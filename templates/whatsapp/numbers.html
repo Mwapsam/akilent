@@ -324,7 +324,18 @@
     el.classList.toggle('text-red-600', !!isError);
   }
 
+  function stateSnapshot() {
+    return JSON.stringify({
+      pendingCode: !!pendingCode,
+      phone_number_id: waSession.phone_number_id || null,
+      waba_id: waSession.waba_id || null,
+      business_id: waSession.business_id || null,
+      completing: completing,
+    });
+  }
+
   function tryCompleteConnection() {
+    console.log('[wa-embedded] state from: tryCompleteConnection', stateSnapshot());
     if (completing) return;
     if (!pendingCode) { console.log('[wa-embedded] waiting for OAuth code'); return; }
     if (!waSession.phone_number_id) { console.log('[wa-embedded] waiting for phone_number_id'); return; }
@@ -374,15 +385,17 @@
     }
 
     if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
-    console.log('[wa-embedded] signup event', data);
+    console.log('[wa-embedded] signup event', JSON.stringify(data));
 
     if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA') {
       const session = data.data || {};
       waSession.phone_number_id = session.phone_number_id || null;
       waSession.waba_id = session.waba_id || null;
       waSession.business_id = session.business_id || null;
-      console.log('[wa-embedded] session received', waSession);
+      console.log('[wa-embedded] session received', JSON.stringify(waSession));
       tryCompleteConnection();
+    } else {
+      console.log('[wa-embedded] non-FINISH signup event, event type:', data.event, JSON.stringify(data.data));
     }
   });
 
@@ -405,7 +418,7 @@
   document.getElementById('wa-connect-btn').addEventListener('click', function () {
     connectBtn = this;
     FB.login(function (response) {
-      console.log('[wa-embedded] FB.login response', response, 'waSession', waSession);
+      console.log('[wa-embedded] FB.login response', JSON.stringify(response));
       const authResponse = response.authResponse;
       const code = authResponse && (authResponse.code ||
         extractCodeFromSignedRequest(authResponse.signedRequest));
@@ -417,10 +430,12 @@
         // before giving up, instead of failing immediately for missing session info.
         if (!completing) {
           waitTimer = setTimeout(function () {
+            console.log('[wa-embedded] state from: timeout', stateSnapshot());
             if (!completing) setStatus('Connection details missing. Try again.', true);
           }, 15000);
         }
       } else {
+        console.log('[wa-embedded] state from: login-callback-no-code', stateSnapshot());
         setStatus('Onboarding was cancelled.', true);
       }
     }, {
@@ -431,7 +446,6 @@
         sessionInfoVersion: '3',
         version: 'v4-public-preview',
         featureType: 'whatsapp_business_app_onboarding',
-        features: null,
       },
     });
   });
