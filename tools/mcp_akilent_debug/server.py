@@ -5,14 +5,14 @@ as MCP tools. Run locally by an engineer debugging the live deployment —
 never deployed as part of the Django app itself.
 
 Config (environment variables, not committed):
-    TASKCENTRO_DEBUG_BASE_URL   default: https://akilent.com
-    TASKCENTRO_DEBUG_TOKEN      required — must match settings.INTERNAL_DEBUG_TOKEN
+    AKILENT_DEBUG_BASE_URL   default: https://akilent.com
+    AKILENT_DEBUG_TOKEN      required — must match settings.INTERNAL_DEBUG_TOKEN
 
 Setup (run once):
     poetry add --group dev mcp   # requests is already a project dependency
 
 Register with Claude Code:
-    claude mcp add --transport stdio taskcentro_debug -- poetry run python tools/mcp_taskcentro_debug/server.py
+    claude mcp add --transport stdio akilent_debug -- poetry run python tools/mcp_akilent_debug/server.py
 """
 from __future__ import annotations
 
@@ -22,18 +22,18 @@ import sys
 import requests
 from mcp.server.mcpserver import MCPServer
 
-BASE_URL = os.environ.get("TASKCENTRO_DEBUG_BASE_URL", "https://akilent.com").rstrip("/")
-TOKEN = os.environ.get("TASKCENTRO_DEBUG_TOKEN", "")
+BASE_URL = os.environ.get("AKILENT_DEBUG_BASE_URL", "https://akilent.com").rstrip("/")
+TOKEN = os.environ.get("AKILENT_DEBUG_TOKEN", "")
 
 if not TOKEN:
     print(
-        "TASKCENTRO_DEBUG_TOKEN is not set — set it in the environment before "
+        "AKILENT_DEBUG_TOKEN is not set — set it in the environment before "
         "running this server (must match the target deployment's "
         "INTERNAL_DEBUG_TOKEN).",
         file=sys.stderr,
     )
 
-mcp = MCPServer("taskcentro-debug")
+mcp = MCPServer("akilent-debug")
 
 
 def _headers() -> dict:
