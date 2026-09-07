@@ -360,10 +360,12 @@
 
   window.addEventListener('message', function (event) {
     console.log('[wa-embedded] postMessage', event.origin, event.data);
-    if (!event.origin.endsWith('facebook.com')) return;
+    // if (!event.origin.endsWith('facebook.com')) return;
 
     // Meta may send event.data as a JSON string or as an already-parsed object.
     let data = event.data;
+    console.log(data, "Testing data");
+    
     if (typeof data === 'string') {
       try {
         data = JSON.parse(data);
