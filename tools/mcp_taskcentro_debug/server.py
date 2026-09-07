@@ -20,7 +20,7 @@ import os
 import sys
 
 import requests
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 BASE_URL = os.environ.get("TASKCENTRO_DEBUG_BASE_URL", "https://akilent.com").rstrip("/")
 TOKEN = os.environ.get("TASKCENTRO_DEBUG_TOKEN", "")
@@ -33,7 +33,7 @@ if not TOKEN:
         file=sys.stderr,
     )
 
-mcp = FastMCP("taskcentro-debug")
+mcp = MCPServer("taskcentro-debug")
 
 
 def _headers() -> dict:
