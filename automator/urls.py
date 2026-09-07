@@ -58,6 +58,10 @@ urlpatterns = [
 if settings.WHATSAPP_ENABLED:
     urlpatterns += [path("whatsapp/", include("apps.whatsapp.urls"))]
 
+# Internal debug API — off by default; see settings.INTERNAL_DEBUG_ENABLED.
+if settings.INTERNAL_DEBUG_ENABLED:
+    urlpatterns += [path("internal/debug/api/", include("apps.internal_debug.urls"))]
+
 # Serve user-uploaded media in development.
 if settings.DEBUG:
     from django.conf.urls.static import static

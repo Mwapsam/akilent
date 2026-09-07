@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "apps.automation",
     "apps.billing",
     "apps.api",
+    "apps.internal_debug",
 ]
 
 MIDDLEWARE = [
@@ -266,6 +267,13 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 
 STALWART_API_BASE = os.getenv("STALWART_API_BASE", "")
 STALWART_API_KEY = os.getenv("STALWART_API_KEY", "")
+
+# --- Internal debug API (apps.internal_debug) ---
+# Off by default even when the token is set — both must be true. Intended to
+# be flipped on only for the duration of an active debugging session, driven
+# by an internal MCP tool, never a customer-facing surface.
+INTERNAL_DEBUG_ENABLED = os.getenv("INTERNAL_DEBUG_ENABLED", "False").lower() == "true"
+INTERNAL_DEBUG_TOKEN = os.getenv("INTERNAL_DEBUG_TOKEN", "")
 
 # Provider selector — swap the implementation without touching business logic.
 # These are the boot-time defaults; the MailProviderSettings singleton (edited by
