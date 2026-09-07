@@ -66,6 +66,8 @@ jobs:
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
           GUNICORN_WORKERS: ${{ secrets.GUNICORN_WORKERS }}
           GUNICORN_TIMEOUT: ${{ secrets.GUNICORN_TIMEOUT }}
+          TASKCENTRO_DEBUG_TOKEN: ${{ secrets.TASKCENTRO_DEBUG_TOKEN }}
+          INTERNAL_DEBUG_ENABLED: ${{ secrets.INTERNAL_DEBUG_ENABLED }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -86,6 +88,7 @@ jobs:
             SLACK_WEBHOOK_URL,
             SENTRY_DSN,SENTRY_ENVIRONMENT,SENTRY_TRACES_SAMPLE_RATE,
             GUNICORN_WORKERS,GUNICORN_TIMEOUT,
+            TASKCENTRO_DEBUG_TOKEN,INTERNAL_DEBUG_ENABLED,
             AWS_S3_REGION_NAME,AWS_CLOUDFRONT_DOMAIN,CLOUDFRONT_ID,AWS_STORAGE_BUCKET_NAME
           script: |
             set -e
@@ -146,7 +149,8 @@ jobs:
             SENTRY_TRACES_SAMPLE_RATE=$SENTRY_TRACES_SAMPLE_RATE
             GUNICORN_WORKERS=$GUNICORN_WORKERS
             GUNICORN_TIMEOUT=$GUNICORN_TIMEOUT
-            ENVEOF
+            TASKCENTRO_DEBUG_TOKEN=$TASKCENTRO_DEBUG_TOKEN
+            INTERNAL_DEBUG_ENABLED=$INTERNAL_DEBUG_ENABLED
             chmod 600 .env
 
             docker compose --profile prod build web celery_worker celery_beat
