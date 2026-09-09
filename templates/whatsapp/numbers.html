@@ -326,7 +326,6 @@
   let connectBtn = null;
   let waitTimer = null;
 
-  // FIX: Standard Django CSRF cookie retrieval for AJAX requests
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -365,12 +364,12 @@
     if (completing) return;
     if (!pendingCode) { console.log('[wa-embedded] waiting for OAuth code'); return; }
     if (!waSession.phone_number_id) { console.log('[wa-embedded] waiting for phone_number_id'); return; }
+    
     completing = true;
     if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
     if (connectBtn) connectBtn.disabled = true;
     setStatus('Finishing connection…', false);
     
-    // FIX: Use secure CSRF token from cookie
     const csrfToken = getCookie('csrftoken');
     fetch('/whatsapp/connect/complete/', {
       method: 'POST',
@@ -401,10 +400,10 @@
       });
   }
 
+  // FIX: Strict origin validation (safer than the official docs' single string check)
   window.addEventListener('message', function (event) {
     console.log('[wa-embedded] postMessage', event.origin, event.data);
     
-    // FIX: Strict origin validation to prevent postMessage spoofing/XSS
     const allowedOrigins = ['https://www.facebook.com', 'https://facebook.com'];
     if (!allowedOrigins.includes(event.origin)) return;
 
@@ -428,19 +427,16 @@
       waSession.business_id = session.business_id || null;
       console.log('[wa-embedded] session received', JSON.stringify(waSession));
       tryCompleteConnection();
-    } else {
-      console.log('[wa-embedded] non-FINISH signup event, event type:', data.event, JSON.stringify(data.data));
     }
   });
 
-  // FIX: Modern, safe UTF-8 Base64 decoding (replaces deprecated escape())
+  // FIX: Modern, safe UTF-8 Base64 decoding
   function extractCodeFromSignedRequest(signedRequest) {
     if (!signedRequest) return null;
     const parts = signedRequest.split('.');
     if (parts.length !== 2) return null;
     try {
       let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      // Pad base64 string if necessary
       base64 = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
       const binaryString = window.atob(base64);
       const bytes = new Uint8Array(binaryString.length);
@@ -455,7 +451,6 @@
     }
   }
 
-  
   document.getElementById('wa-connect-btn').addEventListener('click', function () {
     connectBtn = this;
     
@@ -466,17 +461,13 @@
     if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
     setStatus('', false);
 
+    // FIX: Exact match with official Meta documentation extras object
     FB.login(function (response) {
       console.log('[wa-embedded] FB.login response', response);
       
-      // FIX: Explicitly handle the "unknown" state with actionable feedback
       if (response.status === 'unknown') {
-        console.warn('[wa-embedded] Login failed with status "unknown". Check:');
-        console.warn('1. Browser popup blocker');
-        console.warn('2. App is in Development mode and user is not an Admin/Tester');
-        console.warn('3. Domain is not whitelisted in Facebook App Settings');
-        console.warn('4. Third-party cookies are blocked (e.g., Safari, Brave)');
-        setStatus('Login blocked. Please allow popups and ensure you are a tester on this app.', true);
+        console.warn('[wa-embedded] Login failed with status "unknown".');
+        setStatus('Login blocked or cancelled. Please allow popups and check app settings.', true);
         return;
       }
 
@@ -503,12 +494,7 @@
       response_type: 'code',
       override_default_response_type: true,
       extras: {
-        sessionInfoVersion: '3',
-        // Note: 'version' and 'featureType' are only strictly required if you are 
-        // specifically onboarding WhatsApp Business App users. 
-        // If issues persist, try commenting out these two lines to test the base v4 flow.
-        version: 'v4-public-preview',
-        featureType: 'whatsapp_business_app_onboarding',
+        version: 'v4' // FIX: This is the exact key/value required by Meta docs
       },
     });
   });
