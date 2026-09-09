@@ -144,19 +144,29 @@
     </div>
   </div>
 </div>
+
 <script>
   (function () {
     var form = document.getElementById('wa-manual-form');
+    if (!form) return; // Guard against missing element
     var errorEl = document.getElementById('wa-manual-error');
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       errorEl.classList.add('hidden');
       var btn = form.querySelector('button[type="submit"]');
       btn.disabled = true;
+      
+      var formData = new FormData(form);
+      // FIX: Explicitly pass CSRF token in header for robustness
+      var csrfToken = formData.get('csrfmiddlewaretoken');
+      
       fetch(form.action, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: new FormData(form),
+        headers: { 
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrfToken
+        },
+        body: formData,
       })
         .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }); })
         .then(function (res) {
@@ -296,7 +306,9 @@
   </div>
 </div>
 
-{% if embedded_enabled %}
+{# ── Embedded Signup Script ───────────────────────────────────────────── #}
+<!-- FIX: Added validation for wa_app_id and wa_graph_version to prevent broken SDK init -->
+{% if embedded_enabled and wa_app_id and wa_graph_version %}
 <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 <script>
   window.fbAsyncInit = function () {
@@ -308,17 +320,31 @@
     });
   };
 
-  // Session info from the Embedded Signup popup (phone_number_id, waba_id) and the
-  // OAuth code from FB.login arrive as two independent, unordered async signals.
-  // We only call the backend once both have shown up.
   let waSession = {};
   let pendingCode = null;
   let completing = false;
   let connectBtn = null;
   let waitTimer = null;
 
+  // FIX: Standard Django CSRF cookie retrieval for AJAX requests
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
   function setStatus(msg, isError) {
     const el = document.getElementById('wa-connect-status');
+    if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
     el.classList.toggle('text-red-600', !!isError);
@@ -343,9 +369,15 @@
     if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
     if (connectBtn) connectBtn.disabled = true;
     setStatus('Finishing connection…', false);
+    
+    // FIX: Use secure CSRF token from cookie
+    const csrfToken = getCookie('csrftoken');
     fetch('/whatsapp/connect/complete/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'X-CSRFToken': csrfToken 
+      },
       body: JSON.stringify({
         code: pendingCode,
         phone_number_id: waSession.phone_number_id,
@@ -371,9 +403,11 @@
 
   window.addEventListener('message', function (event) {
     console.log('[wa-embedded] postMessage', event.origin, event.data);
-    if (!event.origin.endsWith('facebook.com')) return;
+    
+    // FIX: Strict origin validation to prevent postMessage spoofing/XSS
+    const allowedOrigins = ['https://www.facebook.com', 'https://facebook.com'];
+    if (!allowedOrigins.includes(event.origin)) return;
 
-    // Meta may send event.data as a JSON string or as an already-parsed object.
     let data = event.data;
     if (typeof data === 'string') {
       try {
@@ -399,15 +433,21 @@
     }
   });
 
-  // Some FB SDK sessions return the OAuth code only inside the signed_request's
-  // base64url-encoded payload (as `code`), not directly on authResponse.code.
+  // FIX: Modern, safe UTF-8 Base64 decoding (replaces deprecated escape())
   function extractCodeFromSignedRequest(signedRequest) {
     if (!signedRequest) return null;
     const parts = signedRequest.split('.');
     if (parts.length !== 2) return null;
     try {
-      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(decodeURIComponent(escape(window.atob(base64))));
+      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      // Pad base64 string if necessary
+      base64 = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+      const binaryString = window.atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
       return payload.code || null;
     } catch (e) {
       console.warn('[wa-embedded] signed_request decode failed', e);
@@ -417,6 +457,14 @@
 
   document.getElementById('wa-connect-btn').addEventListener('click', function () {
     connectBtn = this;
+    
+    // FIX: Reset state for a fresh attempt to prevent state pollution / race conditions
+    waSession = {};
+    pendingCode = null;
+    completing = false;
+    if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
+    setStatus('', false);
+
     FB.login(function (response) {
       console.log('[wa-embedded] FB.login response', JSON.stringify(response));
       const authResponse = response.authResponse;
@@ -426,8 +474,6 @@
         pendingCode = code;
         setStatus('Finishing connection…', false);
         tryCompleteConnection();
-        // The FINISH postMessage can arrive after this callback. Give it a window
-        // before giving up, instead of failing immediately for missing session info.
         if (!completing) {
           waitTimer = setTimeout(function () {
             console.log('[wa-embedded] state from: timeout', stateSnapshot());
@@ -450,6 +496,11 @@
     });
   });
 </script>
+{% elif embedded_enabled %}
+  <!-- Fallback warning if embedded is enabled in DB but env vars are missing -->
+  <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+    Embedded Signup is enabled, but missing <code>wa_app_id</code> or <code>wa_graph_version</code>. Please check your environment configuration.
+  </div>
 {% endif %}
 
 {% endblock %}
