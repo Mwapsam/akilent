@@ -133,8 +133,8 @@ jobs:
             DEFAULT_FROM_EMAIL=$DEFAULT_FROM_EMAIL
             AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
             AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-            AWS_REGION=$AWS_REGION
-            AWS_S3_REGION_NAME=$AWS_REGION
+            AWS_REGION=$AWS_S3_REGION_NAME
+            AWS_S3_REGION_NAME=$AWS_S3_REGION_NAME
             AWS_CLOUDFRONT_DOMAIN=$AWS_CLOUDFRONT_DOMAIN
             CLOUDFRONT_ID=$CLOUDFRONT_ID
             AWS_STORAGE_BUCKET_NAME=$AWS_STORAGE_BUCKET_NAME
@@ -152,7 +152,7 @@ jobs:
             TASKCENTRO_DEBUG_TOKEN=$TASKCENTRO_DEBUG_TOKEN
             INTERNAL_DEBUG_ENABLED=$INTERNAL_DEBUG_ENABLED
             ENVEOF
-            
+
             chmod 600 .env
 
             docker compose --profile prod build web celery_worker celery_beat
