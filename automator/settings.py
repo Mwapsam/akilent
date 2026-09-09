@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.whatsapp",
     "apps.email",
+    "apps.logs",
+    "drf_spectacular",
     "apps.automation",
     "apps.billing",
     "apps.api",
@@ -50,6 +52,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.core.middleware.RequestIdMiddleware",
 ]
 
 ROOT_URLCONF = "automator.urls"
@@ -347,9 +350,26 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "ALLOWED_VERSIONS": ["v1"],
+    "DEFAULT_VERSION": "v1",
     "DEFAULT_THROTTLE_CLASSES": [],
     "EXCEPTION_HANDLER": "apps.api.errors.custom_exception_handler",
     "UNAUTHENTICATED_USER": None,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Akilent API",
+    "DESCRIPTION": "Send transactional and bulk email, manage templates, and observe delivery.",
+    "VERSION": "v1",
+    "SERVERS": [{"url": "/api/v1"}],
+    "SCHEMA_PATH_PREFIX": r"/api",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SORT_OPERATIONS": False,
+    "PREPROCESSING_HOOKS": ["apps.api.schema.only_public_api"],
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.api.schema.strip_version_param",
+    ],
 }
 
 # --- Flutterwave ---
@@ -406,6 +426,10 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.prune_provisioning_jobs": {"queue": "celery"},
     "apps.email.tasks.reverify_pending_domains": {"queue": "celery"},
     "apps.email.tasks.alert_on_failure_spike": {"queue": "celery"},
+    "apps.logs.tasks.prune_message_events": {"queue": "celery"},
+    "apps.logs.tasks.prune_idempotency_records": {"queue": "celery"},
+    "apps.logs.tasks.prune_api_requests": {"queue": "celery"},
+    "apps.logs.tasks.reconcile_message_stats": {"queue": "celery"},
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -432,6 +456,22 @@ CELERY_BEAT_SCHEDULE = {
     "alert-on-failure-spike": {
         "task": "apps.email.tasks.alert_on_failure_spike",
         "schedule": 900.0,  # every 15 min
+    },
+    "prune-message-events": {
+        "task": "apps.logs.tasks.prune_message_events",
+        "schedule": 86400.0,
+    },
+    "prune-idempotency-records": {
+        "task": "apps.logs.tasks.prune_idempotency_records",
+        "schedule": 3600.0,
+    },
+    "prune-api-requests": {
+        "task": "apps.logs.tasks.prune_api_requests",
+        "schedule": 86400.0,
+    },
+    "reconcile-message-stats": {
+        "task": "apps.logs.tasks.reconcile_message_stats",
+        "schedule": 86400.0,
     },
 }
 
@@ -472,9 +512,14 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "apps.core.log_filters.RequestIdFilter",
+        },
+    },
     "formatters": {
         "standard": {
-            "format": "[{levelname}] {asctime} {name}:{lineno} {message}",
+            "format": "[{levelname}] {asctime} {name}:{lineno} [{request_id}] {message}",
             "style": "{",
         },
     },
@@ -482,6 +527,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "standard",
+            "filters": ["request_id"],
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -489,6 +535,7 @@ LOGGING = {
             "maxBytes": 10 * 1024 * 1024,
             "backupCount": 5,
             "formatter": "standard",
+            "filters": ["request_id"],
         },
     },
     "root": {

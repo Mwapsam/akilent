@@ -32,6 +32,11 @@ Pass collapsible=True in the desktop sidebar so labels hide when collapsed.{% en
     {% include "components/icon.html" with name="sparkles" class="w-5 h-5 shrink-0" %}
     <span {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Insights</span>
   </a>
+  <a href="/logs/messages/" class="nav-link {% if '/logs/' in p %}nav-link-active{% endif %}"
+     {% if '/logs/' in p %}aria-current="page"{% endif %}>
+    {% include "components/icon.html" with name="inbox" class="w-5 h-5 shrink-0" %}
+    <span {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Logs</span>
+  </a>
   {% if WHATSAPP_ENABLED %}
   <a href="/whatsapp/numbers/" class="nav-link {% if '/whatsapp' in p %}nav-link-active{% endif %}">
     {% include "components/icon.html" with name="chat" class="w-5 h-5 shrink-0" %}

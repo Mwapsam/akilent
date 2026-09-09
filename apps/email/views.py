@@ -485,6 +485,9 @@ def webhook_redeliver(request, pk):
     delivery.save(update_fields=["status"])
     transaction.on_commit(lambda: deliver_webhook.delay(delivery.pk))
     messages.success(request, "Redelivery queued.")
+    next_url = request.POST.get("next") or ""
+    if next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
     return redirect("email-webhooks")
 
 
@@ -569,19 +572,26 @@ def tracking_open(request, token: str):
     """Record an open event and return a 1×1 transparent GIF."""
     try:
         t = EmailTrackingToken.objects.select_related("message").get(token=token)
+        # Dual-write: EmailTrackingEvent still feeds the legacy engagement
+        # aggregation; MessageEvent is the new source of truth and owns the
+        # outbound-webhook fan-out.
         EmailTrackingEvent.objects.create(
             message=t.message,
             kind=EmailTrackingEvent.Kind.OPEN,
             ip=request.META.get("REMOTE_ADDR"),
             ua=(request.META.get("HTTP_USER_AGENT") or "")[:512],
         )
-        from apps.email.webhooks import enqueue_event
+        from apps.logs.services import record_message_event
 
-        enqueue_event(
-            "message.opened",
-            account=t.message.account,
-            message=t.message,
-            data={"id": t.message_id, "to": t.recipient},
+        record_message_event(
+            t.message,
+            "opened",
+            source="tracking_pixel",
+            data={
+                "to": t.recipient,
+                "ip": request.META.get("REMOTE_ADDR"),
+                "ua": (request.META.get("HTTP_USER_AGENT") or "")[:512],
+            },
         )
     except EmailTrackingToken.DoesNotExist:
         pass
@@ -601,13 +611,18 @@ def tracking_click(request, token: str):
             ip=request.META.get("REMOTE_ADDR"),
             ua=(request.META.get("HTTP_USER_AGENT") or "")[:512],
         )
-        from apps.email.webhooks import enqueue_event
+        from apps.logs.services import record_message_event
 
-        enqueue_event(
-            "message.clicked",
-            account=t.message.account,
-            message=t.message,
-            data={"id": t.message_id, "to": t.recipient, "url": t.url},
+        record_message_event(
+            t.message,
+            "clicked",
+            source="tracking_link",
+            data={
+                "to": t.recipient,
+                "url": t.url,
+                "ip": request.META.get("REMOTE_ADDR"),
+                "ua": (request.META.get("HTTP_USER_AGENT") or "")[:512],
+            },
         )
     except EmailTrackingToken.DoesNotExist:
         pass

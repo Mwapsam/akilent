@@ -112,6 +112,27 @@ def provision_domain_async(
 # â”€â”€ Email sending â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
+def _send_sandbox_message(msg: EmailMessage, text_body: str, html_body: str) -> None:
+    from apps.email.providers.sandbox import SandboxSendProvider, followup_events
+    from apps.logs.services import record_message_event
+
+    result = SandboxSendProvider().send(OutboundEmail(
+        from_email=msg.from_email,
+        to_email=msg.to_email,
+        subject=msg.subject,
+        text_body=text_body,
+        html_body=html_body,
+        headers={},
+    ))
+    if not result.success:
+        msg.mark_failed(result.error or "sandbox failure")
+        return
+
+    msg.mark_sent(result.provider_message_id)
+    for event_type in followup_events(msg.to_email):
+        record_message_event(msg, event_type, source="sandbox")
+
+
 def _send_email_message(task, msg: EmailMessage, text_body: str, html_body: str) -> None:
     """Shared send logic for both send_email and send_bulk_recipient_email.
 
@@ -119,6 +140,12 @@ def _send_email_message(task, msg: EmailMessage, text_body: str, html_body: str)
     """
     from apps.email.services.suppression import is_suppressed
     from apps.email.services.reputation import check_can_send, record_send
+
+    # Test-mode messages route through the sandbox: no suppression / reputation /
+    # quota, nothing delivered, deterministic follow-up events.
+    if getattr(msg, "key_mode", "live") == "test":
+        _send_sandbox_message(msg, text_body, html_body)
+        return
 
     # Final suppression gate before sending (catch-all for race conditions)
     if is_suppressed(msg.account, msg.to_email):

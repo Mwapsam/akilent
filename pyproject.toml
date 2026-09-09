@@ -29,7 +29,8 @@ dependencies = [
     "boto3 (>=1.26.0,<2.0.0)",
     "django-storages (>=1.14,<2.0)",
     "aiosmtpd (>=1.4.0,<2.0.0)",
-    "moto (>=5.2.3,<6.0.0)"
+    "moto (>=5.2.3,<6.0.0)",
+    "drf-spectacular (>=0.30.0,<0.31.0)"
 ]
 
 

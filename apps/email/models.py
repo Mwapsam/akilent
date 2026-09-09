@@ -395,6 +395,14 @@ class EmailApiKey(models.Model):
     key_hash = models.CharField(max_length=64, unique=True, db_index=True, blank=True, null=True)
     key_prefix = models.CharField(max_length=12, default="ak_live_")
     last4 = models.CharField(max_length=4, blank=True, default="")
+
+    class Mode(models.TextChoices):
+        LIVE = "live", "Live"
+        TEST = "test", "Test"
+
+    # Test keys route through the sandbox provider: nothing is delivered, no
+    # SES quota / reputation impact, deterministic outcomes by magic recipient.
+    mode = models.CharField(max_length=4, choices=Mode.choices, default=Mode.LIVE)
     scopes = models.JSONField(default=list)
     expires_at = models.DateTimeField(blank=True, null=True)
     rate_per_min = models.PositiveIntegerField(blank=True, null=True)
@@ -404,22 +412,31 @@ class EmailApiKey(models.Model):
     last_used_at = models.DateTimeField(blank=True, null=True)
 
     @staticmethod
-    def generate_key() -> str:
-        return "ak_live_" + secrets.token_urlsafe(36)
+    def generate_key(mode: str = "live") -> str:
+        prefix = "ak_test_" if mode == "test" else "ak_live_"
+        return prefix + secrets.token_urlsafe(36)
 
     @staticmethod
     def hash_key(raw_key: str) -> str:
         return hashlib.sha256(raw_key.encode()).hexdigest()
 
     @classmethod
-    def create_for_account(cls, account, *, name: str = "default", scopes: list[str] | None = None):
+    def create_for_account(
+        cls,
+        account,
+        *,
+        name: str = "default",
+        scopes: list[str] | None = None,
+        mode: str = "live",
+    ):
         """Create a new key. Returns (instance, plaintext) — plaintext is shown once."""
-        raw = cls.generate_key()
+        raw = cls.generate_key(mode)
         obj = cls.objects.create(
             account=account,
             name=name,
+            mode=mode,
             key_hash=cls.hash_key(raw),
-            key_prefix="ak_live_",
+            key_prefix=raw.split("_")[0] + "_" + raw.split("_")[1] + "_",
             last4=raw[-4:],
             scopes=scopes or ["messages:send"],
         )
@@ -709,6 +726,10 @@ class BulkEmailRecipient(models.Model):
         return f"{self.to_email} [{self.status}] (campaign {self.campaign_id})"
 
 
+def _message_public_id() -> str:
+    return "msg_" + secrets.token_hex(16)
+
+
 class EmailMessage(models.Model):
     """Log of a transactional email send."""
 
@@ -717,7 +738,14 @@ class EmailMessage(models.Model):
         SENT = "sent", "Sent"
         DELIVERED = "delivered", "Delivered"
         FAILED = "failed", "Failed"
+        BOUNCED = "bounced", "Bounced"
+        COMPLAINED = "complained", "Complained"
+        OPENED = "opened", "Opened"
+        CLICKED = "clicked", "Clicked"
 
+    public_id = models.CharField(
+        max_length=40, unique=True, default=_message_public_id, editable=False
+    )
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="email_messages"
     )
@@ -738,6 +766,10 @@ class EmailMessage(models.Model):
     from_email = models.EmailField()
     to_email = models.EmailField()
     subject = models.CharField(max_length=998, blank=True, default="")
+
+    # "live" or "test" — set from the API key that created the message. Test
+    # messages go through the sandbox provider and are excluded from live stats.
+    key_mode = models.CharField(max_length=4, default="live")
 
     # Snapshot of the exact content sent, independent of later template
     # edits — the audit trail for "what did we actually send."
@@ -766,13 +798,26 @@ class EmailMessage(models.Model):
         self.provider_message_id = provider_message_id or None
         self.sent_at = timezone.now()
         self.save(update_fields=["status", "provider_message_id", "sent_at"])
-        self._enqueue_webhook_event("message.sent")
+        self._record_event("sent", source="pipeline")
 
     def mark_failed(self, error: str):
         self.status = self.Status.FAILED
         self.error = (error or "")[:5000]
         self.save(update_fields=["status", "error"])
-        self._enqueue_webhook_event("message.failed")
+        self._record_event("failed", source="pipeline", data={"error": self.error})
+
+    def _record_event(self, event_type: str, *, source: str, data: dict | None = None) -> None:
+        """Append a MessageEvent (which owns the outbound-webhook fan-out)."""
+        from apps.logs.services import record_message_event
+
+        try:
+            record_message_event(self, event_type, source=source, data=data or {})
+        except Exception:  # noqa: BLE001 - observability must not break sends
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "EmailMessage._record_event failed (message %s, %s)", self.pk, event_type
+            )
 
     def _enqueue_webhook_event(self, event_type: str) -> None:
         from apps.email.webhooks import enqueue_event

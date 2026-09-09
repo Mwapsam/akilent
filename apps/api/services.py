@@ -50,6 +50,7 @@ def create_and_queue_message(
     html_body: str = "",
     template_id: int | None = None,
     template_variables: dict | None = None,
+    mode: str = "live",
 ) -> EmailMessage:
     """Validate, reserve quota, and queue a transactional send.
 
@@ -59,35 +60,43 @@ def create_and_queue_message(
     apps.billing.limits.PlanLimitExceeded on rejection — callers translate
     those into their own response shape.
     """
+    is_test = mode == "test"
+
     from_domain = from_email.rsplit("@", 1)[-1].lower()
     domain = EmailDomain.objects.filter(
         account=account, domain=from_domain, status=EmailDomain.Status.VERIFIED
     ).first()
-    if domain is None:
+    # Test mode routes through the sandbox — no real delivery, so a verified
+    # domain, plan quota, suppression, reputation and MX checks don't apply.
+    if domain is None and not is_test:
         raise UnverifiedDomainError(from_domain)
 
     lc = LimitChecker(account)
     lc.require_feature("email_apis", "the email API & SMTP relay")
-    lc.check_email()
+    if not is_test:
+        lc.check_email()
 
-    # Check suppression list and validate recipient
-    from apps.email.services.suppression import is_suppressed, record_event
-    from apps.email.services.validation import validate_recipient
+        from apps.email.services.suppression import is_suppressed, record_event
+        from apps.email.services.validation import validate_recipient
 
-    if is_suppressed(account, to_email):
-        raise UnverifiedDomainError(f"{to_email} is suppressed (bounce, complaint, or unsubscribe)")
+        if is_suppressed(account, to_email):
+            raise UnverifiedDomainError(
+                f"{to_email} is suppressed (bounce, complaint, or unsubscribe)"
+            )
 
-    from apps.email.services.reputation import check_can_send
+        from apps.email.services.reputation import check_can_send
 
-    allowed, reason = check_can_send(account)
-    if not allowed:
-        raise UnverifiedDomainError(
-            f"sending is paused for this account — sender reputation halt ({reason})"
-        )
+        allowed, reason = check_can_send(account)
+        if not allowed:
+            raise UnverifiedDomainError(
+                f"sending is paused for this account — sender reputation halt ({reason})"
+            )
 
-    if not validate_recipient(to_email):
-        record_event(account=account, email=to_email, reason="invalid")
-        raise UnverifiedDomainError(f"{to_email} failed validation (invalid syntax or no MX record)")
+        if not validate_recipient(to_email):
+            record_event(account=account, email=to_email, reason="invalid")
+            raise UnverifiedDomainError(
+                f"{to_email} failed validation (invalid syntax or no MX record)"
+            )
 
     template = None
     if template_id is not None:
@@ -103,10 +112,16 @@ def create_and_queue_message(
         from_email=from_email,
         to_email=to_email,
         subject=subject,
+        key_mode="test" if is_test else "live",
         rendered_subject=subject,
         rendered_text=text_body,
         rendered_html=html_body,
     )
+
+    from apps.logs.services import record_message_event
+
+    record_message_event(msg, "queued", source="api")
+
     transaction.on_commit(
         lambda: send_email.delay(msg.id, text_body=text_body, html_body=html_body)
     )

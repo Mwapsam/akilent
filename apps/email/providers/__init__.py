@@ -50,6 +50,7 @@ _SEND_ALIASES: dict[str, str] = {
     "smtp": "apps.email.providers.smtp.SmtpSendProvider",
     "ses":  "apps.email.providers.ses.SesSendProvider",
     "null": "apps.email.providers.null.NullSendProvider",
+    "sandbox": "apps.email.providers.sandbox.SandboxSendProvider",
 }
 
 
@@ -91,15 +92,18 @@ def get_mail_provider() -> EmailProvider:
     return cls()
 
 
-def get_send_provider() -> EmailSendProvider:
+def get_send_provider(mode: str = "live") -> EmailSendProvider:
     """Return an instance of the configured outbound-message send provider.
 
-    Reads from MailProviderSettings singleton (edited by superadmins via dashboard),
-    falling back to EMAIL_SEND_PROVIDER_BACKEND env var / Django setting.
-
-    Backend argument accepts either a short alias ("smtp", "ses", "null") or a
-    full dotted import path, mirroring get_mail_provider()'s resolution.
+    ``mode="test"`` forces the sandbox provider regardless of configuration —
+    test API keys must never touch a real transport. Otherwise reads from the
+    MailProviderSettings singleton, falling back to EMAIL_SEND_PROVIDER_BACKEND.
     """
+    if mode == "test":
+        from apps.email.providers.sandbox import SandboxSendProvider
+
+        return SandboxSendProvider()
+
     backend: str | None = None
     try:
         from apps.core.models import MailProviderSettings

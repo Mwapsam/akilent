@@ -17,7 +17,7 @@ from apps.api.services import (
     UnverifiedDomainError,
 )
 from apps.billing.limits import PlanLimitExceeded
-from apps.email.models import BulkEmailCampaign, EmailTemplate
+from apps.email.models import BulkEmailCampaign, EmailMessage, EmailTemplate
 
 
 def _flatten_detail(data) -> str:
@@ -36,41 +36,51 @@ def _flatten_detail(data) -> str:
     return str(data)
 
 
+def _request_id(context) -> str:
+    request = (context or {}).get("request")
+    return getattr(request, "id", "") or ""
+
+
+def _envelope(code: str, message: str, status_code: int, context) -> Response:
+    from apps.api.error_codes import CATALOG, docs_url
+
+    err = {"code": code, "message": message}
+    if code in CATALOG:
+        err["docs_url"] = docs_url(code)
+    rid = _request_id(context)
+    if rid:
+        err["request_id"] = rid
+    return Response({"error": err}, status=status_code)
+
+
 def custom_exception_handler(exc, context):
     if isinstance(exc, PlanLimitExceeded):
-        return Response(
-            {"error": {"code": exc.limit_type, "message": str(exc)}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+        return _envelope(exc.limit_type, str(exc), status.HTTP_403_FORBIDDEN, context)
 
     if isinstance(exc, UnverifiedDomainError):
-        return Response(
-            {"error": {"code": "unverified_domain", "message": str(exc)}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+        return _envelope("unverified_domain", str(exc), status.HTTP_403_FORBIDDEN, context)
 
     if isinstance(exc, RecipientCapExceededError):
-        return Response(
-            {"error": {"code": "recipient_cap_exceeded", "message": str(exc)}},
-            status=status.HTTP_403_FORBIDDEN,
+        return _envelope(
+            "recipient_cap_exceeded", str(exc), status.HTTP_403_FORBIDDEN, context
         )
 
     if isinstance(exc, TemplateMissingContentError):
-        return Response(
-            {"error": {"code": "missing_content", "message": str(exc)}},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _envelope("missing_content", str(exc), status.HTTP_400_BAD_REQUEST, context)
 
     if isinstance(exc, EmailTemplate.DoesNotExist):
-        return Response(
-            {"error": {"code": "not_found", "message": "Template not found."}},
-            status=status.HTTP_404_NOT_FOUND,
+        return _envelope(
+            "not_found", "Template not found.", status.HTTP_404_NOT_FOUND, context
         )
 
     if isinstance(exc, BulkEmailCampaign.DoesNotExist):
-        return Response(
-            {"error": {"code": "not_found", "message": "Campaign not found."}},
-            status=status.HTTP_404_NOT_FOUND,
+        return _envelope(
+            "not_found", "Campaign not found.", status.HTTP_404_NOT_FOUND, context
+        )
+
+    if isinstance(exc, EmailMessage.DoesNotExist):
+        return _envelope(
+            "not_found", "Message not found.", status.HTTP_404_NOT_FOUND, context
         )
 
     response = drf_exception_handler(exc, context)
@@ -79,7 +89,15 @@ def custom_exception_handler(exc, context):
 
     code = getattr(exc, "default_code", "error")
     message = _flatten_detail(response.data)
-    response.data = {"error": {"code": code, "message": message}}
+    from apps.api.error_codes import CATALOG, docs_url
+
+    err = {"code": code, "message": message}
+    if code in CATALOG:
+        err["docs_url"] = docs_url(code)
+    rid = _request_id(context)
+    if rid:
+        err["request_id"] = rid
+    response.data = {"error": err}
 
     if isinstance(exc, drf_exceptions.Throttled):
         response["Retry-After"] = str(int(exc.wait)) if exc.wait else "60"

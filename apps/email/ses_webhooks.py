@@ -301,13 +301,13 @@ def ses_sns_webhook(request):
 
     try:
         if event_type == "Bounce":
-            _handle_bounce(ses_message)
+            _handle_bounce(ses_message, sns_message_id)
         elif event_type == "Complaint":
-            _handle_complaint(ses_message)
+            _handle_complaint(ses_message, sns_message_id)
         elif event_type == "Delivery":
-            _handle_delivery(ses_message)
+            _handle_delivery(ses_message, sns_message_id)
         elif event_type == "Reject":
-            _handle_reject(ses_message)
+            _handle_reject(ses_message, sns_message_id)
         elif event_type in ("DeliveryDelay", "RenderingFailure"):
             # Transient / non-terminal — record for visibility, no state change.
             logger.warning(
@@ -316,6 +316,13 @@ def ses_sns_webhook(request):
                 ses_message.get("mail", {}).get("messageId"),
                 ses_message.get("deliveryDelay") or ses_message.get("failure") or {},
             )
+            if event_type == "DeliveryDelay":
+                _record_provider_events(
+                    ses_message.get("mail", {}).get("messageId"),
+                    "deferred",
+                    data=ses_message.get("deliveryDelay") or {},
+                    sns_message_id=sns_message_id,
+                )
         else:
             logger.debug("Ignoring SES event type: %s", event_type)
     except Exception:
@@ -327,7 +334,7 @@ def ses_sns_webhook(request):
     return HttpResponse("OK")
 
 
-def _handle_bounce(ses_message: dict[str, Any]) -> None:
+def _handle_bounce(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     from apps.email.services.reputation import record_bounce
     from apps.email.services.suppression import record_event
 
@@ -336,6 +343,26 @@ def _handle_bounce(ses_message: dict[str, Any]) -> None:
     recipients = bounce.get("bouncedRecipients", [])
 
     message_id = ses_message.get("mail", {}).get("messageId")
+
+    _record_provider_events(
+        message_id,
+        "bounced" if bounce_type == "Permanent" else "deferred",
+        data={
+            "bounceType": bounce_type,
+            "bounceSubType": bounce.get("bounceSubType"),
+            "reportingMTA": bounce.get("reportingMTA"),
+            "recipients": [
+                {
+                    "emailAddress": r.get("emailAddress"),
+                    "diagnosticCode": r.get("diagnosticCode"),
+                    "status": r.get("status"),
+                }
+                for r in recipients
+            ],
+        },
+        sns_message_id=sns_message_id,
+    )
+
     account = _find_account_for_message(message_id)
 
     # Fallback: resolve account via sender domain if EmailMessage not found
@@ -377,7 +404,7 @@ def _handle_bounce(ses_message: dict[str, Any]) -> None:
         )
 
 
-def _handle_complaint(ses_message: dict[str, Any]) -> None:
+def _handle_complaint(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     from apps.email.services.reputation import record_complaint
     from apps.email.services.suppression import record_event
 
@@ -385,6 +412,18 @@ def _handle_complaint(ses_message: dict[str, Any]) -> None:
     recipients = complaint.get("complainedRecipients", [])
 
     message_id = ses_message.get("mail", {}).get("messageId")
+
+    _record_provider_events(
+        message_id,
+        "complained",
+        data={
+            "feedbackType": complaint.get("complaintFeedbackType"),
+            "complaintSubType": complaint.get("complaintSubType"),
+            "recipients": [r.get("emailAddress") for r in recipients],
+        },
+        sns_message_id=sns_message_id,
+    )
+
     account = _find_account_for_message(message_id)
 
     # Fallback: resolve account via sender domain if EmailMessage not found
@@ -418,23 +457,41 @@ def _handle_complaint(ses_message: dict[str, Any]) -> None:
         )
 
 
-def _handle_delivery(ses_message: dict[str, Any]) -> None:
+def _handle_delivery(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     """Mark the corresponding EmailMessage as delivered when possible."""
     from apps.email.models import EmailMessage
 
     mail = ses_message.get("mail", {})
     message_id = mail.get("messageId")
     destination = mail.get("destination", [])
+    delivery = ses_message.get("delivery", {})
 
     if not message_id:
         logger.warning("Delivery notification missing mail.messageId")
         return
 
+    _record_provider_events(
+        message_id,
+        "delivered",
+        data={
+            "smtpResponse": delivery.get("smtpResponse"),
+            "reportingMTA": delivery.get("reportingMTA"),
+            "processingTimeMillis": delivery.get("processingTimeMillis"),
+        },
+        sns_message_id=sns_message_id,
+    )
+
     # Don't resurrect a message a bounce/complaint/reject already marked FAILED —
     # out-of-order SNS delivery must not flip a hard failure back to DELIVERED.
     updated = EmailMessage.objects.filter(
         provider_message_id=message_id
-    ).exclude(status=EmailMessage.Status.FAILED).update(
+    ).exclude(
+        status__in=[
+            EmailMessage.Status.FAILED,
+            EmailMessage.Status.BOUNCED,
+            EmailMessage.Status.COMPLAINED,
+        ]
+    ).update(
         status=EmailMessage.Status.DELIVERED,
     )
     if updated:
@@ -447,7 +504,7 @@ def _handle_delivery(ses_message: dict[str, Any]) -> None:
         )
 
 
-def _handle_reject(ses_message: dict[str, Any]) -> None:
+def _handle_reject(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     """SES rejected the message before sending (e.g. detected malware).
 
     This is a terminal failure for that message — mark it FAILED so it isn't
@@ -463,6 +520,10 @@ def _handle_reject(ses_message: dict[str, Any]) -> None:
     if not message_id:
         return
 
+    _record_provider_events(
+        message_id, "rejected", data={"reason": reason}, sns_message_id=sns_message_id
+    )
+
     updated = EmailMessage.objects.filter(
         provider_message_id=message_id
     ).exclude(status=EmailMessage.Status.DELIVERED).update(
@@ -471,6 +532,43 @@ def _handle_reject(ses_message: dict[str, Any]) -> None:
     )
     if updated:
         logger.info("Marked EmailMessage provider_message_id=%s FAILED (SES reject)", message_id)
+
+
+def _record_provider_events(
+    provider_message_id: str | None,
+    event_type: str,
+    *,
+    data: dict[str, Any] | None = None,
+    sns_message_id: str = "",
+) -> None:
+    """Append a MessageEvent for every EmailMessage matching this SES messageId.
+
+    Best-effort and idempotent (``record_message_event`` dedupes on
+    ``provider_event_id``). This is what keeps the full SES payload instead of
+    only flipping ``EmailMessage.status``.
+    """
+    if not provider_message_id:
+        return
+    try:
+        from apps.email.models import EmailMessage
+        from apps.logs.services import record_message_event
+
+        for msg in EmailMessage.objects.filter(
+            provider_message_id=provider_message_id
+        ):
+            record_message_event(
+                msg,
+                event_type,
+                source="ses_sns",
+                data=data or {},
+                provider_event_id=sns_message_id or None,
+            )
+    except Exception:  # noqa: BLE001 - observability must not break the webhook
+        logger.exception(
+            "Failed to record MessageEvent %s for provider_message_id=%s",
+            event_type,
+            provider_message_id,
+        )
 
 
 def _find_account_for_message(message_id: str | None):
