@@ -47,3 +47,8 @@ node_modules/
 templates/billing/manual_payment_admin_subject.txt
 .gitignore
 templates/billing/manual_payment_admin.txt
+packages/*/.venv/
+packages/*/dist/
+packages/*/*.egg-info/
+packages/*/__pycache__/
+packages/*/node_modules/

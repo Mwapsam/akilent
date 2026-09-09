@@ -4,9 +4,17 @@
 <pre data-lang="json"><code>{
   "error": {
     "code": "unverified_domain",
-    "message": "'yourdomain.com' is not a verified sending domain for this account"
+    "message": "'yourdomain.com' is not a verified sending domain for this account",
+    "request_id": "3f9c1e0b8a7d4e2f9c1e0b8a7d4e2f9c",
+    "docs_url": "https://akilent.com/docs/errors#unverified_domain"
   }
 }</code></pre>
+<p>
+  <code>request_id</code> is also returned as the <code>X-Request-Id</code>
+  response header on every call (echoed from your request if you send one) —
+  quote it when contacting support. <code>docs_url</code> is present for
+  catalogued codes and links straight to the relevant row below.
+</p>
 <p>
   Always branch your error handling on <code>code</code>, not the
   human-readable <code>message</code> text — messages may be reworded, codes
@@ -25,8 +33,20 @@
   <tr><td>403</td><td><code>recipient_cap_exceeded</code></td><td>A campaign's recipient list exceeds your plan's per-campaign cap.</td></tr>
   <tr><td>404</td><td><code>not_found</code></td><td>The requested template or campaign doesn't exist on your account.</td></tr>
   <tr><td>404</td><td>—</td><td>Unknown API version (e.g. requesting <code>/api/v2/...</code> before it exists).</td></tr>
-  <tr><td>429</td><td>—</td><td>Per-key request-rate limit exceeded. Check <code>Retry-After</code>.</td></tr>
+  <tr><td>409</td><td><code>idempotency_key_reuse</code></td><td>The same <code>Idempotency-Key</code> was seen with a different request body. Use a fresh key for a genuinely new request.</td></tr>
+  <tr><td>409</td><td><code>idempotency_key_in_progress</code></td><td>A request with this <code>Idempotency-Key</code> is still being processed. Retry after a short delay.</td></tr>
+  <tr><td>429</td><td><code>throttled</code></td><td>Per-key request-rate limit exceeded. Check <code>Retry-After</code>.</td></tr>
 </table>
+
+<h2 id="idempotency">Idempotency</h2>
+<p>
+  Send an <code>Idempotency-Key</code> header (any unique string, e.g. a UUID)
+  on <code>POST</code> requests. A retried call with the same key and the same
+  body returns the original response and does not send a second time; the same
+  key with a different body returns <code>409 idempotency_key_reuse</code>.
+  Keys are remembered for 24 hours. The official SDKs generate one per call
+  automatically.
+</p>
 
 <p>See <a href="{% url 'docs-page' 'rate-limits' %}">Rate limits</a> for the difference between the 429 (rate) and 403 <code>emails</code> (volume) cases — they're two separate limits.</p>
 {% endblock %}
