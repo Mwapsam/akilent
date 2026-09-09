@@ -16,7 +16,9 @@ build/
 db.sqlite3
 staticfiles/
 media/
-logs/
+# Runtime log dir (settings.LOG_DIR = BASE_DIR/"logs"). Anchored so it does
+# NOT match the apps/logs/ Python package.
+/logs/
 
 # Frontend build — the Tailwind standalone CLI binary (large; download per-machine).
 # The BUILT output (static/css/app.css) and vendored JS/fonts ARE committed.
