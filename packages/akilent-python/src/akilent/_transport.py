@@ -8,7 +8,7 @@ import httpx
 
 from .errors import APIConnectionError, error_from_response
 
-_DEFAULT_BASE_URL = "https://api.akilent.com"
+_DEFAULT_BASE_URL = "https://akilent.com"
 _USER_AGENT = "akilent-python/0.1.0"
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
 

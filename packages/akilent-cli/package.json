@@ -1,0 +1,11 @@
+{
+  "name": "akilent-cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for the Akilent email API",
+  "type": "module",
+  "bin": { "akilent": "./bin/akilent.mjs" },
+  "files": ["bin", "README.md"],
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test test/" },
+  "license": "MIT"
+}

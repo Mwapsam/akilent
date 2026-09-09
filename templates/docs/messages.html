@@ -9,7 +9,7 @@
     <button type="button" data-tab="ruby">Ruby</button>
     <button type="button" data-tab="php">PHP</button>
   </div>
-  <pre data-panel="curl"><code>curl -X POST https://api.akilent.com/api/v1/messages \
+  <pre data-panel="curl"><code>curl -X POST https://akilent.com/api/v1/messages \
   -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -22,7 +22,7 @@
   <pre data-panel="python" hidden><code>import requests
 
 resp = requests.post(
-    "https://api.akilent.com/api/v1/messages",
+    "https://akilent.com/api/v1/messages",
     headers={"Authorization": "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx"},
     json={
         "from": "billing@yourdomain.com",
@@ -34,7 +34,7 @@ resp = requests.post(
 )
 resp.raise_for_status()
 print(resp.json())</code></pre>
-  <pre data-panel="node" hidden><code>const resp = await fetch("https://api.akilent.com/api/v1/messages", {
+  <pre data-panel="node" hidden><code>const resp = await fetch("https://akilent.com/api/v1/messages", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx",
@@ -53,7 +53,7 @@ console.log(await resp.json());</code></pre>
 require "json"
 require "uri"
 
-uri = URI("https://api.akilent.com/api/v1/messages")
+uri = URI("https://akilent.com/api/v1/messages")
 req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
 req["Authorization"] = "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx"
 req.body = {
@@ -66,7 +66,7 @@ req.body = {
 
 resp = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
 puts resp.body</code></pre>
-  <pre data-panel="php" hidden><code>$ch = curl_init("https://api.akilent.com/api/v1/messages");
+  <pre data-panel="php" hidden><code>$ch = curl_init("https://akilent.com/api/v1/messages");
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_RETURNTRANSFER => true,

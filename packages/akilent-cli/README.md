@@ -1,0 +1,33 @@
+# akilent-cli
+
+Command-line interface for the [Akilent](https://akilent.com) email API. Pure
+Node (>=18), zero dependencies.
+
+```bash
+npm install -g akilent-cli
+akilent login --key ak_test_xxxxx
+akilent send --from you@acme.com --to delivered@sandbox.akilent.test --subject Hi --text "It works"
+akilent logs tail
+```
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `akilent login --key <ak_...> [--base-url <url>]` | Store credentials in `~/.akilent/config.json` (mode 600). |
+| `akilent whoami` | Show the resolved base URL and key suffix. |
+| `akilent send --from --to [--subject --text --html --template]` | Send one email (auto `Idempotency-Key`). |
+| `akilent messages [--status --to --limit]` | List recent messages, tab-separated. |
+| `akilent events <message_id>` | Print a message's lifecycle timeline. |
+| `akilent logs tail [--interval <s>]` | Poll for new messages and stream them. |
+| `akilent templates pull <slug> [--out file.json]` | Fetch a template as JSON. |
+| `akilent templates push <slug> --in file.json` | Update a template from a local JSON file. |
+
+Auth resolution order: `--key` flag → `$AKILENT_API_KEY` → `~/.akilent/config.json`.
+Override the config path with `$AKILENT_CONFIG`.
+
+## Development
+
+```bash
+node --test "test/*.test.mjs"
+```

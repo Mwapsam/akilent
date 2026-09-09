@@ -13,7 +13,7 @@
     <button type="button" class="active" data-tab="curl">curl</button>
     <button type="button" data-tab="python">Python</button>
   </div>
-  <pre data-panel="curl"><code>curl -X POST https://api.akilent.com/api/v1/campaigns \
+  <pre data-panel="curl"><code>curl -X POST https://akilent.com/api/v1/campaigns \
   -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -27,7 +27,7 @@
   <pre data-panel="python" hidden><code>import requests
 
 resp = requests.post(
-    "https://api.akilent.com/api/v1/campaigns",
+    "https://akilent.com/api/v1/campaigns",
     headers={"Authorization": "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx"},
     json={
         "from": "billing@yourdomain.com",
