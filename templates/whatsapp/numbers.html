@@ -455,10 +455,11 @@
     }
   }
 
+  
   document.getElementById('wa-connect-btn').addEventListener('click', function () {
     connectBtn = this;
     
-    // FIX: Reset state for a fresh attempt to prevent state pollution / race conditions
+    // Reset state for a fresh attempt
     waSession = {};
     pendingCode = null;
     completing = false;
@@ -466,14 +467,27 @@
     setStatus('', false);
 
     FB.login(function (response) {
-      console.log('[wa-embedded] FB.login response', JSON.stringify(response));
+      console.log('[wa-embedded] FB.login response', response);
+      
+      // FIX: Explicitly handle the "unknown" state with actionable feedback
+      if (response.status === 'unknown') {
+        console.warn('[wa-embedded] Login failed with status "unknown". Check:');
+        console.warn('1. Browser popup blocker');
+        console.warn('2. App is in Development mode and user is not an Admin/Tester');
+        console.warn('3. Domain is not whitelisted in Facebook App Settings');
+        console.warn('4. Third-party cookies are blocked (e.g., Safari, Brave)');
+        setStatus('Login blocked. Please allow popups and ensure you are a tester on this app.', true);
+        return;
+      }
+
       const authResponse = response.authResponse;
-      const code = authResponse && (authResponse.code ||
-        extractCodeFromSignedRequest(authResponse.signedRequest));
+      const code = authResponse && (authResponse.code || extractCodeFromSignedRequest(authResponse.signedRequest));
+      
       if (authResponse && code) {
         pendingCode = code;
         setStatus('Finishing connection…', false);
         tryCompleteConnection();
+        
         if (!completing) {
           waitTimer = setTimeout(function () {
             console.log('[wa-embedded] state from: timeout', stateSnapshot());
@@ -482,7 +496,7 @@
         }
       } else {
         console.log('[wa-embedded] state from: login-callback-no-code', stateSnapshot());
-        setStatus('Onboarding was cancelled.', true);
+        setStatus('Onboarding was cancelled or failed. Please try again.', true);
       }
     }, {
       config_id: '{{ wa_config_id }}',
@@ -490,6 +504,9 @@
       override_default_response_type: true,
       extras: {
         sessionInfoVersion: '3',
+        // Note: 'version' and 'featureType' are only strictly required if you are 
+        // specifically onboarding WhatsApp Business App users. 
+        // If issues persist, try commenting out these two lines to test the base v4 flow.
         version: 'v4-public-preview',
         featureType: 'whatsapp_business_app_onboarding',
       },
