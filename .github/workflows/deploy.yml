@@ -1,53 +1,67 @@
+```yaml
 name: Deploy
 
 on:
   workflow_run:
     workflows: ["CI"]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch: {}
+    types:
+      - completed
+    branches:
+      - main
+
+  workflow_dispatch:
 
 jobs:
   deploy:
-    environment: .env
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
+
         env:
           DEBUG: ${{ secrets.DEBUG }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
           CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
           POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
           USE_SQLITE: ${{ secrets.USE_SQLITE }}
+
           RABBITMQ_USER: ${{ secrets.RABBITMQ_USER }}
           RABBITMQ_PASS: ${{ secrets.RABBITMQ_PASS }}
           CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
           CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+
           FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
+
           WHATSAPP_ENABLED: ${{ secrets.WHATSAPP_ENABLED }}
           WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
           WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
           WHATSAPP_APP_ID: ${{ secrets.WHATSAPP_APP_ID }}
           WHATSAPP_CONFIG_ID: ${{ secrets.WHATSAPP_CONFIG_ID }}
           WHATSAPP_GRAPH_VERSION: ${{ secrets.WHATSAPP_GRAPH_VERSION }}
+
           STALWART_API_BASE: ${{ secrets.STALWART_API_BASE }}
           STALWART_API_KEY: ${{ secrets.STALWART_API_KEY }}
+
           MAIL_PROVIDER_BACKEND: ${{ secrets.MAIL_PROVIDER_BACKEND }}
           EMAIL_SEND_PROVIDER_BACKEND: ${{ secrets.EMAIL_SEND_PROVIDER_BACKEND }}
           BASE_DOMAIN: ${{ secrets.BASE_DOMAIN }}
+
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
           EMAIL_USE_TLS: ${{ secrets.EMAIL_USE_TLS }}
           DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -55,24 +69,32 @@ jobs:
           AWS_CLOUDFRONT_DOMAIN: ${{ secrets.AWS_CLOUDFRONT_DOMAIN }}
           CLOUDFRONT_ID: ${{ secrets.CLOUDFRONT_ID }}
           AWS_STORAGE_BUCKET_NAME: ${{ secrets.AWS_STORAGE_BUCKET_NAME }}
+
           SES_CONFIGURATION_SET: ${{ secrets.SES_CONFIGURATION_SET }}
           SES_SNS_TOPIC_ARN: ${{ secrets.SES_SNS_TOPIC_ARN }}
+
           FLUTTERWAVE_SECRET_KEY: ${{ secrets.FLUTTERWAVE_SECRET_KEY }}
           FLUTTERWAVE_WEBHOOK_HASH: ${{ secrets.FLUTTERWAVE_WEBHOOK_HASH }}
           FLUTTERWAVE_CURRENCY: ${{ secrets.FLUTTERWAVE_CURRENCY }}
+
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+
           GUNICORN_WORKERS: ${{ secrets.GUNICORN_WORKERS }}
           GUNICORN_TIMEOUT: ${{ secrets.GUNICORN_TIMEOUT }}
+
           TASKCENTRO_DEBUG_TOKEN: ${{ secrets.TASKCENTRO_DEBUG_TOKEN }}
           INTERNAL_DEBUG_ENABLED: ${{ secrets.INTERNAL_DEBUG_ENABLED }}
+
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+
           envs: >-
             DEBUG,DJANGO_SECRET_KEY,ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS,
             POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,USE_SQLITE,
@@ -81,89 +103,130 @@ jobs:
             FIELD_ENCRYPTION_KEY,
             WHATSAPP_ENABLED,
             WHATSAPP_VERIFY_TOKEN,WHATSAPP_APP_SECRET,WHATSAPP_APP_ID,WHATSAPP_CONFIG_ID,WHATSAPP_GRAPH_VERSION,
-            STALWART_API_BASE,STALWART_API_KEY,MAIL_PROVIDER_BACKEND,EMAIL_SEND_PROVIDER_BACKEND,BASE_DOMAIN,
+            STALWART_API_BASE,STALWART_API_KEY,
+            MAIL_PROVIDER_BACKEND,EMAIL_SEND_PROVIDER_BACKEND,BASE_DOMAIN,
             EMAIL_HOST,EMAIL_PORT,EMAIL_HOST_USER,EMAIL_HOST_PASSWORD,EMAIL_USE_TLS,DEFAULT_FROM_EMAIL,
-            AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SES_CONFIGURATION_SET,SES_SNS_TOPIC_ARN,
+            AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,AWS_S3_REGION_NAME,
+            AWS_CLOUDFRONT_DOMAIN,CLOUDFRONT_ID,AWS_STORAGE_BUCKET_NAME,
+            SES_CONFIGURATION_SET,SES_SNS_TOPIC_ARN,
             FLUTTERWAVE_SECRET_KEY,FLUTTERWAVE_WEBHOOK_HASH,FLUTTERWAVE_CURRENCY,
             SLACK_WEBHOOK_URL,
             SENTRY_DSN,SENTRY_ENVIRONMENT,SENTRY_TRACES_SAMPLE_RATE,
             GUNICORN_WORKERS,GUNICORN_TIMEOUT,
-            TASKCENTRO_DEBUG_TOKEN,INTERNAL_DEBUG_ENABLED,
-            AWS_S3_REGION_NAME,AWS_CLOUDFRONT_DOMAIN,CLOUDFRONT_ID,AWS_STORAGE_BUCKET_NAME
+            TASKCENTRO_DEBUG_TOKEN,INTERNAL_DEBUG_ENABLED
+
           script: |
             set -e
+
             cd "${{ secrets.DEPLOY_PATH }}"
+
+            echo "Fetching latest code..."
             git fetch origin main
             git reset --hard origin/main
 
-            # Rebuild .env on the server from the GitHub secrets forwarded above -
-            # secrets are the source of truth, not any hand-edited server copy.
+            echo "Rebuilding .env..."
+
             cat > .env <<ENVEOF
             DEBUG=$DEBUG
             DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY
             ALLOWED_HOSTS=$ALLOWED_HOSTS
             CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS
+
             POSTGRES_DB=$POSTGRES_DB
             POSTGRES_USER=$POSTGRES_USER
             POSTGRES_PASSWORD=$POSTGRES_PASSWORD
             POSTGRES_HOST=$POSTGRES_HOST
             POSTGRES_PORT=$POSTGRES_PORT
             USE_SQLITE=$USE_SQLITE
+
             RABBITMQ_USER=$RABBITMQ_USER
             RABBITMQ_PASS=$RABBITMQ_PASS
             CELERY_BROKER_URL=$CELERY_BROKER_URL
             CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND
+
             FIELD_ENCRYPTION_KEY=$FIELD_ENCRYPTION_KEY
+
             WHATSAPP_ENABLED=$WHATSAPP_ENABLED
             WHATSAPP_VERIFY_TOKEN=$WHATSAPP_VERIFY_TOKEN
             WHATSAPP_APP_SECRET=$WHATSAPP_APP_SECRET
             WHATSAPP_APP_ID=$WHATSAPP_APP_ID
             WHATSAPP_CONFIG_ID=$WHATSAPP_CONFIG_ID
             WHATSAPP_GRAPH_VERSION=$WHATSAPP_GRAPH_VERSION
+
             STALWART_API_BASE=$STALWART_API_BASE
             STALWART_API_KEY=$STALWART_API_KEY
+
             MAIL_PROVIDER_BACKEND=$MAIL_PROVIDER_BACKEND
             EMAIL_SEND_PROVIDER_BACKEND=$EMAIL_SEND_PROVIDER_BACKEND
             BASE_DOMAIN=$BASE_DOMAIN
+
             EMAIL_HOST=$EMAIL_HOST
             EMAIL_PORT=$EMAIL_PORT
             EMAIL_HOST_USER=$EMAIL_HOST_USER
             EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD
             EMAIL_USE_TLS=$EMAIL_USE_TLS
             DEFAULT_FROM_EMAIL=$DEFAULT_FROM_EMAIL
+
             AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
             AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
             AWS_REGION=$AWS_REGION
-            AWS_S3_REGION_NAME=$AWS_REGION
+            AWS_S3_REGION_NAME=$AWS_S3_REGION_NAME
             AWS_CLOUDFRONT_DOMAIN=$AWS_CLOUDFRONT_DOMAIN
             CLOUDFRONT_ID=$CLOUDFRONT_ID
             AWS_STORAGE_BUCKET_NAME=$AWS_STORAGE_BUCKET_NAME
+
             SES_CONFIGURATION_SET=$SES_CONFIGURATION_SET
             SES_SNS_TOPIC_ARN=$SES_SNS_TOPIC_ARN
+
             FLUTTERWAVE_SECRET_KEY=$FLUTTERWAVE_SECRET_KEY
             FLUTTERWAVE_WEBHOOK_HASH=$FLUTTERWAVE_WEBHOOK_HASH
             FLUTTERWAVE_CURRENCY=$FLUTTERWAVE_CURRENCY
+
             SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL
+
             SENTRY_DSN=$SENTRY_DSN
             SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT
             SENTRY_TRACES_SAMPLE_RATE=$SENTRY_TRACES_SAMPLE_RATE
+
             GUNICORN_WORKERS=$GUNICORN_WORKERS
             GUNICORN_TIMEOUT=$GUNICORN_TIMEOUT
+
             TASKCENTRO_DEBUG_TOKEN=$TASKCENTRO_DEBUG_TOKEN
             INTERNAL_DEBUG_ENABLED=$INTERNAL_DEBUG_ENABLED
+            ENVEOF
+
             chmod 600 .env
 
-            docker compose --profile prod build web celery_worker celery_beat
-            docker compose --profile prod run --rm web python manage.py migrate --noinput
+            echo "Building Docker images..."
+
+            docker compose --profile prod build \
+              web \
+              celery_worker \
+              celery_beat
+
+            echo "Running migrations..."
+
+            docker compose --profile prod run --rm \
+              web python manage.py migrate --noinput
+
+            echo "Starting services..."
+
             docker compose --profile prod up -d
+
+            echo "Removing unused Docker images..."
+
             docker image prune -f
+
+            echo "Deployment completed successfully."
 
       - name: Invalidate CloudFront
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "${{ secrets.CLOUDFRONT_ID }}" \
             --paths "/*"
+```
