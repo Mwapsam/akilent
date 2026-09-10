@@ -26,6 +26,7 @@ class SmtpSendProvider(EmailSendProvider):
                 text_body=message.text_body,
                 html_body=message.html_body,
                 headers=message.headers or None,
+                attachments=message.attachments or None,
             )
         except Exception as exc:
             raise EmailProviderError(str(exc)) from exc

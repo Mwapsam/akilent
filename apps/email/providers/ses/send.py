@@ -104,6 +104,23 @@ class SesSendProvider(EmailSendProvider):
                 },
             }
 
+            # Attachments require a raw MIME send — SES has no "Simple" slot for them.
+            if message.attachments:
+                from apps.email.services.mime import build_mime
+
+                params["Content"] = {"Raw": {"Data": build_mime(message)}}
+                if self.configuration_set:
+                    params["ConfigurationSetName"] = self.configuration_set
+                response = self.client.send_email(**params)
+                message_id = response.get("MessageId")
+                if not message_id:
+                    raise EmailProviderError("SES returned no MessageId")
+                logger.info(
+                    "SES raw send successful: to=%s, message_id=%s, attachments=%d",
+                    message.to_email, message_id, len(message.attachments),
+                )
+                return SendResult(success=True, provider_message_id=message_id)
+
             # Add body parts (prefer HTML, fallback to text-only)
             if message.html_body:
                 params["Content"]["Simple"]["Body"] = {

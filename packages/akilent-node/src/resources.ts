@@ -8,6 +8,8 @@ export interface SendParams {
   html?: string;
   template?: string;
   variables?: Record<string, unknown>;
+  locale?: string;
+  attachments?: Array<{ filename: string; content_b64: string; content_type?: string }>;
   idempotencyKey?: string;
 }
 
@@ -43,11 +45,10 @@ export class Messages {
   constructor(private readonly t: Transport) {}
 
   send(p: SendParams): Promise<{ id: number; public_id: string; status: string }> {
-    const { idempotencyKey, ...rest } = p;
-    return this.t.request("POST", "/api/v1/messages", {
-      body: rest,
-      idempotencyKey,
-    });
+    const { idempotencyKey, variables, ...rest } = p;
+    const body: Record<string, unknown> = { ...rest };
+    if (variables !== undefined) body.template_variables = variables;
+    return this.t.request("POST", "/api/v1/messages", { body, idempotencyKey });
   }
 
   list(filters: Record<string, string | number> = {}): Promise<Page<Message>> {

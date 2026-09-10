@@ -20,6 +20,7 @@ class ErrorCode:
     VALIDATION_ERROR = "validation_error"
     PARSE_ERROR = "parse_error"
     MISSING_CONTENT = "missing_content"
+    INVALID_ATTACHMENT = "invalid_attachment"
 
     # domain / sending
     UNVERIFIED_DOMAIN = "unverified_domain"
@@ -49,6 +50,7 @@ CATALOG: dict[str, dict[str, str]] = {
     ErrorCode.VALIDATION_ERROR: {"message": "One or more fields failed validation.", "http": "400"},
     ErrorCode.PARSE_ERROR: {"message": "The request body could not be parsed.", "http": "400"},
     ErrorCode.MISSING_CONTENT: {"message": "The message or template has no renderable content.", "http": "400"},
+    ErrorCode.INVALID_ATTACHMENT: {"message": "An attachment is missing fields, not valid base64, or exceeds the size limit.", "http": "400"},
     ErrorCode.UNVERIFIED_DOMAIN: {"message": "The sending domain is not verified for this account.", "http": "403"},
     ErrorCode.RECIPIENT_CAP_EXCEEDED: {"message": "The campaign exceeds your per-campaign recipient cap.", "http": "403"},
     ErrorCode.SUPPRESSED_RECIPIENT: {"message": "The recipient is on your suppression list.", "http": "403"},

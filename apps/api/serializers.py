@@ -19,6 +19,10 @@ class MessageCreateSerializer(serializers.Serializer):
 
     template_id = serializers.IntegerField(required=False, allow_null=True)
     template_variables = serializers.DictField(required=False, default=dict)
+    locale = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+    attachments = serializers.ListField(
+        child=serializers.DictField(), required=False, default=list
+    )
 
     @staticmethod
     def from_request_data(data: dict) -> dict:
@@ -31,6 +35,8 @@ class MessageCreateSerializer(serializers.Serializer):
             "html": data.get("html", ""),
             "template_id": data.get("template_id"),
             "template_variables": data.get("template_variables", {}),
+            "locale": data.get("locale", ""),
+            "attachments": data.get("attachments", []),
         }
 
 

@@ -536,6 +536,67 @@ class EmailTemplate(models.Model):
         return f"{self.name} ({self.account})"
 
 
+class EmailTemplateLocale(models.Model):
+    """A per-locale content variant of an EmailTemplate.
+
+    Each field falls back to the base template when left blank, so a locale
+    row can override just the subject, or the whole message. Rendering picks a
+    locale from an explicit ``locale`` arg or ``contact.locale``; an unknown
+    locale falls back to the base template.
+    """
+
+    template = models.ForeignKey(
+        EmailTemplate, on_delete=models.CASCADE, related_name="locales"
+    )
+    locale = models.CharField(max_length=15)  # e.g. "en", "fr", "pt-BR"
+    subject = models.CharField(max_length=998, blank=True, default="")
+    text_body = models.TextField(blank=True, default="")
+    html_body = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["locale"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["template", "locale"], name="uniq_template_locale"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.template.slug} [{self.locale}]"
+
+
+class EmailTemplateDataSource(models.Model):
+    """A named HTTPS endpoint fetched at render time into a template's context.
+
+    The fetched JSON object is injected under ``key`` (so ``{{ key.field }}``).
+    Fetches are HTTPS-only, SSRF-guarded, size/time-capped, and cached for
+    ``ttl_seconds`` — see apps.email.services.datafetch.
+    """
+
+    template = models.ForeignKey(
+        EmailTemplate, on_delete=models.CASCADE, related_name="data_sources"
+    )
+    key = models.SlugField(max_length=60)
+    url = models.URLField(max_length=1000)
+    headers = models.JSONField(default=dict, blank=True)
+    ttl_seconds = models.PositiveIntegerField(default=300)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["template", "key"], name="uniq_template_datasource_key"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.template.slug}:{self.key}"
+
+
 class SystemEmailTemplate(models.Model):
     """A platform-owned (non-tenant) transactional/system email template.
 
@@ -854,6 +915,10 @@ class EmailMessage(models.Model):
     rendered_subject = models.CharField(max_length=998, blank=True, default="")
     rendered_text = models.TextField(blank=True, default="")
     rendered_html = models.TextField(blank=True, default="")
+
+    # Attachment metadata only: [{"filename", "content_type", "size"}]. The bytes
+    # are carried to the send task, not persisted here.
+    attachments = models.JSONField(default=list, blank=True)
 
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.QUEUED

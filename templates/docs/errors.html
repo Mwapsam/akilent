@@ -26,6 +26,7 @@
   <tr><th>Status</th><th>Code</th><th>Meaning</th></tr>
   <tr><td>400</td><td><code>invalid</code></td><td>Request validation failed — check the message for which field.</td></tr>
   <tr><td>400</td><td><code>missing_content</code></td><td>A template or campaign request had neither a <code>template_id</code> nor inline <code>subject</code>/<code>text</code>/<code>html</code>.</td></tr>
+  <tr><td>400</td><td><code>invalid_attachment</code></td><td>An <code>attachments[]</code> entry is missing a <code>filename</code>/<code>content_b64</code>, isn't valid base64, or exceeds the size limit (5&nbsp;MiB per file, 10&nbsp;MiB total, 10 files).</td></tr>
   <tr><td>401</td><td><code>authentication_failed</code></td><td>Missing or invalid API key.</td></tr>
   <tr><td>403</td><td><code>unverified_domain</code></td><td>The <code>from</code> address's domain isn't verified for your account.</td></tr>
   <tr><td>403</td><td><code>permission_denied</code></td><td>The request was authenticated but not allowed — either your plan doesn't include a feature you're using (API &amp; SMTP relay, templates, or bulk email), or your API key is missing a required <a href="{% url 'docs-page' 'authentication' %}#scopes">scope</a>. Read the <code>message</code> field to tell which.</td></tr>

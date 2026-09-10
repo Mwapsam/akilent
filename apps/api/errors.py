@@ -68,6 +68,13 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, TemplateMissingContentError):
         return _envelope("missing_content", str(exc), status.HTTP_400_BAD_REQUEST, context)
 
+    from apps.email.services.attachments import AttachmentError
+
+    if isinstance(exc, AttachmentError):
+        return _envelope(
+            "invalid_attachment", str(exc), status.HTTP_400_BAD_REQUEST, context
+        )
+
     if isinstance(exc, EmailTemplate.DoesNotExist):
         return _envelope(
             "not_found", "Template not found.", status.HTTP_404_NOT_FOUND, context

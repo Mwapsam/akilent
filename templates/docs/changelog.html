@@ -22,7 +22,7 @@
 </p>
 <table>
   <tr><th>Date</th><th>Change</th></tr>
-  <tr><td>2026-09-10</td><td>Added <code>GET /api/v1/analytics</code> (grouped rollups), the Workflows API (CRUD, publish/archive, enrol, runs), workflow triggers for <code>contact.created/updated</code> and <code>email.opened/clicked</code>, and <code>GET /api/v1/changelog</code>.</td></tr>
+  <tr><td>2026-09-10</td><td>Added <code>GET /api/v1/analytics</code> (grouped rollups); the Workflows API (CRUD, publish/archive, enrol, runs) + starter templates; workflow triggers for <code>contact.created/updated</code> and <code>email.opened/clicked</code>; <code>locale</code> and <code>attachments[]</code> on <code>POST /api/v1/messages</code>; template localization (<code>/locales</code>) and render-time data sources (<code>/data-sources</code>); <code>GET /api/v1/campaigns/{id}/versions</code>; and <code>GET /api/v1/changelog</code>.</td></tr>
   <tr><td>2026-09-03</td><td>Added <code>GET /api/v1/templates/{slug}/versions</code> + <code>.../versions/{n}/activate</code> (rollback) and <code>GET /api/v1/version</code>.</td></tr>
   <tr><td>2026-08-27</td><td>Added <code>GET /api/v1/deliverability</code>; contacts, lists, and segments API; <code>POST /api/v1/events</code>; <code>POST /api/v1/webhooks/test</code>.</td></tr>
   <tr><td>2026-08-20</td><td>OpenAPI schema at <code>/api/schema</code> (Swagger <code>/api/docs</code>, Redoc <code>/api/reference</code>); test-mode API keys + sandbox provider; <code>Idempotency-Key</code> on <code>POST /api/v1/messages</code> and <code>/api/v1/campaigns</code>; message and request logs; <code>request_id</code>/<code>docs_url</code> in the error envelope.</td></tr>

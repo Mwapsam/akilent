@@ -129,6 +129,7 @@ def smtp_send(
     text_body: str = "",
     html_body: str = "",
     headers: dict[str, str] | None = None,
+    attachments=None,
 ) -> str:
     """Send one email through the configured SMTP relay (Stalwart submission port).
 
@@ -152,5 +153,7 @@ def smtp_send(
     )
     if html_body:
         msg.attach_alternative(html_body, "text/html")
+    for att in attachments or ():
+        msg.attach(att.filename, att.content, att.content_type)
     msg.send(fail_silently=False)
     return msg.extra_headers.get("Message-ID", "")

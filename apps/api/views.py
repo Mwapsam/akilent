@@ -108,6 +108,8 @@ class MessageCreateView(BaseApiView):
             html_body=data.get("html", ""),
             template_id=data.get("template_id"),
             template_variables=data.get("template_variables"),
+            locale=data.get("locale") or None,
+            attachments=data.get("attachments") or None,
             mode=getattr(request.auth, "mode", "live"),
         )
         request.auth.touch()
@@ -227,8 +229,10 @@ class TemplateRenderView(BaseApiView):
     @extend_schema(operation_id="template_render", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
     def post(self, request, slug, *args, **kwargs):
         template = EmailTemplate.objects.get(account=request.user, slug=slug)
-        variables = request.data.get("variables") if isinstance(request.data, dict) else None
-        result = render_template_preview(template=template, variables=variables)
+        body = request.data if isinstance(request.data, dict) else {}
+        variables = body.get("variables")
+        locale = body.get("locale")
+        result = render_template_preview(template=template, variables=variables, locale=locale)
         request.auth.touch()
         return Response(result)
 
@@ -564,6 +568,119 @@ class TemplateVersionActivateView(BaseApiView):
         v = activate_version(t, int(number))
         request.auth.touch()
         return Response({"number": v.number, "active": v.is_active, "subject": t.subject})
+
+
+class TemplateLocalesView(BaseApiView):
+    """GET /api/v1/templates/<slug>/locales — list locale variants."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_locales", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def get(self, request, slug, *args, **kwargs):
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        return Response({"data": [
+            {
+                "locale": lo.locale,
+                "subject": lo.subject,
+                "text": lo.text_body,
+                "html": lo.html_body,
+                "updated_at": lo.updated_at,
+            }
+            for lo in t.locales.all()
+        ]})
+
+
+class TemplateLocaleDetailView(BaseApiView):
+    """PUT/DELETE /api/v1/templates/<slug>/locales/<locale> — upsert or remove a variant."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_locale_upsert", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def put(self, request, slug, locale, *args, **kwargs):
+        from apps.email.models import EmailTemplateLocale
+
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        d = request.data if isinstance(request.data, dict) else {}
+        row, _ = EmailTemplateLocale.objects.update_or_create(
+            template=t, locale=locale,
+            defaults={
+                "subject": d.get("subject", ""),
+                "text_body": d.get("text", ""),
+                "html_body": d.get("html", ""),
+            },
+        )
+        request.auth.touch()
+        return Response({
+            "locale": row.locale, "subject": row.subject,
+            "text": row.text_body, "html": row.html_body,
+        })
+
+    @extend_schema(operation_id="template_locale_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def delete(self, request, slug, locale, *args, **kwargs):
+        from apps.email.models import EmailTemplateLocale
+
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        EmailTemplateLocale.objects.filter(template=t, locale=locale).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TemplateDataSourcesView(BaseApiView):
+    """GET /api/v1/templates/<slug>/data-sources — list render-time data sources."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_data_sources", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def get(self, request, slug, *args, **kwargs):
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        return Response({"data": [
+            {"key": s.key, "url": s.url, "ttl_seconds": s.ttl_seconds}
+            for s in t.data_sources.all()
+        ]})
+
+
+class TemplateDataSourceDetailView(BaseApiView):
+    """PUT/DELETE /api/v1/templates/<slug>/data-sources/<key>."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_data_source_upsert", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def put(self, request, slug, key, *args, **kwargs):
+        from apps.email.models import EmailTemplateDataSource
+        from apps.email.services.datafetch import DataFetchError, _assert_public_https
+
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        d = request.data if isinstance(request.data, dict) else {}
+        url = (d.get("url") or "").strip()
+        if not url:
+            return Response({"error": {"code": "validation_error", "message": "url is required"}},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            _assert_public_https(url)
+        except DataFetchError as exc:
+            return Response({"error": {"code": "validation_error", "message": str(exc)}},
+                            status=status.HTTP_400_BAD_REQUEST)
+        row, _ = EmailTemplateDataSource.objects.update_or_create(
+            template=t, key=key,
+            defaults={
+                "url": url,
+                "headers": d.get("headers") or {},
+                "ttl_seconds": int(d.get("ttl_seconds", 300) or 300),
+            },
+        )
+        request.auth.touch()
+        return Response({"key": row.key, "url": row.url, "ttl_seconds": row.ttl_seconds})
+
+    @extend_schema(operation_id="template_data_source_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def delete(self, request, slug, key, *args, **kwargs):
+        from apps.email.models import EmailTemplateDataSource
+
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        EmailTemplateDataSource.objects.filter(template=t, key=key).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ApiVersionView(BaseApiView):

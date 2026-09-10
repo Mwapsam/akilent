@@ -22,6 +22,8 @@ class Messages(_Base):
         html: Optional[str] = None,
         template: Optional[str] = None,
         variables: Optional[dict] = None,
+        locale: Optional[str] = None,
+        attachments: Optional[list] = None,
         idempotency_key: Optional[str] = None,
     ) -> dict:
         payload: dict[str, Any] = {"from": from_, "to": to}
@@ -34,7 +36,11 @@ class Messages(_Base):
         if template is not None:
             payload["template"] = template
         if variables is not None:
-            payload["variables"] = variables
+            payload["template_variables"] = variables
+        if locale is not None:
+            payload["locale"] = locale
+        if attachments is not None:
+            payload["attachments"] = attachments
         return self._t.request(
             "POST", "/api/v1/messages", json=payload, idempotency_key=idempotency_key
         )

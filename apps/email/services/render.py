@@ -43,17 +43,54 @@ def _account_components(template) -> dict:
     }
 
 
-def render_template(template, variables: dict | None = None) -> tuple[str, str, str]:
+def _resolve_locale_source(template, locale: str | None):
+    """Return (subject, text, html) sources for `locale`, per-field falling back
+    to the base template. Unknown/blank locale -> the base template unchanged."""
+    base = (template.subject, template.text_body, template.html_body)
+    if not locale:
+        return base
+    get_locales = getattr(template, "locales", None)
+    if get_locales is None:
+        return base
+    row = get_locales.filter(locale=locale).first()
+    if row is None and "-" in locale:
+        # "pt-BR" -> fall back to "pt"
+        row = get_locales.filter(locale=locale.split("-", 1)[0]).first()
+    if row is None:
+        return base
+    return (
+        row.subject or template.subject,
+        row.text_body or template.text_body,
+        row.html_body or template.html_body,
+    )
+
+
+def render_template(
+    template, variables: dict | None = None, *, locale: str | None = None
+) -> tuple[str, str, str]:
     """Render an EmailTemplate's subject/text/html with `variables`.
 
     Returns (subject, text_body, html_body). The tenant's custom
     ``{% component %}`` bodies are made available via a ``_components`` key.
+    If ``locale`` is given (or ``variables["contact"]["locale"]`` is set) and a
+    matching ``EmailTemplateLocale`` exists, its content is used, per-field
+    falling back to the base template.
     """
     variables = {**(variables or {})}
     variables.setdefault("_components", _account_components(template))
-    subject = render_string(template.subject, variables)
-    text_body = render_string(template.text_body, variables)
-    html_body = render_string(template.html_body, variables)
+    if getattr(template, "pk", None) is not None:
+        from apps.email.services.datafetch import resolve_data_sources
+
+        for key, payload in resolve_data_sources(template).items():
+            variables.setdefault(key, payload)
+    if locale is None:
+        contact = variables.get("contact")
+        if isinstance(contact, dict):
+            locale = contact.get("locale") or None
+    subject_src, text_src, html_src = _resolve_locale_source(template, locale)
+    subject = render_string(subject_src, variables)
+    text_body = render_string(text_src, variables)
+    html_body = render_string(html_src, variables)
     return subject, text_body, html_body
 
 

@@ -120,6 +120,15 @@ class OperationResult:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """One file attached to an outbound message. ``content`` is the raw bytes."""
+
+    filename: str
+    content: bytes
+    content_type: str = "application/octet-stream"
+
+
+@dataclass(frozen=True)
 class OutboundEmail:
     """A single fully-rendered message ready to hand to a send provider.
 
@@ -133,6 +142,7 @@ class OutboundEmail:
     text_body: str = ""
     html_body: str = ""
     headers: dict[str, str] = field(default_factory=dict)
+    attachments: tuple["Attachment", ...] = ()
 
 
 @dataclass(frozen=True)

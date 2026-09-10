@@ -13,8 +13,12 @@ CHANGELOG: list[dict] = [
         "version": "v1",
         "changes": [
             {"type": "added", "summary": "GET /v1/analytics — grouped rollups by day, template, campaign, or domain."},
-            {"type": "added", "summary": "Workflows API: CRUD, publish/archive, enrol contacts, inspect runs."},
+            {"type": "added", "summary": "Workflows API: CRUD, publish/archive, enrol contacts, inspect runs; starter templates at GET /v1/workflows/templates."},
             {"type": "added", "summary": "Workflow triggers for contact.created/updated and email.opened/clicked."},
+            {"type": "added", "summary": "POST /v1/messages accepts `locale` and `attachments[]` (base64, 5 MiB/file, 10 MiB total)."},
+            {"type": "added", "summary": "Template localization: GET /v1/templates/{slug}/locales, PUT/DELETE .../locales/{locale}."},
+            {"type": "added", "summary": "Template render-time data sources: GET/PUT/DELETE /v1/templates/{slug}/data-sources[/{key}]."},
+            {"type": "added", "summary": "GET /v1/campaigns/{id}/versions — content snapshots."},
             {"type": "added", "summary": "GET /v1/changelog — this feed."},
         ],
     },

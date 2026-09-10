@@ -133,13 +133,21 @@ def _send_sandbox_message(msg: EmailMessage, text_body: str, html_body: str) -> 
         record_message_event(msg, event_type, source="sandbox")
 
 
-def _send_email_message(task, msg: EmailMessage, text_body: str, html_body: str) -> None:
+def _send_email_message(
+    task, msg: EmailMessage, text_body: str, html_body: str, *, attachments=None
+) -> None:
     """Shared send logic for both send_email and send_bulk_recipient_email.
 
     ``task`` is the bound Celery task instance (for retry/request.retries).
     """
     from apps.email.services.suppression import is_suppressed
     from apps.email.services.reputation import check_can_send, record_send
+
+    att_objs = ()
+    if attachments:
+        from apps.email.services.attachments import decode_from_task
+
+        att_objs = tuple(decode_from_task(attachments))
 
     # Test-mode messages route through the sandbox: no suppression / reputation /
     # quota, nothing delivered, deterministic follow-up events.
@@ -213,6 +221,7 @@ def _send_email_message(task, msg: EmailMessage, text_body: str, html_body: str)
             text_body=text_body,
             html_body=html_body,
             headers=headers,
+            attachments=att_objs,
         ))
         msg.mark_sent(result.provider_message_id)
         record_send(msg.account)
@@ -282,7 +291,8 @@ def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
     queue="outbound",
 )
 def send_email(
-    self, email_message_id: int, text_body: str = "", html_body: str = ""
+    self, email_message_id: int, text_body: str = "", html_body: str = "",
+    attachments=None,
 ) -> None:
     """Send a queued EmailMessage and record the outcome."""
     try:
@@ -296,7 +306,7 @@ def send_email(
     if msg.status == EmailMessage.Status.SENT:
         return
 
-    _send_email_message(self, msg, text_body, html_body)
+    _send_email_message(self, msg, text_body, html_body, attachments=attachments)
 
 
 @shared_task(

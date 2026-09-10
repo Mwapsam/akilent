@@ -50,6 +50,8 @@ def create_and_queue_message(
     html_body: str = "",
     template_id: int | None = None,
     template_variables: dict | None = None,
+    locale: str | None = None,
+    attachments: list | None = None,
     mode: str = "live",
 ) -> EmailMessage:
     """Validate, reserve quota, and queue a transactional send.
@@ -102,8 +104,16 @@ def create_and_queue_message(
     if template_id is not None:
         template = EmailTemplate.objects.get(pk=template_id, account=account)
         subject, text_body, html_body = render_template(
-            template, template_variables or {}
+            template, template_variables or {}, locale=locale
         )
+
+    from apps.email.services.attachments import (
+        attachments_metadata,
+        encode_for_task,
+        parse_attachments,
+    )
+
+    parsed_attachments = parse_attachments(attachments)  # raises AttachmentError
 
     msg = EmailMessage.objects.create(
         account=account,
@@ -116,14 +126,19 @@ def create_and_queue_message(
         rendered_subject=subject,
         rendered_text=text_body,
         rendered_html=html_body,
+        attachments=attachments_metadata(parsed_attachments),
     )
 
     from apps.logs.services import record_message_event
 
     record_message_event(msg, "queued", source="api")
 
+    task_attachments = encode_for_task(parsed_attachments)
     transaction.on_commit(
-        lambda: send_email.delay(msg.id, text_body=text_body, html_body=html_body)
+        lambda: send_email.delay(
+            msg.id, text_body=text_body, html_body=html_body,
+            attachments=task_attachments or None,
+        )
     )
     return msg
 
@@ -199,9 +214,11 @@ def clone_template(*, template: EmailTemplate) -> EmailTemplate:
     )
 
 
-def render_template_preview(*, template: EmailTemplate, variables: dict | None = None) -> dict:
+def render_template_preview(
+    *, template: EmailTemplate, variables: dict | None = None, locale: str | None = None
+) -> dict:
     variables = variables or template.sample_variables
-    subject, text_body, html_body = render_template(template, variables)
+    subject, text_body, html_body = render_template(template, variables, locale=locale)
     return {
         "subject": subject,
         "text": text_body,
