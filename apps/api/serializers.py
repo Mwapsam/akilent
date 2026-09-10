@@ -24,6 +24,15 @@ class MessageCreateSerializer(serializers.Serializer):
         child=serializers.DictField(), required=False, default=list
     )
 
+    # Scheduling (Akilent Scheduler). `scheduled_at` may carry a UTC offset
+    # ("2026-09-15T09:00:00-04:00") or be naive + paired with `timezone`
+    # (an IANA zone, or "recipient").
+    scheduled_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    timezone = serializers.CharField(required=False, allow_blank=True, default="")
+    recurrence = serializers.CharField(required=False, allow_blank=True, default="")
+    recurrence_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    max_occurrences = serializers.IntegerField(required=False, allow_null=True, default=None)
+
     @staticmethod
     def from_request_data(data: dict) -> dict:
         """Map the public JSON shape (`from`/`to`) onto this serializer's fields."""
@@ -37,6 +46,11 @@ class MessageCreateSerializer(serializers.Serializer):
             "template_variables": data.get("template_variables", {}),
             "locale": data.get("locale", ""),
             "attachments": data.get("attachments", []),
+            "scheduled_at": data.get("scheduled_at"),
+            "timezone": data.get("timezone", ""),
+            "recurrence": data.get("recurrence", ""),
+            "recurrence_until": data.get("recurrence_until"),
+            "max_occurrences": data.get("max_occurrences"),
         }
 
 
@@ -89,6 +103,12 @@ class CampaignCreateSerializer(serializers.Serializer):
     list = serializers.SlugField(required=False, allow_blank=True, default="")
     segment = serializers.SlugField(required=False, allow_blank=True, default="")
 
+    scheduled_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    timezone = serializers.CharField(required=False, allow_blank=True, default="")
+    recurrence = serializers.CharField(required=False, allow_blank=True, default="")
+    recurrence_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    max_occurrences = serializers.IntegerField(required=False, allow_null=True, default=None)
+
     @staticmethod
     def from_request_data(data: dict) -> dict:
         return {
@@ -100,4 +120,9 @@ class CampaignCreateSerializer(serializers.Serializer):
             "recipients": data.get("recipients", []),
             "list": data.get("list", ""),
             "segment": data.get("segment", ""),
+            "scheduled_at": data.get("scheduled_at"),
+            "timezone": data.get("timezone", ""),
+            "recurrence": data.get("recurrence", ""),
+            "recurrence_until": data.get("recurrence_until"),
+            "max_occurrences": data.get("max_occurrences"),
         }

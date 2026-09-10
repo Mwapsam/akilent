@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.events",
     "drf_spectacular",
     "apps.automation",
+    "apps.scheduler",
     "apps.billing",
     "apps.api",
     "apps.internal_debug",
@@ -434,6 +435,8 @@ CELERY_TASK_ROUTES = {
     "apps.logs.tasks.prune_idempotency_records": {"queue": "celery"},
     "apps.logs.tasks.prune_api_requests": {"queue": "celery"},
     "apps.logs.tasks.reconcile_message_stats": {"queue": "celery"},
+    "apps.scheduler.tasks.run_due_jobs": {"queue": "scheduler"},
+    "apps.scheduler.tasks.prune_scheduled_jobs": {"queue": "celery"},
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -485,7 +488,20 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.automation.tasks.run_due_workflows",
         "schedule": 60.0,  # workflow wait-timers resolve at minute granularity
     },
+    "run-due-scheduled-jobs": {
+        "task": "apps.scheduler.tasks.run_due_jobs",
+        "schedule": 60.0,  # send-later / scheduled campaigns resolve at minute granularity
+    },
+    "prune-scheduled-jobs": {
+        "task": "apps.scheduler.tasks.prune_scheduled_jobs",
+        "schedule": 86400.0,
+    },
 }
+
+# Scheduler kill-switch for dark-launch / backout. When False, new schedule
+# requests are rejected with a 4xx (apps.scheduler.api.should_schedule) instead
+# of deferring; existing jobs still drain.
+SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "1") != "0"
 
 if WHATSAPP_ENABLED:
     CELERY_TASK_ROUTES.update({

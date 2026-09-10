@@ -694,6 +694,7 @@ class BulkEmailCampaign(models.Model):
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
+        SCHEDULED = "scheduled", "Scheduled"
         QUEUED = "queued", "Queued"
         SENDING = "sending", "Sending"
         PAUSED = "paused", "Paused"
@@ -873,6 +874,7 @@ class EmailMessage(models.Model):
     """Log of a transactional email send."""
 
     class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
         QUEUED = "queued", "Queued"
         SENT = "sent", "Sent"
         DELIVERED = "delivered", "Delivered"

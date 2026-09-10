@@ -258,6 +258,25 @@
         </button>
         <p class="help">We'll email a copy to your own address so you can check how it looks.</p>
       </div>
+
+      {# ── Schedule for later ─────────────────────────────────────────── #}
+      <div class="rounded-xl border border-border px-4 py-3 grid gap-2"
+           x-data="{ on: {% if form_data.schedule_enabled %}true{% else %}false{% endif %} }">
+        <label class="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" name="schedule_enabled" x-model="on" value="1">
+          Schedule for later
+        </label>
+        <input type="hidden" name="schedule_timezone"
+               :value="Intl.DateTimeFormat().resolvedOptions().timeZone">
+        <div x-show="on" x-cloak class="grid gap-1">
+          <input type="datetime-local" name="scheduled_at" class="input sm:max-w-xs"
+                 value="{{ form_data.scheduled_at }}">
+          <p class="help">Sends at this time in your timezone
+            (<span x-text="Intl.DateTimeFormat().resolvedOptions().timeZone"></span>).
+            Manage or cancel it anytime from <a href="/scheduled/" class="link">Scheduled</a>.</p>
+          {% if errors.scheduled_at %}<p class="field-error">{{ errors.scheduled_at }}</p>{% endif %}
+        </div>
+      </div>
     </div>
 
     {# ── Wizard navigation ────────────────────────────────────────────── #}
@@ -290,6 +309,7 @@
         <td>
           {% if c.status == 'completed' %}<span class="badge badge-success">Completed</span>
           {% elif c.status == 'failed' or c.status == 'cancelled' %}<span class="badge badge-danger">{{ c.get_status_display }}</span>
+          {% elif c.status == 'scheduled' %}<span class="badge badge-info">Scheduled</span>
           {% elif c.status == 'sending' or c.status == 'queued' %}<span class="badge badge-warning">{{ c.get_status_display }}</span>
           {% else %}<span class="badge badge-neutral">Draft</span>{% endif %}
         </td>

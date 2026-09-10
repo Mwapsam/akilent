@@ -30,7 +30,8 @@ dependencies = [
     "django-storages (>=1.14,<2.0)",
     "aiosmtpd (>=1.4.0,<2.0.0)",
     "moto (>=5.2.3,<6.0.0)",
-    "drf-spectacular (>=0.30.0,<0.31.0)"
+    "drf-spectacular (>=0.30.0,<0.31.0)",
+    "python-dateutil (>=2.9,<3.0)"
 ]
 
 

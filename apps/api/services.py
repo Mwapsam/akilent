@@ -40,6 +40,23 @@ class RecipientCapExceededError(Exception):
         )
 
 
+def _validate_schedulable_from(account, from_email: str, template_id: int | None) -> None:
+    """Structural checks that must hold at schedule time (fast-fail before a job
+    row is created). Volume-sensitive gates — quota, reputation, suppression,
+    MX — run at fire time via the normal immediate path instead.
+    """
+    from_domain = from_email.rsplit("@", 1)[-1].lower()
+    if not EmailDomain.objects.filter(
+        account=account, domain=from_domain, status=EmailDomain.Status.VERIFIED
+    ).exists():
+        raise UnverifiedDomainError(from_domain)
+
+    LimitChecker(account).require_feature("email_apis", "the email API & SMTP relay")
+
+    if template_id is not None:
+        EmailTemplate.objects.get(pk=template_id, account=account)
+
+
 def create_and_queue_message(
     *,
     account,
@@ -53,7 +70,13 @@ def create_and_queue_message(
     locale: str | None = None,
     attachments: list | None = None,
     mode: str = "live",
-) -> EmailMessage:
+    scheduled_at=None,
+    tz: str = "",
+    created_by=None,
+    recurrence: str = "",
+    recurrence_until=None,
+    max_occurrences: int | None = None,
+):
     """Validate, reserve quota, and queue a transactional send.
 
     If template_id is given, the template's subject/text/html are rendered
@@ -63,6 +86,40 @@ def create_and_queue_message(
     those into their own response shape.
     """
     is_test = mode == "test"
+
+    from apps.scheduler.api import (
+        new_idempotency_key,
+        resolve_fire_at,
+        schedule_email_message,
+        should_schedule,
+    )
+
+    if should_schedule(scheduled_at):
+        fire_at = resolve_fire_at(scheduled_at, tz)
+        _validate_schedulable_from(account, from_email, template_id)
+        payload = {
+            "from_email": from_email,
+            "to_email": to_email,
+            "subject": subject,
+            "text_body": text_body,
+            "html_body": html_body,
+            "template_id": template_id,
+            "template_variables": template_variables or {},
+            "locale": locale or None,
+            "attachments": attachments or None,
+            "mode": mode,
+        }
+        return schedule_email_message(
+            account=account,
+            payload=payload,
+            fire_at=fire_at,
+            tz=tz or "UTC",
+            idempotency_key=new_idempotency_key(),
+            created_by=created_by,
+            recurrence=recurrence,
+            recurrence_until=recurrence_until,
+            max_occurrences=max_occurrences,
+        )
 
     from_domain = from_email.rsplit("@", 1)[-1].lower()
     domain = EmailDomain.objects.filter(
@@ -238,7 +295,13 @@ def create_and_queue_campaign(
     recipients: list[dict] | None = None,
     list_slug: str | None = None,
     segment_slug: str | None = None,
-) -> BulkEmailCampaign:
+    scheduled_at=None,
+    tz: str = "",
+    created_by=None,
+    recurrence: str = "",
+    recurrence_until=None,
+    max_occurrences: int | None = None,
+):
     """Validate, gate on plan features/recipient cap, and queue a bulk campaign.
 
     Either template_id or inline subject/text/html must be given. Raises
@@ -246,6 +309,17 @@ def create_and_queue_campaign(
     RecipientCapExceededError, or apps.billing.limits.PlanLimitExceeded —
     callers translate those into their own response shape.
     """
+    from apps.email.models import BulkEmailCampaign
+    from apps.scheduler.api import (
+        new_idempotency_key,
+        resolve_fire_at,
+        schedule_email_campaign,
+        should_schedule,
+    )
+
+    scheduled = should_schedule(scheduled_at)
+    fire_at = resolve_fire_at(scheduled_at, tz) if scheduled else None
+
     lc = LimitChecker(account)
     lc.require_feature("bulk_email", "bulk email sending")
 
@@ -287,7 +361,7 @@ def create_and_queue_campaign(
             "Provide either template_id or subject/text/html."
         )
 
-    return create_campaign(
+    campaign = create_campaign(
         account=account,
         from_email=from_email,
         template=template,
@@ -295,4 +369,34 @@ def create_and_queue_campaign(
         text_override=text_body,
         html_override=html_body,
         recipients=recipients,
+        initial_status=(
+            BulkEmailCampaign.Status.SCHEDULED if scheduled else None
+        ),
+    )
+    if not scheduled:
+        return campaign
+
+    # Recurring campaigns re-resolve their audience each occurrence, so the job
+    # replays the create-kwargs rather than pointing at this frozen campaign.
+    payload = {
+        "from_email": from_email,
+        "template_id": template_id,
+        "subject": subject,
+        "text_body": text_body,
+        "html_body": html_body,
+        "list_slug": list_slug,
+        "segment_slug": segment_slug,
+    } if recurrence else {}
+
+    return schedule_email_campaign(
+        account=account,
+        campaign=campaign,
+        payload=payload,
+        fire_at=fire_at,
+        tz=tz or "UTC",
+        idempotency_key=new_idempotency_key(),
+        created_by=created_by,
+        recurrence=recurrence,
+        recurrence_until=recurrence_until,
+        max_occurrences=max_occurrences,
     )

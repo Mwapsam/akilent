@@ -86,6 +86,33 @@ def test_create_from_pasted_addresses_queues_campaign(client, account, bulk_plan
 
 
 @pytest.mark.django_db
+def test_schedule_toggle_defers_the_campaign(client, account, bulk_plan, verified_domain):
+    from datetime import timedelta
+
+    from apps.scheduler.models import ScheduledJob
+
+    client.force_login(account.owner)
+    when = (timezone.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+    resp = client.post("/email/campaigns/create/", {
+        "mode": "text",
+        "from_email": "hello@mail.acme.com",
+        "subject": "Later",
+        "text_body": "Hi",
+        "recipients_text": "ada@example.com",
+        "schedule_enabled": "1",
+        "scheduled_at": when,
+        "schedule_timezone": "UTC",
+    })
+    assert resp.status_code == 302
+    campaign = BulkEmailCampaign.objects.get(account=account)
+    assert campaign.status == BulkEmailCampaign.Status.SCHEDULED
+    assert campaign.recipients.count() == 1
+    job = ScheduledJob.objects.get(account=account)
+    assert job.kind == ScheduledJob.Kind.EMAIL_CAMPAIGN
+    assert job.target_campaign_id == campaign.id
+
+
+@pytest.mark.django_db
 def test_invalid_submission_rerenders_with_input_preserved(client, account, bulk_plan, verified_domain):
     client.force_login(account.owner)
     resp = client.post("/email/campaigns/create/", {

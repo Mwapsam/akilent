@@ -25,6 +25,7 @@ def create_campaign(
     text_override: str = "",
     html_override: str = "",
     recipients: list[dict],
+    initial_status: str | None = None,
 ) -> BulkEmailCampaign:
     """Validate the sending domain, create the campaign + recipient rows.
 
@@ -42,6 +43,7 @@ def create_campaign(
     if domain is None:
         raise UnverifiedDomainError(from_domain)
 
+    scheduled = initial_status == BulkEmailCampaign.Status.SCHEDULED
     campaign = BulkEmailCampaign.objects.create(
         account=account,
         domain=domain,
@@ -51,6 +53,7 @@ def create_campaign(
         text_override=text_override,
         html_override=html_override,
         recipient_count=len(recipients),
+        status=initial_status or BulkEmailCampaign.Status.DRAFT,
     )
 
     rows = [
@@ -65,7 +68,10 @@ def create_campaign(
 
     from apps.email.services.campaign_versions import snapshot_campaign
 
-    snapshot_campaign(campaign, label="submitted")
+    snapshot_campaign(campaign, label="scheduled" if scheduled else "submitted")
 
-    transaction.on_commit(lambda: dispatch_campaign.delay(campaign.id))
+    # A scheduled campaign is dispatched later by apps.scheduler.drainer, which
+    # flips it SCHEDULED -> QUEUED and calls dispatch_campaign then.
+    if not scheduled:
+        transaction.on_commit(lambda: dispatch_campaign.delay(campaign.id))
     return campaign

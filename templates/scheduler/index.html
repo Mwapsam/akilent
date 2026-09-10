@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Scheduled — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block page_header %}
+<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Scheduled</h1>
+    <p class="text-sm text-gray-500 mt-1">Everything queued to send later — single sends, campaigns, and recurring schedules.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div x-data="scheduledView()">
+  <div class="flex flex-wrap items-center gap-2 mb-4">
+    <a href="?show=upcoming" class="btn btn-sm {% if show == 'upcoming' %}btn-primary{% else %}btn-ghost{% endif %}">Upcoming</a>
+    {% for value, label in status_choices %}
+    <a href="?show={{ value }}" class="btn btn-sm {% if show == value %}btn-primary{% else %}btn-ghost{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if groups %}
+  {% for day, jobs in groups.items %}
+  <div class="mb-6">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ day }}</h2>
+    <div class="overflow-x-auto rounded-2xl border border-gray-200">
+      <table class="min-w-full text-sm">
+        <tbody class="divide-y divide-gray-100">
+          {% for job in jobs %}
+          <tr class="hover:bg-gray-50" id="job-{{ job.public_id }}">
+            <td class="px-4 py-2 whitespace-nowrap text-gray-500">{{ job.fire_at|date:"H:i" }} {{ job.tz }}</td>
+            <td class="px-4 py-2">
+              <span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{{ job.get_kind_display }}</span>
+            </td>
+            <td class="px-4 py-2">
+              {% if job.target_campaign_id %}Campaign #{{ job.target_campaign_id }} · {{ job.target_campaign.recipient_count }} recipients
+              {% elif job.target_message_id %}Message {{ job.target_message.public_id }}
+              {% else %}{{ job.template_payload.to_email|default:"—" }}{% endif %}
+              {% if job.recurrence %}<span class="ml-2 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">Repeats</span>{% endif %}
+            </td>
+            <td class="px-4 py-2">
+              <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
+                {% if job.status == 'scheduled' %}bg-amber-50 text-amber-700
+                {% elif job.status == 'sent' or job.status == 'completed' %}bg-green-50 text-green-700
+                {% elif job.status == 'failed' %}bg-red-50 text-red-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">{{ job.get_status_display }}</span>
+            </td>
+            <td class="px-4 py-2 text-right">
+              {% if job.status == 'scheduled' %}
+              <button class="btn btn-ghost btn-xs" @click="reschedule('{{ job.public_id }}')">Reschedule</button>
+              <button class="btn btn-danger-ghost btn-xs" @click="cancel('{{ job.public_id }}')">Cancel</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="card card-pad text-center text-sm text-gray-500">Nothing scheduled.</div>
+  {% endif %}
+</div>
+
+<script>
+function scheduledView() {
+  return {
+    csrf() { return (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || ""; },
+    async cancel(id) {
+      if (!confirm("Cancel this scheduled item?")) return;
+      const r = await fetch(`/scheduled/${id}/cancel/`, {
+        method: "POST", headers: { "X-CSRFToken": this.csrf() },
+      });
+      if (r.ok) { document.getElementById(`job-${id}`).remove(); }
+      else { const d = await r.json(); alert(d.error || "Could not cancel."); }
+    },
+    async reschedule(id) {
+      const when = prompt("New time (ISO 8601, e.g. 2026-09-20T09:00:00-04:00):");
+      if (!when) return;
+      const r = await fetch(`/scheduled/${id}/reschedule/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
+        body: JSON.stringify({ scheduled_at: when }),
+      });
+      const d = await r.json();
+      if (r.ok) { location.reload(); } else { alert(d.error || "Could not reschedule."); }
+    },
+  };
+}
+</script>
+{% endblock %}

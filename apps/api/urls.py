@@ -5,7 +5,14 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from apps.api import analytics_views, contact_views, event_views, views, workflow_views
+from apps.api import (
+    analytics_views,
+    contact_views,
+    event_views,
+    views,
+    views_scheduler,
+    workflow_views,
+)
 
 urlpatterns = [
     path("schema", SpectacularAPIView.as_view(), name="api-schema"),
@@ -61,6 +68,10 @@ urlpatterns = [
     path("<str:version>/workflows/<slug:slug>/archive", workflow_views.WorkflowArchiveView.as_view(), name="api-v1-workflow-archive"),
     path("<str:version>/workflows/<slug:slug>/runs", workflow_views.WorkflowRunsView.as_view(), name="api-v1-workflow-runs"),
     path("<str:version>/workflow-runs/<str:run_id>", workflow_views.WorkflowRunDetailView.as_view(), name="api-v1-workflow-run-detail"),
+
+    # Scheduler (Akilent Scheduler)
+    path("<str:version>/scheduled-jobs", views_scheduler.ScheduledJobCollectionView.as_view(), name="api-v1-scheduled-jobs"),
+    path("<str:version>/scheduled-jobs/<str:public_id>", views_scheduler.ScheduledJobDetailView.as_view(), name="api-v1-scheduled-job-detail"),
 
     # Business events (Phase 5)
     path("<str:version>/events", event_views.EventCollectionView.as_view(), name="api-v1-events"),

@@ -143,6 +143,11 @@ class WorkflowStepRun(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["run", "step_id"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "step_id"], name="uniq_workflowsteprun_run_step"
+            )
+        ]
 
     def __str__(self):
         return f"{self.run_id}/{self.step_id} ({self.step_type})"

@@ -68,6 +68,11 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, TemplateMissingContentError):
         return _envelope("missing_content", str(exc), status.HTTP_400_BAD_REQUEST, context)
 
+    from apps.scheduler.api import SchedulingError
+
+    if isinstance(exc, SchedulingError):
+        return _envelope("invalid_schedule", str(exc), status.HTTP_400_BAD_REQUEST, context)
+
     from apps.email.services.attachments import AttachmentError
 
     if isinstance(exc, AttachmentError):

@@ -1331,6 +1331,8 @@ def campaigns_list(request):
 @login_required
 @require_POST
 def campaign_create(request):
+    from django.utils.dateparse import parse_datetime
+
     from apps.api.services import (
         RecipientCapExceededError,
         TemplateMissingContentError,
@@ -1338,6 +1340,7 @@ def campaign_create(request):
     )
     from apps.billing.limits import PlanLimitExceeded
     from apps.email.exceptions import UnverifiedDomainError
+    from apps.scheduler.api import SchedulingError
 
     admin = _is_admin(request)
     account = get_current_account(request)
@@ -1393,6 +1396,17 @@ def campaign_create(request):
     if not recipients and "recipients" not in errors:
         errors["recipients"] = "Add at least one recipient."
 
+    # Optional "Schedule for later" toggle on the wizard.
+    scheduled_at = None
+    schedule_tz = (request.POST.get("schedule_timezone") or "").strip()
+    if request.POST.get("schedule_enabled"):
+        scheduled_at = parse_datetime((request.POST.get("scheduled_at") or "").strip())
+        if scheduled_at is None:
+            errors["scheduled_at"] = "Pick a valid date and time to schedule this campaign."
+    form_data["schedule_enabled"] = bool(request.POST.get("schedule_enabled"))
+    form_data["scheduled_at"] = request.POST.get("scheduled_at") or ""
+    form_data["schedule_timezone"] = schedule_tz
+
     if not errors:
         try:
             create_and_queue_campaign(
@@ -1403,13 +1417,21 @@ def campaign_create(request):
                 text_body=text_body,
                 html_body=html_body,
                 recipients=recipients,
+                scheduled_at=scheduled_at,
+                tz=schedule_tz,
+                created_by=request.user,
             )
         except UnverifiedDomainError as exc:
             errors["from_email"] = str(exc)
+        except SchedulingError as exc:
+            errors["scheduled_at"] = str(exc)
         except (PlanLimitExceeded, RecipientCapExceededError, TemplateMissingContentError) as exc:
             errors["form"] = str(exc)
         else:
-            messages.success(request, "Campaign queued.")
+            messages.success(
+                request,
+                "Campaign scheduled." if scheduled_at else "Campaign queued.",
+            )
             return redirect("email-campaigns")
 
     return _render_campaigns_page(

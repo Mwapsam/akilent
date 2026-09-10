@@ -272,10 +272,18 @@ def _next_after(step: dict, run: WorkflowRun, *, branch_result: dict | None = No
 
 
 def _record(run: WorkflowRun, step: dict, result: dict, *, status: str = "ok") -> None:
-    WorkflowStepRun.objects.create(
-        run=run, step_id=step["id"], step_type=step.get("type", ""),
-        status=status, result=result,
-    )
+    from django.db import IntegrityError
+
+    try:
+        WorkflowStepRun.objects.create(
+            run=run, step_id=step["id"], step_type=step.get("type", ""),
+            status=status, result=result,
+        )
+    except IntegrityError:
+        # uniq_workflowsteprun_run_step — a concurrent advance already recorded
+        # this step. The .exists() guard in advance_run is best-effort; this
+        # constraint is the real backstop against a double-send.
+        logger.info("workflow run %s step %s already recorded", run.pk, step["id"])
 
 
 def _complete(run: WorkflowRun) -> WorkflowRun:
@@ -334,15 +342,36 @@ def enroll_for_trigger(account_id: int, trigger_type: str, contact, *, context: 
     return n
 
 
+_RUN_DUE_BATCH = 200
+
+
 def run_due() -> int:
-    """Resume every WAITING run whose timer has elapsed. Called by a beat task."""
-    due = WorkflowRun.objects.filter(
-        status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now()
+    """Resume every WAITING run whose timer has elapsed. Called by a beat task.
+
+    Rows are claimed under ``select_for_update(skip_locked=True)`` (where the
+    backend supports it) so parallel beat ticks / workers process disjoint
+    batches rather than racing the same run into a double-send.
+    """
+    from django.db import connection
+
+    lock_kwargs = (
+        {"skip_locked": True}
+        if connection.features.has_select_for_update_skip_locked
+        else {}
     )
     n = 0
-    for run in due.iterator():
+    with transaction.atomic():
+        due = (
+            WorkflowRun.objects.select_for_update(**lock_kwargs)
+            .filter(status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now())
+            .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
+        )
+        runs = list(due)
+
+    for run in runs:
         try:
-            advance_run(run)
+            with transaction.atomic():
+                advance_run(run)
             n += 1
         except Exception:  # noqa: BLE001
             logger.exception("run_due: advance failed for run %s", run.pk)

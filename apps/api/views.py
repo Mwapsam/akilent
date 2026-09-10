@@ -40,6 +40,30 @@ def _paging(request, *, default=50, cap=100):
     return max(limit, 1), offset
 
 
+def _scheduled_job_body(job):
+    return {
+        "id": job.public_id,
+        "status": "scheduled",
+        "scheduled_job": {
+            "id": job.public_id,
+            "kind": job.kind,
+            "status": job.status,
+            "fire_at": job.fire_at,
+            "timezone": job.tz,
+            "recurrence": job.recurrence or None,
+        },
+    }
+
+
+def _create_result_body(result):
+    """202 body for POST /v1/messages — a sent EmailMessage or a ScheduledJob."""
+    from apps.scheduler.models import ScheduledJob
+
+    if isinstance(result, ScheduledJob):
+        return _scheduled_job_body(result)
+    return {"id": result.id, "public_id": result.public_id, "status": result.status}
+
+
 def _message_summary(m):
     return {
         "id": m.public_id,
@@ -99,7 +123,7 @@ class MessageCreateView(BaseApiView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        msg = create_and_queue_message(
+        result = create_and_queue_message(
             account=request.user,
             from_email=data["from_email"],
             to_email=data["to_email"],
@@ -111,14 +135,16 @@ class MessageCreateView(BaseApiView):
             locale=data.get("locale") or None,
             attachments=data.get("attachments") or None,
             mode=getattr(request.auth, "mode", "live"),
+            scheduled_at=data.get("scheduled_at"),
+            tz=data.get("timezone", ""),
+            created_by=getattr(request.auth, "created_by", None),
+            recurrence=data.get("recurrence", ""),
+            recurrence_until=data.get("recurrence_until"),
+            max_occurrences=data.get("max_occurrences"),
         )
         request.auth.touch()
         return self.finish_idempotency(
-            idem,
-            Response(
-                {"id": msg.id, "public_id": msg.public_id, "status": msg.status},
-                status=status.HTTP_202_ACCEPTED,
-            ),
+            idem, Response(_create_result_body(result), status=status.HTTP_202_ACCEPTED)
         )
 
 
@@ -278,7 +304,7 @@ class CampaignCreateView(BaseApiView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        campaign = create_and_queue_campaign(
+        result = create_and_queue_campaign(
             account=request.user,
             from_email=data["from_email"],
             template_id=data.get("template_id"),
@@ -288,18 +314,30 @@ class CampaignCreateView(BaseApiView):
             recipients=data["recipients"] or None,
             list_slug=data.get("list") or None,
             segment_slug=data.get("segment") or None,
+            scheduled_at=data.get("scheduled_at"),
+            tz=data.get("timezone", ""),
+            created_by=getattr(request.auth, "created_by", None),
+            recurrence=data.get("recurrence", ""),
+            recurrence_until=data.get("recurrence_until"),
+            max_occurrences=data.get("max_occurrences"),
         )
         request.auth.touch()
+
+        from apps.scheduler.models import ScheduledJob
+
+        if isinstance(result, ScheduledJob):
+            body = _scheduled_job_body(result)
+            body["recipient_count"] = (
+                result.target_campaign.recipient_count if result.target_campaign_id else 0
+            )
+        else:
+            body = {
+                "id": result.id,
+                "status": result.status,
+                "recipient_count": result.recipient_count,
+            }
         return self.finish_idempotency(
-            idem,
-            Response(
-                {
-                    "id": campaign.id,
-                    "status": campaign.status,
-                    "recipient_count": campaign.recipient_count,
-                },
-                status=status.HTTP_202_ACCEPTED,
-            ),
+            idem, Response(body, status=status.HTTP_202_ACCEPTED)
         )
 
 
