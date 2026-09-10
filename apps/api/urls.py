@@ -50,6 +50,7 @@ urlpatterns = [
 
     # Workflows (Phase 6)
     path("<str:version>/workflows", workflow_views.WorkflowCollectionView.as_view(), name="api-v1-workflows"),
+    path("<str:version>/workflows/templates", workflow_views.WorkflowTemplateCatalogView.as_view(), name="api-v1-workflow-templates"),
     path("<str:version>/workflows/<slug:slug>", workflow_views.WorkflowDetailView.as_view(), name="api-v1-workflow-detail"),
     path("<str:version>/workflows/<slug:slug>/publish", workflow_views.WorkflowPublishView.as_view(), name="api-v1-workflow-publish"),
     path("<str:version>/workflows/<slug:slug>/archive", workflow_views.WorkflowArchiveView.as_view(), name="api-v1-workflow-archive"),

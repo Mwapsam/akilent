@@ -69,6 +69,36 @@ def test_workflow_crud_publish_and_enroll(client, api_key):
 
 
 @pytest.mark.django_db
+def test_workflow_template_catalog_and_create_from_template(client, api_key):
+    key, acc = api_key
+
+    cat = client.get("/api/v1/workflows/templates", HTTP_X_API_KEY=key)
+    assert cat.status_code == 200
+    ids = {t["id"] for t in cat.json()["data"]}
+    assert {"welcome-series", "re-engagement", "post-purchase"} <= ids
+
+    created = client.post("/api/v1/workflows", data={"from_template": "welcome-series"},
+                          content_type="application/json", HTTP_X_API_KEY=key)
+    assert created.status_code == 201
+    body = created.json()
+    assert body["name"] == "Welcome series"
+    assert body["definition"]["trigger"] == {"type": "contact.created"}
+
+    # the copied definition is structurally valid and publishes
+    pub = client.post(f"/api/v1/workflows/{body['id']}/publish", HTTP_X_API_KEY=key)
+    assert pub.status_code == 200
+
+
+@pytest.mark.django_db
+def test_create_from_unknown_template_404(client, api_key):
+    key, _ = api_key
+    r = client.post("/api/v1/workflows", data={"from_template": "nope"},
+                    content_type="application/json", HTTP_X_API_KEY=key)
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.django_db
 def test_publish_rejects_invalid_definition(client, api_key):
     key, _ = api_key
     bad = {"trigger": {"type": "manual"},

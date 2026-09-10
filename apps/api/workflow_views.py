@@ -10,6 +10,7 @@ from apps.api.base import BaseApiView
 from apps.api.permissions import HasEmailApiFeature
 from apps.automation.models import Workflow, WorkflowRun
 from apps.automation.workflow_engine import enroll, validate_definition
+from apps.automation.workflow_templates import get_template, list_templates
 from apps.contacts.models import Contact
 
 
@@ -66,14 +67,30 @@ class WorkflowCollectionView(BaseApiView):
     @extend_schema(operation_id="workflows_create", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def post(self, request, *args, **kwargs):
         d = request.data if isinstance(request.data, dict) else {}
+        definition = d.get("definition") or {}
         name = d.get("name")
+        if d.get("from_template"):
+            tpl = get_template(d["from_template"])
+            if tpl is None:
+                return Response({"error": {"code": "not_found",
+                                           "message": f"unknown workflow template {d['from_template']!r}"}},
+                                status=status.HTTP_404_NOT_FOUND)
+            definition = definition or tpl["definition"]
+            name = name or tpl["name"]
         if not name:
             return Response({"error": {"code": "validation_error", "message": "name is required"}},
                             status=status.HTTP_400_BAD_REQUEST)
-        definition = d.get("definition") or {}
         w = Workflow.objects.create(account=request.user, name=name, definition=definition)
         request.auth.touch()
         return Response(_workflow_dict(w, with_definition=True), status=status.HTTP_201_CREATED)
+
+
+class WorkflowTemplateCatalogView(BaseApiView):
+    permission_classes = [HasEmailApiFeature]
+
+    @extend_schema(operation_id="workflow_templates", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    def get(self, request, *args, **kwargs):
+        return Response({"data": list_templates()})
 
 
 class WorkflowDetailView(BaseApiView):
