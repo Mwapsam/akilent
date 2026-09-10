@@ -762,6 +762,48 @@ class BulkEmailRecipient(models.Model):
         return f"{self.to_email} [{self.status}] (campaign {self.campaign_id})"
 
 
+class BulkEmailCampaignVersion(models.Model):
+    """Immutable content snapshot of a BulkEmailCampaign.
+
+    One is taken automatically when a campaign is submitted, so there is an
+    audit record of exactly what content and recipient count went out. Drafts
+    can be rolled back to a snapshot (see apps.email.services.campaign_versions).
+    """
+
+    campaign = models.ForeignKey(
+        BulkEmailCampaign, on_delete=models.CASCADE, related_name="versions"
+    )
+    number = models.PositiveIntegerField()
+    label = models.CharField(max_length=120, blank=True, default="")
+
+    from_email = models.EmailField()
+    subject_override = models.CharField(max_length=998, blank=True, default="")
+    text_override = models.TextField(blank=True, default="")
+    html_override = models.TextField(blank=True, default="")
+    template = models.ForeignKey(
+        EmailTemplate, on_delete=models.SET_NULL, blank=True, null=True
+    )
+    template_version_number = models.PositiveIntegerField(blank=True, null=True)
+    recipient_count = models.PositiveIntegerField(default=0)
+    status_at_snapshot = models.CharField(max_length=20, blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, blank=True, null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["campaign", "number"], name="uniq_campaign_version_number"
+            )
+        ]
+
+    def __str__(self):
+        return f"campaign {self.campaign_id} v{self.number}"
+
+
 def _message_public_id() -> str:
     return "msg_" + secrets.token_hex(16)
 

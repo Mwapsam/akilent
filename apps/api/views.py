@@ -320,6 +320,31 @@ class CampaignDetailView(BaseApiView):
         )
 
 
+class CampaignVersionsView(BaseApiView):
+    """GET /api/v1/campaigns/<id>/versions — content snapshots for this campaign."""
+
+    permission_classes = [HasEmailApiFeature, HasBulkEmailFeature, HasScope]
+    required_scope = "messages:send:bulk"
+
+    @extend_schema(operation_id="campaign_versions", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Campaigns"])
+    def get(self, request, pk, *args, **kwargs):
+        campaign = BulkEmailCampaign.objects.get(pk=pk, account=request.user)
+        return Response({"data": [
+            {
+                "number": v.number,
+                "label": v.label,
+                "from_email": v.from_email,
+                "subject": v.subject_override,
+                "template": v.template.slug if v.template_id else None,
+                "template_version": v.template_version_number,
+                "recipient_count": v.recipient_count,
+                "status_at_snapshot": v.status_at_snapshot,
+                "created_at": v.created_at,
+            }
+            for v in campaign.versions.all()
+        ]})
+
+
 def _message_list_response(request):
     qs = (
         EmailMessage.objects.filter(account=request.user)

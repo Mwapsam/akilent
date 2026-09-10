@@ -63,5 +63,9 @@ def create_campaign(
     ]
     BulkEmailRecipient.objects.bulk_create(rows, batch_size=_CREATE_BATCH_SIZE)
 
+    from apps.email.services.campaign_versions import snapshot_campaign
+
+    snapshot_campaign(campaign, label="submitted")
+
     transaction.on_commit(lambda: dispatch_campaign.delay(campaign.id))
     return campaign

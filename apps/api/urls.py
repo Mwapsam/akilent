@@ -31,6 +31,7 @@ urlpatterns = [
     path("<str:version>/templates/<slug:slug>/versions/<int:number>/activate", views.TemplateVersionActivateView.as_view(), name="api-v1-template-version-activate"),
     path("<str:version>/campaigns", views.CampaignCreateView.as_view(), name="api-v1-campaigns"),
     path("<str:version>/campaigns/<int:pk>", views.CampaignDetailView.as_view(), name="api-v1-campaign-detail"),
+    path("<str:version>/campaigns/<int:pk>/versions", views.CampaignVersionsView.as_view(), name="api-v1-campaign-versions"),
     path("<str:version>/request-logs", views.RequestLogListView.as_view(), name="api-v1-request-logs"),
     path("<str:version>/request-logs/<str:request_id>", views.RequestLogDetailView.as_view(), name="api-v1-request-log-detail"),
     path("<str:version>/deliverability", views.DeliverabilityView.as_view(), name="api-v1-deliverability"),
