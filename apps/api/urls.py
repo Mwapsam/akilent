@@ -5,7 +5,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from apps.api import contact_views, event_views, views, workflow_views
+from apps.api import analytics_views, contact_views, event_views, views, workflow_views
 
 urlpatterns = [
     path("schema", SpectacularAPIView.as_view(), name="api-schema"),
@@ -34,7 +34,9 @@ urlpatterns = [
     path("<str:version>/request-logs", views.RequestLogListView.as_view(), name="api-v1-request-logs"),
     path("<str:version>/request-logs/<str:request_id>", views.RequestLogDetailView.as_view(), name="api-v1-request-log-detail"),
     path("<str:version>/deliverability", views.DeliverabilityView.as_view(), name="api-v1-deliverability"),
+    path("<str:version>/analytics", analytics_views.AnalyticsView.as_view(), name="api-v1-analytics"),
     path("<str:version>/version", views.ApiVersionView.as_view(), name="api-v1-version"),
+    path("<str:version>/changelog", views.ChangelogView.as_view(), name="api-v1-changelog"),
 
     # Contacts / lists / segments (Phase 4)
     path("<str:version>/contacts", contact_views.ContactCollectionView.as_view(), name="api-v1-contacts"),

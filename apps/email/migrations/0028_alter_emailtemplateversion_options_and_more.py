@@ -4,6 +4,32 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def backfill_version_numbers(apps, schema_editor):
+    """Assign sequential per-template numbers (oldest = 1) and flag the newest active.
+
+    Existing rows all carry the AddField default of 0, which violates the
+    (template, number) unique constraint added next.
+    """
+    Version = apps.get_model('email_service', 'EmailTemplateVersion')
+    template_ids = (
+        Version.objects.order_by('template_id')
+        .values_list('template_id', flat=True)
+        .distinct()
+    )
+    for template_id in template_ids:
+        rows = list(
+            Version.objects.filter(template_id=template_id).order_by('created_at', 'pk')
+        )
+        for idx, row in enumerate(rows, start=1):
+            row.number = idx
+            row.is_active = idx == len(rows)
+        Version.objects.bulk_update(rows, ['number', 'is_active'])
+
+
+def noop_reverse(apps, schema_editor):
+    pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -31,6 +57,7 @@ class Migration(migrations.Migration):
             name='number',
             field=models.PositiveIntegerField(default=0),
         ),
+        migrations.RunPython(backfill_version_numbers, noop_reverse),
         migrations.AddConstraint(
             model_name='emailtemplateversion',
             constraint=models.UniqueConstraint(fields=('template', 'number'), name='uniq_template_version_number'),

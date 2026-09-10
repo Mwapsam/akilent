@@ -555,5 +555,18 @@ class ApiVersionView(BaseApiView):
             "supported": list(dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS", ["v1"])),
             "sunset": None,
             "changelog": "https://akilent.com/docs/changelog",
+            "changelog_feed": "/api/v1/changelog",
             "openapi": "/api/schema",
         })
+
+
+class ChangelogView(BaseApiView):
+    """GET /api/v1/changelog — machine-readable API changelog feed."""
+
+    permission_classes = [HasEmailApiFeature]
+
+    @extend_schema(operation_id="changelog", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Meta"])
+    def get(self, request, *args, **kwargs):
+        from apps.api.changelog import CHANGELOG
+
+        return Response({"data": CHANGELOG})
