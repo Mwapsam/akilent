@@ -5,7 +5,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from apps.api import contact_views, event_views, views
+from apps.api import contact_views, event_views, views, workflow_views
 
 urlpatterns = [
     path("schema", SpectacularAPIView.as_view(), name="api-schema"),
@@ -45,6 +45,14 @@ urlpatterns = [
     path("<str:version>/segments", contact_views.SegmentCollectionView.as_view(), name="api-v1-segments"),
     path("<str:version>/segments/preview", contact_views.SegmentPreviewView.as_view(), name="api-v1-segment-preview"),
     path("<str:version>/segments/<slug:slug>/contacts", contact_views.SegmentContactsView.as_view(), name="api-v1-segment-contacts"),
+
+    # Workflows (Phase 6)
+    path("<str:version>/workflows", workflow_views.WorkflowCollectionView.as_view(), name="api-v1-workflows"),
+    path("<str:version>/workflows/<slug:slug>", workflow_views.WorkflowDetailView.as_view(), name="api-v1-workflow-detail"),
+    path("<str:version>/workflows/<slug:slug>/publish", workflow_views.WorkflowPublishView.as_view(), name="api-v1-workflow-publish"),
+    path("<str:version>/workflows/<slug:slug>/archive", workflow_views.WorkflowArchiveView.as_view(), name="api-v1-workflow-archive"),
+    path("<str:version>/workflows/<slug:slug>/runs", workflow_views.WorkflowRunsView.as_view(), name="api-v1-workflow-runs"),
+    path("<str:version>/workflow-runs/<str:run_id>", workflow_views.WorkflowRunDetailView.as_view(), name="api-v1-workflow-run-detail"),
 
     # Business events (Phase 5)
     path("<str:version>/events", event_views.EventCollectionView.as_view(), name="api-v1-events"),

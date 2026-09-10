@@ -38,6 +38,63 @@ logger = logging.getLogger(__name__)
 
 _MAX_STEPS_PER_CALL = 50
 
+_STEP_TYPES = {"send_email", "wait", "branch", "set_attribute", "stop", "exit"}
+_TRIGGER_TYPES = {"business_event", "manual"}
+
+
+def validate_definition(definition: dict) -> list[str]:
+    """Return a list of human-readable problems with ``definition`` (empty = OK)."""
+    errors: list[str] = []
+    definition = definition or {}
+    trig = definition.get("trigger") or {}
+    if trig.get("type") not in _TRIGGER_TYPES:
+        errors.append(
+            f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}"
+        )
+    elif trig.get("type") == "business_event" and not trig.get("name"):
+        errors.append("business_event trigger requires trigger.name")
+
+    steps = definition.get("steps")
+    if not isinstance(steps, list) or not steps:
+        errors.append("definition.steps must be a non-empty list")
+        return errors
+
+    ids: set[str] = set()
+    for i, step in enumerate(steps):
+        sid = step.get("id")
+        if not sid:
+            errors.append(f"steps[{i}] is missing an id")
+            continue
+        if sid in ids:
+            errors.append(f"duplicate step id {sid!r}")
+        ids.add(sid)
+        if step.get("type") not in _STEP_TYPES:
+            errors.append(f"step {sid!r}: type must be one of {sorted(_STEP_TYPES)}")
+        if step.get("type") == "send_email" and not (
+            step.get("template") or step.get("subject")
+        ):
+            errors.append(f"step {sid!r}: send_email needs a template or subject")
+        if step.get("type") == "send_email" and not step.get("from"):
+            errors.append(f"step {sid!r}: send_email needs a from address")
+        if step.get("type") == "branch" and not (
+            step.get("on_true") and step.get("on_false") and step.get("field")
+        ):
+            errors.append(f"step {sid!r}: branch needs field, on_true, on_false")
+
+    def _check(ref, ctx):
+        if ref and ref not in ids:
+            errors.append(f"{ctx} points to unknown step {ref!r}")
+
+    for step in steps:
+        if not step.get("id"):
+            continue
+        if step.get("type") == "branch":
+            _check(step.get("on_true"), f"step {step['id']!r}.on_true")
+            _check(step.get("on_false"), f"step {step['id']!r}.on_false")
+        elif step.get("type") not in ("stop", "exit"):
+            _check(step.get("next"), f"step {step['id']!r}.next")
+    return errors
+
 
 def _steps_by_id(workflow: Workflow) -> dict:
     return {s["id"]: s for s in (workflow.definition or {}).get("steps", []) if "id" in s}
