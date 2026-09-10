@@ -1,26 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Insights — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Insights</h1>
-    <p class="text-sm text-gray-500 mt-1">Delivery logs and open / click analytics for your domains.</p>
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
+    <p class="mt-1 text-sm text-gray-600">Delivery logs and open / click analytics for your domains.</p>
   </div>
   {% if has_analytics and domains %}
   <form method="get" class="flex items-center gap-2">
     <label class="sr-only" for="domain">Domain</label>
-    <select id="domain" name="domain" class="input sm:w-56" onchange="this.form.submit()">
+    <select id="domain" name="domain" class="select sm:w-56" onchange="this.form.submit()">
       {% for d in domains %}
         <option value="{{ d.domain }}" {% if d.domain == selected %}selected{% endif %}>{{ d.domain }}</option>
       {% endfor %}
     </select>
   </form>
   {% endif %}
-</div>
-{% endblock %}
-
-{% block content %}
+</header>
 
 {% if not has_analytics %}
   <div class="card card-pad text-center max-w-lg mx-auto mt-6">
@@ -37,7 +34,10 @@
 
 {% else %}
   {% if error %}
-    <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">{{ error }}</div>
+    <div class="alert alert-danger mb-6" role="alert">
+      {% include "components/icon.html" with name="alert" %}
+      <span>{{ error }}</span>
+    </div>
   {% endif %}
 
   {# Deliverability score #}
@@ -79,14 +79,14 @@
       <h2 class="font-semibold">Engagement — {{ selected }}</h2>
     </div>
     {% if stats %}
-      <table class="table">
+      <table class="table table--cards">
         <thead><tr><th>Day</th><th>Opens</th><th>Clicks</th></tr></thead>
         <tbody>
           {% for s in stats %}
             <tr>
-              <td>{{ s.day|default:"—" }}</td>
-              <td>{{ s.opens|default:0 }}</td>
-              <td>{{ s.clicks|default:0 }}</td>
+              <td data-label="Day" class="tabular-nums">{{ s.day|default:"—" }}</td>
+              <td data-label="Opens" class="tabular-nums">{{ s.opens|default:0 }}</td>
+              <td data-label="Clicks" class="tabular-nums">{{ s.clicks|default:0 }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -102,29 +102,27 @@
       <h2 class="font-semibold">Delivery logs</h2>
     </div>
     {% if logs %}
-      <div class="overflow-x-auto">
-        <table class="table">
+        <table class="table table--cards">
           <thead><tr>
             <th>Time</th><th>Sender</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Error</th>
           </tr></thead>
           <tbody>
             {% for row in logs %}
               <tr>
-                <td class="text-gray-400 whitespace-nowrap">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
-                <td>{{ row.from_email|default:"—" }}</td>
-                <td>{{ row.to_email|default:"—" }}</td>
-                <td class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
-                <td>
-                  {% if row.status == 'sent' %}<span class="badge badge-success">Delivered</span>
-                  {% elif row.status == 'failed' %}<span class="badge badge-warning">Failed</span>
+                <td data-label="Time" class="text-gray-400 whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
+                <td data-label="Sender">{{ row.from_email|default:"—" }}</td>
+                <td data-label="Recipient" class="font-medium text-ink">{{ row.to_email|default:"—" }}</td>
+                <td data-label="Subject" class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
+                <td data-label="Status">
+                  {% if row.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
+                  {% elif row.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
                   {% else %}<span class="badge badge-neutral">{{ row.get_status_display }}</span>{% endif %}
                 </td>
-                <td class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
+                <td data-label="Error" class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
-      </div>
     {% else %}
       {% include "components/empty_state.html" with icon="inbox" title="No delivery logs" message="Logs from the mail server appear here as you send." %}
     {% endif %}

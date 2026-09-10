@@ -289,6 +289,16 @@ def edit_configuration(request, pk):
 
 
 @admin_required
+def styleguide(request):
+    """Living component gallery — the contract for every Akilent screen.
+
+    Renders every design-system primitive so drift is visible and new screens
+    have a reference. See docs/design/akilent-ui-spec.md §7.
+    """
+    return render(request, "core/styleguide.html")
+
+
+@admin_required
 def delete_configuration(request, pk):
     configuration = get_object_or_404(Configurations, pk=pk)
 

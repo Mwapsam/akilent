@@ -1,0 +1,19 @@
+{% comment %}Pagination for a Django Paginator Page.
+  {% include "components/pagination.html" with page=page %}
+Preserves existing query params (q, status, …) and swaps ?page=.
+{% endcomment %}
+{% if page.has_other_pages %}
+<nav class="flex items-center justify-between gap-3 mt-4 text-sm" aria-label="Pagination">
+  <span class="text-gray-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  <div class="flex gap-2">
+    {% if page.has_previous %}
+      <a class="btn btn-secondary btn-sm" rel="prev"
+         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.previous_page_number }}">Previous</a>
+    {% endif %}
+    {% if page.has_next %}
+      <a class="btn btn-secondary btn-sm" rel="next"
+         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.next_page_number }}">Next</a>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

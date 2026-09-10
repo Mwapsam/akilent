@@ -5,6 +5,7 @@ from . import views
 app_name = "core"
 
 urlpatterns = [
+    path("styleguide/", views.styleguide, name="styleguide"),
     path("customers/", views.customers, name="customers"),
     path("customers/<int:pk>/toggle/", views.customer_toggle, name="customer-toggle"),
     path("customers/<int:pk>/subscription/", views.customer_subscription, name="customer-subscription"),

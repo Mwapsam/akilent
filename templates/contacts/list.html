@@ -1,19 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Contacts — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Contacts</h1>
-    <p class="text-sm text-gray-500 mt-1">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Contacts</h1>
+  <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
+</header>
+
 <form method="get" class="flex flex-wrap items-center gap-2 mb-4">
-  <input type="search" name="q" value="{{ q }}" placeholder="Email contains…" class="input text-sm w-64" />
-  <select name="status" class="input text-sm">
+  <input type="search" name="q" value="{{ q }}" placeholder="Email contains…" class="input w-full sm:w-64" />
+  <select name="status" class="select w-full sm:w-44">
     <option value="">Any status</option>
     {% for value, label in status_choices %}
       <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
@@ -23,38 +19,34 @@
   {% if q or status %}<a href="/contacts/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
-<div class="overflow-x-auto rounded-2xl border border-gray-200">
-  <table class="min-w-full text-sm">
-    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-      <tr>
-        <th class="px-4 py-2">Email</th><th class="px-4 py-2">Name</th>
-        <th class="px-4 py-2">Status</th><th class="px-4 py-2">Last engaged</th>
-        <th class="px-4 py-2">First seen</th>
-      </tr>
+{% if page %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead>
+      <tr><th>Email</th><th>Name</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
     </thead>
-    <tbody class="divide-y divide-gray-100">
+    <tbody>
       {% for c in page %}
-      <tr class="hover:bg-gray-50">
-        <td class="px-4 py-2"><a href="/contacts/{{ c.public_id }}/" class="text-brand-600">{{ c.email }}</a></td>
-        <td class="px-4 py-2">{{ c.full_name|default:"—" }}</td>
-        <td class="px-4 py-2"><span class="badge">{{ c.get_status_display }}</span></td>
-        <td class="px-4 py-2 text-gray-500">{{ c.last_engaged_at|date:"Y-m-d"|default:"—" }}</td>
-        <td class="px-4 py-2 text-gray-500">{{ c.first_seen|date:"Y-m-d" }}</td>
+      <tr>
+        <td data-label="Email"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ c.email }}</a></td>
+        <td data-label="Name">{{ c.full_name|default:"—" }}</td>
+        <td data-label="Status">
+          <span class="badge {% if c.status == 'subscribed' or c.status == 'active' %}badge-success{% elif c.status == 'unsubscribed' or c.status == 'bounced' or c.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">
+            {{ c.get_status_display }}
+          </span>
+        </td>
+        <td data-label="Last engaged" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"Y-m-d"|default:"—" }}</td>
+        <td data-label="First seen" class="text-gray-500 tabular-nums">{{ c.first_seen|date:"Y-m-d" }}</td>
       </tr>
-      {% empty %}
-      <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No contacts yet — add them via the API or a CSV import.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-
-{% if page.has_other_pages %}
-<div class="flex items-center justify-between mt-4 text-sm">
-  <span class="text-gray-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-  <div class="flex gap-2">
-    {% if page.has_previous %}<a class="btn btn-ghost btn-sm" href="?page={{ page.previous_page_number }}&q={{ q }}&status={{ status }}">Previous</a>{% endif %}
-    {% if page.has_next %}<a class="btn btn-ghost btn-sm" href="?page={{ page.next_page_number }}&q={{ q }}&status={{ status }}">Next</a>{% endif %}
-  </div>
+{% else %}
+<div class="table-wrap">
+  {% include "components/empty_state.html" with icon="users" title="No contacts yet" message="Add contacts through a CSV import or the API, then build campaigns around them." %}
 </div>
 {% endif %}
+
+{% include "components/pagination.html" with page=page %}
 {% endblock %}

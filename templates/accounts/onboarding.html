@@ -4,50 +4,54 @@
 
 <div class="max-w-2xl mx-auto">
 
-  <div class="mb-8">
-    <h1 class="text-2xl font-semibold">Welcome, {{ account.company_name }} 👋</h1>
-    <p class="text-sm text-gray-500 mt-1">A few quick steps to set up your workspace and start sending email.</p>
-  </div>
+  {% include "components/page_header.html" with title="Get started" description="A few quick steps to set up your workspace and start sending." %}
 
-  <!-- Progress -->
-  <div class="mb-8">
+  {# Progress #}
+  <div class="mb-6">
     <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
       <span>{{ required_done }} of {{ required_total }} essentials complete</span>
-      {% if complete %}<span class="text-green-600 font-medium">All set 🎉</span>{% endif %}
+      {% if complete %}<span class="text-teal-700 font-medium">All set 🎉</span>{% endif %}
     </div>
-    <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+    <div class="h-2 rounded-full bg-canvas overflow-hidden">
       <div class="h-full bg-brand-600 rounded-full transition-all" style="width: {{ pct }}%"></div>
     </div>
   </div>
 
-  <!-- Next step highlight -->
+  {# Next step / completion callout #}
   {% if next_step %}
-  <div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 p-5">
-    <p class="text-xs font-semibold uppercase tracking-wider text-brand-600 mb-1">Next up</p>
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <p class="font-medium text-brand-900">{{ next_step.title }}</p>
-        <p class="text-sm text-brand-700/80 mt-0.5">{{ next_step.desc }}</p>
+  <div class="alert alert-info mb-6">
+    {% include "components/icon.html" with name="sparkles" %}
+    <div class="flex-1">
+      <p class="text-[11px] font-semibold uppercase tracking-wider mb-1">Next up</p>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="font-medium text-ink">{{ next_step.title }}</p>
+          <p class="text-sm text-gray-600 mt-0.5">{{ next_step.desc }}</p>
+        </div>
+        {% if next_step.url %}
+        <a href="{{ next_step.url }}" class="btn btn-primary btn-sm shrink-0">{{ next_step.cta }}</a>
+        {% endif %}
       </div>
-      {% if next_step.url %}
-      <a href="{{ next_step.url }}" class="btn btn-primary btn-sm shrink-0">{{ next_step.cta }}</a>
-      {% endif %}
     </div>
   </div>
   {% elif complete %}
-  <div class="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
-    <p class="font-medium text-green-800">You're all set up! 🎉</p>
-    <p class="text-sm text-green-700 mt-1">Your workspace is ready. Head to your dashboard to keep an eye on things.</p>
-    <a href="/dashboard/" class="btn btn-primary btn-sm mt-3">Go to dashboard</a>
+  <div class="alert alert-success mb-6">
+    {% include "components/icon.html" with name="check-circle" %}
+    <div class="flex-1">
+      <p class="font-medium">You're all set up! 🎉</p>
+      <p class="text-sm mt-0.5">Your workspace is ready.</p>
+      <a href="/dashboard/" class="btn btn-primary btn-sm mt-3">Go to dashboard</a>
+    </div>
   </div>
   {% endif %}
 
-  <!-- Steps -->
+  {# Steps #}
   <ol class="space-y-3">
     {% for step in steps %}
-      <li class="bg-white border {% if step.done %}border-green-200{% elif step.key == next_step.key %}border-brand-200{% else %}border-gray-200{% endif %} rounded-2xl p-5 flex items-start gap-4">
+      <li class="card card-pad flex items-start gap-4
+                 {% if step.key == next_step.key %}ring-1 ring-brand-200{% endif %}">
         <div class="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center
-          {% if step.done %}bg-green-100 text-green-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+          {% if step.done %}bg-teal-50 text-teal-700{% else %}bg-canvas text-gray-400{% endif %}">
           {% if step.done %}
             {% include "components/icon.html" with name="check" class="w-5 h-5" %}
           {% else %}
@@ -55,16 +59,14 @@
           {% endif %}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="font-medium flex items-center gap-2 {% if step.done %}text-gray-500{% else %}text-gray-900{% endif %}">
+          <p class="font-medium flex items-center gap-2 {% if step.done %}text-gray-500{% else %}text-ink{% endif %}">
             {{ step.title }}
             {% if step.optional %}<span class="text-[11px] font-normal text-gray-400">optional</span>{% endif %}
           </p>
-          <p class="text-sm text-gray-400 mt-0.5">{{ step.desc }}</p>
+          <p class="text-sm text-gray-600 mt-0.5">{{ step.desc }}</p>
         </div>
         {% if step.url %}
-          <a href="{{ step.url }}"
-             class="shrink-0 self-center text-sm font-medium px-4 py-2 rounded-xl
-             {% if step.done %}text-gray-400 border border-gray-200 hover:bg-gray-50{% else %}bg-amber-400 hover:bg-amber-500 text-ink font-semibold{% endif %}">
+          <a href="{{ step.url }}" class="shrink-0 self-center btn btn-sm {% if step.done %}btn-secondary{% else %}btn-primary{% endif %}">
             {% if step.done %}Manage{% else %}{{ step.cta }}{% endif %}
           </a>
         {% endif %}
@@ -72,14 +74,12 @@
     {% endfor %}
   </ol>
 
-  <div class="mt-8 flex items-center justify-between">
+  <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-4">
-      <a href="/billing/plans/" class="text-sm text-gray-500 hover:text-gray-900">View plans</a>
+      <a href="/billing/plans/" class="text-sm text-gray-500 hover:text-ink">View plans</a>
       {% include "components/help_link.html" with slug="getting-started" text="Setup guide" %}
     </div>
-    <a href="/dashboard/"
-       class="text-sm font-medium px-5 py-2.5 rounded-xl
-       {% if complete %}bg-amber-400 hover:bg-amber-500 text-ink font-semibold{% else %}border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+    <a href="/dashboard/" class="btn btn-sm {% if complete %}btn-primary{% else %}btn-secondary{% endif %}">
       {% if complete %}Go to dashboard{% else %}Skip for now{% endif %}
     </a>
   </div>

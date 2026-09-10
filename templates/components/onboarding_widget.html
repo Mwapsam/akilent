@@ -21,7 +21,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
        class="card shadow-modal w-80 overflow-hidden" style="max-width: calc(100vw - 2rem)">
     <div class="flex items-center justify-between px-4 py-3 border-b border-border">
       <p class="font-semibold text-sm">Finish setting up</p>
-      <button type="button" @click="set(false)" class="btn-ghost rounded-lg p-1 text-gray-400" aria-label="Collapse">
+      <button type="button" @click="set(false)" class="btn btn-ghost btn-icon btn-sm text-gray-400" aria-label="Collapse">
         {% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}
       </button>
     </div>
@@ -31,7 +31,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
         <span>{{ onboarding.required_done }} of {{ onboarding.required_total }} done</span>
         <span>{{ onboarding.pct }}%</span>
       </div>
-      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div class="h-1.5 bg-canvas rounded-full overflow-hidden">
         <div class="h-full bg-brand-600 rounded-full transition-all" style="width: {{ onboarding.pct }}%"></div>
       </div>
     </div>
@@ -40,7 +40,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
       {% for step in onboarding.steps %}
       <li>
         <a href="{{ step.url|default:'#' }}"
-           class="flex items-start gap-2.5 rounded-xl px-2.5 py-2 {% if step.url and not step.done %}hover:bg-gray-50{% endif %}
+           class="flex items-start gap-2.5 rounded-xl px-2.5 py-2 {% if step.url and not step.done %}hover:bg-canvas{% endif %}
            {% if not step.url %}pointer-events-none{% endif %}">
           <span class="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center
             {% if step.done %}bg-green-100 text-green-600{% elif step.key == onboarding.next_step.key %}bg-brand-100 text-brand-600{% else %}bg-gray-100 text-gray-400{% endif %}">
@@ -48,7 +48,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
             {% else %}<span class="block w-1.5 h-1.5 rounded-full bg-current"></span>{% endif %}
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block text-sm {% if step.done %}text-gray-400 line-through{% else %}text-gray-800 font-medium{% endif %}">
+            <span class="block text-sm {% if step.done %}text-gray-400 line-through{% else %}text-ink font-medium{% endif %}">
               {{ step.title }}{% if step.optional %} <span class="text-[11px] font-normal text-gray-400 no-underline">optional</span>{% endif %}
             </span>
             {% if not step.done and step.key == onboarding.next_step.key %}
@@ -63,7 +63,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
       {% endfor %}
     </ul>
 
-    <div class="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
+    <div class="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-muted">
       <button type="button" class="text-xs font-medium text-brand-600 hover:text-brand-700"
               @click="$dispatch('open-welcome-tour')">
         {% include "components/icon.html" with name="sparkles" class="w-3.5 h-3.5 inline -mt-0.5" %} Take the tour

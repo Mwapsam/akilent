@@ -1,54 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Scheduled — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Scheduled</h1>
-    <p class="text-sm text-gray-500 mt-1">Everything queued to send later — single sends, campaigns, and recurring schedules.</p>
-  </div>
-</div>
-{% endblock %}
-
 {% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Scheduled</h1>
+  <p class="mt-1 text-sm text-gray-600">Everything queued to send later — single sends, campaigns, and recurring schedules, across every channel.</p>
+</header>
+
 <div x-data="scheduledView()">
-  <div class="flex flex-wrap items-center gap-2 mb-4">
-    <a href="?show=upcoming" class="btn btn-sm {% if show == 'upcoming' %}btn-primary{% else %}btn-ghost{% endif %}">Upcoming</a>
+  <div class="tabs mb-5">
+    <a href="?show=upcoming" class="tab {% if show == 'upcoming' %}tab-active{% endif %}">Upcoming</a>
     {% for value, label in status_choices %}
-    <a href="?show={{ value }}" class="btn btn-sm {% if show == value %}btn-primary{% else %}btn-ghost{% endif %}">{{ label }}</a>
+    <a href="?show={{ value }}" class="tab {% if show == value %}tab-active{% endif %}">{{ label }}</a>
     {% endfor %}
   </div>
 
   {% if groups %}
   {% for day, jobs in groups.items %}
-  <div class="mb-6">
+  <section class="mb-6">
     <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ day }}</h2>
-    <div class="overflow-x-auto rounded-2xl border border-gray-200">
-      <table class="min-w-full text-sm">
-        <tbody class="divide-y divide-gray-100">
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead>
+          <tr><th>Time</th><th>Channel</th><th>What</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
           {% for job in jobs %}
-          <tr class="hover:bg-gray-50" id="job-{{ job.public_id }}">
-            <td class="px-4 py-2 whitespace-nowrap text-gray-500">{{ job.fire_at|date:"H:i" }} {{ job.tz }}</td>
-            <td class="px-4 py-2">
-              <span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{{ job.get_kind_display }}</span>
+          <tr id="job-{{ job.public_id }}">
+            <td data-label="Time" class="whitespace-nowrap text-gray-500 tabular-nums">{{ job.fire_at|date:"H:i" }} {{ job.tz }}</td>
+            <td data-label="Channel">
+              {% if job.kind == 'whatsapp' %}{% include "components/channel_tag.html" with channel="whatsapp" %}
+              {% else %}{% include "components/channel_tag.html" with channel="email" %}{% endif %}
             </td>
-            <td class="px-4 py-2">
+            <td data-label="What" class="text-ink">
               {% if job.target_campaign_id %}Campaign #{{ job.target_campaign_id }} · {{ job.target_campaign.recipient_count }} recipients
               {% elif job.target_message_id %}Message {{ job.target_message.public_id }}
               {% else %}{{ job.template_payload.to_email|default:"—" }}{% endif %}
-              {% if job.recurrence %}<span class="ml-2 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">Repeats</span>{% endif %}
+              {% if job.recurrence %}<span class="badge badge-brand ml-1">Repeats</span>{% endif %}
             </td>
-            <td class="px-4 py-2">
-              <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
-                {% if job.status == 'scheduled' %}bg-amber-50 text-amber-700
-                {% elif job.status == 'sent' or job.status == 'completed' %}bg-green-50 text-green-700
-                {% elif job.status == 'failed' %}bg-red-50 text-red-700
-                {% else %}bg-gray-100 text-gray-600{% endif %}">{{ job.get_status_display }}</span>
+            <td data-label="Status">
+              {% if job.status == 'scheduled' %}{% include "components/status.html" with state="scheduled" badge=True %}
+              {% elif job.status == 'sent' or job.status == 'completed' %}{% include "components/status.html" with state="sent" badge=True %}
+              {% elif job.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
+              {% elif job.status == 'processing' or job.status == 'running' %}{% include "components/status.html" with state="sending" badge=True %}
+              {% else %}<span class="badge badge-neutral">{{ job.get_status_display }}</span>{% endif %}
             </td>
-            <td class="px-4 py-2 text-right">
+            <td class="text-right whitespace-nowrap">
               {% if job.status == 'scheduled' %}
-              <button class="btn btn-ghost btn-xs" @click="reschedule('{{ job.public_id }}')">Reschedule</button>
-              <button class="btn btn-danger-ghost btn-xs" @click="cancel('{{ job.public_id }}')">Cancel</button>
+              <button class="btn btn-ghost btn-sm" @click="reschedule('{{ job.public_id }}')">Reschedule</button>
+              <button class="btn btn-danger-ghost btn-sm" @click="cancel('{{ job.public_id }}')">Cancel</button>
               {% endif %}
             </td>
           </tr>
@@ -56,10 +56,12 @@
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
   {% endfor %}
   {% else %}
-  <div class="card card-pad text-center text-sm text-gray-500">Nothing scheduled.</div>
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign or a single send and it will show up here." action_url="/email/campaigns/#new-campaign" action_label="New campaign" %}
+  </div>
   {% endif %}
 </div>
 
@@ -68,12 +70,17 @@ function scheduledView() {
   return {
     csrf() { return (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || ""; },
     async cancel(id) {
-      if (!confirm("Cancel this scheduled item?")) return;
+      const ok = await Alpine.store("confirm").ask({
+        title: "Cancel scheduled item",
+        message: "This item won't be sent. You can't undo this.",
+        confirmLabel: "Cancel it", danger: true,
+      });
+      if (!ok) return;
       const r = await fetch(`/scheduled/${id}/cancel/`, {
         method: "POST", headers: { "X-CSRFToken": this.csrf() },
       });
-      if (r.ok) { document.getElementById(`job-${id}`).remove(); }
-      else { const d = await r.json(); alert(d.error || "Could not cancel."); }
+      if (r.ok) { document.getElementById(`job-${id}`).remove(); window.toast("success", "Scheduled item cancelled."); }
+      else { const d = await r.json().catch(() => ({})); window.toast("danger", d.error || "Could not cancel."); }
     },
     async reschedule(id) {
       const when = prompt("New time (ISO 8601, e.g. 2026-09-20T09:00:00-04:00):");
@@ -83,8 +90,8 @@ function scheduledView() {
         headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
         body: JSON.stringify({ scheduled_at: when }),
       });
-      const d = await r.json();
-      if (r.ok) { location.reload(); } else { alert(d.error || "Could not reschedule."); }
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { location.reload(); } else { window.toast("danger", d.error || "Could not reschedule."); }
     },
   };
 }

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Style guide — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title="Style guide" description="The living component gallery. Every Akilent screen composes from these primitives — see docs/design/akilent-ui-spec.md." %}
+
+<div class="space-y-12">
+
+  {# ── Color tokens ─────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Surface &amp; text tokens</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-canvas border border-border"></div><p class="mt-2 text-xs font-mono">canvas</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-surface border border-border"></div><p class="mt-2 text-xs font-mono">surface</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-surface-muted border border-border"></div><p class="mt-2 text-xs font-mono">surface-muted</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-brand-600"></div><p class="mt-2 text-xs font-mono">brand-600</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-amber-400"></div><p class="mt-2 text-xs font-mono">amber-400 · email</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-teal-500"></div><p class="mt-2 text-xs font-mono">teal-500 · whatsapp</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-coral-500"></div><p class="mt-2 text-xs font-mono">coral-500 · error</p></div>
+      <div class="card card-pad"><div class="h-10 rounded-lg bg-blue-400"></div><p class="mt-2 text-xs font-mono">blue-400 · info</p></div>
+    </div>
+  </section>
+
+  {# ── Type scale ───────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Type scale</h2>
+    <div class="card card-pad space-y-2">
+      <p class="text-3xl font-semibold tracking-tight text-ink">Display / page title — text-3xl</p>
+      <p class="text-xl font-semibold text-ink">Sub-page title — text-xl</p>
+      <p class="text-lg font-semibold text-ink">Section title — text-lg</p>
+      <p class="text-base text-gray-700">Lead paragraph — text-base</p>
+      <p class="text-sm text-gray-700">Body — text-sm (default)</p>
+      <p class="text-xs text-gray-500">Meta / help — text-xs</p>
+    </div>
+  </section>
+
+  {# ── Buttons ──────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Buttons</h2>
+    <div class="card card-pad flex flex-wrap items-center gap-3">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-danger">Danger</button>
+      <button class="btn btn-danger-ghost">Danger ghost</button>
+      <button class="btn btn-primary btn-sm">Small</button>
+      <button class="btn btn-primary btn-lg">Large</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+      <button class="btn btn-primary" aria-busy="true"><span class="btn-spinner"></span>Loading</button>
+      <button class="btn btn-secondary btn-icon" aria-label="Icon">{% include "components/icon.html" with name="settings" class="w-4 h-4" %}</button>
+    </div>
+  </section>
+
+  {# ── Badges & status ──────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Badges &amp; lifecycle status</h2>
+    <div class="card card-pad space-y-4">
+      <div class="flex flex-wrap gap-2">
+        <span class="badge badge-neutral">Neutral</span>
+        <span class="badge badge-brand">Brand</span>
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-danger">Danger</span>
+        <span class="badge badge-info">Info</span>
+      </div>
+      <div class="flex flex-wrap gap-4">
+        {% include "components/status.html" with state="draft" %}
+        {% include "components/status.html" with state="scheduled" %}
+        {% include "components/status.html" with state="sending" %}
+        {% include "components/status.html" with state="sent" %}
+        {% include "components/status.html" with state="failed" %}
+        {% include "components/status.html" with state="paused" %}
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% include "components/status.html" with state="scheduled" badge=True %}
+        {% include "components/status.html" with state="sent" badge=True %}
+        {% include "components/status.html" with state="failed" badge=True %}
+      </div>
+      <div class="flex flex-wrap gap-4">
+        {% include "components/channel_tag.html" with channel="email" %}
+        {% include "components/channel_tag.html" with channel="whatsapp" %}
+      </div>
+    </div>
+  </section>
+
+  {# ── Alerts ───────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Alerts</h2>
+    <div class="space-y-3">
+      <div class="alert alert-info">{% include "components/icon.html" with name="sparkles" %}<span>Informational — context or a tip.</span></div>
+      <div class="alert alert-success">{% include "components/icon.html" with name="check-circle" %}<span>Success — the thing worked.</span></div>
+      <div class="alert alert-warning">{% include "components/icon.html" with name="key" %}<span>Warning — something needs attention soon.</span></div>
+      <div class="alert alert-danger">{% include "components/icon.html" with name="alert" %}<span>Danger — something is wrong.</span></div>
+    </div>
+  </section>
+
+  {# ── Forms ────────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Form controls</h2>
+    <div class="card card-pad grid sm:grid-cols-2 gap-4">
+      <div><label class="label" for="sg-in">Text input</label><input id="sg-in" class="input" placeholder="Placeholder"></div>
+      <div><label class="label" for="sg-sel">Select</label><select id="sg-sel" class="select"><option>Option A</option><option>Option B</option></select></div>
+      <div class="sm:col-span-2"><label class="label" for="sg-ta">Textarea</label><textarea id="sg-ta" class="textarea" placeholder="Multi-line…"></textarea></div>
+      <div><label class="label" for="sg-err">With error</label><input id="sg-err" class="input input-error" value="not-an-email"><p class="field-error">Enter a valid email address.</p></div>
+      <div><label class="label" for="sg-help">With help</label><input id="sg-help" class="input"><p class="help">We'll never share this.</p></div>
+    </div>
+  </section>
+
+  {# ── Tabs ─────────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Tabs</h2>
+    <div class="card card-pad" x-data="{ t: 'a' }">
+      <div class="tabs" role="tablist">
+        <button class="tab" :class="t==='a' && 'tab-active'" @click="t='a'" role="tab">Overview</button>
+        <button class="tab" :class="t==='b' && 'tab-active'" @click="t='b'" role="tab">Activity</button>
+        <button class="tab" :class="t==='c' && 'tab-active'" @click="t='c'" role="tab">Settings</button>
+      </div>
+      <p class="mt-3 text-sm text-gray-600" x-text="'Panel ' + t"></p>
+    </div>
+  </section>
+
+  {# ── Cards ────────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Cards &amp; stats</h2>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {% include "components/stat_card.html" with label="Messages sent" value="12,480" icon="send" tone="brand" sub="this month" %}
+      {% include "components/stat_card.html" with label="Success rate" value="98.2%" icon="check-circle" tone="success" sub="0 failed" %}
+      <div class="card card-hover card-pad"><p class="font-semibold text-ink">Interactive card</p><p class="text-sm text-gray-600 mt-1">.card-hover — hover me.</p></div>
+      <div class="card card-pad"><p class="skeleton h-4 w-2/3"></p><p class="skeleton h-4 w-1/2 mt-2"></p></div>
+    </div>
+  </section>
+
+  {# ── Table ────────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Table (reflows to cards below md)</h2>
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Name</th><th>Channel</th><th>Status</th><th class="text-right">Sent</th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-label="Name" class="font-medium text-ink">October Newsletter</td>
+            <td data-label="Channel">{% include "components/channel_tag.html" with channel="email" %}</td>
+            <td data-label="Status">{% include "components/status.html" with state="sent" badge=True %}</td>
+            <td data-label="Sent" class="text-right tabular-nums">4,210</td>
+          </tr>
+          <tr>
+            <td data-label="Name" class="font-medium text-ink">Cart reminder</td>
+            <td data-label="Channel">{% include "components/channel_tag.html" with channel="whatsapp" %}</td>
+            <td data-label="Status">{% include "components/status.html" with state="scheduled" badge=True %}</td>
+            <td data-label="Sent" class="text-right tabular-nums">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ── Overlays ─────────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Modal, dropdown, toast, confirm</h2>
+    <div class="card card-pad flex flex-wrap gap-3">
+      <button class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'sg-modal')">Open modal</button>
+      {% dropdown label="Dropdown" %}
+        <a href="#" class="nav-link w-full">First action</a>
+        <a href="#" class="nav-link w-full">Second action</a>
+      {% enddropdown %}
+      <button class="btn btn-secondary btn-sm" @click="window.toast('success', 'Saved.')">Fire toast</button>
+      <button class="btn btn-secondary btn-sm" @click="$store.confirm.ask({title:'Delete?', message:'This cannot be undone.', danger:true})">Confirm dialog</button>
+    </div>
+    {% modal "sg-modal" title="Example modal" %}
+      <p class="text-sm text-gray-600">Canonical modal — <code>--z-modal</code>, backdrop, focus trap, Esc to close.</p>
+    {% endmodal %}
+  </section>
+
+  {# ── Empty state ──────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Empty state</h2>
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="send" title="No campaigns yet" message="Build a message, add recipients, and send." action_url="#" action_label="New campaign" %}
+    </div>
+  </section>
+
+</div>
+{% endblock %}

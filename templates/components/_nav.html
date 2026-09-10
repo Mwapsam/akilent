@@ -38,5 +38,6 @@ Active state comes from apps/core/templatetags/nav.py (path-prefix based).{% end
   <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Admin</p>
   {% include "components/_nav_item.html" with href="/manage/customers/" label="Customers" icon="building" match="manage/customers" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/manage/settings/" label="Admin settings" icon="sliders" match="manage/settings" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible %}
   {% endif %}
 </nav>

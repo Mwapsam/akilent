@@ -2,32 +2,40 @@
 {% load static %}
 {% block title %}Bulk campaigns — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Bulk campaigns</h1>
-    <p class="text-sm text-gray-500 mt-1">Send one email to a list of people, personalised for each recipient.</p>
-  </div>
-  <a href="/email/templates/" class="btn btn-secondary btn-sm">
-    {% include "components/icon.html" with name="book-open" class="w-4 h-4" %} Templates
-  </a>
-</div>
-{% endblock %}
-
 {% block content %}
 
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Campaigns</h1>
+    <p class="mt-1 text-sm text-gray-600">Send one email to a list of people, personalised for each recipient.</p>
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="/email/templates/" class="btn btn-secondary btn-sm">
+      {% include "components/icon.html" with name="layout-template" class="w-4 h-4" %} Templates
+    </a>
+    {% if bulk_enabled %}
+    <a href="#new-campaign" class="btn btn-primary btn-sm">
+      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} New campaign
+    </a>
+    {% endif %}
+  </div>
+</header>
+
 {% if is_admin %}
-<div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-700">
-  Admin view — showing every tenant's campaigns with full access.
+<div class="alert alert-info mb-6" role="status">
+  {% include "components/icon.html" with name="sparkles" %}
+  <span>Admin view — showing every tenant's campaigns with full access.</span>
 </div>
 {% endif %}
 
 {% if not bulk_enabled %}
-<div class="card card-pad mb-6 border-amber-200 bg-amber-50/40">
-  <h2 class="font-semibold flex items-center gap-2">
-    {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Bulk sending
-  </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include bulk email sending. <a href="/billing/plans/" class="text-brand-600 font-medium">Upgrade your plan</a> to launch a campaign.</p>
+<div class="alert alert-warning mb-6">
+  {% include "components/icon.html" with name="key" %}
+  <div>
+    <p class="font-medium">Bulk sending isn't on your plan</p>
+    <p class="mt-0.5">Your current plan doesn't include bulk email sending.
+      <a href="/billing/plans/" class="font-medium underline">Upgrade your plan</a> to launch a campaign.</p>
+  </div>
 </div>
 {% else %}
 
@@ -35,8 +43,8 @@
 {{ wizard_config|json_script:"campaign-wizard-config" }}
 <script src="{% static 'js/campaign-wizard.js' %}?v=2"></script>
 
-<div class="card card-pad mb-6" x-data="campaignWizard()">
-  <h2 class="font-semibold">New campaign</h2>
+<div class="card card-pad mb-6" id="new-campaign" x-data="campaignWizard()">
+  <h2 class="text-lg font-semibold text-ink">New campaign</h2>
 
   {# Progress steps #}
   <ol class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-4 mb-6 text-xs font-medium">
@@ -297,34 +305,38 @@
 {% include "email/_preview_modal.html" %}
 
 {# Campaigns list #}
+{% if campaigns %}
 <div class="table-wrap">
-  <table class="table">
+  <table class="table table--cards">
     <thead><tr>
       <th>From</th><th>Status</th><th>Recipients</th><th>Sent</th><th>Failed</th><th>Created</th><th></th>
     </tr></thead>
     <tbody>
       {% for c in campaigns %}
       <tr>
-        <td>{{ c.from_email }}</td>
-        <td>
-          {% if c.status == 'completed' %}<span class="badge badge-success">Completed</span>
+        <td data-label="From" class="font-medium text-ink">{{ c.from_email }}</td>
+        <td data-label="Status">
+          {% if c.status == 'completed' %}{% include "components/status.html" with state="sent" badge=True %}
           {% elif c.status == 'failed' or c.status == 'cancelled' %}<span class="badge badge-danger">{{ c.get_status_display }}</span>
-          {% elif c.status == 'scheduled' %}<span class="badge badge-info">Scheduled</span>
-          {% elif c.status == 'sending' or c.status == 'queued' %}<span class="badge badge-warning">{{ c.get_status_display }}</span>
-          {% else %}<span class="badge badge-neutral">Draft</span>{% endif %}
+          {% elif c.status == 'scheduled' %}{% include "components/status.html" with state="scheduled" badge=True %}
+          {% elif c.status == 'sending' or c.status == 'queued' %}{% include "components/status.html" with state="sending" badge=True %}
+          {% else %}{% include "components/status.html" with state="draft" badge=True %}{% endif %}
         </td>
-        <td>{{ c.recipient_count }}</td>
-        <td>{{ c.sent_count }}</td>
-        <td>{{ c.failed_count }}</td>
-        <td>{{ c.created_at|date:"M j, H:i" }}</td>
+        <td data-label="Recipients" class="tabular-nums">{{ c.recipient_count }}</td>
+        <td data-label="Sent" class="tabular-nums">{{ c.sent_count }}</td>
+        <td data-label="Failed" class="tabular-nums">{{ c.failed_count }}</td>
+        <td data-label="Created" class="text-gray-500 tabular-nums">{{ c.created_at|date:"M j, H:i" }}</td>
         <td class="text-right"><a href="/email/campaigns/{{ c.pk }}/" class="btn btn-ghost btn-sm">View</a></td>
       </tr>
-      {% empty %}
-      <tr><td colspan="7" class="text-center text-gray-400 py-8">No campaigns yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% else %}
+<div class="table-wrap">
+  {% include "components/empty_state.html" with icon="send" title="No campaigns yet" message="Build a message, add your recipients, and send your first campaign." %}
+</div>
+{% endif %}
 
 {% endif %}
 {% endblock %}

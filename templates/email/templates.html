@@ -2,43 +2,44 @@
 {% load static %}
 {% block title %}Email templates — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Email templates</h1>
-    <p class="text-sm text-gray-500 mt-1">Reusable subject/body content with &#123;&#123; variable &#125;&#125; interpolation, usable in single sends and bulk campaigns.</p>
+{% block content %}
+
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Templates</h1>
+    <p class="mt-1 text-sm text-gray-600">Reusable subject/body content with <code>{% verbatim %}{{ variable }}{% endverbatim %}</code> interpolation, usable in single sends and bulk campaigns.</p>
   </div>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <a href="/email/templates/assets/" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="image" class="w-4 h-4" %} Media library
     </a>
     <a href="/email/campaigns/" class="btn btn-secondary btn-sm">
-      {% include "components/icon.html" with name="chat" class="w-4 h-4" %} Campaigns
+      {% include "components/icon.html" with name="send" class="w-4 h-4" %} Campaigns
     </a>
   </div>
-</div>
-{% endblock %}
-
-{% block content %}
+</header>
 
 {% if is_admin %}
-<div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-700">
-  Admin view — showing every tenant's templates with full access.
+<div class="alert alert-info mb-6" role="status">
+  {% include "components/icon.html" with name="sparkles" %}
+  <span>Admin view — showing every tenant's templates with full access.</span>
 </div>
 {% endif %}
 
 {% if not templates_enabled %}
-<div class="card card-pad mb-6 border-amber-200 bg-amber-50/40">
-  <h2 class="font-semibold flex items-center gap-2">
-    {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Templates
-  </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include email templates. <a href="/billing/plans/" class="text-brand-600 font-medium">Upgrade your plan</a> to create one.</p>
+<div class="alert alert-warning mb-6">
+  {% include "components/icon.html" with name="key" %}
+  <div>
+    <p class="font-medium">Templates aren't on your plan</p>
+    <p class="mt-0.5">Your current plan doesn't include email templates.
+      <a href="/billing/plans/" class="font-medium underline">Upgrade your plan</a> to create one.</p>
+  </div>
 </div>
 {% else %}
 
 {# Create template #}
 <div class="card card-pad mb-6">
-  <h2 class="font-semibold mb-4">New template</h2>
+  <h2 class="text-lg font-semibold text-ink mb-4">New template</h2>
 
   <div class="mb-4" id="starter-template-picker" data-starters='{{ starter_templates_json }}'>
     <p class="text-xs font-medium text-gray-500 mb-1.5">Start from a sample</p>
@@ -53,12 +54,12 @@
     </div>
     {% include "components/form_field.html" with name="subject" label="Subject" placeholder="Welcome, &#123;&#123; first_name &#125;&#125;!" required=True %}
     <div>
-      <label class="text-xs font-medium text-gray-500 mb-1.5 block">Text body</label>
-      <textarea id="id_text_body" name="text_body" rows="4" class="input font-mono text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining."></textarea>
+      <label class="label" for="id_text_body">Text body</label>
+      <textarea id="id_text_body" name="text_body" rows="4" class="textarea font-mono text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining."></textarea>
     </div>
     <div>
-      <label class="text-xs font-medium text-gray-500 mb-1.5 block">HTML body</label>
-      <textarea id="id_html_body" name="html_body" rows="6" class="input font-mono text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;"></textarea>
+      <label class="label" for="id_html_body">HTML body</label>
+      <textarea id="id_html_body" name="html_body" rows="6" class="textarea font-mono text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;"></textarea>
     </div>
     <div>
       <button class="btn btn-primary" type="submit">
@@ -73,7 +74,7 @@
 {# Templates list #}
 {% if templates %}
 <div class="table-wrap mb-8">
-  <table class="table">
+  <table class="table table--cards">
     <thead>
       <tr>
         <th>Template name</th>
@@ -85,30 +86,30 @@
     <tbody>
       {% for t in templates %}
       <tr>
-        <td>
+        <td data-label="Name">
           <a href="/email/templates/{{ t.pk }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ t.name }}</a>
         </td>
-        <td class="text-gray-600">{% if t.builder_mode == 'blocks' %}Drag &amp; Drop{% else %}Raw HTML{% endif %}</td>
-        <td class="text-gray-500">{{ t.updated_at|date:"M j, H:i" }}</td>
-        <td>
+        <td data-label="Type" class="text-gray-600">{% if t.builder_mode == 'blocks' %}Drag &amp; Drop{% else %}Raw HTML{% endif %}</td>
+        <td data-label="Updated" class="text-gray-500 tabular-nums">{{ t.updated_at|date:"M j, H:i" }}</td>
+        <td data-label="Actions">
           <div class="flex items-center gap-1 justify-end">
-            <button type="button" class="btn-ghost rounded-lg p-2" title="Preview" aria-label="Preview {{ t.name }}"
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Preview" aria-label="Preview {{ t.name }}"
                     @click="$dispatch('open-preview-modal', { url: '/email/templates/{{ t.pk }}/preview/', name: '{{ t.name|escapejs }}' })">
               {% include "components/icon.html" with name="eye" class="w-4 h-4" %}
             </button>
-            <button type="button" class="btn-ghost rounded-lg p-2" title="Send via API" aria-label="Send {{ t.name }} via API"
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Send via API" aria-label="Send {{ t.name }} via API"
                     @click="$dispatch('open-api-modal', { id: {{ t.pk }}, name: '{{ t.name|escapejs }}' })">
               {% include "components/icon.html" with name="code-bracket" class="w-4 h-4" %}
             </button>
             <form method="post" action="/email/templates/{{ t.pk }}/clone/" class="inline">
               {% csrf_token %}
-              <button class="btn-ghost rounded-lg p-2" type="submit" title="Duplicate" aria-label="Duplicate {{ t.name }}">
+              <button class="btn btn-ghost btn-icon btn-sm" type="submit" title="Duplicate" aria-label="Duplicate {{ t.name }}">
                 {% include "components/icon.html" with name="copy" class="w-4 h-4" %}
               </button>
             </form>
             <form method="post" action="/email/templates/{{ t.pk }}/delete/" onsubmit="return confirm('Delete this template?');" class="inline">
               {% csrf_token %}
-              <button class="btn-ghost rounded-lg p-2 hover:text-red-600" type="submit" title="Delete" aria-label="Delete {{ t.name }}">
+              <button class="btn btn-ghost btn-icon btn-sm hover:text-red-600" type="submit" title="Delete" aria-label="Delete {{ t.name }}">
                 {% include "components/icon.html" with name="trash" class="w-4 h-4" %}
               </button>
             </form>
