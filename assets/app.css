@@ -130,12 +130,25 @@
   --color-whatsapp: #1FAF9C;
   --color-email: #FFB020;
 
-  /* Semantic surface/border/text tokens (light theme). Canvas = Paper. */
+  /* Semantic surface/border/text tokens (light theme). Canvas = Paper.
+     These are the ONLY tokens the dark theme overrides (see :root blocks
+     below @theme) — the color ramps above stay identical in both themes.
+     Screens must consume these (bg-surface, border-border, text-ink …) rather
+     than literal bg-white / text-gray-900 so dark mode comes for free. */
   --color-surface: #ffffff;
   --color-surface-muted: #FAFBFC;
   --color-canvas: #F3F5F7;
   --color-border: #E8EDF3;
   --color-border-strong: #DCE1E8;
+
+  /* Semantic text + interaction tokens (theme-aware — see dark overrides).
+     ink       = primary body / headings
+     ink-muted = secondary text, form labels, nav labels  (AA on both themes)
+     ink-subtle= tertiary / placeholder / decorative
+     hover     = neutral hover fill for ghost buttons, nav links, menu rows */
+  --color-ink-muted: #46516B;   /* gray-700 */
+  --color-ink-subtle: #657089;  /* gray-600 — AA floor on white */
+  --color-hover: #F3F5F7;       /* gray-100 */
 
   /* Elevation (navy-tinted). */
   --shadow-card: 0 1px 2px 0 rgb(14 21 38 / 0.04), 0 1px 3px 0 rgb(14 21 38 / 0.06);
@@ -163,6 +176,45 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Dark theme — overrides ONLY the semantic surface/border/text/shadow tokens.
+   Values from docs/brand-colors.md §6 (navy ink scale — never #000).
+   Resolution order:
+     - OS "dark" preference applies unless the user explicitly picked "light"
+     - an explicit [data-theme="dark"] always wins (set by Alpine.store('theme'))
+   base.html applies data-theme before first paint to avoid a flash.
+--------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-surface: #161F35;        /* ink-2 — raised panels / cards */
+    --color-surface-muted: #1C2640;  /* ink-3 — wells, table headers  */
+    --color-canvas: #0E1526;         /* Night Ops Navy page ground     */
+    --color-border: #26314A;         /* hairline                       */
+    --color-border-strong: #46516B;
+    --color-ink: #FAFBFC;
+    --color-ink-muted: #A8B2C4;      /* gray-400 — secondary text      */
+    --color-ink-subtle: #838EA3;     /* gray-500 — tertiary            */
+    --color-hover: #1C2640;          /* ink-3 — neutral hover fill     */
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
+    --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
+    --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  --color-surface: #161F35;
+  --color-surface-muted: #1C2640;
+  --color-canvas: #0E1526;
+  --color-border: #26314A;
+  --color-border-strong: #46516B;
+  --color-ink: #FAFBFC;
+  --color-ink-muted: #A8B2C4;
+  --color-ink-subtle: #838EA3;
+  --color-hover: #1C2640;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
+  --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
+  --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+}
+
+/* ---------------------------------------------------------------------------
    Base
 --------------------------------------------------------------------------- */
 @layer base {
@@ -182,6 +234,17 @@
     border-radius: 4px;
   }
   [x-cloak] { display: none !important; }
+
+  /* Global reduced-motion — was previously only in docs/_layout.html.
+     Kills transitions, animations and smooth scroll everywhere. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -197,15 +260,31 @@
   .btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
   .btn-lg { @apply px-5 py-3 text-base; }
   .btn-block { @apply w-full; }
+  .btn { transition-timing-function: var(--ease-emphasized); }
   .btn-primary { @apply bg-amber-400 text-ink font-semibold hover:bg-amber-500 active:bg-amber-600; }
-  .btn-secondary { @apply bg-white text-gray-700 border border-border-strong hover:bg-gray-50; }
-  .btn-ghost { @apply text-gray-600 hover:bg-gray-100 hover:text-gray-900; }
+  .btn-secondary {
+    background-color: var(--color-surface);
+    color: var(--color-ink-muted);
+    @apply border border-border-strong;
+  }
+  .btn-secondary:hover { background-color: var(--color-hover); }
+  .btn-ghost { color: var(--color-ink-subtle); }
+  .btn-ghost:hover { background-color: var(--color-hover); color: var(--color-ink); }
   .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800; } /* red-600 = coral #CC4530, AA with white */
   .btn-danger-ghost { @apply text-red-600 hover:bg-red-50; }
+  /* Square icon-only button. */
+  .btn-icon { @apply p-2 rounded-xl; }
+  .btn-icon.btn-sm { @apply p-1.5 rounded-lg; }
 
   /* Surfaces ------------------------------------------------------------ */
   .card { @apply bg-surface border border-border rounded-2xl shadow-card; }
   .card-pad { @apply p-5 sm:p-6; }
+  /* Interactive card (links / selectable tiles). */
+  .card-hover {
+    @apply transition-colors;
+    transition-timing-function: var(--ease-emphasized);
+  }
+  .card-hover:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
 
   /* Badges -------------------------------------------------------------- */
   .badge {
@@ -220,35 +299,74 @@
   .badge-info { @apply bg-blue-50 text-blue-700; }
 
   /* Forms --------------------------------------------------------------- */
-  .label { @apply block text-sm font-medium text-gray-700 mb-1.5; }
-  .input {
-    @apply w-full rounded-xl border border-border-strong bg-white px-3.5 py-2.5
-      text-sm text-gray-900 placeholder:text-gray-400
+  .label { @apply block text-sm font-medium mb-1.5; color: var(--color-ink-muted); }
+  .input, .select, .textarea {
+    @apply w-full rounded-xl border border-border-strong px-3.5 py-2.5
+      text-sm placeholder:text-gray-400
       focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
   }
+  /* Native <select>: same box as .input + a chevron affordance. */
+  .select {
+    @apply appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23657089' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+  }
+  .textarea { min-height: 6rem; resize: vertical; }
   .input-error { @apply border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500; }
-  .help { @apply text-xs text-gray-400 mt-1; }
+  .help { @apply text-xs mt-1; color: var(--color-ink-subtle); }
   .field-error { @apply text-xs text-red-600 mt-1; }
 
   /* Tables -------------------------------------------------------------- */
   .table-wrap {
     @apply bg-surface border border-border rounded-2xl shadow-card overflow-hidden;
   }
-  .table { @apply w-full text-sm; }
-  .table thead { @apply bg-surface-muted text-gray-500 text-left; }
+  .table { @apply w-full text-sm; color: var(--color-ink); }
+  .table thead { @apply text-left; background-color: var(--color-surface-muted); color: var(--color-ink-subtle); }
   .table th { @apply px-4 py-3 font-medium whitespace-nowrap; }
-  .table tbody { @apply divide-y divide-gray-100; }
+  .table tbody { @apply divide-y; border-color: var(--color-border); }
   .table td { @apply px-4 py-3 align-middle; }
 
+  /* Responsive table → stacked cards below md. Templates add data-label on
+     each <td>; the label renders via ::before. Opt in with .table--cards. */
+  @media (max-width: 767px) {
+    .table--cards thead { @apply sr-only; }
+    .table--cards tbody { @apply block divide-y-0 space-y-3; }
+    .table--cards tr {
+      @apply block rounded-2xl border border-border p-4;
+      background-color: var(--color-surface);
+      box-shadow: var(--shadow-card);
+    }
+    .table--cards td { @apply block px-0 py-1.5 text-right; }
+    .table--cards td::before {
+      content: attr(data-label);
+      @apply float-left font-medium pr-4 text-left;
+      color: var(--color-ink-subtle);
+    }
+    .table--cards td:first-child { @apply pt-0 text-left font-medium; }
+    .table--cards td:first-child::before { content: none; }
+    .table--cards td:last-child { @apply pb-0; }
+  }
+
   /* Skeleton ------------------------------------------------------------ */
-  .skeleton { @apply animate-pulse rounded-md bg-gray-200/70; }
+  .skeleton { @apply animate-pulse rounded-md; background-color: var(--color-border); }
 
   /* App shell nav ------------------------------------------------------- */
   .nav-link {
-    @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-      text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors;
+    @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors;
+    color: var(--color-ink-subtle);
+    transition-timing-function: var(--ease-emphasized);
   }
-  .nav-link-active { @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700; }
+  .nav-link:hover { background-color: var(--color-hover); color: var(--color-ink); }
+  .nav-link-active,
+  .nav-link-active:hover { @apply bg-brand-50 text-brand-700; }
+
+  /* Group heading in the sidebar. */
+  .nav-group-label {
+    @apply px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider;
+    color: var(--color-ink-subtle);
+  }
 
   /* Copy field ---------------------------------------------------------- */
   .copy-value {

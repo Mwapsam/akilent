@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ site.app_name|default:"Automator" }} — Communications infrastructure for business</title>
   <meta name="description" content="{{ site.app_name|default:"Automator" }} connects WhatsApp Business messaging, transactional email, and automated workflows into a unified communications platform.">
+  <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root{
       /* Dark chrome (Night Ops Navy scale) */
@@ -46,12 +44,14 @@
     body{
       background:var(--ink);
       color:var(--text-hi);
-      font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
+      font-family:var(--font-sans);
       -webkit-font-smoothing:antialiased;
       text-rendering:optimizeLegibility;
     }
-    .font-display{ font-family:'Space Grotesk',ui-sans-serif,sans-serif; letter-spacing:-0.015em; }
-    .font-mono{ font-family:'JetBrains Mono',ui-monospace,monospace; letter-spacing:.01em; }
+    /* One self-hosted family (Inter Variable) — no CDN fonts. Display headings
+       lean on the tighter tracking + heavier weight rather than a second face. */
+    .font-display{ font-family:var(--font-sans); letter-spacing:-0.02em; font-weight:600; }
+    .font-mono{ font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.01em; }
     .text-mid{ color:var(--text-mid); }
     .text-lo{ color:var(--text-lo); }
     .bg-ink{ background:var(--ink); }

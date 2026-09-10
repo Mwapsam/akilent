@@ -59,6 +59,31 @@
       closeDrawer() { this.drawerOpen = false; },
     });
 
+    // Theme: "light" | "dark" | "system". Persisted to localStorage; the
+    // pre-paint script in base.html reads the same key to avoid a flash.
+    // "system" removes data-theme so the CSS prefers-color-scheme block wins.
+    Alpine.store("theme", {
+      value: (function () {
+        try { return localStorage.getItem("akilent:theme") || "system"; }
+        catch (e) { return "system"; }
+      })(),
+      init() { this.apply(); },
+      set(v) {
+        this.value = v;
+        try {
+          if (v === "system") localStorage.removeItem("akilent:theme");
+          else localStorage.setItem("akilent:theme", v);
+        } catch (e) {}
+        this.apply();
+      },
+      apply() {
+        const el = document.documentElement;
+        if (this.value === "light" || this.value === "dark") el.setAttribute("data-theme", this.value);
+        else el.removeAttribute("data-theme");
+      },
+    });
+    Alpine.store("theme").init();
+
     // Confirm dialog: { open, title, message, confirmLabel, danger, _resolve }
     Alpine.store("confirm", {
       open: false, title: "", message: "", confirmLabel: "Confirm", danger: false, _resolve: null,

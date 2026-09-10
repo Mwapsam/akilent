@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ page.title }} — Developer docs — {{ site.app_name|default:"Automator" }}{% endblock %}</title>
   <meta name="description" content="{{ page.summary }}">
+  <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <style>
@@ -22,9 +20,9 @@
     *{ box-sizing:border-box; }
     html{ scroll-padding-top:5.5rem; }
     html:focus-within{ scroll-behavior:smooth; }
-    body{ background:var(--paper); color:var(--paper-ink); font-family:'Inter',ui-sans-serif,system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
-    .font-display{ font-family:'Space Grotesk',ui-sans-serif,sans-serif; letter-spacing:-0.015em; }
-    .font-mono{ font-family:'JetBrains Mono',ui-monospace,monospace; letter-spacing:.01em; }
+    body{ background:var(--paper); color:var(--paper-ink); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
+    .font-display{ font-family:var(--font-sans); letter-spacing:-0.015em; }
+    .font-mono{ font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.01em; }
     .bg-ink{ background:var(--ink); }
     .text-mid{ color:var(--text-mid); }
     .text-signal{ color:var(--signal); }
@@ -45,7 +43,7 @@
     }
 
     /* Docs nav */
-    .docs-nav-label{ font-size:.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--paper-lo); margin:1.25rem 0 .4rem; padding:0 .6rem; font-family:'JetBrains Mono',ui-monospace,monospace; }
+    .docs-nav-label{ font-size:.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--paper-lo); margin:1.25rem 0 .4rem; padding:0 .6rem; font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; }
     .docs-nav-label:first-child{ margin-top:0; }
     .docs-nav a{ display:flex; align-items:center; min-height:2.5rem; padding:.45rem .6rem; border-radius:8px; font-size:.85rem; color:var(--paper-mid); transition:background .15s ease, color .15s ease; }
     .docs-nav a:hover{ color:var(--paper-ink); background:#FFFFFF; }
@@ -64,7 +62,7 @@
     /* Docs prose */
     .docs-body{ color:var(--paper-mid); font-size:1rem; line-height:1.75; max-width:70ch; }
     .docs-body > * + *{ margin-top:1rem; }
-    .docs-body h2{ font-size:1.2rem; font-weight:600; color:var(--paper-ink); margin-top:2.25rem; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.01em; }
+    .docs-body h2{ font-size:1.2rem; font-weight:600; color:var(--paper-ink); margin-top:2.25rem; font-family:var(--font-sans); letter-spacing:-0.01em; }
     .docs-body h3{ font-size:1rem; font-weight:600; color:var(--paper-ink); margin-top:1.5rem; }
     .docs-body h2 .anchor{ margin-left:.4rem; color:var(--signal-deep); text-decoration:none; opacity:0; font-weight:500; transition:opacity .15s ease; }
     .docs-body h2:hover .anchor, .docs-body h2 .anchor:focus-visible{ opacity:1; }
@@ -74,10 +72,10 @@
     .docs-body li + li{ margin-top:.35rem; }
     .docs-body a{ color:var(--signal-deep); text-decoration:underline; text-underline-offset:2px; }
     .docs-body a:hover{ color:var(--paper-ink); }
-    .docs-body code{ background:#EEF1F5; border-radius:.375rem; padding:.1rem .35rem; font-size:.85em; font-family:'JetBrains Mono',ui-monospace,monospace; }
+    .docs-body code{ background:#EEF1F5; border-radius:.375rem; padding:.1rem .35rem; font-size:.85em; font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; }
     .docs-body pre{ position:relative; background:#0B111F; color:#E7ECF5; border-radius:.75rem; padding:1rem 1.1rem; overflow-x:auto; font-size:.82rem; line-height:1.6; }
     .docs-body pre code{ background:none; padding:0; color:inherit; }
-    .docs-body pre[data-lang]::before{ content:attr(data-lang); position:absolute; top:.5rem; right:3.25rem; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.65rem; color:var(--text-lo); text-transform:uppercase; letter-spacing:.06em; }
+    .docs-body pre[data-lang]::before{ content:attr(data-lang); position:absolute; top:.5rem; right:3.25rem; font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:.65rem; color:var(--text-lo); text-transform:uppercase; letter-spacing:.06em; }
     .docs-body strong{ color:var(--paper-ink); font-weight:600; }
     .docs-body table{ display:block; width:fit-content; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border-collapse:separate; border-spacing:0; font-size:.875rem; background:var(--paper-card); border:1px solid var(--paper-border); border-radius:.75rem; }
     .docs-body th, .docs-body td{ text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--paper-border); vertical-align:top; }
@@ -92,7 +90,7 @@
     .docs-body .callout--note svg{ color:var(--signal-deep); }
 
     /* Copy-to-clipboard buttons (injected by JS) */
-    .copy-btn{ position:absolute; top:.4rem; right:.4rem; display:inline-flex; align-items:center; justify-content:center; gap:.3rem; min-width:2.25rem; min-height:2.25rem; padding:.35rem .5rem; border-radius:.5rem; color:var(--text-lo); background:rgba(22,31,53,.85); font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.68rem; cursor:pointer; transition:color .15s ease, background .15s ease; }
+    .copy-btn{ position:absolute; top:.4rem; right:.4rem; display:inline-flex; align-items:center; justify-content:center; gap:.3rem; min-width:2.25rem; min-height:2.25rem; padding:.35rem .5rem; border-radius:.5rem; color:var(--text-lo); background:rgba(22,31,53,.85); font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:.68rem; cursor:pointer; transition:color .15s ease, background .15s ease; }
     .copy-btn:hover{ color:#FAFBFC; background:#1C2640; }
     .copy-btn svg{ width:.95rem; height:.95rem; }
     .copy-btn.copied{ color:var(--signal); }
@@ -102,7 +100,7 @@
     /* Code sample tabs */
     .code-tabs{ background:#0B111F; border-radius:.75rem; overflow:hidden; }
     .code-tabs .tab-bar{ display:flex; align-items:stretch; gap:.25rem; padding:.35rem .5rem 0; border-bottom:1px solid #1C2640; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    .code-tabs button[data-tab]{ font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.72rem; color:var(--text-lo); padding:.7rem .85rem; min-height:2.75rem; border-radius:.5rem .5rem 0 0; white-space:nowrap; flex-shrink:0; cursor:pointer; transition:color .15s ease, background .15s ease; }
+    .code-tabs button[data-tab]{ font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:.72rem; color:var(--text-lo); padding:.7rem .85rem; min-height:2.75rem; border-radius:.5rem .5rem 0 0; white-space:nowrap; flex-shrink:0; cursor:pointer; transition:color .15s ease, background .15s ease; }
     .code-tabs button[data-tab]:hover{ color:#FAFBFC; }
     .code-tabs button[data-tab].active{ color:#FAFBFC; background:#161F35; box-shadow:inset 0 -2px 0 var(--signal); }
     .code-tabs pre{ margin:0; border-radius:0; }
@@ -119,8 +117,8 @@
     .docs-pager a:hover{ border-color:var(--signal); box-shadow:0 1px 8px rgba(14,21,38,.06); }
     .docs-pager a.pager-next{ text-align:right; align-items:flex-end; }
     .docs-pager a.pager-next:only-child{ grid-column:2; }
-    .docs-pager .pager-eyebrow{ font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.65rem; text-transform:uppercase; letter-spacing:.08em; color:var(--paper-lo); }
-    .docs-pager .pager-title{ display:inline-flex; align-items:center; gap:.35rem; font-weight:600; font-size:.9rem; color:var(--paper-ink); font-family:'Space Grotesk',sans-serif; }
+    .docs-pager .pager-eyebrow{ font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:.65rem; text-transform:uppercase; letter-spacing:.08em; color:var(--paper-lo); }
+    .docs-pager .pager-title{ display:inline-flex; align-items:center; gap:.35rem; font-weight:600; font-size:.9rem; color:var(--paper-ink); font-family:var(--font-sans); }
     .docs-pager svg{ width:.9rem; height:.9rem; color:var(--signal-deep); flex-shrink:0; }
 
     /* Docs index card grid */
@@ -128,8 +126,8 @@
     @media (min-width:640px){ .docs-cards{ grid-template-columns:repeat(2,1fr); } }
     .docs-body .docs-cards a{ display:block; background:var(--paper-card); border:1px solid var(--paper-border); border-radius:.9rem; padding:1rem 1.1rem; text-decoration:none; color:inherit; transition:border-color .15s ease, box-shadow .15s ease; }
     .docs-body .docs-cards a:hover{ border-color:var(--signal); box-shadow:0 1px 8px rgba(14,21,38,.06); color:inherit; }
-    .docs-cards .card-section{ font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; color:var(--signal-deep); }
-    .docs-cards .card-title{ display:block; font-family:'Space Grotesk',sans-serif; font-weight:600; color:var(--paper-ink); margin:.2rem 0 .25rem; font-size:.95rem; }
+    .docs-cards .card-section{ font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; color:var(--signal-deep); }
+    .docs-cards .card-title{ display:block; font-family:var(--font-sans); font-weight:600; color:var(--paper-ink); margin:.2rem 0 .25rem; font-size:.95rem; }
     .docs-cards .card-summary{ display:block; font-size:.82rem; line-height:1.55; color:var(--paper-mid); }
 
     /* Mobile docs nav (no JS) */

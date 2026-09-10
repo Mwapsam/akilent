@@ -4,8 +4,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ site.app_name|default:"Automator" }}{% endblock %}</title>
+  {# Apply the saved theme before first paint — avoids a light/dark flash. #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("akilent:theme");
+        if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -13,7 +22,7 @@
   <script defer src="{% static 'js/app.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
 </head>
-<body class="h-full bg-canvas text-gray-900 antialiased" x-data>
+<body class="h-full bg-canvas text-ink antialiased" x-data>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
@@ -23,15 +32,15 @@
 
   {% if user.is_authenticated %}
 
-    {# ─── Desktop sidebar ─────────────────────────────────────────────────── #}
-    <aside class="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 bg-white border-r border-border
-                  transition-[width] duration-200"
+    {# ─── Desktop sidebar — icon rail at md, full (collapsible) at lg ──────── #}
+    <aside class="hidden md:flex md:flex-col fixed inset-y-0 left-0 w-[4.75rem] bg-surface
+                  border-r border-border transition-[width] duration-200"
            :class="$store.ui.sidebarCollapsed ? 'lg:w-[4.75rem]' : 'lg:w-64'"
            style="z-index: var(--z-sticky)">
 
       <div class="h-16 flex items-center gap-2 px-4 border-b border-border">
         {% include "components/brand_mark.html" with class="w-9 h-9" %}
-        <span class="font-semibold text-gray-900"
+        <span class="font-semibold text-ink hidden lg:inline"
               x-show="!$store.ui.sidebarCollapsed" x-cloak>
           {{ site.app_name|default:"Automator" }}
         </span>
@@ -41,8 +50,9 @@
         {% include "components/_nav.html" with collapsible=True %}
       </div>
 
+      {# Collapse toggle is only meaningful where the full sidebar shows #}
       <button type="button"
-              class="m-3 nav-link justify-center text-gray-400"
+              class="hidden lg:flex m-3 nav-link justify-center text-gray-400"
               @click="$store.ui.toggleSidebar()"
               :aria-label="$store.ui.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
         <span class="inline-flex transition-transform duration-200"
@@ -66,7 +76,7 @@
            x-transition.opacity
            @click="$store.ui.closeDrawer()"></div>
 
-      <aside class="absolute inset-y-0 left-0 w-64 bg-white flex flex-col shadow-modal"
+      <aside class="absolute inset-y-0 left-0 w-64 bg-surface flex flex-col shadow-modal"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="-translate-x-full"
              x-transition:enter-end="translate-x-0"
@@ -101,17 +111,17 @@
 
   {# ─── Main column ─────────────────────────────────────────────────────── #}
   {% if user.is_authenticated %}
-    <div class="transition-[padding] duration-200"
+    <div class="transition-[padding] duration-200 md:pl-[4.75rem]"
          :class="$store.ui.sidebarCollapsed ? 'lg:pl-[4.75rem]' : 'lg:pl-64'">
 
       {# Topbar #}
-      <header class="sticky top-0 h-16 bg-white/90 backdrop-blur border-b border-border
-                     flex items-center gap-3 px-4 sm:px-6"
+      <header class="sticky top-0 h-16 bg-surface/90 backdrop-blur border-b border-border
+                     flex items-center gap-2 sm:gap-3 px-4 sm:px-6"
               style="z-index: var(--z-sticky)">
 
-        {# Mobile menu trigger #}
+        {# Mobile menu trigger — drawer is the nav below md #}
         <button type="button"
-                class="lg:hidden btn-ghost rounded-lg p-2"
+                class="md:hidden btn btn-ghost btn-icon"
                 @click="$store.ui.openDrawer()"
                 aria-label="Open menu">
           {% include "components/icon.html" with name="menu" class="w-5 h-5" %}
@@ -119,8 +129,22 @@
 
         <div class="flex-1 min-w-0">{% block breadcrumbs %}{% endblock %}</div>
 
+        {# Command palette trigger #}
+        <button type="button"
+                class="hidden sm:flex items-center gap-2 rounded-xl border border-border
+                       px-2.5 py-1.5 text-sm text-gray-400 hover:text-ink hover:border-border-strong"
+                @click="$dispatch('palette-open')"
+                aria-label="Search (Ctrl+K)">
+          {% include "components/icon.html" with name="search" class="w-4 h-4" %}
+          <span>Search…</span>
+          <kbd class="text-[11px] border border-border rounded px-1 py-px">⌘K</kbd>
+        </button>
+
+        {# + Send #}
+        {% include "components/send_menu.html" %}
+
         {# Workspace badge #}
-        <div class="hidden sm:flex items-center gap-2 text-sm text-gray-500">
+        <div class="hidden lg:flex items-center gap-2 text-sm text-gray-500">
           {% if is_admin %}
             <span class="badge badge-brand">Admin · all tenants</span>
           {% elif account %}
@@ -168,6 +192,23 @@
 
             <div class="my-1 border-t border-border"></div>
 
+            {# Theme toggle — backed by Alpine.store('theme') #}
+            <div class="px-3 py-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Theme</p>
+              <div class="grid grid-cols-3 gap-1 rounded-lg bg-canvas p-0.5" role="group" aria-label="Theme">
+                <template x-for="opt in ['light', 'dark', 'system']" :key="opt">
+                  <button type="button"
+                          class="rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors"
+                          :class="$store.theme.value === opt ? 'bg-surface text-ink shadow-card' : 'text-gray-500 hover:text-ink'"
+                          :aria-pressed="$store.theme.value === opt"
+                          @click="$store.theme.set(opt)"
+                          x-text="opt"></button>
+                </template>
+              </div>
+            </div>
+
+            <div class="my-1 border-t border-border"></div>
+
             <form method="post" action="/auth/logout/" role="none">
               {% csrf_token %}
               <button class="nav-link w-full text-left" role="menuitem">
@@ -205,6 +246,9 @@
   {# ─── Global overlays ─────────────────────────────────────────────────── #}
   {% include "components/toast.html" %}
   {% include "components/confirm.html" %}
+  {% if user.is_authenticated %}
+    {% include "components/command_palette.html" %}
+  {% endif %}
 
   {# ─── Onboarding (skip on the onboarding page itself) ────────────────── #}
   {% if onboarding and request.path != "/onboarding/" %}
