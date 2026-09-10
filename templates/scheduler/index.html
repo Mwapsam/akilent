@@ -60,7 +60,7 @@
   {% endfor %}
   {% else %}
   <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign or a single send and it will show up here." action_url="/email/campaigns/#new-campaign" action_label="New campaign" %}
+    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign or a single send and it will show up here." action_url="/email/campaigns/new/" action_label="New campaign" %}
   </div>
   {% endif %}
 </div>

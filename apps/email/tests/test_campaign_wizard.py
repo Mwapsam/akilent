@@ -59,9 +59,9 @@ def test_sample_csv_download(client, account):
 
 
 @pytest.mark.django_db
-def test_list_page_exposes_verified_domain_to_wizard(client, account, bulk_plan, verified_domain):
+def test_compose_page_exposes_verified_domain_to_wizard(client, account, bulk_plan, verified_domain):
     client.force_login(account.owner)
-    resp = client.get("/email/campaigns/")
+    resp = client.get("/email/campaigns/new/")
     assert resp.status_code == 200
     assert b"campaign-wizard-config" in resp.content
     assert b"mail.acme.com" in resp.content

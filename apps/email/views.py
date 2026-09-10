@@ -1272,15 +1272,16 @@ def _parse_recipients_text(raw: str) -> list[dict]:
     return recipients
 
 
-def _render_campaigns_page(request, account, admin, *, form_data=None, errors=None, status=200):
-    """Shared render for the campaigns page — used by the list view and by
-    campaign_create when it needs to re-show the form with validation errors
-    instead of redirecting (which would throw away everything the user typed)."""
+def _render_composer(request, account, admin, *, form_data=None, errors=None, status=200):
+    """Render the standalone message composer (`/email/campaigns/new/`).
+
+    Also used by campaign_create when it needs to re-show the form with
+    validation errors instead of redirecting (which would throw away
+    everything the user typed)."""
     from apps.billing.limits import LimitChecker
-    from apps.email.models import BulkEmailCampaign, EmailTemplate
+    from apps.email.models import EmailTemplate
 
     bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
-    campaigns = _scoped(BulkEmailCampaign.objects, request, account)[:50]
     templates = list(
         _scoped(EmailTemplate.objects, request, account).filter(is_active=True)
     )
@@ -1306,10 +1307,9 @@ def _render_campaigns_page(request, account, admin, *, form_data=None, errors=No
         "errors": errors or {},
     }
 
-    return render(request, "email/campaigns.html", {
+    return render(request, "email/campaign_compose.html", {
         "account": account,
         "is_admin": admin,
-        "campaigns": campaigns,
         "templates": templates,
         "verified_domains": verified_domains,
         "bulk_enabled": bulk_enabled,
@@ -1320,12 +1320,32 @@ def _render_campaigns_page(request, account, admin, *, form_data=None, errors=No
 
 @login_required
 def campaigns_list(request):
+    from apps.billing.limits import LimitChecker
+    from apps.email.models import BulkEmailCampaign
+
     admin = _is_admin(request)
     account = get_current_account(request)
     if account is None and not admin:
         return redirect("dashboard")
 
-    return _render_campaigns_page(request, account, admin)
+    bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
+    campaigns = _scoped(BulkEmailCampaign.objects, request, account)[:50]
+    return render(request, "email/campaigns.html", {
+        "account": account,
+        "is_admin": admin,
+        "campaigns": campaigns,
+        "bulk_enabled": bulk_enabled,
+    })
+
+
+@login_required
+def campaign_compose(request):
+    admin = _is_admin(request)
+    account = get_current_account(request)
+    if account is None and not admin:
+        return redirect("dashboard")
+
+    return _render_composer(request, account, admin)
 
 
 @login_required
@@ -1434,7 +1454,7 @@ def campaign_create(request):
             )
             return redirect("email-campaigns")
 
-    return _render_campaigns_page(
+    return _render_composer(
         request, account, admin, form_data=form_data, errors=errors, status=400
     )
 

@@ -42,6 +42,7 @@ urlpatterns = [
     path("templates/assets/", views.asset_library, name="email-assets"),
     path("templates/assets/<int:pk>/delete/", views.asset_delete, name="email-asset-delete"),
     path("campaigns/", views.campaigns_list, name="email-campaigns"),
+    path("campaigns/new/", views.campaign_compose, name="email-campaign-compose"),
     path("campaigns/create/", views.campaign_create, name="email-campaign-create"),
     path("campaigns/send-test/", views.campaign_send_test, name="email-campaign-send-test"),
     path("campaigns/sample.csv", views.campaign_sample_csv, name="email-campaign-sample-csv"),

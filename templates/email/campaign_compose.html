@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}New campaign — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="/email/campaigns/" class="hover:text-ink">Campaigns</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-ink">New campaign</span>
+  </nav>
+  <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+    <div class="min-w-0">
+      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New campaign</h1>
+      <p class="mt-1 flex items-center gap-2 text-sm text-gray-600">
+        {% include "components/channel_tag.html" with channel="email" %}
+        <span>·</span> Build a message, add recipients, then send or schedule.
+      </p>
+    </div>
+    <a href="/email/campaigns/" class="btn btn-secondary btn-sm">Cancel</a>
+  </div>
+</header>
+
+{% if not bulk_enabled %}
+<div class="alert alert-warning mb-6">
+  {% include "components/icon.html" with name="key" %}
+  <div>
+    <p class="font-medium">Bulk sending isn't on your plan</p>
+    <p class="mt-0.5">Your current plan doesn't include bulk email sending.
+      <a href="/billing/plans/" class="font-medium underline">Upgrade your plan</a> to launch a campaign.</p>
+  </div>
+</div>
+{% else %}
+
+{# ── Guided campaign wizard ─────────────────────────────────────────────── #}
+{{ wizard_config|json_script:"campaign-wizard-config" }}
+<script src="{% static 'js/campaign-wizard.js' %}?v=2"></script>
+
+<div class="card card-pad mb-6" id="new-campaign" x-data="campaignWizard()">
+  {# Progress steps #}
+  <ol class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6 text-xs font-medium">
+    <template x-for="(label, i) in stepLabels" :key="i">
+      <li class="flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-[11px]"
+              :class="i === step ? 'bg-brand-600 text-white' : (i < step ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400')"
+              x-text="i < step ? '✓' : (i + 1)"></span>
+        <span :class="i === step ? 'text-gray-900' : 'text-gray-400'" x-text="label"></span>
+        <span x-show="i < stepLabels.length - 1" class="w-6 h-px bg-gray-200 hidden sm:inline-block"></span>
+      </li>
+    </template>
+  </ol>
+
+  {% if errors.form %}
+  <p class="field-error mb-4">{{ errors.form }}</p>
+  {% endif %}
+
+  <form method="post" action="/email/campaigns/create/" enctype="multipart/form-data" @submit="onSubmit($event)" class="grid gap-4">
+    {% csrf_token %}
+    <input type="hidden" name="mode" :value="mode">
+    <input type="hidden" name="from_email" :value="fromEmail">
+    <input type="hidden" name="from_local" :value="fromLocal">
+    <input type="hidden" name="from_domain" :value="fromDomain">
+
+    {# ── Step 1 — Message ─────────────────────────────────────────────── #}
+    <div x-show="step === 0" class="grid gap-4">
+      <div class="grid sm:grid-cols-2 gap-2">
+        <label class="card card-pad cursor-pointer border-2 transition-colors"
+               :class="mode === 'text' ? 'border-brand-500' : 'border-border'">
+          <span class="flex items-center gap-2 font-medium text-sm">
+            <input type="radio" x-model="mode" value="text" class="accent-brand-600"> Write a message
+          </span>
+          <span class="text-xs text-gray-500 mt-1 block">A simple subject and body. Best for announcements and updates.</span>
+        </label>
+        <label class="card card-pad cursor-pointer border-2 transition-colors"
+               :class="mode === 'template' ? 'border-brand-500' : 'border-border'">
+          <span class="flex items-center gap-2 font-medium text-sm">
+            <input type="radio" x-model="mode" value="template" class="accent-brand-600"> Use a saved template
+          </span>
+          <span class="text-xs text-gray-500 mt-1 block">A designed email you built in Templates.</span>
+        </label>
+      </div>
+
+      {# Write-a-message fields #}
+      <div x-show="mode === 'text'" class="grid gap-3">
+        <div>
+          <label class="label" for="id_subject">Subject line</label>
+          <input id="id_subject" name="subject" type="text" x-model="subject"
+                 :disabled="mode !== 'text'"
+                 placeholder="A quick update from our team"
+                 class="input{% if errors.subject %} input-error{% endif %}">
+        </div>
+        <div>
+          <label class="label" for="id_text_body">Message</label>
+          <textarea id="id_text_body" name="text_body" rows="7" x-model="message"
+                    x-ref="messageInput" :disabled="mode !== 'text'"
+                    placeholder="Hi there,&#10;&#10;We wanted to let you know…"
+                    class="input"></textarea>
+        </div>
+        <div x-show="mergeFields.length" class="text-xs text-gray-500">
+          <span class="inline-flex items-center gap-1">
+            Personalise it
+            {% include "components/help_tip.html" with text="Click a field to drop it into your message. We swap it for each person's real value when the email is sent." %}
+          </span>
+          <div class="flex flex-wrap gap-1.5 mt-1.5">
+            <template x-for="f in mergeFields" :key="f">
+              <button type="button" class="badge badge-neutral hover:bg-gray-200"
+                      @click="insertField(f)" x-text="f"></button>
+            </template>
+          </div>
+        </div>
+        <p x-show="!mergeFields.length" class="help">
+          Add recipients with a CSV in the next step to personalise this message with fields like a first name.
+        </p>
+      </div>
+
+      {# Saved-template fields #}
+      <div x-show="mode === 'template'" class="grid gap-3">
+        {% if templates %}
+        <div>
+          <label class="label" for="id_template_id">Template</label>
+          <div class="flex items-center gap-2">
+            <select id="id_template_id" name="template_id" x-model="templateId"
+                    :disabled="mode !== 'template'" class="input">
+              <option value="">Choose a template…</option>
+              {% for t in templates %}
+              <option value="{{ t.pk }}">{{ t.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm shrink-0" x-show="templateId"
+                    @click="$dispatch('open-preview-modal', { url: '/email/templates/' + templateId + '/preview/', name: (selectedTemplate && selectedTemplate.name) || 'Template' })">
+              {% include "components/icon.html" with name="eye" class="w-4 h-4" %} Preview
+            </button>
+          </div>
+        </div>
+        <p class="help">Need a different design? <a href="/email/templates/" class="text-brand-600 font-medium">Create a template</a> first, then come back.</p>
+        {% else %}
+        <div class="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-gray-600">
+          You don't have any templates yet. <a href="/email/templates/" class="text-brand-600 font-medium">Create one</a>, or switch to “Write a message”.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Step 2 — Recipients ──────────────────────────────────────────── #}
+    <div x-show="step === 1" x-cloak class="grid gap-4">
+      <div class="flex flex-wrap gap-2 text-sm">
+        <button type="button" class="btn btn-sm" :class="recipientMethod === 'csv' ? 'btn-primary' : 'btn-secondary'" @click="selectMethod('csv')">Upload a CSV</button>
+        <button type="button" class="btn btn-sm" :class="recipientMethod === 'paste' ? 'btn-primary' : 'btn-secondary'" @click="selectMethod('paste')">Paste email addresses</button>
+        <button type="button" class="btn btn-sm" :class="recipientMethod === 'json' ? 'btn-primary' : 'btn-secondary'" @click="selectMethod('json')">Advanced (JSON)</button>
+      </div>
+
+      {# CSV #}
+      <div x-show="recipientMethod === 'csv'" class="grid gap-2">
+        <p class="text-sm text-gray-600">
+          One row per person. Include a <code>to</code> column for the email address; any other columns
+          (like <code>first_name</code>) become personalisation fields.
+          <a href="{% url 'email-campaign-sample-csv' %}" class="text-brand-600 font-medium">Download a sample CSV</a>.
+        </p>
+        <input type="file" name="recipients_csv" accept=".csv" class="input"
+               x-ref="csvInput" :disabled="recipientMethod !== 'csv'" @change="onCsvChange($event)">
+        <p x-show="csvError" class="field-error" x-text="csvError"></p>
+        <div x-show="csv.rows.length" class="rounded-xl border border-border overflow-hidden">
+          <div class="px-4 py-2 bg-surface-muted text-xs text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
+            <span><strong x-text="csv.rows.length"></strong> recipients</span>
+            <span x-show="csv.variables.length">Fields: <span x-text="csv.variables.join(', ')"></span></span>
+          </div>
+          <table class="table">
+            <thead><tr><template x-for="h in csv.headers" :key="h"><th x-text="h"></th></template></tr></thead>
+            <tbody>
+              <template x-for="(row, i) in csv.rows.slice(0, 5)" :key="i">
+                <tr><template x-for="h in csv.headers" :key="h"><td class="text-xs" x-text="row[h]"></td></template></tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# Paste #}
+      <div x-show="recipientMethod === 'paste'" class="grid gap-2">
+        <label class="label" for="id_recipients_text">Email addresses</label>
+        <textarea id="id_recipients_text" name="recipients_text" rows="6" x-model="pasteText"
+                  :disabled="recipientMethod !== 'paste'"
+                  placeholder="ada@example.com&#10;grace@example.com"
+                  class="input"></textarea>
+        <p class="help">One per line, or separated by commas. No personalisation fields with this option.</p>
+        <p x-show="pasteText.trim()" class="text-xs text-gray-600"><strong x-text="recipientCount"></strong> valid addresses found.</p>
+      </div>
+
+      {# JSON (advanced) #}
+      <div x-show="recipientMethod === 'json'" class="grid gap-2">
+        <label class="label" for="id_recipients_json">Recipients JSON</label>
+        <textarea id="id_recipients_json" name="recipients_json" rows="6" x-model="jsonText"
+                  :disabled="recipientMethod !== 'json'"
+                  placeholder='[{"to": "a@example.com", "variables": {"first_name": "Ada"}}]'
+                  class="input font-mono text-sm"></textarea>
+        <p class="help">For power users — an array of <code>{"to", "variables"}</code> objects.</p>
+      </div>
+
+      {% if errors.recipients %}<p class="field-error">{{ errors.recipients }}</p>{% endif %}
+    </div>
+
+    {# ── Step 3 — From ────────────────────────────────────────────────── #}
+    <div x-show="step === 2" x-cloak class="grid gap-3">
+      <template x-if="hasDomains">
+        <div class="grid gap-2">
+          <label class="label" for="id_from_local">Send from</label>
+          <div class="flex items-stretch gap-2">
+            <input id="id_from_local" type="text" x-model="fromLocal" class="input sm:max-w-[12rem]" placeholder="hello">
+            <span class="flex items-center text-gray-400 text-sm">@</span>
+            <template x-if="cfg.verifiedDomains.length === 1">
+              <span class="flex items-center px-3 rounded-xl bg-surface-muted border border-border text-sm text-gray-700" x-text="fromDomain"></span>
+            </template>
+            <template x-if="cfg.verifiedDomains.length > 1">
+              <select x-model="fromDomain" class="input sm:max-w-xs">
+                <template x-for="d in cfg.verifiedDomains" :key="d"><option :value="d" x-text="d"></option></template>
+              </select>
+            </template>
+          </div>
+          <p class="help">Recipients see this address. It's one of your verified sending domains — <span x-text="fromEmail"></span></p>
+          {% if errors.from_email %}<p class="field-error">{{ errors.from_email }}</p>{% endif %}
+        </div>
+      </template>
+      <template x-if="!hasDomains">
+        <div class="rounded-xl border border-border bg-surface-muted">
+          {% include "components/empty_state.html" with icon="globe" title="Add a verified sending domain first" message="Campaigns can only be sent from a domain you've verified. It takes a few minutes." %}
+          <div class="text-center pb-6 -mt-4">
+            <a href="/email/domains/" class="btn btn-primary btn-sm">Set up a domain</a>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {# ── Step 4 — Review ──────────────────────────────────────────────── #}
+    <div x-show="step === 3" x-cloak class="grid gap-4">
+      <dl class="rounded-xl border border-border divide-y divide-gray-100 text-sm">
+        <div class="flex justify-between gap-4 px-4 py-3">
+          <dt class="text-gray-500">From</dt><dd class="font-medium text-right" x-text="fromEmail"></dd>
+        </div>
+        <div class="flex justify-between gap-4 px-4 py-3">
+          <dt class="text-gray-500">Content</dt>
+          <dd class="font-medium text-right"
+              x-text="mode === 'template' ? ((selectedTemplate && selectedTemplate.name) || 'Template') : (subject || '(no subject)')"></dd>
+        </div>
+        <div class="flex justify-between gap-4 px-4 py-3">
+          <dt class="text-gray-500">Recipients</dt>
+          <dd class="font-medium text-right"><span x-text="recipientCount"></span> <span x-text="recipientCount === 1 ? 'person' : 'people'"></span></dd>
+        </div>
+        <div class="flex justify-between gap-4 px-4 py-3" x-show="mergeFields.length">
+          <dt class="text-gray-500">Personalised fields</dt>
+          <dd class="font-medium text-right" x-text="mergeFields.join(', ')"></dd>
+        </div>
+      </dl>
+      <div>
+        <button type="button" class="btn btn-secondary btn-sm" @click="sendTest()" :disabled="testing">
+          {% include "components/icon.html" with name="inbox" class="w-4 h-4" %}
+          <span x-text="testing ? 'Sending…' : 'Send a test to myself'"></span>
+        </button>
+        <p class="help">We'll email a copy to your own address so you can check how it looks.</p>
+      </div>
+
+      {# ── Schedule for later ─────────────────────────────────────────── #}
+      <div class="rounded-xl border border-border px-4 py-3 grid gap-2"
+           x-data="{ on: {% if form_data.schedule_enabled %}true{% else %}false{% endif %} }">
+        <label class="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" name="schedule_enabled" x-model="on" value="1">
+          Schedule for later
+        </label>
+        <input type="hidden" name="schedule_timezone"
+               :value="Intl.DateTimeFormat().resolvedOptions().timeZone">
+        <div x-show="on" x-cloak class="grid gap-1">
+          <input type="datetime-local" name="scheduled_at" class="input sm:max-w-xs"
+                 value="{{ form_data.scheduled_at }}">
+          <p class="help">Sends at this time in your timezone
+            (<span x-text="Intl.DateTimeFormat().resolvedOptions().timeZone"></span>).
+            Manage or cancel it anytime from <a href="/scheduled/" class="link">Scheduled</a>.</p>
+          {% if errors.scheduled_at %}<p class="field-error">{{ errors.scheduled_at }}</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Wizard navigation ────────────────────────────────────────────── #}
+    <div class="flex items-center gap-2 mt-2 pt-4 border-t border-border">
+      <button type="button" class="btn btn-ghost btn-sm" x-show="step > 0" @click="prev()">Back</button>
+      <div class="ml-auto flex items-center gap-2">
+        <button type="button" class="btn btn-primary btn-sm" x-show="step < 3"
+                :disabled="!canAdvance" @click="next()">Continue</button>
+        <button type="submit" class="btn btn-primary btn-sm" x-show="step === 3" :disabled="submitting || !canAdvance || recipientCount < 1">
+          {% include "components/icon.html" with name="chat" class="w-4 h-4" %}
+          Send to <span x-text="recipientCount"></span>&nbsp;<span x-text="recipientCount === 1 ? 'person' : 'people'"></span>
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% include "email/_preview_modal.html" %}
+
+{% endif %}
+{% endblock %}
