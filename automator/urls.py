@@ -51,6 +51,7 @@ urlpatterns = [
     path("email/", include("apps.email.urls")),
     path("logs/", include("apps.logs.urls", namespace="logs")),
     path("contacts/", include("apps.contacts.urls", namespace="contacts")),
+    path("automations/", include("apps.automation.urls", namespace="automation")),
     path("billing/", include("apps.billing.urls", namespace="billing")),
     path("manage/", include("apps.core.urls", namespace="core")),
     path("api/", include("apps.api.urls")),

@@ -185,6 +185,77 @@
       if (category) block.set("category", category);
     });
 
+    // Akilent components as first-class blocks. Dropping one inserts the
+    // {% component "Name" ... %} tag, which apps.email.template_components
+    // expands at render time (built-ins need no {% load %}).
+    var AKILENT_BLOCKS = [
+      {
+        id: "akilent-header",
+        label: "Akilent Header",
+        content: '{% component "AkilentHeader" title="Your title" %}',
+      },
+      {
+        id: "akilent-button",
+        label: "Akilent Button",
+        content: '{% component "AkilentButton" href="https://example.com" label="Click me" %}',
+      },
+      {
+        id: "akilent-invoice",
+        label: "Akilent Invoice",
+        content: '{% component "AkilentInvoice" number="INV-001" amount="$0.00" %}',
+      },
+      {
+        id: "akilent-footer",
+        label: "Akilent Footer",
+        content: '{% component "AkilentFooter" company="Your company" %}',
+      },
+    ];
+    AKILENT_BLOCKS.forEach(function (b) {
+      editor.BlockManager.add(b.id, {
+        label: b.label,
+        category: "Akilent",
+        content: b.content,
+        attributes: { class: "gjs-block-akilent" },
+      });
+    });
+
+    // Desktop / mobile / dark-mode preview toggle on the editor canvas.
+    editor.DeviceManager.add({ id: "mobile", name: "Mobile", width: "375px" });
+    var panelButtons = [
+      { id: "dev-desktop", label: "Desktop", command: function () { editor.setDevice("Desktop"); } },
+      { id: "dev-mobile", label: "Mobile", command: function () { editor.setDevice("Mobile"); } },
+      {
+        id: "dev-dark",
+        label: "Dark",
+        command: function () {
+          var frame = editor.Canvas.getFrameEl();
+          if (frame && frame.contentDocument && frame.contentDocument.body) {
+            frame.contentDocument.body.classList.toggle("akilent-dark-preview");
+          }
+        },
+      },
+    ];
+    panelButtons.forEach(function (b) {
+      editor.Panels.addButton("options", {
+        id: b.id,
+        className: "gjs-pn-btn",
+        label: b.label,
+        command: b.command,
+        togglable: false,
+      });
+    });
+
+    editor.on("canvas:frame:load", function (opts) {
+      var doc = (opts && opts.window && opts.window.document) || editor.Canvas.getDocument();
+      if (!doc || doc.getElementById("akilent-dark-style")) return;
+      var style = doc.createElement("style");
+      style.id = "akilent-dark-style";
+      style.textContent =
+        "body.akilent-dark-preview{background:#0f172a!important;color:#e2e8f0!important;}" +
+        "body.akilent-dark-preview *{border-color:#334155!important;}";
+      doc.head.appendChild(style);
+    });
+
     if (config.projectData && Object.keys(config.projectData).length) {
       editor.loadProjectData(config.projectData);
     } else if (config.html) {

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Automations — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block page_header %}
+<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Automations</h1>
+    <p class="text-sm text-gray-500 mt-1">Lifecycle workflows — a trigger, then a series of emails, waits, and branches.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div x-data="{ open: false, starter: '' }">
+  <div class="flex flex-wrap items-center gap-2 mb-4">
+    <button class="btn btn-primary btn-sm" @click="open = true">New workflow</button>
+  </div>
+
+  {% if workflows %}
+  <div class="overflow-x-auto rounded-2xl border border-gray-200">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <tr>
+          <th class="px-4 py-2">Name</th><th class="px-4 py-2">Trigger</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2">Steps</th>
+          <th class="px-4 py-2">Runs</th><th class="px-4 py-2">Updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for wf in workflows %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-2"><a href="/automations/{{ wf.slug }}/" class="text-brand-600 font-medium">{{ wf.name }}</a></td>
+          <td class="px-4 py-2"><code class="text-xs">{{ wf.definition.trigger.type|default:"—" }}{% if wf.definition.trigger.name %} · {{ wf.definition.trigger.name }}{% endif %}</code></td>
+          <td class="px-4 py-2">
+            {% if wf.status == "published" %}<span class="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Published v{{ wf.version }}</span>
+            {% elif wf.status == "archived" %}<span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Archived</span>
+            {% else %}<span class="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Draft</span>{% endif %}
+          </td>
+          <td class="px-4 py-2">{{ wf.definition.steps|length }}</td>
+          <td class="px-4 py-2">{{ wf.runs.count }}</td>
+          <td class="px-4 py-2 text-gray-500">{{ wf.updated_at|date:"M j, H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card card-pad text-center text-sm text-gray-500">
+    No workflows yet. Start from a template or a blank canvas.
+  </div>
+  {% endif %}
+
+  {# New-workflow dialog #}
+  <div x-show="open" x-cloak class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" @click.self="open = false">
+    <div class="card card-pad w-full max-w-lg">
+      <h2 class="font-semibold mb-3">New workflow</h2>
+      <form method="post" action="/automations/create/" class="space-y-3">
+        {% csrf_token %}
+        <label class="block text-sm">
+          <span class="text-gray-600">Name</span>
+          <input name="name" class="input mt-1 w-full" placeholder="Welcome series" />
+        </label>
+        <label class="block text-sm">
+          <span class="text-gray-600">Start from</span>
+          <select name="from_template" class="input mt-1 w-full">
+            <option value="">Blank workflow</option>
+            {% for s in starters %}
+            <option value="{{ s.id }}">{{ s.name }} — {{ s.description }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" class="btn btn-ghost btn-sm" @click="open = false">Cancel</button>
+          <button class="btn btn-primary btn-sm">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

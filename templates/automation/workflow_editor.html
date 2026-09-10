@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ wf.name }} — Automations{% endblock %}
+
+{% block page_header %}
+<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
+  <div>
+    <a href="/automations/" class="text-xs text-gray-400">&larr; Automations</a>
+    <h1 class="text-2xl font-semibold tracking-tight">{{ wf.name }}</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {% if wf.status == "published" %}Published · v{{ wf.version }}{% else %}{{ wf.get_status_display }}{% endif %}
+    </p>
+  </div>
+  <div class="flex items-center gap-2">
+    <form method="post" action="/automations/{{ wf.slug }}/publish/">{% csrf_token %}
+      <button class="btn btn-primary btn-sm">Publish</button>
+    </form>
+    <form method="post" action="/automations/{{ wf.slug }}/archive/" onsubmit="return confirm('Archive this workflow?')">{% csrf_token %}
+      <button class="btn btn-ghost btn-sm">Archive</button>
+    </form>
+    <form method="post" action="/automations/{{ wf.slug }}/delete/" onsubmit="return confirm('Delete this workflow permanently?')">{% csrf_token %}
+      <button class="btn btn-danger-ghost btn-sm">Delete</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div x-data="workflowEditor()" x-init="init()">
+  <div class="flex items-center justify-between gap-2 mb-4">
+    <div class="inline-flex rounded-lg border border-gray-200 p-0.5 text-sm">
+      <button class="px-3 py-1 rounded-md" :class="tab === 'visual' ? 'bg-brand-600 text-white' : 'text-gray-600'" @click="tab = 'visual'">Visual</button>
+      <button class="px-3 py-1 rounded-md" :class="tab === 'code' ? 'bg-brand-600 text-white' : 'text-gray-600'" @click="syncToCode(); tab = 'code'">Code</button>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs" :class="errors.length ? 'text-red-600' : 'text-green-600'"
+            x-text="errors.length ? errors.length + ' issue' + (errors.length === 1 ? '' : 's') : 'Valid'"></span>
+      <span class="text-xs text-gray-400" x-show="saved" x-transition>Saved</span>
+      <button class="btn btn-primary btn-sm" @click="save()" :disabled="busy">Save</button>
+    </div>
+  </div>
+
+  <ul class="mb-4 space-y-1" x-show="errors.length" x-cloak>
+    <template x-for="e in errors" :key="e">
+      <li class="text-xs text-red-600">• <span x-text="e"></span></li>
+    </template>
+  </ul>
+
+  {# ---- Visual ---- #}
+  <div x-show="tab === 'visual'" class="space-y-4">
+    <div class="card card-pad">
+      <h3 class="text-sm font-semibold mb-2">Trigger</h3>
+      <div class="flex flex-wrap gap-3">
+        <label class="text-sm">
+          <span class="text-gray-600">When</span>
+          <select class="input mt-1" x-model="definition.trigger.type">
+            <template x-for="t in triggerTypes" :key="t"><option x-text="t" :value="t"></option></template>
+          </select>
+        </label>
+        <label class="text-sm" x-show="definition.trigger.type === 'business_event'">
+          <span class="text-gray-600">Event name</span>
+          <input class="input mt-1" x-model="definition.trigger.name" placeholder="order.completed" />
+        </label>
+      </div>
+    </div>
+
+    <template x-for="(step, i) in definition.steps" :key="i">
+      <div class="card card-pad">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-gray-400" x-text="'#' + (i + 1)"></span>
+            <input class="input input-sm w-40" x-model="step.id" placeholder="step-id" />
+            <select class="input input-sm" x-model="step.type">
+              <template x-for="t in stepTypes" :key="t"><option x-text="t" :value="t"></option></template>
+            </select>
+          </div>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0">↑</button>
+            <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1">↓</button>
+            <button class="btn btn-danger-ghost btn-xs" @click="definition.steps.splice(i, 1)">Remove</button>
+          </div>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'send_email'">
+          <label class="text-xs">From<input class="input input-sm w-full mt-0.5" x-model="step.from" placeholder="hi@yourdomain.com" /></label>
+          <label class="text-xs">Template slug<input class="input input-sm w-full mt-0.5" x-model="step.template" placeholder="welcome" /></label>
+          <label class="text-xs">Subject (if no template)<input class="input input-sm w-full mt-0.5" x-model="step.subject" /></label>
+          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" placeholder="step-id" /></label>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'wait'">
+          <label class="text-xs">Seconds<input type="number" class="input input-sm w-full mt-0.5" x-model.number="step.seconds" /></label>
+          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" /></label>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'branch'">
+          <label class="text-xs">Field<input class="input input-sm w-full mt-0.5" x-model="step.field" placeholder="opened_in_last_90d" /></label>
+          <label class="text-xs">Operator<input class="input input-sm w-full mt-0.5" x-model="step.operator" placeholder="eq" /></label>
+          <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
+          <label class="text-xs">If true → step<input class="input input-sm w-full mt-0.5" x-model="step.on_true" /></label>
+          <label class="text-xs">If false → step<input class="input input-sm w-full mt-0.5" x-model="step.on_false" /></label>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'set_attribute'">
+          <label class="text-xs">Key<input class="input input-sm w-full mt-0.5" x-model="step.key" /></label>
+          <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
+          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" /></label>
+        </div>
+
+        <p class="text-xs text-gray-400" x-show="step.type === 'stop'">End of the workflow.</p>
+      </div>
+    </template>
+
+    <button class="btn btn-ghost btn-sm" @click="addStep()">+ Add step</button>
+  </div>
+
+  {# ---- Code ---- #}
+  <div x-show="tab === 'code'" x-cloak>
+    <textarea class="input font-mono text-xs w-full h-96" x-model="codeText"
+              @blur="syncFromCode()"></textarea>
+    <p class="text-xs text-gray-400 mt-1" x-text="codeError || 'Edits apply when you click away, then Save.'"
+       :class="codeError ? 'text-red-600' : ''"></p>
+  </div>
+</div>
+
+<script>
+function workflowEditor() {
+  return {
+    tab: "visual",
+    definition: {{ definition_json|safe }},
+    stepTypes: {{ step_types|safe }},
+    triggerTypes: {{ trigger_types|safe }},
+    errors: {{ validation_errors|safe }},
+    codeText: "",
+    codeError: "",
+    saved: false,
+    busy: false,
+    init() {
+      if (!this.definition.trigger) this.definition.trigger = { type: "manual" };
+      if (!Array.isArray(this.definition.steps)) this.definition.steps = [];
+      this.syncToCode();
+    },
+    addStep() {
+      this.definition.steps.push({ id: "step-" + (this.definition.steps.length + 1), type: "send_email" });
+    },
+    move(i, d) {
+      const j = i + d;
+      if (j < 0 || j >= this.definition.steps.length) return;
+      const s = this.definition.steps;
+      [s[i], s[j]] = [s[j], s[i]];
+    },
+    syncToCode() { this.codeText = JSON.stringify(this.definition, null, 2); },
+    syncFromCode() {
+      try {
+        this.definition = JSON.parse(this.codeText);
+        this.codeError = "";
+      } catch (e) { this.codeError = "Invalid JSON: " + e.message; }
+    },
+    async save() {
+      if (this.tab === "code") this.syncFromCode();
+      if (this.codeError) return;
+      this.busy = true;
+      try {
+        const r = await fetch("/automations/{{ wf.slug }}/save/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
+          body: JSON.stringify({ definition: this.definition }),
+        });
+        const data = await r.json();
+        this.errors = data.errors || [];
+        this.saved = true;
+        setTimeout(() => (this.saved = false), 2000);
+        this.syncToCode();
+      } finally { this.busy = false; }
+    },
+    csrf() {
+      return (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "";
+    },
+  };
+}
+</script>
+{% endblock %}
