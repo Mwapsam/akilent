@@ -1,0 +1,18 @@
+{% comment %}One node in a horizontal lifecycle strip.
+  label         — display text
+  current       — the entity's current status string
+  active_states — comma list; render as the CURRENT step (filled dot)
+  done_states   — comma list; render as COMPLETED (check)
+Anything else renders as upcoming (hollow).
+{% endcomment %}
+<li class="inline-flex items-center gap-1.5
+    {% if current in active_states %}text-brand-700
+    {% elif current in done_states %}text-teal-700
+    {% else %}text-gray-400{% endif %}">
+  {% if current in done_states %}
+    {% include "components/icon.html" with name="check" class="w-3.5 h-3.5" %}
+  {% else %}
+    <span class="w-2 h-2 rounded-full {% if current in active_states %}bg-brand-600{% else %}border border-current{% endif %}"></span>
+  {% endif %}
+  <span>{{ label }}</span>
+</li>

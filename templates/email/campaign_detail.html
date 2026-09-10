@@ -19,6 +19,23 @@
   <a href="/email/campaigns/" class="btn btn-secondary btn-sm">Back to campaigns</a>
 </header>
 
+{# Lifecycle: Draft → Scheduled → Sending → Sent (Failed/Cancelled short-circuit) #}
+{% with st=campaign.status %}
+<ol class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-6 text-xs font-medium">
+  {% include "components/_lifecycle_step.html" with label="Draft" active_states="draft" done_states="scheduled,queued,sending,completed" current=st %}
+  <span class="text-gray-300" aria-hidden="true">→</span>
+  {% include "components/_lifecycle_step.html" with label="Scheduled" active_states="scheduled" done_states="queued,sending,completed" current=st %}
+  <span class="text-gray-300" aria-hidden="true">→</span>
+  {% include "components/_lifecycle_step.html" with label="Sending" active_states="sending,queued" done_states="completed" current=st %}
+  <span class="text-gray-300" aria-hidden="true">→</span>
+  {% include "components/_lifecycle_step.html" with label="Sent" active_states="completed" done_states="" current=st %}
+  {% if st == "failed" or st == "cancelled" %}
+    <span class="text-gray-300" aria-hidden="true">·</span>
+    <span class="badge badge-danger">{{ campaign.get_status_display }}</span>
+  {% endif %}
+</ol>
+{% endwith %}
+
 <div class="card card-pad mb-6" id="campaign-progress"
      data-poll-url="/email/campaigns/{{ campaign.pk }}/"
      data-status="{{ campaign.status }}">

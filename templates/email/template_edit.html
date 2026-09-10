@@ -2,11 +2,15 @@
 {% load static %}
 {% block title %}Edit {{ template.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-<div class="flex flex-wrap items-end justify-between gap-3 mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Edit template</h1>
-    <p class="text-sm text-gray-500 mt-1">{{ template.name }} &middot; <code>{{ template.slug }}</code></p>
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+      <a href="/email/templates/" class="hover:text-ink">Templates</a>
+      <span aria-hidden="true">/</span><span class="text-ink">{{ template.name }}</span>
+    </nav>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Edit template</h1>
+    <p class="mt-1 text-sm text-gray-600">{{ template.name }} &middot; <code>{{ template.slug }}</code></p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <button id="editor-undo" type="button" class="btn btn-secondary btn-sm" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>Undo</button>
@@ -23,10 +27,8 @@
       {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %} Back to templates
     </a>
   </div>
-</div>
-{% endblock %}
+</header>
 
-{% block content %}
 <div id="template-editor-config" data-config='{{ builder_config }}' hidden></div>
 {% include "email/_template_settings.html" %}
 
@@ -41,12 +43,12 @@
       <input type="hidden" name="builder_mode" value="raw">
       <div>
         <label class="label" for="tpl-text-body">Text body</label>
-        <textarea id="tpl-text-body" name="text_body" rows="6" class="input font-mono text-sm"
+        <textarea id="tpl-text-body" name="text_body" rows="6" class="textarea font-mono text-sm"
                   data-merge-tags='{{ merge_tag_paths_json }}'>{{ template.text_body }}</textarea>
       </div>
       <div class="flex flex-col flex-1">
         <label class="label" for="tpl-html-body">HTML body</label>
-        <textarea id="tpl-html-body" name="html_body" class="input font-mono text-sm flex-1 min-h-[20rem]"
+        <textarea id="tpl-html-body" name="html_body" class="textarea font-mono text-sm flex-1 min-h-[20rem]"
                   data-merge-tags='{{ merge_tag_paths_json }}'>{{ template.html_body }}</textarea>
       </div>
     </form>
@@ -65,7 +67,7 @@
        x-trap.noscroll="fullscreen"
        @keydown.escape.window="fullscreen = false">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <h2 class="font-semibold">Preview</h2>
+      <h2 class="text-lg font-semibold text-ink">Preview</h2>
       <div class="flex items-center gap-2">
         <div class="inline-flex rounded-lg border border-border-strong p-0.5" role="group" aria-label="Preview device width">
           <button type="button" class="btn btn-sm" :class="device === 'desktop' ? 'btn-primary' : 'btn-ghost'"
@@ -83,7 +85,7 @@
     </div>
     <p id="email-builder-preview-warnings" class="text-xs text-amber-600 mb-2 hidden" role="status" aria-live="polite"></p>
     <div class="device-frame flex-1" :data-device="device">
-      <iframe id="email-builder-preview-frame" class="w-full h-full min-h-[55vh] border border-gray-200 rounded-lg bg-white"
+      <iframe id="email-builder-preview-frame" class="w-full h-full min-h-[55vh] border border-border rounded-lg bg-surface"
               title="Email preview" sandbox="allow-same-origin"></iframe>
     </div>
   </div>
@@ -105,10 +107,10 @@
 
 {% if template.versions.all %}
 <div class="card card-pad">
-  <h2 class="font-semibold mb-3">Version history</h2>
+  <h2 class="text-lg font-semibold text-ink mb-3">Version history</h2>
   <div class="grid gap-2">
     {% for v in template.versions.all %}
-    <div class="text-sm text-gray-600 flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0">
+    <div class="text-sm text-gray-600 flex items-center justify-between gap-3 border-b border-border py-2 last:border-0">
       <span class="truncate">{{ v.subject|default:"(no subject)" }}</span>
       <span class="flex items-center gap-2 shrink-0">
         <span class="text-xs text-gray-400">{{ v.created_at|date:"M j, H:i" }}</span>
