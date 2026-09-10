@@ -219,6 +219,72 @@ def test_deliver_webhook_exhausts_after_max_retries(account, message):
 
 
 @pytest.mark.django_db
+def test_exhausted_delivery_increments_consecutive_failures(account, message):
+    endpoint = WebhookEndpoint.objects.create(
+        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+    )
+    delivery = WebhookDelivery.objects.create(
+        endpoint=endpoint, event_type="message.sent", message=message,
+        payload={"event": "message.sent", "data": {}},
+    )
+    deliver_webhook.push_request(retries=6)
+    try:
+        with patch("apps.email.tasks.requests.post", side_effect=ConnectionError("refused")):
+            deliver_webhook(delivery.pk)
+    finally:
+        deliver_webhook.pop_request()
+
+    endpoint.refresh_from_db()
+    assert endpoint.consecutive_failures == 1
+    assert endpoint.is_active is True
+    assert endpoint.health == "degraded"
+
+
+@pytest.mark.django_db
+def test_endpoint_auto_disables_after_threshold(account):
+    endpoint = WebhookEndpoint.objects.create(
+        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        consecutive_failures=WebhookEndpoint.AUTO_DISABLE_THRESHOLD - 1,
+    )
+    disabled = endpoint.record_failure("still down")
+    assert disabled is True
+    assert endpoint.is_active is False
+    assert endpoint.disabled_at is not None
+    assert endpoint.health == "disabled"
+
+    # a subsequent success via reactivate clears the counters
+    endpoint.reactivate()
+    assert endpoint.is_active is True
+    assert endpoint.consecutive_failures == 0
+    assert endpoint.health == "healthy"
+
+
+@pytest.mark.django_db
+def test_successful_delivery_resets_failure_counter(account, message):
+    endpoint = WebhookEndpoint.objects.create(
+        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        consecutive_failures=4, last_error="was failing",
+    )
+    delivery = WebhookDelivery.objects.create(
+        endpoint=endpoint, event_type="message.sent", message=message,
+        payload={"event": "message.sent", "data": {}},
+    )
+
+    class _Ok:
+        status_code = 200
+        def raise_for_status(self):
+            pass
+
+    with patch("apps.email.tasks.requests.post", return_value=_Ok()):
+        deliver_webhook(delivery.pk)
+
+    endpoint.refresh_from_db()
+    assert endpoint.consecutive_failures == 0
+    assert endpoint.last_error == ""
+    assert endpoint.last_success_at is not None
+
+
+@pytest.mark.django_db
 def test_deliver_webhook_skips_already_succeeded(account, message):
     endpoint = WebhookEndpoint.objects.create(
         account=account, url="https://a.example.com/hook", event_types=["message.sent"],

@@ -964,7 +964,15 @@ class WebhookEndpoint(models.Model):
     event_types = models.JSONField(default=list)
     is_active = models.BooleanField(default=True)
     last_error = models.TextField(blank=True, default="")
+    consecutive_failures = models.PositiveSmallIntegerField(default=0)
+    last_success_at = models.DateTimeField(blank=True, null=True)
+    last_failure_at = models.DateTimeField(blank=True, null=True)
+    disabled_at = models.DateTimeField(blank=True, null=True)
+    disabled_reason = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Consecutive exhausted deliveries before the endpoint is auto-disabled.
+    AUTO_DISABLE_THRESHOLD = 10
 
     class Meta:
         ordering = ["-created_at"]
@@ -980,6 +988,49 @@ class WebhookEndpoint(models.Model):
 
     def __str__(self):
         return f"{self.url} ({self.account})"
+
+    @property
+    def health(self) -> str:
+        if not self.is_active:
+            return "disabled"
+        if self.consecutive_failures > 0:
+            return "degraded"
+        return "healthy"
+
+    def record_success(self) -> None:
+        self.consecutive_failures = 0
+        self.last_success_at = timezone.now()
+        self.last_error = ""
+        self.save(update_fields=["consecutive_failures", "last_success_at", "last_error"])
+
+    def record_failure(self, error: str = "") -> bool:
+        """Register one exhausted delivery. Returns True if this auto-disabled the endpoint."""
+        self.consecutive_failures = (self.consecutive_failures or 0) + 1
+        self.last_failure_at = timezone.now()
+        if error:
+            self.last_error = error[:2000]
+        fields = ["consecutive_failures", "last_failure_at", "last_error"]
+        disabled = False
+        if self.is_active and self.consecutive_failures >= self.AUTO_DISABLE_THRESHOLD:
+            self.is_active = False
+            self.disabled_at = timezone.now()
+            self.disabled_reason = (
+                f"Auto-disabled after {self.consecutive_failures} consecutive failed deliveries"
+            )
+            fields += ["is_active", "disabled_at", "disabled_reason"]
+            disabled = True
+        self.save(update_fields=fields)
+        return disabled
+
+    def reactivate(self) -> None:
+        self.is_active = True
+        self.consecutive_failures = 0
+        self.disabled_at = None
+        self.disabled_reason = ""
+        self.last_error = ""
+        self.save(update_fields=[
+            "is_active", "consecutive_failures", "disabled_at", "disabled_reason", "last_error",
+        ])
 
 
 class WebhookDelivery(models.Model):

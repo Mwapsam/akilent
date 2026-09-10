@@ -469,6 +469,20 @@ def webhook_delete(request, pk):
 
 @login_required
 @require_POST
+def webhook_reactivate(request, pk):
+    admin = _is_admin(request)
+    account = get_current_account(request)
+    if account is None and not admin:
+        return redirect("dashboard")
+
+    endpoint = get_object_or_404(_scoped(WebhookEndpoint.objects, request, account), pk=pk)
+    endpoint.reactivate()
+    messages.success(request, "Webhook endpoint re-enabled.")
+    return redirect("email-webhooks")
+
+
+@login_required
+@require_POST
 def webhook_redeliver(request, pk):
     from apps.email.tasks import deliver_webhook
 

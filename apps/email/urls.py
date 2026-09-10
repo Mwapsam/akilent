@@ -18,6 +18,7 @@ urlpatterns = [
     path("webhooks/", views.webhooks_list, name="email-webhooks"),
     path("webhooks/create/", views.webhook_create, name="email-webhook-create"),
     path("webhooks/<int:pk>/delete/", views.webhook_delete, name="email-webhook-delete"),
+    path("webhooks/<int:pk>/reactivate/", views.webhook_reactivate, name="email-webhook-reactivate"),
     path("webhooks/deliveries/<int:pk>/resend/", views.webhook_redeliver, name="email-webhook-redeliver"),
     path("insights/", views.insights, name="email-insights"),
     path("send/", views.api_send, name="email-send"),

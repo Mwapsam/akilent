@@ -61,15 +61,34 @@
   <div class="card card-pad">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
-        <p class="font-medium text-gray-900 break-all">{{ e.url }}</p>
+        <p class="font-medium text-gray-900 break-all">
+          {{ e.url }}
+          {% if e.health == "healthy" %}
+            <span class="ml-2 inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Connected</span>
+          {% elif e.health == "degraded" %}
+            <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Degraded · {{ e.consecutive_failures }} fail{{ e.consecutive_failures|pluralize }}</span>
+          {% else %}
+            <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Disabled</span>
+          {% endif %}
+        </p>
         <p class="text-xs text-gray-500 mt-1">{{ e.event_types|join:", " }}</p>
         <p class="text-xs text-gray-400 mt-1">Signing secret: <code>{{ e.signing_secret }}</code></p>
+        {% if e.last_success_at %}<p class="text-xs text-gray-400 mt-1">Last success: {{ e.last_success_at }}</p>{% endif %}
+        {% if e.disabled_reason %}<p class="text-xs text-red-600 mt-1">{{ e.disabled_reason }}</p>{% endif %}
         {% if e.last_error %}<p class="text-xs text-red-600 mt-1">Last error: {{ e.last_error|truncatechars:200 }}</p>{% endif %}
       </div>
-      <form method="post" action="/email/webhooks/{{ e.pk }}/delete/" onsubmit="return confirm('Delete this webhook endpoint?');">
-        {% csrf_token %}
-        <button class="btn btn-danger-ghost btn-sm" type="submit">Delete</button>
-      </form>
+      <div class="flex items-center gap-2">
+        {% if not e.is_active %}
+        <form method="post" action="/email/webhooks/{{ e.pk }}/reactivate/">
+          {% csrf_token %}
+          <button class="btn btn-secondary btn-sm" type="submit">Re-enable</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/email/webhooks/{{ e.pk }}/delete/" onsubmit="return confirm('Delete this webhook endpoint?');">
+          {% csrf_token %}
+          <button class="btn btn-danger-ghost btn-sm" type="submit">Delete</button>
+        </form>
+      </div>
     </div>
   </div>
   {% empty %}

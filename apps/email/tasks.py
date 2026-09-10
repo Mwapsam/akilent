@@ -537,6 +537,7 @@ def deliver_webhook(self, delivery_id: int) -> None:
         )
         response.raise_for_status()
         delivery.mark_succeeded(response.status_code)
+        endpoint.record_success()
     except Exception as exc:
         # requests.HTTPError carries a .response with a status code; a
         # connection/timeout failure has none.
@@ -546,12 +547,22 @@ def deliver_webhook(self, delivery_id: int) -> None:
         is_last = self.request.retries >= _WEBHOOK_MAX_RETRIES
         delivery.mark_failed(response_code, exhausted=is_last)
         if is_last:
-            endpoint.last_error = str(exc)[:2000]
-            endpoint.save(update_fields=["last_error"])
+            disabled = endpoint.record_failure(str(exc))
             logger.error(
                 "deliver_webhook: exhausted retries for delivery %s (%s): %s",
                 delivery_id, delivery.event_type, exc,
             )
+            if disabled:
+                try:
+                    from apps.billing.slack import post_message
+
+                    post_message(
+                        f":electric_plug: Webhook endpoint auto-disabled — "
+                        f"{endpoint.url} (account {endpoint.account_id}) after "
+                        f"{endpoint.consecutive_failures} consecutive failures: {exc}"
+                    )
+                except Exception:
+                    logger.exception("webhook auto-disable Slack alert failed for %s", endpoint.pk)
             return
         countdown = _exponential_backoff_delay(self.request.retries, base=_WEBHOOK_RETRY_DELAY_BASE, multiplier=_RETRY_DELAY_MULTIPLIER)
         raise self.retry(exc=exc, countdown=countdown)
