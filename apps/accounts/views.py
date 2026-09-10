@@ -447,10 +447,19 @@ def dashboard(request):
 
     subscription = getattr(account, "subscription", None)
 
+    from django.utils import timezone
+
     from apps.accounts import onboarding as ob
+
+    hour = timezone.localtime().hour
+    greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
 
     state = ob.get_state(account)
     stats = _email_stats(account, subscription)
+    scheduling = _upcoming_sends(account)
+    attention = _attention_items(
+        account, stats, numbers, email_domains, subscription
+    )
 
     return render(
         request,
@@ -464,9 +473,79 @@ def dashboard(request):
             "onboarding_done": state["required_done"],
             "onboarding_total": state["required_total"],
             "onboarding_next": state["next_step"],
+            "attention_items": attention,
+            "greeting": greeting,
             **stats,
+            **scheduling,
         },
     )
+
+
+def _upcoming_sends(account, limit=5):
+    """Next scheduled jobs across all channels — for the dashboard panel + KPI."""
+    from django.utils import timezone
+
+    try:
+        from apps.scheduler.models import ScheduledJob
+    except Exception:
+        return {"scheduled_count": 0, "upcoming_sends": []}
+
+    qs = ScheduledJob.objects.filter(
+        account=account,
+        status=ScheduledJob.Status.SCHEDULED,
+        fire_at__gte=timezone.now(),
+    ).order_by("fire_at")
+
+    rows = []
+    for job in qs[:limit]:
+        channel = "whatsapp" if job.kind == ScheduledJob.Kind.WHATSAPP else "email"
+        label = ""
+        if job.target_campaign_id and getattr(job, "target_campaign", None):
+            label = getattr(job.target_campaign, "name", "") or ""
+        if not label:
+            payload = job.template_payload or {}
+            label = payload.get("subject") or payload.get("name") or job.get_kind_display()
+        rows.append({"when": job.fire_at, "label": label, "channel": channel})
+
+    return {"scheduled_count": qs.count(), "upcoming_sends": rows}
+
+
+def _attention_items(account, stats, numbers, email_domains, subscription):
+    """Actionable "needs attention" rows — only those that currently apply."""
+    from django.conf import settings
+
+    items = []
+    verified = stats.get("domains_verified") or 0
+    total_domains = len(email_domains)
+    if total_domains == 0:
+        items.append({"text": "Add and verify a sending domain", "url": "/email/domains/"})
+    elif verified < total_domains:
+        pending = total_domains - verified
+        items.append({
+            "text": f"{pending} domain{'s' if pending != 1 else ''} awaiting DNS verification",
+            "url": "/email/domains/",
+        })
+
+    if settings.WHATSAPP_ENABLED and not list(numbers):
+        items.append({"text": "Connect a WhatsApp number", "url": "/whatsapp/numbers/"})
+
+    usage_pct = stats.get("usage_pct")
+    if usage_pct is not None and usage_pct >= 80:
+        items.append({
+            "text": f"You've used {usage_pct}% of this month's email quota",
+            "url": "/billing/plans/",
+        })
+
+    if (stats.get("failed_month") or 0) > 0:
+        items.append({
+            "text": f"{stats['failed_month']} message{'s' if stats['failed_month'] != 1 else ''} failed this month",
+            "url": "/logs/messages/",
+        })
+
+    if subscription and getattr(subscription, "status", "") == "past_due":
+        items.append({"text": "Your subscription payment is past due", "url": "/billing/plans/"})
+
+    return items
 
 
 def _email_stats(account, subscription):

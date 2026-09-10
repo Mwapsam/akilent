@@ -1,0 +1,21 @@
+{% comment %}Render a whole Django Form with design-system fields.
+  {% include "components/form.html" with form=form %}
+Renders non-field errors as an .alert, then every visible field via
+components/bound_field.html. Wrap in your own <form> with {% csrf_token %}
+and submit buttons.
+{% endcomment %}
+{% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert">
+    {% include "components/icon.html" with name="alert" %}
+    <div>
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="space-y-4">
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% for field in form.visible_fields %}
+    {% include "components/bound_field.html" with field=field %}
+  {% endfor %}
+</div>

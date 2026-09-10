@@ -368,6 +368,56 @@
     color: var(--color-ink-subtle);
   }
 
+  /* Button loading state — set aria-busy="true" and the label stays put while
+     a spinner replaces the leading icon. Pair with `disabled`. */
+  .btn[aria-busy="true"] { @apply relative pointer-events-none; }
+  .btn[aria-busy="true"] > :not(.btn-spinner) { @apply opacity-0; }
+  .btn-spinner {
+    @apply absolute w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin;
+  }
+
+  /* Tabs -------------------------------------------------------------- */
+  .tabs { @apply flex items-stretch gap-1 border-b border-border overflow-x-auto; }
+  .tab {
+    @apply inline-flex items-center gap-2 whitespace-nowrap px-3 py-2.5 text-sm font-medium
+      border-b-2 border-transparent transition-colors;
+    color: var(--color-ink-subtle);
+    transition-timing-function: var(--ease-emphasized);
+  }
+  .tab:hover { color: var(--color-ink); }
+  .tab[aria-selected="true"], .tab.tab-active {
+    @apply border-brand-500 text-brand-700;
+  }
+
+  /* Alerts — block-level, distinct from inline .badge and transient toasts. */
+  .alert {
+    @apply flex items-start gap-3 rounded-xl border p-4 text-sm;
+  }
+  .alert > svg { @apply w-5 h-5 shrink-0 mt-px; }
+  .alert-info { @apply bg-blue-50 border-blue-200 text-blue-700; }
+  .alert-success { @apply bg-green-50 border-green-200 text-green-800; }
+  .alert-warning { @apply bg-amber-50 border-amber-200 text-amber-700; }
+  .alert-danger { @apply bg-red-50 border-red-200 text-red-700; }
+
+  /* Status indicator — dot + label for the message lifecycle
+     (Draft → Scheduled → Sending → Sent / Failed / Paused). See status.html. */
+  .status-indicator { @apply inline-flex items-center gap-1.5 text-sm font-medium; }
+  .status-indicator::before {
+    content: "";
+    @apply w-2 h-2 rounded-full bg-gray-400;
+  }
+  .status-indicator[data-state="scheduled"]::before { @apply bg-blue-400; }
+  .status-indicator[data-state="sending"]::before { @apply bg-amber-400 animate-pulse; }
+  .status-indicator[data-state="sent"]::before { @apply bg-teal-500; }
+  .status-indicator[data-state="failed"]::before { @apply bg-coral-500; }
+  .status-indicator[data-state="paused"]::before { @apply bg-gray-500; }
+
+  /* Channel tag — icon + label in the channel colour. Never colour alone. */
+  .channel-tag { @apply inline-flex items-center gap-1.5 text-sm font-medium; }
+  .channel-tag > svg { @apply w-4 h-4 shrink-0; }
+  .channel-tag[data-channel="email"] { color: var(--color-amber-700); }
+  .channel-tag[data-channel="whatsapp"] { color: var(--color-teal-700); }
+
   /* Copy field ---------------------------------------------------------- */
   .copy-value {
     @apply flex-1 font-mono text-xs bg-surface-muted border border-border

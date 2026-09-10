@@ -1,0 +1,13 @@
+{% comment %}Channel indicator — icon + label in the channel colour (never colour alone).
+  {% include "components/channel_tag.html" with channel="email" %}
+channel ∈ email | whatsapp
+{% endcomment %}
+{% with c=channel|default:"email" %}
+<span class="channel-tag" data-channel="{{ c }}">
+  {% if c == "whatsapp" %}
+    {% include "components/icon.html" with name="message-circle" %}WhatsApp
+  {% else %}
+    {% include "components/icon.html" with name="mail" %}Email
+  {% endif %}
+</span>
+{% endwith %}

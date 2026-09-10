@@ -1,144 +1,170 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
-{% if account %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight">{{ account.company_name }}</h1>
-  {% if subscription %}
-    <p class="text-sm text-gray-500 mt-1">
-      {{ subscription.plan.name }} plan ·
-      <span class="capitalize">{{ subscription.status }}</span>
-      {% if subscription.is_trialing and subscription.trial_ends_at %} · trial ends {{ subscription.trial_ends_at|date:"M j" }}{% endif %}
-    </p>
-  {% endif %}
-</div>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 
 {% if account is None %}
-  <div class="card card-pad text-center max-w-md mx-auto mt-10">
-    <h1 class="text-lg font-semibold">No workspace yet</h1>
-    <p class="text-sm text-gray-500 mt-2">This account isn't attached to a workspace.</p>
-  </div>
+  {% include "components/empty_state.html" with icon="building" title="No workspace yet" message="This account isn't attached to a workspace." %}
+
 {% else %}
 
+  {# ── Greeting ─────────────────────────────────────────────── #}
+  <header class="mb-6">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">
+      {{ greeting }}{% if request.user.first_name %}, {{ request.user.first_name }}{% endif %} 👋
+    </h1>
+    <p class="mt-1 text-sm text-gray-600">
+      {% if onboarding_complete %}
+        Here's what's happening with your communications.
+      {% else %}
+        You're almost ready to send your first campaign.
+      {% endif %}
+    </p>
+  </header>
+
+  {# ── Onboarding checklist (until complete) ────────────────── #}
   {% if not onboarding_complete %}
-  <a href="{% if onboarding_next.url %}{{ onboarding_next.url }}{% else %}/onboarding/{% endif %}" class="block mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-4 hover:bg-brand-100/60 transition">
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <p class="text-sm font-medium text-brand-800">Finish setting up your workspace</p>
-        <p class="text-xs text-brand-600 mt-0.5">
-          {{ onboarding_done }} of {{ onboarding_total }} essentials complete{% if onboarding_next %} — next: {{ onboarding_next.title|lower }}{% endif %}.
-        </p>
-      </div>
-      <span class="text-sm font-medium text-brand-700 shrink-0">{% if onboarding_next.cta %}{{ onboarding_next.cta }}{% else %}Continue{% endif %} →</span>
+  <div class="card card-pad mb-6">
+    <div class="flex items-center justify-between gap-4 mb-3">
+      <h2 class="text-lg font-semibold text-ink">Get started</h2>
+      <span class="text-sm text-gray-500">{{ onboarding_done }} / {{ onboarding_total }}</span>
     </div>
-  </a>
+    <div class="h-2 rounded-full bg-canvas overflow-hidden mb-4" role="progressbar"
+         aria-valuenow="{{ onboarding_done }}" aria-valuemin="0" aria-valuemax="{{ onboarding_total }}">
+      <div class="h-full rounded-full bg-brand-600 transition-all"
+           style="width: {% widthratio onboarding_done onboarding_total 100 %}%"></div>
+    </div>
+    {% if onboarding_next %}
+    <a href="{{ onboarding_next.url|default:'/onboarding/' }}" class="btn btn-primary btn-sm">
+      {{ onboarding_next.cta|default:onboarding_next.title }}
+    </a>
+    <a href="/onboarding/" class="btn btn-ghost btn-sm">View all steps</a>
+    {% endif %}
+  </div>
   {% endif %}
 
-  {# Stat cards #}
+  {# ── KPI row ──────────────────────────────────────────────── #}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-    {% include "components/stat_card.html" with label="Sent this month" value=sent_month icon="inbox" tone="brand" %}
+    {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
     {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
     {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
-    {% include "components/stat_card.html" with label="Active mailboxes" value=mailboxes_active icon="user" tone="brand" sub=mailboxes_sub %}
+    {% include "components/stat_card.html" with label="Scheduled" value=scheduled_count icon="clock" tone="brand" sub="upcoming sends" %}
   </div>
 
-  <div class="grid lg:grid-cols-3 gap-4 mt-4">
-    {# Usage #}
-    <div class="card card-pad lg:col-span-2">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-semibold">Email usage this month</h2>
-        <a href="/billing/plans/" class="text-sm text-brand-600 hover:text-brand-700">Manage plan</a>
+  {# ── Upcoming sends + Needs attention ─────────────────────── #}
+  <div class="grid lg:grid-cols-3 gap-6 mt-6">
+
+    <div class="card lg:col-span-2 overflow-hidden">
+      <div class="flex items-center justify-between card-pad pb-3">
+        <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
+        <a href="/scheduled/" class="text-sm text-brand-600 hover:text-brand-700">View all</a>
       </div>
-      {% if email_quota and email_quota > 0 %}
-        <div class="flex items-end justify-between mb-2">
-          <p class="text-2xl font-semibold">{{ emails_used }}<span class="text-sm font-normal text-gray-400"> / {{ email_quota }}</span></p>
-          <p class="text-sm text-gray-400">{{ usage_pct }}%</p>
-        </div>
-        <div class="h-2 bg-gray-100 rounded-full overflow-hidden" role="progressbar"
-             aria-valuenow="{{ usage_pct }}" aria-valuemin="0" aria-valuemax="100">
-          <div class="h-full rounded-full transition-all {% if usage_pct >= 90 %}bg-red-500{% elif usage_pct >= 75 %}bg-amber-500{% else %}bg-brand-600{% endif %}"
-               style="width: {{ usage_pct }}%"></div>
-        </div>
+      {% if upcoming_sends %}
+        <ul class="divide-y divide-border">
+          {% for s in upcoming_sends %}
+          <li class="flex items-center gap-3 px-5 sm:px-6 py-3">
+            {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0" %}
+            <span class="text-sm text-gray-500 w-40 shrink-0 tabular-nums">{{ s.when|date:"D M j, H:i" }}</span>
+            <span class="text-sm font-medium text-ink truncate flex-1">{{ s.label }}</span>
+            {% include "components/channel_tag.html" with channel=s.channel %}
+          </li>
+          {% endfor %}
+        </ul>
       {% else %}
-        <p class="text-2xl font-semibold">{{ emails_used }}</p>
-        <p class="text-sm text-gray-400 mt-1">emails this month{% if not subscription %} · no active plan{% endif %}</p>
+        {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign and it will show up here." %}
       {% endif %}
     </div>
 
-    {# Subscription #}
     <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Subscription</h2>
-      {% if subscription %}
-        <p class="text-sm text-gray-900 font-medium">{{ subscription.plan.name }}</p>
-        <p class="mt-1">
+      <h2 class="text-lg font-semibold text-ink mb-3">Needs attention</h2>
+      {% if attention_items %}
+        <ul class="space-y-2">
+          {% for a in attention_items %}
+          <li>
+            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
+              {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
+              <span>{{ a.text }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="flex items-center gap-2 text-sm text-gray-500">
+          {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
+          All clear.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Recent activity ──────────────────────────────────────── #}
+  <div class="card mt-6 overflow-hidden">
+    <div class="flex items-center justify-between card-pad pb-3">
+      <h2 class="text-lg font-semibold text-ink">Recent activity</h2>
+      <a href="/logs/messages/" class="text-sm text-brand-600 hover:text-brand-700">View activity log</a>
+    </div>
+    {% if recent_sends %}
+      <table class="table table--cards">
+        <thead>
+          <tr><th>Recipient</th><th>Subject</th><th>Status</th><th class="text-right">When</th></tr>
+        </thead>
+        <tbody>
+          {% for m in recent_sends %}
+          <tr>
+            <td data-label="Recipient" class="font-medium text-ink">{{ m.to_email }}</td>
+            <td data-label="Subject" class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
+            <td data-label="Status">
+              {% include "components/status.html" with state=m.status badge=True %}
+            </td>
+            <td data-label="When" class="text-gray-400 text-right tabular-nums">{{ m.created_at|date:"M j, H:i" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      {% include "components/empty_state.html" with icon="send" title="No messages sent yet" message="Send your first campaign and recent activity will appear here." %}
+    {% endif %}
+  </div>
+
+  {# ── Subscription (secondary) ─────────────────────────────── #}
+  {% if subscription %}
+  <div class="card card-pad mt-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-ink">{{ subscription.plan.name }} plan</h2>
+        <p class="mt-1 text-sm text-gray-600">
           {% if subscription.status == 'active' %}<span class="badge badge-success">Active</span>
           {% elif subscription.status == 'trialing' %}<span class="badge badge-info">Trialing</span>
           {% elif subscription.status == 'past_due' %}<span class="badge badge-warning">Past due</span>
           {% else %}<span class="badge badge-neutral capitalize">{{ subscription.status }}</span>{% endif %}
+          {% if subscription.current_period_end %} · renews {{ subscription.current_period_end|date:"M j, Y" }}{% endif %}
         </p>
-        {% if subscription.current_period_end %}<p class="text-xs text-gray-400 mt-3">Renews {{ subscription.current_period_end|date:"M j, Y" }}</p>{% endif %}
-
-        {% with p=subscription.plan %}
-        <div class="mt-4 pt-4 border-t border-border space-y-1.5">
-          <p class="text-xs font-medium text-gray-500 mb-1">Plan includes</p>
-          {% include "components/_capability.html" with ok=p.email_apis text="RESTful API & SMTP relay" %}
-          {% include "components/_capability.html" with ok=p.inbound_email text="Inbound email processing" %}
-          {% include "components/_capability.html" with ok=p.tracking_webhooks text="Tracking, analytics & webhooks" %}
-          {% include "components/_capability.html" with ok=p.detailed_analytics text="Detailed analytics & insights" %}
-          {% include "components/_capability.html" with ok=p.has_priority_support text="Priority support" %}
-          <p class="text-xs text-gray-400 pt-1">{{ p.mailbox_storage_gb }} GB/mailbox · {% if p.max_aliases == -1 %}∞{% else %}{{ p.max_aliases }}{% endif %} aliases · {{ p.log_retention_days }}d log retention</p>
-        </div>
-        {% endwith %}
-      {% else %}
-        <p class="text-sm text-gray-400">No active subscription.</p>
-        <a href="/billing/plans/" class="btn btn-primary btn-sm mt-3">Choose a plan</a>
-      {% endif %}
-    </div>
-  </div>
-
-  {# Recent activity + quick links #}
-  <div class="grid lg:grid-cols-3 gap-4 mt-4">
-    <div class="card lg:col-span-2 overflow-hidden">
-      <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border">
-        <h2 class="font-semibold">Recent sends</h2>
-        <a href="/email/domains/" class="text-sm text-brand-600 hover:text-brand-700">View domains</a>
       </div>
-      {% if recent_sends %}
-        <table class="table">
-          <tbody>
-            {% for m in recent_sends %}
-              <tr>
-                <td>{{ m.to_email }}</td>
-                <td class="text-gray-500">{{ m.subject|default:"—"|truncatechars:36 }}</td>
-                <td>
-                  {% if m.status == 'sent' %}<span class="badge badge-success">Sent</span>
-                  {% elif m.status == 'failed' %}<span class="badge badge-danger">Failed</span>
-                  {% else %}<span class="badge badge-warning">Queued</span>{% endif %}
-                </td>
-                <td class="text-gray-400 text-right">{{ m.created_at|date:"M j, H:i" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        {% include "components/empty_state.html" with icon="inbox" title="No emails sent yet" message="Once you send via the API, recent activity shows here." %}
-      {% endif %}
+      <a href="/billing/plans/" class="btn btn-secondary btn-sm">Manage plan</a>
     </div>
-
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Quick actions</h2>
-      <div class="space-y-2">
-        <a href="/email/domains/" class="nav-link">{% include "components/icon.html" with name="globe" class="w-5 h-5 shrink-0" %}<span>Add a domain</span></a>
-        <a href="/email/mailboxes/" class="nav-link">{% include "components/icon.html" with name="inbox" class="w-5 h-5 shrink-0" %}<span>Create a mailbox</span></a>
-        <a href="/billing/plans/" class="nav-link">{% include "components/icon.html" with name="card" class="w-5 h-5 shrink-0" %}<span>Manage billing</span></a>
+    {% if email_quota and email_quota > 0 %}
+    <div class="mt-4">
+      <div class="flex items-end justify-between mb-1.5 text-sm">
+        <span class="text-gray-600">Email usage this month</span>
+        <span class="text-gray-500 tabular-nums">{{ emails_used }} / {{ email_quota }} · {{ usage_pct }}%</span>
+      </div>
+      <div class="h-2 rounded-full bg-canvas overflow-hidden" role="progressbar"
+           aria-valuenow="{{ usage_pct }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="h-full rounded-full transition-all {% if usage_pct >= 90 %}bg-red-500{% elif usage_pct >= 75 %}bg-amber-500{% else %}bg-brand-600{% endif %}"
+             style="width: {{ usage_pct }}%"></div>
       </div>
     </div>
+    {% endif %}
   </div>
+  {% else %}
+  <div class="card card-pad mt-6 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">No active plan</h2>
+      <p class="mt-1 text-sm text-gray-600">Choose a plan to raise your sending limits.</p>
+    </div>
+    <a href="/billing/plans/" class="btn btn-primary btn-sm">Choose a plan</a>
+  </div>
+  {% endif %}
 
 {% endif %}
 {% endblock %}
