@@ -79,7 +79,9 @@ class CampaignCreateSerializer(serializers.Serializer):
     subject = serializers.CharField(required=False, allow_blank=True, default="")
     text = serializers.CharField(required=False, allow_blank=True, default="")
     html = serializers.CharField(required=False, allow_blank=True, default="")
-    recipients = BulkRecipientSerializer(many=True)
+    recipients = BulkRecipientSerializer(many=True, required=False, default=list)
+    list = serializers.SlugField(required=False, allow_blank=True, default="")
+    segment = serializers.SlugField(required=False, allow_blank=True, default="")
 
     @staticmethod
     def from_request_data(data: dict) -> dict:
@@ -90,4 +92,6 @@ class CampaignCreateSerializer(serializers.Serializer):
             "text": data.get("text", ""),
             "html": data.get("html", ""),
             "recipients": data.get("recipients", []),
+            "list": data.get("list", ""),
+            "segment": data.get("segment", ""),
         }

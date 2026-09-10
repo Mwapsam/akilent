@@ -35,6 +35,8 @@ INSTALLED_APPS = [
     "apps.whatsapp",
     "apps.email",
     "apps.logs",
+    "apps.contacts",
+    "apps.events",
     "drf_spectacular",
     "apps.automation",
     "apps.billing",
@@ -426,6 +428,8 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.prune_provisioning_jobs": {"queue": "celery"},
     "apps.email.tasks.reverify_pending_domains": {"queue": "celery"},
     "apps.email.tasks.alert_on_failure_spike": {"queue": "celery"},
+    "apps.email.tasks.snapshot_deliverability": {"queue": "celery"},
+    "apps.automation.tasks.run_due_workflows": {"queue": "celery"},
     "apps.logs.tasks.prune_message_events": {"queue": "celery"},
     "apps.logs.tasks.prune_idempotency_records": {"queue": "celery"},
     "apps.logs.tasks.prune_api_requests": {"queue": "celery"},
@@ -472,6 +476,14 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-message-stats": {
         "task": "apps.logs.tasks.reconcile_message_stats",
         "schedule": 86400.0,
+    },
+    "snapshot-deliverability": {
+        "task": "apps.email.tasks.snapshot_deliverability",
+        "schedule": 86400.0,
+    },
+    "run-due-workflows": {
+        "task": "apps.automation.tasks.run_due_workflows",
+        "schedule": 60.0,  # workflow wait-timers resolve at minute granularity
     },
 }
 

@@ -62,3 +62,24 @@ class MessageStatusChanged(DomainEvent):
     message_id: str
     status: str
     occurred_at: datetime
+
+
+@dataclass(frozen=True)
+class BusinessEventReceived(DomainEvent):
+    """A developer-supplied business fact arrived via POST /v1/events.
+
+    Attributes:
+        account_id: The Akilent tenant.
+        event_id: BusinessEvent.public_id.
+        name: Dotted event name, e.g. "invoice.paid".
+        contact_id: The resolved Contact id, or None.
+        data: The event payload.
+        occurred_at: When the event happened (client-supplied or receipt time).
+    """
+
+    account_id: int
+    event_id: str
+    name: str
+    contact_id: int | None
+    data: dict
+    occurred_at: datetime

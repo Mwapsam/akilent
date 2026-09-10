@@ -27,7 +27,7 @@ Usage:
     dispatcher.subscribe(MessageReceived, handle_message_received)
 """
 from .dispatcher import DjangoSignalDispatcher
-from .domain_events import MessageReceived, MessageStatusChanged
+from .domain_events import BusinessEventReceived, MessageReceived, MessageStatusChanged
 
 # Singleton dispatcher instance — all modules import and use this.
 dispatcher = DjangoSignalDispatcher()
@@ -36,4 +36,5 @@ __all__ = [
     "dispatcher",
     "MessageReceived",
     "MessageStatusChanged",
+    "BusinessEventReceived",
 ]

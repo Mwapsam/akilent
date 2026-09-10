@@ -218,7 +218,9 @@ def create_and_queue_campaign(
     subject: str = "",
     text_body: str = "",
     html_body: str = "",
-    recipients: list[dict],
+    recipients: list[dict] | None = None,
+    list_slug: str | None = None,
+    segment_slug: str | None = None,
 ) -> BulkEmailCampaign:
     """Validate, gate on plan features/recipient cap, and queue a bulk campaign.
 
@@ -229,6 +231,23 @@ def create_and_queue_campaign(
     """
     lc = LimitChecker(account)
     lc.require_feature("bulk_email", "bulk email sending")
+
+    if recipients is None:
+        if list_slug or segment_slug:
+            from apps.contacts.audience import resolve_recipients
+
+            try:
+                recipients = resolve_recipients(
+                    account, list_slug=list_slug, segment_slug=segment_slug
+                )
+            except ValueError as exc:
+                raise TemplateMissingContentError(str(exc)) from exc
+        else:
+            recipients = []
+    if not recipients:
+        raise TemplateMissingContentError(
+            "No recipients — provide `recipients`, `list`, or `segment`."
+        )
 
     from apps.email.services.reputation import check_can_send
 

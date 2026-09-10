@@ -5,7 +5,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from apps.api import views
+from apps.api import contact_views, event_views, views
 
 urlpatterns = [
     path("schema", SpectacularAPIView.as_view(), name="api-schema"),
@@ -27,8 +27,27 @@ urlpatterns = [
     path("<str:version>/templates/<slug:slug>/render", views.TemplateRenderView.as_view(), name="api-v1-template-render"),
     path("<str:version>/templates/<slug:slug>/preview", views.TemplatePreviewView.as_view(), name="api-v1-template-preview"),
     path("<str:version>/templates/<slug:slug>/clone", views.TemplateCloneView.as_view(), name="api-v1-template-clone"),
+    path("<str:version>/templates/<slug:slug>/versions", views.TemplateVersionsView.as_view(), name="api-v1-template-versions"),
+    path("<str:version>/templates/<slug:slug>/versions/<int:number>/activate", views.TemplateVersionActivateView.as_view(), name="api-v1-template-version-activate"),
     path("<str:version>/campaigns", views.CampaignCreateView.as_view(), name="api-v1-campaigns"),
     path("<str:version>/campaigns/<int:pk>", views.CampaignDetailView.as_view(), name="api-v1-campaign-detail"),
     path("<str:version>/request-logs", views.RequestLogListView.as_view(), name="api-v1-request-logs"),
     path("<str:version>/request-logs/<str:request_id>", views.RequestLogDetailView.as_view(), name="api-v1-request-log-detail"),
+    path("<str:version>/deliverability", views.DeliverabilityView.as_view(), name="api-v1-deliverability"),
+    path("<str:version>/version", views.ApiVersionView.as_view(), name="api-v1-version"),
+
+    # Contacts / lists / segments (Phase 4)
+    path("<str:version>/contacts", contact_views.ContactCollectionView.as_view(), name="api-v1-contacts"),
+    path("<str:version>/contacts/import", contact_views.ContactImportView.as_view(), name="api-v1-contacts-import"),
+    path("<str:version>/contacts/<str:cid>", contact_views.ContactDetailView.as_view(), name="api-v1-contact-detail"),
+    path("<str:version>/contacts/<str:cid>/events", contact_views.ContactEventsView.as_view(), name="api-v1-contact-events"),
+    path("<str:version>/lists", contact_views.ListCollectionView.as_view(), name="api-v1-lists"),
+    path("<str:version>/segments", contact_views.SegmentCollectionView.as_view(), name="api-v1-segments"),
+    path("<str:version>/segments/preview", contact_views.SegmentPreviewView.as_view(), name="api-v1-segment-preview"),
+    path("<str:version>/segments/<slug:slug>/contacts", contact_views.SegmentContactsView.as_view(), name="api-v1-segment-contacts"),
+
+    # Business events (Phase 5)
+    path("<str:version>/events", event_views.EventCollectionView.as_view(), name="api-v1-events"),
+    path("<str:version>/events/catalog", event_views.EventCatalogView.as_view(), name="api-v1-events-catalog"),
+    path("<str:version>/webhooks/test", event_views.WebhookTestView.as_view(), name="api-v1-webhooks-test"),
 ]

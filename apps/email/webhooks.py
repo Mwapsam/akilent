@@ -78,3 +78,12 @@ def enqueue_event(event_type: str, *, account, message=None, data: dict | None =
     except Exception:
         logger.exception("enqueue_event: failed to fan out event %s", event_type)
     return delivery_ids
+
+
+def notify(account, event_type: str, data: dict | None = None) -> list[int]:
+    """Fan out a non-message event (contact / workflow / campaign / business).
+
+    Thin wrapper over ``enqueue_event`` for events with no associated
+    EmailMessage. Best-effort; never raises.
+    """
+    return enqueue_event(event_type, account=account, message=None, data=data or {})

@@ -37,3 +37,14 @@ def evaluate_rules_for_message(account_id: int, trigger_event: str, context: dic
             except Exception:
                 logger.exception("evaluate_rules_for_message: error executing rule pk=%s", rule.pk)
                 # Don't re-raise — continue to next rule if one fails
+
+
+@shared_task(queue="celery")
+def run_due_workflows() -> int:
+    """Resume lifecycle WorkflowRuns whose wait timers have elapsed."""
+    from apps.automation.workflow_engine import run_due
+
+    n = run_due()
+    if n:
+        logger.info("run_due_workflows: advanced %d run(s)", n)
+    return n

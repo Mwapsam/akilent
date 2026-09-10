@@ -40,6 +40,39 @@
     <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">{{ error }}</div>
   {% endif %}
 
+  {# Deliverability score #}
+  {% if deliverability %}
+  <div class="card overflow-hidden mb-6">
+    <div class="px-5 sm:px-6 py-4 border-b border-border flex items-center justify-between">
+      <h2 class="font-semibold">Deliverability score — {{ selected }}</h2>
+      <span class="text-2xl font-bold tabular-nums">{{ deliverability.score }}<span class="text-sm text-gray-400"> / 100</span></span>
+    </div>
+    <div class="px-5 sm:px-6 py-4">
+      <p class="text-sm mb-3">
+        <span class="badge {% if deliverability.score >= 90 %}badge-success{% elif deliverability.score >= 75 %}badge-info{% elif deliverability.score >= 60 %}badge-warning{% else %}badge-danger{% endif %}">{{ deliverability.grade }}</span>
+      </p>
+      <ul class="space-y-1.5 text-sm">
+        {% for c in deliverability.checks %}
+        <li class="flex items-start gap-2">
+          <span class="mt-0.5">
+            {% if c.status == 'ok' %}✓{% elif c.status == 'warn' %}⚠{% elif c.status == 'fail' %}✗{% else %}–{% endif %}
+          </span>
+          <span><span class="font-medium">{{ c.label }}</span> <span class="text-gray-500">— {{ c.detail }}</span></span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if deliverability.recommendations %}
+      <div class="mt-4 rounded-xl bg-brand-50 border border-brand-200 p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-brand-700 mb-2">What to do next</p>
+        <ul class="list-disc list-inside space-y-1 text-sm text-brand-800">
+          {% for r in deliverability.recommendations %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   {# Open / click stats #}
   <div class="card overflow-hidden mb-6">
     <div class="px-5 sm:px-6 py-4 border-b border-border">

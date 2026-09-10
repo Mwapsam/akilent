@@ -166,3 +166,27 @@ def test_unknown_message_returns_404_envelope(client, account, api_key):
     resp = client.get("/api/v1/messages/msg_missing", HTTP_X_API_KEY=api_key)
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.django_db
+def test_deliverability_endpoint(client, account, api_key):
+    from apps.logs.models import MessageStatsDaily
+    from django.utils import timezone
+
+    MessageStatsDaily.objects.create(
+        account=account, domain=None, day=timezone.now().date(), key_mode="live",
+        sent=200, delivered=195, bounced=2,
+    )
+    resp = client.get("/api/v1/deliverability", HTTP_X_API_KEY=api_key)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert 0 <= body["score"] <= 100
+    assert body["grade"]
+    assert isinstance(body["checks"], list)
+    assert body["scope"] == "account"
+
+
+@pytest.mark.django_db
+def test_deliverability_unknown_domain_404(client, account, api_key):
+    resp = client.get("/api/v1/deliverability?domain=nope.example", HTTP_X_API_KEY=api_key)
+    assert resp.status_code == 404

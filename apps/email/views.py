@@ -537,13 +537,21 @@ def insights(request):
     domain_names = [d.domain for d in domains]
     selected = request.GET.get("domain") or (domain_names[0] if domain_names else "")
 
-    logs, stats, error = [], [], None
+    logs, stats, error, deliverability = [], [], None, None
     if has_analytics and selected and selected in domain_names:
         log_qs = EmailMessage.objects.filter(domain__domain=selected)
         if not admin and account:
             log_qs = log_qs.filter(account=account)
         logs = list(log_qs.order_by("-created_at")[:100])
         stats = _build_engagement_stats(selected)
+        if account:
+            from apps.email.services.deliverability import compute_score
+
+            sel_domain = next((d for d in domains if d.domain == selected), None)
+            try:
+                deliverability = compute_score(account, sel_domain).as_dict()
+            except Exception:
+                logger.exception("insights: deliverability score failed")
 
     return render(request, "email/insights.html", {
         "account": account,
@@ -554,6 +562,7 @@ def insights(request):
         "logs": logs,
         "stats": stats,
         "error": error,
+        "deliverability": deliverability,
     })
 
 
@@ -878,12 +887,10 @@ def template_edit(request, pk):
     autosave = request.POST.get("autosave") == "1" or is_ajax(request)
 
     if not autosave:
-        EmailTemplateVersion.objects.create(
-            template=template,
-            subject=template.subject,
-            text_body=template.text_body,
-            html_body=template.html_body,
-            content_blocks=template.content_blocks,
+        from apps.email.services.versions import snapshot_version
+
+        snapshot_version(
+            template,
             created_by=request.user if request.user.is_authenticated else None,
         )
 
@@ -941,13 +948,10 @@ def template_version_restore(request, pk, version_pk):
 
     # Snapshot the current state before overwriting so restoring is itself
     # undoable, consistent with how template_edit snapshots before every save.
-    EmailTemplateVersion.objects.create(
-        template=template,
-        subject=template.subject,
-        text_body=template.text_body,
-        html_body=template.html_body,
-        content_blocks=template.content_blocks,
-        created_by=request.user if request.user.is_authenticated else None,
+    from apps.email.services.versions import snapshot_version
+
+    snapshot_version(
+        template, created_by=request.user if request.user.is_authenticated else None
     )
 
     template.subject = version.subject

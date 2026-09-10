@@ -571,11 +571,20 @@ class SystemEmailTemplate(models.Model):
 
 
 class EmailTemplateVersion(models.Model):
-    """Snapshot of an EmailTemplate's content taken just before an edit overwrites it."""
+    """A numbered snapshot of an EmailTemplate's content.
+
+    Written on every edit (snapshot-before-overwrite) and on explicit publishes.
+    ``is_active`` marks which snapshot the live template currently reflects;
+    activating an older one is a rollback.
+    """
 
     template = models.ForeignKey(
         EmailTemplate, on_delete=models.CASCADE, related_name="versions"
     )
+    number = models.PositiveIntegerField(default=0)
+    label = models.CharField(max_length=120, blank=True, default="")
+    is_active = models.BooleanField(default=False)
+
     subject = models.CharField(max_length=998, blank=True, default="")
     text_body = models.TextField(blank=True, default="")
     html_body = models.TextField(blank=True, default="")
@@ -587,7 +596,12 @@ class EmailTemplateVersion(models.Model):
     )
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-number", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["template", "number"], name="uniq_template_version_number"
+            )
+        ]
 
     def __str__(self):
         return f"{self.template.name} @ {self.created_at:%Y-%m-%d %H:%M}"
@@ -665,11 +679,33 @@ class BulkEmailCampaign(models.Model):
             if self.started_at is None:
                 self.started_at = timezone.now()
             self.save(update_fields=["status", "started_at"])
+            self._notify_campaign("campaign.started")
 
     def mark_completed(self) -> None:
+        already = self.status == self.Status.COMPLETED
         self.status = self.Status.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=["status", "completed_at"])
+        if not already:
+            self._notify_campaign("campaign.completed")
+
+    def _notify_campaign(self, event_type: str) -> None:
+        try:
+            from apps.email.webhooks import notify
+
+            notify(self.account, event_type, {
+                "id": self.pk,
+                "status": self.status,
+                "recipient_count": self.recipient_count,
+                "sent_count": self.sent_count,
+                "failed_count": self.failed_count,
+            })
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "campaign %s webhook notify failed", self.pk
+            )
 
     def mark_paused(self, reason: str = "") -> None:
         self.status = self.Status.PAUSED
@@ -905,8 +941,19 @@ class WebhookEndpoint(models.Model):
     EVENT_CHOICES = [
         ("message.sent", "Message sent"),
         ("message.failed", "Message failed"),
+        ("message.delivered", "Message delivered"),
         ("message.opened", "Message opened"),
         ("message.clicked", "Link clicked"),
+        ("message.bounced", "Message bounced"),
+        ("message.complained", "Spam complaint"),
+        ("campaign.started", "Campaign started"),
+        ("campaign.completed", "Campaign completed"),
+        ("contact.created", "Contact created"),
+        ("contact.updated", "Contact updated"),
+        ("contact.unsubscribed", "Contact unsubscribed"),
+        ("workflow.started", "Workflow run started"),
+        ("workflow.completed", "Workflow run completed"),
+        ("event.received", "Business event received"),
     ]
 
     account = models.ForeignKey(
@@ -1123,3 +1170,65 @@ class ProcessedSnsMessage(models.Model):
 
     def __str__(self):
         return f"{self.message_id} ({self.event_type or 'unknown'})"
+
+
+class DeliverabilitySnapshot(models.Model):
+    """Daily point-in-time deliverability score, for trend lines and week-over-week deltas.
+
+    ``domain`` NULL means the account-wide roll-up. Written once per day by
+    ``apps.email.tasks.snapshot_deliverability``.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="deliverability_snapshots"
+    )
+    domain = models.ForeignKey(
+        EmailDomain, on_delete=models.CASCADE, blank=True, null=True
+    )
+    day = models.DateField()
+    score = models.PositiveIntegerField()
+    grade = models.CharField(max_length=16, default="")
+    checks = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "domain", "day"], name="uniq_deliverability_snapshot"
+            )
+        ]
+        indexes = [models.Index(fields=["account", "day"])]
+        ordering = ["-day"]
+
+    def __str__(self):
+        scope = self.domain.domain if self.domain_id else "account"
+        return f"{scope} {self.day}: {self.score}"
+
+
+class TemplateComponent(models.Model):
+    """A reusable snippet a tenant can drop into templates with
+    ``{% component "name" arg=value %}``. Built-in components (AkilentButton,
+    AkilentHeader, …) are defined in ``apps.email.template_components`` and do
+    not need a row here.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="template_components"
+    )
+    name = models.CharField(max_length=64)
+    html = models.TextField(blank=True, default="")
+    text = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "name"], name="uniq_template_component_account_name"
+            )
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

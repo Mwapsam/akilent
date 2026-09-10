@@ -83,6 +83,13 @@ def custom_exception_handler(exc, context):
             "not_found", "Message not found.", status.HTTP_404_NOT_FOUND, context
         )
 
+    from django.core.exceptions import ObjectDoesNotExist
+
+    if isinstance(exc, ObjectDoesNotExist):
+        return _envelope(
+            "not_found", "Resource not found.", status.HTTP_404_NOT_FOUND, context
+        )
+
     response = drf_exception_handler(exc, context)
     if response is None:
         return None

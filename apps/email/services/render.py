@@ -16,7 +16,11 @@ _VARIABLE_RE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_.]*)")
 _ENGINE = Engine(
     debug=False,
     libraries={},
-    builtins=["django.template.defaulttags", "django.template.defaultfilters"],
+    builtins=[
+        "django.template.defaulttags",
+        "django.template.defaultfilters",
+        "apps.email.template_components",  # {% component "AkilentButton" ... %}
+    ],
 )
 
 
@@ -27,12 +31,26 @@ def render_string(source: str, variables: dict | None = None) -> str:
     return _ENGINE.from_string(source).render(Context(variables or {}, autoescape=True))
 
 
+def _account_components(template) -> dict:
+    account_id = getattr(template, "account_id", None)
+    if not account_id:
+        return {}
+    from apps.email.models import TemplateComponent
+
+    return {
+        c.name: c.html
+        for c in TemplateComponent.objects.filter(account_id=account_id)
+    }
+
+
 def render_template(template, variables: dict | None = None) -> tuple[str, str, str]:
     """Render an EmailTemplate's subject/text/html with `variables`.
 
-    Returns (subject, text_body, html_body).
+    Returns (subject, text_body, html_body). The tenant's custom
+    ``{% component %}`` bodies are made available via a ``_components`` key.
     """
-    variables = variables or {}
+    variables = {**(variables or {})}
+    variables.setdefault("_components", _account_components(template))
     subject = render_string(template.subject, variables)
     text_body = render_string(template.text_body, variables)
     html_body = render_string(template.html_body, variables)

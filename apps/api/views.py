@@ -281,7 +281,9 @@ class CampaignCreateView(BaseApiView):
             subject=data.get("subject", ""),
             text_body=data.get("text", ""),
             html_body=data.get("html", ""),
-            recipients=data["recipients"],
+            recipients=data["recipients"] or None,
+            list_slug=data.get("list") or None,
+            segment_slug=data.get("segment") or None,
         )
         request.auth.touch()
         return self.finish_idempotency(
@@ -469,3 +471,89 @@ class RequestLogDetailView(BaseApiView):
                 "created_at": r.created_at,
             }
         )
+
+
+class DeliverabilityView(BaseApiView):
+    """GET /api/v1/deliverability — composite deliverability score + recommendations.
+
+    Optional `?domain=<name>` scopes to one verified domain; otherwise account-wide.
+    """
+
+    permission_classes = [HasEmailApiFeature]
+
+    @extend_schema(operation_id="deliverability", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Deliverability"])
+    def get(self, request, *args, **kwargs):
+        from apps.email.models import EmailDomain
+        from apps.email.services.deliverability import compute_score
+
+        domain_name = request.query_params.get("domain")
+        domain = None
+        if domain_name:
+            try:
+                domain = EmailDomain.objects.get(account=request.user, domain=domain_name)
+            except EmailDomain.DoesNotExist:
+                return Response(
+                    {"error": {"code": "not_found", "message": "Domain not found."}},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        result = compute_score(request.user, domain)
+        body = result.as_dict()
+        body["scope"] = domain_name or "account"
+        return Response(body)
+
+
+class TemplateVersionsView(BaseApiView):
+    """GET /api/v1/templates/<slug>/versions — list numbered snapshots."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_versions", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def get(self, request, slug, *args, **kwargs):
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        return Response({"data": [
+            {
+                "number": v.number,
+                "label": v.label or None,
+                "active": v.is_active,
+                "created_at": v.created_at,
+                "subject": v.subject,
+            }
+            for v in t.versions.all()
+        ]})
+
+
+class TemplateVersionActivateView(BaseApiView):
+    """POST /api/v1/templates/<slug>/versions/<n>/activate — roll back to version n."""
+
+    permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
+    required_scope = "templates:manage"
+
+    @extend_schema(operation_id="template_version_activate", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    def post(self, request, slug, number, *args, **kwargs):
+        from apps.email.services.versions import activate_version
+
+        t = EmailTemplate.objects.get(account=request.user, slug=slug)
+        # EmailTemplateVersion.DoesNotExist -> ObjectDoesNotExist -> 404 envelope.
+        v = activate_version(t, int(number))
+        request.auth.touch()
+        return Response({"number": v.number, "active": v.is_active, "subject": t.subject})
+
+
+class ApiVersionView(BaseApiView):
+    """GET /api/v1/version — machine-readable API version metadata."""
+
+    permission_classes = [HasEmailApiFeature]
+
+    @extend_schema(operation_id="api_version", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Meta"])
+    def get(self, request, *args, **kwargs):
+        from django.conf import settings as dj_settings
+
+        return Response({
+            "version": getattr(request, "version", "v1") or "v1",
+            "supported": list(dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS", ["v1"])),
+            "sunset": None,
+            "changelog": "https://akilent.com/docs/changelog",
+            "openapi": "/api/schema",
+        })

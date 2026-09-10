@@ -691,6 +691,34 @@ def prune_provisioning_jobs() -> int:
     return deleted
 
 
+@shared_task(queue="celery")
+def snapshot_deliverability() -> int:
+    """Write a daily DeliverabilitySnapshot per account (+ per verified domain)."""
+    from apps.accounts.models import Account
+    from apps.email.models import EmailDomain
+    from apps.email.services.deliverability import snapshot
+
+    written = 0
+    account_ids = (
+        EmailDomain.objects.filter(status=EmailDomain.Status.VERIFIED)
+        .values_list("account_id", flat=True)
+        .distinct()
+    )
+    for account in Account.objects.filter(id__in=list(account_ids)):
+        try:
+            snapshot(account, None)
+            written += 1
+            for domain in EmailDomain.objects.filter(
+                account=account, status=EmailDomain.Status.VERIFIED
+            ):
+                snapshot(account, domain)
+                written += 1
+        except Exception:
+            logger.exception("snapshot_deliverability failed for account %s", account.id)
+    logger.info("snapshot_deliverability: wrote %d snapshots", written)
+    return written
+
+
 
 
 

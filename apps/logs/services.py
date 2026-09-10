@@ -147,9 +147,28 @@ def _sink_analytics(event: MessageEvent) -> None:
     apply_event(event)
 
 
+_CONTACT_ACTIVITY_TYPES = {
+    "delivered", "opened", "clicked", "bounced", "complained", "unsubscribed",
+}
+
+
 def _sink_contact_activity(event: MessageEvent) -> None:
-    # Phase 4 (apps.contacts) wires the contact activity stream here.
-    return
+    if event.type not in _CONTACT_ACTIVITY_TYPES:
+        return
+    from apps.contacts.models import Contact
+    from apps.contacts.services import record_contact_event
+
+    contact = Contact.objects.filter(
+        account_id=event.account_id, email__iexact=event.message.to_email
+    ).first()
+    if contact is None:
+        return
+    record_contact_event(
+        contact,
+        f"email.{event.type}",
+        occurred_at=event.occurred_at,
+        data={"message_id": event.message.public_id, **(event.data or {})},
+    )
 
 
 def _sink_workflows(event: MessageEvent) -> None:
