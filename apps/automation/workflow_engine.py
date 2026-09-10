@@ -39,7 +39,11 @@ logger = logging.getLogger(__name__)
 _MAX_STEPS_PER_CALL = 50
 
 _STEP_TYPES = {"send_email", "wait", "branch", "set_attribute", "stop", "exit"}
-_TRIGGER_TYPES = {"business_event", "manual"}
+_TRIGGER_TYPES = {
+    "business_event", "manual",
+    "contact.created", "contact.updated",
+    "email.opened", "email.clicked",
+}
 
 
 def validate_definition(definition: dict) -> list[str]:
@@ -305,6 +309,29 @@ def on_business_event(event, **kwargs) -> None:
                     enroll(wf, contact, context={"event": event.data})
             except Exception:  # noqa: BLE001
                 logger.exception("on_business_event: enroll failed wf=%s", wf.pk)
+
+
+def enroll_for_trigger(account_id: int, trigger_type: str, contact, *, context: dict | None = None) -> int:
+    """Enroll ``contact`` into every published workflow whose trigger matches.
+
+    Used for the lightweight contact-lifecycle triggers (``contact.created``,
+    ``email.opened``, …). ``business_event`` has its own richer path in
+    ``on_business_event``.
+    """
+    workflows = Workflow.objects.filter(
+        account_id=account_id, status=Workflow.Status.PUBLISHED
+    )
+    n = 0
+    for wf in workflows:
+        if (wf.definition or {}).get("trigger", {}).get("type") != trigger_type:
+            continue
+        try:
+            with transaction.atomic():
+                if enroll(wf, contact, context=context or {}) is not None:
+                    n += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type)
+    return n
 
 
 def run_due() -> int:

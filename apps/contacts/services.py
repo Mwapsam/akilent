@@ -38,8 +38,19 @@ def upsert_contact(account, email: str, *, attributes: dict | None = None, **fie
     elif created and (attributes or dirty):
         contact.save()
 
-    _notify_contact(contact, "contact.created" if created else "contact.updated")
+    trigger = "contact.created" if created else "contact.updated"
+    _notify_contact(contact, trigger)
+    _trigger_workflows(contact, trigger)
     return contact, created
+
+
+def _trigger_workflows(contact, trigger_type: str, context: dict | None = None) -> None:
+    try:
+        from apps.automation.workflow_engine import enroll_for_trigger
+
+        enroll_for_trigger(contact.account_id, trigger_type, contact, context=context)
+    except Exception:
+        logger.exception("_trigger_workflows failed (%s) for %s", trigger_type, contact.pk)
 
 
 def _notify_contact(contact, event_type: str) -> None:
@@ -68,6 +79,7 @@ def record_contact_event(contact: Contact, event_type: str, *, occurred_at=None,
     if kind in _ENGAGEMENT_EVENTS:
         contact.last_engaged_at = ev.occurred_at
         updates.append("last_engaged_at")
+        _trigger_workflows(contact, f"email.{kind}", {"event": data or {}})
     if kind == "unsubscribed" and contact.status != Contact.Status.UNSUBSCRIBED:
         contact.status = Contact.Status.UNSUBSCRIBED
         updates.append("status")

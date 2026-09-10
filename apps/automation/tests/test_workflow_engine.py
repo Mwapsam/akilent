@@ -114,6 +114,32 @@ def test_draft_workflow_does_not_enrol(account, contact):
 
 
 @pytest.mark.django_db
+def test_contact_created_trigger_enrolls(account):
+    from apps.contacts.services import upsert_contact
+
+    wf = _wf(account, [
+        {"id": "a", "type": "set_attribute", "key": "welcomed", "value": True, "next": "b"},
+        {"id": "b", "type": "stop"},
+    ], trigger={"type": "contact.created"})
+    c, _ = upsert_contact(account, "new@acme.com")
+    run = WorkflowRun.objects.get(workflow=wf, contact=c)
+    assert run.status == WorkflowRun.Status.COMPLETED
+    c.refresh_from_db()
+    assert c.attributes.get("welcomed") is True
+
+
+@pytest.mark.django_db
+def test_email_opened_trigger_enrolls(account, contact):
+    wf = _wf(account, [
+        {"id": "a", "type": "set_attribute", "key": "engaged", "value": True, "next": "b"},
+        {"id": "b", "type": "stop"},
+    ], trigger={"type": "email.opened"})
+    record_contact_event(contact, "email.opened")
+    run = WorkflowRun.objects.get(workflow=wf, contact=contact)
+    assert run.status == WorkflowRun.Status.COMPLETED
+
+
+@pytest.mark.django_db
 def test_advance_is_idempotent(account, contact):
     wf = _wf(account, [
         {"id": "a", "type": "send_email", "from": "hi@mail.acme.test", "text": "x", "next": "w"},
