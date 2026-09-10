@@ -2,7 +2,7 @@
 AJAX create/quota. Needs: mb, is_admin.{% endcomment %}
 <tr id="mailbox-row-{{ mb.pk }}">
   <td>
-    <div class="font-medium text-gray-900">{{ mb.email }}</div>
+    <div class="font-medium text-ink">{{ mb.email }}</div>
     {% if mb.name %}<div class="text-xs text-gray-400">{{ mb.name }}</div>{% endif %}
     {% if is_admin %}<div class="text-xs text-brand-600">{{ mb.account.company_name }}</div>{% endif %}
     {% if mb.status == 'failed' and mb.error %}<div class="text-xs text-red-500 mt-1">{{ mb.error|truncatechars:80 }}</div>{% endif %}

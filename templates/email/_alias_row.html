@@ -1,6 +1,6 @@
 {% comment %}One alias table row. Needs: a, is_admin.{% endcomment %}
 <tr id="alias-row-{{ a.pk }}">
-  <td class="font-medium text-gray-900">{{ a.address }}</td>
+  <td class="font-medium text-ink">{{ a.address }}</td>
   <td class="text-gray-500">{{ a.goto }}</td>
   {% if is_admin %}<td class="text-xs text-brand-600">{{ a.account.company_name }}</td>{% endif %}
 </tr>

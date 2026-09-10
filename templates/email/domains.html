@@ -94,14 +94,14 @@
 {# Domains — list only; click through to a domain for DNS records & management #}
 {% if domains %}
 <div class="card overflow-hidden">
-  <ul class="divide-y divide-gray-100">
+  <ul class="divide-y divide-border">
     {% for d in domains %}
     <li>
       <a href="{% url 'email-domain-detail' d.pk %}"
-         class="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
+         class="flex items-center gap-4 px-5 py-4 hover:bg-surface-muted transition-colors">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
-            <span class="font-medium text-gray-900 truncate">{{ d.domain }}</span>
+            <span class="font-medium text-ink truncate">{{ d.domain }}</span>
             {% if d.status == 'verified' %}<span class="badge badge-success">Verified</span>
             {% elif d.status == 'failed' %}<span class="badge badge-danger">Failed</span>
             {% else %}<span class="badge badge-warning">Pending DNS</span>{% endif %}

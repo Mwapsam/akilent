@@ -6,10 +6,10 @@
     <div class="text-center mb-8">
       <div class="inline-flex mb-4">{% include "components/brand_mark.html" with class="w-12 h-12" %}</div>
       {% if invalid %}
-        <h1 class="text-xl font-semibold text-gray-900">Invitation not valid</h1>
+        <h1 class="text-xl font-semibold text-ink">Invitation not valid</h1>
         <p class="text-sm text-gray-400 mt-1">This invitation has expired or already been used.</p>
       {% else %}
-        <h1 class="text-xl font-semibold text-gray-900">Join {{ invite.account.company_name }}</h1>
+        <h1 class="text-xl font-semibold text-ink">Join {{ invite.account.company_name }}</h1>
         <p class="text-sm text-gray-400 mt-1">
           {% if invite.invited_by %}{{ invite.invited_by.get_username }} invited you{% else %}You've been invited{% endif %}
           as {{ invite.get_role_display }}.

@@ -162,7 +162,7 @@
       {% for u in admins %}
         <div class="flex items-center justify-between gap-2 py-2 border-b border-border last:border-0">
           <div class="min-w-0">
-            <p class="text-sm font-medium text-gray-900 truncate">{{ u.get_username }}{% if u == request.user %} <span class="text-xs text-gray-400">(you)</span>{% endif %}</p>
+            <p class="text-sm font-medium text-ink truncate">{{ u.get_username }}{% if u == request.user %} <span class="text-xs text-gray-400">(you)</span>{% endif %}</p>
             <p class="text-xs text-gray-400 truncate">{{ u.email|default:"—" }}</p>
           </div>
           <div class="flex items-center gap-2 shrink-0">

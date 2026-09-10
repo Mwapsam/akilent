@@ -13,15 +13,15 @@
   <nav class="flex gap-1 overflow-x-auto" aria-label="Settings">
     <a href="{% url 'settings-profile' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'profile' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-gray-900{% endif %}"
+       {% if active_tab == 'profile' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'profile' %}aria-current="page"{% endif %}>Profile</a>
     <a href="{% url 'settings-security' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'security' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-gray-900{% endif %}"
+       {% if active_tab == 'security' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'security' %}aria-current="page"{% endif %}>Security</a>
     <a href="{% url 'settings-team' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'team' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-gray-900{% endif %}"
+       {% if active_tab == 'team' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'team' %}aria-current="page"{% endif %}>Team</a>
   </nav>
 </div>

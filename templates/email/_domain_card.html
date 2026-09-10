@@ -7,7 +7,7 @@ re-submits the data-dns-check form until the domain verifies itself.{% endcommen
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
-        <h3 class="font-semibold text-gray-900 truncate">{{ d.domain }}</h3>
+        <h3 class="font-semibold text-ink truncate">{{ d.domain }}</h3>
         {% if d.status == 'verified' %}<span class="badge badge-success">Verified</span>
         {% elif d.status == 'failed' %}<span class="badge badge-danger">Failed</span>
         {% else %}<span class="badge badge-warning">Pending DNS</span>{% endif %}
@@ -139,12 +139,12 @@ re-submits the data-dns-check form until the domain verifies itself.{% endcommen
         How do I add these at my provider?
       </button>
 
-      <div x-show="open" x-cloak x-transition class="mt-3 rounded-xl border border-border bg-white p-3">
+      <div x-show="open" x-cloak x-transition class="mt-3 rounded-xl border border-border bg-surface p-3">
         <div class="flex flex-wrap gap-1 mb-3 text-xs">
-          <button type="button" @click="tab='cloudflare'" :class="tab==='cloudflare' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-gray-50'" class="px-2.5 py-1 rounded-lg font-medium">Cloudflare</button>
-          <button type="button" @click="tab='godaddy'" :class="tab==='godaddy' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-gray-50'" class="px-2.5 py-1 rounded-lg font-medium">GoDaddy</button>
-          <button type="button" @click="tab='namecheap'" :class="tab==='namecheap' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-gray-50'" class="px-2.5 py-1 rounded-lg font-medium">Namecheap</button>
-          <button type="button" @click="tab='other'" :class="tab==='other' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-gray-50'" class="px-2.5 py-1 rounded-lg font-medium">Other</button>
+          <button type="button" @click="tab='cloudflare'" :class="tab==='cloudflare' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Cloudflare</button>
+          <button type="button" @click="tab='godaddy'" :class="tab==='godaddy' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">GoDaddy</button>
+          <button type="button" @click="tab='namecheap'" :class="tab==='namecheap' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Namecheap</button>
+          <button type="button" @click="tab='other'" :class="tab==='other' ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Other</button>
         </div>
 
         <ol x-show="tab==='cloudflare'" class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
