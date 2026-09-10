@@ -1,18 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ contact.email }} — Contacts{% endblock %}
 
-{% block page_header %}
+{% block content %}
 <div class="mb-6">
-  <a href="/contacts/" class="text-sm text-gray-500 hover:text-gray-700">&larr; Contacts</a>
-  <h1 class="text-2xl font-semibold tracking-tight mt-1">{{ contact.full_name|default:contact.email }}</h1>
+  <a href="/contacts/" class="text-sm text-gray-500 hover:text-ink">&larr; Contacts</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">{{ contact.full_name|default:contact.email }}</h1>
   <p class="text-sm text-gray-500">{{ contact.email }}</p>
 </div>
-{% endblock %}
-
-{% block content %}
 <div class="grid gap-6 lg:grid-cols-3">
-  <section class="rounded-2xl border border-gray-200 p-5 text-sm space-y-2">
-    <div class="flex justify-between"><span class="text-gray-500">Status</span><span class="badge">{{ contact.get_status_display }}</span></div>
+  <section class="card card-pad text-sm space-y-2">
+    <div class="flex justify-between"><span class="text-gray-500">Status</span><span class="badge {% if contact.status == 'subscribed' or contact.status == 'active' %}badge-success{% elif contact.status == 'unsubscribed' or contact.status == 'bounced' or contact.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">{{ contact.get_status_display }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Source</span><span>{{ contact.source|default:"—" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Locale</span><span>{{ contact.locale|default:"—" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">First seen</span><span>{{ contact.first_seen|date:"Y-m-d H:i" }}</span></div>
@@ -23,21 +20,21 @@
     </div>
     <div class="pt-2">
       <p class="text-gray-500 mb-1">Attributes</p>
-      <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ contact.attributes|default:"{}" }}</pre>
+      <pre class="text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ contact.attributes|default:"{}" }}</pre>
     </div>
   </section>
 
-  <section class="lg:col-span-2 rounded-2xl border border-gray-200 p-5">
-    <h2 class="font-semibold mb-3">Activity</h2>
+  <section class="lg:col-span-2 card card-pad">
+    <h2 class="text-lg font-semibold text-ink mb-3">Activity</h2>
     <ol class="relative border-l border-gray-200 ml-2 space-y-3">
       {% for e in events %}
       <li class="ml-4">
-        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500"></span>
+        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
         <div class="flex items-baseline justify-between gap-4">
           <span class="font-medium">{{ e.type }}</span>
           <span class="text-xs text-gray-400">{{ e.occurred_at|date:"Y-m-d H:i:s" }}</span>
         </div>
-        {% if e.data %}<pre class="mt-1 text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
+        {% if e.data %}<pre class="mt-1 text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
       </li>
       {% empty %}
       <li class="ml-4 text-gray-400 text-sm">No activity recorded.</li>
@@ -46,15 +43,15 @@
   </section>
 </div>
 
-<div class="rounded-2xl border border-gray-200 p-5 mt-6">
-  <h2 class="font-semibold mb-3">Messages sent to this contact</h2>
-  <table class="min-w-full text-sm">
-    <tbody class="divide-y divide-gray-100">
+<div class="card card-pad mt-6">
+  <h2 class="text-lg font-semibold text-ink mb-3">Messages sent to this contact</h2>
+  <table class="table table--cards">
+    <tbody>
       {% for m in messages_to %}
       <tr>
         <td class="py-1.5 font-mono text-xs"><a href="/logs/messages/{{ m.public_id }}/" class="text-brand-600">{{ m.public_id }}</a></td>
         <td class="py-1.5">{{ m.subject|default:"—"|truncatechars:50 }}</td>
-        <td class="py-1.5"><span class="badge">{{ m.get_status_display }}</span></td>
+        <td data-label="Status">{% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}</td>
         <td class="py-1.5 text-gray-400">{{ m.created_at|date:"Y-m-d H:i" }}</td>
       </tr>
       {% empty %}

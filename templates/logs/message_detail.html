@@ -1,17 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ msg.public_id }} — Email logs{% endblock %}
 
-{% block page_header %}
-<div class="mb-6">
-  <a href="/logs/messages/" class="text-sm text-gray-500 hover:text-gray-700">&larr; Email logs</a>
-  <h1 class="text-2xl font-semibold tracking-tight mt-1 font-mono">{{ msg.public_id }}</h1>
-</div>
-{% endblock %}
-
 {% block content %}
+<div class="mb-6">
+  <a href="/logs/messages/" class="text-sm text-gray-500 hover:text-ink">&larr; Email logs</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1 font-mono">{{ msg.public_id }}</h1>
+</div>
 <div class="grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-1 rounded-2xl border border-gray-200 p-5 text-sm space-y-2">
-    <div class="flex justify-between"><span class="text-gray-500">Status</span><span class="badge">{{ msg.get_status_display }}</span></div>
+  <section class="lg:col-span-1 card card-pad text-sm space-y-2">
+    <div class="flex justify-between"><span class="text-gray-500">Status</span>{% if msg.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif msg.status == 'failed' or msg.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ msg.get_status_display }}</span>{% endif %}</div>
     <div class="flex justify-between"><span class="text-gray-500">From</span><span>{{ msg.from_email }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">To</span><span>{{ msg.to_email }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Template</span><span>{{ msg.template.slug|default:"—" }}</span></div>
@@ -22,18 +19,18 @@
     {% if msg.error %}<p class="text-red-600 pt-2">{{ msg.error }}</p>{% endif %}
   </section>
 
-  <section class="lg:col-span-2 rounded-2xl border border-gray-200 p-5">
-    <h2 class="font-semibold mb-3">Timeline</h2>
+  <section class="lg:col-span-2 card card-pad">
+    <h2 class="text-lg font-semibold text-ink mb-3">Timeline</h2>
     <ol class="relative border-l border-gray-200 ml-2 space-y-4">
       {% for e in events %}
       <li class="ml-4">
-        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500"></span>
+        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
         <div class="flex items-baseline justify-between gap-4">
           <span class="font-medium capitalize">{{ e.get_type_display }}</span>
           <span class="text-xs text-gray-400">{{ e.occurred_at|date:"Y-m-d H:i:s" }}</span>
         </div>
         <p class="text-xs text-gray-500">source: {{ e.get_source_display }}</p>
-        {% if e.data %}<pre class="mt-1 text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
+        {% if e.data %}<pre class="mt-1 text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
       </li>
       {% empty %}
       <li class="ml-4 text-gray-400 text-sm">No events recorded.</li>
@@ -43,30 +40,30 @@
 </div>
 
 <div class="grid gap-6 lg:grid-cols-2 mt-6">
-  <section class="rounded-2xl border border-gray-200 p-5">
-    <h2 class="font-semibold mb-3">Rendered subject</h2>
+  <section class="card card-pad">
+    <h2 class="text-lg font-semibold text-ink mb-3">Rendered subject</h2>
     <p class="text-sm">{{ msg.rendered_subject|default:msg.subject|default:"—" }}</p>
-    <h2 class="font-semibold mt-4 mb-2">Rendered HTML</h2>
-    <pre class="text-xs bg-gray-50 rounded p-3 overflow-x-auto max-h-96">{{ msg.rendered_html|default:"—" }}</pre>
-    <h2 class="font-semibold mt-4 mb-2">Rendered text</h2>
-    <pre class="text-xs bg-gray-50 rounded p-3 overflow-x-auto max-h-64">{{ msg.rendered_text|default:"—" }}</pre>
+    <h2 class="text-lg font-semibold text-ink mt-4 mb-2">Rendered HTML</h2>
+    <pre class="text-xs bg-surface-muted border border-border rounded-lg p-3 overflow-x-auto max-h-96">{{ msg.rendered_html|default:"—" }}</pre>
+    <h2 class="text-lg font-semibold text-ink mt-4 mb-2">Rendered text</h2>
+    <pre class="text-xs bg-surface-muted border border-border rounded-lg p-3 overflow-x-auto max-h-64">{{ msg.rendered_text|default:"—" }}</pre>
   </section>
 
-  <section class="rounded-2xl border border-gray-200 p-5">
-    <h2 class="font-semibold mb-3">Originating API request</h2>
+  <section class="card card-pad">
+    <h2 class="text-lg font-semibold text-ink mb-3">Originating API request</h2>
     {% if api_request %}
       <p class="text-sm font-mono">
         <a href="/logs/requests/{{ api_request.public_id }}/" class="text-brand-600">{{ api_request.method }} {{ api_request.path }}</a>
         &rarr; {{ api_request.status_code }}
       </p>
-      <pre class="mt-2 text-xs bg-gray-50 rounded p-3 overflow-x-auto max-h-72">{{ api_request.request_body }}</pre>
+      <pre class="mt-2 text-xs bg-surface-muted border border-border rounded-lg p-3 overflow-x-auto max-h-72">{{ api_request.request_body }}</pre>
     {% else %}
       <p class="text-sm text-gray-400">Not sent via the API, or the request log has aged out.</p>
     {% endif %}
 
-    <h2 class="font-semibold mt-5 mb-3">Webhook deliveries</h2>
-    <table class="min-w-full text-xs">
-      <tbody class="divide-y divide-gray-100">
+    <h2 class="text-lg font-semibold text-ink mt-5 mb-3">Webhook deliveries</h2>
+    <table class="table text-xs">
+      <tbody>
         {% for d in webhook_deliveries %}
         <tr>
           <td class="py-1.5">{{ d.event_type }}</td>

@@ -26,7 +26,7 @@
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
-            focus:bg-white focus:px-4 focus:py-2 focus:rounded-xl focus:shadow-pop focus:text-sm">
+            focus:bg-surface focus:px-4 focus:py-2 focus:rounded-xl focus:shadow-pop focus:text-sm focus:text-ink">
     Skip to content
   </a>
 
@@ -71,7 +71,7 @@
          @keydown.escape.window="$store.ui.closeDrawer()">
 
       {# Backdrop #}
-      <div class="absolute inset-0 bg-gray-900/40"
+      <div class="absolute inset-0 bg-gray-900/50"
            aria-hidden="true"
            x-transition.opacity
            @click="$store.ui.closeDrawer()"></div>
@@ -155,7 +155,7 @@
         {# User menu #}
         <div class="relative" x-data="{ open: false }" @keydown.escape="open = false">
           <button type="button"
-                  class="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-gray-100"
+                  class="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-canvas"
                   @click="open = !open"
                   :aria-expanded="open"
                   aria-haspopup="true">
@@ -175,7 +175,7 @@
                role="menu">
 
             <div class="px-3 py-2 border-b border-border mb-1">
-              <p class="text-sm font-medium text-gray-900 truncate">{{ user.get_username }}</p>
+              <p class="text-sm font-medium text-ink truncate">{{ user.get_username }}</p>
               {% if user.email %}
                 <p class="text-xs text-gray-400 truncate">{{ user.email }}</p>
               {% endif %}

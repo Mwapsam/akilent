@@ -1,27 +1,24 @@
 {% extends "base.html" %}
 {% block title %}API request logs — {{ site.app_name|default:"Automator" }}{% endblock %}
 
-{% block page_header %}
+{% block content %}
 <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
   <div>
-    <h1 class="text-2xl font-semibold tracking-tight">API request logs</h1>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">API request logs</h1>
     <p class="text-sm text-gray-500 mt-1">Every call to the Akilent API, with timing and full payloads.</p>
   </div>
   <a href="/logs/messages/" class="btn btn-secondary btn-sm">Email logs</a>
 </div>
-{% endblock %}
-
-{% block content %}
 <form method="get" class="flex flex-wrap items-center gap-2 mb-4">
-  <input type="text" name="path" value="{{ path }}" placeholder="Path contains…" class="input text-sm w-64" />
-  <input type="text" name="status_code" value="{{ status_code }}" placeholder="Status" class="input text-sm w-24" />
+  <input type="text" name="path" value="{{ path }}" placeholder="Path contains…" class="input w-full sm:w-64" />
+  <input type="text" name="status_code" value="{{ status_code }}" placeholder="Status" class="input w-full sm:w-24" />
   <button class="btn btn-primary btn-sm">Filter</button>
   {% if path or status_code %}<a href="/logs/requests/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
-<div class="overflow-x-auto rounded-2xl border border-gray-200">
-  <table class="min-w-full text-sm">
-    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead>
       <tr>
         <th class="px-4 py-2">Time</th>
         <th class="px-4 py-2">Method</th>
@@ -31,33 +28,25 @@
         <th class="px-4 py-2">Request ID</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-100">
+    <tbody class="divide-y divide-border">
       {% for r in page %}
       <tr class="hover:bg-gray-50">
-        <td class="px-4 py-2 text-gray-500">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
-        <td class="px-4 py-2 font-mono text-xs">{{ r.method }}</td>
-        <td class="px-4 py-2 font-mono text-xs">
-          <a href="/logs/requests/{{ r.public_id }}/" class="text-brand-600">{{ r.path }}</a>
-          {% if r.idempotency_replayed %}<span class="badge ml-1">replayed</span>{% endif %}
+        <td data-label="Time" class="text-gray-500 tabular-nums">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
+        <td data-label="Method" class="font-mono text-xs">{{ r.method }}</td>
+        <td data-label="Path" class="font-mono text-xs">
+          <a href="/logs/requests/{{ r.public_id }}/" class="text-brand-600 hover:text-brand-700">{{ r.path }}</a>
+          {% if r.idempotency_replayed %}<span class="badge badge-neutral ml-1">replayed</span>{% endif %}
         </td>
-        <td class="px-4 py-2">{{ r.status_code }}{% if r.error_code %} <span class="text-gray-400">({{ r.error_code }})</span>{% endif %}</td>
-        <td class="px-4 py-2 text-gray-500">{{ r.latency_ms }} ms</td>
-        <td class="px-4 py-2 font-mono text-xs text-gray-400">{{ r.request_id|default:"—" }}</td>
+        <td data-label="Status" class="tabular-nums">{{ r.status_code }}{% if r.error_code %} <span class="text-gray-400">({{ r.error_code }})</span>{% endif %}</td>
+        <td data-label="Latency" class="text-gray-500 tabular-nums">{{ r.latency_ms }} ms</td>
+        <td data-label="Request ID" class="font-mono text-xs text-gray-400">{{ r.request_id|default:"—" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No API requests yet.</td></tr>
+      <tr><td colspan="6">{% include "components/empty_state.html" with icon="code-bracket" title="No API requests yet" message="Calls to the Akilent API show up here with timing and payloads." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
-{% if page.has_other_pages %}
-<div class="flex items-center justify-between mt-4 text-sm">
-  <span class="text-gray-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-  <div class="flex gap-2">
-    {% if page.has_previous %}<a class="btn btn-ghost btn-sm" href="?page={{ page.previous_page_number }}&path={{ path }}&status_code={{ status_code }}">Previous</a>{% endif %}
-    {% if page.has_next %}<a class="btn btn-ghost btn-sm" href="?page={{ page.next_page_number }}&path={{ path }}&status_code={{ status_code }}">Next</a>{% endif %}
-  </div>
-</div>
-{% endif %}
+{% include "components/pagination.html" with page=page %}
 {% endblock %}
