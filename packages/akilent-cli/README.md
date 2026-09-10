@@ -22,6 +22,8 @@ akilent logs tail
 | `akilent logs tail [--interval <s>]` | Poll for new messages and stream them. |
 | `akilent templates pull <slug> [--out file.json]` | Fetch a template as JSON. |
 | `akilent templates push <slug> --in file.json` | Update a template from a local JSON file. |
+| `akilent webhooks test --event <type> [--data <json>]` | Fan a synthetic event through your live webhook endpoints. |
+| `akilent webhooks listen [--port <n>] [--secret <whsec_...>] [--forward-to <url>]` | Run a local receiver that verifies signatures, prints events, and optionally re-POSTs each request to a local URL. Point a webhook endpoint at it via your own tunnel. |
 
 Auth resolution order: `--key` flag → `$AKILENT_API_KEY` → `~/.akilent/config.json`.
 Override the config path with `$AKILENT_CONFIG`.

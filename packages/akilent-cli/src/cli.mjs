@@ -1,5 +1,6 @@
 import { call } from "./api.mjs";
 import { configPath, loadConfig, resolveAuth, saveConfig } from "./config.mjs";
+import { listen as webhookListen } from "./webhooks.mjs";
 
 const HELP = `akilent — command-line interface for the Akilent email API
 
@@ -12,6 +13,8 @@ Usage:
   akilent logs tail [--interval <seconds>]
   akilent templates pull <slug> [--out <file.json>]
   akilent templates push <slug> --in <file.json>
+  akilent webhooks test --event <type> [--data <json>]
+  akilent webhooks listen [--port <n>] [--secret <whsec_...>] [--forward-to <url>]
 
 Auth resolution order: --key flag, $AKILENT_API_KEY, ${"~/.akilent/config.json"}.
 `;
@@ -156,6 +159,46 @@ async function main(argv, { out = console.log, err = console.error } = {}) {
           return 0;
         }
         err("templates: expected `pull` or `push`");
+        return 1;
+      }
+      case "webhooks": {
+        const sub = positional[1];
+        if (sub === "test") {
+          if (!flags.event || flags.event === true) {
+            err("webhooks test: --event <type> is required");
+            return 1;
+          }
+          let data = {};
+          if (flags.data && flags.data !== true) {
+            try {
+              data = JSON.parse(flags.data);
+            } catch {
+              err("webhooks test: --data must be valid JSON");
+              return 1;
+            }
+          }
+          const r = await call(baseUrl, apiKey, "POST", "/api/v1/webhooks/test", {
+            body: { event: flags.event, data },
+          });
+          out(JSON.stringify(r, null, 2));
+          return 0;
+        }
+        if (sub === "listen") {
+          const port = Number(flags.port || 4318);
+          const secret =
+            (flags.secret && flags.secret !== true && flags.secret) ||
+            loadConfig().webhookSecret ||
+            null;
+          const forwardTo = flags["forward-to"] && flags["forward-to"] !== true ? flags["forward-to"] : null;
+          const { port: bound } = await webhookListen({ port, secret, forwardTo, out });
+          out(`Listening for webhooks on http://localhost:${bound}/`);
+          out(secret ? "Signatures will be verified." : "No --secret given — signatures will not be verified.");
+          if (forwardTo) out(`Forwarding each request to ${forwardTo}`);
+          out("Point a webhook endpoint (via your own tunnel) at this URL. Ctrl-C to stop.");
+          await new Promise(() => {}); // run until killed
+          return 0;
+        }
+        err("usage: akilent webhooks <test|listen> ...");
         return 1;
       }
       default:
