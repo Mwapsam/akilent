@@ -131,7 +131,15 @@
 
         <div class="flex-1 min-w-0">{% block breadcrumbs %}{% endblock %}</div>
 
-        {# Command palette trigger #}
+        {# Mobile search trigger #}
+        <button type="button"
+                class="sm:hidden btn btn-ghost btn-icon"
+                @click="$dispatch('palette-open')"
+                aria-label="Search">
+          {% include "components/icon.html" with name="search" class="w-5 h-5" %}
+        </button>
+
+        {# Command palette trigger — desktop #}
         <button type="button"
                 class="hidden sm:flex items-center gap-2 rounded-xl border border-border
                        px-2.5 py-1.5 text-sm text-gray-400 hover:text-ink hover:border-border-strong"
@@ -145,8 +153,8 @@
         {# + Send #}
         {% include "components/send_menu.html" %}
 
-        {# Workspace badge #}
-        <div class="hidden lg:flex items-center gap-2 text-sm text-gray-500">
+        {# Workspace badge — visible on md and up #}
+        <div class="hidden md:flex items-center gap-2 text-sm text-gray-500">
           {% if is_admin %}
             <span class="badge badge-brand">Admin · all tenants</span>
           {% elif account %}
