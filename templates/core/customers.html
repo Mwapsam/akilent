@@ -19,7 +19,7 @@
       {% for r in rows %}
       <tr>
         <td>
-          <div class="font-medium text-ink">{{ r.account.company_name }}</div>
+          <a href="/manage/customers/{{ r.account.pk }}/" class="font-medium text-ink hover:text-brand-600">{{ r.account.company_name }}</a>
           <div class="text-xs text-gray-400">{{ r.account.created_at|date:"M j, Y" }}{% if not r.account.is_active %} · <span class="text-red-500">inactive</span>{% endif %}</div>
         </td>
         <td class="text-gray-500">{% if r.owner %}{{ r.owner.email|default:r.owner.username }}{% else %}—{% endif %}</td>

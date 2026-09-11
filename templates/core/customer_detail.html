@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}{{ account.company_name }} — Admin{% endblock %}
+
+{% block page_header %}
+<div class="mb-6">
+  <a href="/manage/customers/" class="text-sm text-gray-500 hover:text-ink mb-2 inline-block">← Back to customers</a>
+  <h1 class="text-2xl font-semibold tracking-tight">{{ account.company_name }}</h1>
+  <p class="text-sm text-gray-500 mt-1">Created {{ account.created_at|date:"M j, Y" }}{% if not account.is_active %} · <span class="text-red-500">inactive</span>{% endif %}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# Overview Card #}
+  <div class="card card-pad">
+    <div class="flex items-start justify-between mb-4">
+      <h2 class="text-lg font-semibold">Overview</h2>
+      <div class="flex items-center gap-2">
+        <form method="post" action="/manage/customers/{{ account.pk }}/toggle/" class="inline">
+          {% csrf_token %}
+          <button class="btn btn-sm {% if account.is_active %}btn-danger-ghost{% else %}btn-secondary{% endif %}" type="submit">
+            {% if account.is_active %}Deactivate{% else %}Activate{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Plan</p>
+        <p class="text-lg font-semibold mt-1">{{ subscription.plan.name|default:"—" }}</p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Status</p>
+        <p class="mt-1">
+          {% if subscription %}
+            {% if subscription.status == 'active' %}<span class="badge badge-success">Active</span>
+            {% elif subscription.status == 'trialing' %}<span class="badge badge-info">Trialing</span>
+            {% elif subscription.status == 'past_due' %}<span class="badge badge-warning">Past due</span>
+            {% else %}<span class="badge badge-neutral capitalize">{{ subscription.status }}</span>{% endif %}
+          {% else %}<span class="badge badge-neutral">None</span>{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Members</p>
+        <p class="text-lg font-semibold mt-1">{{ members|length }}</p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Emails (this month)</p>
+        <p class="text-lg font-semibold mt-1">{{ emails_used }}</p>
+      </div>
+    </div>
+
+    {% if subscription %}
+    <div class="mt-4 pt-4 border-t border-border">
+      <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'edit-subscription')">Edit plan & status</button>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Module Subscriptions #}
+  <div class="card card-pad">
+    <h2 class="text-lg font-semibold mb-4">Modules</h2>
+    <div class="table-wrap">
+      <table class="table text-sm">
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Enabled</th>
+            <th>Billing Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% regroup module_subscriptions by module as modules_by_name %}
+          {% for module_value, module_name in module_choices %}
+          <tr>
+            <td>{{ module_name }}</td>
+            <td>
+              {% with ms=module_subscriptions|dictsort:"module"|first %}
+              <form method="post" action="/manage/customers/{{ account.pk }}/modules/{{ module_value }}/toggle/" class="inline" data-ajax>
+                {% csrf_token %}
+                <button type="submit" class="badge {% if ms.enabled %}badge-success{% else %}badge-neutral{% endif %}">
+                  {% if ms.enabled %}Enabled{% else %}Disabled{% endif %}
+                </button>
+              </form>
+              {% endwith %}
+            </td>
+            <td>
+              {% for ms in module_subscriptions %}
+                {% if ms.module == module_value %}
+                  {% if ms.billing_status == 'active' %}<span class="badge badge-success">Active</span>
+                  {% elif ms.billing_status == 'past_due' %}<span class="badge badge-warning">Past due</span>
+                  {% elif ms.billing_status == 'suspended' %}<span class="badge badge-danger">Suspended</span>
+                  {% endif %}
+                {% endif %}
+              {% empty %}<span class="badge badge-neutral">—</span>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# Send Reputation / Health #}
+  {% if send_reputation %}
+  <div class="card card-pad">
+    <h2 class="text-lg font-semibold mb-4">Email Health</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Status</p>
+        <p class="mt-1">
+          {% if send_reputation.state == 'ok' %}<span class="badge badge-success">OK</span>
+          {% elif send_reputation.state == 'warned' %}<span class="badge badge-warning">Warned</span>
+          {% elif send_reputation.state == 'halted' %}<span class="badge badge-danger">Halted</span>
+          {% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Bounce Rate</p>
+        <p class="text-lg font-semibold mt-1">{{ send_reputation.bounce_rate|floatformat:1 }}%</p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Complaint Rate</p>
+        <p class="text-lg font-semibold mt-1">{{ send_reputation.complaint_rate|floatformat:1 }}%</p>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-gray-500 uppercase">Sent (window)</p>
+        <p class="text-lg font-semibold mt-1">{{ send_reputation.sent }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Recent Payment Requests #}
+  {% if payment_requests %}
+  <div class="card card-pad">
+    <h2 class="text-lg font-semibold mb-4">Recent Payment Requests</h2>
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Plan</th>
+            <th>Reference</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in payment_requests %}
+          <tr>
+            <td data-label="Date">{{ req.created_at|date:"M j, Y H:i" }}</td>
+            <td data-label="Plan">{{ req.plan.name }}</td>
+            <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
+            <td data-label="Status">
+              {% if req.status == 'pending' %}<span class="badge badge-info">Pending</span>
+              {% elif req.status == 'approved' %}<span class="badge badge-success">Approved</span>
+              {% elif req.status == 'rejected' %}<span class="badge badge-danger">Rejected</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Recent Audit Log #}
+  {% if audit_logs %}
+  <div class="card card-pad">
+    <h2 class="text-lg font-semibold mb-4">Recent Activity</h2>
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in audit_logs %}
+          <tr>
+            <td data-label="Time">{{ log.timestamp|date:"M j, Y H:i" }}</td>
+            <td data-label="Action" class="font-mono text-xs">{{ log.action }}</td>
+            <td data-label="Resource">{{ log.resource_type }}: {{ log.resource_id }}</td>
+            <td data-label="Status">
+              {% if log.success %}<span class="badge badge-success">OK</span>
+              {% else %}<span class="badge badge-danger">Failed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Members #}
+  <div class="card card-pad">
+    <h2 class="text-lg font-semibold mb-4">Team Members</h2>
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in members %}
+          <tr>
+            <td data-label="Email">{{ m.user.email }}</td>
+            <td data-label="Name">{{ m.user.get_full_name|default:m.user.username }}</td>
+            <td data-label="Role" class="capitalize">{{ m.role }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-center text-gray-400 py-4">No members.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{# Edit Subscription Modal (reuse from customers.html) #}
+{% modal "edit-subscription" title="Edit subscription" size="md" %}
+  <form method="post" action="/manage/customers/{{ account.pk }}/subscription/" class="space-y-3">
+    {% csrf_token %}
+    <div>
+      <label class="label">Package</label>
+      <select name="plan" class="select">
+        {% for pl in plans %}
+          <option value="{{ pl.pk }}" {% if subscription and subscription.plan_id == pl.pk %}selected{% endif %}>{{ pl.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label">Status</label>
+      <select name="status" class="select">
+        {% for val, lbl in statuses %}
+          <option value="{{ val }}" {% if subscription and subscription.status == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex justify-end gap-2 pt-3 border-t border-border">
+      <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'edit-subscription')">Cancel</button>
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endblock %}

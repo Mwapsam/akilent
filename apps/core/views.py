@@ -11,12 +11,13 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts import api as accounts_api
 from apps.billing import api as billing_api
-from apps.billing.models import Plan, Subscription, UsageSummary
+from apps.billing.models import Plan, Subscription, UsageSummary, ModuleSubscription, ManualPaymentRequest
 from apps.core import docs as docs_kb
 from apps.core import help as help_kb
 from apps.core.forms import ConfigurationForm
 from apps.core.models import Configurations, SiteSettings, MailProviderSettings
 from apps.core.utils import admin_required
+from apps.email.models import AuditLog, SendReputation
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -93,6 +94,59 @@ def customer_subscription(request, pk):
         request, f"{a.company_name}: subscription set to {plan.name} ({status})."
     )
     return redirect("core:customers")
+
+
+@admin_required
+@require_POST
+def customer_module_toggle(request, pk, module):
+    from apps.accounts.models import Account  # Admin view, direct import okay
+
+    if module not in dict(ModuleSubscription.MODULE_CHOICES):
+        messages.error(request, "Invalid module.")
+        return redirect("core:customer-detail", pk=pk)
+
+    a = get_object_or_404(Account, pk=pk)
+    ms, created = ModuleSubscription.objects.get_or_create(
+        account=a,
+        module=module,
+        defaults={"enabled": False},
+    )
+    ms.enabled = not ms.enabled
+    ms.save(update_fields=["enabled"])
+    messages.success(
+        request, f"{ms.get_module_display()} {'enabled' if ms.enabled else 'disabled'}."
+    )
+    return redirect("core:customer-detail", pk=pk)
+
+
+@admin_required
+def customer_detail(request, pk):
+    from apps.accounts.models import Account  # Admin view, direct import okay
+
+    a = get_object_or_404(Account, pk=pk)
+
+    subscription = billing_api.get_subscription(a)
+    emails_used = billing_api.get_email_usage(a)
+    module_subscriptions = ModuleSubscription.objects.filter(account=a)
+    audit_logs = AuditLog.objects.filter(account=a).order_by("-timestamp")[:20]
+    payment_requests = ManualPaymentRequest.objects.filter(account=a).order_by("-created_at")[:10]
+    send_reputation = SendReputation.objects.filter(account=a).first()
+    members = a.memberships.select_related("user").order_by("user__email")
+
+    return render(request, "core/customer_detail.html", {
+        "account": a,
+        "subscription": subscription,
+        "emails_used": emails_used,
+        "module_subscriptions": module_subscriptions,
+        "module_choices": ModuleSubscription.MODULE_CHOICES,
+        "billing_status_choices": ModuleSubscription.BILLING_STATUS_CHOICES,
+        "audit_logs": audit_logs,
+        "payment_requests": payment_requests,
+        "send_reputation": send_reputation,
+        "members": members,
+        "plans": Plan.objects.all().order_by("price_monthly"),
+        "statuses": Subscription.STATUS_CHOICES,
+    })
 
 
 # --- Settings -----------------------------------------------------------------
