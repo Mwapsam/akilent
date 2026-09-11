@@ -363,8 +363,15 @@
     transition-timing-function: var(--ease-emphasized);
   }
   .nav-link:hover { background-color: var(--color-hover); color: var(--color-ink); }
+  .nav-link:focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: -2px;
+  }
   .nav-link-active,
   .nav-link-active:hover { @apply bg-brand-50 text-brand-700; }
+  .nav-link-active:focus-visible {
+    outline-color: var(--color-brand-700);
+  }
 
   /* Group heading in the sidebar. */
   .nav-group-label {

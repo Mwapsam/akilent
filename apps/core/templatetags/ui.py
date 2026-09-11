@@ -71,6 +71,9 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
     """Canonical dropdown menu. Put the trigger label in `label` (or pass
     `button_class="unstyled"` and supply your own trigger as the first child
     wrapped in <template x-slot:trigger> … not supported; keep it simple)."""
+    import hashlib
+    # Generate a stable unique id based on content hash for a11y linkage
+    menu_id = "dropdown-" + hashlib.md5(content.encode()).hexdigest()[:8]
     return mark_safe(
         render_to_string(
             "components/_dropdown.html",
@@ -79,6 +82,7 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
                 "label": label,
                 "align_class": "left-0" if align == "left" else "right-0",
                 "button_class": button_class,
+                "id": menu_id,
             },
         )
     )

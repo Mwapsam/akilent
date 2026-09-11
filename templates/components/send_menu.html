@@ -2,19 +2,28 @@
 Reinforces that Email and WhatsApp are channels of one product.
 Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
 {% endcomment %}
-<div x-data="{ open: false }" @keydown.escape.window="open = false" @send-menu-open.window="open = true">
+<div x-data="{ open: false, trigger: null }" @keydown.escape.window="open = false" @send-menu-open.window="open = true">
   <button type="button"
+          id="send-menu-trigger"
           class="btn btn-primary btn-sm"
-          @click="open = true"
+          @click="trigger = $event.target; open = true"
           aria-haspopup="dialog"
+          aria-controls="send-menu-dialog"
           :aria-expanded="open">
     {% include "components/icon.html" with name="plus" class="w-4 h-4" %}
     <span class="hidden sm:inline">Send</span>
   </button>
 
   <template x-teleport="body">
-    <div x-show="open" x-cloak class="fixed inset-0" style="z-index: var(--z-modal)"
-         role="dialog" aria-modal="true" aria-label="Send a message">
+    <div id="send-menu-dialog"
+         x-show="open"
+         x-cloak
+         class="fixed inset-0"
+         style="z-index: var(--z-modal)"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Send a message"
+         @modal-close="open = false; if (trigger) trigger.focus()">
       <div class="absolute inset-0 bg-gray-900/50" x-transition.opacity
            @click="open = false" aria-hidden="true"></div>
 
@@ -27,7 +36,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
           <div class="flex items-start justify-between gap-4">
             <h2 class="text-lg font-semibold text-ink">What do you want to send?</h2>
             <button type="button" class="btn btn-ghost btn-icon btn-sm -mt-1 -mr-1"
-                    @click="open = false" aria-label="Close">
+                    @click="open = false; if (trigger) trigger.focus()" aria-label="Close">
               {% include "components/icon.html" with name="x" class="w-5 h-5" %}
             </button>
           </div>

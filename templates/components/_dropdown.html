@@ -1,16 +1,26 @@
 {% comment %}Canonical dropdown menu. Rendered by {% dropdown %} (apps/core/templatetags/ui.py).
 The slot holds menu rows — typically <a class="nav-link w-full"> or <button>.
 {% endcomment %}
-<div class="relative inline-block" x-data="{ open: false }"
-     @keydown.escape="open = false" @click.outside="open = false">
+<div class="relative inline-block" x-data="{ open: false, trigger: null }"
+     @keydown.escape="open = false">
   <button type="button" class="{{ button_class }}"
-          @click="open = !open" :aria-expanded="open" aria-haspopup="menu">
+          @click="trigger = $event.target; open = !open"
+          :aria-expanded="open"
+          aria-haspopup="menu"
+          :aria-controls="open ? '{{ id }}-menu' : null">
     <span>{{ label }}</span>
     {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-gray-400" %}
   </button>
-  <div x-show="open" x-cloak x-transition.opacity
+  <div id="{{ id }}-menu"
+       x-show="open"
+       x-cloak
+       x-transition.opacity
+       x-trap.noscroll="open"
+       @click.outside="open = false"
        class="absolute {{ align_class }} mt-2 w-56 card shadow-pop p-1.5"
-       style="z-index: var(--z-dropdown)" role="menu">
+       style="z-index: var(--z-dropdown)"
+       role="menu"
+       @close="open = false; if (trigger) trigger.focus()">
     {{ slot }}
   </div>
 </div>
