@@ -31,6 +31,19 @@
     else _toastQueue.push(t); // before Alpine boots
   };
 
+  // --- Navigation keyboard shortcuts ------------------------------------
+  window.navFocusLink = function (e, dir) {
+    const link = e.target.closest('a[data-nav-link]');
+    if (!link) return;
+    const group = link.closest('[role="group"]');
+    if (!group) return;
+    const links = Array.from(group.querySelectorAll('a[data-nav-link]'));
+    const idx = links.indexOf(link);
+    if (idx === -1) return;
+    const next = dir === 'up' ? links[idx - 1] : links[idx + 1];
+    if (next) { e.preventDefault(); next.focus(); }
+  };
+
   // --- Alpine stores -----------------------------------------------------
   document.addEventListener("alpine:init", function () {
     Alpine.store("toasts", {

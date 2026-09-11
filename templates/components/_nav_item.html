@@ -4,11 +4,14 @@
            (defaults to href)
   exact  — match the path exactly rather than by prefix
   collapsible — hide the label text when the desktop rail is collapsed
+  group_key  — identifies the nav group for arrow-key navigation
 {% endcomment %}
 {% load nav %}
 {% is_nav_active match|default:href exact=exact as on %}
 <a href="{{ href }}" title="{{ label }}"
    class="nav-link {% if on %}nav-link-active{% endif %}"
+   data-nav-link
+   data-nav-group="{{ group_key }}"
    {% if on %}aria-current="page"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0" %}
   {% if collapsible %}

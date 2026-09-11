@@ -1,0 +1,10 @@
+{% comment %}Placeholder row while async table content loads.
+Usage: {% include "components/skeleton_row.html" with cols=5 %}
+{% endcomment %}
+<tr class="skeleton-row" aria-hidden="true">
+  {% for i in "x"|rjust:cols %}
+  <td data-label=" " class="h-12">
+    <div class="skeleton h-4 w-3/4"></div>
+  </td>
+  {% endfor %}
+</tr>

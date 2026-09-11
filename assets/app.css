@@ -355,6 +355,8 @@
 
   /* Skeleton ------------------------------------------------------------ */
   .skeleton { @apply animate-pulse rounded-md; background-color: var(--color-border); }
+  .skeleton-row { @apply border-b border-border; }
+  .skeleton-row td { @apply py-3 px-4; }
 
   /* App shell nav ------------------------------------------------------- */
   .nav-link {

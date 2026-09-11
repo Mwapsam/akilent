@@ -1,43 +1,58 @@
 {% comment %}Primary nav. Shared by the desktop sidebar and the mobile drawer.
 Pass collapsible=True in the desktop sidebar so group labels + link text hide
 when the rail is collapsed (icons + tooltips remain).
-Active state comes from apps/core/templatetags/nav.py (path-prefix based).{% endcomment %}
-<nav class="flex-1 space-y-0.5 px-3" aria-label="Primary">
+Active state comes from apps/core/templatetags/nav.py (path-prefix based).
+Arrow Up/Down navigate within groups; Tab moves between groups.{% endcomment %}
+<nav class="flex-1 space-y-0.5 px-3" aria-label="Primary" @keydown.arrow-up.window="navFocusLink($event, 'up')" @keydown.arrow-down.window="navFocusLink($event, 'down')">
 
   {% include "components/_nav_item.html" with href="/dashboard/" label="Dashboard" icon="home" exact=True collapsible=collapsible %}
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Send</p>
-  {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/scheduled/" label="Scheduled" icon="clock" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/email/templates/" label="Templates" icon="layout-template" collapsible=collapsible %}
+  <div role="group" aria-label="Send">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Send</p>
+    {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" collapsible=collapsible group_key="send" %}
+    {% include "components/_nav_item.html" with href="/scheduled/" label="Scheduled" icon="clock" collapsible=collapsible group_key="send" %}
+    {% include "components/_nav_item.html" with href="/email/templates/" label="Templates" icon="layout-template" collapsible=collapsible group_key="send" %}
+  </div>
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Automate</p>
-  {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" collapsible=collapsible %}
+  <div role="group" aria-label="Automate">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Automate</p>
+    {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" collapsible=collapsible group_key="automate" %}
+  </div>
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Audience</p>
-  {% include "components/_nav_item.html" with href="/contacts/" label="Contacts" icon="users" collapsible=collapsible %}
+  <div role="group" aria-label="Audience">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Audience</p>
+    {% include "components/_nav_item.html" with href="/contacts/" label="Contacts" icon="users" collapsible=collapsible group_key="audience" %}
+  </div>
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Channels</p>
-  {% include "components/_nav_item.html" with href="/email/domains/" label="Email" icon="mail" match="email/domains" collapsible=collapsible %}
-  {% if WHATSAPP_ENABLED %}
-  {% include "components/_nav_item.html" with href="/whatsapp/numbers/" label="WhatsApp" icon="message-circle" match="whatsapp" collapsible=collapsible %}
-  {% endif %}
+  <div role="group" aria-label="Channels">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Channels</p>
+    {% include "components/_nav_item.html" with href="/email/domains/" label="Email" icon="mail" match="email/domains" collapsible=collapsible group_key="channels" %}
+    {% if WHATSAPP_ENABLED %}
+    {% include "components/_nav_item.html" with href="/whatsapp/numbers/" label="WhatsApp" icon="message-circle" match="whatsapp" collapsible=collapsible group_key="channels" %}
+    {% endif %}
+  </div>
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Analytics</p>
-  {% include "components/_nav_item.html" with href="/email/insights/" label="Insights" icon="bar-chart" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/logs/messages/" label="Activity" icon="list" match="logs" collapsible=collapsible %}
+  <div role="group" aria-label="Analytics">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Analytics</p>
+    {% include "components/_nav_item.html" with href="/email/insights/" label="Insights" icon="bar-chart" collapsible=collapsible group_key="analytics" %}
+    {% include "components/_nav_item.html" with href="/logs/messages/" label="Activity" icon="list" match="logs" collapsible=collapsible group_key="analytics" %}
+  </div>
 
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Account</p>
-  {% include "components/_nav_item.html" with href="/billing/plans/" label="Billing" icon="card" match="billing" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="life-buoy" match="help" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/docs/" label="API docs" icon="code-bracket" match="docs" collapsible=collapsible %}
-  {% url 'settings-profile' as settings_url %}
-  {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings" collapsible=collapsible %}
+  <div role="group" aria-label="Account">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Account</p>
+    {% include "components/_nav_item.html" with href="/billing/plans/" label="Billing" icon="card" match="billing" collapsible=collapsible group_key="account" %}
+    {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="life-buoy" match="help" collapsible=collapsible group_key="account" %}
+    {% include "components/_nav_item.html" with href="/docs/" label="API docs" icon="code-bracket" match="docs" collapsible=collapsible group_key="account" %}
+    {% url 'settings-profile' as settings_url %}
+    {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings" collapsible=collapsible group_key="account" %}
+  </div>
 
   {% if user.is_superuser %}
-  <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %}>Admin</p>
-  {% include "components/_nav_item.html" with href="/manage/customers/" label="Customers" icon="building" match="manage/customers" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/manage/settings/" label="Admin settings" icon="sliders" match="manage/settings" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible %}
+  <div role="group" aria-label="Admin">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Admin</p>
+    {% include "components/_nav_item.html" with href="/manage/customers/" label="Customers" icon="building" match="manage/customers" collapsible=collapsible group_key="admin" %}
+    {% include "components/_nav_item.html" with href="/manage/settings/" label="Admin settings" icon="sliders" match="manage/settings" collapsible=collapsible group_key="admin" %}
+    {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible group_key="admin" %}
+  </div>
   {% endif %}
 </nav>

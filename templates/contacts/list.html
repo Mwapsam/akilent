@@ -7,7 +7,7 @@
   <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
 </header>
 
-<form method="get" class="flex flex-wrap items-center gap-2 mb-4">
+<form method="get" class="flex flex-wrap items-center gap-2 mb-4" @submit="$el.classList.add('is-submitting')">
   <input type="search" name="q" value="{{ q }}" placeholder="Email contains…" class="input w-full sm:w-64" />
   <select name="status" class="select w-full sm:w-44">
     <option value="">Any status</option>
