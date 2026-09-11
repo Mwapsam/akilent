@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Platform Health — Admin{% endblock %}
+
+{% block page_header %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight">Platform Health</h1>
+  <p class="text-sm text-gray-500 mt-1">System-wide delivery, audit, and webhook status.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# Reputation Issues #}
+  <div>
+    <h2 class="text-lg font-semibold mb-4">Email Reputation Issues</h2>
+    {% if reputation_issues %}
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Status</th>
+            <th>Bounce Rate</th>
+            <th>Complaint Rate</th>
+            <th>Sent (window)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rep in reputation_issues %}
+          <tr>
+            <td data-label="Account"><a href="/manage/customers/{{ rep.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ rep.account.company_name }}</a></td>
+            <td data-label="Status">
+              {% if rep.state == 'warned' %}<span class="badge badge-warning">Warned</span>
+              {% elif rep.state == 'halted' %}<span class="badge badge-danger">Halted</span>
+              {% endif %}
+            </td>
+            <td data-label="Bounce Rate" class="font-mono">{{ rep.bounce_rate|floatformat:1 }}%</td>
+            <td data-label="Complaint Rate" class="font-mono">{{ rep.complaint_rate|floatformat:1 }}%</td>
+            <td data-label="Sent (window)" class="font-mono">{{ rep.sent }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card card-pad text-center py-8 text-gray-500">
+      <p class="flex items-center justify-center gap-2">
+        <span>✓</span> All accounts healthy
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Audit Failures #}
+  <div>
+    <h2 class="text-lg font-semibold mb-4">Audit Failures (Last 50)</h2>
+    {% if audit_failures %}
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Account</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in audit_failures %}
+          <tr>
+            <td data-label="Time">{{ log.timestamp|date:"M j H:i" }}</td>
+            <td data-label="Account"><a href="/manage/customers/{{ log.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ log.account.company_name }}</a></td>
+            <td data-label="Action" class="font-mono text-xs">{{ log.action }}</td>
+            <td data-label="Resource" class="text-gray-600">{{ log.resource_type }}: {{ log.resource_id }}</td>
+            <td data-label="Error" class="text-red-600 text-xs">{{ log.error|truncatewords:10 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card card-pad text-center py-8 text-gray-500">
+      <p class="flex items-center justify-center gap-2">
+        <span>✓</span> No failures
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Webhook Failures #}
+  <div>
+    <h2 class="text-lg font-semibold mb-4">Unprocessed Webhooks (Last 50)</h2>
+    {% if webhook_failures %}
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Received</th>
+            <th>Event Type</th>
+            <th>Attempts</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in webhook_failures %}
+          <tr>
+            <td data-label="Received">{{ event.created_at|date:"M j H:i" }}</td>
+            <td data-label="Event Type" class="font-mono text-xs">{{ event.event_type }}</td>
+            <td data-label="Attempts" class="font-mono">{{ event.attempts }}</td>
+            <td data-label="Error" class="text-red-600 text-xs">{{ event.error_message|truncatewords:10|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card card-pad text-center py-8 text-gray-500">
+      <p class="flex items-center justify-center gap-2">
+        <span>✓</span> All webhooks processed
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

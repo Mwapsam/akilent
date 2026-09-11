@@ -18,6 +18,7 @@ from apps.core.forms import ConfigurationForm
 from apps.core.models import Configurations, SiteSettings, MailProviderSettings
 from apps.core.utils import admin_required
 from apps.email.models import AuditLog, SendReputation
+from apps.whatsapp.models import WebhookEventLog
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -162,6 +163,27 @@ def billing_requests(request):
     return render(request, "core/billing_requests.html", {
         "pending": pending,
         "recent_resolved": recent_resolved,
+    })
+
+
+@admin_required
+def platform_health(request):
+    reputation_issues = SendReputation.objects.exclude(
+        state="ok"
+    ).select_related("account").order_by("-state")
+
+    audit_failures = AuditLog.objects.filter(
+        success=False
+    ).select_related("account").order_by("-timestamp")[:50]
+
+    webhook_failures = WebhookEventLog.objects.filter(
+        processed=False
+    ).order_by("-created_at")[:50]
+
+    return render(request, "core/platform_health.html", {
+        "reputation_issues": reputation_issues,
+        "audit_failures": audit_failures,
+        "webhook_failures": webhook_failures,
     })
 
 

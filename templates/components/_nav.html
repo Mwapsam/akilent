@@ -52,6 +52,7 @@ Arrow Up/Down navigate within groups; Tab moves between groups.{% endcomment %}
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Admin</p>
     {% include "components/_nav_item.html" with href="/manage/customers/" label="Customers" icon="building" match="manage/customers" collapsible=collapsible group_key="admin" %}
     {% include "components/_nav_item.html" with href="/manage/billing-requests/" label="Payment Requests" icon="credit-card" match="manage/billing-requests" collapsible=collapsible group_key="admin" %}
+    {% include "components/_nav_item.html" with href="/manage/health/" label="Platform Health" icon="heartbeat" match="manage/health" collapsible=collapsible group_key="admin" %}
     {% include "components/_nav_item.html" with href="/manage/settings/" label="Admin settings" icon="sliders" match="manage/settings" collapsible=collapsible group_key="admin" %}
     {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible group_key="admin" %}
   </div>
