@@ -36,7 +36,7 @@
     </a>
     <p class="text-xs text-gray-500 truncate">{{ asset.file.name }}</p>
     <p class="text-xs text-gray-400 mt-1">{{ asset.uploaded_at|date:"M j, H:i" }}</p>
-    <form method="post" action="/email/templates/assets/{{ asset.pk }}/delete/" onsubmit="return confirm('Delete this image?');" class="mt-2">
+    <form method="post" action="/email/templates/assets/{{ asset.pk }}/delete/" data-ajax data-confirm="Delete this image?" data-confirm-danger class="mt-2">
       {% csrf_token %}
       <button class="btn btn-danger-ghost btn-sm w-full" type="submit">Delete</button>
     </form>

@@ -7,7 +7,7 @@
   <p class="mt-1 text-sm text-gray-600">Everything queued to send later — single sends, campaigns, and recurring schedules, across every channel.</p>
 </header>
 
-<div x-data="scheduledView()">
+<div x-data="scheduledView()" @reschedule-submitted.window="handleRescheduleSubmit($event.detail)">
   <div class="tabs mb-5">
     <a href="?show=upcoming" class="tab {% if show == 'upcoming' %}tab-active{% endif %}">Upcoming</a>
     {% for value, label in status_choices %}
@@ -63,6 +63,25 @@
     {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign or a single send and it will show up here." action_url="/email/campaigns/new/" action_label="New campaign" %}
   </div>
   {% endif %}
+
+  {% modal "reschedule-modal" %}
+  <div class="space-y-4">
+    <h2 class="text-lg font-semibold text-ink">Reschedule</h2>
+    <p class="text-sm text-gray-600">When would you like to send this?</p>
+    <form @submit.prevent="
+      const input = $el.querySelector('input[type=datetime-local]');
+      if (!input.value) { window.toast('danger', 'Please select a date and time'); return; }
+      $dispatch('reschedule-submitted', input.value);
+      document.dispatchEvent(new CustomEvent('modal-close', { detail: 'reschedule-modal' }));
+    ">
+      <input type="datetime-local" class="input w-full" placeholder="Select date and time" required>
+      <div class="flex gap-2 mt-4">
+        <button type="button" class="btn btn-ghost btn-sm flex-1" @click="document.dispatchEvent(new CustomEvent('modal-close', { detail: 'reschedule-modal' }))">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm flex-1">Reschedule</button>
+      </div>
+    </form>
+  </div>
+  {% endmodal %}
 </div>
 
 <script>
@@ -82,10 +101,16 @@ function scheduledView() {
       if (r.ok) { document.getElementById(`job-${id}`).remove(); window.toast("success", "Scheduled item cancelled."); }
       else { const d = await r.json().catch(() => ({})); window.toast("danger", d.error || "Could not cancel."); }
     },
+    rescheduleId: null,
+    rescheduleWhen: "",
     async reschedule(id) {
-      const when = prompt("New time (ISO 8601, e.g. 2026-09-20T09:00:00-04:00):");
-      if (!when) return;
-      const r = await fetch(`/scheduled/${id}/reschedule/`, {
+      this.rescheduleId = id;
+      this.rescheduleWhen = "";
+      document.dispatchEvent(new CustomEvent("modal-open", { detail: "reschedule-modal" }));
+    },
+    async handleRescheduleSubmit(when) {
+      if (!when || !this.rescheduleId) return;
+      const r = await fetch(`/scheduled/${this.rescheduleId}/reschedule/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
         body: JSON.stringify({ scheduled_at: when }),

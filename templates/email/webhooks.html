@@ -84,7 +84,7 @@
           <button class="btn btn-secondary btn-sm" type="submit">Re-enable</button>
         </form>
         {% endif %}
-        <form method="post" action="/email/webhooks/{{ e.pk }}/delete/" onsubmit="return confirm('Delete this webhook endpoint?');">
+        <form method="post" action="/email/webhooks/{{ e.pk }}/delete/" data-ajax data-confirm="Delete this webhook endpoint?" data-confirm-danger>
           {% csrf_token %}
           <button class="btn btn-danger-ghost btn-sm" type="submit">Delete</button>
         </form>

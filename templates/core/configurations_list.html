@@ -82,7 +82,9 @@
                     <form method="post"
                           action="{% url 'core:delete-configuration' configuration.pk %}"
                           class="inline"
-                          onsubmit="return confirm('Delete this configuration?');">
+                          data-ajax
+                          data-confirm="Delete this configuration?"
+                          data-confirm-danger>
                       {% csrf_token %}
 
                       <button type="submit"
