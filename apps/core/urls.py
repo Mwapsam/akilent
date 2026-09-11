@@ -12,6 +12,7 @@ urlpatterns = [
     path("customers/<int:pk>/subscription/", views.customer_subscription, name="customer-subscription"),
     path("customers/<int:pk>/modules/<str:module>/toggle/", views.customer_module_toggle, name="customer-module-toggle"),
     path("settings/", views.settings_page, name="settings"),
+    path("billing-requests/", views.billing_requests, name="billing-requests"),
     path("settings/mail/", views.mail_settings_save, name="mail-settings"),
     path("settings/users/<int:pk>/toggle-admin/", views.user_toggle_admin, name="user-toggle-admin"),
     path("settings/configurations/", views.configurations_list, name="configurations-list"),

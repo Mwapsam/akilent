@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Payment Requests — Admin{% endblock %}
+
+{% block page_header %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight">Payment Requests</h1>
+  <p class="text-sm text-gray-500 mt-1">Offline payments awaiting approval.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# Pending Requests #}
+  <div>
+    <h2 class="text-lg font-semibold mb-4">Pending</h2>
+    {% if pending %}
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Submitted</th>
+            <th>Company</th>
+            <th>Plan</th>
+            <th>Reference</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in pending %}
+          <tr>
+            <td data-label="Submitted">{{ req.created_at|date:"M j, Y H:i" }}</td>
+            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Plan">{{ req.plan.name }}</td>
+            <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
+            <td data-label="Actions" class="text-right">
+              <div class="flex items-center justify-end gap-2">
+                <form method="post" action="{% url 'billing:manual-approve' req.pk %}" class="inline">
+                  {% csrf_token %}
+                  <button class="btn btn-success btn-sm">Approve</button>
+                </form>
+                <button type="button" class="btn btn-danger-ghost btn-sm" @click="$dispatch('modal-open', 'reject-{{ req.pk }}')">Reject</button>
+              </div>
+
+              {# Reject Modal #}
+              {% modal "reject-"|add:req.pk title="Reject payment request" size="sm" %}
+                <form method="post" action="{% url 'billing:manual-reject' req.pk %}" class="space-y-3">
+                  {% csrf_token %}
+                  <div>
+                    <label class="label">Rejection reason (optional)</label>
+                    <textarea name="note" class="textarea" placeholder="e.g., duplicate, wrong amount, etc."></textarea>
+                  </div>
+                  <div class="flex justify-end gap-2 pt-3 border-t border-border">
+                    <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'reject-{{ req.pk }}')">Cancel</button>
+                    <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+                  </div>
+                </form>
+              {% endmodal %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card card-pad text-center py-8 text-gray-500">
+      <p>No pending payment requests.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Recently Resolved #}
+  {% if recent_resolved %}
+  <div>
+    <h2 class="text-lg font-semibold mb-4">Recently Resolved</h2>
+    <div class="table-wrap">
+      <table class="table table--cards text-sm">
+        <thead>
+          <tr>
+            <th>Submitted</th>
+            <th>Company</th>
+            <th>Plan</th>
+            <th>Reference</th>
+            <th>Resolved</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in recent_resolved %}
+          <tr>
+            <td data-label="Submitted">{{ req.created_at|date:"M j, Y" }}</td>
+            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Plan">{{ req.plan.name }}</td>
+            <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
+            <td data-label="Resolved">{{ req.reviewed_at|date:"M j, Y" }}</td>
+            <td data-label="Status">
+              {% if req.status == 'approved' %}<span class="badge badge-success">Approved</span>
+              {% elif req.status == 'rejected' %}<span class="badge badge-danger">Rejected</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

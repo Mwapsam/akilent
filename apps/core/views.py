@@ -149,6 +149,22 @@ def customer_detail(request, pk):
     })
 
 
+@admin_required
+def billing_requests(request):
+    pending = ManualPaymentRequest.objects.filter(
+        status=ManualPaymentRequest.PENDING
+    ).select_related("account", "plan").order_by("-created_at")
+
+    recent_resolved = ManualPaymentRequest.objects.exclude(
+        status=ManualPaymentRequest.PENDING
+    ).select_related("account", "plan").order_by("-reviewed_at")[:10]
+
+    return render(request, "core/billing_requests.html", {
+        "pending": pending,
+        "recent_resolved": recent_resolved,
+    })
+
+
 # --- Settings -----------------------------------------------------------------
 
 @admin_required
