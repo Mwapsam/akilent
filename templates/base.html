@@ -18,9 +18,9 @@
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  {# Alpine must load first so plugins (focus) can register with it before app.js runs #}
-  <script defer src="{% static 'js/alpine.min.js' %}"></script>
+  {# Plugin scripts load BEFORE Alpine core so they can register via Alpine.plugin() before Alpine.start() fires #}
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data>
