@@ -4,7 +4,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
 {% endcomment %}
 <div x-data="commandPalette()"
      @keydown.window="onKey($event)"
-     @palette-open.window="openPalette()">
+     @palette-open.window="openPalette($event)">
   <template x-teleport="body">
     <div x-show="open" x-cloak class="fixed inset-0" style="z-index: var(--z-modal)"
          role="dialog" aria-modal="true" aria-label="Command palette">
@@ -57,6 +57,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       open: false,
       q: "",
       active: 0,
+      trigger: null, // Track the element that triggered open for focus return
       items: [
         { group: "Go to", label: "Dashboard", href: "/dashboard/" },
         { group: "Go to", label: "Campaigns", href: "/email/campaigns/" },
@@ -87,14 +88,19 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       },
       onKey(e) {
         const k = e.key.toLowerCase();
-        if ((e.metaKey || e.ctrlKey) && k === "k") { e.preventDefault(); this.openPalette(); }
+        if ((e.metaKey || e.ctrlKey) && k === "k") { e.preventDefault(); this.openPalette(e); }
         else if (this.open && k === "escape") { this.close(); }
       },
-      openPalette() {
+      openPalette(e) {
+        this.trigger = e && e.target; // Save the element that triggered open
         this.open = true; this.q = ""; this.active = 0;
         this.$nextTick(() => this.$refs.input && this.$refs.input.focus());
       },
-      close() { this.open = false; },
+      close() {
+        this.open = false;
+        // Return focus to the trigger that opened the palette
+        if (this.trigger) { this.$nextTick(() => this.trigger.focus()); }
+      },
       move(d) {
         const n = this.filtered.length;
         if (!n) return;

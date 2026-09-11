@@ -162,6 +162,10 @@
   --z-modal: 1050;
   --z-toast: 1080;
 
+  /* Sidebar layout dimensions (icon rail at md, collapsible full at lg). */
+  --sidebar-rail-w: 4.75rem;
+  --sidebar-full-w: 16rem;
+
   /* Motion. */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }

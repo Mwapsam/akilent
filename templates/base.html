@@ -18,9 +18,10 @@
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {# Alpine must load first so plugins (focus) can register with it before app.js runs #}
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
-  <script defer src="{% static 'js/alpine.min.js' %}"></script>
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data>
 
@@ -33,10 +34,11 @@
   {% if user.is_authenticated %}
 
     {# ─── Desktop sidebar — icon rail at md, full (collapsible) at lg ──────── #}
-    <aside class="hidden md:flex md:flex-col fixed inset-y-0 left-0 w-[4.75rem] bg-surface
+    {# Three-tier layout: mobile drawer (below md) / md icon-rail / lg collapsible full. #}
+    <aside class="hidden md:flex md:flex-col fixed inset-y-0 left-0 bg-surface
                   border-r border-border transition-[width] duration-200"
-           :class="$store.ui.sidebarCollapsed ? 'lg:w-[4.75rem]' : 'lg:w-64'"
-           style="z-index: var(--z-sticky)">
+           style="width: var(--sidebar-rail-w); z-index: var(--z-sticky)"
+           :style="window.matchMedia('(min-width: 1024px)').matches && !$store.ui.sidebarCollapsed ? 'width: var(--sidebar-full-w)' : null">
 
       <div class="h-16 flex items-center gap-2 px-4 border-b border-border">
         {% include "components/brand_mark.html" with class="w-9 h-9" %}
@@ -111,8 +113,8 @@
 
   {# ─── Main column ─────────────────────────────────────────────────────── #}
   {% if user.is_authenticated %}
-    <div class="transition-[padding] duration-200 md:pl-[4.75rem]"
-         :class="$store.ui.sidebarCollapsed ? 'lg:pl-[4.75rem]' : 'lg:pl-64'">
+    <div class="transition-[padding] duration-200"
+         :style="`padding-left: ${window.matchMedia('(min-width: 768px)').matches ? (window.matchMedia('(min-width: 1024px)').matches && !$store.ui.sidebarCollapsed ? 'var(--sidebar-full-w)' : 'var(--sidebar-rail-w)') : '0'}`">
 
       {# Topbar #}
       <header class="sticky top-0 h-16 bg-surface/90 backdrop-blur border-b border-border
@@ -158,17 +160,21 @@
                   class="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-canvas"
                   @click="open = !open"
                   :aria-expanded="open"
-                  aria-haspopup="true">
+                  aria-haspopup="menu"
+                  aria-controls="user-menu-panel">
             <span class="inline-flex items-center justify-center w-8 h-8 rounded-full
-                         bg-brand-100 text-brand-700 text-sm font-semibold">
+                         bg-brand-100 text-brand-700 text-sm font-semibold"
+                  aria-hidden="true">
               {{ user.get_username|default:"?"|first|upper }}
             </span>
             {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-gray-400" %}
           </button>
 
-          <div x-show="open"
+          <div id="user-menu-panel"
+               x-show="open"
                x-cloak
                x-transition.opacity
+               x-trap.noscroll="open"
                @click.outside="open = false"
                class="absolute right-0 mt-2 w-56 card shadow-pop p-1.5"
                style="z-index: var(--z-dropdown)"
@@ -233,13 +239,22 @@
 
   {# ─── Server-side flash messages → toasts ────────────────────────────── #}
   {% if messages %}
+    {% with messages_data=messages|dictsort:"tags" %}
+      <script type="application/json" id="flash-messages">
+        [{% for m in messages %}{"message":"{{ m|escapejs }}","tags":"{{ m.tags }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
+      </script>
+    {% endwith %}
     <div x-data x-init="
-      {% for m in messages %}
-        window.toast(
-          '{% if m.tags == 'error' %}danger{% elif m.tags == 'success' %}success{% elif m.tags == 'warning' %}warning{% else %}info{% endif %}',
-          '{{ m|escapejs }}'
-        );
-      {% endfor %}
+      const el = document.getElementById('flash-messages');
+      if (el) {
+        try {
+          const messages = JSON.parse(el.textContent);
+          messages.forEach(m => {
+            const type = m.tags === 'error' ? 'danger' : (m.tags || 'info');
+            window.toast(type, m.message);
+          });
+        } catch (e) { console.error('Flash message parse error:', e); }
+      }
     "></div>
   {% endif %}
 
