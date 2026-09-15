@@ -611,13 +611,27 @@
   </main>
 
   <footer class="border-t border-hairline">
-    <div class="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-lo">
-      <span>© {{ site.app_name|default:"Automator" }} · Communications infrastructure for business</span>
-      <span class="flex items-center gap-4">
-        <a href="#platform" class="hover:text-white">Platform</a>
-        <a href="#pricing" class="hover:text-white">Pricing</a>
-        <a href="{% url 'docs' %}" class="hover:text-white">Documentation</a>
-      </span>
+    <div class="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-2 gap-8 font-mono text-xs text-lo">
+      <div>
+        <p class="text-white font-medium mb-2">Contact us</p>
+        <p class="not-italic leading-relaxed">
+          Mr Samuel Chimfwembe<br>
+          Block 3 Flat 12 Kajema Flats<br>
+          Chilenje, Lusaka
+        </p>
+        <p class="mt-2">
+          <a href="tel:+260963447432" class="hover:text-white">+260 96 344 7432</a><br>
+          <a href="tel:+260971903744" class="hover:text-white">+260 97 190 3744</a>
+        </p>
+      </div>
+      <div class="flex flex-col sm:items-end justify-between gap-3">
+        <span class="flex items-center gap-4">
+          <a href="#platform" class="hover:text-white">Platform</a>
+          <a href="#pricing" class="hover:text-white">Pricing</a>
+          <a href="{% url 'docs' %}" class="hover:text-white">Documentation</a>
+        </span>
+        <span>© {{ site.app_name|default:"Automator" }} · Communications infrastructure for business</span>
+      </div>
     </div>
   </footer>
 
