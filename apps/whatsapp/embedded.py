@@ -98,11 +98,19 @@ def discover_waba_and_phone(access_token: str) -> tuple[list[str], dict]:
         raise EmbeddedSignupError(
             (data.get("error") or {}).get("message") or "Could not verify access token."
         )
+    logger.info("discover_waba_and_phone: debug_token data=%s", token_data)
 
     waba_ids: list[str] = []
     for scope in token_data.get("granular_scopes") or []:
         if scope.get("scope") == "whatsapp_business_management":
             waba_ids.extend(scope.get("target_ids") or [])
+
+    if not waba_ids:
+        # granular_scopes.target_ids often doesn't include a WABA that was
+        # just *created* during Embedded Signup (as opposed to an existing
+        # one the user already owned) — fall back to walking the businesses
+        # this token can see and asking each for its owned WABAs.
+        waba_ids = _discover_waba_ids_via_businesses(access_token)
 
     if not waba_ids:
         raise EmbeddedSignupError(
@@ -126,7 +134,61 @@ def discover_waba_and_phone(access_token: str) -> tuple[list[str], dict]:
             )
             phone_numbers_by_waba[waba_id] = []
 
+    logger.info(
+        "discover_waba_and_phone: waba_ids=%s phone_numbers=%s",
+        waba_ids, phone_numbers_by_waba,
+    )
     return waba_ids, phone_numbers_by_waba
+
+
+def _discover_waba_ids_via_businesses(access_token: str) -> list[str]:
+    """Fallback: enumerate businesses this token can see and their owned WABAs.
+
+    Used when ``debug_token``'s ``granular_scopes`` doesn't list a WABA
+    directly — which happens for a WABA created fresh during Embedded Signup,
+    since ``target_ids`` there tends to reflect pre-existing shared assets.
+    """
+    resp = requests.get(
+        f"{GRAPH}/{_version()}/me/businesses",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code != 200:
+        logger.warning(
+            "discover_waba_and_phone: me/businesses failed (%s): %s",
+            resp.status_code, resp.text[:300],
+        )
+        return []
+
+    businesses = data.get("data") or []
+    logger.info("discover_waba_and_phone: me/businesses=%s", businesses)
+
+    waba_ids: list[str] = []
+    for business in businesses:
+        business_id = business.get("id")
+        if not business_id:
+            continue
+        resp = requests.get(
+            f"{GRAPH}/{_version()}/{business_id}/owned_whatsapp_business_accounts",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=_TIMEOUT,
+        )
+        data = resp.json() if resp.content else {}
+        if resp.status_code != 200:
+            logger.warning(
+                "discover_waba_and_phone: owned_whatsapp_business_accounts failed "
+                "for business=%s (%s): %s",
+                business_id, resp.status_code, resp.text[:300],
+            )
+            continue
+        wabas = data.get("data") or []
+        logger.info(
+            "discover_waba_and_phone: business=%s owned_wabas=%s", business_id, wabas
+        )
+        waba_ids.extend(w["id"] for w in wabas if w.get("id"))
+
+    return waba_ids
 
 
 def register_phone_number(phone_number_id: str, access_token: str, pin: str) -> None:

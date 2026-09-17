@@ -318,10 +318,21 @@ def connect_redirect_callback(request):
         for phone in phone_numbers_by_waba.get(waba_id, [])
     ]
     if not candidates:
-        messages.error(
-            request,
-            "No phone number was found on the connected WhatsApp Business Account.",
+        logger.error(
+            "connect_redirect_callback: no candidates. waba_ids=%s phone_numbers_by_waba=%s",
+            waba_ids, phone_numbers_by_waba,
         )
+        if waba_ids:
+            msg = (
+                "Found your WhatsApp Business Account, but it has no phone number "
+                "on it yet. Add one in Meta Business Manager, then try again."
+            )
+        else:
+            msg = (
+                "Meta didn't grant access to a WhatsApp Business Account. Make sure "
+                "you selected or created one during sign-in, and try again."
+            )
+        messages.error(request, msg)
         return redirect("whatsapp-numbers")
 
     if len(candidates) > 1:
