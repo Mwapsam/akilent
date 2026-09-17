@@ -11,7 +11,7 @@
 </header>
 
 <div class="card card-pad">
-  <form method="post" action="{% url 'whatsapp-connect-redirect-select' %}" class="space-y-3">
+  <form method="post" action="/whatsapp/connect/redirect/select/" class="space-y-3">
     {% csrf_token %}
     {% for candidate in candidates %}
     <label class="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:border-brand-400">

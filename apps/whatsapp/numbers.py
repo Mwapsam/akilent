@@ -212,6 +212,15 @@ def connect_complete(request):
             status=400,
         )
 
+    existing = WhatsAppBusinessNumber.objects.filter(
+        phone_number_id=phone_number_id
+    ).first()
+    if existing and existing.account_id != account.pk:
+        return JsonResponse(
+            {"error": "This WhatsApp number is already connected to another account."},
+            status=409,
+        )
+
     from apps.whatsapp.embedded import EmbeddedSignupError, exchange_code_for_token
 
     try:

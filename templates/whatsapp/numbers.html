@@ -69,7 +69,7 @@
         {% include "components/icon.html" with name="chat" class="w-4 h-4" %}
         Connect with WhatsApp
       </button>
-      <a id="wa-connect-redirect-link" href="{% url 'whatsapp-connect-redirect-start' %}"
+      <a id="wa-connect-redirect-link" href="/whatsapp/connect/redirect/"
          class="text-sm text-brand-600 hover:text-brand-700">
         Connect without popup
       </a>
@@ -299,7 +299,7 @@
       <p class="font-medium text-gray-800">Valid OAuth Redirect URI</p>
       <p>In the app's Facebook Login for Business settings, add this exact URL
         so "Connect without popup" works:
-        <code>{{ request.scheme }}://{{ request.get_host }}{% url 'whatsapp-connect-redirect-callback' %}</code>.
+        <code>{{ request.scheme }}://{{ request.get_host }}/whatsapp/connect/redirect/callback/</code>.
         This is separate from the popup/Embedded Signup <code>config_id</code> setup.</p>
     </div>
     <div>
