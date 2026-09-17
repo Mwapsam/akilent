@@ -8,5 +8,16 @@ urlpatterns = [
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),
     path("numbers/<int:pk>/delete/", numbers.numbers_delete, name="whatsapp-numbers-delete"),
     path("connect/complete/", numbers.connect_complete, name="whatsapp-connect-complete"),
+    path("connect/redirect/", numbers.connect_redirect_start, name="whatsapp-connect-redirect-start"),
+    path(
+        "connect/redirect/callback/",
+        numbers.connect_redirect_callback,
+        name="whatsapp-connect-redirect-callback",
+    ),
+    path(
+        "connect/redirect/select/",
+        numbers.connect_redirect_select,
+        name="whatsapp-connect-redirect-select",
+    ),
     path("webhook/", WhatsAppWebhookView.as_view(), name="whatsapp-webhook"),
 ]

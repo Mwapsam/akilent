@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Choose a number — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Choose a WhatsApp number</h1>
+  <p class="mt-1 text-sm text-gray-600">
+    Meta returned more than one phone number for this WhatsApp Business Account.
+    Pick the one to connect.
+  </p>
+</header>
+
+<div class="card card-pad">
+  <form method="post" action="{% url 'whatsapp-connect-redirect-select' %}" class="space-y-3">
+    {% csrf_token %}
+    {% for candidate in candidates %}
+    <label class="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:border-brand-400">
+      <input type="radio" name="phone_number_id" value="{{ candidate.id }}"
+             {% if forloop.first %}checked{% endif %} class="mt-1">
+      <span class="min-w-0">
+        <span class="block font-medium text-ink">{{ candidate.display_phone_number|default:candidate.id }}</span>
+        <span class="block text-xs text-gray-500 font-mono">Phone number ID: {{ candidate.id }}</span>
+        <span class="block text-xs text-gray-500 font-mono">WABA ID: {{ candidate.waba_id }}</span>
+      </span>
+    </label>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary mt-2">Connect this number</button>
+  </form>
+</div>
+{% endblock %}

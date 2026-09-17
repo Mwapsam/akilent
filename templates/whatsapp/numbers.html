@@ -64,10 +64,16 @@
   </p>
 
   {% if embedded_enabled %}
-    <button id="wa-connect-btn" class="btn btn-primary mt-4">
-      {% include "components/icon.html" with name="chat" class="w-4 h-4" %}
-      Connect with WhatsApp
-    </button>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <button id="wa-connect-btn" class="btn btn-primary">
+        {% include "components/icon.html" with name="chat" class="w-4 h-4" %}
+        Connect with WhatsApp
+      </button>
+      <a id="wa-connect-redirect-link" href="{% url 'whatsapp-connect-redirect-start' %}"
+         class="text-sm text-brand-600 hover:text-brand-700">
+        Connect without popup
+      </a>
+    </div>
     <p id="wa-connect-status" class="text-sm text-gray-500 mt-3 hidden"></p>
   {% else %}
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -90,13 +96,19 @@
       <span class="inline-flex transition-transform" :class="open ? 'rotate-180' : ''">
         {% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}
       </span>
-      Add a number manually instead
+      Option 3: Add a number manually with a System User token
     </button>
 
     <div x-show="open" x-cloak x-transition class="mt-4">
       <p class="text-xs text-gray-400 mb-3">
-        For testing, or when you already have a System User token. Values come
-        from Meta → WhatsApp → API Setup.
+        For testing, or when both connect options above are blocked. Steps: in
+        <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener"
+           class="underline">Meta Business Manager → System Users</a>, create or
+        pick a System User → <strong>Generate token</strong> → select your app,
+        check <code>whatsapp_business_messaging</code> and
+        <code>whatsapp_business_management</code> → assign the WABA to that
+        System User with full control. Then find the phone number ID and WABA
+        ID under Meta → WhatsApp → API Setup and paste everything below.
       </p>
       <form id="wa-manual-form" method="post" action="/whatsapp/numbers/create/" class="grid sm:grid-cols-2 gap-4">
         {% csrf_token %}
@@ -284,6 +296,13 @@
         <code>whatsapp_business_management</code>.</p>
     </div>
     <div>
+      <p class="font-medium text-gray-800">Valid OAuth Redirect URI</p>
+      <p>In the app's Facebook Login for Business settings, add this exact URL
+        so "Connect without popup" works:
+        <code>{{ request.scheme }}://{{ request.get_host }}{% url 'whatsapp-connect-redirect-callback' %}</code>.
+        This is separate from the popup/Embedded Signup <code>config_id</code> setup.</p>
+    </div>
+    <div>
       <p class="font-medium text-gray-800">A phone number</p>
       <p>A number not already on WhatsApp, or Meta's free test number
         (WhatsApp → API Setup) for a first run.</p>
@@ -436,9 +455,30 @@
     }
   }
 
+  function showRedirectFallback() {
+    const link = document.getElementById('wa-connect-redirect-link');
+    if (link) link.classList.add('font-medium');
+  }
+
+  // Best-effort popup-blocker test. Must run synchronously inside the click
+  // handler so it still counts as a user gesture.
+  function isPopupBlocked() {
+    let popup;
+    try {
+      popup = window.open('', '_blank', 'width=1,height=1');
+    } catch (e) {
+      return true;
+    }
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      return true;
+    }
+    popup.close();
+    return false;
+  }
+
   document.getElementById('wa-connect-btn').addEventListener('click', function () {
     connectBtn = this;
-    
+
     // Reset state for a fresh attempt
     waSession = {};
     pendingCode = null;
@@ -446,33 +486,53 @@
     if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
     setStatus('', false);
 
+    if (isPopupBlocked()) {
+      console.warn('[wa-embedded] popup blocked before FB.login was called.');
+      setStatus(
+        "Your browser blocked the popup. Allow popups for this site and try again, " +
+        "or use “Connect without popup” instead.",
+        true
+      );
+      showRedirectFallback();
+      return;
+    }
+
     // FIX: Exact match with official Meta documentation extras object
     FB.login(function (response) {
       console.log('[wa-embedded] FB.login response', response);
-      
+
       if (response.status === 'unknown') {
         console.warn('[wa-embedded] Login failed with status "unknown".');
-        setStatus('Login blocked or cancelled. Please allow popups and check app settings.', true);
+        setStatus(
+          "Popup sign-in didn't complete — this is usually caused by blocked " +
+          "third-party cookies. Try “Connect without popup” instead.",
+          true
+        );
+        showRedirectFallback();
         return;
       }
 
       const authResponse = response.authResponse;
       const code = authResponse && (authResponse.code || extractCodeFromSignedRequest(authResponse.signedRequest));
-      
+
       if (authResponse && code) {
         pendingCode = code;
         setStatus('Finishing connection…', false);
         tryCompleteConnection();
-        
+
         if (!completing) {
           waitTimer = setTimeout(function () {
             console.log('[wa-embedded] state from: timeout', stateSnapshot());
-            if (!completing) setStatus('Connection details missing. Try again.', true);
+            if (!completing) {
+              setStatus('Connection details missing. Try again.', true);
+              showRedirectFallback();
+            }
           }, 15000);
         }
       } else {
         console.log('[wa-embedded] state from: login-callback-no-code', stateSnapshot());
         setStatus('Onboarding was cancelled or failed. Please try again.', true);
+        showRedirectFallback();
       }
     }, {
       config_id: '{{ wa_config_id }}',
