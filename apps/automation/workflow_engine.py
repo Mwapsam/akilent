@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_STEPS_PER_CALL = 50
 
-_STEP_TYPES = {"send_email", "wait", "branch", "set_attribute", "stop", "exit"}
+_STEP_TYPES = {"send_email", "send_whatsapp", "wait", "branch", "set_attribute", "stop", "exit"}
 _TRIGGER_TYPES = {
     "business_event", "manual",
     "contact.created", "contact.updated",
@@ -80,6 +80,8 @@ def validate_definition(definition: dict) -> list[str]:
             errors.append(f"step {sid!r}: send_email needs a template or subject")
         if step.get("type") == "send_email" and not step.get("from"):
             errors.append(f"step {sid!r}: send_email needs a from address")
+        if step.get("type") == "send_whatsapp" and not step.get("template"):
+            errors.append(f"step {sid!r}: send_whatsapp needs a template")
         if step.get("type") == "branch" and not (
             step.get("on_true") and step.get("on_false") and step.get("field")
         ):
@@ -188,6 +190,51 @@ def _resolve_template_id(account, slug):
     return t.id if t else None
 
 
+def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
+    """Send a WhatsApp template message via the shared sending path.
+
+    Reuses ``apps.automation.workflows.send_whatsapp_message`` — the same
+    function the legacy AutomationRule ``send_whatsapp_message`` action calls —
+    so there is one place that talks to WhatsAppContact/MessageTemplate/
+    OutboundMessage. Any resolution failure (no phone, unknown template, no
+    matching WhatsAppContact) raises, which ``advance_run`` turns into a
+    FAILED run rather than a silent no-op.
+    """
+    from apps.automation.workflows import send_whatsapp_message
+
+    contact = run.contact
+    phone_field = step.get("phone_field", "phone")
+    phone = (contact.attributes or {}).get(phone_field)
+    if not phone:
+        raise ValueError(
+            f"send_whatsapp step {step.get('id')!r}: contact {contact.pk} has no "
+            f"{phone_field!r} attribute"
+        )
+
+    template_id = _resolve_whatsapp_template_id(run.workflow.account, step.get("template"))
+    if template_id is None:
+        raise ValueError(
+            f"send_whatsapp step {step.get('id')!r}: template {step.get('template')!r} not found"
+        )
+
+    msg = send_whatsapp_message(
+        run.workflow.account,
+        phone=phone,
+        template_id=template_id,
+        params={**(step.get("params") or {}), **(run.context or {})},
+    )
+    return {"outbound_message_id": msg.id}
+
+
+def _resolve_whatsapp_template_id(account, name):
+    if not name:
+        return None
+    from apps.whatsapp.models import MessageTemplate
+
+    t = MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
+    return t.id if t else None
+
+
 def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
     contact = run.contact
     contact.attributes = {**(contact.attributes or {}), step["key"]: step.get("value")}
@@ -235,6 +282,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
         try:
             if stype == "send_email":
                 result = _run_send_email(run, step)
+            elif stype == "send_whatsapp":
+                result = _run_send_whatsapp(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}
@@ -244,7 +293,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 _record(run, step, {})
                 return _complete(run)
             else:
-                result = {"skipped": f"unknown step type {stype!r}"}
+                raise ValueError(f"unsupported workflow step type {stype!r}")
         except Exception as exc:  # noqa: BLE001
             logger.exception("workflow run %s step %s failed", run.pk, step.get("id"))
             _record(run, step, {"error": str(exc)}, status="error")

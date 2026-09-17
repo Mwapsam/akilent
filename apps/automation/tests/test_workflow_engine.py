@@ -11,6 +11,7 @@ from apps.billing.models import Plan, Subscription
 from apps.contacts.models import Contact
 from apps.contacts.services import record_contact_event
 from apps.email.models import EmailDomain, EmailMessage
+from apps.whatsapp.models import MessageTemplate, OutboundMessage, WhatsAppContact
 
 
 @pytest.fixture
@@ -28,6 +29,14 @@ def account(db):
 @pytest.fixture
 def contact(account):
     return Contact.objects.create(account=account, email="user@example.com", first_name="Ada")
+
+
+@pytest.fixture
+def whatsapp_template(account):
+    return MessageTemplate.objects.create(
+        account=account, name="Order update", whatsapp_template_name="order_update",
+        content="Your order is {{1}}", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
 
 
 def _wf(account, steps, *, trigger=None, status=Workflow.Status.PUBLISHED):
@@ -137,6 +146,75 @@ def test_email_opened_trigger_enrolls(account, contact):
     record_contact_event(contact, "email.opened")
     run = WorkflowRun.objects.get(workflow=wf, contact=contact)
     assert run.status == WorkflowRun.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_sends_via_shared_path(account, contact, whatsapp_template):
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    assert OutboundMessage.objects.filter(
+        account=account, contact__phone_number="+260971234567", template=whatsapp_template
+    ).count() == 1
+    assert list(run.step_runs.values_list("step_id", flat=True)) == ["a", "b"]
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_fails_without_phone_attribute(account, contact, whatsapp_template):
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.FAILED
+    assert not OutboundMessage.objects.exists()
+    step_run = run.step_runs.get(step_id="a")
+    assert step_run.status == "error"
+    assert "phone" in step_run.result["error"]
+    # re-running a failed run must not retry or double-record the step
+    advance_run(run)
+    assert run.step_runs.filter(step_id="a").count() == 1
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_fails_for_unknown_template(account, contact):
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "does_not_exist", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.FAILED
+    assert not OutboundMessage.objects.exists()
+
+
+@pytest.mark.django_db
+def test_unsupported_step_type_fails_run_instead_of_skipping(account, contact):
+    wf = _wf(account, [
+        {"id": "a", "type": "send_carrier_pigeon", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.FAILED
+    step_run = run.step_runs.get(step_id="a")
+    assert step_run.status == "error"
+    assert "send_carrier_pigeon" in step_run.result["error"]
+    # step "b" never ran — a bad step halts the workflow, it doesn't skip past it
+    assert not run.step_runs.filter(step_id="b").exists()
 
 
 @pytest.mark.django_db

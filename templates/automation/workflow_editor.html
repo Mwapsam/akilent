@@ -70,6 +70,7 @@
       <div class="card card-pad border-l-4"
            :class="{
              'border-l-amber-500': step.type === 'send_email',
+             'border-l-emerald-500': step.type === 'send_whatsapp',
              'border-l-brand-500': step.type === 'wait',
              'border-l-blue-500': step.type === 'branch',
              'border-l-green-500': step.type === 'set_attribute',
@@ -95,6 +96,12 @@
           <label class="text-xs">From<input class="input input-sm w-full mt-0.5" x-model="step.from" placeholder="hi@yourdomain.com" /></label>
           <label class="text-xs">Template slug<input class="input input-sm w-full mt-0.5" x-model="step.template" placeholder="welcome" /></label>
           <label class="text-xs">Subject (if no template)<input class="input input-sm w-full mt-0.5" x-model="step.subject" /></label>
+          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" placeholder="step-id" /></label>
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'send_whatsapp'">
+          <label class="text-xs">Template name<input class="input input-sm w-full mt-0.5" x-model="step.template" placeholder="order_update" /></label>
+          <label class="text-xs">Phone attribute<input class="input input-sm w-full mt-0.5" x-model="step.phone_field" placeholder="phone" /></label>
           <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" placeholder="step-id" /></label>
         </div>
 

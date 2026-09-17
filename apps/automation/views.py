@@ -15,7 +15,7 @@ from apps.automation.models import Workflow
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 
-_STEP_TYPES = ["send_email", "wait", "branch", "set_attribute", "stop"]
+_STEP_TYPES = ["send_email", "send_whatsapp", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
                   "email.opened", "email.clicked"]
 
