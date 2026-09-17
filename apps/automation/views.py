@@ -66,13 +66,36 @@ def workflow_editor(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
+
+    from apps.email.models import EmailTemplate
+    from apps.whatsapp.models import MessageTemplate
+
+    email_templates = [
+        {"slug": t.slug, "name": t.name, "subject": t.subject}
+        for t in EmailTemplate.objects.filter(account=account, is_active=True).order_by("name")
+    ]
+    whatsapp_templates = [
+        {
+            "name": t.whatsapp_template_name,
+            "label": t.name,
+            "language_code": t.language_code,
+            "approved": t.approval_status == t.ApprovalStatus.APPROVED,
+        }
+        for t in MessageTemplate.objects.filter(account=account)
+        .exclude(whatsapp_template_name__isnull=True)
+        .exclude(whatsapp_template_name="")
+        .order_by("name")
+    ]
+
     return render(request, "automation/workflow_editor.html", {
         "account": account,
         "wf": wf,
         "definition_json": json.dumps(wf.definition or {}, indent=2),
         "step_types": _STEP_TYPES,
         "trigger_types": _TRIGGER_TYPES,
-        "validation_errors": validate_definition(wf.definition),
+        "validation_errors": json.dumps(validate_definition(wf.definition)),
+        "email_templates_json": json.dumps(email_templates),
+        "whatsapp_templates_json": json.dumps(whatsapp_templates),
     })
 
 
@@ -110,7 +133,10 @@ def workflow_publish(request, slug: str):
     wf = get_object_or_404(Workflow, account=account, slug=slug)
     errors = validate_definition(wf.definition)
     if errors:
-        messages.error(request, "Fix the workflow before publishing: " + "; ".join(errors[:3]))
+        messages.error(
+            request,
+            "Fix the workflow before publishing: " + "; ".join(e["message"] for e in errors[:3]),
+        )
         return redirect("automation:editor", slug=wf.slug)
     if wf.status != Workflow.Status.PUBLISHED:
         wf.version += 1

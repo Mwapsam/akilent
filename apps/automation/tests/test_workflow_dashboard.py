@@ -8,6 +8,8 @@ from django.utils import timezone
 from apps.accounts.models import Account, Membership
 from apps.automation.models import Workflow
 from apps.billing.models import Plan, Subscription
+from apps.email.models import EmailTemplate
+from apps.whatsapp.models import MessageTemplate
 
 
 @pytest.fixture
@@ -57,6 +59,42 @@ def test_editor_save_and_publish(client, user_account):
     wf.refresh_from_db()
     assert wf.status == Workflow.Status.PUBLISHED
     assert wf.version == 2
+
+
+@pytest.mark.django_db
+def test_editor_scopes_template_pickers_to_account(client, user_account):
+    user, acc = user_account
+    client.force_login(user)
+    other_acc = Account.objects.create(company_name="Other")
+
+    EmailTemplate.objects.create(account=acc, name="Welcome", slug="welcome", subject="Hi")
+    EmailTemplate.objects.create(account=other_acc, name="Not mine", slug="not-mine")
+    EmailTemplate.objects.create(account=acc, name="Inactive", slug="inactive", is_active=False)
+
+    MessageTemplate.objects.create(
+        account=acc, name="Order update", whatsapp_template_name="order_update",
+        content="x", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    MessageTemplate.objects.create(
+        account=other_acc, name="Not mine", whatsapp_template_name="not_mine", content="x",
+    )
+
+    wf = Workflow.objects.create(account=acc, name="WF", slug="wf",
+                                 definition={"trigger": {"type": "manual"}, "steps": []})
+    r = client.get("/automations/wf/")
+    assert r.status_code == 200
+
+    email_templates = json.loads(r.context["email_templates_json"])
+    email_slugs = [t["slug"] for t in email_templates]
+    assert "welcome" in email_slugs
+    assert "not-mine" not in email_slugs
+    assert "inactive" not in email_slugs
+
+    whatsapp_templates = json.loads(r.context["whatsapp_templates_json"])
+    whatsapp_names = [t["name"] for t in whatsapp_templates]
+    assert "order_update" in whatsapp_names
+    assert "not_mine" not in whatsapp_names
+    assert next(t for t in whatsapp_templates if t["name"] == "order_update")["approved"] is True
 
 
 @pytest.mark.django_db

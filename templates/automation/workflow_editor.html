@@ -43,92 +43,192 @@
   </div>
 
   <ul class="mb-4 space-y-1" x-show="errors.length" x-cloak>
-    <template x-for="e in errors" :key="e">
-      <li class="text-xs text-red-600">• <span x-text="e"></span></li>
+    <template x-for="(e, ei) in errors" :key="ei">
+      <li class="text-xs text-red-600">
+        • <span x-text="e.message"></span>
+        <button type="button" x-show="e.step_id" class="ml-1 underline text-red-500 hover:text-red-700"
+                @click="jumpToStep(e.step_id)">Jump to step</button>
+      </li>
     </template>
   </ul>
 
   {# ---- Visual ---- #}
-  <div x-show="tab === 'visual'" class="space-y-3 border-l-2 border-border pl-4 ml-1">
+  <div x-show="tab === 'visual'" class="space-y-3">
     <div class="card card-pad border-l-4 border-l-brand-500">
       <h3 class="text-sm font-semibold text-ink mb-2">Trigger</h3>
       <div class="flex flex-wrap gap-3">
         <label class="text-sm">
           <span class="text-gray-600">When</span>
-          <select class="input mt-1" x-model="definition.trigger.type">
+          <select class="select mt-1" x-model="definition.trigger.type" :class="triggerFieldError('trigger.type') && 'input-error'">
             <template x-for="t in triggerTypes" :key="t"><option x-text="t" :value="t"></option></template>
           </select>
+          <p class="field-error" x-show="triggerFieldError('trigger.type')" x-text="triggerFieldError('trigger.type')"></p>
         </label>
         <label class="text-sm" x-show="definition.trigger.type === 'business_event'">
           <span class="text-gray-600">Event name</span>
-          <input class="input mt-1" x-model="definition.trigger.name" placeholder="order.completed" />
+          <input class="input mt-1" x-model="definition.trigger.name" placeholder="order.completed"
+                 :class="triggerFieldError('trigger.name') && 'input-error'" />
+          <p class="field-error" x-show="triggerFieldError('trigger.name')" x-text="triggerFieldError('trigger.name')"></p>
         </label>
       </div>
     </div>
 
-    <template x-for="(step, i) in definition.steps" :key="i">
-      <div class="card card-pad border-l-4"
-           :class="{
-             'border-l-amber-500': step.type === 'send_email',
-             'border-l-emerald-500': step.type === 'send_whatsapp',
-             'border-l-brand-500': step.type === 'wait',
-             'border-l-blue-500': step.type === 'branch',
-             'border-l-green-500': step.type === 'set_attribute',
-             'border-l-red-500': step.type === 'stop'
-           }">
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-xs font-mono text-gray-400" x-text="'#' + (i + 1)"></span>
-            <span class="badge badge-neutral" x-text="step.type"></span>
-            <input class="input w-40" x-model="step.id" placeholder="step-id" />
-            <select class="select" x-model="step.type">
-              <template x-for="t in stepTypes" :key="t"><option x-text="t" :value="t"></option></template>
-            </select>
+    <div class="relative pl-8 ml-1">
+      <div class="absolute left-3 top-2 bottom-2 w-px bg-border" aria-hidden="true"></div>
+      <div class="space-y-3">
+        <template x-for="(step, i) in definition.steps" :key="step.id + ':' + i">
+          <div class="relative" :id="'step-' + step.id">
+            <span class="absolute -left-8 top-3 w-6 h-6 rounded-full bg-white border border-border flex items-center justify-center text-[11px] font-medium text-gray-500"
+                  x-text="i + 1"></span>
+            <div class="card card-pad border-l-4 transition-shadow"
+                 :class="[(stepTypeMeta[step.type] || {}).border || 'border-l-gray-300', highlighted === step.id && 'ring-2 ring-brand-400']">
+              <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="badge inline-flex items-center gap-1" :class="(stepTypeMeta[step.type] || {}).chip || 'badge-neutral'">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"
+                         x-html="(stepTypeMeta[step.type] || {}).icon || ''"></svg>
+                    <span x-text="(stepTypeMeta[step.type] || {}).label || step.type"></span>
+                  </span>
+                  <input class="input input-sm w-32" x-model="step.id" placeholder="step-id" />
+                  <select class="select select-sm" x-model="step.type" @change="deriveMode(step)">
+                    <template x-for="t in stepTypes" :key="t"><option x-text="t" :value="t"></option></template>
+                  </select>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0">↑</button>
+                  <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1">↓</button>
+                  <button class="btn btn-ghost btn-xs" @click="insertStep(i)" title="Insert a step below this one">+ Insert</button>
+                  <button class="btn btn-danger-ghost btn-xs" @click="definition.steps.splice(i, 1)">Remove</button>
+                </div>
+              </div>
+
+              <p class="field-error mb-2" x-show="hasStepLevelError(step.id)" x-text="stepLevelError(step.id)"></p>
+
+              {# ---- send_email ---- #}
+              <div x-show="step.type === 'send_email'">
+                <div class="flex items-center gap-3 mb-2">
+                  <label class="text-xs inline-flex items-center gap-1">
+                    <input type="radio" class="accent-brand-600" value="write" x-model="step._mode" @change="step.template = ''"> Write a message
+                  </label>
+                  <label class="text-xs inline-flex items-center gap-1">
+                    <input type="radio" class="accent-brand-600" value="template" x-model="step._mode"> Use a saved template
+                  </label>
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-2" x-show="step._mode !== 'template'">
+                  <label class="text-xs">Subject<input class="input input-sm w-full mt-0.5" x-model="step.subject" /></label>
+                  <div></div>
+                </div>
+
+                <div x-show="step._mode === 'template'" class="grid gap-2 sm:grid-cols-2 mb-2">
+                  <template x-if="!emailTemplates.length">
+                    <p class="text-xs text-gray-400 col-span-2">No email templates yet — create one under Templates first, or switch to "Write a message".</p>
+                  </template>
+                  <template x-for="t in emailTemplates" :key="t.slug">
+                    <button type="button" class="card card-pad text-left border-2 transition-colors"
+                            :class="step.template === t.slug ? 'border-brand-500' : 'border-border'"
+                            @click="step.template = t.slug">
+                      <span class="text-xs font-medium block" x-text="t.name"></span>
+                      <span class="text-xs text-gray-500 block truncate" x-text="t.subject || '(no subject)'"></span>
+                    </button>
+                  </template>
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label class="text-xs">From
+                    <input class="input input-sm w-full mt-0.5" x-model="step.from" placeholder="hi@yourdomain.com"
+                           :class="fieldError(step.id, 'from') && 'input-error'" />
+                    <span class="field-error" x-show="fieldError(step.id, 'from')" x-text="fieldError(step.id, 'from')"></span>
+                  </label>
+                  <label class="text-xs">Next step
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next" :class="fieldError(step.id, 'next') && 'input-error'">
+                      <option value="">— choose a step —</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                    <span class="field-error" x-show="fieldError(step.id, 'next')" x-text="fieldError(step.id, 'next')"></span>
+                  </label>
+                </div>
+              </div>
+
+              {# ---- send_whatsapp ---- #}
+              <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'send_whatsapp'">
+                <label class="text-xs">Template
+                  <select class="select select-sm w-full mt-0.5" x-model="step.template" :class="fieldError(step.id, 'template') && 'input-error'">
+                    <option value="">— choose a template —</option>
+                    <template x-for="t in whatsappTemplates" :key="t.name">
+                      <option :value="t.name" x-text="t.label + ' (' + t.language_code + ')' + (t.approved ? '' : ' — pending approval')"></option>
+                    </template>
+                  </select>
+                  <span class="field-error" x-show="fieldError(step.id, 'template')" x-text="fieldError(step.id, 'template')"></span>
+                  <template x-if="!whatsappTemplates.length">
+                    <span class="text-xs text-gray-400 block mt-1">No WhatsApp templates yet — add one under WhatsApp Templates first.</span>
+                  </template>
+                  <template x-if="whatsappSelected(step) && !whatsappSelected(step).approved">
+                    <span class="text-xs text-amber-700 block mt-1">Not yet approved by Meta — sends will be rejected until it's approved.</span>
+                  </template>
+                </label>
+                <label class="text-xs">Phone attribute<input class="input input-sm w-full mt-0.5" x-model="step.phone_field" placeholder="phone" /></label>
+                <label class="text-xs">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- wait ---- #}
+              <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'wait'">
+                <label class="text-xs">Seconds<input type="number" class="input input-sm w-full mt-0.5" x-model.number="step.seconds" /></label>
+                <label class="text-xs">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- branch ---- #}
+              <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'branch'">
+                <label class="text-xs">Field<input class="input input-sm w-full mt-0.5" x-model="step.field" placeholder="opened_in_last_90d"
+                       :class="fieldError(step.id, 'field') && 'input-error'" /></label>
+                <label class="text-xs">Operator<input class="input input-sm w-full mt-0.5" x-model="step.operator" placeholder="eq" /></label>
+                <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
+                <label class="text-xs">If true → step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.on_true" :class="fieldError(step.id, 'on_true') && 'input-error'">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                  <span class="field-error" x-show="fieldError(step.id, 'on_true')" x-text="fieldError(step.id, 'on_true')"></span>
+                </label>
+                <label class="text-xs">If false → step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.on_false" :class="fieldError(step.id, 'on_false') && 'input-error'">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                  <span class="field-error" x-show="fieldError(step.id, 'on_false')" x-text="fieldError(step.id, 'on_false')"></span>
+                </label>
+              </div>
+
+              {# ---- set_attribute ---- #}
+              <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'set_attribute'">
+                <label class="text-xs">Key<input class="input input-sm w-full mt-0.5" x-model="step.key" /></label>
+                <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
+                <label class="text-xs">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              <p class="text-xs text-gray-400" x-show="step.type === 'stop'">End of the workflow.</p>
+            </div>
           </div>
-          <div class="flex items-center gap-1">
-            <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0">↑</button>
-            <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1">↓</button>
-            <button class="btn btn-danger-ghost btn-xs" @click="definition.steps.splice(i, 1)">Remove</button>
-          </div>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'send_email'">
-          <label class="text-xs">From<input class="input input-sm w-full mt-0.5" x-model="step.from" placeholder="hi@yourdomain.com" /></label>
-          <label class="text-xs">Template slug<input class="input input-sm w-full mt-0.5" x-model="step.template" placeholder="welcome" /></label>
-          <label class="text-xs">Subject (if no template)<input class="input input-sm w-full mt-0.5" x-model="step.subject" /></label>
-          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" placeholder="step-id" /></label>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'send_whatsapp'">
-          <label class="text-xs">Template name<input class="input input-sm w-full mt-0.5" x-model="step.template" placeholder="order_update" /></label>
-          <label class="text-xs">Phone attribute<input class="input input-sm w-full mt-0.5" x-model="step.phone_field" placeholder="phone" /></label>
-          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" placeholder="step-id" /></label>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'wait'">
-          <label class="text-xs">Seconds<input type="number" class="input input-sm w-full mt-0.5" x-model.number="step.seconds" /></label>
-          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" /></label>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'branch'">
-          <label class="text-xs">Field<input class="input input-sm w-full mt-0.5" x-model="step.field" placeholder="opened_in_last_90d" /></label>
-          <label class="text-xs">Operator<input class="input input-sm w-full mt-0.5" x-model="step.operator" placeholder="eq" /></label>
-          <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
-          <label class="text-xs">If true → step<input class="input input-sm w-full mt-0.5" x-model="step.on_true" /></label>
-          <label class="text-xs">If false → step<input class="input input-sm w-full mt-0.5" x-model="step.on_false" /></label>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'set_attribute'">
-          <label class="text-xs">Key<input class="input input-sm w-full mt-0.5" x-model="step.key" /></label>
-          <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
-          <label class="text-xs">Next step<input class="input input-sm w-full mt-0.5" x-model="step.next" /></label>
-        </div>
-
-        <p class="text-xs text-gray-400" x-show="step.type === 'stop'">End of the workflow.</p>
+        </template>
       </div>
-    </template>
+    </div>
 
-    <button class="btn btn-ghost btn-sm" @click="addStep()">+ Add step</button>
+    <button class="btn btn-ghost btn-sm ml-8" @click="addStep()">+ Add step</button>
   </div>
 
   {# ---- Code ---- #}
@@ -148,17 +248,109 @@ function workflowEditor() {
     stepTypes: {{ step_types|safe }},
     triggerTypes: {{ trigger_types|safe }},
     errors: {{ validation_errors|safe }},
+    emailTemplates: {{ email_templates_json|safe }},
+    whatsappTemplates: {{ whatsapp_templates_json|safe }},
     codeText: "",
     codeError: "",
     saved: false,
     busy: false,
+    highlighted: null,
+    stepTypeMeta: {
+      send_email: {
+        label: "Send email", border: "border-l-amber-500", chip: "bg-amber-50 text-amber-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/>',
+      },
+      send_whatsapp: {
+        label: "Send WhatsApp", border: "border-l-teal-500", chip: "bg-teal-50 text-teal-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>',
+      },
+      wait: {
+        label: "Wait", border: "border-l-brand-500", chip: "bg-brand-50 text-brand-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
+      },
+      branch: {
+        label: "Branch", border: "border-l-blue-500", chip: "bg-blue-50 text-blue-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM15.75 18a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM6 8.25v3.75a2.25 2.25 0 0 0 2.25 2.25H15m0 0-2.25-2.25M15 14.25l-2.25 2.25"/>',
+      },
+      set_attribute: {
+        label: "Set attribute", border: "border-l-green-500", chip: "bg-green-50 text-green-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"/>',
+      },
+      stop: {
+        label: "Stop", border: "border-l-red-500", chip: "bg-red-50 text-red-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5"/>',
+      },
+      exit: {
+        label: "Exit", border: "border-l-red-500", chip: "bg-red-50 text-red-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5"/>',
+      },
+    },
     init() {
       if (!this.definition.trigger) this.definition.trigger = { type: "manual" };
       if (!Array.isArray(this.definition.steps)) this.definition.steps = [];
+      this.deriveModes();
       this.syncToCode();
     },
+    deriveModes() {
+      this.definition.steps.forEach((s) => this.deriveMode(s));
+    },
+    deriveMode(step) {
+      if (step.type === "send_email") step._mode = step.template ? "template" : "write";
+    },
+    stepOptions(step) {
+      const missing = step && step.next && !this.definition.steps.some((s) => s.id === step.next);
+      const opts = this.definition.steps
+        .filter((s) => s.id !== step.id)
+        .map((s) => ({ value: s.id, label: s.id }));
+      if (missing) opts.push({ value: step.next, label: "⚠ " + step.next + " (not found)" });
+      return opts;
+    },
+    stepErrors(stepId) {
+      return this.errors.filter((e) => e.step_id === stepId);
+    },
+    fieldError(stepId, field) {
+      const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
+      return e ? e.message : "";
+    },
+    hasStepLevelError(stepId) {
+      return this.stepErrors(stepId).some((e) => !["from", "template", "next", "on_true", "on_false", "field", "type", "id"].includes(e.field) || e.field == null);
+    },
+    stepLevelError(stepId) {
+      const e = this.stepErrors(stepId).find((er) => !["from", "template", "next", "on_true", "on_false", "field", "type", "id"].includes(er.field) || er.field == null);
+      return e ? e.message : "";
+    },
+    triggerFieldError(field) {
+      const e = this.errors.find((er) => er.step_id === null && er.field === field);
+      return e ? e.message : "";
+    },
+    whatsappSelected(step) {
+      return this.whatsappTemplates.find((t) => t.name === step.template);
+    },
+    jumpToStep(stepId) {
+      this.tab = "visual";
+      this.$nextTick(() => {
+        const el = document.getElementById("step-" + stepId);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        this.highlighted = stepId;
+        setTimeout(() => (this.highlighted = null), 2000);
+      });
+    },
+    uniqueId() {
+      let max = 0;
+      this.definition.steps.forEach((s) => {
+        const m = /^step-(\d+)$/.exec(s.id || "");
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      });
+      return "step-" + (max + 1);
+    },
     addStep() {
-      this.definition.steps.push({ id: "step-" + (this.definition.steps.length + 1), type: "send_email" });
+      const step = { id: this.uniqueId(), type: "send_email", _mode: "write" };
+      this.definition.steps.push(step);
+    },
+    insertStep(i) {
+      const step = { id: this.uniqueId(), type: "send_email", _mode: "write" };
+      this.definition.steps.splice(i + 1, 0, step);
     },
     move(i, d) {
       const j = i + d;
@@ -170,6 +362,8 @@ function workflowEditor() {
     syncFromCode() {
       try {
         this.definition = JSON.parse(this.codeText);
+        if (!Array.isArray(this.definition.steps)) this.definition.steps = [];
+        this.deriveModes();
         this.codeError = "";
       } catch (e) { this.codeError = "Invalid JSON: " + e.message; }
     },
@@ -178,10 +372,11 @@ function workflowEditor() {
       if (this.codeError) return;
       this.busy = true;
       try {
+        const cleanSteps = this.definition.steps.map(({ _mode, ...rest }) => rest);
         const r = await fetch("/automations/{{ wf.slug }}/save/", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
-          body: JSON.stringify({ definition: this.definition }),
+          body: JSON.stringify({ definition: { ...this.definition, steps: cleanSteps } }),
         });
         const data = await r.json();
         this.errors = data.errors || [];

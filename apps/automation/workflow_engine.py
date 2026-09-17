@@ -46,59 +46,67 @@ _TRIGGER_TYPES = {
 }
 
 
-def validate_definition(definition: dict) -> list[str]:
-    """Return a list of human-readable problems with ``definition`` (empty = OK)."""
-    errors: list[str] = []
+def validate_definition(definition: dict) -> list[dict]:
+    """Return a list of problems with ``definition`` (empty = OK).
+
+    Each error is ``{"step_id": str | None, "field": str | None, "message": str}``.
+    ``step_id`` is ``None`` for trigger-level/structural errors; ``field`` names the
+    offending key on that step where applicable (e.g. ``"next"``, ``"template"``).
+    """
+    errors: list[dict] = []
+
+    def _error(message: str, *, step_id: str | None = None, field: str | None = None) -> None:
+        errors.append({"step_id": step_id, "field": field, "message": message})
+
     definition = definition or {}
     trig = definition.get("trigger") or {}
     if trig.get("type") not in _TRIGGER_TYPES:
-        errors.append(
-            f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}"
-        )
+        _error(f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}", field="trigger.type")
     elif trig.get("type") == "business_event" and not trig.get("name"):
-        errors.append("business_event trigger requires trigger.name")
+        _error("business_event trigger requires trigger.name", field="trigger.name")
 
     steps = definition.get("steps")
     if not isinstance(steps, list) or not steps:
-        errors.append("definition.steps must be a non-empty list")
+        _error("definition.steps must be a non-empty list")
         return errors
 
     ids: set[str] = set()
     for i, step in enumerate(steps):
         sid = step.get("id")
         if not sid:
-            errors.append(f"steps[{i}] is missing an id")
+            _error(f"steps[{i}] is missing an id", field="id")
             continue
         if sid in ids:
-            errors.append(f"duplicate step id {sid!r}")
+            _error(f"duplicate step id {sid!r}", step_id=sid, field="id")
         ids.add(sid)
         if step.get("type") not in _STEP_TYPES:
-            errors.append(f"step {sid!r}: type must be one of {sorted(_STEP_TYPES)}")
+            _error(f"step {sid!r}: type must be one of {sorted(_STEP_TYPES)}", step_id=sid, field="type")
         if step.get("type") == "send_email" and not (
             step.get("template") or step.get("subject")
         ):
-            errors.append(f"step {sid!r}: send_email needs a template or subject")
+            _error(f"step {sid!r}: send_email needs a template or subject", step_id=sid, field="template")
         if step.get("type") == "send_email" and not step.get("from"):
-            errors.append(f"step {sid!r}: send_email needs a from address")
+            _error(f"step {sid!r}: send_email needs a from address", step_id=sid, field="from")
         if step.get("type") == "send_whatsapp" and not step.get("template"):
-            errors.append(f"step {sid!r}: send_whatsapp needs a template")
+            _error(f"step {sid!r}: send_whatsapp needs a template", step_id=sid, field="template")
         if step.get("type") == "branch" and not (
             step.get("on_true") and step.get("on_false") and step.get("field")
         ):
-            errors.append(f"step {sid!r}: branch needs field, on_true, on_false")
+            _error(f"step {sid!r}: branch needs field, on_true, on_false", step_id=sid, field="field")
 
-    def _check(ref, ctx):
+    def _check(ref, sid, field):
         if ref and ref not in ids:
-            errors.append(f"{ctx} points to unknown step {ref!r}")
+            _error(f"step {sid!r}.{field} points to unknown step {ref!r}", step_id=sid, field=field)
 
     for step in steps:
-        if not step.get("id"):
+        sid = step.get("id")
+        if not sid:
             continue
         if step.get("type") == "branch":
-            _check(step.get("on_true"), f"step {step['id']!r}.on_true")
-            _check(step.get("on_false"), f"step {step['id']!r}.on_false")
+            _check(step.get("on_true"), sid, "on_true")
+            _check(step.get("on_false"), sid, "on_false")
         elif step.get("type") not in ("stop", "exit"):
-            _check(step.get("next"), f"step {step['id']!r}.next")
+            _check(step.get("next"), sid, "next")
     return errors
 
 

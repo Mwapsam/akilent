@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Account
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
-from apps.automation.workflow_engine import advance_run, enroll, on_business_event, run_due
+from apps.automation.workflow_engine import advance_run, enroll, on_business_event, run_due, validate_definition
 from apps.billing.models import Plan, Subscription
 from apps.contacts.models import Contact
 from apps.contacts.services import record_contact_event
@@ -215,6 +215,71 @@ def test_unsupported_step_type_fails_run_instead_of_skipping(account, contact):
     assert "send_carrier_pigeon" in step_run.result["error"]
     # step "b" never ran — a bad step halts the workflow, it doesn't skip past it
     assert not run.step_runs.filter(step_id="b").exists()
+
+
+def _err(errors, step_id, field):
+    return next((e for e in errors if e["step_id"] == step_id and e["field"] == field), None)
+
+
+def test_validate_definition_flags_trigger_errors():
+    errors = validate_definition({"trigger": {"type": "bogus"}, "steps": [{"id": "a", "type": "stop"}]})
+    e = _err(errors, None, "trigger.type")
+    assert e is not None and "trigger.type" in e["message"]
+
+    errors = validate_definition({
+        "trigger": {"type": "business_event"},
+        "steps": [{"id": "a", "type": "stop"}],
+    })
+    e = _err(errors, None, "trigger.name")
+    assert e is not None
+
+
+def test_validate_definition_flags_send_email_and_send_whatsapp():
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_email", "next": "b"}, {"id": "b", "type": "stop"}],
+    })
+    assert _err(errors, "a", "template") is not None
+    assert _err(errors, "a", "from") is not None
+
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_whatsapp", "next": "b"}, {"id": "b", "type": "stop"}],
+    })
+    assert _err(errors, "a", "template") is not None
+
+
+def test_validate_definition_flags_branch_and_dangling_refs():
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "branch"}],
+    })
+    assert _err(errors, "a", "field") is not None
+
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "stop", "next": "nowhere"},
+                  {"id": "b", "type": "branch", "field": "x", "on_true": "gone", "on_false": "b"}],
+    })
+    # "stop" steps aren't followed via `next`, so no dangling-ref error for "a".
+    assert _err(errors, "a", "next") is None
+    e = _err(errors, "b", "on_true")
+    assert e is not None and "gone" in e["message"]
+
+
+def test_validate_definition_flags_duplicate_and_missing_ids():
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "stop"}, {"id": "a", "type": "stop"}],
+    })
+    assert _err(errors, "a", "id") is not None
+
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"type": "stop"}],
+    })
+    e = _err(errors, None, "id")
+    assert e is not None
 
 
 @pytest.mark.django_db
