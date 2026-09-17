@@ -30,7 +30,9 @@
           {% else %}<span class="badge badge-warning">Draft</span>{% endif %}
         </td>
         <td data-label="Steps" class="tabular-nums">{{ wf.definition.steps|length }}</td>
-        <td data-label="Runs" class="tabular-nums">{{ wf.runs.count }}</td>
+        <td data-label="Runs" class="tabular-nums">
+          <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-brand-700 hover:underline">{{ wf.runs.count }}</a>
+        </td>
         <td data-label="Updated" class="text-gray-500 tabular-nums">{{ wf.updated_at|date:"M j, H:i" }}</td>
       </tr>
       {% endfor %}

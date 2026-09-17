@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_STEPS_PER_CALL = 50
 
-_STEP_TYPES = {"send_email", "send_whatsapp", "wait", "branch", "set_attribute", "stop", "exit"}
+_STEP_TYPES = {"send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit"}
 _TRIGGER_TYPES = {
     "business_event", "manual",
     "contact.created", "contact.updated",
@@ -53,6 +53,8 @@ def validate_definition(definition: dict) -> list[dict]:
     ``step_id`` is ``None`` for trigger-level/structural errors; ``field`` names the
     offending key on that step where applicable (e.g. ``"next"``, ``"template"``).
     """
+    from django.utils.dateparse import parse_datetime
+
     errors: list[dict] = []
 
     def _error(message: str, *, step_id: str | None = None, field: str | None = None) -> None:
@@ -89,10 +91,15 @@ def validate_definition(definition: dict) -> list[dict]:
             _error(f"step {sid!r}: send_email needs a from address", step_id=sid, field="from")
         if step.get("type") == "send_whatsapp" and not step.get("template"):
             _error(f"step {sid!r}: send_whatsapp needs a template", step_id=sid, field="template")
+        if step.get("type") == "webhook" and not step.get("url"):
+            _error(f"step {sid!r}: webhook needs a url", step_id=sid, field="url")
         if step.get("type") == "branch" and not (
             step.get("on_true") and step.get("on_false") and step.get("field")
         ):
             _error(f"step {sid!r}: branch needs field, on_true, on_false", step_id=sid, field="field")
+        if step.get("type") in ("send_email", "send_whatsapp") and step.get("send_at"):
+            if parse_datetime(step["send_at"]) is None:
+                _error(f"step {sid!r}: send_at is not a valid datetime", step_id=sid, field="send_at")
 
     def _check(ref, sid, field):
         if ref and ref not in ids:
@@ -167,9 +174,12 @@ def _condition_matches(contact, step: dict) -> bool:
 
 
 def _run_send_email(run: WorkflowRun, step: dict) -> dict:
+    from django.utils.dateparse import parse_datetime
+
     from apps.api.services import create_and_queue_message
 
     contact = run.contact
+    send_at = parse_datetime(step["send_at"]) if step.get("send_at") else None
     msg = create_and_queue_message(
         account=run.workflow.account,
         from_email=step["from"],
@@ -185,6 +195,8 @@ def _run_send_email(run: WorkflowRun, step: dict) -> dict:
             "attributes": contact.attributes or {},
             **(run.context or {}),
         },
+        scheduled_at=send_at,
+        tz=step.get("send_at_tz", ""),
     )
     return {"message_id": msg.public_id}
 
@@ -208,7 +220,10 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     matching WhatsAppContact) raises, which ``advance_run`` turns into a
     FAILED run rather than a silent no-op.
     """
+    from django.utils.dateparse import parse_datetime
+
     from apps.automation.workflows import send_whatsapp_message
+    from apps.core.scheduling import to_utc
 
     contact = run.contact
     phone_field = step.get("phone_field", "phone")
@@ -225,11 +240,17 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
             f"send_whatsapp step {step.get('id')!r}: template {step.get('template')!r} not found"
         )
 
+    send_at = None
+    if step.get("send_at"):
+        parsed = parse_datetime(step["send_at"])
+        if parsed is not None:
+            send_at = to_utc(parsed, step.get("send_at_tz") or "UTC")
     msg = send_whatsapp_message(
         run.workflow.account,
         phone=phone,
         template_id=template_id,
         params={**(step.get("params") or {}), **(run.context or {})},
+        scheduled_at=send_at,
     )
     return {"outbound_message_id": msg.id}
 
@@ -241,6 +262,29 @@ def _resolve_whatsapp_template_id(account, name):
 
     t = MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
     return t.id if t else None
+
+
+def _run_webhook(run: WorkflowRun, step: dict) -> dict:
+    """Queue a Workflow ``webhook`` step's HTTP POST for async delivery.
+
+    Like ``_run_send_email``/``_run_send_whatsapp``, this step is marked
+    ``ok`` once the delivery is queued, not once it's actually delivered —
+    the network call (with SSRF guard, retries) happens in
+    ``apps.automation.tasks.deliver_workflow_webhook``.
+    """
+    from apps.automation.models import WorkflowWebhookDelivery
+    from apps.automation.tasks import deliver_workflow_webhook
+
+    delivery = WorkflowWebhookDelivery.objects.create(
+        run=run,
+        step_id=step["id"],
+        url=step["url"],
+        method=(step.get("method") or "POST").upper(),
+        headers=step.get("headers") or {},
+        body={**(step.get("body") or {}), **(run.context or {})},
+    )
+    deliver_workflow_webhook.delay(delivery.id)
+    return {"delivery_id": delivery.id}
 
 
 def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
@@ -292,6 +336,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_send_email(run, step)
             elif stype == "send_whatsapp":
                 result = _run_send_whatsapp(run, step)
+            elif stype == "webhook":
+                result = _run_webhook(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}

@@ -5,7 +5,7 @@ import pytest
 from django.utils import timezone
 
 from apps.accounts.models import Account
-from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
+from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun, WorkflowWebhookDelivery
 from apps.automation.workflow_engine import advance_run, enroll, on_business_event, run_due, validate_definition
 from apps.billing.models import Plan, Subscription
 from apps.contacts.models import Contact
@@ -165,6 +165,54 @@ def test_send_whatsapp_step_sends_via_shared_path(account, contact, whatsapp_tem
         account=account, contact__phone_number="+260971234567", template=whatsapp_template
     ).count() == 1
     assert list(run.step_runs.values_list("step_id", flat=True)) == ["a", "b"]
+
+
+@pytest.mark.django_db
+def test_send_email_step_with_send_at_schedules_instead_of_sending_now(account, contact):
+    from apps.scheduler.models import ScheduledJob
+
+    future = (timezone.now() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    wf = _wf(account, [
+        {"id": "a", "type": "send_email", "from": "hi@mail.acme.test", "subject": "Hi",
+         "text": "yo", "send_at": future, "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    # Scheduled, not sent immediately: no EmailMessage yet, a ScheduledJob instead.
+    assert EmailMessage.objects.filter(account=account, to_email=contact.email).count() == 0
+    assert ScheduledJob.objects.filter(account=account, kind=ScheduledJob.Kind.EMAIL_SINGLE).count() == 1
+
+
+def test_validate_definition_flags_invalid_send_at():
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_email", "from": "x@y.com", "subject": "hi",
+                   "send_at": "not-a-date", "next": "b"}, {"id": "b", "type": "stop"}],
+    })
+    e = next((e for e in errors if e["step_id"] == "a" and e["field"] == "send_at"), None)
+    assert e is not None
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_with_send_at_sets_outbound_scheduled_at(account, contact, whatsapp_template):
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+
+    future = timezone.now() + timedelta(hours=2)
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update",
+         "send_at": future.strftime("%Y-%m-%dT%H:%M:%S"), "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    msg = OutboundMessage.objects.get(account=account, contact__phone_number="+260971234567")
+    # Not "now" — the drain task shouldn't pick this up until send_at.
+    assert msg.scheduled_at > timezone.now() + timedelta(minutes=30)
 
 
 @pytest.mark.django_db

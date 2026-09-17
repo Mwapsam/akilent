@@ -22,12 +22,18 @@ def execute_rule(rule: AutomationRule, context: dict) -> None:
     handler(rule, action, context)
 
 
-def send_whatsapp_message(account, *, phone: str, template_id, params: dict | None = None) -> OutboundMessage:
+def send_whatsapp_message(
+    account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None
+) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
     Shared sending path: both the legacy AutomationRule action handler and the
     Workflow engine's ``send_whatsapp`` step call this, so there is exactly one
     place that talks to WhatsAppContact/MessageTemplate/OutboundMessage.
+
+    ``scheduled_at`` (optional) sets when OutboundMessage.scheduled_at becomes
+    due — it's already the field ``apps.whatsapp.tasks.drain_outbound_queue``
+    polls, so this just exposes it instead of always defaulting to "now".
 
     Raises ``WhatsAppContact.DoesNotExist`` / ``MessageTemplate.DoesNotExist``
     if the contact or template can't be resolved for this account.
@@ -36,6 +42,10 @@ def send_whatsapp_message(account, *, phone: str, template_id, params: dict | No
 
     contact = WhatsAppContact.objects.get(account=account, phone_number=phone)
     template = MessageTemplate.objects.get(pk=template_id, account=account)
+
+    kwargs = {}
+    if scheduled_at is not None:
+        kwargs["scheduled_at"] = scheduled_at
 
     return OutboundMessage.objects.create(
         account=account,
@@ -47,6 +57,7 @@ def send_whatsapp_message(account, *, phone: str, template_id, params: dict | No
             "language": template.language_code,
             "params": params or {},
         },
+        **kwargs,
     )
 
 

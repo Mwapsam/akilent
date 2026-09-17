@@ -6,8 +6,9 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
-from apps.automation.models import Workflow
+from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.billing.models import Plan, Subscription
+from apps.contacts.models import Contact
 from apps.email.models import EmailTemplate
 from apps.whatsapp.models import MessageTemplate
 
@@ -95,6 +96,41 @@ def test_editor_scopes_template_pickers_to_account(client, user_account):
     assert "order_update" in whatsapp_names
     assert "not_mine" not in whatsapp_names
     assert next(t for t in whatsapp_templates if t["name"] == "order_update")["approved"] is True
+
+
+@pytest.mark.django_db
+def test_workflow_stats_shows_funnel_and_step_breakdown(client, user_account):
+    user, acc = user_account
+    client.force_login(user)
+    other_acc = Account.objects.create(company_name="Other")
+
+    wf = Workflow.objects.create(account=acc, name="WF", slug="wf",
+                                 definition={"trigger": {"type": "manual"}, "steps": []})
+    other_wf = Workflow.objects.create(account=other_acc, name="Other WF", slug="other-wf",
+                                       definition={"trigger": {"type": "manual"}, "steps": []})
+
+    c1 = Contact.objects.create(account=acc, email="a@example.com")
+    c2 = Contact.objects.create(account=acc, email="b@example.com")
+    run1 = WorkflowRun.objects.create(workflow=wf, contact=c1, status=WorkflowRun.Status.COMPLETED)
+    run2 = WorkflowRun.objects.create(workflow=wf, contact=c2, status=WorkflowRun.Status.FAILED)
+    WorkflowStepRun.objects.create(run=run1, step_id="a", step_type="send_email", status="ok")
+    WorkflowStepRun.objects.create(run=run2, step_id="a", step_type="send_email", status="ok")
+    WorkflowStepRun.objects.create(run=run2, step_id="b", step_type="webhook", status="error")
+
+    other_contact = Contact.objects.create(account=other_acc, email="c@example.com")
+    WorkflowRun.objects.create(workflow=other_wf, contact=other_contact, status=WorkflowRun.Status.COMPLETED)
+
+    r = client.get("/automations/wf/stats/")
+    assert r.status_code == 200
+    assert r.context["total_enrolled"] == 2
+    assert r.context["run_counts"]["completed"] == 1
+    assert r.context["run_counts"]["failed"] == 1
+
+    breakdown = {row["step_id"]: row for row in r.context["step_breakdown"]}
+    assert breakdown["a"]["ok"] == 2
+    assert breakdown["a"]["error"] == 0
+    assert breakdown["b"]["ok"] == 0
+    assert breakdown["b"]["error"] == 1
 
 
 @pytest.mark.django_db

@@ -5,17 +5,18 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.automation.models import Workflow
+from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 
-_STEP_TYPES = ["send_email", "send_whatsapp", "wait", "branch", "set_attribute", "stop"]
+_STEP_TYPES = ["send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
                   "email.opened", "email.clicked"]
 
@@ -96,6 +97,44 @@ def workflow_editor(request, slug: str):
         "validation_errors": json.dumps(validate_definition(wf.definition)),
         "email_templates_json": json.dumps(email_templates),
         "whatsapp_templates_json": json.dumps(whatsapp_templates),
+    })
+
+
+@login_required
+def workflow_stats(request, slug: str):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+
+    run_counts = {
+        row["status"]: row["count"]
+        for row in WorkflowRun.objects.filter(workflow=wf).values("status").annotate(count=Count("id"))
+    }
+    total_enrolled = sum(run_counts.values())
+
+    step_rows = list(
+        WorkflowStepRun.objects.filter(run__workflow=wf)
+        .values("step_id", "step_type", "status")
+        .annotate(count=Count("id"))
+        .order_by("step_id", "status")
+    )
+    steps_by_id: dict[str, dict] = {}
+    for row in step_rows:
+        entry = steps_by_id.setdefault(row["step_id"], {
+            "step_id": row["step_id"], "step_type": row["step_type"], "ok": 0, "error": 0,
+        })
+        if row["status"] == "error":
+            entry["error"] += row["count"]
+        else:
+            entry["ok"] += row["count"]
+
+    return render(request, "automation/workflow_stats.html", {
+        "account": account,
+        "wf": wf,
+        "total_enrolled": total_enrolled,
+        "run_counts": run_counts,
+        "step_breakdown": list(steps_by_id.values()),
     })
 
 

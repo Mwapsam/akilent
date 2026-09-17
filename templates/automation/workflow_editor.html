@@ -16,6 +16,7 @@
     </p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
+    <a href="/automations/{{ wf.slug }}/stats/" class="btn btn-secondary btn-sm">Stats</a>
     <form method="post" action="/automations/{{ wf.slug }}/publish/">{% csrf_token %}
       <button class="btn btn-primary btn-sm">Publish</button>
     </form>
@@ -148,6 +149,17 @@
                     <span class="field-error" x-show="fieldError(step.id, 'next')" x-text="fieldError(step.id, 'next')"></span>
                   </label>
                 </div>
+
+                <div class="grid gap-2 sm:grid-cols-2 mt-2">
+                  <label class="text-xs">Send at (optional — leave blank to send immediately)
+                    <input type="datetime-local" class="input input-sm w-full mt-0.5" x-model="step.send_at"
+                           :class="fieldError(step.id, 'send_at') && 'input-error'" />
+                    <span class="field-error" x-show="fieldError(step.id, 'send_at')" x-text="fieldError(step.id, 'send_at')"></span>
+                  </label>
+                  <label class="text-xs" x-show="step.send_at">Timezone
+                    <input class="input input-sm w-full mt-0.5" x-model="step.send_at_tz" placeholder="Africa/Lusaka" />
+                  </label>
+                </div>
               </div>
 
               {# ---- send_whatsapp ---- #}
@@ -168,6 +180,35 @@
                   </template>
                 </label>
                 <label class="text-xs">Phone attribute<input class="input input-sm w-full mt-0.5" x-model="step.phone_field" placeholder="phone" /></label>
+                <label class="text-xs">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+                <label class="text-xs">Send at (optional — leave blank to send immediately)
+                  <input type="datetime-local" class="input input-sm w-full mt-0.5" x-model="step.send_at"
+                         :class="fieldError(step.id, 'send_at') && 'input-error'" />
+                  <span class="field-error" x-show="fieldError(step.id, 'send_at')" x-text="fieldError(step.id, 'send_at')"></span>
+                </label>
+                <label class="text-xs" x-show="step.send_at">Timezone
+                  <input class="input input-sm w-full mt-0.5" x-model="step.send_at_tz" placeholder="Africa/Lusaka" />
+                </label>
+              </div>
+
+              {# ---- webhook ---- #}
+              <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'webhook'">
+                <label class="text-xs sm:col-span-2">URL
+                  <input class="input input-sm w-full mt-0.5" x-model="step.url" placeholder="https://example.com/hooks/akilent"
+                         :class="fieldError(step.id, 'url') && 'input-error'" />
+                  <span class="field-error" x-show="fieldError(step.id, 'url')" x-text="fieldError(step.id, 'url')"></span>
+                </label>
+                <label class="text-xs sm:col-span-2">Body (JSON, optional)
+                  <textarea class="textarea font-mono text-xs w-full mt-0.5" rows="3"
+                            x-model="step._bodyText" @blur="syncWebhookBody(step)"
+                            placeholder='{"note": "run context fields are merged in automatically"}'></textarea>
+                  <span class="field-error" x-show="step._bodyError" x-text="step._bodyError"></span>
+                </label>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
                     <option value="">— choose a step —</option>
@@ -244,12 +285,12 @@
 function workflowEditor() {
   return {
     tab: "visual",
-    definition: {{ definition_json|safe }},
-    stepTypes: {{ step_types|safe }},
-    triggerTypes: {{ trigger_types|safe }},
-    errors: {{ validation_errors|safe }},
-    emailTemplates: {{ email_templates_json|safe }},
-    whatsappTemplates: {{ whatsapp_templates_json|safe }},
+    definition: `{{ definition_json|safe }}`,
+    stepTypes: `{{ step_types|safe }}`,
+    triggerTypes: `{{ trigger_types|safe }}`,
+    errors: `{{ validation_errors|safe }}`,
+    emailTemplates: `{{ email_templates_json|safe }}`,
+    whatsappTemplates: `{{ whatsapp_templates_json|safe }}`,
     codeText: "",
     codeError: "",
     saved: false,
@@ -271,6 +312,10 @@ function workflowEditor() {
       branch: {
         label: "Branch", border: "border-l-blue-500", chip: "bg-blue-50 text-blue-700",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM15.75 18a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM6 8.25v3.75a2.25 2.25 0 0 0 2.25 2.25H15m0 0-2.25-2.25M15 14.25l-2.25 2.25"/>',
+      },
+      webhook: {
+        label: "Webhook", border: "border-l-purple-500", chip: "bg-purple-50 text-purple-700",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/>',
       },
       set_attribute: {
         label: "Set attribute", border: "border-l-green-500", chip: "bg-green-50 text-green-700",
@@ -296,6 +341,22 @@ function workflowEditor() {
     },
     deriveMode(step) {
       if (step.type === "send_email") step._mode = step.template ? "template" : "write";
+      if (step.type === "webhook" && step._bodyText === undefined) {
+        step._bodyText = Object.keys(step.body || {}).length ? JSON.stringify(step.body, null, 2) : "";
+      }
+    },
+    syncWebhookBody(step) {
+      if (!step._bodyText || !step._bodyText.trim()) {
+        step.body = {};
+        step._bodyError = "";
+        return;
+      }
+      try {
+        step.body = JSON.parse(step._bodyText);
+        step._bodyError = "";
+      } catch (e) {
+        step._bodyError = "Invalid JSON: " + e.message;
+      }
     },
     stepOptions(step) {
       const missing = step && step.next && !this.definition.steps.some((s) => s.id === step.next);
@@ -312,11 +373,12 @@ function workflowEditor() {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at"],
     hasStepLevelError(stepId) {
-      return this.stepErrors(stepId).some((e) => !["from", "template", "next", "on_true", "on_false", "field", "type", "id"].includes(e.field) || e.field == null);
+      return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },
     stepLevelError(stepId) {
-      const e = this.stepErrors(stepId).find((er) => !["from", "template", "next", "on_true", "on_false", "field", "type", "id"].includes(er.field) || er.field == null);
+      const e = this.stepErrors(stepId).find((er) => !this.stepFieldsWithInlineError.includes(er.field) || er.field == null);
       return e ? e.message : "";
     },
     triggerFieldError(field) {
@@ -372,7 +434,7 @@ function workflowEditor() {
       if (this.codeError) return;
       this.busy = true;
       try {
-        const cleanSteps = this.definition.steps.map(({ _mode, ...rest }) => rest);
+        const cleanSteps = this.definition.steps.map(({ _mode, _bodyText, _bodyError, ...rest }) => rest);
         const r = await fetch("/automations/{{ wf.slug }}/save/", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },

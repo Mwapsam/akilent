@@ -5,6 +5,7 @@ occurs with matching conditions, execute the specified action (send message,
 create contact, etc.).
 """
 from django.db import models
+from django.utils import timezone
 
 
 class AutomationRule(models.Model):
@@ -151,3 +152,60 @@ class WorkflowStepRun(models.Model):
 
     def __str__(self):
         return f"{self.run_id}/{self.step_id} ({self.step_type})"
+
+
+class WorkflowWebhookDelivery(models.Model):
+    """One attempted (or retried) delivery of a Workflow ``webhook`` step.
+
+    Unlike ``apps.email.models.WebhookDelivery`` (event-subscription driven,
+    FK to a pre-registered ``WebhookEndpoint``), this carries the URL/method/
+    headers/body inline per step invocation — a workflow step configures its
+    own target, not a pre-registered endpoint.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        EXHAUSTED = "exhausted", "Exhausted"
+
+    run = models.ForeignKey(
+        WorkflowRun, on_delete=models.CASCADE, related_name="webhook_deliveries"
+    )
+    step_id = models.CharField(max_length=64)
+
+    url = models.URLField(max_length=1000)
+    method = models.CharField(max_length=10, default="POST")
+    headers = models.JSONField(default=dict, blank=True)
+    body = models.JSONField(default=dict, blank=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    response_code = models.PositiveSmallIntegerField(blank=True, null=True)
+    last_error = models.TextField(blank=True, default="")
+    last_attempt_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["run", "step_id"])]
+
+    def mark_succeeded(self, response_code: int) -> None:
+        self.status = self.Status.SUCCEEDED
+        self.response_code = response_code
+        self.attempt_count += 1
+        self.last_attempt_at = timezone.now()
+        self.save(update_fields=["status", "response_code", "attempt_count", "last_attempt_at"])
+
+    def mark_failed(self, response_code: int | None, error: str = "", *, exhausted: bool = False) -> None:
+        self.status = self.Status.EXHAUSTED if exhausted else self.Status.FAILED
+        self.response_code = response_code
+        self.last_error = error[:2000]
+        self.attempt_count += 1
+        self.last_attempt_at = timezone.now()
+        self.save(update_fields=[
+            "status", "response_code", "last_error", "attempt_count", "last_attempt_at",
+        ])
+
+    def __str__(self):
+        return f"{self.run_id}/{self.step_id} -> {self.url} [{self.status}]"
