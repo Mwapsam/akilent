@@ -33,6 +33,9 @@ class Contact(models.Model):
     first_name = models.CharField(max_length=150, blank=True, default="")
     last_name = models.CharField(max_length=150, blank=True, default="")
     locale = models.CharField(max_length=15, blank=True, default="")
+    # E.164-normalized (see apps.whatsapp.models.contact.normalize_phone). Not
+    # unique — a contact may have none, and we don't want a blank-string fight.
+    phone = models.CharField(max_length=20, blank=True, default="")
 
     # Free-form typed attributes; keys are optionally declared in CustomAttributeDef.
     attributes = models.JSONField(default=dict, blank=True)
@@ -55,6 +58,7 @@ class Contact(models.Model):
         indexes = [
             models.Index(fields=["account", "status"]),
             models.Index(fields=["account", "last_engaged_at"]),
+            models.Index(fields=["account", "phone"]),
         ]
         ordering = ["-first_seen"]
 

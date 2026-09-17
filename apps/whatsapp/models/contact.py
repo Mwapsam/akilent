@@ -29,6 +29,14 @@ class WhatsAppContact(models.Model):
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="contacts"
     )
+    # Links this messaging identity to the apps.contacts.Contact the Workflow
+    # engine operates on, so an inbound message can resolve who sent it instead
+    # of only ever being matched by phone-number string comparison. Optional —
+    # not every WhatsApp identity has (or needs) a linked Contact.
+    contact = models.ForeignKey(
+        "contacts.Contact", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="whatsapp_contacts",
+    )
 
     phone_number = models.CharField(max_length=20, db_index=True)
     display_name = models.CharField(max_length=255, blank=True, null=True)

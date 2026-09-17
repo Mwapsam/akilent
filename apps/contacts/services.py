@@ -14,6 +14,21 @@ logger = logging.getLogger(__name__)
 _ENGAGEMENT_EVENTS = {"opened", "clicked"}
 
 
+def _normalize_phone_soft(raw: str) -> str:
+    """Normalize a CSV phone cell to E.164; fall back to the raw value on failure.
+
+    A malformed phone number must not fail the whole import row — same
+    soft-failure posture as the rest of ``import_csv``.
+    """
+    from apps.whatsapp.models.contact import normalize_phone
+
+    try:
+        return normalize_phone(raw)
+    except Exception:
+        logger.warning("import_csv: could not normalize phone %r; storing as-is", raw)
+        return raw
+
+
 def upsert_contact(account, email: str, *, attributes: dict | None = None, **fields) -> tuple[Contact, bool]:
     """Create or update a contact by (account, email). Returns (contact, created)."""
     email = (email or "").strip().lower()
@@ -129,6 +144,8 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
                 continue
             if dst.startswith("attr:"):
                 attributes[dst[5:]] = val
+            elif dst == "phone":
+                fields["phone"] = _normalize_phone_soft(val)
             elif dst in {"first_name", "last_name", "locale"}:
                 fields[dst] = val
         try:

@@ -43,6 +43,7 @@ _TRIGGER_TYPES = {
     "business_event", "manual",
     "contact.created", "contact.updated",
     "email.opened", "email.clicked",
+    "whatsapp.received",
 }
 
 
@@ -295,6 +296,7 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
         params=params,
         scheduled_at=send_at,
         auto_create_contact=bool(step.get("auto_create_contact")),
+        link_contact=contact,
     )
     return {"outbound_message_id": msg.id}
 

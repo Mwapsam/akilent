@@ -450,6 +450,9 @@ def test_send_whatsapp_auto_creates_contact_when_enabled(account, contact, whats
     # Auto-provisioning never implies consent — the send-authorization layer
     # in apps.whatsapp remains the sole authority on whether this is allowed.
     assert wa_contact.opt_in_status == WhatsAppContact.OptInStatus.UNKNOWN
+    # Links back to the Contact the workflow was running for, so a later
+    # inbound reply can resolve identity without a phone-match lookup.
+    assert wa_contact.contact_id == contact.id
 
 
 @pytest.mark.django_db

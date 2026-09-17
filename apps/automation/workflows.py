@@ -22,7 +22,7 @@ def execute_rule(rule: AutomationRule, context: dict) -> None:
     handler(rule, action, context)
 
 
-def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = False):
+def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = False, link_contact=None):
     """Resolve the ``WhatsAppContact`` for ``phone``, or provision one if allowed.
 
     By default (``auto_create=False``) a missing contact/opt-in record is a hard
@@ -32,6 +32,11 @@ def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = Fa
     a new record is created in the existing ``UNKNOWN`` opt-in state — never
     ``OPTED_IN`` — so the real consent decision is still made by
     ``apps.whatsapp``'s send-authorization policy, not by this helper.
+
+    ``link_contact`` (an ``apps.contacts.Contact``), when given, is set as the
+    new ``WhatsAppContact.contact`` on creation — the caller already knows which
+    Contact this send is for, so there's no need for a later phone-match lookup
+    to establish that identity link.
     """
     from apps.whatsapp.models import WhatsAppContact
 
@@ -43,12 +48,12 @@ def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = Fa
             f"no WhatsApp contact/opt-in record for {phone!r} on account {account.pk}; "
             "add one under WhatsApp Contacts or enable auto_create_contact for this step"
         )
-    return WhatsAppContact.objects.create(account=account, phone_number=phone)
+    return WhatsAppContact.objects.create(account=account, phone_number=phone, contact=link_contact)
 
 
 def send_whatsapp_message(
     account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None,
-    auto_create_contact: bool = False,
+    auto_create_contact: bool = False, link_contact=None,
 ) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
@@ -60,6 +65,9 @@ def send_whatsapp_message(
     due — it's already the field ``apps.whatsapp.tasks.drain_outbound_queue``
     polls, so this just exposes it instead of always defaulting to "now".
 
+    ``link_contact`` is forwarded to ``_resolve_or_provision_contact`` — see
+    there for what it does on auto-create.
+
     Raises ``ValueError`` (with an actionable message) if there's no matching
     ``WhatsAppContact`` and ``auto_create_contact`` is not set, or
     ``MessageTemplate.DoesNotExist`` if the template can't be resolved for this
@@ -67,7 +75,9 @@ def send_whatsapp_message(
     """
     from apps.whatsapp.models import MessageTemplate
 
-    contact = _resolve_or_provision_contact(account, phone, auto_create=auto_create_contact)
+    contact = _resolve_or_provision_contact(
+        account, phone, auto_create=auto_create_contact, link_contact=link_contact
+    )
     template = MessageTemplate.objects.get(pk=template_id, account=account)
 
     kwargs = {}

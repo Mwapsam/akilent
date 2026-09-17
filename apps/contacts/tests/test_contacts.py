@@ -37,6 +37,17 @@ def test_import_csv_with_attribute_mapping(account):
 
 
 @pytest.mark.django_db
+def test_import_csv_normalizes_phone_column(account):
+    csv_text = "email,phone\na@x.com,0971234567\nb@x.com,not-a-number\n"
+    import_csv(account, csv_text, mapping={"email": "email", "phone": "phone"})
+    ada = Contact.objects.get(account=account, email="a@x.com")
+    assert ada.phone == "+260971234567"
+    # Malformed phone must not fail the row — stored as-is rather than blocking import.
+    ben = Contact.objects.get(account=account, email="b@x.com")
+    assert ben.phone == "not-a-number"
+
+
+@pytest.mark.django_db
 def test_record_event_updates_engagement_and_status(account):
     c, _ = upsert_contact(account, "u@x.com")
     record_contact_event(c, "email.opened")
