@@ -44,5 +44,5 @@ def resolve_recipients(account, *, list_slug: str | None = None, segment_slug: s
 
     return [
         {"to": c.email, "variables": _variables(c)}
-        for c in qs.filter(status__in=_SENDABLE).iterator()
+        for c in qs.filter(status__in=_SENDABLE, email__isnull=False).iterator()
     ]

@@ -214,6 +214,8 @@ def _run_send_email(run: WorkflowRun, step: dict) -> dict:
     from apps.api.services import create_and_queue_message
 
     contact = run.contact
+    if not contact.email:
+        raise ValueError(f"send_email step requires an email, but contact {contact.pk} has none")
     send_at = parse_datetime(step["send_at"]) if step.get("send_at") else None
     msg = create_and_queue_message(
         account=run.workflow.account,

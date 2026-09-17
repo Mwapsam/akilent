@@ -1,9 +1,11 @@
 """Tests for the whatsapp.received Workflow trigger (apps/automation/triggers.py).
 
 Covers: enrollment via a directly-linked Contact, enrollment via phone-match
-backfill, no-op when unlinked, and — most importantly — that a failure in the
-new enrollment path never affects the legacy AutomationRule dispatch that
-already runs on the same MessageReceived event.
+backfill, Contact creation for a brand-new phone (the WhatsApp-first case),
+identity stability across repeated messages from the same phone, and —
+most importantly — that a failure in the new enrollment path never affects
+the legacy AutomationRule dispatch that already runs on the same
+MessageReceived event.
 """
 from unittest.mock import patch
 
@@ -70,18 +72,47 @@ class WhatsAppReceivedTriggerTest(TestCase):
         self.assertEqual(wa_contact.contact_id, contact.id)
         self.assertTrue(WorkflowRun.objects.filter(contact=contact).exists())
 
-    def test_no_enrollment_and_no_error_when_unlinked(self):
+    def test_unknown_phone_creates_contact_and_enrolls(self):
+        """WhatsApp-first customer: no linked Contact and no phone match exists yet."""
         wa_contact = WhatsAppContact.objects.create(
             account=self.account, phone_number="+260971234569",
         )
+        wf_received = _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}])
+        wf_created = _wf(self.account, "contact.created", [{"id": "a", "type": "stop"}])
+
+        dispatcher.publish(_event(self.account, wa_contact))
+
+        wa_contact.refresh_from_db()
+        self.assertIsNotNone(wa_contact.contact_id)
+        contact = wa_contact.contact
+        self.assertIsNone(contact.email)
+        self.assertEqual(contact.phone, "+260971234569")
+
+        # A brand-new phone fires both contact.created and whatsapp.received
+        # for the same inbound message — intentional, not a bug.
+        self.assertTrue(WorkflowRun.objects.filter(contact=contact, workflow=wf_received).exists())
+        self.assertTrue(WorkflowRun.objects.filter(contact=contact, workflow=wf_created).exists())
+
+    def test_second_message_from_same_phone_reuses_contact(self):
+        """Identity must stabilize after the first interaction — no duplicate Contacts."""
+        wa_contact = WhatsAppContact.objects.create(
+            account=self.account, phone_number="+260971234571",
+        )
         _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}])
 
-        try:
-            dispatcher.publish(_event(self.account, wa_contact))
-        except Exception as exc:  # noqa: BLE001
-            self.fail(f"publish() should not raise, but raised: {exc}")
+        dispatcher.publish(_event(self.account, wa_contact, body="first"))
+        wa_contact.refresh_from_db()
+        first_contact_id = wa_contact.contact_id
+        self.assertIsNotNone(first_contact_id)
+        self.assertEqual(Contact.objects.filter(account=self.account).count(), 1)
 
-        self.assertFalse(WorkflowRun.objects.exists())
+        dispatcher.publish(_event(self.account, wa_contact, body="second"))
+        wa_contact.refresh_from_db()
+        self.assertEqual(wa_contact.contact_id, first_contact_id)
+        self.assertEqual(Contact.objects.filter(account=self.account).count(), 1)
+        self.assertEqual(
+            WorkflowRun.objects.filter(contact_id=first_contact_id).count(), 2,
+        )
 
     def test_legacy_rule_dispatch_unaffected_by_workflow_enrollment_failure(self):
         """The core isolation invariant: a broken new path must not break the old one."""

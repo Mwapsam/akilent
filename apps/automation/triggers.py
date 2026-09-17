@@ -53,29 +53,29 @@ def _enroll_workflows_for_reply(event: MessageReceived, wa_contact) -> None:
 
     Resolves the ``apps.contacts.Contact`` linked to this WhatsApp identity —
     directly via ``wa_contact.contact`` if already linked, otherwise by a
-    normalized-phone lookup (backfilling the link for next time). If no
-    ``Contact`` can be resolved, this is a no-op (logged) rather than
-    fabricating one — see the plan's "explicitly out of scope" note on why
-    Contact creation isn't attempted here (email is required on Contact today).
+    normalized-phone lookup against an existing Contact (backfilling the link
+    for next time), otherwise by creating a new phone-only Contact. This is
+    what lets a WhatsApp-first customer become a canonical Contact on their
+    very first message, rather than requiring an email-based Contact to
+    already exist. Note this means a brand-new phone number can fire both
+    ``contact.created`` (from the creation below) and ``whatsapp.received``
+    (below) for the same inbound message — intentional, not a bug.
     """
     from apps.automation.workflow_engine import enroll_for_trigger
     from apps.contacts.models import Contact
+    from apps.contacts.services import upsert_contact_by_phone
     from apps.whatsapp.models.contact import normalize_phone
 
     contact = wa_contact.contact
     if contact is None:
         normalized = normalize_phone(wa_contact.phone_number)
         contact = Contact.objects.filter(account_id=event.account_id, phone=normalized).first()
-        if contact is not None:
-            wa_contact.contact = contact
-            wa_contact.save(update_fields=["contact"])
-
-    if contact is None:
-        logger.info(
-            "_enroll_workflows_for_reply: no linked Contact for WhatsAppContact %s (account=%s)",
-            wa_contact.pk, event.account_id,
-        )
-        return
+        if contact is None:
+            contact, _ = upsert_contact_by_phone(
+                wa_contact.account, normalized, source="whatsapp",
+            )
+        wa_contact.contact = contact
+        wa_contact.save(update_fields=["contact"])
 
     enroll_for_trigger(event.account_id, "whatsapp.received", contact, context={
         "message": {

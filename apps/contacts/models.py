@@ -29,13 +29,18 @@ class Contact(models.Model):
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="email_contacts"
     )
-    email = models.EmailField()
+    # Canonical identity invariant: within an account, every non-null email
+    # identifies at most one Contact, every non-null normalized phone
+    # identifies at most one Contact, and a Contact may have phone only,
+    # email only, or both (see the partial unique constraints below). Channel
+    # identities (e.g. WhatsAppContact.contact) resolve to this Contact, and
+    # workflows always execute against Contact, never a channel-specific model.
+    email = models.EmailField(blank=True, null=True, default=None)
     first_name = models.CharField(max_length=150, blank=True, default="")
     last_name = models.CharField(max_length=150, blank=True, default="")
     locale = models.CharField(max_length=15, blank=True, default="")
-    # E.164-normalized (see apps.whatsapp.models.contact.normalize_phone). Not
-    # unique — a contact may have none, and we don't want a blank-string fight.
-    phone = models.CharField(max_length=20, blank=True, default="")
+    # E.164-normalized (see apps.whatsapp.models.contact.normalize_phone).
+    phone = models.CharField(max_length=20, blank=True, null=True, default=None)
 
     # Free-form typed attributes; keys are optionally declared in CustomAttributeDef.
     attributes = models.JSONField(default=dict, blank=True)
@@ -52,8 +57,15 @@ class Contact(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["account", "email"], name="uniq_contact_account_email"
-            )
+                fields=["account", "email"],
+                condition=models.Q(email__isnull=False),
+                name="unique_account_contact_email",
+            ),
+            models.UniqueConstraint(
+                fields=["account", "phone"],
+                condition=models.Q(phone__isnull=False),
+                name="unique_account_contact_phone",
+            ),
         ]
         indexes = [
             models.Index(fields=["account", "status"]),
@@ -63,7 +75,7 @@ class Contact(models.Model):
         ordering = ["-first_seen"]
 
     def __str__(self):
-        return self.email
+        return self.email or self.phone or self.public_id
 
     @property
     def full_name(self) -> str:

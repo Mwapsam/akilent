@@ -6,7 +6,12 @@ from django.utils import timezone
 from apps.accounts.models import Account
 from apps.contacts.models import Contact, ContactEvent, ContactList, Segment
 from apps.contacts.segments import SegmentError, contacts_for, count_for
-from apps.contacts.services import import_csv, record_contact_event, upsert_contact
+from apps.contacts.services import (
+    import_csv,
+    record_contact_event,
+    upsert_contact,
+    upsert_contact_by_phone,
+)
 
 
 @pytest.fixture
@@ -22,6 +27,59 @@ def test_upsert_creates_then_updates(account):
     assert not created2 and c2.pk == c1.pk
     assert c2.attributes == {"plan": "free", "country": "ZM"}
     assert Contact.objects.filter(account=account).count() == 1
+
+
+@pytest.mark.django_db
+def test_upsert_contact_by_phone_creates_phone_only_contact(account):
+    c, created = upsert_contact_by_phone(account, "0971234567")
+    assert created
+    assert c.phone == "+260971234567"
+    assert c.email is None
+
+
+@pytest.mark.django_db
+def test_upsert_contact_by_phone_is_idempotent(account):
+    c1, created1 = upsert_contact_by_phone(account, "0971234567", attributes={"plan": "free"})
+    c2, created2 = upsert_contact_by_phone(account, "+260971234567", attributes={"country": "ZM"})
+    assert created1 and not created2
+    assert c1.pk == c2.pk
+    assert c2.attributes == {"plan": "free", "country": "ZM"}
+    assert Contact.objects.filter(account=account).count() == 1
+
+
+@pytest.mark.django_db
+def test_upsert_contact_by_phone_does_not_collide_with_email_only_contact(account):
+    upsert_contact(account, "a@x.com")
+    phone_contact, created = upsert_contact_by_phone(account, "0971234567")
+    assert created
+    assert Contact.objects.filter(account=account).count() == 2
+    assert phone_contact.email is None
+
+
+@pytest.mark.django_db
+def test_upsert_contact_by_phone_concurrent_create_yields_one_contact(account):
+    """The partial unique constraint on (account, phone) — not application-level
+    locking — must be what prevents a double-create when two requests race for
+    the same unseen phone number."""
+    from django.db import IntegrityError, transaction
+
+    from apps.whatsapp.models.contact import normalize_phone
+
+    normalized = normalize_phone("0971234567")
+
+    # Simulate the race: both "requests" attempt a raw create for the same
+    # normalized phone: the second must fail at the database level.
+    Contact.objects.create(account=account, phone=normalized, email=None)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Contact.objects.create(account=account, phone=normalized, email=None)
+
+    assert Contact.objects.filter(account=account, phone=normalized).count() == 1
+
+    # get_or_create on top of that constraint must resolve cleanly to the one row.
+    contact, created = upsert_contact_by_phone(account, "0971234567")
+    assert not created
+    assert Contact.objects.filter(account=account, phone=normalized).count() == 1
 
 
 @pytest.mark.django_db

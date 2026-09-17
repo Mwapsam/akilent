@@ -59,6 +59,43 @@ def upsert_contact(account, email: str, *, attributes: dict | None = None, **fie
     return contact, created
 
 
+def upsert_contact_by_phone(account, phone: str, *, attributes: dict | None = None, **fields) -> tuple[Contact, bool]:
+    """Create or update a contact by (account, normalized phone). Returns (contact, created).
+
+    Mirrors ``upsert_contact``'s update semantics but keys identity on phone
+    instead of email, so a Contact can be created from a phone-only (e.g.
+    WhatsApp-first) interaction. Race-safe: the partial unique constraint on
+    (account, phone) lets the database — not application-level locking —
+    resolve concurrent creates for the same unseen phone.
+    """
+    from apps.whatsapp.models.contact import normalize_phone
+
+    normalized_phone = normalize_phone(phone)
+
+    contact, created = Contact.objects.get_or_create(
+        account=account, phone=normalized_phone, defaults={"email": None, **fields}
+    )
+    dirty = []
+    for key, value in fields.items():
+        if value not in (None, "") and getattr(contact, key, None) != value:
+            setattr(contact, key, value)
+            dirty.append(key)
+    if attributes:
+        merged = {**(contact.attributes or {}), **attributes}
+        if merged != contact.attributes:
+            contact.attributes = merged
+            dirty.append("attributes")
+    if dirty and not created:
+        contact.save(update_fields=[*set(dirty), "updated_at"])
+    elif created and (attributes or dirty):
+        contact.save()
+
+    trigger = "contact.created" if created else "contact.updated"
+    _notify_contact(contact, trigger)
+    _trigger_workflows(contact, trigger)
+    return contact, created
+
+
 def _trigger_workflows(contact, trigger_type: str, context: dict | None = None) -> None:
     try:
         from apps.automation.workflow_engine import enroll_for_trigger

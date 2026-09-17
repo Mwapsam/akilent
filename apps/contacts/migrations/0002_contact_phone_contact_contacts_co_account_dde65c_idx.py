@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='contact',
             name='phone',
-            field=models.CharField(blank=True, default='', max_length=20),
+            field=models.CharField(blank=True, default=None, max_length=20, null=True),
         ),
         migrations.AddIndex(
             model_name='contact',
