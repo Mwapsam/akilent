@@ -151,6 +151,38 @@ class OutboundSendTest(TestCase):
         self.assertEqual(msg.status, OutboundMessage.Status.FAILED)
         self.assertEqual(msg.message_log.status, MessageLog.Status.FAILED)
 
+    def test_permanent_failure_notifies_automation_reconciliation_hook(self):
+        """A terminal FAILED transition must call the apps.automation hook.
+
+        apps.whatsapp doesn't know about workflows — it just calls the hook
+        with the message; apps.automation.integrations.whatsapp owns what
+        happens next (see apps/automation/tests/test_workflow_engine.py for
+        the WorkflowStepRun/WorkflowRun reconciliation behavior itself).
+        """
+        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        msg.attempts = OutboundMessage.MAX_ATTEMPTS - 1
+        msg.save(update_fields=["attempts"])
+
+        bad = SendResult(message_id="", success=False, error="invalid_recipient")
+        with patch(
+            "apps.automation.integrations.whatsapp.mark_outbound_message_failed"
+        ) as hook:
+            self._drain_with(_FakeProvider(result=bad))
+
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboundMessage.Status.FAILED)
+        hook.assert_called_once_with(msg)
+
+    def test_retryable_failure_does_not_notify_reconciliation_hook(self):
+        """A requeued (non-terminal) failure must not fire the hook yet."""
+        whatsapp_api.send_message(self.account, self.contact, "hi")
+        with patch(
+            "apps.automation.integrations.whatsapp.mark_outbound_message_failed"
+        ) as hook:
+            self._drain_with(_FakeProvider(exc=RuntimeError("boom")))
+
+        hook.assert_not_called()
+
     # --- idempotency & recovery -------------------------------------
 
     def test_duplicate_idempotency_key_returns_existing_message(self):

@@ -344,3 +344,180 @@ def test_advance_is_idempotent(account, contact):
     advance_run(run)
     assert EmailMessage.objects.filter(to_email=contact.email).count() == 1
     assert WorkflowStepRun.objects.filter(run=run, step_id="a").count() == 1
+
+
+# ── send_whatsapp: production-safety fixes ──────────────────────────────────
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_fails_when_template_not_approved(account, contact):
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+    MessageTemplate.objects.create(
+        account=account, name="Pending", whatsapp_template_name="pending_tpl",
+        content="Hi", approval_status=MessageTemplate.ApprovalStatus.PENDING,
+    )
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "pending_tpl", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.FAILED
+    assert not OutboundMessage.objects.exists()
+    step_run = run.step_runs.get(step_id="a")
+    assert "not approved" in step_run.result["error"]
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_variable_mapping_resolves_contact_and_context_fields(account, contact):
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567", "first_name": "Ada"}
+    contact.save()
+    MessageTemplate.objects.create(
+        account=account, name="Order confirmation", whatsapp_template_name="order_confirm",
+        content="Hi {{1}}, order {{2}}", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        variables=["name", "order_number"],
+    )
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_confirm", "next": "b",
+         "variable_mapping": {"name": "contact.first_name", "order_number": "context.order_number"}},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact, context={"order_number": "ORD-123"})
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    msg = OutboundMessage.objects.get(account=account)
+    assert msg.payload["params"] == {"name": "Ada", "order_number": "ORD-123"}
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_variable_mapping_does_not_leak_unlisted_context_keys(account, contact):
+    """Regression test: only explicitly mapped context keys may reach the outbound message."""
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+    MessageTemplate.objects.create(
+        account=account, name="Order confirmation", whatsapp_template_name="order_confirm",
+        content="Order {{1}}", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        variables=["order_number"],
+    )
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_confirm", "next": "b",
+         "variable_mapping": {"order_number": "context.order_number"}},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact, context={
+        "order_number": "ORD-123",
+        "internal_customer_notes": "flagged for fraud review",
+        "admin_token": "super-secret",
+    })
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    msg = OutboundMessage.objects.get(account=account)
+    assert msg.payload["params"] == {"order_number": "ORD-123"}
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_missing_whatsapp_contact_raises_clear_error(account, contact, whatsapp_template):
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.FAILED
+    assert not OutboundMessage.objects.exists()
+    step_run = run.step_runs.get(step_id="a")
+    assert "no WhatsApp contact" in step_run.result["error"]
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_auto_creates_contact_when_enabled(account, contact, whatsapp_template):
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b",
+         "auto_create_contact": True},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    wa_contact = WhatsAppContact.objects.get(account=account, phone_number="+260971234567")
+    # Auto-provisioning never implies consent — the send-authorization layer
+    # in apps.whatsapp remains the sole authority on whether this is allowed.
+    assert wa_contact.opt_in_status == WhatsAppContact.OptInStatus.UNKNOWN
+
+
+@pytest.mark.django_db
+def test_validate_definition_rejects_missing_or_unapproved_template_for_account(account):
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_whatsapp", "template": "nope", "next": "b"},
+                  {"id": "b", "type": "stop"}],
+    }, account=account)
+    e = _err(errors, "a", "template")
+    assert e is not None and e["severity"] == "error"
+
+    MessageTemplate.objects.create(
+        account=account, name="Pending", whatsapp_template_name="pending_tpl",
+        content="Hi", approval_status=MessageTemplate.ApprovalStatus.PENDING,
+    )
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_whatsapp", "template": "pending_tpl", "next": "b"},
+                  {"id": "b", "type": "stop"}],
+    }, account=account)
+    e = _err(errors, "a", "template")
+    assert e is not None and e["severity"] == "warning"
+
+
+@pytest.mark.django_db
+def test_validate_definition_requires_variable_mapping_for_account(account):
+    MessageTemplate.objects.create(
+        account=account, name="Order", whatsapp_template_name="order_tpl",
+        content="Hi {{1}}", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        variables=["name"],
+    )
+    errors = validate_definition({
+        "trigger": {"type": "manual"},
+        "steps": [{"id": "a", "type": "send_whatsapp", "template": "order_tpl", "next": "b"},
+                  {"id": "b", "type": "stop"}],
+    }, account=account)
+    e = _err(errors, "a", "variable_mapping")
+    assert e is not None and "name" in e["message"]
+
+
+@pytest.mark.django_db
+def test_workflow_step_run_reconciles_to_failed_on_outbound_permanent_failure(account, contact, whatsapp_template):
+    from apps.automation.integrations.whatsapp import mark_outbound_message_failed
+
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    contact.attributes = {"phone": "+260971234567"}
+    contact.save()
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, contact)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+
+    msg = OutboundMessage.objects.get(account=account)
+    msg.mark_failed("permanently rejected by Meta", terminal=True)
+
+    mark_outbound_message_failed(msg)
+    run.refresh_from_db()
+    step_run = run.step_runs.get(step_id="a")
+    assert step_run.status == "failed"
+    assert run.status == WorkflowRun.Status.FAILED
+
+    # idempotent: calling again must not error or change anything further
+    mark_outbound_message_failed(msg)
+    step_run.refresh_from_db()
+    run.refresh_from_db()
+    assert step_run.status == "failed"
+    assert run.status == WorkflowRun.Status.FAILED

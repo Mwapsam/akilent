@@ -46,19 +46,27 @@ _TRIGGER_TYPES = {
 }
 
 
-def validate_definition(definition: dict) -> list[dict]:
+def validate_definition(definition: dict, account=None) -> list[dict]:
     """Return a list of problems with ``definition`` (empty = OK).
 
     Each error is ``{"step_id": str | None, "field": str | None, "message": str}``.
     ``step_id`` is ``None`` for trigger-level/structural errors; ``field`` names the
     offending key on that step where applicable (e.g. ``"next"``, ``"template"``).
+
+    ``account``, when given, enables account-aware ``send_whatsapp`` checks: that
+    the named template actually exists for this account (hard error) and, if
+    found, whether it's still pending Meta approval (a warning — drafts may
+    legitimately reference a template before it's approved).
     """
     from django.utils.dateparse import parse_datetime
 
     errors: list[dict] = []
 
-    def _error(message: str, *, step_id: str | None = None, field: str | None = None) -> None:
-        errors.append({"step_id": step_id, "field": field, "message": message})
+    def _error(
+        message: str, *, step_id: str | None = None, field: str | None = None,
+        severity: str = "error",
+    ) -> None:
+        errors.append({"step_id": step_id, "field": field, "message": message, "severity": severity})
 
     definition = definition or {}
     trig = definition.get("trigger") or {}
@@ -91,6 +99,32 @@ def validate_definition(definition: dict) -> list[dict]:
             _error(f"step {sid!r}: send_email needs a from address", step_id=sid, field="from")
         if step.get("type") == "send_whatsapp" and not step.get("template"):
             _error(f"step {sid!r}: send_whatsapp needs a template", step_id=sid, field="template")
+        if step.get("type") == "send_whatsapp" and step.get("template") and account is not None:
+            from apps.whatsapp.models import MessageTemplate
+
+            template = MessageTemplate.objects.filter(
+                account=account, whatsapp_template_name=step["template"]
+            ).first()
+            if template is None:
+                _error(
+                    f"step {sid!r}: template {step['template']!r} not found",
+                    step_id=sid, field="template",
+                )
+            else:
+                if template.approval_status != template.ApprovalStatus.APPROVED:
+                    _error(
+                        f"step {sid!r}: template {step['template']!r} is not yet approved "
+                        f"by Meta (status={template.approval_status}) — sends will fail until approved",
+                        step_id=sid, field="template", severity="warning",
+                    )
+                mapping = step.get("variable_mapping") or {}
+                missing = [v for v in (template.variables or []) if v not in mapping]
+                if missing:
+                    _error(
+                        f"step {sid!r}: template {step['template']!r} needs a mapping for "
+                        f"variable(s) {', '.join(missing)}",
+                        step_id=sid, field="variable_mapping",
+                    )
         if step.get("type") == "webhook" and not step.get("url"):
             _error(f"step {sid!r}: webhook needs a url", step_id=sid, field="url")
         if step.get("type") == "branch" and not (
@@ -216,9 +250,9 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     Reuses ``apps.automation.workflows.send_whatsapp_message`` — the same
     function the legacy AutomationRule ``send_whatsapp_message`` action calls —
     so there is one place that talks to WhatsAppContact/MessageTemplate/
-    OutboundMessage. Any resolution failure (no phone, unknown template, no
-    matching WhatsAppContact) raises, which ``advance_run`` turns into a
-    FAILED run rather than a silent no-op.
+    OutboundMessage. Any resolution failure (no phone, unapproved/unknown
+    template, no matching WhatsAppContact) raises, which ``advance_run`` turns
+    into a FAILED run rather than a silent no-op or a false "completed".
     """
     from django.utils.dateparse import parse_datetime
 
@@ -234,11 +268,20 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
             f"{phone_field!r} attribute"
         )
 
-    template_id = _resolve_whatsapp_template_id(run.workflow.account, step.get("template"))
-    if template_id is None:
+    template = _resolve_whatsapp_template(run.workflow.account, step.get("template"))
+    if template is None:
         raise ValueError(
             f"send_whatsapp step {step.get('id')!r}: template {step.get('template')!r} not found"
         )
+    if template.approval_status != template.ApprovalStatus.APPROVED:
+        raise ValueError(
+            f"send_whatsapp step {step.get('id')!r}: template {step.get('template')!r} "
+            f"is not approved by Meta (status={template.approval_status})"
+        )
+
+    params = _resolve_variable_mapping(
+        template.variables, step.get("variable_mapping") or {}, run, contact
+    )
 
     send_at = None
     if step.get("send_at"):
@@ -248,20 +291,52 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     msg = send_whatsapp_message(
         run.workflow.account,
         phone=phone,
-        template_id=template_id,
-        params={**(step.get("params") or {}), **(run.context or {})},
+        template_id=template.id,
+        params=params,
         scheduled_at=send_at,
+        auto_create_contact=bool(step.get("auto_create_contact")),
     )
     return {"outbound_message_id": msg.id}
 
 
-def _resolve_whatsapp_template_id(account, name):
+def _resolve_whatsapp_template(account, name):
     if not name:
         return None
     from apps.whatsapp.models import MessageTemplate
 
-    t = MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
-    return t.id if t else None
+    return MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
+
+
+def _resolve_variable_mapping(variables: list, mapping: dict, run: WorkflowRun, contact) -> dict:
+    """Build the WhatsApp template ``params`` dict from an explicit, allow-listed mapping.
+
+    ``variables`` is the template's declared placeholder names (``MessageTemplate.variables``,
+    e.g. ``["name", "company"]`` — named, not Meta's positional ``{{1}}``/``{{2}}`` keys).
+    ``mapping`` is ``step["variable_mapping"]``, keyed by those same names, valued by one of:
+
+    - ``"contact.<attr>"``  -> ``contact.attributes.get(attr)``
+    - ``"context.<key>"``   -> ``run.context.get(key)``
+    - anything else         -> used verbatim as a literal constant
+
+    Only variable names present in ``variables`` are ever resolved, and only the
+    ``contact``/``context`` keys explicitly named in ``mapping`` are ever read — the
+    full ``run.context`` is never forwarded wholesale, so nothing outside the
+    declared mapping can reach the outbound WhatsApp message.
+    """
+    params: dict = {}
+    contact_attrs = contact.attributes or {}
+    context = run.context or {}
+    for var in variables or []:
+        if var not in mapping:
+            continue
+        source = mapping[var]
+        if isinstance(source, str) and source.startswith("contact."):
+            params[var] = contact_attrs.get(source[len("contact."):])
+        elif isinstance(source, str) and source.startswith("context."):
+            params[var] = context.get(source[len("context."):])
+        else:
+            params[var] = source
+    return params
 
 
 def _run_webhook(run: WorkflowRun, step: dict) -> dict:
@@ -381,6 +456,10 @@ def _record(run: WorkflowRun, step: dict, result: dict, *, status: str = "ok") -
         WorkflowStepRun.objects.create(
             run=run, step_id=step["id"], step_type=step.get("type", ""),
             status=status, result=result,
+            # Keep the FK in sync with the legacy JSON key so both the
+            # reconciliation hook (apps.automation.integrations.whatsapp) and
+            # any existing code reading result["outbound_message_id"] work.
+            outbound_message_id=result.get("outbound_message_id"),
         )
     except IntegrityError:
         # uniq_workflowsteprun_run_step — a concurrent advance already recorded

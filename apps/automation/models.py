@@ -141,6 +141,15 @@ class WorkflowStepRun(models.Model):
     status = models.CharField(max_length=12, default="ok")
     result = models.JSONField(default=dict, blank=True)
     executed_at = models.DateTimeField(auto_now_add=True)
+    # Links a "send_whatsapp" step to the OutboundMessage it queued, so a
+    # permanent failure discovered later (apps.whatsapp.tasks.drain_outbound_queue)
+    # can be reconciled back onto this step/run instead of leaving the run
+    # showing "completed" while the message never actually sent. See
+    # apps.automation.integrations.whatsapp.mark_outbound_message_failed.
+    outbound_message = models.ForeignKey(
+        "whatsapp.OutboundMessage", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="workflow_step_runs",
+    )
 
     class Meta:
         indexes = [models.Index(fields=["run", "step_id"])]

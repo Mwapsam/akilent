@@ -130,7 +130,8 @@ class WorkflowPublishView(BaseApiView):
     @extend_schema(operation_id="workflows_publish", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def post(self, request, slug, *args, **kwargs):
         w = Workflow.objects.get(account=request.user, slug=slug)
-        errors = validate_definition(w.definition)
+        errors = validate_definition(w.definition, account=w.account)
+        errors = [e for e in errors if e.get("severity", "error") != "warning"]
         if errors:
             return Response({"error": {"code": "invalid_workflow",
                                        "message": "workflow definition is invalid",

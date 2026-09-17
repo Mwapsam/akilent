@@ -36,8 +36,8 @@
       <button class="tab" :class="tab === 'code' && 'tab-active'" @click="syncToCode(); tab = 'code'">Code</button>
     </div>
     <div class="flex items-center gap-3">
-      <span class="text-xs font-medium" :class="errors.length ? 'text-red-600' : 'text-teal-700'"
-            x-text="errors.length ? errors.length + ' issue' + (errors.length === 1 ? '' : 's') : 'Valid'"></span>
+      <span class="text-xs font-medium" :class="blockingErrors().length ? 'text-red-600' : 'text-teal-700'"
+            x-text="blockingErrors().length ? blockingErrors().length + ' issue' + (blockingErrors().length === 1 ? '' : 's') : 'Valid'"></span>
       <span class="text-xs text-gray-400" x-show="saved" x-transition>Saved</span>
       <button class="btn btn-primary btn-sm" @click="save()" :disabled="busy">Save</button>
     </div>
@@ -45,9 +45,9 @@
 
   <ul class="mb-4 space-y-1" x-show="errors.length" x-cloak>
     <template x-for="(e, ei) in errors" :key="ei">
-      <li class="text-xs text-red-600">
+      <li class="text-xs" :class="e.severity === 'warning' ? 'text-amber-700' : 'text-red-600'">
         • <span x-text="e.message"></span>
-        <button type="button" x-show="e.step_id" class="ml-1 underline text-red-500 hover:text-red-700"
+        <button type="button" x-show="e.step_id" class="ml-1 underline hover:opacity-80"
                 @click="jumpToStep(e.step_id)">Jump to step</button>
       </li>
     </template>
@@ -194,6 +194,24 @@
                 <label class="text-xs" x-show="step.send_at">Timezone
                   <input class="input input-sm w-full mt-0.5" x-model="step.send_at_tz" placeholder="Africa/Lusaka" />
                 </label>
+                <label class="text-xs flex items-center gap-2 sm:col-span-2">
+                  <input type="checkbox" x-model="step.auto_create_contact" />
+                  Auto-create a WhatsApp contact if none exists (does not opt them in — consent rules still apply)
+                </label>
+                <div x-show="whatsappSelected(step) && (whatsappSelected(step).variables || []).length"
+                     class="sm:col-span-2 grid gap-1.5 mt-1 border-t border-gray-100 pt-2">
+                  <p class="text-xs text-gray-500">Template variables</p>
+                  <template x-for="v in (whatsappSelected(step) || {}).variables || []" :key="v">
+                    <label class="text-xs flex items-center gap-2">
+                      <span x-text="v" class="w-28 shrink-0 font-mono truncate" :title="v"></span>
+                      <input class="input input-sm flex-1"
+                             :class="fieldError(step.id, 'variable_mapping') && !((step.variable_mapping || {})[v]) && 'input-error'"
+                             x-model="(step.variable_mapping = step.variable_mapping || {})[v]"
+                             :placeholder="'contact.' + v + '  or  context.key  or literal text'">
+                    </label>
+                  </template>
+                  <span class="field-error" x-show="fieldError(step.id, 'variable_mapping')" x-text="fieldError(step.id, 'variable_mapping')"></span>
+                </div>
               </div>
 
               {# ---- webhook ---- #}
@@ -369,11 +387,14 @@ function workflowEditor() {
     stepErrors(stepId) {
       return this.errors.filter((e) => e.step_id === stepId);
     },
+    blockingErrors() {
+      return this.errors.filter((e) => e.severity !== "warning");
+    },
     fieldError(stepId, field) {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
-    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at"],
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping"],
     hasStepLevelError(stepId) {
       return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },

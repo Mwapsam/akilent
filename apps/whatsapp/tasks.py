@@ -503,6 +503,25 @@ def _throttle_for_account(account, cache: dict) -> None:
     ).wait_for(1)
 
 
+def _notify_terminal_failure(msg) -> None:
+    """Tell any consumer outside apps.whatsapp that this send permanently failed.
+
+    Only fires once ``mark_failed`` has actually landed the message in its
+    terminal FAILED state — a retryable failure re-queues instead, and no
+    notification is due yet. Kept a thin, best-effort call (never lets a
+    downstream consumer's failure break the outbound queue) so apps.whatsapp
+    doesn't need to know who's listening.
+    """
+    if msg.status != OutboundMessage.Status.FAILED:
+        return
+    try:
+        from apps.automation.integrations.whatsapp import mark_outbound_message_failed
+
+        mark_outbound_message_failed(msg)
+    except Exception:
+        logger.exception("_notify_terminal_failure: reconciliation hook failed for message %s", msg.id)
+
+
 @shared_task(acks_late=True, reject_on_worker_lost=True)
 def drain_outbound_queue():
     now = timezone.now()
@@ -567,6 +586,7 @@ def drain_outbound_queue():
                 MessageLog.objects.filter(pk=msg.message_log_id).update(
                     status=MessageLog.Status.FAILED
                 )
+            _notify_terminal_failure(msg)
             failed += 1
         except Exception as exc:
             code = getattr(exc, "code", "") or ""
@@ -579,6 +599,7 @@ def drain_outbound_queue():
                 MessageLog.objects.filter(pk=msg.message_log_id).update(
                     status=MessageLog.Status.FAILED
                 )
+            _notify_terminal_failure(msg)
             failed += 1
 
     if sent or failed:

@@ -81,6 +81,7 @@ def workflow_editor(request, slug: str):
             "label": t.name,
             "language_code": t.language_code,
             "approved": t.approval_status == t.ApprovalStatus.APPROVED,
+            "variables": t.variables,
         }
         for t in MessageTemplate.objects.filter(account=account)
         .exclude(whatsapp_template_name__isnull=True)
@@ -94,7 +95,7 @@ def workflow_editor(request, slug: str):
         "definition_json": json.dumps(wf.definition or {}, indent=2),
         "step_types": _STEP_TYPES,
         "trigger_types": _TRIGGER_TYPES,
-        "validation_errors": json.dumps(validate_definition(wf.definition)),
+        "validation_errors": json.dumps(validate_definition(wf.definition, account=account)),
         "email_templates_json": json.dumps(email_templates),
         "whatsapp_templates_json": json.dumps(whatsapp_templates),
     })
@@ -157,7 +158,7 @@ def workflow_save(request, slug: str):
     wf.save(update_fields=["name", "definition", "updated_at"])
     return JsonResponse({
         "ok": True,
-        "errors": validate_definition(wf.definition),
+        "errors": validate_definition(wf.definition, account=account),
         "status": wf.status,
         "version": wf.version,
     })
@@ -170,11 +171,12 @@ def workflow_publish(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
-    errors = validate_definition(wf.definition)
-    if errors:
+    errors = validate_definition(wf.definition, account=account)
+    blocking = [e for e in errors if e.get("severity", "error") != "warning"]
+    if blocking:
         messages.error(
             request,
-            "Fix the workflow before publishing: " + "; ".join(e["message"] for e in errors[:3]),
+            "Fix the workflow before publishing: " + "; ".join(e["message"] for e in blocking[:3]),
         )
         return redirect("automation:editor", slug=wf.slug)
     if wf.status != Workflow.Status.PUBLISHED:

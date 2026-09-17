@@ -22,8 +22,33 @@ def execute_rule(rule: AutomationRule, context: dict) -> None:
     handler(rule, action, context)
 
 
+def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = False):
+    """Resolve the ``WhatsAppContact`` for ``phone``, or provision one if allowed.
+
+    By default (``auto_create=False``) a missing contact/opt-in record is a hard
+    failure with an actionable message — safer, since WhatsApp sends require
+    consent and we don't want to invent contacts silently. When ``auto_create``
+    is explicitly set (e.g. a workflow step opts in via ``auto_create_contact``),
+    a new record is created in the existing ``UNKNOWN`` opt-in state — never
+    ``OPTED_IN`` — so the real consent decision is still made by
+    ``apps.whatsapp``'s send-authorization policy, not by this helper.
+    """
+    from apps.whatsapp.models import WhatsAppContact
+
+    contact = WhatsAppContact.objects.filter(account=account, phone_number=phone).first()
+    if contact is not None:
+        return contact
+    if not auto_create:
+        raise ValueError(
+            f"no WhatsApp contact/opt-in record for {phone!r} on account {account.pk}; "
+            "add one under WhatsApp Contacts or enable auto_create_contact for this step"
+        )
+    return WhatsAppContact.objects.create(account=account, phone_number=phone)
+
+
 def send_whatsapp_message(
-    account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None
+    account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None,
+    auto_create_contact: bool = False,
 ) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
@@ -35,12 +60,14 @@ def send_whatsapp_message(
     due — it's already the field ``apps.whatsapp.tasks.drain_outbound_queue``
     polls, so this just exposes it instead of always defaulting to "now".
 
-    Raises ``WhatsAppContact.DoesNotExist`` / ``MessageTemplate.DoesNotExist``
-    if the contact or template can't be resolved for this account.
+    Raises ``ValueError`` (with an actionable message) if there's no matching
+    ``WhatsAppContact`` and ``auto_create_contact`` is not set, or
+    ``MessageTemplate.DoesNotExist`` if the template can't be resolved for this
+    account.
     """
-    from apps.whatsapp.models import MessageTemplate, WhatsAppContact
+    from apps.whatsapp.models import MessageTemplate
 
-    contact = WhatsAppContact.objects.get(account=account, phone_number=phone)
+    contact = _resolve_or_provision_contact(account, phone, auto_create=auto_create_contact)
     template = MessageTemplate.objects.get(pk=template_id, account=account)
 
     kwargs = {}
@@ -66,7 +93,7 @@ def _send_whatsapp_message(rule: AutomationRule, action: dict, context: dict) ->
     Action payload example:
         {"type": "send_whatsapp_message", "template_id": 42, "params": {...}}
     """
-    from apps.whatsapp.models import MessageTemplate, WhatsAppContact
+    from apps.whatsapp.models import MessageTemplate
 
     phone = context.get("phone_number")
     template_id = action.get("template_id")
@@ -78,7 +105,7 @@ def _send_whatsapp_message(rule: AutomationRule, action: dict, context: dict) ->
         send_whatsapp_message(
             rule.account, phone=phone, template_id=template_id, params=action.get("params", {})
         )
-    except (WhatsAppContact.DoesNotExist, MessageTemplate.DoesNotExist) as exc:
+    except (ValueError, MessageTemplate.DoesNotExist) as exc:
         logger.error("_send_whatsapp_message: %s", exc)
         return
 
