@@ -27,19 +27,29 @@ def _version() -> str:
     return getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
 
 
-def exchange_code_for_token(code: str) -> str:
-    """Exchange the Embedded Signup auth code for an access token."""
+def exchange_code_for_token(code: str, redirect_uri: str | None = None) -> str:
+    """Exchange the Embedded Signup auth code for an access token.
+
+    ``redirect_uri`` is only needed for the redirect-based (non-popup) flow,
+    and if passed here it must be byte-identical to the one sent to the
+    ``/dialog/oauth`` authorization request — Meta rejects the exchange
+    otherwise with "Error validating verification code... redirect_uri is
+    [not] identical". The popup/JS-SDK flow doesn't use a redirect_uri at all.
+    """
     if not settings.WHATSAPP_APP_ID or not settings.WHATSAPP_APP_SECRET:
         raise EmbeddedSignupError(
             "WHATSAPP_APP_ID and WHATSAPP_APP_SECRET must be configured."
         )
+    params = {
+        "client_id": settings.WHATSAPP_APP_ID,
+        "client_secret": settings.WHATSAPP_APP_SECRET,
+        "code": code,
+    }
+    if redirect_uri:
+        params["redirect_uri"] = redirect_uri
     resp = requests.get(
         f"{GRAPH}/{_version()}/oauth/access_token",
-        params={
-            "client_id": settings.WHATSAPP_APP_ID,
-            "client_secret": settings.WHATSAPP_APP_SECRET,
-            "code": code,
-        },
+        params=params,
         timeout=_TIMEOUT,
     )
     data = resp.json() if resp.content else {}

@@ -258,9 +258,13 @@ def connect_redirect_start(request):
     from urllib.parse import urlencode
 
     nonce = secrets.token_urlsafe(24)
-    request.session["whatsapp_connect_state"] = nonce
-
     redirect_uri = request.build_absolute_uri(reverse("whatsapp-connect-redirect-callback"))
+    request.session["whatsapp_connect_state"] = nonce
+    # Stored so the token exchange in connect_redirect_callback can send the
+    # exact same redirect_uri Meta saw here — a mismatch (even in scheme,
+    # e.g. behind a proxy) makes Meta reject the code exchange.
+    request.session["whatsapp_connect_redirect_uri"] = redirect_uri
+
     params = {
         "client_id": settings.WHATSAPP_APP_ID,
         "config_id": settings.WHATSAPP_CONFIG_ID,
@@ -283,6 +287,7 @@ def connect_redirect_callback(request):
         return redirect("dashboard")
 
     expected_state = request.session.pop("whatsapp_connect_state", None)
+    redirect_uri = request.session.pop("whatsapp_connect_redirect_uri", None)
     state = request.GET.get("state")
     if not state or not expected_state or state != expected_state:
         messages.error(request, "Connection request expired or was tampered with. Try again.")
@@ -305,7 +310,7 @@ def connect_redirect_callback(request):
     )
 
     try:
-        token = exchange_code_for_token(code)
+        token = exchange_code_for_token(code, redirect_uri=redirect_uri)
         waba_ids, phone_numbers_by_waba = discover_waba_and_phone(token)
     except EmbeddedSignupError as exc:
         logger.error("connect_redirect_callback: %s", exc)
