@@ -19,9 +19,9 @@ from apps.core.events import MessageReceived, dispatcher
 from apps.whatsapp.models import WhatsAppContact
 
 
-def _wf(account, trigger_type, steps):
+def _wf(account, trigger_type, steps, name="WF"):
     return Workflow.objects.create(
-        account=account, name="WF", status=Workflow.Status.PUBLISHED,
+        account=account, name=name, status=Workflow.Status.PUBLISHED,
         definition={"trigger": {"type": trigger_type}, "steps": steps},
     )
 
@@ -77,8 +77,8 @@ class WhatsAppReceivedTriggerTest(TestCase):
         wa_contact = WhatsAppContact.objects.create(
             account=self.account, phone_number="+260971234569",
         )
-        wf_received = _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}])
-        wf_created = _wf(self.account, "contact.created", [{"id": "a", "type": "stop"}])
+        wf_received = _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}], name="WF received")
+        wf_created = _wf(self.account, "contact.created", [{"id": "a", "type": "stop"}], name="WF created")
 
         dispatcher.publish(_event(self.account, wa_contact))
 
