@@ -363,7 +363,9 @@ def webhook(request):
             logger.info("webhook: duplicate event ignored key=%s", event_key)
             return HttpResponse(status=200)
 
-    if event == "charge.completed":
+    if event == "charge.completed" and (data.get("meta") or {}).get("order_id"):
+        _handle_commerce_charge_completed(payload)
+    elif event == "charge.completed":
         _handle_charge_completed(payload)
     elif event == "subscription.cancelled":
         _handle_subscription_cancelled(payload)
@@ -419,6 +421,56 @@ def _handle_charge_completed(payload: dict):
     activate_subscription(sub.account, plan, "flutterwave", fw_customer_email=cust_email)
 
     logger.info("_handle_charge_completed: renewed subscription for account=%s", account_id)
+
+
+def _handle_commerce_charge_completed(payload: dict):
+    """Route a Flutterwave charge tagged with an ``order_id`` to apps.commerce.
+
+    Shares this endpoint, its ``verif-hash`` check, and its
+    ``ProcessedWebhookEvent`` idempotency ledger with the subscription-billing
+    handler above rather than standing up a second webhook — the two are
+    distinguished purely by ``meta.order_id`` being present.
+    """
+    from apps.commerce.models import Payment
+    from apps.commerce.services import mark_failed, mark_paid
+
+    data = payload.get("data", {})
+    meta = data.get("meta") or {}
+    payment_id = meta.get("payment_id")
+    order_id = meta.get("order_id")
+
+    payment = Payment.objects.filter(public_id=payment_id, order__public_id=order_id).first()
+    if payment is None:
+        logger.warning(
+            "_handle_commerce_charge_completed: no payment for payment_id=%s order_id=%s",
+            payment_id, order_id,
+        )
+        return
+
+    transaction_id = data.get("id")
+    try:
+        verified = get_fw_client().verify_transaction(transaction_id)
+    except FlutterwaveError as exc:
+        logger.error("_handle_commerce_charge_completed: verify failed tx=%s: %s", transaction_id, exc)
+        return
+
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        covers = Decimal(str(verified.get("amount"))) >= payment.amount
+    except (InvalidOperation, TypeError):
+        covers = False
+
+    if verified.get("status") != "successful" or not covers:
+        logger.error(
+            "_handle_commerce_charge_completed: rejected payment=%s status=%s amount=%s expected=%s",
+            payment.public_id, verified.get("status"), verified.get("amount"), payment.amount,
+        )
+        mark_failed(payment, error=f"verification rejected: status={verified.get('status')}")
+        return
+
+    mark_paid(payment, transaction_id=str(transaction_id), raw_payload=verified)
+    logger.info("_handle_commerce_charge_completed: order %s paid", order_id)
 
 
 def _handle_subscription_cancelled(payload: dict):

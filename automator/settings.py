@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.events",
     "apps.conversations",
     "apps.crm",
+    "apps.commerce",
     "drf_spectacular",
     "apps.automation",
     "apps.scheduler",

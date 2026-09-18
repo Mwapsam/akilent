@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Orders — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Orders</h1>
+  <p class="mt-1 text-sm text-gray-600">What needs action.</p>
+</header>
+
+<nav class="flex gap-1 mb-4" aria-label="Order views">
+  <a href="?view=needs_attention" class="btn btn-sm {% if view == 'needs_attention' %}btn-primary{% else %}btn-ghost{% endif %}">Needs attention {% if needs_attention_count %}<span class="ml-1 opacity-75">{{ needs_attention_count }}</span>{% endif %}</a>
+  <a href="?view=all" class="btn btn-sm {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
+</nav>
+
+{% if page %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th><th>Placed</th></tr></thead>
+    <tbody>
+      {% for order in page %}
+      <tr>
+        <td data-label="Order"><a href="{% url 'commerce:detail' order.public_id %}" class="text-brand-600 hover:text-brand-700 font-mono text-xs">{{ order.public_id }}</a></td>
+        <td data-label="Customer">{{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}</td>
+        <td data-label="Total">{{ order.currency }} {{ order.total }}</td>
+        <td data-label="Status">
+          {% if order.status == 'paid' %}<span class="badge badge-success">Paid</span>
+          {% elif order.status == 'failed' or order.status == 'cancelled' %}<span class="badge badge-danger">{{ order.get_status_display }}</span>
+          {% else %}<span class="badge badge-neutral">{{ order.get_status_display }}</span>{% endif %}
+        </td>
+        <td data-label="Placed" class="text-gray-500 tabular-nums">{{ order.created_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="table-wrap">
+  {% include "components/empty_state.html" with icon="layout-template" title="Turn conversations into orders" message="When a customer places an order — through Inbox, a workflow, or the API — it shows up here, from payment through to delivery." %}
+</div>
+{% endif %}
+{% endblock %}

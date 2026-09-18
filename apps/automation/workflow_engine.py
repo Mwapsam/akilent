@@ -54,6 +54,9 @@ _TRIGGER_TYPES = {
     "lead.created",
     "deal.created",
     "deal.stage_changed",
+    # Phase 3 minimal Commerce: fired from apps.commerce.services.
+    "order.created",
+    "order.paid",
 }
 
 

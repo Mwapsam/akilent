@@ -53,6 +53,7 @@ urlpatterns = [
     path("contacts/", include("apps.contacts.urls", namespace="contacts")),
     path("inbox/", include("apps.conversations.urls", namespace="conversations")),
     path("sales/", include("apps.crm.urls", namespace="crm")),
+    path("orders/", include("apps.commerce.urls", namespace="commerce")),
     path("automations/", include("apps.automation.urls", namespace="automation")),
     path("scheduled/", include("apps.scheduler.urls", namespace="scheduler")),
     path("billing/", include("apps.billing.urls", namespace="billing")),
