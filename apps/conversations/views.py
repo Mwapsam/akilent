@@ -62,15 +62,16 @@ def conversation_detail(request, public_id: str):
 
     if request.method == "POST":
         action = request.POST.get("action")
+        ctx = {"account": account}
         try:
             if action == "reply":
-                run_action("reply", {}, conversation=conversation, body=request.POST.get("body", "").strip())
+                run_action("reply", ctx, conversation=conversation, body=request.POST.get("body", "").strip())
                 conversation.mark_read()
             elif action == "assign":
-                run_action("assign_conversation", {}, conversation=conversation, user=request.user)
+                run_action("assign_conversation", ctx, conversation=conversation, user=request.user)
             elif action == "add_note":
                 run_action(
-                    "add_internal_note", {}, conversation=conversation,
+                    "add_internal_note", ctx, conversation=conversation,
                     body=request.POST.get("body", "").strip(), author=request.user,
                 )
             elif action == "mark_read":

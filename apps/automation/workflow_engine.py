@@ -38,7 +38,15 @@ logger = logging.getLogger(__name__)
 
 _MAX_STEPS_PER_CALL = 50
 
-_STEP_TYPES = {"send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit"}
+_STEP_TYPES = {
+    "send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit",
+    # Phase 4: a generic step that calls through the shared Action Registry
+    # (apps.core.actions) by name, rather than requiring a hand-written
+    # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
+    # and anything Phase 5/6 adds) are usable from a Workflow the moment
+    # they're registered — no workflow_engine change needed.
+    "action",
+}
 _TRIGGER_TYPES = {
     "business_event", "manual",
     "contact.created", "contact.updated",
@@ -139,6 +147,36 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                         f"variable(s) {', '.join(missing)}",
                         step_id=sid, field="variable_mapping",
                     )
+        if step.get("type") == "action":
+            if not step.get("action"):
+                _error(f"step {sid!r}: action needs an action name", step_id=sid, field="action")
+            else:
+                from apps.core.actions import ActionError, get_action
+
+                try:
+                    registered = get_action(step["action"])
+                except ActionError:
+                    _error(
+                        f"step {sid!r}: no action registered as {step['action']!r}",
+                        step_id=sid, field="action",
+                    )
+                else:
+                    params = step.get("params") or {}
+                    required = registered.input_schema().get("required", [])
+                    for field_name in required:
+                        # "contact" and "account" are auto-injected from the run at
+                        # execution time (see _build_action_kwargs) — never required
+                        # in params. Object-typed fields may instead be supplied as
+                        # "<field>_id" (resolved by public_id at execution time).
+                        if field_name in ("contact", "account"):
+                            continue
+                        if field_name in params or f"{field_name}_id" in params:
+                            continue
+                        _error(
+                            f"step {sid!r}: action {step['action']!r} needs "
+                            f"{field_name!r} in params (or {field_name}_id)",
+                            step_id=sid, field="params",
+                        )
         if step.get("type") == "webhook" and not step.get("url"):
             _error(f"step {sid!r}: webhook needs a url", step_id=sid, field="url")
         if step.get("type") == "branch" and not (
@@ -379,6 +417,89 @@ def _run_webhook(run: WorkflowRun, step: dict) -> dict:
     return {"delivery_id": delivery.id}
 
 
+# Kwarg name -> dotted path of the model to resolve it against, by
+# ``public_id``, when a step's params supply ``"<name>_id"`` instead of the
+# object directly. Extend this as new object-typed action kwargs appear —
+# it's the only place workflow_engine needs to know about them.
+_ACTION_OBJECT_RESOLVERS = {
+    "conversation": "apps.conversations.models.Conversation",
+    "lead": "apps.crm.models.Lead",
+    "deal": "apps.crm.models.Deal",
+    "order": "apps.commerce.models.Order",
+}
+
+
+def _resolve_action_param(source, run: WorkflowRun):
+    """Same "contact."/"context."/literal convention as
+    ``_resolve_variable_mapping``, generalized for action-step params."""
+    contact_attrs = run.contact.attributes or {}
+    context = run.context or {}
+    if isinstance(source, str) and source.startswith("contact."):
+        return contact_attrs.get(source[len("contact."):])
+    if isinstance(source, str) and source.startswith("context."):
+        return context.get(source[len("context."):])
+    return source
+
+
+def _resolve_action_object(field_name: str, public_id: str, run: WorkflowRun):
+    import importlib
+
+    dotted = _ACTION_OBJECT_RESOLVERS[field_name]
+    module_path, class_name = dotted.rsplit(".", 1)
+    model = getattr(importlib.import_module(module_path), class_name)
+    return model.objects.get(account=run.workflow.account, public_id=public_id)
+
+
+def _build_action_kwargs(run: WorkflowRun, step: dict) -> dict:
+    from apps.core.actions import get_action
+
+    action = get_action(step["action"])
+    schema = action.input_schema()
+    params = step.get("params") or {}
+    kwargs = {}
+
+    for field_name in [*schema.get("required", []), *schema.get("optional", [])]:
+        if field_name == "contact":
+            kwargs["contact"] = run.contact
+            continue
+        if field_name == "account":
+            kwargs["account"] = run.workflow.account
+            continue
+        if field_name in _ACTION_OBJECT_RESOLVERS and field_name not in params:
+            id_source = params.get(f"{field_name}_id")
+            if id_source is not None:
+                public_id = _resolve_action_param(id_source, run)
+                if public_id:
+                    kwargs[field_name] = _resolve_action_object(field_name, public_id, run)
+            continue
+        if field_name in params:
+            kwargs[field_name] = _resolve_action_param(params[field_name], run)
+
+    return kwargs
+
+
+def _run_action_step(run: WorkflowRun, step: dict) -> dict:
+    """Execute a Phase 4 ``action`` step through the shared Action Registry.
+
+    Auto-injects ``contact`` (``run.contact``) and ``account``
+    (``run.workflow.account``) — a step never needs to name those in
+    ``params``. Other object-typed kwargs (``conversation``, ``lead``,
+    ``deal``, ``order``) are resolved by ``public_id`` from ``"<name>_id"``.
+    Scalar kwargs use the same ``"contact.<attr>"`` / ``"context.<key>"`` /
+    literal convention as ``send_whatsapp``'s ``variable_mapping``.
+    """
+    from apps.core.actions import ActionError, run_action
+
+    kwargs = _build_action_kwargs(run, step)
+    try:
+        return run_action(step["action"], {"account": run.workflow.account}, **kwargs)
+    except ActionError as exc:
+        # advance_run's caller treats any exception from a step as a failed
+        # run — this just gives it a clean message instead of leaking
+        # ActionError's type across the module boundary.
+        raise ValueError(f"action step {step.get('id')!r} ({step['action']}): {exc}") from exc
+
+
 def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
     contact = run.contact
     contact.attributes = {**(contact.attributes or {}), step["key"]: step.get("value")}
@@ -430,6 +551,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_send_whatsapp(run, step)
             elif stype == "webhook":
                 result = _run_webhook(run, step)
+            elif stype == "action":
+                result = _run_action_step(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}

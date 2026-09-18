@@ -52,7 +52,7 @@ def lead_detail(request, public_id: str):
         try:
             if action == "convert":
                 result = run_action(
-                    "create_deal", {}, lead=lead,
+                    "create_deal", {"account": account}, lead=lead,
                     title=request.POST.get("title") or None,
                     value=request.POST.get("value") or 0,
                 )
@@ -78,7 +78,7 @@ def deal_detail(request, public_id: str):
             stage_id = request.POST.get("stage_id")
             stage = get_object_or_404(deal.pipeline.stages, id=stage_id)
             try:
-                run_action("change_deal_stage", {}, deal=deal, stage=stage)
+                run_action("change_deal_stage", {"account": account}, deal=deal, stage=stage)
             except ActionError as exc:
                 messages.error(request, str(exc))
         return redirect("crm:deal-detail", public_id=public_id)

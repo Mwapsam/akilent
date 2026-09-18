@@ -48,7 +48,7 @@ def order_detail(request, public_id: str):
             redirect_url = request.build_absolute_uri(
                 reverse("commerce:detail", args=[order.public_id])
             )
-            run_action("request_payment", {}, order=order, redirect_url=redirect_url)
+            run_action("request_payment", {"account": account}, order=order, redirect_url=redirect_url)
             messages.success(request, "Payment link created.")
         except ActionError as exc:
             messages.error(request, str(exc))

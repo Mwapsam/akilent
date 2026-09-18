@@ -6,6 +6,7 @@ from apps.core.actions import Action, ActionError, register
 
 class CreateOrderAction(Action):
     name = "create_order"
+    scope_kwarg = "account"
 
     def input_schema(self) -> dict:
         return {"required": ["account", "contact", "items"], "optional": ["currency"]}
@@ -21,6 +22,7 @@ class CreateOrderAction(Action):
 
 class RequestPaymentAction(Action):
     name = "request_payment"
+    scope_kwarg = "order"
 
     def input_schema(self) -> dict:
         return {"required": ["order", "redirect_url"]}

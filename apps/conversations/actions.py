@@ -29,6 +29,7 @@ class SendWhatsAppAction(Action):
     """
 
     name = "send_whatsapp"
+    scope_kwarg = "account"
 
     def input_schema(self) -> dict:
         return {
@@ -60,6 +61,7 @@ class ReplyAction(Action):
     """
 
     name = "reply"
+    scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
         return {"required": ["conversation", "body"]}
@@ -83,6 +85,7 @@ class AssignConversationAction(Action):
     """Assign a generic Conversation to a team member."""
 
     name = "assign_conversation"
+    scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
         return {"required": ["conversation", "user"]}
@@ -96,6 +99,7 @@ class AddInternalNoteAction(Action):
     """Attach a staff-only note to a conversation."""
 
     name = "add_internal_note"
+    scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
         return {"required": ["conversation", "body"], "optional": ["author"]}

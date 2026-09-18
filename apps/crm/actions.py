@@ -6,6 +6,7 @@ from apps.core.actions import Action, ActionError, register
 
 class CreateLeadAction(Action):
     name = "create_lead"
+    scope_kwarg = "account"
 
     def input_schema(self) -> dict:
         return {"required": ["account", "contact"], "optional": ["source", "owner"]}
@@ -19,6 +20,7 @@ class CreateLeadAction(Action):
 
 class CreateDealAction(Action):
     name = "create_deal"
+    scope_kwarg = "lead"
 
     def input_schema(self) -> dict:
         return {"required": ["lead"], "optional": ["title", "value", "pipeline"]}
@@ -32,6 +34,7 @@ class CreateDealAction(Action):
 
 class ChangeDealStageAction(Action):
     name = "change_deal_stage"
+    scope_kwarg = "deal"
 
     def input_schema(self) -> dict:
         return {"required": ["deal", "stage"]}
