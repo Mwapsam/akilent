@@ -9,6 +9,7 @@ Arrow Up/Down navigate within groups; Tab moves between groups.{% endcomment %}
 
   <div role="group" aria-label="Work">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Work</p>
+    {% include "components/_nav_item.html" with href="/inbox/" label="Inbox" icon="message-circle" match="inbox" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/contacts/" label="Contacts" icon="users" collapsible=collapsible group_key="work" %}

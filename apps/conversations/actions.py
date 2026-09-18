@@ -110,6 +110,36 @@ class SendWhatsAppAction(Action):
         return {"outbound_message_id": msg.id}
 
 
+class ReplyAction(Action):
+    """Send a free-text reply in an open conversation.
+
+    Channel-agnostic entry point: for Phase 1 (WhatsApp only) it resolves the
+    conversation's WhatsApp identity and sends via the free-text path (valid
+    only inside the 24h customer-service window — ``apps.whatsapp`` already
+    enforces that at send time). Later channels register their own resolution
+    here without callers (Inbox UI, Workflow steps) needing to change.
+    """
+
+    name = "reply"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation", "body"]}
+
+    def execute(self, context: dict, *, conversation, body: str) -> dict:
+        if not body:
+            raise ActionError("reply requires a body")
+
+        if conversation.channel == conversation.Channel.WHATSAPP:
+            from apps.whatsapp import api as whatsapp_api
+
+            wa_contact = conversation.whatsapp_conversation.contact
+            msg = whatsapp_api.send_message(conversation.account, wa_contact, body)
+            conversation.whatsapp_conversation.register_outbound(msg.created_at)
+            return {"outbound_message_id": msg.id}
+
+        raise ActionError(f"reply not yet implemented for channel {conversation.channel!r}")
+
+
 class AssignConversationAction(Action):
     """Assign a generic Conversation to a team member."""
 
@@ -144,5 +174,6 @@ class AddInternalNoteAction(Action):
 
 
 register(SendWhatsAppAction())
+register(ReplyAction())
 register(AssignConversationAction())
 register(AddInternalNoteAction())

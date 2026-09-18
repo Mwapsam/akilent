@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Inbox — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
+  <p class="mt-1 text-sm text-gray-600">Who needs a reply — across every channel.</p>
+</header>
+
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <nav class="flex gap-1" aria-label="Inbox views">
+    <a href="?view=needs_reply" class="btn btn-sm {% if view == 'needs_reply' %}btn-primary{% else %}btn-ghost{% endif %}">Needs reply {% if needs_reply_count %}<span class="ml-1 opacity-75">{{ needs_reply_count }}</span>{% endif %}</a>
+    <a href="?view=assigned" class="btn btn-sm {% if view == 'assigned' %}btn-primary{% else %}btn-ghost{% endif %}">Assigned to me {% if assigned_count %}<span class="ml-1 opacity-75">{{ assigned_count }}</span>{% endif %}</a>
+    <a href="?view=all" class="btn btn-sm {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
+  </nav>
+  <form method="get" class="flex items-center gap-2">
+    <input type="hidden" name="view" value="{{ view }}" />
+    <select name="channel" class="select w-40" onchange="this.form.submit()">
+      <option value="">All channels</option>
+      {% for value, label in channel_choices %}
+        <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if page and page.object_list %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead>
+      <tr><th>Customer</th><th>Channel</th><th>Status</th><th>Last message</th></tr>
+    </thead>
+    <tbody>
+      {% for c in page %}
+      <tr class="{% if c.is_unread %}font-medium{% endif %}">
+        <td data-label="Customer">
+          <a href="{% url 'conversations:detail' c.public_id %}" class="text-brand-600 hover:text-brand-700">
+            {{ c.contact.full_name|default:c.contact.email|default:c.contact.phone }}
+          </a>
+        </td>
+        <td data-label="Channel"><span class="badge badge-neutral">{{ c.get_channel_display }}</span></td>
+        <td data-label="Status">
+          {% if c.status == 'open' %}<span class="badge badge-success">Open</span>{% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+          {% if c.assigned_to %}<span class="badge badge-neutral ml-1">{{ c.assigned_to }}</span>{% endif %}
+        </td>
+        <td data-label="Last message" class="text-gray-500 tabular-nums">{{ c.last_message_at|date:"Y-m-d H:i"|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="table-wrap">
+  {% include "components/empty_state.html" with icon="message-circle" title="Nothing needs your attention right now" message="When a customer messages you on WhatsApp, Email, or SMS, the conversation shows up here — one inbox, every channel." %}
+</div>
+{% endif %}
+
+{% include "components/pagination.html" with page=page %}
+{% endblock %}
