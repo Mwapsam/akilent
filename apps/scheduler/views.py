@@ -1,15 +1,15 @@
-"""Dashboard: the "Scheduled" section — everything queued to fire later,
-grouped by day, with Cancel / Reschedule / View-target actions.
+"""Scheduled jobs: cancel/reschedule actions for anything queued to fire later.
+
+The list view has moved to the Campaigns page's "Scheduled" status filter;
+this module now only redirects there and serves the cancel/reschedule API.
 """
 from __future__ import annotations
 
 import json
-from collections import OrderedDict
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
-from django.utils import timezone
+from django.shortcuts import redirect
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 
@@ -20,37 +20,7 @@ from apps.scheduler.models import ScheduledJob
 
 @login_required
 def scheduled_index(request):
-    account = get_current_account(request)
-    if account is None:
-        return redirect("dashboard")
-
-    qs = (
-        ScheduledJob.objects.filter(account=account, parent__isnull=True)
-        .select_related("target_campaign", "target_message")
-        .order_by("fire_at", "id")
-    )
-    show = (request.GET.get("show") or "upcoming").strip()
-    if show == "upcoming":
-        qs = qs.filter(status__in=[
-            ScheduledJob.Status.SCHEDULED,
-            ScheduledJob.Status.PROCESSING,
-            ScheduledJob.Status.RUNNING,
-        ])
-    elif show in {c for c, _ in ScheduledJob.Status.choices}:
-        qs = qs.filter(status=show)
-
-    groups: "OrderedDict[str, list]" = OrderedDict()
-    for job in qs[:500]:
-        day = timezone.localtime(job.fire_at).strftime("%A, %B %d").replace(" 0", " ")
-        groups.setdefault(day, []).append(job)
-
-    return render(request, "scheduler/index.html", {
-        "account": account,
-        "groups": groups,
-        "show": show,
-        "status_choices": ScheduledJob.Status.choices,
-        "total": qs.count(),
-    })
+    return redirect("/email/campaigns/?status=scheduled")
 
 
 def _job_or_none(account, public_id):

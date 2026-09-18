@@ -273,7 +273,7 @@
                  value="{{ form_data.scheduled_at }}">
           <p class="help">Sends at this time in your timezone
             (<span x-text="Intl.DateTimeFormat().resolvedOptions().timeZone"></span>).
-            Manage or cancel it anytime from <a href="/scheduled/" class="link">Scheduled</a>.</p>
+            Manage or cancel it anytime from <a href="/email/campaigns/?status=scheduled" class="link">Campaigns</a>.</p>
           {% if errors.scheduled_at %}<p class="field-error">{{ errors.scheduled_at }}</p>{% endif %}
         </div>
       </div>

@@ -51,50 +51,68 @@
     {% include "components/stat_card.html" with label="Scheduled" value=scheduled_count icon="clock" tone="brand" sub="upcoming sends" %}
   </div>
 
-  {# ── Upcoming sends + Needs attention ─────────────────────── #}
-  <div class="grid lg:grid-cols-3 gap-6 mt-6">
+  {# ── Needs attention (headline, promoted above quick actions) #}
+  <div class="card card-pad mt-6">
+    <h2 class="text-lg font-semibold text-ink mb-3">Needs attention</h2>
+    {% if attention_items %}
+      <ul class="space-y-2">
+        {% for a in attention_items %}
+        <li>
+          <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
+            {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
+            <span>{{ a.text }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="flex items-center gap-2 text-sm text-gray-500">
+        {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
+        All clear.
+      </p>
+    {% endif %}
+  </div>
 
-    <div class="card lg:col-span-2 overflow-hidden">
-      <div class="flex items-center justify-between card-pad pb-3">
-        <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
-        <a href="/scheduled/" class="text-sm text-brand-600 hover:text-brand-700">View all</a>
-      </div>
-      {% if upcoming_sends %}
-        <ul class="divide-y divide-border">
-          {% for s in upcoming_sends %}
-          <li class="flex items-center gap-3 px-5 sm:px-6 py-3">
-            {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0" %}
-            <span class="text-sm text-gray-500 w-40 shrink-0 tabular-nums">{{ s.when|date:"D M j, H:i" }}</span>
-            <span class="text-sm font-medium text-ink truncate flex-1">{{ s.label }}</span>
-            {% include "components/channel_tag.html" with channel=s.channel %}
-          </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign and it will show up here." %}
-      {% endif %}
-    </div>
+  {# ── Quick actions ─────────────────────────────────────────── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+    <a href="/email/campaigns/new/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="send" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Send campaign</span>
+    </a>
+    <a href="/automations/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="workflow" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Create workflow</span>
+    </a>
+    <a href="/contacts/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="users" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Add contacts</span>
+    </a>
+    <a href="/email/templates/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="layout-template" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Create template</span>
+    </a>
+  </div>
 
-    <div class="card card-pad">
-      <h2 class="text-lg font-semibold text-ink mb-3">Needs attention</h2>
-      {% if attention_items %}
-        <ul class="space-y-2">
-          {% for a in attention_items %}
-          <li>
-            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
-              {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
-              <span>{{ a.text }}</span>
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="flex items-center gap-2 text-sm text-gray-500">
-          {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
-          All clear.
-        </p>
-      {% endif %}
+  {# ── Upcoming sends ───────────────────────────────────────── #}
+  <div class="card mt-6 overflow-hidden">
+    <div class="flex items-center justify-between card-pad pb-3">
+      <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
+      <a href="/email/campaigns/?status=scheduled" class="text-sm text-brand-600 hover:text-brand-700">View all</a>
     </div>
+    {% if upcoming_sends %}
+      <ul class="divide-y divide-border">
+        {% for s in upcoming_sends %}
+        <li class="flex items-center gap-3 px-5 sm:px-6 py-3">
+          {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0" %}
+          <span class="text-sm text-gray-500 w-40 shrink-0 tabular-nums">{{ s.when|date:"D M j, H:i" }}</span>
+          <span class="text-sm font-medium text-ink truncate flex-1">{{ s.label }}</span>
+          {% include "components/channel_tag.html" with channel=s.channel %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign and it will show up here." %}
+    {% endif %}
   </div>
 
   {# ── Recent activity ──────────────────────────────────────── #}

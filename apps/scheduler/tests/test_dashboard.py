@@ -15,15 +15,15 @@ def logged_in(client, account):
 
 
 @pytest.mark.django_db
-def test_index_lists_upcoming_grouped(logged_in):
+def test_index_redirects_to_campaigns_scheduled_filter(logged_in):
     client, account = logged_in
     ScheduledJob.objects.create(
         account=account, kind=ScheduledJob.Kind.EMAIL_SINGLE,
         fire_at=timezone.now() + timedelta(hours=2), idempotency_key="a",
     )
     r = client.get("/scheduled/")
-    assert r.status_code == 200
-    assert b"Scheduled" in r.content
+    assert r.status_code == 302
+    assert r.url == "/email/campaigns/?status=scheduled"
 
 
 @pytest.mark.django_db

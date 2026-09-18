@@ -1329,12 +1329,32 @@ def campaigns_list(request):
         return redirect("dashboard")
 
     bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
-    campaigns = _scoped(BulkEmailCampaign.objects, request, account)[:50]
+
+    status = request.GET.get("status") or "all"
+    campaigns = _scoped(BulkEmailCampaign.objects, request, account)
+    status_map = {
+        "draft": ["draft"],
+        "scheduled": ["scheduled"],
+        "sending": ["queued", "sending"],
+        "completed": ["completed"],
+    }
+    if status in status_map:
+        campaigns = campaigns.filter(status__in=status_map[status])
+    campaigns = campaigns[:50]
+
     return render(request, "email/campaigns.html", {
         "account": account,
         "is_admin": admin,
         "campaigns": campaigns,
         "bulk_enabled": bulk_enabled,
+        "status_filter": status,
+        "status_tabs": [
+            ("all", "All"),
+            ("draft", "Draft"),
+            ("scheduled", "Scheduled"),
+            ("sending", "Sending"),
+            ("completed", "Completed"),
+        ],
     })
 
 

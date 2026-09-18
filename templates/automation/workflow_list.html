@@ -41,7 +41,12 @@
 </div>
 {% else %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="workflow" title="No automations yet" message="Build a workflow from a template or a blank canvas — a trigger, then emails, waits and branches." %}
+  {% include "components/empty_state.html" with icon="workflow" title="Automate your first workflow" message="Automations let Akilent send emails, wait, and branch automatically in response to an event — like a new contact or a reply — so you don't have to do it by hand." %}
+  <div class="text-center pb-8 -mt-6">
+    <button class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-workflow')">
+      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create automation
+    </button>
+  </div>
 </div>
 {% endif %}
 

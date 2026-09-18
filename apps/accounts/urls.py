@@ -9,6 +9,7 @@ urlpatterns = [
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("onboarding/", views.onboarding, name="onboarding"),
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("channels/", views.channels, name="channels"),
 
     # Self-service account settings (profile / security / team).
     path("settings/", settings_views.settings_profile, name="settings-profile"),

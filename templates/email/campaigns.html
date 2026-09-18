@@ -38,6 +38,13 @@
 </div>
 {% endif %}
 
+<div class="tabs mb-4" role="tablist" aria-label="Filter campaigns by status">
+  {% for key, label in status_tabs %}
+  <a href="?status={{ key }}" role="tab" aria-selected="{% if status_filter == key %}true{% else %}false{% endif %}"
+     class="tab{% if status_filter == key %} tab-active{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
 {% if campaigns %}
 <div class="table-wrap">
   <table class="table table--cards">
@@ -67,7 +74,11 @@
 </div>
 {% elif bulk_enabled %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="send" title="No campaigns yet" message="Build a message, add your recipients, and send your first campaign." action_url="/email/campaigns/new/" action_label="New campaign" %}
+  {% if status_filter == "all" %}
+  {% include "components/empty_state.html" with icon="send" title="Send your first campaign" message="Campaigns let you reach many customers at once with a personalised email — build a message, add your recipients, and send." action_url="/email/campaigns/new/" action_label="Create campaign" %}
+  {% else %}
+  {% include "components/empty_state.html" with icon="send" title="No campaigns here yet" message="Nothing matches this filter right now." action_url="?status=all" action_label="View all campaigns" %}
+  {% endif %}
 </div>
 {% endif %}
 

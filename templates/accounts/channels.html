@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Channels — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Channels</h1>
+  <p class="mt-1 text-sm text-gray-600">Connect and manage the channels Akilent uses to communicate with your customers.</p>
+</header>
+
+<div class="grid gap-4 sm:grid-cols-2">
+
+  <div class="card p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+          {% include "components/icon.html" with name="mail" class="w-5 h-5" %}
+        </span>
+        <div>
+          <p class="font-semibold text-ink">Email</p>
+          <p class="text-sm text-gray-600">Manage your sending domains and email configuration.</p>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center justify-between">
+      {% if email_connected %}
+        {% include "components/status.html" with state="sent" badge=True %}
+      {% else %}
+        <span class="badge badge-neutral">Not connected</span>
+      {% endif %}
+      <a href="/email/domains/" class="btn btn-secondary btn-sm">Manage email</a>
+    </div>
+  </div>
+
+  {% if whatsapp_enabled %}
+  <div class="card p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+          {% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}
+        </span>
+        <div>
+          <p class="font-semibold text-ink">WhatsApp</p>
+          <p class="text-sm text-gray-600">Connect and manage your WhatsApp numbers.</p>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center justify-between">
+      {% if whatsapp_connected %}
+        {% include "components/status.html" with state="sent" badge=True %}
+      {% else %}
+        <span class="badge badge-neutral">Not connected</span>
+      {% endif %}
+      <a href="/whatsapp/numbers/" class="btn btn-secondary btn-sm">Manage WhatsApp</a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

@@ -481,6 +481,40 @@ def dashboard(request):
     )
 
 
+@login_required
+def channels(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    from django.conf import settings
+
+    numbers = []
+    if settings.WHATSAPP_ENABLED:
+        from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+
+        numbers = list(
+            WhatsAppBusinessNumber.objects.filter(account=account).order_by("phone_number_id")
+        )
+
+    email_domains = []
+    try:
+        from apps.email.models import EmailDomain
+
+        email_domains = list(EmailDomain.objects.filter(account=account).order_by("domain"))
+    except Exception:
+        pass
+
+    return render(request, "accounts/channels.html", {
+        "account": account,
+        "email_domains": email_domains,
+        "email_connected": any(d.status == "verified" for d in email_domains),
+        "whatsapp_enabled": settings.WHATSAPP_ENABLED,
+        "whatsapp_numbers": numbers,
+        "whatsapp_connected": bool(numbers),
+    })
+
+
 def _upcoming_sends(account, limit=5):
     """Next scheduled jobs across all channels — for the dashboard panel + KPI."""
     from django.utils import timezone
