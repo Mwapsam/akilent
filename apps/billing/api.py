@@ -20,6 +20,8 @@ MODULE_MAP = {
     "automation": ModuleSubscription.AUTOMATION,
     "payments": ModuleSubscription.PAYMENTS,
     "ai": ModuleSubscription.AI,
+    "crm": ModuleSubscription.CRM,
+    "commerce": ModuleSubscription.COMMERCE,
 }
 
 # Legacy Plan attribute fallback map (for backward compatibility during migration)
@@ -84,6 +86,20 @@ def has_feature(account: Account, feature_name: str) -> bool:
         )
 
     return result
+
+
+def enable_module(account: Account, feature_name: str) -> None:
+    """Enable a module (``ModuleSubscription.enabled = True``) for an account.
+
+    Idempotent. Used by ``apps.verticals`` when activating a Starter pack —
+    the public entry point so callers never import ``ModuleSubscription``
+    directly.
+
+    Raises:
+        KeyError: if ``feature_name`` isn't a recognized module.
+    """
+    module = MODULE_MAP[feature_name]
+    ModuleSubscription.objects.update_or_create(account=account, module=module, defaults={"enabled": True})
 
 
 def get_subscription(account: Account) -> Optional[Subscription]:

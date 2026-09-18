@@ -312,6 +312,8 @@ class ModuleSubscription(models.Model):
     AUTOMATION = "automation"
     PAYMENTS = "payments"
     AI = "ai"
+    CRM = "crm"
+    COMMERCE = "commerce"
 
     MODULE_CHOICES = [
         (WHATSAPP, "WhatsApp"),
@@ -319,6 +321,8 @@ class ModuleSubscription(models.Model):
         (AUTOMATION, "Automation"),
         (PAYMENTS, "Payments"),
         (AI, "AI"),
+        (CRM, "CRM"),
+        (COMMERCE, "Commerce"),
     ]
 
     ACTIVE = "active"

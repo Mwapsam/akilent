@@ -15,7 +15,22 @@ from apps.crm.models import Deal, Lead, Pipeline, Stage
 logger = logging.getLogger(__name__)
 
 
+_OPEN_LEAD_STATUSES = [Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]
+
+
 def create_lead(account, contact, *, source: str = "", owner=None) -> Lead:
+    """Create a Lead for ``contact``, or return its existing open one.
+
+    A contact should have at most one open opportunity being tracked at a
+    time — without this, a trigger like "every inbound message creates a
+    lead" would spawn a new Lead per message from the same returning
+    customer. Callers that genuinely need a second concurrent lead (rare)
+    should create one directly via ``Lead.objects.create``.
+    """
+    existing = Lead.objects.filter(account=account, contact=contact, status__in=_OPEN_LEAD_STATUSES).first()
+    if existing is not None:
+        return existing
+
     lead = Lead.objects.create(account=account, contact=contact, source=source, owner=owner)
 
     emit_event(

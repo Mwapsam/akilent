@@ -89,6 +89,22 @@ def execute_rule(rule, context: dict) -> dict:
     return _execute(rule, context)
 
 
+def upsert_published_workflow(account, *, slug: str, name: str, definition: dict):
+    """Create or update a published Workflow by slug — idempotent by design.
+
+    Used by ``apps.verticals`` to install a vertical Starter pack's bundled
+    workflows without importing ``apps.automation.models`` directly (module
+    boundary rule: cross-app model access goes through this public API).
+    """
+    from apps.automation.models import Workflow
+
+    workflow, _ = Workflow.objects.update_or_create(
+        account=account, slug=slug,
+        defaults={"name": name, "definition": definition, "status": Workflow.Status.PUBLISHED},
+    )
+    return workflow
+
+
 # Re-export for Phase 2 compatibility (triggers still imports from here internally)
 # This will be removed once triggers.py is fully migrated to use dispatcher
 from apps.automation.triggers import (  # noqa: E402, F401
