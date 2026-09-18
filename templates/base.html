@@ -18,10 +18,13 @@
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  {# Plugin scripts load BEFORE Alpine core so they can register via Alpine.plugin() before Alpine.start() fires #}
+  {# Plugin/store scripts load BEFORE Alpine core so their alpine:init listeners
+     are attached before Alpine.start() fires. Alpine core queues its own start()
+     as a microtask right after it finishes executing, which runs before the next
+     deferred <script> — so alpine.min.js must be the LAST script here. #}
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
-  <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data>
 
