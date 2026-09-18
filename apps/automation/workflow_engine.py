@@ -49,6 +49,11 @@ _TRIGGER_TYPES = {
     # once a generic Conversation/Message/Event exists, so a Workflow can be
     # written against "a customer messaged us" without naming a channel.
     "conversation.message_received",
+    # Phase 2 thin CRM: fired from apps.crm.services alongside the durable
+    # Event and the legacy AutomationRule.TriggerEvent dispatch.
+    "lead.created",
+    "deal.created",
+    "deal.stage_changed",
 }
 
 

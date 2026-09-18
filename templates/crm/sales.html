@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Sales — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Sales</h1>
+  <p class="mt-1 text-sm text-gray-600">Which opportunities need follow-up.</p>
+</header>
+
+<section class="mb-8">
+  <h2 class="text-lg font-semibold text-ink mb-3">Leads</h2>
+  {% if leads %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Customer</th><th>Source</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>
+        {% for lead in leads %}
+        <tr>
+          <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-brand-600 hover:text-brand-700">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a></td>
+          <td data-label="Source">{{ lead.source|default:"—" }}</td>
+          <td data-label="Status"><span class="badge badge-neutral">{{ lead.get_status_display }}</span></td>
+          <td data-label="Created" class="text-gray-500 tabular-nums">{{ lead.created_at|date:"Y-m-d" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="building" title="Turn conversations into customers" message="Capture leads from conversations and follow up automatically. New leads created from Inbox or the API will appear here." %}
+  </div>
+  {% endif %}
+</section>
+
+<section>
+  <h2 class="text-lg font-semibold text-ink mb-3">Pipeline</h2>
+  {% if has_pipeline %}
+  <div class="grid gap-4" style="grid-template-columns: repeat({{ stages|length }}, minmax(0, 1fr));">
+    {% for stage in stages %}
+    <div class="card card-pad">
+      <h3 class="text-sm font-semibold text-ink mb-2">{{ stage.name }}</h3>
+      <div class="space-y-2">
+        {% for deal in stage.deals_in_stage %}
+        <a href="{% url 'crm:deal-detail' deal.public_id %}" class="block rounded-lg border border-border p-2 text-sm hover:border-brand-400">
+          <p class="font-medium text-ink">{{ deal.title }}</p>
+          <p class="text-gray-500">{{ deal.contact.full_name|default:deal.contact.phone }}</p>
+        </a>
+        {% empty %}
+        <p class="text-xs text-gray-400">No deals</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="building" title="No pipeline yet" message="Convert your first lead into a deal and Akilent will set up a starter sales pipeline for you." %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

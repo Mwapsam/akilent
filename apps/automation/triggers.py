@@ -141,11 +141,18 @@ def on_message_sent(message_log) -> None:
 
 
 def on_lead_created(account_id: int, lead_id: str, fields: dict) -> None:
-    pass
+    from apps.automation.models import AutomationRule
+
+    _dispatch(account_id, AutomationRule.TriggerEvent.LEAD_CREATED, {"lead_id": lead_id, **fields})
 
 
 def on_deal_stage_changed(account_id: int, deal_id: str, stage_id: str) -> None:
-    pass
+    from apps.automation.models import AutomationRule
+
+    _dispatch(
+        account_id, AutomationRule.TriggerEvent.DEAL_STAGE_CHANGED,
+        {"deal_id": deal_id, "stage_id": stage_id},
+    )
 
 
 def _dispatch(account_id: int, event: str, context: dict) -> None:

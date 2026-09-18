@@ -1,83 +1,22 @@
-"""Phase 1 Action Registry.
+"""Messaging/Inbox actions, registered into the shared Action Registry
+(``apps.core.actions``).
 
-The single execution surface Workflows, AI, the API, and webhooks share.
-Phase 1 establishes the *contract* and ships three actions
-(``send_whatsapp``, ``assign_conversation``, ``add_internal_note``); Phase 4
-expands the registry with the full CRM/Commerce/Booking action set. The
-boundary matters more than the breadth at this stage.
-
-Every action implements the same shape (name, version, input schema,
-permission check, execute) so callers never need to know which module owns
-the underlying state.
+Phase 1 established the registry contract here; from Phase 2 onward the
+contract itself lives in ``apps.core.actions`` so other modules (``apps.crm``,
+later Commerce) can register into the same registry without depending on
+``apps.conversations``. Re-exported here (``Action``, ``ActionError``,
+``run_action``, ...) so existing imports keep working.
 """
 from __future__ import annotations
 
-import abc
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-class ActionError(Exception):
-    """Raised when an action's input is invalid or it cannot be executed."""
-
-
-class Action(abc.ABC):
-    """Base contract every registry action implements."""
-
-    name: str
-    version: int = 1
-
-    def input_schema(self) -> dict:
-        """JSON-schema-like description of accepted kwargs. Advisory in Phase 1."""
-        return {}
-
-    def has_permission(self, context: dict) -> bool:
-        """Whether the caller (given in ``context``) may run this action.
-
-        Phase 1 default is permissive (any authenticated account context);
-        modules that need finer-grained checks override this.
-        """
-        return True
-
-    @abc.abstractmethod
-    def execute(self, context: dict, **kwargs) -> dict:
-        """Perform the action. Must return a JSON-serializable result dict."""
-        raise NotImplementedError
-
-
-_REGISTRY: dict[str, Action] = {}
-
-
-def register(action: Action) -> Action:
-    if action.name in _REGISTRY:
-        raise ActionError(f"action {action.name!r} is already registered")
-    _REGISTRY[action.name] = action
-    return action
-
-
-def get_action(name: str) -> Action:
-    try:
-        return _REGISTRY[name]
-    except KeyError:
-        raise ActionError(f"no action registered as {name!r}") from None
-
-
-def available_actions() -> list[str]:
-    return sorted(_REGISTRY)
-
-
-def run_action(name: str, context: dict, **kwargs) -> dict:
-    """Look up, permission-check, and execute a registered action.
-
-    This is the one call site every caller (Workflow steps, future AI,
-    API endpoints, webhooks) should go through — never call an action's
-    ``execute`` directly.
-    """
-    action = get_action(name)
-    if not action.has_permission(context):
-        raise ActionError(f"action {name!r} not permitted for this context")
-    return action.execute(context, **kwargs)
+from apps.core.actions import (  # noqa: F401 — re-exported for existing imports
+    Action,
+    ActionError,
+    available_actions,
+    get_action,
+    register,
+    run_action,
+)
 
 
 class SendWhatsAppAction(Action):
