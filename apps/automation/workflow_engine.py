@@ -44,6 +44,11 @@ _TRIGGER_TYPES = {
     "contact.created", "contact.updated",
     "email.opened", "email.clicked",
     "whatsapp.received",
+    # Phase 1 operational spine: channel-agnostic equivalent of
+    # "whatsapp.received" — fired once per channel from apps.conversations
+    # once a generic Conversation/Message/Event exists, so a Workflow can be
+    # written against "a customer messaged us" without naming a channel.
+    "conversation.message_received",
 }
 
 

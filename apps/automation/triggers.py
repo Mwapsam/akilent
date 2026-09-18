@@ -85,6 +85,50 @@ def _enroll_workflows_for_reply(event: MessageReceived, wa_contact) -> None:
         },
     })
 
+    _project_onto_operational_spine(event, wa_contact, contact)
+
+
+def _project_onto_operational_spine(event: MessageReceived, wa_contact, contact) -> None:
+    """Feed the Phase 1 generic Conversation/Message/Event spine.
+
+    Looks up the already-created ``whatsapp.Conversation``/``MessageLog`` by
+    the identifiers on ``event`` rather than threading them through the
+    dispatcher's ``MessageReceived`` dataclass, keeping that dataclass (and
+    the existing WhatsApp webhook pipeline) untouched. Best-effort: any
+    failure here must never affect the legacy or modern trigger dispatch
+    above, which has already run by this point.
+    """
+    from apps.conversations.services import record_inbound_whatsapp_message
+    from apps.whatsapp.models import Conversation as WhatsAppConversation, MessageLog
+
+    try:
+        message_log = MessageLog.objects.get(
+            account_id=event.account_id, message_id=event.message_id,
+        )
+        whatsapp_conversation = (
+            WhatsAppConversation.objects.filter(contact=wa_contact, is_open=True)
+            .order_by("-created_at")
+            .first()
+            or WhatsAppConversation.objects.filter(contact=wa_contact)
+            .order_by("-last_message_at")
+            .first()
+        )
+        if whatsapp_conversation is None:
+            logger.warning(
+                "_project_onto_operational_spine: no whatsapp.Conversation found for "
+                "wa_contact=%s", wa_contact.pk,
+            )
+            return
+        record_inbound_whatsapp_message(
+            contact=contact, wa_contact=wa_contact,
+            whatsapp_conversation=whatsapp_conversation, message_log=message_log,
+        )
+    except Exception:
+        logger.exception(
+            "_project_onto_operational_spine failed for account=%s message_id=%s",
+            event.account_id, event.message_id,
+        )
+
 
 def on_message_sent(message_log) -> None:
     from apps.automation.models import AutomationRule
