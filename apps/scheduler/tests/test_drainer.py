@@ -220,9 +220,12 @@ def test_reschedule_moves_fire_at_and_resets_attempts(account, verified_domain, 
 
 @pytest.mark.django_db
 def test_recurring_job_rearms_after_fire(account, verified_domain, future):
+    # No BYHOUR/BYMINUTE: the rule inherits its time-of-day from whatever
+    # instant it's walked forward from, so re-arming lands exactly one day
+    # after the fire_at used below — regardless of what time the suite runs.
     job = create_and_queue_message(
         account=account, scheduled_at=future(hours=1), tz="UTC",
-        recurrence="FREQ=DAILY;BYHOUR=9;BYMINUTE=0", **_msg_payload()
+        recurrence="FREQ=DAILY", **_msg_payload()
     )
     first_fire = job.fire_at
     job.fire_at = timezone.now() - timedelta(seconds=1)
