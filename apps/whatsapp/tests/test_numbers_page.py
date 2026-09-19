@@ -1,4 +1,5 @@
 """WhatsApp Business onboarding page — rendering + state-driven messaging."""
+import html
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -20,6 +21,7 @@ class OnboardingPageTest(TestCase):
         request = self.rf.get("/whatsapp/numbers/")
         self.user.is_staff = staff
         request.user = self.user
+        request.session = {}
         with patch(
             "apps.whatsapp.numbers.get_current_account", return_value=self.account
         ), patch("apps.billing.api.has_feature", return_value=module):
@@ -45,7 +47,9 @@ class OnboardingPageTest(TestCase):
         self.assertIn("WhatsApp isn't enabled on this plan", body)
 
     def test_all_set_banner_when_fully_onboarded(self):
-        self._add_number(waba_id="WABA1", verification_pin="123456")
+        self._add_number(
+            waba_id="WABA1", verification_pin="123456", registration_status="registered"
+        )
         contact = self.account.contacts.create(phone_number="+260971234567")
         convo = Conversation.get_or_open(contact)
         MessageLog.objects.create(
@@ -54,13 +58,25 @@ class OnboardingPageTest(TestCase):
             message_type=MessageLog.MessageType.TEXT, content="hi",
             status=MessageLog.Status.DELIVERED, timestamp="2026-09-04T00:00:00Z",
         )
+        number = WhatsAppBusinessNumber.objects.get(phone_number_id="PNID")
+        number.connection_tests.create(recipient="+260971234567", status="sent")
         _, body = self._render()
         self.assertIn("You're all set", body)
 
     def test_unregistered_number_shows_warning(self):
         self._add_number(waba_id="WABA1", verification_pin=None)
         _, body = self._render()
-        self.assertIn("Not yet registered on the Cloud API", body)
+        self.assertIn("isn't registered on the Cloud API yet", html.unescape(body))
+        self.assertIn("Retry registration", body)
+
+    def test_failed_registration_shows_error_and_retry(self):
+        self._add_number(
+            waba_id="WABA1", registration_status="failed", registration_error="133010 nope"
+        )
+        _, body = self._render()
+        self.assertIn("133010 nope", body)
+        self.assertIn("Retry registration", body)
+        self.assertNotIn("re-run", body.lower())
 
     def test_missing_token_shows_warning(self):
         WhatsAppBusinessNumber.objects.create(
@@ -68,7 +84,7 @@ class OnboardingPageTest(TestCase):
             is_active=True,
         )
         _, body = self._render()
-        self.assertIn("this number can't send", body)
+        self.assertIn("this number can't send", html.unescape(body))
 
     def test_webhook_block_is_staff_only(self):
         self._add_number()

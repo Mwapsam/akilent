@@ -88,7 +88,7 @@ class ConnectCompleteTest(TestCase):
         ) as ex, patch(
             "apps.whatsapp.embedded.subscribe_app_to_waba"
         ) as sub, patch(
-            "apps.whatsapp.embedded.register_phone_number"
+            "apps.whatsapp.registration.register_phone_number"
         ) as reg:
             response = numbers_views.connect_complete(request)
         return response, ex, sub, reg
@@ -110,6 +110,8 @@ class ConnectCompleteTest(TestCase):
         self.assertEqual(number.access_token, "TOKEN")
         self.assertEqual(number.waba_id, "WABA1")
         self.assertRegex(number.verification_pin, r"^\d{6}$")
+        self.assertEqual(number.registration_status, "registered")
+        self.assertEqual(response.content.decode().count("/whatsapp/numbers/"), 1)
 
     def test_registration_failure_still_connects_without_pin(self):
         with patch(
@@ -119,7 +121,7 @@ class ConnectCompleteTest(TestCase):
         ), patch(
             "apps.whatsapp.embedded.subscribe_app_to_waba"
         ), patch(
-            "apps.whatsapp.embedded.register_phone_number",
+            "apps.whatsapp.registration.register_phone_number",
             side_effect=EmbeddedSignupError("nope"),
         ):
             response = numbers_views.connect_complete(
@@ -130,6 +132,9 @@ class ConnectCompleteTest(TestCase):
         number = WhatsAppBusinessNumber.objects.get(phone_number_id="PNID2")
         self.assertEqual(number.access_token, "TOKEN")
         self.assertIsNone(number.verification_pin)
+        self.assertEqual(number.registration_status, "failed")
+        self.assertEqual(number.registration_error, "nope")
+        self.assertFalse(number.is_ready)
 
     def test_number_owned_by_another_account_is_rejected(self):
         other = Account.objects.create(company_name="Other", slug="other")

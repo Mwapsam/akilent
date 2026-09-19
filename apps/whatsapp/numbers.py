@@ -18,6 +18,13 @@ from django.views.decorators.http import require_POST
 from apps.accounts.utils import get_current_account, is_ajax
 from apps.whatsapp.models import MessageLog
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+from apps.whatsapp.registration import register_number
+from apps.whatsapp.setup_errors import (
+    SetupError,
+    clear_setup_error,
+    get_setup_error,
+    redirect_with_setup_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +45,7 @@ def numbers_list(request):
     active_number = next(
         (n for n in numbers if n.is_active and n.access_token), None
     )
-    # Embedded-Signup numbers store a PIN once registered on the Cloud API;
-    # a manually-entered number legitimately has none.
-    needs_registration = bool(
-        active_number and active_number.waba_id and not active_number.verification_pin
-    )
+    needs_registration = bool(active_number and not active_number.is_ready)
 
     try:
         from apps.billing.api import has_feature
@@ -60,28 +63,15 @@ def numbers_list(request):
     except NoReverseMatch:  # urls only mounted when WHATSAPP_ENABLED
         webhook_url = request.build_absolute_uri("/whatsapp/webhook/")
 
-    steps = [
-        {
-            "label": "Connect a WhatsApp Business number",
-            "done": bool(numbers),
-            "hint": "Use “Connect with WhatsApp” below, or add one manually.",
-        },
-        {
-            "label": "Number ready to send",
-            "done": bool(active_number) and not needs_registration,
-            "hint": "An active number with an access token, registered on the Cloud API.",
-        },
-        {
-            "label": "Receiving messages from customers",
-            "done": inbound_seen,
-            "hint": "Send a message to the number from a phone to confirm inbound works.",
-        },
-        {
-            "label": "WhatsApp enabled on your plan",
-            "done": module_enabled,
-            "hint": "Managed in billing / by your account admin.",
-        },
-    ]
+    from apps.whatsapp.health import number_health
+    from apps.whatsapp.setup import build_setup_console
+
+    for n in numbers:
+        n.health = number_health(n, embedded_enabled=embedded_enabled)
+
+    console = build_setup_console(
+        numbers, embedded_enabled=embedded_enabled, inbound_seen=inbound_seen
+    )
 
     return render(
         request,
@@ -93,8 +83,11 @@ def numbers_list(request):
             "wa_app_id": settings.WHATSAPP_APP_ID,
             "wa_config_id": settings.WHATSAPP_CONFIG_ID,
             "wa_graph_version": settings.WHATSAPP_GRAPH_VERSION,
-            "steps": steps,
-            "onboarding_complete": all(s["done"] for s in steps),
+            "console": console,
+            "setup_error": get_setup_error(request),
+            "onboarding_complete": bool(
+                numbers and console.required_complete and inbound_seen and module_enabled
+            ),
             "active_number": active_number,
             "needs_registration": needs_registration,
             "module_enabled": module_enabled,
@@ -133,55 +126,45 @@ def finish_embedded_connection(request, account, token, phone_number_id, waba_id
         except PlanLimitExceeded as exc:
             return False, {"error": str(exc), "status": 403}
 
-    import secrets
+    from apps.whatsapp.embedded import subscribe_app_to_waba
+    from apps.whatsapp.registration import register_number
 
-    from apps.whatsapp.embedded import register_phone_number, subscribe_app_to_waba
+    clear_setup_error(request)
 
     try:
         subscribe_app_to_waba(waba_id, token)
     except Exception as exc:  # best-effort; don't block the connection
         logger.warning("finish_embedded_connection: subscribe failed: %s", exc)
 
-    # Register the number on the Cloud API so it can send (Tech Provider flow).
-    pin = f"{secrets.randbelow(1_000_000):06d}"
-    try:
-        register_phone_number(phone_number_id, token, pin)
-    except Exception as exc:  # best-effort; owner can retry from the dashboard
-        logger.warning("finish_embedded_connection: phone registration failed: %s", exc)
-        pin = None
-
-    WhatsAppBusinessNumber.objects.update_or_create(
+    number, _created = WhatsAppBusinessNumber.objects.update_or_create(
         phone_number_id=phone_number_id,
         defaults={
             "account": account,
             "access_token": token,
             "waba_id": waba_id or None,
             "business_id": business_id or None,
-            "verification_pin": pin,
         },
     )
     logger.info(
         "finish_embedded_connection: connected number %s for account %s",
         phone_number_id, account.pk,
     )
+
+    # Register on the Cloud API so it can send (Tech Provider flow). The outcome
+    # is persisted on the number; on failure the user retries from the numbers
+    # page without redoing OAuth.
+    result = register_number(number)
+
     from apps.accounts import onboarding as ob
-    from apps.accounts.models import Account
 
-    was_onboarding = account.onboarding_state != Account.Onboarding.COMPLETED
-    next_url = ob.advance_onboarding(account)
-    if not next_url:
-        next_url = "/onboarding/" if was_onboarding else "/whatsapp/numbers/"
-
-    if pin is None:
-        # A flash message (not a JSON field the JS would have to relay) so the
-        # warning survives regardless of where advance_onboarding sends the
-        # user next — it may not be back to the numbers page.
+    ob.advance_onboarding(account)  # side effects only; the numbers page is the console
+    if not result.ok:
         messages.warning(
             request,
-            "Connected, but we couldn't finish activating this number for "
-            "sending — you may need to retry from the numbers page.",
+            "WhatsApp connected, but setup isn't finished — we couldn't register "
+            "this number yet. Use Retry registration below.",
         )
-    return True, {"redirect": next_url}
+    return True, {"redirect": "/whatsapp/numbers/"}
 
 
 @login_required
@@ -251,12 +234,12 @@ def connect_redirect_start(request):
         return redirect("dashboard")
 
     if not (settings.WHATSAPP_APP_ID and settings.WHATSAPP_CONFIG_ID):
-        messages.error(request, "WhatsApp connection is not configured.")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(request, SetupError.NOT_CONFIGURED)
 
     import secrets
     from urllib.parse import urlencode
 
+    clear_setup_error(request)  # a fresh attempt replaces any previous failure
     nonce = secrets.token_urlsafe(24)
     redirect_uri = request.build_absolute_uri(reverse("whatsapp-connect-redirect-callback"))
     request.session["whatsapp_connect_state"] = nonce
@@ -290,18 +273,15 @@ def connect_redirect_callback(request):
     redirect_uri = request.session.pop("whatsapp_connect_redirect_uri", None)
     state = request.GET.get("state")
     if not state or not expected_state or state != expected_state:
-        messages.error(request, "Connection request expired or was tampered with. Try again.")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(request, SetupError.STATE_EXPIRED)
 
     error = request.GET.get("error_description") or request.GET.get("error")
     if error:
-        messages.error(request, f"Meta sign-in was cancelled: {error}")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(request, SetupError.CANCELLED, str(error))
 
     code = (request.GET.get("code") or "").strip()
     if not code:
-        messages.error(request, "Meta did not return a sign-in code. Try again.")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(request, SetupError.NO_CODE)
 
     from apps.whatsapp.embedded import (
         EmbeddedSignupError,
@@ -314,8 +294,9 @@ def connect_redirect_callback(request):
         waba_ids, phone_numbers_by_waba = discover_waba_and_phone(token)
     except EmbeddedSignupError as exc:
         logger.error("connect_redirect_callback: %s", exc)
-        messages.error(request, f"Could not complete onboarding: {exc}")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(
+            request, SetupError.TOKEN_EXCHANGE_FAILED, str(exc)
+        )
 
     candidates = [
         {"waba_id": waba_id, **phone}
@@ -327,18 +308,9 @@ def connect_redirect_callback(request):
             "connect_redirect_callback: no candidates. waba_ids=%s phone_numbers_by_waba=%s",
             waba_ids, phone_numbers_by_waba,
         )
-        if waba_ids:
-            msg = (
-                "Found your WhatsApp Business Account, but it has no phone number "
-                "on it yet. Add one in Meta Business Manager, then try again."
-            )
-        else:
-            msg = (
-                "Meta didn't grant access to a WhatsApp Business Account. Make sure "
-                "you selected or created one during sign-in, and try again."
-            )
-        messages.error(request, msg)
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(
+            request, SetupError.NO_PHONE if waba_ids else SetupError.NO_WABA
+        )
 
     if len(candidates) > 1:
         # More than one number to choose from — let the owner pick rather than
@@ -356,8 +328,9 @@ def connect_redirect_callback(request):
         request, account, token, chosen["id"], chosen["waba_id"], None
     )
     if not ok:
-        messages.error(request, payload["error"])
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(
+            request, SetupError.CONNECT_REJECTED, payload["error"]
+        )
     return redirect(payload["redirect"])
 
 
@@ -377,15 +350,15 @@ def connect_redirect_select(request):
         (c for c in (candidates or []) if c.get("id") == phone_number_id), None
     )
     if not token or not chosen:
-        messages.error(request, "Selection expired. Try connecting again.")
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(request, SetupError.SELECTION_EXPIRED)
 
     ok, payload = finish_embedded_connection(
         request, account, token, chosen["id"], chosen["waba_id"], None
     )
     if not ok:
-        messages.error(request, payload["error"])
-        return redirect("whatsapp-numbers")
+        return redirect_with_setup_error(
+            request, SetupError.CONNECT_REJECTED, payload["error"]
+        )
     return redirect(payload["redirect"])
 
 
@@ -422,7 +395,7 @@ def numbers_create(request):
     if WhatsAppBusinessNumber.objects.filter(phone_number_id=phone_number_id).exists():
         return fail("This phone number ID is already registered.")
 
-    WhatsAppBusinessNumber.objects.create(
+    number = WhatsAppBusinessNumber.objects.create(
         account=account,
         phone_number_id=phone_number_id,
         access_token=access_token or None,
@@ -431,24 +404,62 @@ def numbers_create(request):
         display_number=(request.POST.get("display_number") or "").strip() or None,
     )
 
-    from apps.accounts import onboarding as ob
-    from apps.accounts.models import Account
+    # Same registration path as OAuth and retry. Needs a token to call Meta.
+    result = register_number(number) if number.access_token else None
 
-    was_onboarding = account.onboarding_state != Account.Onboarding.COMPLETED
-    next_url = ob.advance_onboarding(account)
-    if not next_url:
-        next_url = "onboarding" if was_onboarding else "whatsapp-numbers"
+    from apps.accounts import onboarding as ob
+
+    ob.advance_onboarding(account)  # side effects only; the numbers page is the console
+
+    if result is None:
+        msg = f"WhatsApp number {phone_number_id} added. Add an access token to finish setup."
+    elif result.ok:
+        msg = f"WhatsApp number {phone_number_id} registered."
+    else:
+        msg = f"Number {phone_number_id} added, but registration failed: {result.error}"
 
     if ajax:
-        redirect_url = next_url if next_url.startswith("/") else reverse(next_url)
         return JsonResponse({
             "ok": True,
-            "redirect": redirect_url,
-            "message": f"WhatsApp number {phone_number_id} registered.",
+            "redirect": reverse("whatsapp-numbers"),
+            "message": msg,
         })
 
-    messages.success(request, f"WhatsApp number {phone_number_id} registered.")
-    return redirect(next_url)
+    (messages.success if result and result.ok else messages.warning)(request, msg)
+    return redirect("whatsapp-numbers")
+
+
+@login_required
+@require_POST
+def numbers_register(request, pk):
+    """Retry Cloud API registration. Idempotent: an already-registered number is a no-op."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
+    result = register_number(number)
+    if result.ok:
+        messages.success(request, "Number registered — you can now send messages.")
+    else:
+        messages.error(request, f"Registration failed: {result.error}")
+    return redirect("whatsapp-numbers")
+
+
+@login_required
+@require_POST
+def numbers_verify(request, pk):
+    """Send a verification test message; JSON result for the setup card."""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error_code": "no_account", "action": "retry",
+                             "message": "No account."}, status=400)
+
+    from apps.whatsapp.verification import verify_connection
+
+    number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
+    result = verify_connection(number, request.POST.get("recipient", ""))
+    return JsonResponse(result, status=200 if result["ok"] else 400)
 
 
 @login_required

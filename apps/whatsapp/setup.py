@@ -1,0 +1,113 @@
+"""View-model for the WhatsApp setup console.
+
+Templates render this; they never inspect tokens, PINs or registration state
+themselves. Setup progress is sequential: the first incomplete required step is
+``current`` and is the only one that carries a primary action.
+"""
+from dataclasses import dataclass, field
+
+DONE, CURRENT, UPCOMING, OPTIONAL = "done", "current", "upcoming", "optional"
+
+CONNECT_URL = "/whatsapp/connect/redirect/"
+
+
+@dataclass
+class Step:
+    key: str
+    label: str
+    hint: str
+    done: bool
+    required: bool = True
+    state: str = UPCOMING
+    action: dict | None = None  # {label, url, method}
+
+
+@dataclass
+class SetupConsole:
+    number: object | None
+    steps: list[Step] = field(default_factory=list)
+    current: Step | None = None
+
+    @property
+    def primary_action(self):
+        return self.current.action if self.current else None
+
+    @property
+    def required_complete(self) -> bool:
+        return all(s.done for s in self.steps if s.required)
+
+
+def pick_setup_number(numbers):
+    """The number the console is about: first one not ready, else the first."""
+    for n in numbers:
+        if not n.is_ready:
+            return n
+    return numbers[0] if numbers else None
+
+
+def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) -> SetupConsole:
+    number = pick_setup_number(numbers)
+    connect = (
+        {"label": "Connect with WhatsApp", "url": CONNECT_URL, "method": "get"}
+        if embedded_enabled
+        else None
+    )
+    has_creds = bool(number and number.access_token and number.waba_id)
+
+    register = None
+    if number and has_creds:
+        failed = number.registration_status == number.RegistrationStatus.FAILED
+        register = {
+            "label": "Retry registration" if failed else "Register number",
+            "url": f"/whatsapp/numbers/{number.pk}/register/",
+            "method": "post",
+        }
+
+    steps = [
+        Step(
+            "connected", "WhatsApp connected",
+            "Use “Connect with WhatsApp” below, or add a number manually.",
+            done=number is not None, action=connect,
+        ),
+        Step(
+            "credentials", "Credentials valid",
+            "We need an access token and WhatsApp Business Account for this number.",
+            done=has_creds, action=connect,
+        ),
+        Step(
+            "registered", "Number registered",
+            "Registered on the Cloud API so it can send messages.",
+            done=bool(number and number.is_ready), action=register,
+        ),
+        Step(
+            "test", "Send a test message",
+            "Confirm that messages can be sent from this number.",
+            done=bool(number and number.is_ready and number.last_successful_test()),
+            action=(
+                {
+                    "label": "Send test message", "kind": "verify",
+                    "url": f"/whatsapp/numbers/{number.pk}/verify/", "method": "post",
+                }
+                if number and number.is_ready else None
+            ),
+        ),
+        Step(
+            "incoming", "Confirm incoming messages",
+            "Reply to the test message from your phone to confirm inbound works.",
+            done=inbound_seen or bool(number and number.has_received_test_reply()),
+            required=False,
+        ),
+    ]
+
+    current = None
+    for s in steps:
+        if s.done:
+            s.state = DONE
+        elif not s.required:
+            s.state = OPTIONAL
+        elif current is None:
+            s.state = CURRENT
+            current = s
+        else:
+            s.state = UPCOMING
+    return SetupConsole(number=number, steps=steps, current=current)
