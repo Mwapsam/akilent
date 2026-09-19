@@ -79,6 +79,7 @@ class Subscription(models.Model):
     PAST_DUE = "past_due"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    INCOMPLETE = "incomplete"
 
     STATUS_CHOICES = [
         (TRIALING, "Trialing"),
@@ -86,6 +87,7 @@ class Subscription(models.Model):
         (PAST_DUE, "Past Due"),
         (CANCELLED, "Cancelled"),
         (EXPIRED, "Expired"),
+        (INCOMPLETE, "Payment Required"),
     ]
 
     MONTHLY = "monthly"

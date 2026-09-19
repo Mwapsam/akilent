@@ -522,13 +522,42 @@ def _handle_subscription_cancelled(payload: dict):
 
 # --- Stripe -----------------------------------------------------------------
 
+@login_required
 def stripe_success(request):
     """Stripe Checkout's success_url landing page.
 
-    Real activation happens via webhook (Stripe's documented best practice —
-    the redirect alone isn't trustworthy proof of payment), so this just
-    shows a confirmation while the webhook catches up.
+    The redirect alone isn't proof of payment, so this independently
+    retrieves and verifies the Checkout Session (same pattern as
+    Flutterwave's callback()) and activates immediately rather than waiting
+    on the webhook — the webhook remains the authoritative idempotent
+    backstop for this and for renewals.
+
+    A bare session_id in the URL is not sufficient authorization to activate
+    a subscription: login is required, and activation is scoped to the
+    caller's own current account. A session that verifies but belongs to a
+    different account is rejected silently (same response as "not paid
+    yet") so we never reveal to the browser that the session belongs to
+    someone else.
     """
+    account = get_current_account(request)
+    session_id = request.GET.get("session_id")
+    sub = None
+    if account and session_id:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            sub = _activate_stripe_session(session, account=account)
+        except stripe.error.StripeError as exc:
+            logger.warning("stripe_success: could not retrieve session=%s: %s", session_id, exc)
+
+    if sub is not None:
+        messages.success(request, f"Payment confirmed — you're on {sub.plan.name}.")
+        from apps.accounts import onboarding as ob
+
+        if account.onboarding_state != account.Onboarding.COMPLETED:
+            return redirect(ob.first_setup_url(account))
+        return redirect("/dashboard/")
+
     return render(request, "billing/stripe_pending.html")
 
 
@@ -571,36 +600,99 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
-def _handle_stripe_checkout_completed(session: dict):
-    if session.get("mode") != "subscription" or session.get("payment_status") != "paid":
-        return
-
+def _verify_stripe_session(session: dict) -> dict | None:
+    """Stripe-level requirements that must hold before ANY caller is allowed
+    to activate from this session — independent of who's asking, and treating
+    the session's metadata as untrusted data to validate, not business state
+    to trust outright."""
+    if session.get("mode") != "subscription":
+        return None
+    if session.get("payment_status") != "paid":
+        return None
+    if not session.get("subscription"):  # the Stripe subscription object id
+        return None
     meta = session.get("metadata") or {}
-    account_id = meta.get("account_id")
-    plan_slug = meta.get("plan_slug")
-    billing_period = meta.get("billing_period", Subscription.MONTHLY)
+    if not meta.get("account_id") or not meta.get("plan_slug"):
+        return None
+    return session
 
-    if not account_id or not plan_slug:
-        logger.warning("_handle_stripe_checkout_completed: missing metadata on session=%s", session.get("id"))
-        return
+
+def _activate_stripe_session(session: dict, *, account=None):
+    """Activate a Subscription from a verified Stripe Checkout Session.
+
+    ``account`` is the caller's authorization context:
+    - Webhook caller (server-to-server, Stripe-signature-verified): omit —
+      trusted to activate whichever account the session's metadata names.
+    - Browser caller (stripe_success): MUST pass the requesting user's
+      current account. If the session's metadata.account_id doesn't match,
+      the request is rejected — otherwise anyone who learns/guesses a
+      session_id could activate billing for an account that isn't theirs.
+    """
+    session = _verify_stripe_session(session)
+    if session is None:
+        return None
+
+    meta = session["metadata"]
+    if account is not None and str(account.pk) != str(meta["account_id"]):
+        # Log the mismatch for our own audit trail, but the caller (stripe_success)
+        # must respond identically to this and to "not paid yet" — never reveal
+        # to the browser that the session belongs to a different account.
+        logger.warning(
+            "_activate_stripe_session: session account_id=%s does not match caller account=%s",
+            meta["account_id"], account.pk,
+        )
+        return None
+
+    from apps.accounts.models import Account
 
     try:
-        from apps.accounts.models import Account
-        account = Account.objects.get(pk=account_id)
-        plan = Plan.objects.get(slug=plan_slug)
-    except Exception as exc:
-        logger.error("_handle_stripe_checkout_completed: account/plan lookup failed: %s", exc)
-        return
+        target_account = account or Account.objects.get(pk=meta["account_id"])
+        # is_active=True: a plan deactivated between Checkout creation and
+        # completion must not still be grantable.
+        plan = Plan.objects.get(slug=meta["plan_slug"], is_active=True)
+    except (Account.DoesNotExist, Plan.DoesNotExist) as exc:
+        logger.error("_activate_stripe_session: account/plan lookup failed: %s", exc)
+        return None
 
-    activate_subscription(
-        account,
+    # A Subscription row must already exist for this account — activation
+    # only ever rolls an existing row forward (update_or_create inside
+    # activate_subscription), it never conjures one from nothing. Any prior
+    # status is a legitimate starting point (INCOMPLETE from a fresh paid
+    # signup, PAST_DUE recovering via a new Checkout, TRIALING upgrading to
+    # a paid plan, or a replayed ACTIVE session) — the account-id match
+    # above is what actually prevents cross-account activation.
+    existing_subscription = getattr(target_account, "subscription", None)
+    if existing_subscription is None:
+        logger.error("_activate_stripe_session: no subscription row for account=%s", target_account.pk)
+        return None
+
+    # If this subscription already has a Stripe customer on file (e.g. a
+    # retry/second Checkout, or the webhook already ran), the session's
+    # customer must match — guards against a stale or cross-account session
+    # id being replayed here.
+    existing_customer_id = existing_subscription.stripe_customer_id
+    session_customer_id = session.get("customer")
+    if existing_customer_id and session_customer_id and str(existing_customer_id) != str(session_customer_id):
+        logger.warning(
+            "_activate_stripe_session: session customer=%s does not match existing stripe_customer_id=%s",
+            session_customer_id, existing_customer_id,
+        )
+        return None
+
+    sub = activate_subscription(
+        target_account,
         plan,
         "stripe",
-        billing_period=billing_period,
-        stripe_customer_id=session.get("customer"),
-        stripe_subscription_id=session.get("subscription"),
+        billing_period=meta.get("billing_period", Subscription.MONTHLY),
+        stripe_customer_id=session_customer_id,
+        stripe_subscription_id=session["subscription"],
     )
-    logger.info("_handle_stripe_checkout_completed: activated subscription for account=%s", account_id)
+    logger.info("_activate_stripe_session: activated subscription for account=%s", target_account.pk)
+    return sub
+
+
+def _handle_stripe_checkout_completed(session: dict):
+    _activate_stripe_session(session)
 
 
 def _handle_stripe_invoice_paid(invoice: dict):

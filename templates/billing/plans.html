@@ -43,7 +43,7 @@
           {{ subscription.plan.name }}
           <span class="text-sm font-normal capitalize
             {% if subscription.status == 'active' %}text-green-600
-            {% elif subscription.status == 'trialing' %}text-amber-600
+            {% elif subscription.status == 'trialing' or subscription.status == 'incomplete' %}text-amber-600
             {% elif subscription.status == 'expired' or subscription.status == 'past_due' %}text-red-600
             {% else %}text-gray-500{% endif %}">· {{ subscription.get_status_display }}</span>
         </p>
@@ -70,7 +70,13 @@
         </div>
       </div>
     </div>
-    {% if subscription.is_active and subscription.plan.slug != 'trial' %}
+    {% if subscription.status == 'incomplete' %}
+      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+        <p class="text-xs text-amber-600">Payment required to activate this plan.</p>
+        <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&method=stripe&period={{ subscription.billing_period }}"
+           class="btn btn-primary btn-sm">Complete payment</a>
+      </div>
+    {% elif subscription.is_active and subscription.plan.slug != 'trial' %}
       <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
         <p class="text-xs text-gray-400">
           {% if subscription.stripe_subscription_id %}Recurring {{ subscription.get_billing_period_display|lower }} billing via Stripe.

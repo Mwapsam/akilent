@@ -44,8 +44,11 @@ def trial_plan(db):
 
 @pytest.fixture
 def email_plan(db):
+    # $0: these fixtures exercise onboarding routing/login/verification, not
+    # billing — kept free so signup completes without a Stripe checkout
+    # redirect. See test_signup_billing.py for paid-plan behavior.
     return Plan.objects.create(
-        slug=Plan.STARTER, name="Starter", price_monthly=19,
+        slug=Plan.STARTER, name="Starter", price_monthly=0,
         service_type=Plan.SERVICE_EMAIL,
     )
 
@@ -53,7 +56,7 @@ def email_plan(db):
 @pytest.fixture
 def whatsapp_plan(db):
     return Plan.objects.create(
-        slug=Plan.PROFESSIONAL, name="Professional", price_monthly=49,
+        slug=Plan.PROFESSIONAL, name="Professional", price_monthly=0,
         service_type=Plan.SERVICE_WHATSAPP,
     )
 

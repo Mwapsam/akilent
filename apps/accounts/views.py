@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -250,6 +251,17 @@ def signup(request):
                 "signup: created account %s (%s) for user %s",
                 account.pk, account.selected_services, user.pk,
             )
+
+            from apps.billing.models import Subscription
+
+            subscription = getattr(account, "subscription", None)
+            if subscription and subscription.status == Subscription.INCOMPLETE:
+                messages.success(
+                    request,
+                    f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
+                )
+                return redirect(f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly")
+
             messages.success(
                 request,
                 "Your account is ready. We've emailed a link to verify your address.",
@@ -289,10 +301,15 @@ def _apply_selected_plan(account, plan_slug):
     The trial Subscription is auto-created by the billing post_save signal;
     this just swaps its plan so a "Choose Professional" click doesn't
     silently land the user on the default/trial plan instead.
+
+    A plan priced above $0 is never activated here — it's marked
+    INCOMPLETE (no trial grace period, regardless of the plan's trial_days)
+    and signup() redirects straight to Stripe Checkout to collect payment
+    before the account is usable.
     """
     if not plan_slug:
         return
-    from apps.billing.models import Plan
+    from apps.billing.models import Plan, Subscription
 
     plan = Plan.objects.filter(slug=plan_slug, is_active=True).first()
     if plan is None:
@@ -301,12 +318,15 @@ def _apply_selected_plan(account, plan_slug):
     if subscription is None:
         return
     subscription.plan = plan
-    if plan.trial_days:
+    if plan.price_monthly > Decimal("0"):
+        subscription.status = Subscription.INCOMPLETE
+        subscription.trial_ends_at = None
+    elif plan.trial_days:
         subscription.trial_ends_at = timezone.now() + timedelta(days=plan.trial_days)
-        subscription.status = subscription.__class__.TRIALING
+        subscription.status = Subscription.TRIALING
     else:
         subscription.trial_ends_at = None
-        subscription.status = subscription.__class__.ACTIVE
+        subscription.status = Subscription.ACTIVE
     subscription.save(update_fields=["plan", "trial_ends_at", "status"])
 
 
