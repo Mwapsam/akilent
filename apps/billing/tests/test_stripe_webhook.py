@@ -101,3 +101,53 @@ def test_subscription_deleted_cancels_locally(client, account, plan, subscriptio
     subscription.refresh_from_db()
     assert subscription.status == Subscription.CANCELLED
     assert subscription.cancelled_at is not None
+
+
+class _StripeLikeObject:
+    """Mimics stripe-python v15 objects: subscriptable, has to_dict(), no .get()."""
+
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def to_dict(self):
+        return self._data
+
+
+def _post_stripe_objects(client, event):
+    wrapped = {
+        "id": event["id"],
+        "type": event["type"],
+        "data": {"object": _StripeLikeObject(event["data"]["object"])},
+    }
+    return _post(client, wrapped)
+
+
+@pytest.mark.django_db
+def test_webhook_handles_non_dict_stripe_objects(client, account, plan, subscription, settings):
+    settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+    resp = _post_stripe_objects(client, _checkout_completed_event(account))
+
+    assert resp.status_code == 200
+    subscription.refresh_from_db()
+    assert subscription.status == Subscription.ACTIVE
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_handler_does_not_burn_the_dedupe_key(client, account, plan, subscription, settings):
+    settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+    client.raise_request_exception = False
+    event = _checkout_completed_event(account)
+
+    with patch("apps.billing.views._activate_stripe_session", side_effect=RuntimeError("boom")):
+        resp = _post(client, event)
+    assert resp.status_code == 500
+    assert not ProcessedWebhookEvent.objects.filter(event_key="checkout.session.completed:evt_1").exists()
+
+    # Stripe's retry must now be processed, not ignored as a duplicate.
+    resp = _post(client, event)
+    assert resp.status_code == 200
+    subscription.refresh_from_db()
+    assert subscription.status == Subscription.ACTIVE

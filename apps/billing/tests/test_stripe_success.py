@@ -130,3 +130,23 @@ def test_missing_session_id_shows_pending_page(client, account_a, incomplete_sub
     assert resp.status_code == 200
     incomplete_subscription_a.refresh_from_db()
     assert incomplete_subscription_a.status == Subscription.INCOMPLETE
+
+
+@pytest.mark.django_db
+def test_non_dict_stripe_session_object_is_handled(client, account_a, incomplete_subscription_a):
+    class _StripeLikeObject:
+        def __init__(self, data):
+            self._data = data
+
+        def to_dict(self):
+            return self._data
+
+    _login_owner(client, account_a, username="ownera5@example.com")
+
+    with patch("apps.billing.views.stripe.checkout.Session.retrieve") as retrieve:
+        retrieve.return_value = _StripeLikeObject(_session(account=account_a))
+        resp = client.get(f"{SUCCESS_URL}?session_id=cs_test_123")
+
+    assert resp.status_code == 302
+    incomplete_subscription_a.refresh_from_db()
+    assert incomplete_subscription_a.status == Subscription.ACTIVE

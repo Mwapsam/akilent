@@ -4,6 +4,7 @@ import logging
 import stripe
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -545,7 +546,7 @@ def stripe_success(request):
     if account and session_id:
         stripe.api_key = settings.STRIPE_SECRET_KEY
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
+            session = _stripe_to_dict(stripe.checkout.Session.retrieve(session_id))
             sub = _activate_stripe_session(session, account=account)
         except stripe.error.StripeError as exc:
             logger.warning("stripe_success: could not retrieve session=%s: %s", session_id, exc)
@@ -579,25 +580,35 @@ def stripe_webhook(request):
         return HttpResponse(status=400)
 
     event_key = f"{event['type']}:{event['id']}"
-    _, created = ProcessedWebhookEvent.objects.get_or_create(event_key=event_key)
-    if not created:
-        logger.info("stripe_webhook: duplicate event ignored key=%s", event_key)
-        return HttpResponse(status=200)
+    data = _stripe_to_dict(event["data"]["object"])
 
-    data = event["data"]["object"]
+    # The dedupe row and the handler share one transaction: if the handler
+    # raises, the row rolls back, so Stripe's retry is processed rather than
+    # ignored as an already-seen event.
+    with transaction.atomic():
+        _, created = ProcessedWebhookEvent.objects.get_or_create(event_key=event_key)
+        if not created:
+            logger.info("stripe_webhook: duplicate event ignored key=%s", event_key)
+            return HttpResponse(status=200)
 
-    if event["type"] == "checkout.session.completed":
-        _handle_stripe_checkout_completed(data)
-    elif event["type"] == "invoice.payment_succeeded":
-        _handle_stripe_invoice_paid(data)
-    elif event["type"] == "invoice.payment_failed":
-        _handle_stripe_payment_failed(data)
-    elif event["type"] == "customer.subscription.deleted":
-        _handle_stripe_subscription_deleted(data)
-    else:
-        logger.debug("stripe_webhook: unhandled event type=%s", event["type"])
+        if event["type"] == "checkout.session.completed":
+            _handle_stripe_checkout_completed(data)
+        elif event["type"] == "invoice.payment_succeeded":
+            _handle_stripe_invoice_paid(data)
+        elif event["type"] == "invoice.payment_failed":
+            _handle_stripe_payment_failed(data)
+        elif event["type"] == "customer.subscription.deleted":
+            _handle_stripe_subscription_deleted(data)
+        else:
+            logger.debug("stripe_webhook: unhandled event type=%s", event["type"])
 
     return HttpResponse(status=200)
+
+
+def _stripe_to_dict(obj) -> dict:
+    """Stripe SDK objects (v15+) are not dicts — no .get(). Convert at the
+    boundary so the handlers can treat payloads as plain dicts."""
+    return obj.to_dict() if hasattr(obj, "to_dict") else obj
 
 
 def _verify_stripe_session(session: dict) -> dict | None:
