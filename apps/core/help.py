@@ -27,7 +27,9 @@ class Article:
 
 
 # Display order for the index.
-CATEGORIES = ["Getting started", "Email setup", "Account & team", "Troubleshooting"]
+CATEGORIES = [
+    "Getting started", "Email setup", "WhatsApp", "Account & team", "Troubleshooting",
+]
 
 ARTICLES = [
     Article(
@@ -62,6 +64,15 @@ ARTICLES = [
         "Email setup", icon="inbox",
         keywords=("mailbox", "alias", "quota", "storage", "password", "forward", "inbox", "user@"),
         related=("domains", "security"),
+    ),
+    Article(
+        "whatsapp-setup",
+        "Connect & troubleshoot WhatsApp",
+        "Connect a number through Meta, register it, send a test message, and fix common errors.",
+        "WhatsApp", icon="chat",
+        keywords=("whatsapp", "meta", "waba", "cloud api", "register", "registration", "133010",
+                  "token", "webhook", "test message", "business verification", "phone number"),
+        related=("troubleshooting", "getting-started"),
     ),
     Article(
         "team",

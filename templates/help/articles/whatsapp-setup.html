@@ -1,0 +1,45 @@
+{% comment %}Body for the "Connect & troubleshoot WhatsApp" guide.{% endcomment %}
+<p>Set up WhatsApp from <a href="/whatsapp/numbers/">WhatsApp → Numbers</a>. The page always shows your next step; you're done when a number is registered and a test message is sent.</p>
+
+<h2>The steps</h2>
+<ol>
+  <li><strong>Connect with WhatsApp</strong> — sign in with Meta and pick or create your WhatsApp Business Account and phone number.</li>
+  <li><strong>Registration</strong> — we register the number on the WhatsApp Cloud API automatically. If it fails, click <strong>Retry registration</strong>; you don't need to sign in with Meta again.</li>
+  <li><strong>Send a test message</strong> — enter your own phone number and we'll send a WhatsApp test message. You don't have to reply for it to count.</li>
+  <li><strong>Confirm incoming messages</strong> (recommended) — reply to the test message. This proves messages from customers reach you.</li>
+</ol>
+
+<h2>What you need from Meta</h2>
+<ul>
+  <li><strong>Business Verification</strong> completed in Meta Business Manager.</li>
+  <li><strong>App Review</strong> approval for <code>whatsapp_business_messaging</code> and <code>whatsapp_business_management</code>.</li>
+  <li>A phone number that isn't already on WhatsApp, or Meta's free test number for a first run.</li>
+</ul>
+
+<h2>Common problems</h2>
+
+<h3>"WhatsApp Business Account not found"</h3>
+<p>Meta didn't give us access to a WhatsApp Business Account. Connect again and select or create one during sign-in.</p>
+
+<h3>"Your WhatsApp Business Account has no phone number"</h3>
+<p>Add a phone number to the account in Meta Business Manager, then connect again.</p>
+
+<h3>Registration failed (error 133010)</h3>
+<p>The number isn't registered on the Cloud API. Click <strong>Retry registration</strong>. If it keeps failing, check that the number isn't registered with another provider, then reconnect.</p>
+
+<h3>Access token rejected / credentials not working</h3>
+<p>The token expired or was revoked. Use <strong>Connect with WhatsApp</strong> to reconnect and refresh it.</p>
+
+<h3>The test message failed</h3>
+<ul>
+  <li>Check the number has WhatsApp and includes the country code.</li>
+  <li>With a Meta test number, the recipient must be added as a test recipient in Meta first.</li>
+  <li>If the message says the test template isn't available, contact support.</li>
+</ul>
+
+<h3>No incoming messages</h3>
+<p>Reply to the test message from your phone. If "Last webhook received" still shows nothing, ask your administrator to check the webhook setup in Meta.</p>
+
+<div class="note">Sends that fail repeatedly turn the number to <strong>Attention needed</strong>; a successful send clears it.</div>
+
+<p>For email problems, see <a href="{% url 'help-article' 'troubleshooting' %}">Troubleshooting &amp; FAQ</a>.</p>

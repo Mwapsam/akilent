@@ -13,7 +13,7 @@ from apps.whatsapp.models.outbound import OutboundMessage
 from apps.whatsapp.models.webhook import WebhookEventLog
 
 OK, WARN, NONE = "ok", "warn", "none"
-HELP_URL = "/help/troubleshooting/"
+HELP_URL = "/help/whatsapp-setup/"
 DEGRADED_STREAK = 3
 DEGRADED_WINDOW = timedelta(hours=24)
 

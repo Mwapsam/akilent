@@ -63,6 +63,17 @@ class OnboardingPageTest(TestCase):
         _, body = self._render()
         self.assertIn("You're all set", body)
 
+    def test_whats_next_cards_only_when_tested(self):
+        number = self._add_number(waba_id="WABA1", registration_status="registered")
+        _, body = self._render()
+        self.assertNotIn("What's next?", html.unescape(body))
+        number.connection_tests.create(recipient="+260971234567", status="sent")
+        _, body = self._render()
+        body = html.unescape(body)
+        self.assertIn("What's next?", body)
+        for href in ('href="/inbox/"', 'href="/contacts/"', 'href="/automations/"'):
+            self.assertIn(href, body)
+
     def test_unregistered_number_shows_warning(self):
         self._add_number(waba_id="WABA1", verification_pin=None)
         _, body = self._render()

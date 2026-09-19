@@ -160,7 +160,8 @@ jobs:
             STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
             STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET
             STRIPE_CURRENCY=$STRIPE_CURRENCY
-            ENVOEF
+        
+            ENVEOF
 
             chmod 600 .env
 

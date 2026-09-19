@@ -25,10 +25,17 @@ def _wants_email(account) -> bool:
     ) or not _wants_whatsapp(account)
 
 
-def _has_whatsapp_number(account) -> bool:
+def _has_ready_whatsapp_number(account) -> bool:
+    """A number registered on the Cloud API with working credentials.
+
+    Merely having a number row doesn't mean WhatsApp works, so this gates the
+    resumable onboarding state (``WhatsAppBusinessNumber.is_ready``).
+    """
     from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
-    return WhatsAppBusinessNumber.objects.filter(account=account).exists()
+    return any(
+        n.is_ready for n in WhatsAppBusinessNumber.objects.filter(account=account)
+    )
 
 
 def _has_sending_domain(account) -> bool:
@@ -61,7 +68,7 @@ def advance_onboarding(account) -> str:
     if account.onboarding_state == Account.Onboarding.COMPLETED:
         return ""
 
-    if _wants_whatsapp(account) and not _has_whatsapp_number(account):
+    if _wants_whatsapp(account) and not _has_ready_whatsapp_number(account):
         target, url = Account.Onboarding.WHATSAPP_SETUP, WHATSAPP_SETUP_URL
     elif _wants_email(account) and not _has_sending_domain(account):
         target, url = Account.Onboarding.DOMAIN_SETUP, DOMAIN_SETUP_URL
@@ -81,7 +88,7 @@ def resume_url(account) -> str:
 
     if account.onboarding_state == Account.Onboarding.COMPLETED:
         return ""
-    if _wants_whatsapp(account) and not _has_whatsapp_number(account):
+    if _wants_whatsapp(account) and not _has_ready_whatsapp_number(account):
         return WHATSAPP_SETUP_URL
     if _wants_email(account) and not _has_sending_domain(account):
         return DOMAIN_SETUP_URL
@@ -91,6 +98,43 @@ def resume_url(account) -> str:
 def first_setup_url(account) -> str:
     """Where to send a freshly created account for its first setup step."""
     return advance_onboarding(account) or "/onboarding/"
+
+
+def _whatsapp_step(account) -> dict:
+    """Checklist step that follows the WhatsApp setup console.
+
+    Done once a number is registered *and* a test message was accepted by Meta
+    (outbound proven). A reply/webhook is recommended but never blocks this.
+    """
+    from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+    from apps.whatsapp.setup import build_setup_console
+
+    numbers = list(
+        WhatsAppBusinessNumber.objects.filter(account=account).order_by("phone_number_id")
+    )
+    console = build_setup_console(
+        numbers,
+        embedded_enabled=bool(settings.WHATSAPP_APP_ID and settings.WHATSAPP_CONFIG_ID),
+        inbound_seen=False,
+    )
+    current = console.current
+    done = bool(numbers) and console.required_complete
+    if not numbers:
+        cta = "Connect WhatsApp"
+    elif current:
+        cta = (current.action or {}).get("label") or "Continue setup"
+    else:
+        cta = None
+    return {
+        "key": "whatsapp", "title": "Set up WhatsApp",
+        "desc": (
+            current.hint if current
+            else "Your number is registered and sending. Reply to the test message to confirm inbound."
+        ),
+        "done": done,
+        "url": WHATSAPP_SETUP_URL, "cta": cta,
+        "icon": "chat", "optional": False,
+    }
 
 
 def get_state(account) -> dict:
@@ -133,15 +177,7 @@ def get_state(account) -> dict:
     ]
 
     if _wants_whatsapp(account):
-        from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
-
-        steps.append({
-            "key": "whatsapp", "title": "Connect a WhatsApp number",
-            "desc": "Register your phone number ID and token to start messaging.",
-            "done": WhatsAppBusinessNumber.objects.filter(account=account).exists(),
-            "url": "/whatsapp/numbers/", "cta": "Add number",
-            "icon": "chat", "optional": False,
-        })
+        steps.append(_whatsapp_step(account))
 
     if _wants_email(account):
         steps += [

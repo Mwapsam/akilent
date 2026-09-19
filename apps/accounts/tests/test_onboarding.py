@@ -148,3 +148,77 @@ def test_widget_not_shown_on_onboarding_page(client, account):
     resp = client.get("/onboarding/")
     assert resp.status_code == 200
     assert b"Finish setup" not in resp.content
+
+
+# --- WhatsApp step follows the setup console -----------------------------
+
+def _wa_account(settings, services=Account.Services.WHATSAPP):
+    settings.WHATSAPP_ENABLED = True
+    return _make_account(services)
+
+
+def _wa_step(acc):
+    return next(s for s in ob.get_state(acc)["steps"] if s["key"] == "whatsapp")
+
+
+def _wa_number(acc, **kw):
+    from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+
+    kw.setdefault("phone_number_id", "PNID")
+    kw.setdefault("access_token", "tok")
+    kw.setdefault("waba_id", "W")
+    return WhatsAppBusinessNumber.objects.create(account=acc, **kw)
+
+
+@pytest.mark.django_db
+def test_whatsapp_step_not_done_for_bare_number(settings):
+    acc = _wa_account(settings)
+    _wa_number(acc)  # PENDING registration
+    step = _wa_step(acc)
+    assert not step["done"]
+    assert step["cta"] == "Register number"
+
+
+@pytest.mark.django_db
+def test_whatsapp_step_failed_registration_offers_retry(settings):
+    acc = _wa_account(settings)
+    _wa_number(acc, registration_status="failed")
+    assert _wa_step(acc)["cta"] == "Retry registration"
+
+
+@pytest.mark.django_db
+def test_whatsapp_step_registered_but_untested_asks_for_test(settings):
+    acc = _wa_account(settings)
+    _wa_number(acc, registration_status="registered")
+    step = _wa_step(acc)
+    assert not step["done"]
+    assert step["cta"] == "Send test message"
+
+
+@pytest.mark.django_db
+def test_whatsapp_step_done_after_successful_test_without_reply(settings):
+    acc = _wa_account(settings)
+    n = _wa_number(acc, registration_status="registered")
+    n.connection_tests.create(recipient="+260971234567", status="sent")
+    step = _wa_step(acc)
+    assert step["done"]  # a reply is recommended, never blocking
+    assert step["cta"] is None
+
+
+@pytest.mark.django_db
+def test_failed_test_does_not_complete_step(settings):
+    acc = _wa_account(settings)
+    n = _wa_number(acc, registration_status="registered")
+    n.connection_tests.create(recipient="+260971234567", status="failed")
+    assert not _wa_step(acc)["done"]
+
+
+@pytest.mark.django_db
+def test_advance_onboarding_waits_for_registered_number(settings):
+    acc = _wa_account(settings, Account.Services.BOTH)
+    n = _wa_number(acc)  # exists, but not registered
+    assert ob.advance_onboarding(acc) == "/whatsapp/numbers/"
+    n.registration_status = "registered"
+    n.save()
+    # Registered is enough to move on to domain setup; a test is checklist-only.
+    assert ob.advance_onboarding(acc) == "/email/domains/"
