@@ -10,6 +10,8 @@ urlpatterns = [
     path("callback/", views.callback, name="callback"),
     path("webhook/", views.webhook, name="webhook"),
     path("cancel/", views.cancel_subscription, name="cancel"),
+    path("stripe/success/", views.stripe_success, name="stripe-success"),
+    path("stripe/webhook/", views.stripe_webhook, name="stripe-webhook"),
     # Admin package management
     path("plans/create/", views.plan_create, name="plan-create"),
     path("plans/<int:pk>/edit/", views.plan_edit, name="plan-edit"),

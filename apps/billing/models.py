@@ -88,6 +88,18 @@ class Subscription(models.Model):
         (EXPIRED, "Expired"),
     ]
 
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    ANNUALLY = "annually"
+    BIENNIAL = "biennial"
+
+    BILLING_PERIOD_CHOICES = [
+        (MONTHLY, "Monthly"),
+        (QUARTERLY, "Quarterly"),
+        (ANNUALLY, "Annually"),
+        (BIENNIAL, "Every 2 years"),
+    ]
+
     account = models.OneToOneField(
         "accounts.Account",
         on_delete=models.CASCADE,
@@ -96,6 +108,9 @@ class Subscription(models.Model):
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=TRIALING)
+    billing_period = models.CharField(
+        max_length=12, choices=BILLING_PERIOD_CHOICES, default=MONTHLY
+    )
 
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     current_period_start = models.DateTimeField()
@@ -103,6 +118,9 @@ class Subscription(models.Model):
 
     fw_customer_email = models.CharField(max_length=255, blank=True, null=True)
     fw_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
 
     # Which payment method activated the current period — audit/display only,
     # the gateway-specific fields above (fw_*) remain the source of truth for

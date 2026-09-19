@@ -1,6 +1,7 @@
 import json
 import logging
 
+import stripe
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
@@ -15,6 +16,7 @@ from apps.core.models import SiteSettings
 from .models import ManualPaymentRequest, Plan, PaymentMethod, ProcessedWebhookEvent, Subscription, UsageSummary
 from .flutterwave import FlutterwaveError, get_fw_client
 from .gateways import enabled_payment_methods, get_gateway
+from .pricing import DEFAULT_PERIOD_MULTIPLIERS, PERIOD_MONTH_MULTIPLES
 from .services import activate_subscription
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,15 @@ def pricing_page(request):
     current_plan_slug = subscription.plan.slug if subscription else None
     site = SiteSettings.load()
 
+    period_pricing = {
+        period: {
+            "label": label,
+            "months": float(PERIOD_MONTH_MULTIPLES[period]),
+            "multiplier": float(DEFAULT_PERIOD_MULTIPLIERS[period]),
+        }
+        for period, label in Subscription.BILLING_PERIOD_CHOICES
+    }
+
     return render(request, "billing/plans.html", {
         "plans": plans,
         "account": account,
@@ -56,6 +67,8 @@ def pricing_page(request):
         "payments_enabled": site.payments_enabled,
         "payment_methods": enabled_payment_methods() if site.payments_enabled else [],
         "payment_method_rows": PaymentMethod.objects.all() if is_admin else None,
+        "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
+        "period_pricing_json": json.dumps(period_pricing),
         "manual_requests": (
             ManualPaymentRequest.objects.filter(status=ManualPaymentRequest.PENDING)
             .select_related("account", "plan") if is_admin else None
@@ -195,6 +208,11 @@ def checkout(request):
         messages.error(request, "No payment method is currently available. Contact support.")
         return redirect("/billing/plans/")
 
+    period = request.GET.get("period", Subscription.MONTHLY)
+    if period not in dict(Subscription.BILLING_PERIOD_CHOICES):
+        messages.error(request, "Invalid billing period selected.")
+        return redirect("/billing/plans/")
+
     return gateway.start_checkout(request, account, plan)
 
 
@@ -246,7 +264,9 @@ def callback(request):
         return redirect("/billing/plans/")
 
     cust_email = (transaction.get("customer") or {}).get("email")
-    activate_subscription(account, plan, "flutterwave", fw_customer_email=cust_email)
+    activate_subscription(
+        account, plan, "flutterwave", billing_period=Subscription.MONTHLY, fw_customer_email=cust_email
+    )
 
     # Capture the Flutterwave recurring-subscription id so it can be cancelled later.
     if plan.flutterwave_plan_id and cust_email:
@@ -300,6 +320,14 @@ def cancel_subscription(request):
             get_fw_client().cancel_subscription(sub.fw_subscription_id)
         except FlutterwaveError as exc:
             logger.error("cancel_subscription: FW error for account=%s: %s", account.pk, exc)
+            messages.error(request, f"Could not cancel recurring billing: {exc}")
+            return redirect("/billing/plans/")
+    elif sub.payment_method == "stripe" and sub.stripe_subscription_id:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        try:
+            stripe.Subscription.delete(sub.stripe_subscription_id)
+        except stripe.error.StripeError as exc:
+            logger.error("cancel_subscription: Stripe error for account=%s: %s", account.pk, exc)
             messages.error(request, f"Could not cancel recurring billing: {exc}")
             return redirect("/billing/plans/")
 
@@ -418,7 +446,9 @@ def _handle_charge_completed(payload: dict):
         return
 
     cust_email = (verified.get("customer") or {}).get("email") or sub.fw_customer_email
-    activate_subscription(sub.account, plan, "flutterwave", fw_customer_email=cust_email)
+    activate_subscription(
+        sub.account, plan, "flutterwave", billing_period=Subscription.MONTHLY, fw_customer_email=cust_email
+    )
 
     logger.info("_handle_charge_completed: renewed subscription for account=%s", account_id)
 
@@ -488,6 +518,149 @@ def _handle_subscription_cancelled(payload: dict):
     )
     if updated:
         logger.info("_handle_subscription_cancelled: cancelled subscription for account=%s", account_id)
+
+
+# --- Stripe -----------------------------------------------------------------
+
+def stripe_success(request):
+    """Stripe Checkout's success_url landing page.
+
+    Real activation happens via webhook (Stripe's documented best practice —
+    the redirect alone isn't trustworthy proof of payment), so this just
+    shows a confirmation while the webhook catches up.
+    """
+    return render(request, "billing/stripe_pending.html")
+
+
+@csrf_exempt
+@require_POST
+def stripe_webhook(request):
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    sig_header = request.headers.get("Stripe-Signature")
+    webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
+
+    if not webhook_secret:
+        logger.warning("stripe_webhook: STRIPE_WEBHOOK_SECRET not configured")
+        return HttpResponse(status=401)
+
+    try:
+        event = stripe.Webhook.construct_event(request.body, sig_header, webhook_secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        logger.warning("stripe_webhook: invalid signature")
+        return HttpResponse(status=400)
+
+    event_key = f"{event['type']}:{event['id']}"
+    _, created = ProcessedWebhookEvent.objects.get_or_create(event_key=event_key)
+    if not created:
+        logger.info("stripe_webhook: duplicate event ignored key=%s", event_key)
+        return HttpResponse(status=200)
+
+    data = event["data"]["object"]
+
+    if event["type"] == "checkout.session.completed":
+        _handle_stripe_checkout_completed(data)
+    elif event["type"] == "invoice.payment_succeeded":
+        _handle_stripe_invoice_paid(data)
+    elif event["type"] == "invoice.payment_failed":
+        _handle_stripe_payment_failed(data)
+    elif event["type"] == "customer.subscription.deleted":
+        _handle_stripe_subscription_deleted(data)
+    else:
+        logger.debug("stripe_webhook: unhandled event type=%s", event["type"])
+
+    return HttpResponse(status=200)
+
+
+def _handle_stripe_checkout_completed(session: dict):
+    if session.get("mode") != "subscription" or session.get("payment_status") != "paid":
+        return
+
+    meta = session.get("metadata") or {}
+    account_id = meta.get("account_id")
+    plan_slug = meta.get("plan_slug")
+    billing_period = meta.get("billing_period", Subscription.MONTHLY)
+
+    if not account_id or not plan_slug:
+        logger.warning("_handle_stripe_checkout_completed: missing metadata on session=%s", session.get("id"))
+        return
+
+    try:
+        from apps.accounts.models import Account
+        account = Account.objects.get(pk=account_id)
+        plan = Plan.objects.get(slug=plan_slug)
+    except Exception as exc:
+        logger.error("_handle_stripe_checkout_completed: account/plan lookup failed: %s", exc)
+        return
+
+    activate_subscription(
+        account,
+        plan,
+        "stripe",
+        billing_period=billing_period,
+        stripe_customer_id=session.get("customer"),
+        stripe_subscription_id=session.get("subscription"),
+    )
+    logger.info("_handle_stripe_checkout_completed: activated subscription for account=%s", account_id)
+
+
+def _handle_stripe_invoice_paid(invoice: dict):
+    stripe_subscription_id = invoice.get("subscription")
+    if not stripe_subscription_id:
+        return
+
+    sub = Subscription.objects.select_related("plan", "account").filter(
+        stripe_subscription_id=stripe_subscription_id
+    ).first()
+    if sub is None:
+        logger.warning(
+            "_handle_stripe_invoice_paid: no subscription for stripe_subscription_id=%s",
+            stripe_subscription_id,
+        )
+        return
+
+    # The first invoice of a new subscription (billing_reason=subscription_create)
+    # is already handled by checkout.session.completed — only renewals
+    # (subscription_cycle) should roll the period forward here.
+    if invoice.get("billing_reason") != "subscription_cycle":
+        return
+
+    activate_subscription(
+        sub.account,
+        sub.plan,
+        "stripe",
+        billing_period=sub.billing_period,
+        stripe_customer_id=sub.stripe_customer_id,
+        stripe_subscription_id=sub.stripe_subscription_id,
+    )
+    logger.info("_handle_stripe_invoice_paid: renewed subscription for account=%s", sub.account_id)
+
+
+def _handle_stripe_payment_failed(invoice: dict):
+    stripe_subscription_id = invoice.get("subscription")
+    if not stripe_subscription_id:
+        return
+    updated = Subscription.objects.filter(stripe_subscription_id=stripe_subscription_id).update(
+        status=Subscription.PAST_DUE
+    )
+    if updated:
+        logger.info(
+            "_handle_stripe_payment_failed: marked past_due for stripe_subscription_id=%s",
+            stripe_subscription_id,
+        )
+
+
+def _handle_stripe_subscription_deleted(subscription: dict):
+    stripe_subscription_id = subscription.get("id")
+    if not stripe_subscription_id:
+        return
+    updated = Subscription.objects.filter(stripe_subscription_id=stripe_subscription_id).update(
+        status=Subscription.CANCELLED, cancelled_at=timezone.now()
+    )
+    if updated:
+        logger.info(
+            "_handle_stripe_subscription_deleted: cancelled stripe_subscription_id=%s",
+            stripe_subscription_id,
+        )
 
 
 # --- Manual (offline) payments -------------------------------------------------

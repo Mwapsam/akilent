@@ -31,7 +31,8 @@ dependencies = [
     "aiosmtpd (>=1.4.0,<2.0.0)",
     "moto (>=5.2.3,<6.0.0)",
     "drf-spectacular (>=0.30.0,<0.31.0)",
-    "python-dateutil (>=2.9,<3.0)"
+    "python-dateutil (>=2.9,<3.0)",
+    "stripe (>=15.6.1,<16.0.0)"
 ]
 
 

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Payment received — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+
+<div class="max-w-md mx-auto text-center py-16">
+  <h1 class="text-2xl font-semibold text-ink mb-2">Payment received</h1>
+  <p class="text-sm text-gray-400 mb-6">
+    We're finalizing your subscription now — this usually takes a few seconds.
+    You'll see it reflected on your plan shortly.
+  </p>
+  <a href="/billing/plans/" class="btn btn-primary btn-sm">Back to plans</a>
+</div>
+
+{% endblock %}

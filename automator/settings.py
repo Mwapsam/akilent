@@ -385,6 +385,13 @@ FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY")
 FLUTTERWAVE_WEBHOOK_HASH = os.getenv("FLUTTERWAVE_WEBHOOK_HASH")
 FLUTTERWAVE_CURRENCY = os.getenv("FLUTTERWAVE_CURRENCY", "USD")
 
+# --- Stripe ---
+
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
+
 # --- Cache ---
 # Backs DRF request-rate throttling and the API-key bad-attempt lockout
 # counter (apps.api.authentication) — must be shared across gunicorn workers,
