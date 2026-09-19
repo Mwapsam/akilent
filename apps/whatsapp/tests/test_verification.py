@@ -94,6 +94,48 @@ class VerifyConnectionTest(VerifyBase):
         self.assertEqual((r["action"], r["error_code"]), ("retry", "999/1"))
 
 
+class TemplateChoiceTest(VerifyBase):
+    def test_recent_inbound_from_recipient_sends_free_text(self):
+        self.inbound(TESTER)
+        with patch(SEND) as tpl, patch(
+            "apps.whatsapp.verification.MetaCloudAPIProvider.send_text", return_value=ok("wamid.t")
+        ) as text:
+            r = verify_connection(self.number, TESTER)
+        tpl.assert_not_called()
+        text.assert_called_once()
+        self.assertTrue(r["ok"])
+
+    def test_old_inbound_does_not_open_window(self):
+        self.inbound(TESTER, when=timezone.now() - timedelta(hours=30))
+        with patch(SEND, return_value=ok()) as tpl:
+            verify_connection(self.number, TESTER)
+        tpl.assert_called_once()
+
+    def test_uses_approved_parameterless_template_before_hello_world(self):
+        from apps.whatsapp.models.templates import MessageTemplate as T
+
+        T.objects.create(account=self.account, name="Var", whatsapp_template_name="with_var",
+                         approval_status="approved", category="utility",
+                         content="Hi {{1}}", variables=["name"])
+        T.objects.create(account=self.account, name="Plain", whatsapp_template_name="plain",
+                         language_code="en", approval_status="approved", category="utility",
+                         content="Thanks for contacting us")
+        with patch(SEND, return_value=ok()) as tpl:
+            verify_connection(self.number, TESTER)
+        self.assertEqual(tpl.call_args[0][1:3], ("plain", "en"))
+
+    def test_falls_back_to_hello_world(self):
+        with patch(SEND, return_value=ok()) as tpl:
+            verify_connection(self.number, TESTER)
+        self.assertEqual(tpl.call_args[0][1:3], ("hello_world", "en_US"))
+
+    def test_131058_tells_user_to_message_first(self):
+        with patch(SEND, return_value=fail("131058")):
+            r = verify_connection(self.number, TESTER)
+        self.assertEqual((r["ok"], r["action"]), (False, "message_first"))
+        self.assertIn("Message this WhatsApp number", r["message"])
+
+
 class SetupStatusTest(VerifyBase):
     def test_lifecycle(self):
         self.assertEqual(self.number.setup_status, S.READY_FOR_TEST)
