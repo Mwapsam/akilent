@@ -8,6 +8,7 @@ urlpatterns = [
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),
     path("numbers/<int:pk>/delete/", numbers.numbers_delete, name="whatsapp-numbers-delete"),
     path("numbers/<int:pk>/register/", numbers.numbers_register, name="whatsapp-numbers-register"),
+    path("numbers/<int:pk>/status/", numbers.numbers_status, name="whatsapp-numbers-status"),
     path("numbers/<int:pk>/verify/", numbers.numbers_verify, name="whatsapp-numbers-verify"),
     path("connect/complete/", numbers.connect_complete, name="whatsapp-connect-complete"),
     path("connect/redirect/", numbers.connect_redirect_start, name="whatsapp-connect-redirect-start"),

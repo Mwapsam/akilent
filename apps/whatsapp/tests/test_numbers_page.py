@@ -16,6 +16,9 @@ class OnboardingPageTest(TestCase):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.user = User.objects.create_user("owner", "o@example.com", "pw")
         self.rf = RequestFactory()
+        p = patch("apps.whatsapp.embedded.fetch_display_number", return_value="")
+        p.start()
+        self.addCleanup(p.stop)
 
     def _render(self, *, staff=False, module=True):
         request = self.rf.get("/whatsapp/numbers/")

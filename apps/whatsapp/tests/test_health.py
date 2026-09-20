@@ -150,7 +150,7 @@ class HealthPanelRenderTest(HealthBase):
         request._messages = FallbackStorage(request)
         with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account), patch(
             "apps.billing.api.has_feature", return_value=True
-        ):
+        ), patch("apps.whatsapp.embedded.fetch_display_number", return_value=""):
             body = numbers_views.numbers_list(request).content.decode()
         for text in ("Connection", "Messaging", "Webhooks", "Ready to test", "Troubleshoot"):
             self.assertIn(text, body)

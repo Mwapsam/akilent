@@ -192,7 +192,7 @@ def test_whatsapp_step_registered_but_untested_asks_for_test(settings):
     _wa_number(acc, registration_status="registered")
     step = _wa_step(acc)
     assert not step["done"]
-    assert step["cta"] == "Send test message"
+    assert step["cta"] == "Open WhatsApp"  # message-first guide precedes the test
 
 
 @pytest.mark.django_db

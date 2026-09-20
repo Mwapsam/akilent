@@ -11,6 +11,10 @@ DONE, CURRENT, UPCOMING, OPTIONAL = "done", "current", "upcoming", "optional"
 CONNECT_URL = "/whatsapp/connect/redirect/"
 
 
+def _digits(value: str) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
 @dataclass
 class Step:
     key: str
@@ -63,6 +67,40 @@ def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) 
             "method": "post",
         }
 
+    ready = bool(number and number.is_ready)
+    tested = bool(ready and number.last_successful_test())
+    inbound = None
+    if ready and not tested:
+        from apps.whatsapp.verification import recent_inbound
+
+        inbound = recent_inbound(number)
+
+    display = (number.display_number or "").strip() if number else ""
+    if inbound is not None:
+        message_hint = (
+            f"We received a message from {inbound.contact.phone_number}. "
+            "Send the test to that number."
+        )
+    elif display:
+        message_hint = (
+            f"From your phone, send “Hi” to {display} on WhatsApp. This lets us send "
+            "a plain-text test on any number and confirms incoming messages work."
+        )
+    else:
+        message_hint = (
+            "From your phone, send “Hi” to this WhatsApp number. This lets us send "
+            "a plain-text test on any number and confirms incoming messages work."
+        )
+    message_action = None
+    if ready:
+        message_action = {
+            "kind": "guide", "label": "Open WhatsApp",
+            "url": f"https://wa.me/{_digits(display)}?text=Hi" if _digits(display) else "",
+            "number": display,
+            "status_url": f"/whatsapp/numbers/{number.pk}/status/",
+            "verify_url": f"/whatsapp/numbers/{number.pk}/verify/",
+        }
+
     steps = [
         Step(
             "connected", "WhatsApp connected",
@@ -80,15 +118,20 @@ def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) 
             done=bool(number and number.is_ready), action=register,
         ),
         Step(
+            "message_first", "Message this number from your phone", message_hint,
+            done=tested or inbound is not None, action=message_action,
+        ),
+        Step(
             "test", "Send a test message",
             "Confirm that messages can be sent from this number.",
-            done=bool(number and number.is_ready and number.last_successful_test()),
+            done=tested,
             action=(
                 {
                     "label": "Send test message", "kind": "verify",
                     "url": f"/whatsapp/numbers/{number.pk}/verify/", "method": "post",
+                    "prefill": inbound.contact.phone_number if inbound is not None else "",
                 }
-                if number and number.is_ready else None
+                if ready else None
             ),
         ),
         Step(

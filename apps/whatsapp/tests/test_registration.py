@@ -154,10 +154,10 @@ class SetupConsoleTest(TestCase):
         self.assertEqual([s.state for s in c.steps].count("current"), 1)
         self.assertEqual(c.current.key, "credentials")
 
-    def test_registered_number_is_asked_for_a_test_message(self):
+    def test_registered_number_is_first_asked_to_message_us(self):
         c = self._build([make(self.account, registration_status=R.REGISTERED)])
-        self.assertEqual(c.current.key, "test")
-        self.assertEqual(c.primary_action["kind"], "verify")
+        self.assertEqual(c.current.key, "message_first")
+        self.assertEqual(c.primary_action["kind"], "guide")
         self.assertFalse(c.required_complete)
 
     def test_tested_number_completes_required_steps_without_inbound(self):

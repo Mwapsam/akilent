@@ -46,15 +46,26 @@ def _fail(error_code: str, message: str, action: str) -> dict:
     return {"ok": False, "error_code": error_code, "message": message, "action": action}
 
 
-def _window_open(number, recipient: str) -> bool:
+def recent_inbound(number, recipient: str | None = None):
+    """Latest inbound message inside the 24h window, optionally from one sender.
+
+    Inside the window free text is allowed on any number, so this is both the
+    "they messaged us first" check and proof that inbound webhooks work.
+    """
     from apps.whatsapp.models.message import MessageLog
 
-    return MessageLog.objects.filter(
+    qs = MessageLog.objects.filter(
         account=number.account,
         direction=MessageLog.Direction.INBOUND,
-        contact__phone_number=recipient,
         timestamp__gte=timezone.now() - WINDOW,
-    ).exists()
+    )
+    if recipient:
+        qs = qs.filter(contact__phone_number=recipient)
+    return qs.select_related("contact").order_by("-timestamp").first()
+
+
+def _window_open(number, recipient: str) -> bool:
+    return recent_inbound(number, recipient) is not None
 
 
 _SAFE_BUTTONS = {"QUICK_REPLY", "PHONE_NUMBER", "URL"}

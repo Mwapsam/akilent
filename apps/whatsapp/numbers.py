@@ -29,6 +29,22 @@ from apps.whatsapp.setup_errors import (
 logger = logging.getLogger(__name__)
 
 
+def _ensure_display_number(numbers):
+    """Fill in the number users must message, once, only when it's needed.
+
+    Embedded Signup stores just the phone_number_id, but the "message us first"
+    step needs the real number. One best-effort Graph call; failures are ignored.
+    """
+    from apps.whatsapp.embedded import fetch_display_number
+
+    for n in numbers:
+        if n.is_ready and not n.display_number and not n.last_successful_test():
+            value = fetch_display_number(n.phone_number_id, n.access_token)
+            if value:
+                n.display_number = value
+                n.save(update_fields=["display_number", "updated_at"])
+
+
 @login_required
 def numbers_list(request):
     account = get_current_account(request)
@@ -68,6 +84,8 @@ def numbers_list(request):
 
     for n in numbers:
         n.health = number_health(n, embedded_enabled=embedded_enabled)
+
+    _ensure_display_number(numbers)
 
     console = build_setup_console(
         numbers, embedded_enabled=embedded_enabled, inbound_seen=inbound_seen
@@ -444,6 +462,23 @@ def numbers_register(request, pk):
     else:
         messages.error(request, f"Registration failed: {result.error}")
     return redirect("whatsapp-numbers")
+
+
+@login_required
+def numbers_status(request, pk):
+    """Polled by the "message us first" step: has the tester messaged us yet?"""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"message_received": False}, status=400)
+
+    from apps.whatsapp.verification import recent_inbound
+
+    number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
+    inbound = recent_inbound(number)
+    return JsonResponse({
+        "message_received": inbound is not None,
+        "sender": inbound.contact.phone_number if inbound is not None else "",
+    })
 
 
 @login_required

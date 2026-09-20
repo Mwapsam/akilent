@@ -57,15 +57,23 @@
         </p>
         <p class="text-xs text-gray-400 mt-0.5">{{ step.hint }}</p>
         {% if step.state == "current" and step.action %}
-          {% if step.action.kind == "verify" %}
-          <form class="mt-3 flex flex-wrap items-start gap-2" data-wa-verify action="{{ step.action.url }}" method="post">
-            {% csrf_token %}
-            <input name="recipient" type="tel" required placeholder="+260 97 XXX XXXX"
-                   aria-label="Phone number to send the test to" class="input w-56">
-            <button type="submit" class="btn btn-primary btn-sm">{{ step.action.label }}</button>
-            <p class="w-full text-xs text-gray-400">We'll send a WhatsApp test message to this number. Replying isn't required.</p>
-            <p data-wa-verify-result class="w-full text-sm hidden" role="status"></p>
-          </form>
+          {% if step.action.kind == "guide" %}
+          <div class="mt-3" x-data="{ skip: false }">
+            {% if step.action.url %}
+            <a href="{{ step.action.url }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">{{ step.action.label }}</a>
+            {% endif %}
+            <p class="mt-3 text-xs text-gray-500" data-wa-poll data-status-url="{{ step.action.status_url }}" role="status">
+              Waiting for your message… this page updates automatically.
+            </p>
+            <button type="button" class="mt-2 text-xs text-brand-600 hover:text-brand-700 underline"
+                    x-show="!skip" @click="skip = true">Skip — send a template test instead</button>
+            <div x-show="skip" x-cloak>
+              {% include "whatsapp/_verify_form.html" with url=step.action.verify_url label="Send test message" prefill="" %}
+              <p class="text-xs text-gray-400 mt-1">Works only if your account has an approved template without variables, or on Meta's public test number.</p>
+            </div>
+          </div>
+          {% elif step.action.kind == "verify" %}
+          {% include "whatsapp/_verify_form.html" with url=step.action.url label=step.action.label prefill=step.action.prefill %}
           {% elif step.action.method == "post" %}
           <form method="post" action="{{ step.action.url }}" class="mt-3"
                 onsubmit="this.querySelector('button').disabled = true">
@@ -190,8 +198,7 @@
 <script>
   (function () {
     // Verify connection: JSON contract {ok, message, action}; never parses Meta responses.
-    var vform = document.querySelector('[data-wa-verify]');
-    if (vform) {
+    document.querySelectorAll('[data-wa-verify]').forEach(function (vform) {
       var out = vform.querySelector('[data-wa-verify-result]');
       vform.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -226,6 +233,26 @@
             out.textContent = 'Network error. Try again.';
           });
       });
+    });
+
+    // "Message us first": poll until the tester's message arrives, then reload.
+    var pollEl = document.querySelector('[data-wa-poll]');
+    if (pollEl) {
+      var tries = 0;
+      var timer = setInterval(function () {
+        if (document.hidden) return;
+        if (++tries > 120) { clearInterval(timer); return; }
+        fetch(pollEl.dataset.statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.message_received) {
+              clearInterval(timer);
+              pollEl.textContent = 'Message received from ' + d.sender + '.';
+              setTimeout(function () { window.location.reload(); }, 800);
+            }
+          })
+          .catch(function () {});
+      }, 5000);
     }
 
     var form = document.getElementById('wa-manual-form');

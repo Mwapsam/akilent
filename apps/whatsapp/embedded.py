@@ -224,3 +224,23 @@ def register_phone_number(phone_number_id: str, access_token: str, pin: str) -> 
             (data.get("error") or {}).get("message")
             or f"Phone number registration failed ({resp.status_code})"
         )
+
+
+def fetch_display_number(phone_number_id: str, access_token: str) -> str:
+    """The number's human-readable value (e.g. ``+1 555-025-3483``), or ''.
+
+    Embedded Signup only gives us the phone_number_id; users need the actual
+    number to message it from their phone. Best-effort: any failure returns ''.
+    """
+    try:
+        resp = requests.get(
+            f"{GRAPH}/{_version()}/{phone_number_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"fields": "display_phone_number"},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return ""
+        return (resp.json().get("display_phone_number") or "").strip()
+    except (requests.RequestException, ValueError):
+        return ""
