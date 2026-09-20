@@ -50,7 +50,7 @@ def emit_event(
 
 
 def record_inbound_whatsapp_message(
-    *, contact, wa_contact, whatsapp_conversation, message_log,
+    *, contact, wa_contact, whatsapp_conversation, message_log, enroll_workflows: bool = True,
 ) -> Conversation | None:
     """Project an already-recorded inbound WhatsApp message onto the spine.
 
@@ -58,6 +58,9 @@ def record_inbound_whatsapp_message(
     WhatsApp-specific identity). Returns the generic ``Conversation``, or
     ``None`` if this message was already projected (e.g. a replayed
     webhook) — in which case no duplicate Event/Workflow enrollment happens.
+
+    ``enroll_workflows=False`` records the Inbox conversation/message without
+    starting any Workflow (used when automation events are switched off).
     """
     conversation = Conversation.get_or_create_for_whatsapp(whatsapp_conversation)
     conversation.register_inbound(message_log.timestamp)
@@ -92,7 +95,7 @@ def record_inbound_whatsapp_message(
         subject_type="conversation",
         subject_id=conversation.public_id,
     )
-    if event is None:
+    if event is None or not enroll_workflows:
         return conversation
 
     try:

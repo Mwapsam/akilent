@@ -152,6 +152,35 @@ def _auto_reply_during_setup(phone_number_id: str, contact) -> None:
         logger.warning("auto-reply during setup failed for %s: %s", phone_number_id, exc)
 
 
+def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *, enroll_workflows: bool):
+    """Put an inbound message in the Inbox (generic Conversation/Message spine).
+
+    The Inbox is a core feature, so this never depends on the beta
+    ``automation_events_enabled`` flag: that flag only decides whether Workflows
+    are *enrolled*. Idempotent (a replay re-uses the same Message) and
+    best-effort — a failure is logged, never raised, so the inbound event itself
+    still completes.
+    """
+    try:
+        from apps.contacts.services import upsert_contact_by_phone
+        from apps.conversations.services import record_inbound_whatsapp_message
+
+        contact = wa_contact.contact
+        if contact is None:
+            contact, _ = upsert_contact_by_phone(account, wa_contact.phone_number, source="whatsapp")
+            wa_contact.contact = contact
+            wa_contact.save(update_fields=["contact"])
+        record_inbound_whatsapp_message(
+            contact=contact, wa_contact=wa_contact,
+            whatsapp_conversation=whatsapp_conversation, message_log=message_log,
+            enroll_workflows=enroll_workflows,
+        )
+    except Exception:
+        logger.exception(
+            "project_to_inbox failed for account=%s message_id=%s", account.pk, message_log.message_id,
+        )
+
+
 def _handle_inbound_message(event: WebhookEventLog) -> None:
     value = event.payload["entry"][0]["changes"][0]["value"]
     message = value["messages"][0]
@@ -236,6 +265,13 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
 
     contact.last_message_at = msg_ts
     contact.save(update_fields=["last_message_at"])
+
+    try:
+        enroll = _automation_events_enabled()
+    except Exception:
+        enroll = False
+    # Regardless of `created`: idempotent, and a replay repairs an earlier failed projection.
+    project_to_inbox(account, contact, conversation, message_log, enroll_workflows=enroll)
 
     if created and msg_type == "text":
         _apply_consent_keyword(contact, conversation, content)
