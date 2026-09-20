@@ -33,6 +33,18 @@ class InboxProjectionTest(Base):
         self.assertEqual((message.body, message.direction), ("Hi", Message.Direction.INBOUND))
         enroll.assert_not_called()  # the flag still gates Workflows
 
+    def test_new_contact_is_named_from_the_whatsapp_profile(self):
+        with patch(ENABLED, return_value=False):
+            self.receive()
+        contact = Contact.objects.get(account=self.account)
+        self.assertEqual((contact.phone, contact.first_name, contact.source), (PHONE, "Tester", "whatsapp"))
+
+    def test_existing_contact_name_is_not_overwritten(self):
+        Contact.objects.create(account=self.account, phone=PHONE, first_name="Ada")
+        with patch(ENABLED, return_value=False):
+            self.receive()
+        self.assertEqual(Contact.objects.get(account=self.account).first_name, "Ada")
+
     def test_workflows_are_enrolled_when_the_flag_is_on(self):
         with patch(ENABLED, return_value=True), patch(ENROLL) as enroll:
             self.receive()
@@ -109,6 +121,16 @@ class BackfillInboxTest(Base):
         self._run()
         self.assertIn("Backfilled 0 message(s); 1 already", self._run())
         self.assertEqual(Message.objects.filter(account=self.account).count(), 1)
+
+    def test_links_whatsapp_contacts_that_never_got_a_contact(self):
+        from apps.whatsapp.models import WhatsAppContact
+
+        wa = WhatsAppContact.objects.create(account=self.account, phone_number=PHONE, display_name="Tester")
+        self.assertIsNone(wa.contact)
+        self.assertIn("Linked 1 WhatsApp contact(s)", self._run())
+        wa.refresh_from_db()
+        self.assertEqual((wa.contact.phone, wa.contact.first_name), (PHONE, "Tester"))
+        self.assertIn("Linked 0 WhatsApp contact(s)", self._run())  # re-run is a no-op
 
     def test_never_starts_workflows(self):
         self.receive(msg_id="wamid.1")

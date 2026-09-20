@@ -167,7 +167,12 @@ def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *,
 
         contact = wa_contact.contact
         if contact is None:
-            contact, _ = upsert_contact_by_phone(account, wa_contact.phone_number, source="whatsapp")
+            contact, created = upsert_contact_by_phone(
+                account, wa_contact.phone_number, source="whatsapp"
+            )
+            if created and wa_contact.display_name and not contact.first_name:
+                contact.first_name = wa_contact.display_name[:150]
+                contact.save(update_fields=["first_name", "updated_at"])
             wa_contact.contact = contact
             wa_contact.save(update_fields=["contact"])
         record_inbound_whatsapp_message(

@@ -8,7 +8,7 @@
 </header>
 
 <form method="get" class="flex flex-wrap items-center gap-2 mb-4" @submit="$el.classList.add('is-submitting')">
-  <input type="search" name="q" value="{{ q }}" placeholder="Email contains…" class="input w-full sm:w-64" />
+  <input type="search" name="q" value="{{ q }}" placeholder="Search email, phone or name…" class="input w-full sm:w-64" />
   <select name="status" class="select w-full sm:w-44">
     <option value="">Any status</option>
     {% for value, label in status_choices %}
@@ -23,13 +23,14 @@
 <div class="table-wrap">
   <table class="table table--cards">
     <thead>
-      <tr><th>Email</th><th>Name</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
+      <tr><th>Contact</th><th>Name</th><th>Phone</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
     </thead>
     <tbody>
       {% for c in page %}
       <tr>
-        <td data-label="Email"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ c.email }}</a></td>
+        <td data-label="Contact"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ c.email|default:c.phone|default:"Unknown contact" }}</a></td>
         <td data-label="Name">{{ c.full_name|default:"—" }}</td>
+        <td data-label="Phone" class="tabular-nums">{{ c.phone|default:"—" }}</td>
         <td data-label="Status">
           <span class="badge {% if c.status == 'subscribed' or c.status == 'active' %}badge-success{% elif c.status == 'unsubscribed' or c.status == 'bounced' or c.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">
             {{ c.get_status_display }}
@@ -44,7 +45,7 @@
 </div>
 {% else %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Contacts are the people Akilent communicates with — import them from a CSV during your first campaign, or add them via the API, and campaigns and automations can start reaching them." action_url="/docs/" action_label="View API docs" %}
+  {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Contacts are the people Akilent communicates with. They appear automatically when someone messages your WhatsApp number, or you can import them from a CSV or add them via the API." action_url="/docs/" action_label="View API docs" %}
 </div>
 {% endif %}
 

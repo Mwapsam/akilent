@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.shortcuts import redirect, render
 
 from apps.accounts.utils import get_current_account
@@ -22,7 +23,11 @@ def contact_list(request):
     q = (request.GET.get("q") or "").strip()
     st = (request.GET.get("status") or "").strip()
     if q:
-        qs = qs.filter(email__icontains=q)
+        # Phone-only contacts (e.g. WhatsApp-first customers) have no email.
+        qs = qs.filter(
+            Q(email__icontains=q) | Q(phone__icontains=q)
+            | Q(first_name__icontains=q) | Q(last_name__icontains=q)
+        )
     if st:
         qs = qs.filter(status=st)
 
