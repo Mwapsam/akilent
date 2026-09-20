@@ -173,6 +173,11 @@ class PageRenderTest(Base):
         self.assertIn(f'data-status-url="/whatsapp/numbers/{self.number.pk}/status/"', body)
         self.assertIn("Skip — send a template test instead", body)
 
+    def test_polling_keeps_running_in_a_background_tab(self):
+        body = self._render()
+        self.assertNotIn("if (document.hidden) return", body)  # would pause while they use WhatsApp
+        self.assertIn("visibilitychange", body)  # and re-check as soon as they return
+
     def test_test_form_is_prefilled_after_they_message_us(self):
         self.inbound()
         body = self._render()

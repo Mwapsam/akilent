@@ -248,14 +248,21 @@
     if (pollEl) {
       var helpEl = document.querySelector('[data-wa-poll-help]');
       var started = Date.now();
-      var timer = setInterval(function () {
-        if (document.hidden) return;
+      var timer = null;
+      var checking = false;
+
+      // Keep polling while the tab is in the background: "Open WhatsApp" opens a
+      // new tab, so the user is usually looking elsewhere when the message lands.
+      // Also check the moment they come back.
+      function check() {
+        if (checking) return;
         var elapsed = Date.now() - started;
         if (elapsed > 600000) {
           clearInterval(timer);
           pollEl.textContent = 'Stopped checking. Reload this page to check again.';
           return;
         }
+        checking = true;
         var url = pollEl.dataset.statusUrl + '?since=' + encodeURIComponent(pollEl.dataset.since || '');
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(function (r) { return r.json(); })
@@ -266,12 +273,19 @@
               setTimeout(function () { window.location.reload(); }, 1500);
             } else if (d.stage === 'waiting' && elapsed > 60000 && helpEl) {
               helpEl.classList.remove('hidden');
-            } else if (d.stage === 'delayed' || d.stage === 'failed') {
-              if (helpEl) helpEl.classList.remove('hidden');
+            } else if ((d.stage === 'delayed' || d.stage === 'failed') && helpEl) {
+              helpEl.classList.remove('hidden');
             }
           })
-          .catch(function () {});
-      }, 4000);
+          .catch(function () {})
+          .then(function () { checking = false; });
+      }
+
+      timer = setInterval(check, 4000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) check();
+      });
+      window.addEventListener('focus', check);
     }
 
     var form = document.getElementById('wa-manual-form');
