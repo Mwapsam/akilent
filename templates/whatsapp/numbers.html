@@ -62,9 +62,16 @@
             {% if step.action.url %}
             <a href="{{ step.action.url }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">{{ step.action.label }}</a>
             {% endif %}
-            <p class="mt-3 text-xs text-gray-500" data-wa-poll data-status-url="{{ step.action.status_url }}" role="status">
+            <p class="mt-3 text-xs text-gray-500" data-wa-poll data-status-url="{{ step.action.status_url }}"
+               data-since="{{ step.action.since }}" role="status" aria-live="polite">
               Waiting for your message… this page updates automatically.
             </p>
+            <div class="hidden mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800" data-wa-poll-help>
+              Still nothing? Make sure you sent the message to {% if step.action.number %}<strong>{{ step.action.number }}</strong>{% else %}this WhatsApp number{% endif %}
+              from WhatsApp.
+              {% if step.action.url %}<a href="{{ step.action.url }}" target="_blank" rel="noopener" class="underline font-medium">Open WhatsApp again</a> &middot;{% endif %}
+              <a href="{{ step.action.help_url }}" class="underline font-medium">Troubleshoot</a>
+            </div>
             <button type="button" class="mt-2 text-xs text-brand-600 hover:text-brand-700 underline"
                     x-show="!skip" @click="skip = true">Skip — send a template test instead</button>
             <div x-show="skip" x-cloak>
@@ -235,24 +242,36 @@
       });
     });
 
-    // "Message us first": poll until the tester's message arrives, then reload.
+    // "Message us first": poll for the tester's message and narrate progress, so the
+    // user is never left wondering whether it arrived.
     var pollEl = document.querySelector('[data-wa-poll]');
     if (pollEl) {
-      var tries = 0;
+      var helpEl = document.querySelector('[data-wa-poll-help]');
+      var started = Date.now();
       var timer = setInterval(function () {
         if (document.hidden) return;
-        if (++tries > 120) { clearInterval(timer); return; }
-        fetch(pollEl.dataset.statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        var elapsed = Date.now() - started;
+        if (elapsed > 600000) {
+          clearInterval(timer);
+          pollEl.textContent = 'Stopped checking. Reload this page to check again.';
+          return;
+        }
+        var url = pollEl.dataset.statusUrl + '?since=' + encodeURIComponent(pollEl.dataset.since || '');
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(function (r) { return r.json(); })
           .then(function (d) {
-            if (d.message_received) {
+            if (d.message) pollEl.textContent = d.message;
+            if (d.stage === 'received') {
               clearInterval(timer);
-              pollEl.textContent = 'Message received from ' + d.sender + '.';
-              setTimeout(function () { window.location.reload(); }, 800);
+              setTimeout(function () { window.location.reload(); }, 1500);
+            } else if (d.stage === 'waiting' && elapsed > 60000 && helpEl) {
+              helpEl.classList.remove('hidden');
+            } else if (d.stage === 'delayed' || d.stage === 'failed') {
+              if (helpEl) helpEl.classList.remove('hidden');
             }
           })
           .catch(function () {});
-      }, 5000);
+      }, 4000);
     }
 
     var form = document.getElementById('wa-manual-form');

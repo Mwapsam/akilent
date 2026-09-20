@@ -471,14 +471,15 @@ def numbers_status(request, pk):
     if account is None:
         return JsonResponse({"message_received": False}, status=400)
 
-    from apps.whatsapp.verification import recent_inbound
+    from apps.whatsapp.verification import inbound_stage
 
     number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
-    inbound = recent_inbound(number)
-    return JsonResponse({
-        "message_received": inbound is not None,
-        "sender": inbound.contact.phone_number if inbound is not None else "",
-    })
+    try:
+        since = float(request.GET.get("since", "")) or None
+    except ValueError:
+        since = None
+    stage = inbound_stage(number, since)
+    return JsonResponse({**stage, "message_received": stage["stage"] == "received"})
 
 
 @login_required

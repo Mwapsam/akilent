@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 
 from celery import shared_task
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -23,7 +24,9 @@ from apps.whatsapp.models.tenant import (
     TenantResolutionError,
     WhatsAppBusinessNumber,
     get_account_for_webhook,
+    get_number_for_webhook,
 )
+from apps.whatsapp.models.contact import normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +139,19 @@ def _apply_consent_keyword(contact, conversation, body: str) -> None:
         contact.record_opt_in("inbound_keyword")
 
 
+def _auto_reply_during_setup(phone_number_id: str, contact) -> None:
+    """Confirm a brand-new connection by answering the first inbound message.
+
+    Never lets a failure here fail (and retry) the inbound event itself.
+    """
+    try:
+        from apps.whatsapp.verification import maybe_auto_reply
+
+        maybe_auto_reply(get_number_for_webhook(phone_number_id), contact.phone_number)
+    except Exception as exc:
+        logger.warning("auto-reply during setup failed for %s: %s", phone_number_id, exc)
+
+
 def _handle_inbound_message(event: WebhookEventLog) -> None:
     value = event.payload["entry"][0]["changes"][0]["value"]
     message = value["messages"][0]
@@ -159,9 +175,16 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
     wa_id = message["from"]
     profile_name = (value.get("contacts") or [{}])[0].get("profile", {}).get("name")
 
+    # Meta sends wa_id without "+", but contacts are stored normalized (E.164).
+    # Looking up the raw value misses an existing contact and then violates the
+    # unique constraint on create, so the message would never be logged.
+    try:
+        phone = normalize_phone(wa_id)
+    except ValidationError:
+        phone = wa_id
     contact, _ = WhatsAppContact.objects.get_or_create(
         account=account,
-        phone_number=wa_id,
+        phone_number=phone,
         defaults={"display_name": profile_name},
     )
     if profile_name and contact.display_name != profile_name:
@@ -216,6 +239,9 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
 
     if created and msg_type == "text":
         _apply_consent_keyword(contact, conversation, content)
+
+    if created and not contact.is_opted_out:
+        _auto_reply_during_setup(phone_number_id, contact)
 
     if (
         created

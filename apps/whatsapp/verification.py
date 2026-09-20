@@ -24,6 +24,10 @@ RETRY_REGISTRATION, RECONNECT, FIX_NUMBER, MESSAGE_FIRST, RETRY, CONTACT_SUPPORT
 
 WINDOW = timedelta(hours=24)
 TEXT_BODY = "Your WhatsApp connection is working. You can ignore this message."
+AUTO_REPLY_BODY = (
+    "✅ Your WhatsApp number is connected. Messages you send here will now appear in your inbox."
+)
+DELAYED_AFTER = timedelta(seconds=30)
 
 # error code (before any "/subcode") -> (friendly message, action)
 _ERRORS = {
@@ -118,7 +122,9 @@ def _pick_template(number, provider) -> tuple[str, str]:
     return "hello_world", "en_US"
 
 
-def verify_connection(number: WhatsAppBusinessNumber, recipient_raw: str) -> dict:
+def verify_connection(
+    number: WhatsAppBusinessNumber, recipient_raw: str, *, body: str = TEXT_BODY
+) -> dict:
     if not number.is_ready:
         return _fail(
             "not_registered",
@@ -134,7 +140,7 @@ def verify_connection(number: WhatsAppBusinessNumber, recipient_raw: str) -> dic
     if _window_open(number, recipient):
         # The recipient messaged us in the last 24h, so free text is allowed and
         # works on any number (no template needed).
-        result = provider.send_text(recipient, TEXT_BODY)
+        result = provider.send_text(recipient, body)
     else:
         name, language = _pick_template(number, provider)
         result = provider.send_template(recipient, name, language, [])
@@ -161,3 +167,65 @@ def verify_connection(number: WhatsAppBusinessNumber, recipient_raw: str) -> dic
         number.registration_error = f"Meta error {code}: not registered on the Cloud API."
         number.save(update_fields=["registration_status", "registration_error", "updated_at"])
     return _fail(code or "send_failed", friendly, action)
+
+
+def maybe_auto_reply(number: WhatsAppBusinessNumber, sender_phone: str):
+    """Answer the first message a new number receives, so setup confirms itself.
+
+    Proves both directions at once (their message reached us, our reply reaches
+    them) and records a successful ``ConnectionTest``. Only during setup: once
+    a test has succeeded this never replies again. Returns the result or None.
+    """
+    if not number.is_ready or number.last_successful_test() is not None:
+        return None
+    return verify_connection(number, sender_phone, body=AUTO_REPLY_BODY)
+
+
+def inbound_stage(number: WhatsAppBusinessNumber, since: float | None = None) -> dict:
+    """Where the "message us first" step stands, with a user-facing message.
+
+    ``stage`` is one of waiting / processing / delayed / failed / received.
+    Uses the raw webhook log (written synchronously) so the user gets feedback
+    even when message processing is slow or failing.
+    """
+    from datetime import datetime, timezone as dt_tz
+
+    from apps.whatsapp.models.webhook import WebhookEventLog
+
+    inbound = recent_inbound(number)
+    if inbound is not None:
+        sender = inbound.contact.phone_number
+        replied = number.last_successful_test() is not None
+        return {
+            "stage": "received", "sender": sender,
+            "message": f"Message received from {sender}."
+            + (" We sent a confirmation reply — check your phone." if replied else ""),
+        }
+
+    started = (
+        datetime.fromtimestamp(since, tz=dt_tz.utc) if since else timezone.now() - timedelta(minutes=10)
+    )
+    event = (
+        WebhookEventLog.objects.filter(
+            event_type="message",
+            created_at__gte=started,
+            payload__entry__0__changes__0__value__metadata__phone_number_id=number.phone_number_id,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if event is None:
+        return {"stage": "waiting", "sender": "", "message": "Waiting for your message…"}
+    if event.error_message or event.attempts:
+        return {
+            "stage": "failed", "sender": "",
+            "message": "Your message reached us but we couldn't process it yet. We'll keep "
+                       "retrying — if this doesn't clear, contact support.",
+        }
+    if not event.processed and timezone.now() - event.created_at > DELAYED_AFTER:
+        return {
+            "stage": "delayed", "sender": "",
+            "message": "Your message reached us, but processing is taking longer than usual…",
+        }
+    return {"stage": "processing", "sender": "",
+            "message": "We heard from Meta — processing your message…"}

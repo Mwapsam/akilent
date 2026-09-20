@@ -97,13 +97,15 @@ class StatusEndpointTest(Base):
             return numbers_views.numbers_status(request, pk)
 
     def test_reports_waiting(self):
-        self.assertEqual(json.loads(self._get(self.number.pk).content),
-                         {"message_received": False, "sender": ""})
+        body = json.loads(self._get(self.number.pk).content)
+        self.assertEqual((body["message_received"], body["stage"], body["sender"]),
+                         (False, "waiting", ""))
 
     def test_reports_received_with_sender(self):
         self.inbound()
-        self.assertEqual(json.loads(self._get(self.number.pk).content),
-                         {"message_received": True, "sender": TESTER})
+        body = json.loads(self._get(self.number.pk).content)
+        self.assertEqual((body["message_received"], body["stage"], body["sender"]),
+                         (True, "received", TESTER))
 
     def test_other_accounts_number_404(self):
         foreign = N.objects.create(account=self.other, phone_number_id="X")

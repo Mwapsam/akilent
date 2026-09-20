@@ -4,6 +4,7 @@ Templates render this; they never inspect tokens, PINs or registration state
 themselves. Setup progress is sequential: the first incomplete required step is
 ``current`` and is the only one that carries a primary action.
 """
+import time
 from dataclasses import dataclass, field
 
 DONE, CURRENT, UPCOMING, OPTIONAL = "done", "current", "upcoming", "optional"
@@ -98,6 +99,8 @@ def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) 
             "url": f"https://wa.me/{_digits(display)}?text=Hi" if _digits(display) else "",
             "number": display,
             "status_url": f"/whatsapp/numbers/{number.pk}/status/",
+            "since": int(time.time()),
+            "help_url": "/help/whatsapp-setup/",
             "verify_url": f"/whatsapp/numbers/{number.pk}/verify/",
         }
 
