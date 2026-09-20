@@ -68,3 +68,17 @@ def test_owner_can_cancel_stripe_subscription(client, account, active_subscripti
     delete_mock.assert_called_once_with("sub_123")
     active_subscription.refresh_from_db()
     assert active_subscription.status == Subscription.CANCELLED
+
+
+@pytest.mark.django_db
+def test_ajax_cancel_returns_redirect_json(client, account, active_subscription):
+    user = _member(account, "owner3", Membership.Role.OWNER)
+    client.force_login(user)
+    resp = client.post(CANCEL_URL, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    # The data-ajax form's fetch() needs JSON to navigate; a bare 302 is
+    # followed silently and leaves the page stale.
+    assert resp.status_code == 200
+    assert resp.json() == {"redirect": "/billing/plans/"}
+    active_subscription.refresh_from_db()
+    assert active_subscription.status == Subscription.CANCELLED

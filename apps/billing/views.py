@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from apps.accounts.utils import get_current_account
+from apps.accounts.utils import get_current_account, is_ajax
 from apps.core.models import SiteSettings
 from .models import ManualPaymentRequest, Plan, PaymentMethod, ProcessedWebhookEvent, Subscription, UsageSummary
 from .flutterwave import FlutterwaveError, get_fw_client
@@ -309,12 +309,12 @@ def cancel_subscription(request):
     ).exists()
     if not is_privileged:
         messages.error(request, "Only an account owner or admin can cancel the subscription.")
-        return redirect("/billing/plans/")
+        return _back_to_plans(request)
 
     sub = getattr(account, "subscription", None)
     if not sub or not sub.is_active:
         messages.error(request, "No active subscription to cancel.")
-        return redirect("/billing/plans/")
+        return _back_to_plans(request)
 
     if sub.fw_subscription_id:
         try:
@@ -322,7 +322,7 @@ def cancel_subscription(request):
         except FlutterwaveError as exc:
             logger.error("cancel_subscription: FW error for account=%s: %s", account.pk, exc)
             messages.error(request, f"Could not cancel recurring billing: {exc}")
-            return redirect("/billing/plans/")
+            return _back_to_plans(request)
     elif sub.payment_method == "stripe" and sub.stripe_subscription_id:
         stripe.api_key = settings.STRIPE_SECRET_KEY
         try:
@@ -330,12 +330,22 @@ def cancel_subscription(request):
         except stripe.error.StripeError as exc:
             logger.error("cancel_subscription: Stripe error for account=%s: %s", account.pk, exc)
             messages.error(request, f"Could not cancel recurring billing: {exc}")
-            return redirect("/billing/plans/")
+            return _back_to_plans(request)
 
     sub.status = Subscription.CANCELLED
     sub.cancelled_at = timezone.now()
     sub.save(update_fields=["status", "cancelled_at", "updated_at"])
     messages.success(request, "Your subscription has been cancelled.")
+    return _back_to_plans(request)
+
+
+def _back_to_plans(request):
+    """Plain redirect for normal form posts. The cancel form is data-ajax, and
+    fetch() follows a 302 silently without updating the page — so for XHR
+    return the JSON {redirect} shape app.js turns into a real navigation. The
+    queued flash message is then shown by that fresh page load."""
+    if is_ajax(request):
+        return JsonResponse({"redirect": "/billing/plans/"})
     return redirect("/billing/plans/")
 
 
