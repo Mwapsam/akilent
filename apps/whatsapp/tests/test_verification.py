@@ -19,6 +19,7 @@ from apps.whatsapp.verification import verify_connection
 R = N.RegistrationStatus
 S = N.SetupStatus
 SEND = "apps.whatsapp.verification.MetaCloudAPIProvider.send_template"
+LIST = "apps.whatsapp.verification.MetaCloudAPIProvider.list_templates"
 TESTER = "+260971234567"
 
 
@@ -37,6 +38,9 @@ class VerifyBase(TestCase):
             account=self.account, phone_number_id="PNID", access_token="tok",
             waba_id="W", registration_status=R.REGISTERED,
         )
+        patcher = patch(LIST, return_value=[])
+        self.list_templates = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def inbound(self, phone, when=None):
         contact = self.account.contacts.create(phone_number=phone)
@@ -111,18 +115,47 @@ class TemplateChoiceTest(VerifyBase):
             verify_connection(self.number, TESTER)
         tpl.assert_called_once()
 
-    def test_uses_approved_parameterless_template_before_hello_world(self):
-        from apps.whatsapp.models.templates import MessageTemplate as T
+    def _tpl(self, name, *, lang="en_US", status="APPROVED", category="UTILITY", components=None):
+        return {"name": name, "language": lang, "status": status, "category": category,
+                "components": components if components is not None else [{"type": "BODY", "text": "Thanks"}]}
 
-        T.objects.create(account=self.account, name="Var", whatsapp_template_name="with_var",
-                         approval_status="approved", category="utility",
-                         content="Hi {{1}}", variables=["name"])
-        T.objects.create(account=self.account, name="Plain", whatsapp_template_name="plain",
-                         language_code="en", approval_status="approved", category="utility",
-                         content="Thanks for contacting us")
+    def test_uses_meta_language_of_an_approved_parameterless_template(self):
+        self.list_templates.return_value = [
+            self._tpl("with_var", components=[{"type": "BODY", "text": "Hi {{1}}"}]),
+            self._tpl("pending_one", status="PENDING"),
+            self._tpl("marketing_one", category="MARKETING"),
+            self._tpl("plain", lang="en_GB"),
+        ]
         with patch(SEND, return_value=ok()) as tpl:
             verify_connection(self.number, TESTER)
-        self.assertEqual(tpl.call_args[0][1:3], ("plain", "en"))
+        self.assertEqual(tpl.call_args[0][1:3], ("plain", "en_GB"))
+        self.list_templates.assert_called_once_with("W")  # this number's own WABA
+
+    def test_skips_templates_needing_media_header_or_dynamic_button(self):
+        self.list_templates.return_value = [
+            self._tpl("img", components=[{"type": "HEADER", "format": "IMAGE"}, {"type": "BODY", "text": "x"}]),
+            self._tpl("btn", components=[{"type": "BODY", "text": "x"},
+                                         {"type": "BUTTONS", "buttons": [{"type": "URL", "url": "https://a/{{1}}"}]}]),
+            self._tpl("otp", components=[{"type": "BODY", "text": "x"},
+                                         {"type": "BUTTONS", "buttons": [{"type": "COPY_CODE"}]}]),
+        ]
+        with patch(SEND, return_value=ok()) as tpl:
+            verify_connection(self.number, TESTER)
+        self.assertEqual(tpl.call_args[0][1], "hello_world")
+
+    def test_template_lookup_failure_falls_back_to_hello_world(self):
+        self.list_templates.side_effect = RuntimeError("meta down")
+        with patch(SEND, return_value=ok()) as tpl:
+            verify_connection(self.number, TESTER)
+        self.assertEqual(tpl.call_args[0][1], "hello_world")
+
+    def test_setting_overrides_lookup(self):
+        with self.settings(WHATSAPP_VERIFY_TEMPLATE="mine", WHATSAPP_VERIFY_TEMPLATE_LANG="fr"), patch(
+            SEND, return_value=ok()
+        ) as tpl:
+            verify_connection(self.number, TESTER)
+        self.assertEqual(tpl.call_args[0][1:3], ("mine", "fr"))
+        self.list_templates.assert_not_called()
 
     def test_falls_back_to_hello_world(self):
         with patch(SEND, return_value=ok()) as tpl:

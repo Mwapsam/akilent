@@ -57,23 +57,53 @@ def _window_open(number, recipient: str) -> bool:
     ).exists()
 
 
-def _pick_template(number) -> tuple[str, str]:
-    """Template for the test send: explicit setting, else an approved template
-    with no variables, else Meta's ``hello_world`` (public test numbers only)."""
+_SAFE_BUTTONS = {"QUICK_REPLY", "PHONE_NUMBER", "URL"}
+
+
+def _is_parameterless(tpl: dict) -> bool:
+    """Approved utility template that can be sent with no components/variables."""
+    if (tpl.get("status") or "").upper() != "APPROVED":
+        return False
+    if (tpl.get("category") or "").upper() != "UTILITY":
+        return False
+    for c in tpl.get("components") or []:
+        kind = (c.get("type") or "").upper()
+        if kind == "HEADER":
+            if (c.get("format") or "TEXT").upper() != "TEXT" or "{{" in (c.get("text") or ""):
+                return False
+        elif kind == "BODY":
+            if "{{" in (c.get("text") or ""):
+                return False
+        elif kind == "BUTTONS":
+            for btn in c.get("buttons") or []:
+                if (btn.get("type") or "").upper() not in _SAFE_BUTTONS or "{{" in (btn.get("url") or ""):
+                    return False
+        elif kind not in ("FOOTER",):
+            return False
+    return bool(tpl.get("name") and tpl.get("language"))
+
+
+def _pick_template(number, provider) -> tuple[str, str]:
+    """Template for the test send.
+
+    Explicit setting wins. Otherwise ask Meta for *this number's own WABA*
+    (the source of truth: language codes and variables are exact, and local
+    synced rows can belong to another WABA) and use an approved utility template
+    with no variables. Falls back to ``hello_world``, which Meta only delivers
+    from its public test numbers.
+    """
     configured = getattr(settings, "WHATSAPP_VERIFY_TEMPLATE", "")
     if configured:
         return configured, getattr(settings, "WHATSAPP_VERIFY_TEMPLATE_LANG", "en_US")
 
-    from apps.whatsapp.models.templates import MessageTemplate
-
-    candidates = MessageTemplate.objects.filter(
-        account=number.account,
-        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        category=MessageTemplate.Category.UTILITY,
-    ).exclude(whatsapp_template_name__isnull=True).exclude(whatsapp_template_name="")
-    for t in candidates.order_by("pk"):
-        if not t.variables and "{{" not in t.content:
-            return t.whatsapp_template_name, t.language_code
+    try:
+        templates = provider.list_templates(number.waba_id) if number.waba_id else []
+    except Exception as exc:  # a lookup failure must not block the test
+        logger.warning("verify: could not list templates for %s: %s", number.waba_id, exc)
+        templates = []
+    for tpl in templates:
+        if _is_parameterless(tpl):
+            return tpl["name"], tpl["language"]
     return "hello_world", "en_US"
 
 
@@ -95,7 +125,7 @@ def verify_connection(number: WhatsAppBusinessNumber, recipient_raw: str) -> dic
         # works on any number (no template needed).
         result = provider.send_text(recipient, TEXT_BODY)
     else:
-        name, language = _pick_template(number)
+        name, language = _pick_template(number, provider)
         result = provider.send_template(recipient, name, language, [])
 
     if result.success:
