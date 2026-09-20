@@ -67,6 +67,7 @@ class SyncTemplatesTest(TestCase):
             payload={
                 "entry": [
                     {
+                        "id": "WABA1",  # Meta sends the WABA id; it scopes the update to the tenant
                         "changes": [
                             {
                                 "field": "message_template_status_update",

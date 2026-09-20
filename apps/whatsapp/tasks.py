@@ -85,9 +85,10 @@ def process_whatsapp_event(self, event_id: int):
         return
 
     try:
-        if event.event_type == "message":
+        if event.event_type in ("message", "status"):
+            # One POST can batch messages and statuses across several changes/entries,
+            # so both handlers walk the whole payload (each is a no-op if it has none).
             _handle_inbound_message(event)
-        elif event.event_type == "status":
             _handle_status_update(event)
         elif event.event_type == "message_template_status_update":
             _handle_template_status_update(event)
@@ -186,9 +187,46 @@ def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *,
         )
 
 
+def _iter_payload_items(payload: dict, key: str):
+    """Yield ``(value, item)`` for every ``key`` ("messages"/"statuses") item in every
+    change of every entry. Meta may batch any number of each in one POST."""
+    for entry in (payload or {}).get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            for item in value.get(key) or []:
+                yield value, item
+
+
+def _for_each_item(items, handler) -> None:
+    """Run ``handler`` on every item even if some fail, then re-raise.
+
+    A bad item (unroutable number, transient error) must not stop the rest of the
+    batch from being processed. Handlers are idempotent, so the retry that follows a
+    re-raised failure safely replays the whole event. A non-tenant error wins so the
+    task retries; a tenant-only failure is surfaced as before (event marked failed).
+    """
+    tenant_exc = other_exc = None
+    for value, item in items:
+        try:
+            handler(value, item)
+        except TenantResolutionError as exc:
+            logger.warning("webhook batch item skipped: %s", exc)
+            tenant_exc = tenant_exc or exc
+        except Exception as exc:
+            logger.exception("webhook batch item failed")
+            other_exc = other_exc or exc
+    if other_exc or tenant_exc:
+        raise other_exc or tenant_exc
+
+
 def _handle_inbound_message(event: WebhookEventLog) -> None:
-    value = event.payload["entry"][0]["changes"][0]["value"]
-    message = value["messages"][0]
+    _for_each_item(
+        _iter_payload_items(event.payload, "messages"),
+        lambda value, message: _process_inbound_message(event, value, message),
+    )
+
+
+def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict) -> None:
     phone_number_id = value["metadata"]["phone_number_id"]
 
     account = get_account_for_webhook(phone_number_id)
@@ -314,16 +352,25 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
 
 
 def _handle_status_update(event: WebhookEventLog) -> None:
-    value = event.payload["entry"][0]["changes"][0]["value"]
-    status_obj = value["statuses"][0]
+    _for_each_item(
+        _iter_payload_items(event.payload, "statuses"),
+        _process_status_update,
+    )
 
+
+def _process_status_update(value: dict, status_obj: dict) -> None:
     message_id = status_obj.get("id")
     new_status = status_obj.get("status")  # "sent" | "delivered" | "read" | "failed"
     if not message_id or not new_status:
         return
 
+    # message_id is only unique per account, so the lookup must be tenant-scoped.
+    phone_number_id = (value.get("metadata") or {}).get("phone_number_id")
+    account = get_account_for_webhook(phone_number_id)
+
     try:
         log = MessageLog.objects.get(
+            account=account,
             message_id=message_id,
             direction=MessageLog.Direction.OUTBOUND,
         )
@@ -842,8 +889,21 @@ _VALID_TEMPLATE_CATEGORIES = {c[0] for c in MessageTemplate.Category.choices}
 
 
 def _handle_template_status_update(event: WebhookEventLog) -> None:
-    """Apply a Meta `message_template_status_update` webhook to the local row."""
-    change = event.payload["entry"][0]["changes"][0]
+    """Apply Meta `message_template_status_update` webhooks to the local rows.
+
+    Template events carry the WABA id (``entry.id``), not a phone_number_id. Templates
+    are only ever matched within the account(s) that own that WABA, so a same-named
+    template in another tenant can never be updated.
+    """
+    entries = [
+        (entry, change)
+        for entry in (event.payload or {}).get("entry") or []
+        for change in entry.get("changes") or []
+    ]
+    _for_each_item(entries, _process_template_status_change)
+
+
+def _process_template_status_change(entry: dict, change: dict) -> None:
     value = change.get("value", {})
     name = value.get("message_template_name")
     language = value.get("message_template_language") or "en"
@@ -852,13 +912,20 @@ def _handle_template_status_update(event: WebhookEventLog) -> None:
     if not name or not mapped:
         return
 
-    updated = MessageTemplate.objects.filter(
-        whatsapp_template_name=name, language_code=language
-    ).update(approval_status=mapped)
+    waba_id = entry.get("id")
+    account_ids = (
+        list(WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list("account_id", flat=True))
+        if waba_id else []
+    )
+    if not account_ids:
+        raise TenantResolutionError(f"No WhatsApp account owns WABA id {waba_id!r}")
+
+    scoped = MessageTemplate.objects.filter(account_id__in=account_ids)
+    updated = scoped.filter(whatsapp_template_name=name, language_code=language).update(
+        approval_status=mapped
+    )
     if not updated:
-        MessageTemplate.objects.filter(whatsapp_template_name=name).update(
-            approval_status=mapped
-        )
+        scoped.filter(whatsapp_template_name=name).update(approval_status=mapped)
 
 
 def _upsert_meta_template(account, tpl: dict) -> None:

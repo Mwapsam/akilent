@@ -25,13 +25,14 @@ MODULE_MAP = {
 }
 
 # Legacy Plan attribute fallback map (for backward compatibility during migration)
+# Only features that still have a Plan column belong here. "whatsapp" and "automation"
+# have no Plan boolean (the columns never existed): they are answered by
+# ModuleSubscription alone, which the 0013 seed populated for existing accounts.
 LEGACY_PLAN_MAP = {
-    "whatsapp": "whatsapp_enabled",
     "email": "email_apis",
     "inbound_email": "inbound_email",
     "bulk_email": "bulk_email",
     "email_templates": "email_templates",
-    "automation": "automation_enabled",
     "detailed_analytics": "detailed_analytics",
     "api_access": "email_apis",
     "outbound_webhooks": "outbound_webhooks",
@@ -86,6 +87,22 @@ def has_feature(account: Account, feature_name: str) -> bool:
         )
 
     return result
+
+
+def module_enabled(account: Account, feature_name: str) -> bool:
+    """Whether ``account`` may use a module (views, workflow enrollment, actions).
+
+    Backward compatible: only an explicit ``ModuleSubscription(enabled=False)`` row
+    blocks a module. A tenant with no row is allowed, so existing tenants keep
+    working (crm/commerce were never seeded). Unlike ``has_feature`` this is not a
+    plan-entitlement check.
+
+    Raises:
+        KeyError: if ``feature_name`` isn't a recognized module.
+    """
+    module = MODULE_MAP[feature_name]
+    row = ModuleSubscription.objects.filter(account=account, module=module).first()
+    return row is None or row.enabled
 
 
 def enable_module(account: Account, feature_name: str) -> None:

@@ -10,10 +10,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.utils import get_current_account
 from apps.core.actions import ActionError, run_action
+from apps.core.module_gate import module_required
 from apps.crm.models import Deal, Lead, Pipeline
 
 
 @login_required
+@module_required("crm")
 def sales(request):
     account = get_current_account(request)
     if account is None:
@@ -41,6 +43,7 @@ def sales(request):
 
 
 @login_required
+@module_required("crm")
 def lead_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:
@@ -66,6 +69,7 @@ def lead_detail(request, public_id: str):
 
 
 @login_required
+@module_required("crm")
 def deal_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:

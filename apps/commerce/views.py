@@ -11,9 +11,11 @@ from django.urls import reverse
 from apps.accounts.utils import get_current_account
 from apps.commerce.models import Order
 from apps.core.actions import ActionError, run_action
+from apps.core.module_gate import module_required
 
 
 @login_required
+@module_required("commerce")
 def orders(request):
     account = get_current_account(request)
     if account is None:
@@ -37,6 +39,7 @@ def orders(request):
 
 
 @login_required
+@module_required("commerce")
 def order_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:

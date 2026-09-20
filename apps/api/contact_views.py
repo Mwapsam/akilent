@@ -10,7 +10,12 @@ from apps.api.base import BaseApiView
 from apps.api.permissions import HasEmailApiFeature
 from apps.contacts.models import Contact, ContactList, Segment
 from apps.contacts.segments import SegmentError, contacts_for, count_for
-from apps.contacts.services import import_csv, record_contact_event, upsert_contact
+from apps.contacts.services import (
+    import_csv,
+    record_contact_event,
+    upsert_contact,
+    upsert_contact_by_phone,
+)
 
 
 def _paging(request, *, default=50, cap=200):
@@ -96,8 +101,10 @@ class ContactDetailView(BaseApiView):
     def patch(self, request, cid, *args, **kwargs):
         c = self._get(request, cid)
         d = request.data if isinstance(request.data, dict) else {}
-        contact, _ = upsert_contact(
-            request.user, c.email,
+        # A phone-only contact (e.g. created from WhatsApp) has no email to key on.
+        upsert, identity = (upsert_contact, c.email) if c.email else (upsert_contact_by_phone, c.phone)
+        contact, _ = upsert(
+            request.user, identity,
             attributes=d.get("attributes") or {},
             first_name=d.get("first_name", ""),
             last_name=d.get("last_name", ""),

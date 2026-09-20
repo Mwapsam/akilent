@@ -110,6 +110,10 @@ class WorkflowRun(models.Model):
     )
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     context = models.JSONField(default=dict, blank=True)
+    # What this run is about, e.g. "order:ord_ab12". Empty for contact-level triggers,
+    # which keep one active run per (workflow, contact); a subject lets one contact have
+    # concurrent runs for different subjects (a second order is not dropped).
+    subject_key = models.CharField(max_length=80, blank=True, default="")
     current_step = models.CharField(max_length=64, blank=True, default="")
     next_due_at = models.DateTimeField(blank=True, null=True)
     started_at = models.DateTimeField(auto_now_add=True)
@@ -118,7 +122,7 @@ class WorkflowRun(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["workflow", "contact"],
+                fields=["workflow", "contact", "subject_key"],
                 condition=models.Q(status__in=["active", "waiting"]),
                 name="uniq_active_run_per_contact",
             )

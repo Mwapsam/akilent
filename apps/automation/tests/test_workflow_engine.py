@@ -524,3 +524,53 @@ def test_workflow_step_run_reconciles_to_failed_on_outbound_permanent_failure(ac
     run.refresh_from_db()
     assert step_run.status == "failed"
     assert run.status == WorkflowRun.Status.FAILED
+
+
+# Phase 0 - a WhatsApp-originated contact keeps its number in Contact.phone, not attributes.
+@pytest.mark.django_db
+def test_send_whatsapp_step_uses_contact_phone_column(account, whatsapp_template):
+    phone_only = Contact.objects.create(account=account, phone="+260971234567")
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    assert not phone_only.attributes
+
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, phone_only)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED, run.step_runs.get(step_id="a").result
+    assert OutboundMessage.objects.filter(
+        account=account, contact__phone_number="+260971234567", template=whatsapp_template
+    ).count() == 1
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_prefers_contact_phone_over_stale_attribute(account, whatsapp_template):
+    c = Contact.objects.create(account=account, phone="+260971234567",
+                               attributes={"phone": "+260000000000"})
+    WhatsAppContact.objects.create(account=account, phone_number="+260971234567")
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, c)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    assert OutboundMessage.objects.get(account=account).contact.phone_number == "+260971234567"
+
+
+@pytest.mark.django_db
+def test_send_whatsapp_step_custom_phone_field_still_reads_attributes(account, whatsapp_template):
+    c = Contact.objects.create(account=account, phone="+260971234567",
+                               attributes={"whatsapp_number": "+260961111111"})
+    WhatsAppContact.objects.create(account=account, phone_number="+260961111111")
+    wf = _wf(account, [
+        {"id": "a", "type": "send_whatsapp", "template": "order_update",
+         "phone_field": "whatsapp_number", "next": "b"},
+        {"id": "b", "type": "stop"},
+    ])
+    run = enroll(wf, c)
+    run.refresh_from_db()
+    assert run.status == WorkflowRun.Status.COMPLETED
+    assert OutboundMessage.objects.get(account=account).contact.phone_number == "+260961111111"

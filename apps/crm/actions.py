@@ -6,6 +6,7 @@ from apps.core.actions import Action, ActionError, register
 
 class CreateLeadAction(Action):
     name = "create_lead"
+    module = "crm"
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
@@ -20,6 +21,7 @@ class CreateLeadAction(Action):
 
 class CreateDealAction(Action):
     name = "create_deal"
+    module = "crm"
     scope_kwarg = "lead"
 
     def input_schema(self) -> dict:
@@ -34,6 +36,7 @@ class CreateDealAction(Action):
 
 class ChangeDealStageAction(Action):
     name = "change_deal_stage"
+    module = "crm"
     scope_kwarg = "deal"
 
     def input_schema(self) -> dict:

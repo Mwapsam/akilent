@@ -64,6 +64,7 @@ class WhatsAppContact(models.Model):
         return self.opt_in_status == self.OptInStatus.OPTED_OUT
 
     def record_opt_in(self, source: str) -> None:
+        changed = self.opt_in_status != self.OptInStatus.OPTED_IN
         self.opt_in_status = self.OptInStatus.OPTED_IN
         self.opt_in_source = source[:100]
         self.opt_in_at = timezone.now()
@@ -73,14 +74,27 @@ class WhatsAppContact(models.Model):
             "opt_in_status", "opt_in_source", "opt_in_at",
             "opt_out_at", "opt_out_reason",
         ])
+        if changed:
+            self._record_on_contact("whatsapp.opted_in", {"source": source[:100]})
 
     def record_opt_out(self, reason: str) -> None:
+        changed = self.opt_in_status != self.OptInStatus.OPTED_OUT
         self.opt_in_status = self.OptInStatus.OPTED_OUT
         self.opt_out_at = timezone.now()
         self.opt_out_reason = reason[:255]
         self.save(update_fields=[
             "opt_in_status", "opt_out_at", "opt_out_reason",
         ])
+        if changed:
+            self._record_on_contact("whatsapp.opted_out", {"reason": reason[:255]})
+
+    def _record_on_contact(self, event_type: str, data: dict) -> None:
+        """Mirror a consent change onto the linked Contact's timeline (whatever the source)."""
+        if not self.contact_id:
+            return
+        from apps.contacts.services import record_contact_event
+
+        record_contact_event(self.contact, event_type, data=data)
 
     @property
     def primary_binding(self):

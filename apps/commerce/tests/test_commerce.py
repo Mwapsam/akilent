@@ -117,3 +117,59 @@ def test_action_registry_create_order_and_request_payment(account, contact):
 def test_action_registry_create_order_rejects_empty_items(account, contact):
     with pytest.raises(ActionError):
         run_action("create_order", {}, account=account, contact=contact, items=[])
+
+
+# Phase 0 - each order gets its own workflow run; a second order is not dropped.
+def _order_workflow(account, trigger):
+    return Workflow.objects.create(
+        account=account, name="Order flow", status=Workflow.Status.PUBLISHED,
+        definition={"trigger": {"type": trigger}, "steps": [
+            {"id": "w", "type": "wait", "seconds": 3600, "next": "done"},
+            {"id": "done", "type": "stop"},
+        ]},
+    )
+
+
+def _new_order(account, contact):
+    return create_order(account, contact, items=[
+        {"name": "Coke", "unit_price": Decimal("15.00"), "quantity": 1}])
+
+
+@pytest.mark.django_db
+def test_each_order_created_gets_its_own_workflow_run(account, contact):
+    wf = _order_workflow(account, "order.created")
+    first, second = _new_order(account, contact), _new_order(account, contact)  # first still WAITING
+    runs = WorkflowRun.objects.filter(workflow=wf, contact=contact)
+    assert runs.count() == 2
+    assert {r.context["order_id"] for r in runs} == {first.public_id, second.public_id}
+
+
+@pytest.mark.django_db
+def test_each_paid_order_gets_its_own_order_paid_run(account, contact):
+    wf = _order_workflow(account, "order.paid")
+    orders = [_new_order(account, contact), _new_order(account, contact)]
+    for o in orders:
+        payment = Payment.objects.create(account=account, order=o, amount=o.total)
+        mark_paid(payment, transaction_id=f"tx-{o.pk}", raw_payload={})
+    assert WorkflowRun.objects.filter(workflow=wf, contact=contact).count() == 2
+
+
+@pytest.mark.django_db
+def test_same_order_does_not_start_a_second_run(account, contact):  # regression: still de-duplicated
+    from apps.automation.workflow_engine import enroll_for_trigger
+
+    wf = _order_workflow(account, "order.created")
+    order = _new_order(account, contact)
+    enroll_for_trigger(account.id, "order.created", contact,
+                       context={"order_id": order.public_id}, subject_key=f"order:{order.public_id}")
+    assert WorkflowRun.objects.filter(workflow=wf, contact=contact).count() == 1
+
+
+@pytest.mark.django_db
+def test_triggers_without_a_subject_stay_one_active_run_per_contact(account, contact):  # regression
+    from apps.automation.workflow_engine import enroll_for_trigger
+
+    wf = _order_workflow(account, "contact.updated")
+    enroll_for_trigger(account.id, "contact.updated", contact)
+    enroll_for_trigger(account.id, "contact.updated", contact)
+    assert WorkflowRun.objects.filter(workflow=wf, contact=contact).count() == 1

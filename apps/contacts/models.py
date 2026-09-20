@@ -81,6 +81,15 @@ class Contact(models.Model):
     def full_name(self) -> str:
         return " ".join(p for p in (self.first_name, self.last_name) if p)
 
+    @property
+    def whatsapp_opted_out(self) -> bool:
+        """True if any of this contact's WhatsApp identities has opted out (e.g. STOP).
+
+        WhatsApp-only: ``status`` is email subscription state and is deliberately not
+        touched by a WhatsApp opt-out (nor does an email unsubscribe opt out of WhatsApp).
+        """
+        return self.whatsapp_contacts.filter(opt_in_status="opted_out").exists()
+
 
 class ContactList(models.Model):
     account = models.ForeignKey(

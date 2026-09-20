@@ -14,6 +14,7 @@ Only aggregate counts are output - no message content or phone numbers.
 """
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import uuid
@@ -30,7 +31,11 @@ from apps.whatsapp.baseline import build_snapshot, render_report
 from apps.whatsapp.baseline_schema import SnapshotSchemaError, validate_snapshot
 
 
-def _git_commit() -> str:
+def _git_commit(override=None) -> str:
+    """Recorded commit: --git-commit / AKILENT_GIT_COMMIT (containers have no .git), else git."""
+    override = override or os.environ.get("AKILENT_GIT_COMMIT")
+    if override:
+        return override
     root = Path(settings.BASE_DIR)
     try:
         sha = subprocess.check_output(
@@ -78,6 +83,7 @@ class Command(BaseCommand):
         parser.add_argument("--grace-hours", type=float, default=1,
                             help="Applied uniformly to every gap (default 1).")
         parser.add_argument("--out", help="Write the JSON snapshot here (never overwrites).")
+        parser.add_argument("--git-commit", help="Commit to record (default: $AKILENT_GIT_COMMIT, else git).")
         parser.add_argument("--operator", help="Who ran this; required with --out.")
 
     def handle(self, *args, **options):
@@ -121,7 +127,7 @@ class Command(BaseCommand):
                     cursor.execute("SET TRANSACTION READ ONLY")
             snapshot = build_snapshot(
                 accounts, gaps, options["grace_hours"], since, until,
-                options["since"], options["until"], as_of, _git_commit(),
+                options["since"], options["until"], as_of, _git_commit(options["git_commit"]),
                 include_total=options["all_accounts_total"],
             )
 

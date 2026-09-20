@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from apps.api.base import BaseApiView
-from apps.api.permissions import HasEmailApiFeature
+from apps.api.permissions import HasAutomationModule, HasEmailApiFeature
 from apps.automation.models import Workflow, WorkflowRun
 from apps.automation.workflow_engine import enroll, validate_definition
 from apps.automation.workflow_templates import get_template, list_templates
@@ -55,7 +55,7 @@ def _run_dict(r: WorkflowRun, *, with_steps: bool = False) -> dict:
 
 
 class WorkflowCollectionView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     @extend_schema(operation_id="workflows_list", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def get(self, request, *args, **kwargs):
@@ -86,7 +86,7 @@ class WorkflowCollectionView(BaseApiView):
 
 
 class WorkflowTemplateCatalogView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     @extend_schema(operation_id="workflow_templates", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def get(self, request, *args, **kwargs):
@@ -94,7 +94,7 @@ class WorkflowTemplateCatalogView(BaseApiView):
 
 
 class WorkflowDetailView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     def _get(self, request, slug):
         return Workflow.objects.get(account=request.user, slug=slug)
@@ -125,7 +125,7 @@ class WorkflowDetailView(BaseApiView):
 
 
 class WorkflowPublishView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     @extend_schema(operation_id="workflows_publish", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def post(self, request, slug, *args, **kwargs):
@@ -145,7 +145,7 @@ class WorkflowPublishView(BaseApiView):
 
 
 class WorkflowArchiveView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     @extend_schema(operation_id="workflows_archive", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def post(self, request, slug, *args, **kwargs):
@@ -156,7 +156,7 @@ class WorkflowArchiveView(BaseApiView):
 
 
 class WorkflowRunsView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     @extend_schema(operation_id="workflows_runs_list", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
     def get(self, request, slug, *args, **kwargs):
@@ -195,7 +195,7 @@ class WorkflowRunsView(BaseApiView):
 
 
 class WorkflowRunDetailView(BaseApiView):
-    permission_classes = [HasEmailApiFeature]
+    permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
     def _get(self, request, run_id):
         return WorkflowRun.objects.select_related("workflow", "contact").get(

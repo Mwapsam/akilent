@@ -148,3 +148,48 @@ def test_events_ingest_requires_event_name(client, api_key):
     r = _post(client, key, "/events", {"customer": "b@x.com"})
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "validation_error"
+
+
+def _patch(client, key, path, body):
+    return client.patch(f"/api/v1{path}", data=json.dumps(body),
+                        content_type="application/json", HTTP_X_API_KEY=key)
+
+
+# Phase 0 - a phone-only contact (e.g. created from an inbound WhatsApp message) can be updated.
+@pytest.mark.django_db
+def test_phone_only_contact_can_be_patched(client, api_key):
+    from apps.contacts.services import upsert_contact_by_phone
+
+    key, acc = api_key
+    contact, _ = upsert_contact_by_phone(acc, "+260971234567", source="whatsapp",
+                                         attributes={"tier": "gold"})
+    assert contact.email is None
+
+    r = _patch(client, key, f"/contacts/{contact.public_id}",
+               {"first_name": "Mary", "attributes": {"city": "Lusaka"}})
+    assert r.status_code == 200, r.content
+    contact.refresh_from_db()
+    assert (contact.first_name, contact.phone, contact.email) == ("Mary", "+260971234567", None)
+    assert contact.attributes == {"tier": "gold", "city": "Lusaka"}
+    assert Contact.objects.filter(account=acc).count() == 1  # updated in place, no duplicate
+
+
+@pytest.mark.django_db
+def test_phone_only_contact_status_can_be_patched(client, api_key):
+    from apps.contacts.services import upsert_contact_by_phone
+
+    key, acc = api_key
+    contact, _ = upsert_contact_by_phone(acc, "+260971234567")
+    r = _patch(client, key, f"/contacts/{contact.public_id}", {"status": "unsubscribed"})
+    assert r.status_code == 200, r.content
+    contact.refresh_from_db()
+    assert contact.status == "unsubscribed"
+
+
+@pytest.mark.django_db
+def test_email_contact_patch_still_works(client, api_key):  # regression
+    key, acc = api_key
+    cid = _post(client, key, "/contacts", {"email": "a@x.com"}).json()["id"]
+    r = _patch(client, key, f"/contacts/{cid}", {"first_name": "Ada"})
+    assert r.status_code == 200
+    assert Contact.objects.get(account=acc, email="a@x.com").first_name == "Ada"

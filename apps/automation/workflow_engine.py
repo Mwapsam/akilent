@@ -212,9 +212,19 @@ def _first_step_id(workflow: Workflow) -> str | None:
     return steps[0]["id"] if steps else None
 
 
-def enroll(workflow: Workflow, contact, *, context: dict | None = None) -> WorkflowRun | None:
-    """Start a run for ``contact`` on ``workflow`` (no-op if one is already active)."""
+def enroll(
+    workflow: Workflow, contact, *, context: dict | None = None, subject_key: str = ""
+) -> WorkflowRun | None:
+    """Start a run for ``contact`` on ``workflow`` (no-op if one is already active).
+
+    "Already active" is per ``subject_key``: with the default empty key that is one run
+    per contact; with e.g. ``"order:<id>"`` each subject gets its own concurrent run.
+    """
     if workflow.status != Workflow.Status.PUBLISHED:
+        return None
+    from apps.billing import api as billing_api
+
+    if not billing_api.module_enabled(workflow.account, "automation"):
         return None
     first = _first_step_id(workflow)
     if first is None:
@@ -222,6 +232,7 @@ def enroll(workflow: Workflow, contact, *, context: dict | None = None) -> Workf
     run, created = WorkflowRun.objects.get_or_create(
         workflow=workflow,
         contact=contact,
+        subject_key=subject_key,
         status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
         defaults={"context": context or {}, "current_step": first},
     )
@@ -315,7 +326,9 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
 
     contact = run.contact
     phone_field = step.get("phone_field", "phone")
-    phone = (contact.attributes or {}).get(phone_field)
+    # The canonical number lives on Contact.phone (WhatsApp-originated contacts have
+    # no attributes); a custom phone_field still reads from attributes.
+    phone = (contact.phone if phone_field == "phone" else None) or (contact.attributes or {}).get(phone_field)
     if not phone:
         raise ValueError(
             f"send_whatsapp step {step.get('id')!r}: contact {contact.pk} has no "
@@ -641,7 +654,9 @@ def on_business_event(event, **kwargs) -> None:
                 logger.exception("on_business_event: enroll failed wf=%s", wf.pk)
 
 
-def enroll_for_trigger(account_id: int, trigger_type: str, contact, *, context: dict | None = None) -> int:
+def enroll_for_trigger(
+    account_id: int, trigger_type: str, contact, *, context: dict | None = None, subject_key: str = ""
+) -> int:
     """Enroll ``contact`` into every published workflow whose trigger matches.
 
     Used for the lightweight contact-lifecycle triggers (``contact.created``,
@@ -657,7 +672,7 @@ def enroll_for_trigger(account_id: int, trigger_type: str, contact, *, context: 
             continue
         try:
             with transaction.atomic():
-                if enroll(wf, contact, context=context or {}) is not None:
+                if enroll(wf, contact, context=context or {}, subject_key=subject_key) is not None:
                     n += 1
         except Exception:  # noqa: BLE001
             logger.exception("enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type)

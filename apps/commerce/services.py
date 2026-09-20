@@ -41,7 +41,8 @@ def create_order(account, contact, items: list[dict], *, currency: str = "USD") 
         source="commerce", subject_type="order", subject_id=order.public_id,
         payload={"contact_id": contact.public_id, "total": str(order.total), "currency": order.currency},
     )
-    _enroll_workflows(account, "order.created", contact, {"order_id": order.public_id})
+    _enroll_workflows(account, "order.created", contact, {"order_id": order.public_id},
+                      subject_key=f"order:{order.public_id}")
     return order
 
 
@@ -108,7 +109,8 @@ def mark_paid(payment: Payment, *, transaction_id: str, raw_payload: dict | None
         source="commerce", subject_type="order", subject_id=order.public_id,
         payload={"contact_id": order.contact.public_id, "total": str(order.total)},
     )
-    _enroll_workflows(order.account, "order.paid", order.contact, {"order_id": order.public_id})
+    _enroll_workflows(order.account, "order.paid", order.contact, {"order_id": order.public_id},
+                      subject_key=f"order:{order.public_id}")
     return order
 
 
@@ -129,10 +131,10 @@ def mark_failed(payment: Payment, *, error: str = "") -> Order:
     return order
 
 
-def _enroll_workflows(account, trigger_type: str, contact, context: dict) -> None:
+def _enroll_workflows(account, trigger_type: str, contact, context: dict, subject_key: str = "") -> None:
     try:
         from apps.automation.workflow_engine import enroll_for_trigger
 
-        enroll_for_trigger(account.id, trigger_type, contact, context=context)
+        enroll_for_trigger(account.id, trigger_type, contact, context=context, subject_key=subject_key)
     except Exception:
         logger.exception("_enroll_workflows failed for trigger=%s", trigger_type)

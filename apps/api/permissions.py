@@ -20,6 +20,18 @@ class HasEmailApiFeature(BasePermission):
         return LimitChecker(account).has_feature("email_apis")
 
 
+class HasAutomationModule(BasePermission):
+    """The tenant's Automation module must not be explicitly disabled."""
+
+    message = "The automation module is not enabled for this account."
+
+    def has_permission(self, request, view) -> bool:
+        from apps.billing import api as billing_api
+
+        account = request.user
+        return account is not None and billing_api.module_enabled(account, "automation")
+
+
 class HasBulkEmailFeature(BasePermission):
     """Gate on the account's plan including bulk/campaign sending."""
 

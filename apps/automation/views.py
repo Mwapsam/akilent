@@ -15,6 +15,7 @@ from apps.accounts.utils import get_current_account
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
+from apps.core.module_gate import module_required
 
 _STEP_TYPES = ["send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
@@ -22,6 +23,7 @@ _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.update
 
 
 @login_required
+@module_required("automation")
 def workflow_list(request):
     account = get_current_account(request)
     if account is None:
@@ -35,6 +37,7 @@ def workflow_list(request):
 
 
 @login_required
+@module_required("automation")
 @require_POST
 def workflow_create(request):
     account = get_current_account(request)
@@ -62,6 +65,7 @@ def workflow_create(request):
 
 
 @login_required
+@module_required("automation")
 def workflow_editor(request, slug: str):
     account = get_current_account(request)
     if account is None:
@@ -102,6 +106,7 @@ def workflow_editor(request, slug: str):
 
 
 @login_required
+@module_required("automation")
 def workflow_stats(request, slug: str):
     account = get_current_account(request)
     if account is None:
@@ -140,6 +145,7 @@ def workflow_stats(request, slug: str):
 
 
 @login_required
+@module_required("automation")
 @require_POST
 def workflow_save(request, slug: str):
     account = get_current_account(request)
@@ -165,6 +171,7 @@ def workflow_save(request, slug: str):
 
 
 @login_required
+@module_required("automation")
 @require_POST
 def workflow_publish(request, slug: str):
     account = get_current_account(request)
@@ -188,6 +195,7 @@ def workflow_publish(request, slug: str):
 
 
 @login_required
+@module_required("automation")
 @require_POST
 def workflow_archive(request, slug: str):
     account = get_current_account(request)
@@ -201,6 +209,7 @@ def workflow_archive(request, slug: str):
 
 
 @login_required
+@module_required("automation")
 @require_POST
 def workflow_delete(request, slug: str):
     account = get_current_account(request)

@@ -32,14 +32,17 @@ def _verify_meta_signature(request) -> bool:
 
 
 def _classify_event(payload: dict) -> str:
+    """One label per POST. A POST may batch several entries/changes, so look at all
+    of them: any message makes it "message", else any status makes it "status"."""
     try:
-        value = payload["entry"][0]["changes"][0]["value"]
-        if "messages" in value:
+        changes = [c for entry in payload["entry"] for c in entry["changes"]]
+        values = [c.get("value") or {} for c in changes]
+        if any(v.get("messages") for v in values):
             return "message"
-        if "statuses" in value:
+        if any(v.get("statuses") for v in values):
             return "status"
-        return payload["entry"][0]["changes"][0].get("field", "unknown")
-    except (KeyError, IndexError, TypeError):
+        return changes[0].get("field", "unknown")
+    except (KeyError, IndexError, TypeError, AttributeError):
         return "unknown"
 
 
