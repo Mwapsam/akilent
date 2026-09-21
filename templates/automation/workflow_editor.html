@@ -303,12 +303,12 @@
 function workflowEditor() {
   return {
     tab: "visual",
-    definition: `{{ definition_json|safe }}`,
-    stepTypes: `{{ step_types|safe }}`,
-    triggerTypes: `{{ trigger_types|safe }}`,
-    errors: `{{ validation_errors|safe }}`,
-    emailTemplates: `{{ email_templates_json|safe }}`,
-    whatsappTemplates: `{{ whatsapp_templates_json|safe }}`,
+    definition: {{ definition_json|safe }},
+    stepTypes: {{ step_types|safe }},
+    triggerTypes: {{ trigger_types|safe }},
+    errors: {{ validation_errors|safe }},
+    emailTemplates: {{ email_templates_json|safe }},
+    whatsappTemplates: {{ whatsapp_templates_json|safe }},
     codeText: "",
     codeError: "",
     saved: false,
