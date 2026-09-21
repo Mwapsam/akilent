@@ -40,9 +40,11 @@ def inbox(request):
     if view == "missed":
         qs = missed(account, now)
     elif view == "assigned":
-        qs = with_activity(Conversation.objects.filter(account=account, assigned_to=request.user))
+        qs = with_activity(
+            Conversation.objects.filter(account=account, assigned_to=request.user)
+        ).order_by("-last_any", "-id")
     elif view == "all":
-        qs = with_activity(Conversation.objects.filter(account=account))
+        qs = with_activity(Conversation.objects.filter(account=account)).order_by("-last_any", "-id")
     else:
         view = "needs_attention"
         qs = needs_attention(account, now)
