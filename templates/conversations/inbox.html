@@ -4,12 +4,13 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
-  <p class="mt-1 text-sm text-gray-600">Who needs a reply — across every channel.</p>
+  <p class="mt-1 text-sm text-gray-600">Who is waiting on you, and for how long — across every channel.</p>
 </header>
 
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
   <nav class="flex gap-1" aria-label="Inbox views">
-    <a href="?view=needs_reply" class="btn btn-sm {% if view == 'needs_reply' %}btn-primary{% else %}btn-ghost{% endif %}">Needs reply {% if needs_reply_count %}<span class="ml-1 opacity-75">{{ needs_reply_count }}</span>{% endif %}</a>
+    <a href="?view=needs_attention" class="btn btn-sm {% if view == 'needs_attention' %}btn-primary{% else %}btn-ghost{% endif %}">Needs attention {% if needs_attention_count %}<span class="ml-1 opacity-75">{{ needs_attention_count }}</span>{% endif %}</a>
+    <a href="?view=missed" class="btn btn-sm {% if view == 'missed' %}btn-primary{% else %}btn-ghost{% endif %}" title="Customers who wrote and got no reply for over 24 hours">Missed {% if missed_count %}<span class="ml-1 opacity-75">{{ missed_count }}</span>{% endif %}</a>
     <a href="?view=assigned" class="btn btn-sm {% if view == 'assigned' %}btn-primary{% else %}btn-ghost{% endif %}">Assigned to me {% if assigned_count %}<span class="ml-1 opacity-75">{{ assigned_count }}</span>{% endif %}</a>
     <a href="?view=all" class="btn btn-sm {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
   </nav>
@@ -28,11 +29,11 @@
 <div class="table-wrap">
   <table class="table table--cards">
     <thead>
-      <tr><th>Customer</th><th>Channel</th><th>Status</th><th>Last message</th></tr>
+      <tr><th>Customer</th><th>Channel</th><th>Status</th><th>Waiting</th><th>Last message</th></tr>
     </thead>
     <tbody>
       {% for c in page %}
-      <tr class="{% if c.is_unread %}font-medium{% endif %}">
+      <tr class="{% if c.snapshot.state == WAITING_FOR_AGENT %}font-medium{% endif %}">
         <td data-label="Customer">
           <a href="{% url 'conversations:detail' c.public_id %}" class="text-brand-600 hover:text-brand-700">
             {{ c.contact.full_name|default:c.contact.email|default:c.contact.phone }}
@@ -40,10 +41,16 @@
         </td>
         <td data-label="Channel"><span class="badge badge-neutral">{{ c.get_channel_display }}</span></td>
         <td data-label="Status">
-          {% if c.status == 'open' %}<span class="badge badge-success">Open</span>{% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+          {% if c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
+          {% elif c.snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting for you</span>
+          {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
+          {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
           {% if c.assigned_to %}<span class="badge badge-neutral ml-1">{{ c.assigned_to }}</span>{% endif %}
         </td>
-        <td data-label="Last message" class="text-gray-500 tabular-nums">{{ c.last_message_at|date:"Y-m-d H:i"|default:"—" }}</td>
+        <td data-label="Waiting" class="tabular-nums">
+          {% if c.snapshot.state == WAITING_FOR_AGENT or c.snapshot.missed %}{{ c.snapshot.last_customer_message_at|timesince:now }}{% else %}—{% endif %}
+        </td>
+        <td data-label="Last message" class="text-gray-500 tabular-nums">{{ c.snapshot.last_activity_at|date:"Y-m-d H:i"|default:"—" }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -51,7 +58,7 @@
 </div>
 {% else %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="message-circle" title="Nothing needs your attention right now" message="When a customer messages you on WhatsApp, Email, or SMS, the conversation shows up here — one inbox, every channel." %}
+  {% include "components/empty_state.html" with icon="message-circle" title="Nobody is waiting on you" message="When a customer messages you, the conversation shows up here with how long they have been waiting. Once you reply, it moves out of this list." %}
 </div>
 {% endif %}
 

@@ -325,6 +325,9 @@ class WhatsAppWebhookReplayTest(TestCase):
         settings = SiteSettings.load()
         settings.automation_events_enabled = True
         settings.save()
+        # The flag is cached process-wide for 60s; don't inherit another test's stale value.
+        from django.core.cache import cache
+        cache.clear()
 
     def test_replay_message_webhook_does_not_duplicate_events(self):
         """Test that replaying a message webhook doesn't publish the event twice."""

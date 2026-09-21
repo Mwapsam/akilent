@@ -108,6 +108,13 @@ def process_whatsapp_event(self, event_id: int):
         raise self.retry(exc=exc)
 
 
+def _close_spine_conversation(whatsapp_conversation) -> None:
+    """Keep the inbox in step when a WhatsApp conversation is closed (e.g. STOP)."""
+    spine = getattr(whatsapp_conversation, "generic_conversation", None)
+    if spine is not None:
+        spine.close()
+
+
 def _apply_consent_keyword(contact, conversation, body: str) -> None:
     """Honor STOP / START keywords in an inbound text message.
 
@@ -124,6 +131,7 @@ def _apply_consent_keyword(contact, conversation, body: str) -> None:
         if not contact.is_opted_out:
             contact.record_opt_out("inbound_keyword")
         conversation.close()
+        _close_spine_conversation(conversation)
         confirmation = settings.WHATSAPP_OPT_OUT_CONFIRMATION
         if confirmation:
             OutboundMessage.objects.create(
@@ -163,19 +171,9 @@ def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *,
     still completes.
     """
     try:
-        from apps.contacts.services import upsert_contact_by_phone
         from apps.conversations.services import record_inbound_whatsapp_message
 
-        contact = wa_contact.contact
-        if contact is None:
-            contact, created = upsert_contact_by_phone(
-                account, wa_contact.phone_number, source="whatsapp"
-            )
-            if created and wa_contact.display_name and not contact.first_name:
-                contact.first_name = wa_contact.display_name[:150]
-                contact.save(update_fields=["first_name", "updated_at"])
-            wa_contact.contact = contact
-            wa_contact.save(update_fields=["contact"])
+        contact = _canonical_contact(account, wa_contact)
         record_inbound_whatsapp_message(
             contact=contact, wa_contact=wa_contact,
             whatsapp_conversation=whatsapp_conversation, message_log=message_log,
@@ -185,6 +183,46 @@ def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *,
         logger.exception(
             "project_to_inbox failed for account=%s message_id=%s", account.pk, message_log.message_id,
         )
+
+
+def _canonical_contact(account, wa_contact):
+    """The ``apps.contacts.Contact`` behind a WhatsApp identity, created (phone-only) if missing."""
+    from apps.contacts.services import upsert_contact_by_phone
+
+    contact = wa_contact.contact
+    if contact is None:
+        contact, created = upsert_contact_by_phone(account, wa_contact.phone_number, source="whatsapp")
+        if created and wa_contact.display_name and not contact.first_name:
+            contact.first_name = wa_contact.display_name[:150]
+            contact.save(update_fields=["first_name", "updated_at"])
+        wa_contact.contact = contact
+        wa_contact.save(update_fields=["contact"])
+    return contact
+
+
+def project_outbound_to_inbox(log: MessageLog) -> None:
+    """Mirror a business message (human reply, template or workflow send) onto the spine.
+
+    Called wherever the provider log for an outbound message is created or changes, so the
+    inbox never has to consult ``MessageLog`` to know what the business said. Idempotent
+    (a replay updates the same spine message) and best-effort like the inbound projection.
+    The channel-neutral work lives in ``apps.conversations``; this only adapts.
+    """
+    from apps.conversations import metrics
+
+    try:
+        from apps.conversations.models import Conversation as SpineConversation
+        from apps.conversations.services import record_outbound_message
+
+        _canonical_contact(log.account, log.contact)
+        spine = SpineConversation.get_or_create_for_whatsapp(log.conversation)
+        record_outbound_message(
+            conversation=spine, body=log.content, timestamp=log.timestamp, status=log.status,
+            metadata={"message_type": log.message_type}, whatsapp_message=log,
+        )
+    except Exception:
+        metrics.incr("outbound_projection_failures")
+        logger.exception("project_outbound_to_inbox failed for message_log=%s", log.pk)
 
 
 def _iter_payload_items(payload: dict, key: str):
@@ -352,10 +390,30 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
 
 
 def _handle_status_update(event: WebhookEventLog) -> None:
-    _for_each_item(
-        _iter_payload_items(event.payload, "statuses"),
-        _process_status_update,
-    )
+    from apps.conversations import metrics
+
+    def handle(value, status_obj):
+        metrics.incr("status_webhooks_received", status=status_obj.get("status") or "unknown")
+        try:
+            _process_status_update(value, status_obj)
+        except TenantResolutionError:
+            raise
+        except Exception:
+            metrics.incr("status_update_failures")
+            raise
+
+    _for_each_item(_iter_payload_items(event.payload, "statuses"), handle)
+
+
+def _record_status_lag(status_obj: dict) -> None:
+    """Seconds between the provider reporting a status and us applying it."""
+    try:
+        from apps.conversations import metrics
+
+        reported = datetime.fromtimestamp(int(status_obj["timestamp"]), tz=dt_timezone.utc)
+        metrics.incr("status_update_lag_seconds", (timezone.now() - reported).total_seconds())
+    except (KeyError, TypeError, ValueError):
+        pass
 
 
 def _process_status_update(value: dict, status_obj: dict) -> None:
@@ -375,6 +433,11 @@ def _process_status_update(value: dict, status_obj: dict) -> None:
             direction=MessageLog.Direction.OUTBOUND,
         )
         status_changed = log.apply_status_update(new_status)
+
+        # Keep the spine message in step with the provider log (idempotent; also repairs an
+        # earlier failed projection). This is what flips a failed send back to "waiting".
+        project_outbound_to_inbox(log)
+        _record_status_lag(status_obj)
 
         # Publish domain event for subscribers (automation, AI, analytics)
         # IMPORTANT: Only publish if the status actually changed to prevent duplicate
@@ -693,6 +756,7 @@ def drain_outbound_queue():
             msg.save(update_fields=["status", "sent_at"])
 
             log.conversation.register_outbound(msg.sent_at)
+            project_outbound_to_inbox(log)
             sent += 1
         except SendNotAuthorized as exc:
             msg.mark_failed(f"{exc.code}: {exc}", terminal=True)
@@ -700,6 +764,7 @@ def drain_outbound_queue():
                 MessageLog.objects.filter(pk=msg.message_log_id).update(
                     status=MessageLog.Status.FAILED
                 )
+                project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
             _notify_terminal_failure(msg)
             failed += 1
         except Exception as exc:
@@ -713,6 +778,7 @@ def drain_outbound_queue():
                 MessageLog.objects.filter(pk=msg.message_log_id).update(
                     status=MessageLog.Status.FAILED
                 )
+                project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
             _notify_terminal_failure(msg)
             failed += 1
 

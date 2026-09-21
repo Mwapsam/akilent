@@ -128,6 +128,13 @@ class Conversation(models.Model):
         self.is_unread = True
         self.save(update_fields=["last_message_at", "status", "is_unread", "updated_at"])
 
+    def register_outbound(self, at) -> None:
+        """Advance ``last_message_at`` for a business message. Unlike an inbound message it
+        neither re-opens the conversation nor marks it unread."""
+        if self.last_message_at is None or at > self.last_message_at:
+            self.last_message_at = at
+            self.save(update_fields=["last_message_at", "updated_at"])
+
     def assign(self, user) -> None:
         self.assigned_to = user
         self.save(update_fields=["assigned_to", "updated_at"])

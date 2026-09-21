@@ -15,6 +15,7 @@ from datetime import datetime
 
 from django.db import IntegrityError, transaction
 
+from apps.conversations import metrics
 from apps.conversations.models import Conversation, Event, Message
 
 logger = logging.getLogger(__name__)
@@ -123,3 +124,56 @@ def _enroll_workflows(conversation: Conversation, contact, message_log) -> None:
             },
         },
     )
+
+
+# Same ordering as the provider-side log: a status only moves forward, and "failed" is terminal.
+_STATUS_RANK = {"queued": 0, "sent": 1, "delivered": 2, "read": 3, "failed": 99}
+
+
+def record_outbound_message(
+    *, conversation: Conversation, body: str, timestamp: datetime, status: str,
+    metadata: dict | None = None, whatsapp_message=None,
+) -> tuple[Message, bool]:
+    """Record a business message (human reply, template or workflow send) on the spine.
+
+    Channel-neutral: the adapter passes what it knows and, optionally, its provider
+    record so the call is idempotent (a replay returns the existing ``Message`` and
+    carries a newer status forward). Returns ``(message, created)``. Whether it counts
+    as the business having *responded* is decided by ``state.py`` from ``status``.
+    """
+    metrics.incr("outbound_projection_attempts")
+    if whatsapp_message is not None:
+        message, created = Message.objects.get_or_create(
+            whatsapp_message=whatsapp_message,
+            defaults={
+                "account": conversation.account, "conversation": conversation,
+                "direction": Message.Direction.OUTBOUND, "body": body,
+                "timestamp": timestamp, "status": status, "metadata": metadata or {},
+            },
+        )
+    else:
+        message = Message.objects.create(
+            account=conversation.account, conversation=conversation,
+            direction=Message.Direction.OUTBOUND, body=body, timestamp=timestamp,
+            status=status, metadata=metadata or {},
+        )
+        created = True
+
+    if created:
+        metrics.incr("outbound_projection_created")
+        conversation.register_outbound(timestamp)
+    else:
+        metrics.incr("outbound_projection_duplicates")
+        record_message_status(message, status)
+    return message, created
+
+
+def record_message_status(message: Message, status: str) -> bool:
+    """Advance a message's delivery status. Returns True if it changed."""
+    incoming = _STATUS_RANK.get(status)
+    if incoming is None or incoming <= _STATUS_RANK.get(message.status, 0):
+        return False
+    message.status = status
+    message.save(update_fields=["status"])
+    metrics.incr("status_updates_applied", status=status)
+    return True

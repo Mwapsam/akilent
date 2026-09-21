@@ -9,7 +9,11 @@
   </h1>
   <p class="text-sm text-gray-500">
     <span class="badge badge-neutral">{{ conversation.get_channel_display }}</span>
-    {% if conversation.status == 'open' %}<span class="badge badge-success">Open</span>{% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+    {% if snapshot.missed %}<span class="badge badge-danger">Missed — no reply for over 24h</span>
+    {% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span>
+    {% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied · waiting for the customer</span>
+    {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+    {% if snapshot.first_response_seconds is not None %}<span class="text-xs text-gray-400 ml-2">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}
   </p>
 </div>
 
@@ -21,7 +25,7 @@
         <div class="inline-block rounded-2xl px-3 py-2 text-sm {% if m.direction == 'outbound' %}bg-brand-600 text-white{% else %}bg-surface-muted text-ink{% endif %}">
           {{ m.body|default:"(no text content)"|linebreaksbr }}
         </div>
-        <p class="text-xs text-gray-400 mt-0.5">{{ m.timestamp|date:"Y-m-d H:i" }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ m.timestamp|date:"Y-m-d H:i" }}{% if m.direction == 'outbound' and m.status %} · {{ m.status }}{% endif %}</p>
       </div>
       {% empty %}
       <p class="text-gray-400 text-sm">No messages yet.</p>
@@ -48,6 +52,18 @@
       <div class="flex justify-between"><span class="text-gray-500">Email</span><span>{{ conversation.contact.email|default:"—" }}</span></div>
       <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
     </div>
+
+    {% if conversation.status == 'open' %}
+    <div class="card card-pad text-sm space-y-3">
+      <h2 class="text-lg font-semibold text-ink">Close</h2>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="close" />
+        <button class="btn btn-ghost btn-sm w-full">Close conversation</button>
+      </form>
+      <p class="text-xs text-gray-400">If the customer writes again, it re-opens.</p>
+    </div>
+    {% endif %}
 
     <div class="card card-pad text-sm space-y-3">
       <h2 class="text-lg font-semibold text-ink">Assign</h2>
