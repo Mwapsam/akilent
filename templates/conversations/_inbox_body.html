@@ -1,9 +1,9 @@
 <nav class="flex gap-1.5 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 mb-4" aria-label="Inbox views">
   {% with ch=channel|yesno:"&channel=,"|add:channel %}
-  <a href="?view=needs_attention{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'needs_attention' %}btn-primary{% else %}btn-ghost{% endif %}">Needs attention {% if needs_attention_count %}<span class="ml-1 opacity-75">{{ needs_attention_count }}</span>{% endif %}</a>
-  <a href="?view=missed{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'missed' %}btn-primary{% else %}btn-ghost{% endif %}" title="Customers who wrote and got no reply for over 24 hours">Missed {% if missed_count %}<span class="ml-1 opacity-75">{{ missed_count }}</span>{% endif %}</a>
-  <a href="?view=assigned{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'assigned' %}btn-primary{% else %}btn-ghost{% endif %}">Assigned to me {% if assigned_count %}<span class="ml-1 opacity-75">{{ assigned_count }}</span>{% endif %}</a>
-  <a href="?view=all{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
+  <a href="?view=needs_attention{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'needs_attention' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>Needs attention {% if needs_attention_count %}<span class="ml-1 opacity-75">{{ needs_attention_count }}</span>{% endif %}</a>
+  <a href="?view=missed{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'missed' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'missed' %}aria-current="page"{% endif %} title="Customers who wrote and got no reply for over 24 hours">Missed {% if missed_count %}<span class="ml-1 opacity-75">{{ missed_count }}</span>{% endif %}</a>
+  <a href="?view=assigned{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'assigned' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'assigned' %}aria-current="page"{% endif %}>Assigned to me {% if assigned_count %}<span class="ml-1 opacity-75">{{ assigned_count }}</span>{% endif %}</a>
+  <a href="?view=all{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'all' %}aria-current="page"{% endif %}>All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
   {% endwith %}
 </nav>
 
@@ -12,15 +12,15 @@
   {% for c in page %}
   {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone %}
   <li>
-    <a href="{% url 'conversations:detail' c.public_id %}" class="flex items-start gap-3 px-4 py-3.5 hover:bg-hover transition-colors">
+    <a href="{% url 'conversations:detail' c.public_id %}" class="flex items-start gap-3 px-4 py-3.5 hover:bg-hover focus-visible:bg-hover transition-colors">
       <span class="chat-avatar w-10 h-10 text-sm mt-0.5" aria-hidden="true">{{ name|default:"?"|slice:":1"|upper }}</span>
       <div class="min-w-0 flex-1">
         <div class="flex items-baseline justify-between gap-3">
           <p class="truncate text-sm {% if c.is_unread or c.snapshot.state == WAITING_FOR_AGENT %}font-semibold{% else %}font-medium{% endif %} text-ink">{{ name }}</p>
-          <time class="shrink-0 text-xs text-gray-400 tabular-nums" datetime="{{ c.snapshot.last_activity_at|date:'c' }}">{% if c.snapshot.last_activity_at %}{{ c.snapshot.last_activity_at|timesince:now }} ago{% endif %}</time>
+          <time class="shrink-0 text-xs text-gray-600 tabular-nums" datetime="{{ c.snapshot.last_activity_at|date:'c' }}">{% if c.snapshot.last_activity_at %}{{ c.snapshot.last_activity_at|timesince:now }} ago{% endif %}</time>
         </div>
-        <p class="truncate text-sm {% if c.is_unread %}text-ink{% else %}text-gray-500{% endif %}">
-          {% if c.preview %}{% if c.preview.direction == 'outbound' %}<span class="text-gray-400">You: </span>{% endif %}{{ c.preview.body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
+        <p class="truncate text-sm {% if c.is_unread %}text-ink{% else %}text-gray-600{% endif %}">
+          {% if c.preview %}{% if c.preview.direction == 'outbound' %}<span class="text-gray-600">You: </span>{% endif %}{{ c.preview.body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
         </p>
         <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
           <span class="badge badge-neutral">{{ c.get_channel_display }}</span>
@@ -31,7 +31,7 @@
           {% if c.assigned_to %}<span class="badge badge-neutral">{{ c.assigned_to }}</span>{% endif %}
         </div>
       </div>
-      {% if c.is_unread %}<span class="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" title="Unread" aria-label="Unread"></span>{% endif %}
+      {% if c.is_unread %}<span class="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" title="Unread" aria-label="Unread"></span>{% endif %}
     </a>
   </li>
   {% endwith %}
@@ -39,7 +39,15 @@
 </ul>
 {% else %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="message-circle" title="Nobody is waiting on you" message="When a customer messages you, the conversation shows up here with how long they have been waiting. Once you reply, it moves out of this list." %}
+  {% if view == 'missed' %}
+    {% include "components/empty_state.html" with icon="check-circle" title="No missed conversations" message="Every customer who wrote in the last day or more has had a reply. Nice work." %}
+  {% elif view == 'assigned' %}
+    {% include "components/empty_state.html" with icon="message-circle" title="Nothing assigned to you" message="Open a conversation and choose “Assign to me” to keep track of the ones you own." %}
+  {% elif view == 'all' %}
+    {% include "components/empty_state.html" with icon="message-circle" title="No conversations yet" message="Conversations from every connected channel will appear here as customers get in touch." %}
+  {% else %}
+    {% include "components/empty_state.html" with icon="message-circle" title="Nobody is waiting on you" message="When a customer messages you, the conversation shows up here with how long they have been waiting. Once you reply, it moves out of this list." %}
+  {% endif %}
 </div>
 {% endif %}
 

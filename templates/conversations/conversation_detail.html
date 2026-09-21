@@ -7,7 +7,7 @@
 {{ chat_config|json_script:"chat-config" }}
 <script src="{% static 'js/chat.js' %}"></script>
 
-<div class="chat-layout" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))">
+<div class="chat-layout" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))" @keydown.escape.window="infoOpen = false">
   <div x-show="infoOpen" x-cloak x-transition.opacity @click="infoOpen = false"
        class="chat-backdrop fixed inset-0 bg-black/40 lg:hidden"></div>
 
@@ -21,16 +21,16 @@
         <h1 class="text-base sm:text-lg font-semibold text-ink truncate">{{ display_name }}</h1>
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1" x-html="statusHtml"></div>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm lg:hidden" @click="infoOpen = true">Info</button>
+      <button type="button" class="btn btn-ghost btn-sm lg:hidden" @click="infoOpen = true" :aria-expanded="infoOpen" aria-controls="chat-info">Info</button>
     </header>
 
     <div class="chat-thread" x-ref="thread" @scroll.passive="onScroll" role="log" aria-live="polite" aria-label="Messages">
-      <template x-if="!messages.length"><p class="text-gray-400 text-sm text-center py-8">No messages yet.</p></template>
+      <template x-if="!messages.length"><p class="text-gray-600 text-sm text-center py-8">No messages yet.</p></template>
       <template x-for="item in items" :key="item.key">
         <div>
           <template x-if="item.type === 'day'"><p class="chat-day" x-text="item.label"></p></template>
           <template x-if="item.type === 'msg'">
-            <div class="chat-msg" :class="{ 'chat-msg--out': item.m.direction === 'outbound', 'chat-msg--pending': item.m.pending }">
+            <div class="chat-msg" :class="{ 'chat-msg--out': item.m.direction === 'outbound', 'chat-msg--pending': item.m.pending, 'chat-msg--failed': item.m.status === 'failed' }">
               <div class="chat-bubble" x-text="item.m.body || '(no text content)'"></div>
               <p class="chat-meta" x-show="item.showMeta" x-text="meta(item.m)"></p>
             </div>
@@ -49,24 +49,25 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="reply" />
         <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input chat-input"
-                  placeholder="Type a reply…" aria-label="Reply"
+                  placeholder="Type a reply…" aria-label="Reply" aria-describedby="composer-hint"
                   @input="grow($event.target)" @keydown.enter="onEnter($event)"></textarea>
-        <button class="btn btn-primary" :disabled="!draft.trim()">Send</button>
+        <button class="btn btn-primary" :disabled="!draft.trim() || sending">Send</button>
+        <p id="composer-hint" class="sr-only">Press Enter to send, Shift and Enter for a new line.</p>
       </form>
     </template>
     <template x-if="!open">
-      <p class="chat-composer text-sm text-gray-400">This conversation is closed. It re-opens if the customer writes again.</p>
+      <p class="chat-composer text-sm text-gray-600">This conversation is closed. It re-opens if the customer writes again.</p>
     </template>
   </section>
 
-  <aside class="chat-side fixed inset-y-0 right-0 w-80 max-w-[90vw] bg-canvas p-4 shadow-pop lg:static lg:w-auto lg:max-w-none lg:bg-transparent lg:p-0 lg:shadow-none"
+  <aside id="chat-info" aria-label="Conversation details" class="chat-side fixed inset-y-0 right-0 w-80 max-w-[90vw] bg-canvas p-4 shadow-pop lg:static lg:w-auto lg:max-w-none lg:bg-transparent lg:p-0 lg:shadow-none"
          :class="infoOpen ? '' : 'hidden lg:block'">
     <button type="button" class="btn btn-ghost btn-sm mb-3 lg:hidden" @click="infoOpen = false">Close panel</button>
     <div class="card card-pad text-sm space-y-2">
       <h2 class="text-lg font-semibold text-ink mb-1">Customer</h2>
-      <div class="flex justify-between"><span class="text-gray-500">Name</span><span>{{ conversation.contact.full_name|default:"—" }}</span></div>
-      <div class="flex justify-between"><span class="text-gray-500">Phone</span><span>{{ conversation.contact.phone|default:"—" }}</span></div>
-      <div class="flex justify-between"><span class="text-gray-500">Email</span><span>{{ conversation.contact.email|default:"—" }}</span></div>
+      <div class="flex justify-between"><span class="text-gray-600">Name</span><span>{{ conversation.contact.full_name|default:"—" }}</span></div>
+      <div class="flex justify-between"><span class="text-gray-600">Phone</span><span>{{ conversation.contact.phone|default:"—" }}</span></div>
+      <div class="flex justify-between"><span class="text-gray-600">Email</span><span>{{ conversation.contact.email|default:"—" }}</span></div>
       <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
     </div>
 
@@ -78,7 +79,7 @@
         <input type="hidden" name="action" value="close" />
         <button class="btn btn-ghost btn-sm w-full">Close conversation</button>
       </form>
-      <p class="text-xs text-gray-400">If the customer writes again, it re-opens.</p>
+      <p class="text-xs text-gray-600">If the customer writes again, it re-opens.</p>
     </div>
     {% endif %}
 
@@ -87,8 +88,8 @@
       <form method="post" class="flex gap-2">
         {% csrf_token %}
         <input type="hidden" name="action" value="assign" />
-        <button class="btn btn-ghost btn-sm w-full">
-          {% if conversation.assigned_to %}Reassign to me ({{ conversation.assigned_to }} now){% else %}Assign to me{% endif %}
+        <button class="btn btn-ghost btn-sm w-full" {% if conversation.assigned_to_id == request.user.id %}disabled{% endif %}>
+          {% if conversation.assigned_to_id == request.user.id %}Assigned to you{% elif conversation.assigned_to %}Take over from {{ conversation.assigned_to }}{% else %}Assign to me{% endif %}
         </button>
       </form>
     </div>
@@ -99,10 +100,10 @@
         {% for n in notes %}
         <li class="bg-surface-muted rounded-lg p-2">
           <p>{{ n.body }}</p>
-          <p class="text-xs text-gray-400 mt-1">{{ n.author|default:"—" }} · {{ n.created_at|date:"Y-m-d H:i" }}</p>
+          <p class="text-xs text-gray-600 mt-1">{{ n.author|default:"—" }} · {{ n.created_at|date:"Y-m-d H:i" }}</p>
         </li>
         {% empty %}
-        <li class="text-gray-400">No notes yet.</li>
+        <li class="text-gray-600">No notes yet.</li>
         {% endfor %}
       </ul>
       <form method="post" class="flex gap-2">

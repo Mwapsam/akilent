@@ -239,6 +239,16 @@
   }
   [x-cloak] { display: none !important; }
 
+  /* Slim scrollbars app-wide (thin track, subtle thumb). */
+  * { scrollbar-width: thin; scrollbar-color: var(--color-gray-300) transparent; }
+  *:hover { scrollbar-color: var(--color-gray-400) transparent; }
+  @supports not (scrollbar-width: thin) {
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-gray-300); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-gray-400); }
+  }
+
   /* Global reduced-motion — was previously only in docs/_layout.html.
      Kills transitions, animations and smooth scroll everywhere. */
   @media (prefers-reduced-motion: reduce) {
@@ -320,8 +330,10 @@
   }
   .chat-msg--out .chat-bubble { @apply bg-brand-600 text-white border-transparent; }
   .chat-msg--pending .chat-bubble { opacity: 0.6; }
-  .chat-meta { @apply text-[11px] text-gray-400 mt-0.5 px-1; }
-  .chat-day { @apply text-center text-[11px] font-medium uppercase tracking-wide text-gray-400 py-3; }
+  .chat-meta { @apply text-xs text-gray-600 mt-0.5 px-1; }
+  .chat-msg--failed .chat-bubble { @apply bg-red-50 text-red-900 border-red-300; }
+  .chat-msg--failed .chat-meta { @apply text-red-700 font-medium; }
+  .chat-day { @apply text-center text-xs font-medium uppercase tracking-wide text-gray-600 py-3; }
   .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
   .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
   @media (min-width: 1024px) { .chat-side { z-index: auto; } }
