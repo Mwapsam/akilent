@@ -1,0 +1,6 @@
+<span class="badge badge-neutral">{{ conversation.get_channel_display }}</span>
+{% if snapshot.missed %}<span class="badge badge-danger">Missed — no reply for over 24h</span>
+{% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span>
+{% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied · waiting for the customer</span>
+{% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+{% if snapshot.first_response_seconds is not None %}<span class="text-xs text-gray-400">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}

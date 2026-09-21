@@ -1,50 +1,67 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} — Inbox{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <a href="{% url 'conversations:inbox' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Inbox</a>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">
-    {{ conversation.contact.full_name|default:conversation.contact.phone|default:conversation.contact.email }}
-  </h1>
-  <p class="text-sm text-gray-500">
-    <span class="badge badge-neutral">{{ conversation.get_channel_display }}</span>
-    {% if snapshot.missed %}<span class="badge badge-danger">Missed — no reply for over 24h</span>
-    {% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span>
-    {% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied · waiting for the customer</span>
-    {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
-    {% if snapshot.first_response_seconds is not None %}<span class="text-xs text-gray-400 ml-2">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}
-  </p>
-</div>
+{% with display_name=conversation.contact.full_name|default:conversation.contact.phone|default:conversation.contact.email %}
+{{ chat_config|json_script:"chat-config" }}
+<script src="{% static 'js/chat.js' %}"></script>
 
-<div class="grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-2 card card-pad flex flex-col" style="min-height: 28rem;">
-    <div class="flex-1 space-y-3 overflow-y-auto mb-4">
-      {% for m in thread %}
-      <div class="max-w-md {% if m.direction == 'outbound' %}ml-auto text-right{% endif %}">
-        <div class="inline-block rounded-2xl px-3 py-2 text-sm {% if m.direction == 'outbound' %}bg-brand-600 text-white{% else %}bg-surface-muted text-ink{% endif %}">
-          {{ m.body|default:"(no text content)"|linebreaksbr }}
-        </div>
-        <p class="text-xs text-gray-400 mt-0.5">{{ m.timestamp|date:"Y-m-d H:i" }}{% if m.direction == 'outbound' and m.status %} · {{ m.status }}{% endif %}</p>
+<div class="chat-layout" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))">
+  <div x-show="infoOpen" x-cloak x-transition.opacity @click="infoOpen = false"
+       class="chat-backdrop fixed inset-0 bg-black/40 lg:hidden"></div>
+
+  <section class="chat-pane">
+    <header class="chat-header">
+      <a href="{% url 'conversations:inbox' %}" class="btn btn-ghost btn-icon btn-sm" aria-label="Back to inbox">
+        {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+      </a>
+      <span class="chat-avatar w-10 h-10 text-sm" aria-hidden="true">{{ display_name|default:"?"|slice:":1"|upper }}</span>
+      <div class="min-w-0 flex-1">
+        <h1 class="text-base sm:text-lg font-semibold text-ink truncate">{{ display_name }}</h1>
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1" x-html="statusHtml"></div>
       </div>
-      {% empty %}
-      <p class="text-gray-400 text-sm">No messages yet.</p>
-      {% endfor %}
+      <button type="button" class="btn btn-ghost btn-sm lg:hidden" @click="infoOpen = true">Info</button>
+    </header>
+
+    <div class="chat-thread" x-ref="thread" @scroll.passive="onScroll" role="log" aria-live="polite" aria-label="Messages">
+      <template x-if="!messages.length"><p class="text-gray-400 text-sm text-center py-8">No messages yet.</p></template>
+      <template x-for="item in items" :key="item.key">
+        <div>
+          <template x-if="item.type === 'day'"><p class="chat-day" x-text="item.label"></p></template>
+          <template x-if="item.type === 'msg'">
+            <div class="chat-msg" :class="{ 'chat-msg--out': item.m.direction === 'outbound', 'chat-msg--pending': item.m.pending }">
+              <div class="chat-bubble" x-text="item.m.body || '(no text content)'"></div>
+              <p class="chat-meta" x-show="item.showMeta" x-text="meta(item.m)"></p>
+            </div>
+          </template>
+        </div>
+      </template>
     </div>
 
-    {% if conversation.status == 'open' %}
-    <form method="post" class="flex gap-2 pt-3 border-t border-border">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="reply" />
-      <input type="text" name="body" placeholder="Type a reply…" class="input flex-1" required autofocus />
-      <button class="btn btn-primary">Reply</button>
-    </form>
-    {% else %}
-    <p class="text-sm text-gray-400 pt-3 border-t border-border">This conversation is closed.</p>
-    {% endif %}
+    <div class="relative" x-show="newBelow" x-cloak>
+      <button type="button" @click="scrollBottom()"
+              class="btn btn-primary btn-sm absolute -top-12 left-1/2 -translate-x-1/2 shadow-pop">New messages ↓</button>
+    </div>
+
+    <template x-if="open">
+      <form method="post" class="chat-composer" x-ref="composer" @submit.prevent="send()">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reply" />
+        <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input chat-input"
+                  placeholder="Type a reply…" aria-label="Reply"
+                  @input="grow($event.target)" @keydown.enter="onEnter($event)"></textarea>
+        <button class="btn btn-primary" :disabled="!draft.trim()">Send</button>
+      </form>
+    </template>
+    <template x-if="!open">
+      <p class="chat-composer text-sm text-gray-400">This conversation is closed. It re-opens if the customer writes again.</p>
+    </template>
   </section>
 
-  <section class="space-y-6">
+  <aside class="chat-side fixed inset-y-0 right-0 w-80 max-w-[90vw] bg-canvas p-4 shadow-pop lg:static lg:w-auto lg:max-w-none lg:bg-transparent lg:p-0 lg:shadow-none"
+         :class="infoOpen ? '' : 'hidden lg:block'">
+    <button type="button" class="btn btn-ghost btn-sm mb-3 lg:hidden" @click="infoOpen = false">Close panel</button>
     <div class="card card-pad text-sm space-y-2">
       <h2 class="text-lg font-semibold text-ink mb-1">Customer</h2>
       <div class="flex justify-between"><span class="text-gray-500">Name</span><span>{{ conversation.contact.full_name|default:"—" }}</span></div>
@@ -95,6 +112,7 @@
         <button class="btn btn-ghost btn-sm">Add</button>
       </form>
     </div>
-  </section>
+  </aside>
 </div>
+{% endwith %}
 {% endblock %}

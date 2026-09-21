@@ -290,6 +290,42 @@
   }
   .card-hover:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
 
+  /* Chat ---------------------------------------------------------------- */
+  /* Fills the viewport under the 4rem topbar + main padding; only the thread scrolls. */
+  .chat-layout {
+    display: grid;
+    gap: 1rem;
+    height: calc(100dvh - 7.5rem);
+    min-height: 26rem;
+  }
+  @media (min-width: 1024px) {
+    .chat-layout { grid-template-columns: minmax(0, 1fr) 20rem; height: calc(100dvh - 9rem); }
+  }
+  .chat-pane { @apply bg-surface border border-border rounded-2xl shadow-card flex flex-col min-h-0 overflow-hidden; }
+  .chat-header { @apply flex items-center gap-3 px-4 py-3 border-b border-border; }
+  .chat-thread { @apply flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-1 bg-surface-muted/40; overscroll-behavior: contain; }
+  .chat-composer { @apply flex items-end gap-2 p-3 border-t border-border bg-surface; }
+  .chat-input { @apply flex-1 resize-none py-2.5; max-height: 9rem; }
+  .chat-avatar {
+    @apply inline-flex items-center justify-center shrink-0 rounded-full
+      bg-brand-100 text-brand-700 font-semibold;
+  }
+  .chat-msg { @apply flex flex-col items-start; }
+  .chat-msg--out { @apply items-end; }
+  .chat-bubble {
+    @apply rounded-2xl px-3.5 py-2 text-sm bg-surface text-ink border border-border;
+    max-width: min(85%, 32rem);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .chat-msg--out .chat-bubble { @apply bg-brand-600 text-white border-transparent; }
+  .chat-msg--pending .chat-bubble { opacity: 0.6; }
+  .chat-meta { @apply text-[11px] text-gray-400 mt-0.5 px-1; }
+  .chat-day { @apply text-center text-[11px] font-medium uppercase tracking-wide text-gray-400 py-3; }
+  .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
+  .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
+  @media (min-width: 1024px) { .chat-side { z-index: auto; } }
+
   /* Badges -------------------------------------------------------------- */
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
