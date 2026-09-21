@@ -27,7 +27,18 @@ The rules (locked in the plan):
 
 A consequence worth knowing: because ``inactive_24h`` counts as closed, a customer who
 was never answered drops out of needs-attention after 24h. ``missed`` surfaces exactly
-those (still-open conversations the customer wrote to, unanswered for 24h+).
+those (still-open conversations the customer wrote to, unanswered for 24h+). ``missed`` is
+a derived recovery queue - the state semantics above are not bent to fit the UI.
+
+Closing and re-opening (kept deliberately different):
+
+* **Explicit close** - the *same* conversation is closed; a later customer message
+  re-opens it (``Conversation.register_inbound``) and it is eligible for attention again.
+* **STOP** - terminal for the exchange. The channel adapter closes the conversation, and a
+  later customer message starts a *new* conversation (WhatsApp opens a fresh
+  ``whatsapp.Conversation``), leaving the old one closed.
+
+Both paths are pinned by ``apps/whatsapp/tests/test_phase1_acceptance.py``.
 """
 from __future__ import annotations
 
