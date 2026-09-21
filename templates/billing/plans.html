@@ -169,11 +169,11 @@
 {% endif %}
 {% endif %}
 
-<div x-data="{
-       period: 'monthly',
+<div x-data='{
+       period: "monthly",
        pricing: {{ period_pricing_json|safe }},
        priceFor(monthly) { return (monthly * this.pricing[this.period].months * this.pricing[this.period].multiplier).toFixed(0); },
-     }">
+     }'>
 
 <!-- Billing period selector -->
 <div class="mb-6 flex justify-center">
