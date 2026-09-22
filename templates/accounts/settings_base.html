@@ -23,6 +23,10 @@
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
        {% if active_tab == 'team' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'team' %}aria-current="page"{% endif %}>Team</a>
+    <a href="{% url 'settings-tools' %}"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
+       {% if active_tab == 'tools' %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
   </nav>
 </div>
 

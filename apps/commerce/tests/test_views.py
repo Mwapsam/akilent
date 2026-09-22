@@ -54,6 +54,45 @@ def test_order_detail_scoped_to_account(logged_in):
 
 
 @pytest.mark.django_db
+def test_create_order_via_orders_page(logged_in, contact):
+    client, account, _ = logged_in
+    resp = client.post("/orders/create/", {
+        "contact": contact.phone, "name": "Website package",
+        "unit_price": "500", "quantity": "1", "currency": "USD",
+    })
+    assert resp.status_code == 302
+    order = Order.objects.get(account=account, contact=contact)
+    assert order.total == Decimal("500.00")
+    assert resp["Location"] == f"/orders/{order.public_id}/"
+
+
+@pytest.mark.django_db
+def test_create_order_unknown_contact_shows_error(logged_in):
+    client, account, _ = logged_in
+    resp = client.post(
+        "/orders/create/",
+        {"contact": "+000000000", "name": "X", "unit_price": "1", "quantity": "1"},
+        follow=True,
+    )
+    assert resp.status_code == 200
+    assert b"No customer found" in resp.content
+    assert not Order.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
+def test_create_order_invalid_price_shows_error(logged_in, contact):
+    client, account, _ = logged_in
+    resp = client.post(
+        "/orders/create/",
+        {"contact": contact.phone, "name": "X", "unit_price": "not-a-number", "quantity": "1"},
+        follow=True,
+    )
+    assert resp.status_code == 200
+    assert b"valid price" in resp.content
+    assert not Order.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
 def test_request_payment_via_view(logged_in, order):
     client, _, _ = logged_in
     with patch("apps.billing.flutterwave.get_fw_client") as fw:

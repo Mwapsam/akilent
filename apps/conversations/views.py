@@ -169,6 +169,17 @@ def conversation_detail(request, public_id: str):
             "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
         }),
     }
+    open_lead = None
+    try:
+        from apps.crm.models import Lead
+
+        open_lead = Lead.objects.filter(
+            account=account, contact=conversation.contact,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        ).first()
+    except Exception:
+        pass  # crm app not installed/migrated — panel just won't show it
+
     return render(request, "conversations/conversation_detail.html", {
         "account": account,
         "now": now,
@@ -176,6 +187,7 @@ def conversation_detail(request, public_id: str):
         "chat_config": chat_config,
         "snapshot": snapshot,
         "notes": conversation.notes.select_related("author"),
+        "open_lead": open_lead,
     })
 
 

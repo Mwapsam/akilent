@@ -108,6 +108,29 @@ def test_conversation_detail_renders_thread(logged_in, open_conversation):
 
 
 @pytest.mark.django_db
+def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, open_conversation):
+    """R1.5a: the inbox side panel is the fix for the "orphaned CRM" finding —
+    a lead can be created from the conversation, and creating one returns the
+    agent to the conversation (via the hidden "next" field) rather than to Sales."""
+    client, _, _ = logged_in
+    resp = client.get(f"/inbox/{open_conversation.public_id}/")
+    body = resp.content.decode()
+    assert "Create lead" in body
+    assert f'/inbox/{open_conversation.public_id}/' in body  # the "next" hidden field
+
+    create_resp = client.post("/sales/leads/create/", {
+        "contact": open_conversation.contact.phone,
+        "next": f"/inbox/{open_conversation.public_id}/",
+    })
+    assert create_resp.status_code == 302
+    assert create_resp["Location"] == f"/inbox/{open_conversation.public_id}/"
+
+    # The panel now shows the lead exists instead of offering to create another.
+    resp = client.get(f"/inbox/{open_conversation.public_id}/")
+    assert "Already a lead" in resp.content.decode()
+
+
+@pytest.mark.django_db
 def test_messages_feed_returns_only_newer_messages(logged_in, open_conversation):
     client, _, _ = logged_in
     first = open_conversation.messages.first()

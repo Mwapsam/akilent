@@ -11,9 +11,13 @@ Arrow Up/Down navigate within groups; Tab moves between groups.{% endcomment %}
   <div role="group" aria-label="Work">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Work</p>
     {% include "components/_nav_item.html" with href="/contacts/" label="Customers" icon="users" collapsible=collapsible group_key="work" %}
+    {% if crm_enabled|default:True %}
     {% include "components/_nav_item.html" with href="/sales/" label="Sales" icon="building" match="sales" collapsible=collapsible group_key="work" %}
+    {% endif %}
+    {% if commerce_enabled|default:True %}
     {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" collapsible=collapsible group_key="work" %}
-    {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled" collapsible=collapsible group_key="work" %}
+    {% endif %}
+    {% include "components/_nav_item.html" with href="/email/campaigns/" label="Email campaigns" icon="send" match="email/campaigns scheduled" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/automations/" label="Follow-ups" icon="workflow" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/email/insights/" label="Insights" icon="bar-chart" collapsible=collapsible group_key="work" %}
     {% include "components/_nav_item.html" with href="/logs/messages/" label="Message history" icon="list" match="logs" collapsible=collapsible group_key="work" %}

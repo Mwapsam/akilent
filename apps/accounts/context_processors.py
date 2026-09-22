@@ -8,6 +8,30 @@ def feature_flags(request):
     }
 
 
+def module_flags(request):
+    """Expose which optional modules (Sales/Orders) this account has turned on,
+    so nav links can hide themselves rather than 404 or redirect with an error
+    when a business has opted out (see apps.accounts.settings_views.settings_tools,
+    R1.5a). Defensive like ``onboarding_status`` — never breaks rendering.
+    """
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return {}
+    try:
+        from apps.accounts.utils import get_current_account
+        from apps.billing import api as billing_api
+
+        account = get_current_account(request)
+        if account is None:
+            return {}
+        return {
+            "crm_enabled": billing_api.module_enabled(account, "crm"),
+            "commerce_enabled": billing_api.module_enabled(account, "commerce"),
+        }
+    except Exception:
+        return {}
+
+
 def onboarding_status(request):
     """Expose onboarding progress for the floating widget + welcome tour.
 

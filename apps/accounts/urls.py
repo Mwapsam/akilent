@@ -15,6 +15,7 @@ urlpatterns = [
     path("settings/", settings_views.settings_profile, name="settings-profile"),
     path("settings/security/", settings_views.settings_security, name="settings-security"),
     path("settings/team/", settings_views.settings_team, name="settings-team"),
+    path("settings/tools/", settings_views.settings_tools, name="settings-tools"),
     path("settings/team/invite/", settings_views.invite_create, name="invite-create"),
     path("settings/team/invitations/<int:pk>/revoke/", settings_views.invite_revoke, name="invite-revoke"),
     path("settings/team/members/<int:pk>/role/", settings_views.member_role, name="member-role"),

@@ -6,9 +6,11 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.utils import get_current_account
+from apps.contacts.models import Contact
 from apps.core.actions import ActionError, run_action
 from apps.core.module_gate import module_required
 from apps.crm.models import Deal, Lead, Pipeline
@@ -40,6 +42,60 @@ def sales(request):
         "stages": stages,
         "has_pipeline": pipeline is not None,
     })
+
+
+@login_required
+@module_required("crm")
+def create_lead_view(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        # A conversation's "Create lead" button sets this so the agent lands back
+        # in the conversation with a confirmation, instead of being pulled into
+        # Sales mid-reply (see docs/plans R1.5a UX review).
+        next_url = request.POST.get("next") or None
+
+        query = (request.POST.get("contact") or "").strip()
+        contact = Contact.objects.filter(account=account).filter(
+            Q(phone=query) | Q(email__iexact=query)
+        ).first()
+        if contact is None:
+            messages.error(
+                request,
+                "No customer found with that phone or email. Check the number/email, "
+                "or add them from Contacts first.",
+            )
+            return redirect(next_url or "crm:sales")
+
+        try:
+            result = run_action(
+                "create_lead", {"account": account}, account=account, contact=contact,
+                source=(request.POST.get("source") or "manual").strip(),
+            )
+        except ActionError as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url or "crm:sales")
+
+        value = (request.POST.get("value") or "").strip()
+        if value:
+            lead = Lead.objects.get(public_id=result["lead_id"])
+            try:
+                deal_result = run_action(
+                    "create_deal", {"account": account}, lead=lead, value=value,
+                )
+                messages.success(request, "Lead created and moved into your pipeline.")
+                return redirect(next_url) if next_url else redirect(
+                    "crm:deal-detail", public_id=deal_result["deal_id"]
+                )
+            except ActionError as exc:
+                messages.error(request, str(exc))
+
+        messages.success(request, "Lead created.")
+        return redirect(next_url) if next_url else redirect("crm:lead-detail", public_id=result["lead_id"])
+
+    return redirect("crm:sales")
 
 
 @login_required

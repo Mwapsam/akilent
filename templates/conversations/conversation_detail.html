@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static ui %}
 {% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} — Inbox{% endblock %}
 
 {% block content %}
@@ -78,6 +78,20 @@
       <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
     </div>
 
+    {% if crm_enabled or commerce_enabled %}
+    <div class="card card-pad text-sm space-y-3">
+      <h2 class="text-lg font-semibold text-ink">Sales</h2>
+      {% if open_lead %}
+      <p class="text-gray-600">Already a lead: <a href="{% url 'crm:lead-detail' open_lead.public_id %}" class="text-brand-600 hover:text-brand-700">{{ open_lead.get_status_display }}</a></p>
+      {% elif crm_enabled %}
+      <button type="button" class="btn btn-ghost btn-sm w-full" @click="$dispatch('modal-open', 'chat-new-lead')">This customer may be interested — Create lead</button>
+      {% endif %}
+      {% if commerce_enabled %}
+      <button type="button" class="btn btn-ghost btn-sm w-full" @click="$dispatch('modal-open', 'chat-new-order')">Create order</button>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if conversation.status == 'open' %}
     <div class="card card-pad text-sm space-y-3">
       <h2 class="text-lg font-semibold text-ink">Close</h2>
@@ -122,5 +136,62 @@
     </div>
   </aside>
 </div>
+
+{% with contact_identifier=conversation.contact.phone|default:conversation.contact.email %}
+{% if crm_enabled and not open_lead %}
+{% modal "chat-new-lead" title="Create lead" %}
+  <form method="post" action="{% url 'crm:create-lead' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="contact" value="{{ contact_identifier }}" />
+    <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
+    <div>
+      <label class="label" for="chat-lead-source">What are they interested in? (optional)</label>
+      <input id="chat-lead-source" name="source" class="input" placeholder="e.g. Website package" />
+    </div>
+    <div>
+      <label class="label" for="chat-lead-value">Estimated value (optional)</label>
+      <input id="chat-lead-value" name="value" type="number" step="0.01" min="0" class="input" placeholder="e.g. 500" />
+      <p class="text-xs text-gray-400 mt-1">Adding a value moves it straight into your pipeline as a deal.</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Create lead</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
+
+{% if commerce_enabled %}
+{% modal "chat-new-order" title="Create order" %}
+  <form method="post" action="{% url 'commerce:create-order' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="contact" value="{{ contact_identifier }}" />
+    <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
+    <div>
+      <label class="label" for="chat-order-name">What are they buying?</label>
+      <input id="chat-order-name" name="name" class="input" placeholder="e.g. Website package" required />
+    </div>
+    <div class="grid grid-cols-3 gap-3">
+      <div>
+        <label class="label" for="chat-order-price">Price</label>
+        <input id="chat-order-price" name="unit_price" type="number" step="0.01" min="0" class="input" required />
+      </div>
+      <div>
+        <label class="label" for="chat-order-qty">Quantity</label>
+        <input id="chat-order-qty" name="quantity" type="number" step="1" min="1" value="1" class="input" required />
+      </div>
+      <div>
+        <label class="label" for="chat-order-currency">Currency</label>
+        <input id="chat-order-currency" name="currency" class="input" value="USD" required />
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Create order</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
+{% endwith %}
 {% endwith %}
 {% endblock %}

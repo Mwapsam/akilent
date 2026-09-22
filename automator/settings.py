@@ -79,6 +79,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.core.context_processors.site_context",
                 "apps.accounts.context_processors.onboarding_status",
+                "apps.accounts.context_processors.module_flags",
             ],
         },
     },

@@ -70,6 +70,46 @@ def test_convert_lead_via_view(logged_in, contact):
 
 
 @pytest.mark.django_db
+def test_create_lead_via_sales_page(logged_in, contact):
+    client, account, _ = logged_in
+    resp = client.post("/sales/leads/create/", {"contact": contact.phone, "source": "Website package"})
+    assert resp.status_code == 302
+    lead = Lead.objects.get(account=account, contact=contact)
+    assert lead.source == "Website package"
+    assert "/sales/leads/" in resp["Location"]
+
+
+@pytest.mark.django_db
+def test_create_lead_with_value_creates_a_deal_directly(logged_in, contact):
+    client, account, _ = logged_in
+    resp = client.post("/sales/leads/create/", {"contact": contact.phone, "value": "500"})
+    assert resp.status_code == 302
+    assert "/sales/deals/" in resp["Location"]
+    assert Deal.objects.filter(account=account, contact=contact, value="500").exists()
+
+
+@pytest.mark.django_db
+def test_create_lead_unknown_contact_shows_error(logged_in):
+    client, account, _ = logged_in
+    resp = client.post("/sales/leads/create/", {"contact": "+000000000"}, follow=True)
+    assert resp.status_code == 200
+    assert b"No customer found" in resp.content
+    assert not Lead.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
+def test_create_lead_cannot_use_another_accounts_contact(logged_in):
+    client, account, _ = logged_in
+    other = Account.objects.create(company_name="Other Co")
+    other_contact = Contact.objects.create(account=other, phone="+260970000002")
+
+    resp = client.post("/sales/leads/create/", {"contact": other_contact.phone}, follow=True)
+    assert resp.status_code == 200
+    assert b"No customer found" in resp.content
+    assert not Lead.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
 def test_move_deal_stage_via_view(logged_in, contact):
     client, account, _ = logged_in
     lead = create_lead(account, contact)

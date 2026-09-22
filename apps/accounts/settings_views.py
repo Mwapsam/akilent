@@ -108,6 +108,44 @@ def settings_security(request):
     })
 
 
+# --- Optional tools -----------------------------------------------------------
+
+# (feature_name for apps.billing.api, checkbox label, one-line explanation of the goal).
+# Framed as opt-OUT: apps.billing.api.module_enabled() already treats "no row" as
+# enabled, so an account with neither row checked here already has both on today —
+# this page must not silently turn anything off on first render (see R1.5a).
+OPTIONAL_TOOLS = [
+    ("crm", "Track potential sales",
+     "See customers who are considering buying, and where each one stands."),
+    ("commerce", "Create orders and collect payments",
+     "Turn a conversation into an order, and send a payment link."),
+]
+
+
+@login_required
+def settings_tools(request):
+    from apps.billing import api as billing_api
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        for feature_name, _label, _hint in OPTIONAL_TOOLS:
+            enabled = request.POST.get(feature_name) == "on"
+            billing_api.set_module_enabled(account, feature_name, enabled)
+        messages.success(request, "Settings saved.")
+        return redirect("settings-tools")
+
+    tools = [
+        {"feature": f, "label": label, "hint": hint, "enabled": billing_api.module_enabled(account, f)}
+        for f, label, hint in OPTIONAL_TOOLS
+    ]
+    return render(request, "accounts/settings_tools.html", {
+        "account": account, "active_tab": "tools", "tools": tools,
+    })
+
+
 # --- Team ---------------------------------------------------------------------
 
 @login_required

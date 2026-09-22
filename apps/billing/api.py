@@ -119,6 +119,22 @@ def enable_module(account: Account, feature_name: str) -> None:
     ModuleSubscription.objects.update_or_create(account=account, module=module, defaults={"enabled": True})
 
 
+def set_module_enabled(account: Account, feature_name: str, enabled: bool) -> None:
+    """Set a module on or off for an account — the self-serve counterpart to
+    ``enable_module`` (which only ever turns one on). Used by the account's own
+    "Optional tools" settings page (apps.accounts.settings_views.settings_tools),
+    as distinct from the platform-admin toggle in apps.core.views.
+
+    Idempotent, and safe to call for a module that already has no row (leaves it
+    enabled, per ``module_enabled``'s "no row = enabled" rule) when ``enabled=True``.
+
+    Raises:
+        KeyError: if ``feature_name`` isn't a recognized module.
+    """
+    module = MODULE_MAP[feature_name]
+    ModuleSubscription.objects.update_or_create(account=account, module=module, defaults={"enabled": enabled})
+
+
 def get_subscription(account: Account) -> Optional[Subscription]:
     """Get the subscription for an account.
 

@@ -1,0 +1,23 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Optional tools</h2>
+  <p class="text-sm text-gray-500 mb-4">
+    These are on by default. Turn one off if your business doesn't need it — you
+    can turn it back on any time, nothing is deleted.
+  </p>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {% for tool in tools %}
+    <label class="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:border-brand-300">
+      <input type="checkbox" name="{{ tool.feature }}" {% if tool.enabled %}checked{% endif %} class="mt-1">
+      <span class="min-w-0">
+        <span class="block font-medium text-ink">{{ tool.label }}</span>
+        <span class="block text-sm text-gray-500">{{ tool.hint }}</span>
+      </span>
+    </label>
+    {% endfor %}
+    <button class="btn btn-primary" type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}
