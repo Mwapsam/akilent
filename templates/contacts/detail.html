@@ -18,10 +18,16 @@
       <p class="text-gray-500 mb-1">Lists</p>
       {% for l in lists %}<span class="badge badge-neutral mr-1">{{ l.name }}</span>{% empty %}<span class="text-gray-400">None</span>{% endfor %}
     </div>
+    {% if attribute_rows %}
     <div class="pt-2">
-      <p class="text-gray-500 mb-1">Attributes</p>
-      <pre class="text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ contact.attributes|default:"{}" }}</pre>
+      <p class="text-gray-500 mb-1">Customer information</p>
+      <dl class="text-sm space-y-1">
+        {% for label, value in attribute_rows %}
+        <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right">{{ value }}</dd></div>
+        {% endfor %}
+      </dl>
     </div>
+    {% endif %}
   </section>
 
   <section class="lg:col-span-2 card card-pad">
@@ -31,10 +37,10 @@
       <li class="ml-4">
         <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
         <div class="flex items-baseline justify-between gap-4">
-          <span class="font-medium">{{ e.type }}</span>
-          <span class="text-xs text-gray-400">{{ e.occurred_at|date:"Y-m-d H:i:s" }}</span>
+          <span class="font-medium">{{ e.label }}</span>
+          <span class="text-xs text-gray-400">{{ e.occurred_at|date:"M j, Y H:i" }}</span>
         </div>
-        {% if e.data %}<pre class="mt-1 text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
+        {% if e.detail %}<p class="mt-0.5 text-sm text-gray-600">{{ e.detail }}</p>{% endif %}
       </li>
       {% empty %}
       <li class="ml-4 text-gray-400 text-sm">No activity recorded.</li>

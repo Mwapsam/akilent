@@ -52,10 +52,23 @@ def contact_detail(request, public_id: str):
     except Contact.DoesNotExist:
         return render(request, "contacts/not_found.html", status=404)
 
-    events = contact.events.all()[:100]
+    from apps.contacts.event_labels import event_detail, event_label
+
+    events = list(contact.events.all()[:100])
+    for e in events:
+        e.label = event_label(e.type)
+        e.detail = event_detail(e.type, e.data)
+
     messages_to = (
         EmailMessage.objects.filter(account=account, to_email__iexact=contact.email)
         .order_by("-created_at")[:50]
+    )
+    # Readable (label, value) pairs instead of a raw attributes dict — R1: no
+    # JSON on a page a business user works from (docs/plans amendment).
+    attribute_rows = sorted(
+        (k.replace("_", " ").capitalize(), v)
+        for k, v in (contact.attributes or {}).items()
+        if v not in (None, "")
     )
     return render(request, "contacts/detail.html", {
         "account": account,
@@ -63,4 +76,5 @@ def contact_detail(request, public_id: str):
         "events": events,
         "messages_to": messages_to,
         "lists": contact.lists.all(),
+        "attribute_rows": attribute_rows,
     })

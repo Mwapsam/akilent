@@ -27,7 +27,8 @@ def test_contact_list_and_profile_render(logged_in):
     detail = client.get(f"/contacts/{c.public_id}/")
     assert detail.status_code == 200
     body = detail.content.decode()
-    assert "Activity" in body and "email.opened" in body
+    # The raw event type is translated to a readable label (apps/contacts/event_labels.py).
+    assert "Activity" in body and "Opened an email" in body
 
 
 @pytest.mark.django_db

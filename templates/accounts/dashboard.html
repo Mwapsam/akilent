@@ -43,54 +43,83 @@
   </div>
   {% endif %}
 
-  {# ── KPI row ──────────────────────────────────────────────── #}
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-    {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
-    {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
-    {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
-    {% include "components/stat_card.html" with label="Scheduled" value=scheduled_count icon="clock" tone="brand" sub="upcoming sends" %}
-  </div>
-
-  {# ── Needs attention (headline, promoted above quick actions) #}
-  <div class="card card-pad mt-6">
-    <h2 class="text-lg font-semibold text-ink mb-3">Needs attention</h2>
-    {% if attention_items %}
-      <ul class="space-y-2">
-        {% for a in attention_items %}
-        <li>
-          <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
-            {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
-            <span>{{ a.text }}</span>
-          </a>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="flex items-center gap-2 text-sm text-gray-500">
-        {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
-        All clear.
-      </p>
+  {# ── Work queue: "what needs my attention today?" — the dashboard's one job. #}
+  <div class="card card-pad">
+    <p class="text-sm text-gray-600 mb-3">What needs your attention today</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <a href="/inbox/?view=needs_attention" class="card-hover rounded-xl border border-border p-4 flex items-center gap-3">
+        {% include "components/icon.html" with name="message-circle" class="w-6 h-6 text-brand-600 shrink-0" %}
+        <div>
+          <p class="text-2xl font-semibold text-ink tabular-nums">{{ customers_waiting_count }}</p>
+          <p class="text-sm text-gray-600">customer{{ customers_waiting_count|pluralize }} waiting for you</p>
+        </div>
+      </a>
+      <a href="/inbox/?view=missed" class="card-hover rounded-xl border border-border p-4 flex items-center gap-3">
+        {% include "components/icon.html" with name="alert" class="w-6 h-6 text-amber-600 shrink-0" %}
+        <div>
+          <p class="text-2xl font-semibold text-ink tabular-nums">{{ missed_count }}</p>
+          <p class="text-sm text-gray-600">missed conversation{{ missed_count|pluralize }}</p>
+        </div>
+      </a>
+      <a href="/sales/" class="card-hover rounded-xl border border-border p-4 flex items-center gap-3">
+        {% include "components/icon.html" with name="building" class="w-6 h-6 text-teal-600 shrink-0" %}
+        <div>
+          <p class="text-2xl font-semibold text-ink tabular-nums">{{ new_leads_count }}</p>
+          <p class="text-sm text-gray-600">new lead{{ new_leads_count|pluralize }}</p>
+        </div>
+      </a>
+    </div>
+    {% if customers_waiting_count == 0 and missed_count == 0 and new_leads_count == 0 %}
+    <p class="flex items-center gap-2 text-sm text-gray-500 mt-4">
+      {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
+      Nothing waiting. You're on top of it.
+    </p>
     {% endif %}
   </div>
 
+  {# ── Setup / billing issues (secondary — configuration, not customer work) #}
+  {% if attention_items %}
+  <div class="card card-pad mt-6">
+    <h2 class="text-base font-semibold text-ink mb-3">Setup</h2>
+    <ul class="space-y-2">
+      {% for a in attention_items %}
+      <li>
+        <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
+          {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
+          <span>{{ a.text }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {# ── Quick actions ─────────────────────────────────────────── #}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+    <a href="/inbox/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="message-circle" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Go to Inbox</span>
+    </a>
     <a href="/email/campaigns/new/" class="card card-pad flex items-center gap-3 card-hover">
       {% include "components/icon.html" with name="send" class="w-5 h-5 text-brand-600 shrink-0" %}
       <span class="text-sm font-medium text-ink">Send campaign</span>
-    </a>
-    <a href="/automations/" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="workflow" class="w-5 h-5 text-brand-600 shrink-0" %}
-      <span class="text-sm font-medium text-ink">Create workflow</span>
     </a>
     <a href="/contacts/" class="card card-pad flex items-center gap-3 card-hover">
       {% include "components/icon.html" with name="users" class="w-5 h-5 text-brand-600 shrink-0" %}
       <span class="text-sm font-medium text-ink">Add contacts</span>
     </a>
-    <a href="/email/templates/" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="layout-template" class="w-5 h-5 text-brand-600 shrink-0" %}
-      <span class="text-sm font-medium text-ink">Create template</span>
+    <a href="/automations/" class="card card-pad flex items-center gap-3 card-hover">
+      {% include "components/icon.html" with name="workflow" class="w-5 h-5 text-brand-600 shrink-0" %}
+      <span class="text-sm font-medium text-ink">Follow-up automation</span>
     </a>
+  </div>
+
+  {# ── Email stats (secondary; not the dashboard's primary question) ─── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+    {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
+    {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
+    {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
+    {% include "components/stat_card.html" with label="Scheduled" value=scheduled_count icon="clock" tone="brand" sub="upcoming sends" %}
   </div>
 
   {# ── Upcoming sends ───────────────────────────────────────── #}

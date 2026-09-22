@@ -480,6 +480,7 @@ def dashboard(request):
     attention = _attention_items(
         account, stats, numbers, email_domains, subscription
     )
+    work_queue = _work_queue(account)
 
     return render(
         request,
@@ -497,8 +498,43 @@ def dashboard(request):
             "greeting": greeting,
             **stats,
             **scheduling,
+            **work_queue,
         },
     )
+
+
+def _work_queue(account):
+    """"What should I do right now?" — the dashboard's primary question.
+
+    Built from the same derived conversation state the inbox uses
+    (apps.conversations.state), never from MessageLog or a stored flag, so this
+    can never drift from what "Needs attention" shows. New leads is the one
+    non-conversation number, kept because it answers the same question
+    ("who is waiting on me") from the sales side.
+    """
+    from django.utils import timezone
+
+    from apps.conversations.state import missed, needs_attention
+
+    now = timezone.now()
+    waiting_count = needs_attention(account, now).count()
+    missed_count = missed(account, now).count()
+
+    new_leads_count = 0
+    try:
+        from apps.crm.models import Lead
+
+        new_leads_count = Lead.objects.filter(
+            account=account, status=Lead.Status.NEW
+        ).count()
+    except Exception:
+        pass
+
+    return {
+        "customers_waiting_count": waiting_count,
+        "missed_count": missed_count,
+        "new_leads_count": new_leads_count,
+    }
 
 
 @login_required
