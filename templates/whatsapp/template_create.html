@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}New WhatsApp template — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="/email/templates/?channel=whatsapp" class="hover:text-ink">Templates</a>
+    <span aria-hidden="true">/</span><span class="text-ink">New WhatsApp template</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New WhatsApp template</h1>
+  <p class="mt-1 text-sm text-gray-600">Akilent submits this to WhatsApp for approval — no need to use Meta Business Manager directly.</p>
+</header>
+
+<div class="card card-pad max-w-2xl">
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="label" for="tpl-name">Template name</label>
+      <input id="tpl-name" name="name" class="input" placeholder="e.g. payment_reminder"
+             pattern="[a-z0-9_]+" value="{{ form.name|default:'' }}" required />
+      <p class="text-xs text-gray-400 mt-1">Lowercase letters, numbers and underscores only — this is fixed once submitted.</p>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="label" for="tpl-category">Category</label>
+        <select id="tpl-category" name="category" class="select" required>
+          {% for value, label in categories %}
+          <option value="{{ value }}" {% if form.category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="tpl-language">Language</label>
+        <select id="tpl-language" name="language" class="select" required>
+          <option value="en" {% if form.language == "en" or not form.language %}selected{% endif %}>English</option>
+          <option value="es" {% if form.language == "es" %}selected{% endif %}>Spanish</option>
+          <option value="fr" {% if form.language == "fr" %}selected{% endif %}>French</option>
+          <option value="pt_PT" {% if form.language == "pt_PT" %}selected{% endif %}>Portuguese</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="label" for="tpl-header">Header (optional)</label>
+      <input id="tpl-header" name="header" class="input" placeholder="e.g. Order update" value="{{ form.header|default:'' }}" />
+    </div>
+    <div>
+      <label class="label" for="tpl-body">Message</label>
+      <textarea id="tpl-body" name="body" rows="5" class="input" required
+                placeholder="{% verbatim %}Hi {{1}}, your order {{2}} is still awaiting payment.{% endverbatim %}">{{ form.body|default:'' }}</textarea>
+      <p class="text-xs text-gray-400 mt-1">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… in order for anything that changes per customer.</p>
+    </div>
+    <div>
+      <label class="label" for="tpl-footer">Footer (optional)</label>
+      <input id="tpl-footer" name="footer" class="input" placeholder="e.g. Thank you for your business" value="{{ form.footer|default:'' }}" />
+    </div>
+
+    <div>
+      <label class="label">Variables</label>
+      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval.</p>
+      <div id="variable-rows" class="space-y-2"></div>
+      <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="addVariableRow()">
+        {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add variable
+      </button>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-1">
+      <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Cancel</a>
+      <button class="btn btn-primary btn-sm">Submit for approval</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function addVariableRow(label, example) {
+    const container = document.getElementById('variable-rows');
+    const row = document.createElement('div');
+    row.className = 'flex gap-2';
+    row.innerHTML =
+      '<input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="' + (label || '').replace(/"/g, '&quot;') + '" />' +
+      '<input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="' + (example || '').replace(/"/g, '&quot;') + '" />' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>';
+    container.appendChild(row);
+  }
+  addVariableRow();
+</script>
+{% endblock %}

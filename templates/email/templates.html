@@ -14,9 +14,12 @@
   </div>
   <div class="flex flex-wrap items-center gap-2">
     {% if channel == 'whatsapp' %}
+    <a href="{% url 'whatsapp-template-create' %}" class="btn btn-primary btn-sm">
+      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create template
+    </a>
     <form method="post" action="{% url 'whatsapp-templates-sync' %}">
       {% csrf_token %}
-      <button class="btn btn-primary btn-sm">
+      <button class="btn btn-secondary btn-sm">
         {% include "components/icon.html" with name="refresh" class="w-4 h-4" %} Sync from WhatsApp
       </button>
     </form>
@@ -73,7 +76,7 @@
   </div>
   {% else %}
   <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="message-circle" title="No templates yet" message="Create a template in Meta Business Manager, then sync here to use it in replies, workflows and campaigns." %}
+    {% include "components/empty_state.html" with icon="message-circle" title="No templates yet" message="Create your first template above, or sync one already approved in Meta Business Manager." %}
   </div>
   {% endif %}
 {% else %}

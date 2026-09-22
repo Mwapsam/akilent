@@ -129,6 +129,19 @@ class WhatsAppProvider(ABC):
             f"{type(self).__name__} does not support template listing"
         )
 
+    def create_template(self, waba_id: str, payload: dict) -> dict:
+        """Submit a new message template for approval.
+
+        Optional capability. ``payload`` is Meta's template-creation schema
+        (name/language/category/components) — callers build it via
+        ``apps.whatsapp.template_builder``, never construct it inline.
+        Returns Meta's raw response (carries the new template's id and status,
+        normally "PENDING").
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support template creation"
+        )
+
     def upload_media(self, content: bytes, mime_type: str, filename: str = "upload") -> MediaUploadResult:
         """Upload a local media file and return a reusable provider media id.
 

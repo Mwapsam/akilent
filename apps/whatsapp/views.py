@@ -20,6 +20,7 @@ from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
 from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
 from apps.whatsapp.tasks import process_whatsapp_event, sync_templates_for_account
+from apps.whatsapp.template_builder import TemplateBuilderError, create_and_submit_template
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,47 @@ def templates_sync(request):
     else:
         messages.success(request, f"Synced {result['synced']} template(s) from WhatsApp.")
     return redirect("/email/templates/?channel=whatsapp")
+
+
+# --- Template creation (amendment to R1.5c follow-up, 2026-09-22): Meta's own
+# UI is too complex for a non-technical owner, so Akilent offers a simplified
+# builder in front of it. Akilent validates and submits to Meta; Meta stays
+# the approval source of truth (apps.whatsapp.template_builder). ------------
+
+@login_required
+@module_required("whatsapp")
+def template_create(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        labels = [v.strip() for v in request.POST.getlist("variable_label") if v.strip()]
+        examples = [v.strip() for v in request.POST.getlist("variable_example") if v.strip()]
+        try:
+            create_and_submit_template(
+                account,
+                name=request.POST.get("name", "").strip().lower(),
+                category=request.POST.get("category", ""),
+                language=request.POST.get("language", "en"),
+                body=request.POST.get("body", ""),
+                header=request.POST.get("header", ""),
+                footer=request.POST.get("footer", ""),
+                variable_labels=labels,
+                variable_examples=examples,
+            )
+        except TemplateBuilderError as exc:
+            messages.error(request, str(exc))
+            return render(request, "whatsapp/template_create.html", {
+                "account": account, "categories": MessageTemplate.Category.choices,
+                "form": request.POST,
+            })
+        messages.success(request, "Template submitted to WhatsApp for approval.")
+        return redirect("/email/templates/?channel=whatsapp")
+
+    return render(request, "whatsapp/template_create.html", {
+        "account": account, "categories": MessageTemplate.Category.choices, "form": {},
+    })
 
 
 # --- Campaigns (R1.5c): create + list + detail. Sending logic lives in

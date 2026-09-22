@@ -210,6 +210,25 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 f"Failed to list templates for {waba_id}: {e}"
             ) from e
 
+    def create_template(self, waba_id: str, payload: dict) -> dict:
+        """Submit a new message template for approval."""
+        url = self._url(f"{waba_id}/message_templates")
+        try:
+            response = self._session.post(url, json=payload, timeout=30)
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to create template: {e}") from e
+
+        if response.status_code >= 400:
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            code, message, _ = _classify_meta_error(response.status_code, body)
+            err = WhatsAppProviderError(f"Meta API {response.status_code} [{code}]: {message}")
+            err.code = code
+            raise err
+        return response.json()
+
     def upload_media(
         self, content: bytes, mime_type: str, filename: str = "upload"
     ) -> MediaUploadResult:
