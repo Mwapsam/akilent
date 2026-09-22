@@ -5,8 +5,8 @@
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Choose a WhatsApp number</h1>
   <p class="mt-1 text-sm text-gray-600">
-    Meta returned more than one phone number for this WhatsApp Business Account.
-    Pick the one to connect.
+    Your WhatsApp Business account has more than one number. Pick the one you want
+    customer messages to come from.
   </p>
 </header>
 
@@ -19,8 +19,11 @@
              {% if forloop.first %}checked{% endif %} class="mt-1">
       <span class="min-w-0">
         <span class="block font-medium text-ink">{{ candidate.display_phone_number|default:candidate.id }}</span>
-        <span class="block text-xs text-gray-500 font-mono">Phone number ID: {{ candidate.id }}</span>
-        <span class="block text-xs text-gray-500 font-mono">WABA ID: {{ candidate.waba_id }}</span>
+        <details class="mt-1">
+          <summary class="text-xs text-gray-400 cursor-pointer select-none">Details</summary>
+          <span class="block text-xs text-gray-500 font-mono">Phone number ID: {{ candidate.id }}</span>
+          <span class="block text-xs text-gray-500 font-mono">WhatsApp Business account ID: {{ candidate.waba_id }}</span>
+        </details>
       </span>
     </label>
     {% endfor %}

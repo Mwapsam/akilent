@@ -33,9 +33,12 @@
   <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="tabs">
       <button class="tab" :class="tab === 'visual' && 'tab-active'" @click="tab = 'visual'">Visual</button>
-      <button class="tab" :class="tab === 'code' && 'tab-active'" @click="syncToCode(); tab = 'code'">Code</button>
+      <button class="tab" x-show="advanced" :class="tab === 'code' && 'tab-active'" @click="syncToCode(); tab = 'code'">Code</button>
     </div>
     <div class="flex items-center gap-3">
+      <label class="text-xs inline-flex items-center gap-1.5 text-gray-500">
+        <input type="checkbox" x-model="advanced" @change="!advanced && tab === 'code' && (tab = 'visual')" /> Advanced
+      </label>
       <span class="text-xs font-medium" :class="blockingErrors().length ? 'text-red-600' : 'text-teal-700'"
             x-text="blockingErrors().length ? blockingErrors().length + ' issue' + (blockingErrors().length === 1 ? '' : 's') : 'Valid'"></span>
       <span class="text-xs text-gray-400" x-show="saved" x-transition>Saved</span>
@@ -61,7 +64,7 @@
         <label class="text-sm">
           <span class="text-gray-600">When</span>
           <select class="select mt-1" x-model="definition.trigger.type" :class="triggerFieldError('trigger.type') && 'input-error'">
-            <template x-for="t in triggerTypes" :key="t"><option x-text="t" :value="t"></option></template>
+            <template x-for="t in triggerTypes" :key="t"><option x-text="triggerTypeLabels[t] || t" :value="t"></option></template>
           </select>
           <p class="field-error" x-show="triggerFieldError('trigger.type')" x-text="triggerFieldError('trigger.type')"></p>
         </label>
@@ -92,7 +95,7 @@
                   </span>
                   <input class="input input-sm w-32" x-model="step.id" placeholder="step-id" />
                   <select class="select select-sm" x-model="step.type" @change="deriveMode(step)">
-                    <template x-for="t in stepTypes" :key="t"><option x-text="t" :value="t"></option></template>
+                    <template x-for="t in visibleStepTypes(step.type)" :key="t"><option x-text="(stepTypeMeta[t] || {}).label || t" :value="t"></option></template>
                   </select>
                 </div>
                 <div class="flex items-center gap-1">
@@ -303,9 +306,24 @@
 function workflowEditor() {
   return {
     tab: "visual",
+    advanced: false,
     definition: {{ definition_json|safe }},
     stepTypes: {{ step_types|safe }},
     triggerTypes: {{ trigger_types|safe }},
+    // Kept in sync with apps/automation/labels.py's TRIGGER_LABELS by hand —
+    // this page has no server round-trip per keystroke, so the mapping is
+    // duplicated here rather than fetched.
+    triggerTypeLabels: {
+      manual: "Run manually",
+      business_event: "When a custom event happens",
+      "contact.created": "When a new customer is added",
+      "contact.updated": "When a customer's details change",
+      "email.opened": "When a customer opens an email",
+      "email.clicked": "When a customer clicks a link in an email",
+      "whatsapp.received": "When a customer messages you",
+      "conversation.message_received": "When a customer messages you",
+    },
+    advancedStepTypes: ["webhook", "set_attribute", "action"],
     errors: {{ validation_errors|safe }},
     emailTemplates: {{ email_templates_json|safe }},
     whatsappTemplates: {{ whatsapp_templates_json|safe }},
@@ -356,6 +374,13 @@ function workflowEditor() {
     },
     deriveModes() {
       this.definition.steps.forEach((s) => this.deriveMode(s));
+    },
+    visibleStepTypes(currentType) {
+      // Advanced-only step types stay hidden from the picker unless "Advanced"
+      // is on, or a step already uses one (e.g. opened from Code) — never hide
+      // a type out from under a step already using it.
+      if (this.advanced) return this.stepTypes;
+      return this.stepTypes.filter((t) => !this.advancedStepTypes.includes(t) || t === currentType);
     },
     deriveMode(step) {
       if (step.type === "send_email") step._mode = step.template ? "template" : "write";

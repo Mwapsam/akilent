@@ -126,7 +126,8 @@ class NumberHealthTest(HealthBase):
         h = self._h()
         self.assertEqual(h["headline"], "Attention needed")
         failing = [i for i in self._items(h, "Messaging") if i["label"] == "Recent sends failing"]
-        self.assertIn("[190] token expired", failing[0]["detail"])
+        # Translated via apps.whatsapp.friendly_errors — no raw code/exception text.
+        self.assertIn("reconnected", failing[0]["detail"])
 
     def test_last_webhook_is_matched_by_phone_number_id(self):
         def event(pnid):

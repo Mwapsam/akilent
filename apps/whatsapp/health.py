@@ -106,9 +106,9 @@ def number_health(number, *, embedded_enabled: bool = False) -> dict:
     if last_sent:
         messaging.append(_item("Last send", OK, "", last_sent))
     if status == S.DEGRADED and last_failed:
-        detail = (last_failed.last_error or "Recent sends are failing.")[:200]
-        if last_failed.error_code:
-            detail = f"[{last_failed.error_code}] {detail}"
+        from apps.whatsapp.friendly_errors import friendly_send_error
+
+        detail = friendly_send_error(last_failed.error_code)
         messaging.append(_item("Recent sends failing", WARN, detail, last_failed.updated_at))
 
     hook = last_webhook_at(number)
