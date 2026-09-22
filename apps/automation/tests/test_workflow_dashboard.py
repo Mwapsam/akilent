@@ -37,6 +37,23 @@ def test_list_and_create_from_template(client, user_account):
 
 
 @pytest.mark.django_db
+def test_list_renders_trigger_without_name_key(client, user_account):
+    """Regression: a trigger dict with no "name" key (e.g. {"type": "contact.created"})
+    crashed this page — {{ trigger.name }} used as a *filter argument* raises
+    VariableDoesNotExist uncaught, unlike a plain template variable. See
+    apps/automation/views.py:workflow_list."""
+    user, acc = user_account
+    client.force_login(user)
+    Workflow.objects.create(
+        account=acc, name="No name key", slug="no-name-key",
+        definition={"trigger": {"type": "contact.created"}, "steps": []},
+    )
+    resp = client.get("/automations/")
+    assert resp.status_code == 200
+    assert "When a new customer is added" in resp.content.decode()
+
+
+@pytest.mark.django_db
 def test_editor_save_and_publish(client, user_account):
     user, acc = user_account
     client.force_login(user)

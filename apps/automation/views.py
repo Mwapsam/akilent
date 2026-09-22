@@ -25,10 +25,21 @@ _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.update
 @login_required
 @module_required("automation")
 def workflow_list(request):
+    from apps.automation.labels import trigger_label
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    workflows = Workflow.objects.filter(account=account)
+    workflows = list(Workflow.objects.filter(account=account))
+    for wf in workflows:
+        # Computed here, not in the template: a dict without a "name" key makes
+        # `{{ trigger.name }}` used as a *filter argument* raise
+        # VariableDoesNotExist uncaught (unlike a plain variable, filter
+        # arguments don't get the template engine's safe string_if_invalid
+        # fallback) — crashed this page in production. See friendly_errors.py
+        # note in apps.whatsapp for the same "translate once, in Python" rule.
+        trigger = (wf.definition or {}).get("trigger") or {}
+        wf.trigger_label = trigger_label(trigger.get("type", ""), trigger.get("name", ""))
     return render(request, "automation/workflow_list.html", {
         "account": account,
         "workflows": workflows,

@@ -18,7 +18,6 @@
   </div>
 </header>
 
-{% load automation_labels %}
 {% if workflows %}
 <div class="table-wrap">
   <table class="table table--cards">
@@ -29,7 +28,7 @@
       {% for wf in workflows %}
       <tr>
         <td data-label="Name"><a href="/automations/{{ wf.slug }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ wf.name }}</a></td>
-        <td data-label="When">{{ wf.definition.trigger.type|trigger_label:wf.definition.trigger.name }}</td>
+        <td data-label="When">{{ wf.trigger_label }}</td>
         <td data-label="Status">
           {% if wf.status == "published" %}<span class="badge badge-success">On (v{{ wf.version }})</span>
           {% elif wf.status == "archived" %}<span class="badge badge-neutral">Off</span>
