@@ -54,9 +54,21 @@
         <form method="post" class="chat-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
           <input type="hidden" name="action" value="reply" />
+          {% if saved_replies %}
+          <select class="select select-sm chat-saved-reply-select" aria-label="Insert a saved reply" onchange="
+            if (this.value) { window.dispatchEvent(new CustomEvent('saved-reply-insert', { detail: this.value })); }
+            this.selectedIndex = 0;
+          ">
+            <option value="">Insert a saved reply…</option>
+            {% for r in saved_replies %}
+            <option value="{{ r.body|escape }}">{{ r.title }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
           <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input chat-input"
                     placeholder="Type a reply…" aria-label="Reply" aria-describedby="composer-hint"
-                    @input="grow($event.target)" @keydown.enter="onEnter($event)"></textarea>
+                    @input="grow($event.target)" @keydown.enter="onEnter($event)"
+                    x-on:saved-reply-insert.window="draft = $event.detail; grow($refs.input)"></textarea>
           <button class="btn btn-primary" :disabled="!draft.trim() || sending">Send</button>
           <p id="composer-hint" class="sr-only">Press Enter to send, Shift and Enter for a new line.</p>
         </form>
@@ -121,6 +133,34 @@
       {% endif %}
     </div>
     {% endif %}
+
+    <div class="card card-pad text-sm space-y-3">
+      <h2 class="text-lg font-semibold text-ink">Follow-up</h2>
+      {% if open_followup %}
+      <p class="text-gray-600">Reminder set for {{ open_followup.due_at|date:"D, H:i" }}{% if open_followup.note %} — {{ open_followup.note }}{% endif %}</p>
+      <form method="post" action="{% url 'conversations:followup_complete' open_followup.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
+        <button class="btn btn-ghost btn-sm w-full">Mark done</button>
+      </form>
+      {% else %}
+      <form method="post" class="space-y-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_followup" />
+        <label class="label" for="followup-when">Remind me</label>
+        <select id="followup-when" name="when" class="select" onchange="
+          document.getElementById('followup-custom').hidden = this.value !== 'custom';
+        ">
+          <option value="1h">In 1 hour</option>
+          <option value="tomorrow">Tomorrow morning</option>
+          <option value="custom">Pick a time…</option>
+        </select>
+        <input id="followup-custom" type="datetime-local" name="custom_due_at" class="input" hidden />
+        <input type="text" name="note" placeholder="Note (optional)" class="input" />
+        <button class="btn btn-ghost btn-sm w-full">Set reminder</button>
+      </form>
+      {% endif %}
+    </div>
 
     {% if conversation.status == 'open' %}
     <div class="card card-pad text-sm space-y-3">

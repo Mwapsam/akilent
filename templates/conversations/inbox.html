@@ -7,15 +7,19 @@
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
     <p class="mt-1 text-sm text-gray-600">Who is waiting on you, and for how long — across every channel.</p>
   </div>
-  <form method="get" class="flex items-center gap-2">
-    <input type="hidden" name="view" value="{{ view }}" />
-    <select name="channel" class="select w-40" onchange="this.form.submit()" aria-label="Filter by channel">
-      <option value="">All channels</option>
-      {% for value, label in channel_choices %}
-        <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </form>
+  <div class="flex items-center gap-2">
+    <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm">Follow-ups due</a>
+    <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm">Saved replies</a>
+    <form method="get" class="flex items-center gap-2">
+      <input type="hidden" name="view" value="{{ view }}" />
+      <select name="channel" class="select w-40" onchange="this.form.submit()" aria-label="Filter by channel">
+        <option value="">All channels</option>
+        {% for value, label in channel_choices %}
+          <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
 </header>
 
 <div id="inbox-body" data-feed-url="{% url 'conversations:inbox_feed' %}">

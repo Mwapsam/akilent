@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Saved replies — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Saved replies</h1>
+  <p class="mt-1 text-sm text-gray-600">Write a reply once, reuse it from any conversation's composer.</p>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2">
+    {% if replies %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Title</th><th>Message</th><th></th></tr></thead>
+        <tbody>
+          {% for r in replies %}
+          <tr>
+            <td data-label="Title">{{ r.title }}</td>
+            <td data-label="Message" class="text-gray-600">{{ r.body|truncatechars:80 }}</td>
+            <td>
+              <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}"
+                    onsubmit="return confirm('Delete this saved reply?');">
+                {% csrf_token %}
+                <button class="btn btn-ghost btn-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="chat" title="No saved replies yet" message="Add your most common answers so agents don't have to retype them every time." %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a saved reply</h2>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="reply-title">Title</label>
+          <input id="reply-title" name="title" class="input" placeholder="e.g. Store hours" required />
+        </div>
+        <div>
+          <label class="label" for="reply-body">Message</label>
+          <textarea id="reply-body" name="body" rows="4" class="input" placeholder="We're open Mon-Sat, 9am-6pm." required></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm w-full">Save</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

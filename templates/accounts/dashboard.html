@@ -46,7 +46,7 @@
   {# ── Work queue: "what needs my attention today?" — the dashboard's one job. #}
   <div class="card card-pad">
     <p class="text-sm text-gray-600 mb-3">What needs your attention today</p>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <a href="/inbox/?view=needs_attention" class="card-hover rounded-xl border border-border p-4 flex items-center gap-3">
         {% include "components/icon.html" with name="message-circle" class="w-6 h-6 text-brand-600 shrink-0" %}
         <div>
@@ -68,8 +68,15 @@
           <p class="text-sm text-gray-600">new lead{{ new_leads_count|pluralize }}</p>
         </div>
       </a>
+      <a href="/inbox/followups/" class="card-hover rounded-xl border border-border p-4 flex items-center gap-3">
+        {% include "components/icon.html" with name="clock" class="w-6 h-6 text-brand-600 shrink-0" %}
+        <div>
+          <p class="text-2xl font-semibold text-ink tabular-nums">{{ followups_due_count }}</p>
+          <p class="text-sm text-gray-600">follow-up{{ followups_due_count|pluralize }} due</p>
+        </div>
+      </a>
     </div>
-    {% if customers_waiting_count == 0 and missed_count == 0 and new_leads_count == 0 %}
+    {% if customers_waiting_count == 0 and missed_count == 0 and new_leads_count == 0 and followups_due_count == 0 %}
     <p class="flex items-center gap-2 text-sm text-gray-500 mt-4">
       {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
       Nothing waiting. You're on top of it.

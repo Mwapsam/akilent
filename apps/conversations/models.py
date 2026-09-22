@@ -269,3 +269,58 @@ class Event(models.Model):
 
     def __str__(self):
         return f"{self.type} @ {self.occurred_at.isoformat()}"
+
+
+class SavedReply(models.Model):
+    """A reusable, plain-text canned reply a business writes once for its
+    agents (R2.1). Deliberately no variable substitution or channel scoping —
+    that's what a WhatsApp ``MessageTemplate`` is for; this is only ever
+    inserted into the free-text composer draft, never sent on its own."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="saved_replies"
+    )
+    title = models.CharField(max_length=100)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class FollowUp(models.Model):
+    """A due-date reminder to return to a customer (R2.2). Deliberately not a
+    general task system — creation is limited to "remind me in 1h / tomorrow /
+    pick a time" from a conversation, per the plan's UX guardrail."""
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="followups")
+    contact = models.ForeignKey("contacts.Contact", on_delete=models.CASCADE, related_name="followups")
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="followups", null=True, blank=True
+    )
+    due_at = models.DateTimeField()
+    note = models.CharField(max_length=255, blank=True, default="")
+    done_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["account", "done_at", "due_at"]),
+        ]
+        ordering = ["due_at"]
+
+    def __str__(self):
+        return f"Follow up with {self.contact} at {self.due_at.isoformat()}"
+
+    def mark_done(self) -> None:
+        from django.utils import timezone
+
+        if self.done_at is None:
+            self.done_at = timezone.now()
+            self.save(update_fields=["done_at"])

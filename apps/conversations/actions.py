@@ -116,7 +116,46 @@ class AddInternalNoteAction(Action):
         return {"note_id": note.id}
 
 
+class CreateFollowUpAction(Action):
+    """Create a due-date reminder to return to a customer (R2.2)."""
+
+    name = "create_followup"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation", "due_at"], "optional": ["note", "created_by"]}
+
+    def execute(self, context: dict, *, conversation, due_at, note: str = "", created_by=None) -> dict:
+        from apps.conversations.models import FollowUp
+
+        followup = FollowUp.objects.create(
+            account=conversation.account,
+            contact=conversation.contact,
+            conversation=conversation,
+            due_at=due_at,
+            note=note,
+            created_by=created_by,
+        )
+        return {"followup_id": followup.id}
+
+
+class CompleteFollowUpAction(Action):
+    """Mark a follow-up as done."""
+
+    name = "complete_followup"
+    scope_kwarg = "followup"
+
+    def input_schema(self) -> dict:
+        return {"required": ["followup"]}
+
+    def execute(self, context: dict, *, followup) -> dict:
+        followup.mark_done()
+        return {"followup_id": followup.id}
+
+
 register(SendWhatsAppAction())
 register(ReplyAction())
 register(AssignConversationAction())
 register(AddInternalNoteAction())
+register(CreateFollowUpAction())
+register(CompleteFollowUpAction())

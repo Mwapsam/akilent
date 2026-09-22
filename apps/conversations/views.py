@@ -12,10 +12,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.conversations.actions import ActionError, run_action
-from apps.conversations.models import Conversation, Message
+from apps.conversations.models import Conversation, FollowUp, Message, SavedReply
 from apps.conversations.state import (
     ConversationState,
     get_conversation_state,
@@ -155,6 +156,19 @@ def conversation_detail(request, public_id: str):
                     phone=conversation.contact.phone, template_id=template.id, params=params,
                 )
                 conversation.mark_read()
+            elif action == "create_followup":
+                from apps.conversations.followups import resolve_due_at
+
+                choice = request.POST.get("when", "").strip()
+                try:
+                    due_at = resolve_due_at(choice, request.POST.get("custom_due_at", ""))
+                except ValueError as exc:
+                    raise ActionError(str(exc)) from exc
+                run_action(
+                    "create_followup", ctx, conversation=conversation, due_at=due_at,
+                    note=request.POST.get("note", "").strip(), created_by=request.user,
+                )
+                messages.success(request, "Follow-up scheduled.")
             elif action == "assign":
                 run_action("assign_conversation", ctx, conversation=conversation, user=request.user)
             elif action == "add_note":
@@ -208,6 +222,11 @@ def conversation_detail(request, public_id: str):
             ).order_by("name")
         )
 
+    saved_replies = list(SavedReply.objects.filter(account=account).order_by("title"))
+    open_followup = FollowUp.objects.filter(
+        account=account, contact=conversation.contact, done_at__isnull=True
+    ).order_by("due_at").first()
+
     open_lead = None
     try:
         from apps.crm.models import Lead
@@ -228,7 +247,73 @@ def conversation_detail(request, public_id: str):
         "notes": conversation.notes.select_related("author"),
         "open_lead": open_lead,
         "approved_templates": approved_templates,
+        "saved_replies": saved_replies,
+        "open_followup": open_followup,
     })
+
+
+@login_required
+def followups_due(request):
+    """"Due today" list (R2.2) — every open follow-up due now or earlier."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    now = timezone.now()
+    due = (
+        FollowUp.objects.filter(account=account, done_at__isnull=True, due_at__lte=now)
+        .select_related("contact", "conversation")
+        .order_by("due_at")
+    )
+    upcoming = (
+        FollowUp.objects.filter(account=account, done_at__isnull=True, due_at__gt=now)
+        .select_related("contact", "conversation")
+        .order_by("due_at")[:20]
+    )
+    return render(request, "conversations/followups_due.html", {
+        "account": account, "now": now, "due": due, "upcoming": upcoming,
+    })
+
+
+@login_required
+@require_POST
+def followup_complete(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    followup = get_object_or_404(FollowUp, account=account, pk=pk)
+    run_action("complete_followup", {"account": account}, followup=followup)
+    messages.success(request, "Follow-up marked done.")
+    return redirect(request.POST.get("next") or "conversations:followups_due")
+
+
+@login_required
+def saved_replies(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        body = request.POST.get("body", "").strip()
+        if not title or not body:
+            messages.error(request, "A saved reply needs both a title and a message.")
+        else:
+            SavedReply.objects.create(account=account, title=title, body=body)
+            messages.success(request, "Saved reply added.")
+        return redirect("conversations:saved_replies")
+    replies = SavedReply.objects.filter(account=account).order_by("title")
+    return render(request, "conversations/saved_replies.html", {"account": account, "replies": replies})
+
+
+@login_required
+@require_POST
+def saved_reply_delete(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    reply = get_object_or_404(SavedReply, account=account, pk=pk)
+    reply.delete()
+    messages.success(request, "Saved reply removed.")
+    return redirect("conversations:saved_replies")
 
 
 @login_required

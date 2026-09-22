@@ -514,11 +514,15 @@ def _work_queue(account):
     """
     from django.utils import timezone
 
+    from apps.conversations.models import FollowUp
     from apps.conversations.state import missed, needs_attention
 
     now = timezone.now()
     waiting_count = needs_attention(account, now).count()
     missed_count = missed(account, now).count()
+    followups_due_count = FollowUp.objects.filter(
+        account=account, done_at__isnull=True, due_at__lte=now
+    ).count()
 
     new_leads_count = 0
     try:
@@ -534,6 +538,7 @@ def _work_queue(account):
         "customers_waiting_count": waiting_count,
         "missed_count": missed_count,
         "new_leads_count": new_leads_count,
+        "followups_due_count": followups_due_count,
     }
 
 

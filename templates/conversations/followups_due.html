@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
+  <p class="mt-1 text-sm text-gray-600">Customers you asked to be reminded about.</p>
+</header>
+
+<section class="mb-8">
+  <h2 class="text-lg font-semibold text-ink mb-3">Due now</h2>
+  {% if due %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Customer</th><th>Note</th><th>Due</th><th></th></tr></thead>
+      <tbody>
+        {% for f in due %}
+        <tr>
+          <td data-label="Customer">
+            {% if f.conversation %}
+            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-brand-600 hover:text-brand-700">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
+            {% else %}
+            {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
+            {% endif %}
+          </td>
+          <td data-label="Note">{{ f.note|default:"—" }}</td>
+          <td data-label="Due" class="text-gray-500 tabular-nums">{{ f.due_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <form method="post" action="{% url 'conversations:followup_complete' f.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'conversations:followups_due' %}" />
+              <button class="btn btn-ghost btn-sm">Mark done</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="check" title="No follow-ups due" message="Nothing needs your attention right now — reminders you set from a conversation will show up here when they're due." %}
+  </div>
+  {% endif %}
+</section>
+
+{% if upcoming %}
+<section>
+  <h2 class="text-lg font-semibold text-ink mb-3">Coming up</h2>
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Customer</th><th>Note</th><th>Due</th></tr></thead>
+      <tbody>
+        {% for f in upcoming %}
+        <tr>
+          <td data-label="Customer">
+            {% if f.conversation %}
+            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-brand-600 hover:text-brand-700">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
+            {% else %}
+            {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
+            {% endif %}
+          </td>
+          <td data-label="Note">{{ f.note|default:"—" }}</td>
+          <td data-label="Due" class="text-gray-500 tabular-nums">{{ f.due_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
