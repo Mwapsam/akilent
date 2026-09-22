@@ -19,6 +19,7 @@ from apps.contacts.models import ContactList
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
 from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
+from apps.whatsapp.starter_templates import STARTER_CATEGORIES
 from apps.whatsapp.tasks import process_whatsapp_event, sync_templates_for_account
 from apps.whatsapp.template_builder import TemplateBuilderError, create_and_submit_template
 
@@ -81,15 +82,18 @@ def template_create(request):
             )
         except TemplateBuilderError as exc:
             messages.error(request, str(exc))
+            rows = list(zip(labels, examples)) or [("", "")]
             return render(request, "whatsapp/template_create.html", {
                 "account": account, "categories": MessageTemplate.Category.choices,
-                "form": request.POST,
+                "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
+                "variable_rows": rows,
             })
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
 
     return render(request, "whatsapp/template_create.html", {
         "account": account, "categories": MessageTemplate.Category.choices, "form": {},
+        "starters_json": json.dumps(STARTER_CATEGORIES),
     })
 
 

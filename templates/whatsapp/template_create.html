@@ -11,7 +11,25 @@
   <p class="mt-1 text-sm text-gray-600">Akilent submits this to WhatsApp for approval — no need to use Meta Business Manager directly.</p>
 </header>
 
-<div class="card card-pad max-w-2xl">
+{# Starter library: pick a business scenario instead of a blank form. Selecting
+   "Use template" prefills the form below but nothing is submitted here — the
+   owner still reviews, edits and submits it themselves (whatsapp-template-starter-picker.js). #}
+<div id="wa-starter-picker" data-starters='{{ starters_json }}' class="mb-6">
+  <h2 class="text-lg font-semibold text-ink mb-3">Start with a template</h2>
+  <div id="wa-starter-categories" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+  <div id="wa-starter-templates" class="hidden">
+    <button type="button" id="wa-starter-back" class="btn btn-ghost btn-sm mb-3">
+      {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %} All categories
+    </button>
+    <div id="wa-starter-template-list" class="space-y-2"></div>
+  </div>
+</div>
+
+<p class="mb-6">
+  <button type="button" id="wa-start-scratch" class="btn btn-ghost btn-sm">Start from a blank template</button>
+</p>
+
+<div class="card card-pad max-w-2xl" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
   <form method="post" class="space-y-4">
     {% csrf_token %}
     <div>
@@ -57,7 +75,15 @@
     <div>
       <label class="label">Variables</label>
       <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval.</p>
-      <div id="variable-rows" class="space-y-2"></div>
+      <div id="variable-rows" class="space-y-2">
+        {% for label, example in variable_rows %}
+        <div class="flex gap-2">
+          <input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="{{ label }}" />
+          <input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="{{ example }}" />
+          <button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>
+        </div>
+        {% endfor %}
+      </div>
       <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="addVariableRow()">
         {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add variable
       </button>
@@ -81,6 +107,7 @@
       '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>';
     container.appendChild(row);
   }
-  addVariableRow();
 </script>
+{% load static %}
+<script src="{% static 'js/whatsapp-template-starter-picker.js' %}"></script>
 {% endblock %}
