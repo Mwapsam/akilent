@@ -2,11 +2,33 @@
 {% block title %}Insights — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-  <div class="min-w-0">
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
-    <p class="mt-1 text-sm text-gray-600">Delivery logs and open / click analytics for your domains.</p>
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
+  <p class="mt-1 text-sm text-gray-600">What's happening with your customers.</p>
+</header>
+
+{% if conversation_stats %}
+<section class="mb-8">
+  <h2 class="text-lg font-semibold text-ink mb-3">Conversations</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <a href="/inbox/?view=needs_attention" class="card-hover rounded-xl border border-border p-4 block">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ conversation_stats.waiting_count }}</p>
+      <p class="text-sm text-gray-600">customer{{ conversation_stats.waiting_count|pluralize }} waiting for you</p>
+    </a>
+    <a href="/inbox/?view=missed" class="card-hover rounded-xl border border-border p-4 block">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ conversation_stats.missed_count }}</p>
+      <p class="text-sm text-gray-600">missed conversation{{ conversation_stats.missed_count|pluralize }}</p>
+    </a>
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{% if conversation_stats.avg_first_response_minutes is not None %}{{ conversation_stats.avg_first_response_minutes }} min{% else %}—{% endif %}</p>
+      <p class="text-sm text-gray-600">average first reply, recent conversations</p>
+    </div>
   </div>
+</section>
+{% endif %}
+
+<div class="border-b border-border mb-6 flex items-center justify-between flex-wrap gap-3">
+  <h2 class="text-lg font-semibold text-ink pb-2">Email</h2>
   {% if has_analytics and domains %}
   <form method="get" class="flex items-center gap-2">
     <label class="sr-only" for="domain">Domain</label>
@@ -17,7 +39,7 @@
     </select>
   </form>
   {% endif %}
-</header>
+</div>
 
 {% if not has_analytics %}
   <div class="card card-pad text-center max-w-lg mx-auto mt-6">

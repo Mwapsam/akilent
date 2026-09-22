@@ -9,6 +9,7 @@ from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, Message
 from apps.conversations.state import (
     ConversationState as S,
+    average_first_response_seconds,
     calculate_response_time,
     get_conversation_state,
     missed,
@@ -130,6 +131,29 @@ def test_first_response_time(account):
     assert calculate_response_time(convo(account, (IN, 60, "delivered"))) is None      # not invented
     assert calculate_response_time(convo(account, (IN, 60, "delivered"), (OUT, 50, "failed"))) is None
     assert calculate_response_time(convo(account, (OUT, 60, "delivered"))) is None     # no customer message
+
+
+@pytest.mark.django_db
+def test_average_first_response_seconds(account):
+    # 5 min and 15 min response times -> average 10 min = 600s.
+    convo(account, (IN, 60, "delivered"), (OUT, 55, "delivered"))
+    convo(account, (IN, 120, "delivered"), (OUT, 105, "delivered"))
+    # Unanswered conversations must not be counted or divide-by-zero the average.
+    convo(account, (IN, 10, "delivered"))
+    assert average_first_response_seconds(account) == pytest.approx(600)
+
+
+@pytest.mark.django_db
+def test_average_first_response_seconds_none_when_nothing_answered_yet(account):
+    convo(account, (IN, 10, "delivered"))
+    assert average_first_response_seconds(account) is None
+
+
+@pytest.mark.django_db
+def test_average_first_response_seconds_scoped_to_account(account):
+    other = Account.objects.create(company_name="Other Co")
+    convo(other, (IN, 60, "delivered"), (OUT, 55, "delivered"))
+    assert average_first_response_seconds(account) is None
 
 
 @pytest.mark.django_db

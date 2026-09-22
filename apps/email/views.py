@@ -533,6 +533,26 @@ def _build_engagement_stats(domain_name: str) -> list[dict]:
     return list(pivot.values())
 
 
+def _conversation_insights(account):
+    """Account-wide conversation numbers for the Insights landing section
+    (R1.5b) — reuses the same derived queries the inbox uses, so Insights can
+    never disagree with what "Needs attention"/"Missed" show. ``None`` account
+    (staff viewing platform-wide) skips this section rather than aggregating
+    across tenants.
+    """
+    if account is None:
+        return None
+    from apps.conversations.state import average_first_response_seconds, missed, needs_attention
+
+    now = timezone.now()
+    avg_seconds = average_first_response_seconds(account)
+    return {
+        "waiting_count": needs_attention(account, now).count(),
+        "missed_count": missed(account, now).count(),
+        "avg_first_response_minutes": round(avg_seconds / 60) if avg_seconds is not None else None,
+    }
+
+
 @login_required
 def insights(request):
     from apps.billing.limits import LimitChecker
@@ -541,6 +561,8 @@ def insights(request):
     account = get_current_account(request)
     if account is None and not admin:
         return redirect("dashboard")
+
+    conversation_stats = _conversation_insights(account)
 
     has_analytics = admin or (account and LimitChecker(account).has_feature("detailed_analytics"))
     domains = list(
@@ -571,6 +593,7 @@ def insights(request):
         "account": account,
         "is_admin": admin,
         "has_analytics": has_analytics,
+        "conversation_stats": conversation_stats,
         "domains": domains,
         "selected": selected,
         "logs": logs,

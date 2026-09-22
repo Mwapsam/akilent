@@ -121,9 +121,15 @@ def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, open
     create_resp = client.post("/sales/leads/create/", {
         "contact": open_conversation.contact.phone,
         "next": f"/inbox/{open_conversation.public_id}/",
+        "source": "conversation",  # hidden field set by the panel's form, not typed by the agent
     })
     assert create_resp.status_code == 302
     assert create_resp["Location"] == f"/inbox/{open_conversation.public_id}/"
+
+    from apps.crm.models import Lead
+
+    lead = Lead.objects.get(contact=open_conversation.contact)
+    assert lead.source == "conversation"  # provenance, so this path is measurable later
 
     # The panel now shows the lead exists instead of offering to create another.
     resp = client.get(f"/inbox/{open_conversation.public_id}/")

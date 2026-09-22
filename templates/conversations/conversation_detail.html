@@ -144,10 +144,7 @@
     {% csrf_token %}
     <input type="hidden" name="contact" value="{{ contact_identifier }}" />
     <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
-    <div>
-      <label class="label" for="chat-lead-source">What are they interested in? (optional)</label>
-      <input id="chat-lead-source" name="source" class="input" placeholder="e.g. Website package" />
-    </div>
+    <input type="hidden" name="source" value="conversation" />
     <div>
       <label class="label" for="chat-lead-value">Estimated value (optional)</label>
       <input id="chat-lead-value" name="value" type="number" step="0.01" min="0" class="input" placeholder="e.g. 500" />

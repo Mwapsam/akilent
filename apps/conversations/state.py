@@ -187,6 +187,26 @@ def needs_attention(account, now: datetime | None = None):
     )
 
 
+def average_first_response_seconds(account, *, limit: int = 100) -> float | None:
+    """Average first-response time (seconds) over the most recently active
+    answered conversations — the one account-wide number Insights needs
+    (R1.5b) that didn't already exist. Deliberately not a stored/cached
+    metric: computed on demand from the same ``calculate_response_time``
+    the acceptance test and the composer status line already rely on, so
+    there's exactly one definition of "first response time" in the codebase.
+    ``None`` when there's no determinate sample yet (never invented).
+    """
+    candidates = (
+        with_activity(Conversation.objects.filter(account=account))
+        .filter(last_in__isnull=False, last_out__isnull=False)
+        .order_by("-last_any")[:limit]
+    )
+    samples = [s for c in candidates if (s := calculate_response_time(c)) is not None]
+    if not samples:
+        return None
+    return sum(samples) / len(samples)
+
+
 def missed(account, now: datetime | None = None):
     """Open conversations the customer wrote to that went 24h+ with no business reply."""
     now = now or timezone.now()
