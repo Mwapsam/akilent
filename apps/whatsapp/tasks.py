@@ -1031,16 +1031,21 @@ def _upsert_meta_template(account, tpl: dict) -> None:
     )
 
 
-@shared_task
-def sync_templates() -> dict:
-    """Pull template approval status from Meta into local MessageTemplate rows."""
+def sync_templates_for_account(account) -> dict:
+    """Pull template approval status from Meta for one account's active numbers.
+
+    Public, synchronous entry point (not a Celery task) for the "Sync now"
+    button on the WhatsApp Templates page — a business owner triggering this
+    themselves needs an immediate result, not a fire-and-forget queue.
+    ``sync_templates`` (the periodic task, below) calls this per account
+    instead of duplicating the Meta-API loop.
+    """
     from apps.whatsapp.providers import get_whatsapp_provider, WhatsAppProviderError
 
     numbers = (
-        WhatsAppBusinessNumber.objects.filter(is_active=True)
+        WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
         .exclude(waba_id__isnull=True)
         .exclude(waba_id="")
-        .select_related("account")
     )
     synced = errors = 0
     seen_wabas: set = set()
@@ -1049,13 +1054,36 @@ def sync_templates() -> dict:
             continue
         seen_wabas.add(number.waba_id)
         try:
-            provider = get_whatsapp_provider(number.account)
+            provider = get_whatsapp_provider(account)
             for tpl in provider.list_templates(number.waba_id):
-                _upsert_meta_template(number.account, tpl)
+                _upsert_meta_template(account, tpl)
                 synced += 1
         except (WhatsAppProviderError, NotImplementedError) as exc:
-            logger.warning("sync_templates: waba=%s failed: %s", number.waba_id, exc)
+            logger.warning("sync_templates_for_account: waba=%s failed: %s", number.waba_id, exc)
             errors += 1
+    return {"synced": synced, "errors": errors}
+
+
+@shared_task
+def sync_templates() -> dict:
+    """Pull template approval status from Meta into local MessageTemplate rows,
+    across every account — the periodic (Celery beat) version of
+    ``sync_templates_for_account``."""
+    numbers = (
+        WhatsAppBusinessNumber.objects.filter(is_active=True)
+        .exclude(waba_id__isnull=True)
+        .exclude(waba_id="")
+        .select_related("account")
+    )
+    seen_accounts: dict = {}
+    for number in numbers:
+        seen_accounts.setdefault(number.account_id, number.account)
+
+    synced = errors = 0
+    for account in seen_accounts.values():
+        result = sync_templates_for_account(account)
+        synced += result["synced"]
+        errors += result["errors"]
 
     if synced or errors:
         logger.info("sync_templates: synced=%s errors=%s", synced, errors)

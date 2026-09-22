@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}New WhatsApp campaign — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
+    <span aria-hidden="true">/</span><span class="text-ink">New WhatsApp campaign</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New WhatsApp campaign</h1>
+  <p class="mt-1 text-sm text-gray-600">Send an approved WhatsApp template to everyone on a customer list.</p>
+</header>
+
+<div class="card card-pad max-w-xl">
+  {% if not contact_lists %}
+  <p class="text-sm text-gray-600">You don't have any customer lists yet. <a href="/contacts/" class="underline">Go to Contacts</a> to create one first.</p>
+  {% elif not templates %}
+  <p class="text-sm text-gray-600">You don't have any Meta-approved WhatsApp templates yet. Add one under WhatsApp Templates and wait for approval before sending a campaign.</p>
+  {% else %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="label" for="campaign-name">Campaign name (optional)</label>
+      <input id="campaign-name" name="name" class="input" placeholder="e.g. September promotion" />
+    </div>
+    <div>
+      <label class="label" for="campaign-list">Customer list</label>
+      <select id="campaign-list" name="contact_list" class="select" required>
+        {% for l in contact_lists %}
+        <option value="{{ l.pk }}">{{ l.name }} ({{ l.contacts.count }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label" for="campaign-template">Template</label>
+      <select id="campaign-template" name="template_id" class="select" required>
+        {% for t in templates %}
+        <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-gray-400 mt-1">Only Meta-approved templates can be used for a campaign.</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <a href="/email/campaigns/?channel=whatsapp" class="btn btn-ghost btn-sm">Cancel</a>
+      <button class="btn btn-primary btn-sm">Send campaign</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

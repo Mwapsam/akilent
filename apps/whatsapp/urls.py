@@ -1,9 +1,11 @@
 from django.urls import path
 
-from apps.whatsapp import numbers
+from apps.whatsapp import numbers, views
 from apps.whatsapp.views import WhatsAppWebhookView
 
 urlpatterns = [
+    path("campaigns/new/", views.campaign_new, name="whatsapp-campaign-new"),
+    path("campaigns/<int:pk>/", views.campaign_detail, name="whatsapp-campaign-detail"),
     path("numbers/", numbers.numbers_list, name="whatsapp-numbers"),
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),
     path("numbers/<int:pk>/delete/", numbers.numbers_delete, name="whatsapp-numbers-delete"),

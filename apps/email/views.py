@@ -1343,6 +1343,8 @@ def _render_composer(request, account, admin, *, form_data=None, errors=None, st
 
 @login_required
 def campaigns_list(request):
+    from django.conf import settings
+
     from apps.billing.limits import LimitChecker
     from apps.email.models import BulkEmailCampaign
 
@@ -1350,6 +1352,11 @@ def campaigns_list(request):
     account = get_current_account(request)
     if account is None and not admin:
         return redirect("dashboard")
+
+    # R1.5c: "Campaigns" is one channel-neutral concept with two sending paths
+    # (see docs/plans) — Email keeps its existing wizard/model untouched;
+    # WhatsApp is a new, deliberately smaller campaign type. One page, one tab.
+    channel = request.GET.get("channel") or "email"
 
     bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
 
@@ -1365,9 +1372,18 @@ def campaigns_list(request):
         campaigns = campaigns.filter(status__in=status_map[status])
     campaigns = campaigns[:50]
 
+    whatsapp_campaigns = []
+    whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
+    if whatsapp_enabled and (admin or account):
+        from apps.whatsapp.models import WhatsAppCampaign
+
+        wa_qs = WhatsAppCampaign.objects if admin else WhatsAppCampaign.objects.filter(account=account)
+        whatsapp_campaigns = list(wa_qs.select_related("template", "contact_list")[:50])
+
     return render(request, "email/campaigns.html", {
         "account": account,
         "is_admin": admin,
+        "channel": channel,
         "campaigns": campaigns,
         "bulk_enabled": bulk_enabled,
         "status_filter": status,
@@ -1378,6 +1394,8 @@ def campaigns_list(request):
             ("sending", "Sending"),
             ("completed", "Completed"),
         ],
+        "whatsapp_enabled": whatsapp_enabled,
+        "whatsapp_campaigns": whatsapp_campaigns,
     })
 
 

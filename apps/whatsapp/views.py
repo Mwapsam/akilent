@@ -4,16 +4,76 @@ import json
 import logging
 
 from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from apps.whatsapp.models import WebhookEventLog
+from apps.accounts.utils import get_current_account
+from apps.contacts.models import ContactList
+from apps.core.module_gate import module_required
+from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
+from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
 from apps.whatsapp.tasks import process_whatsapp_event
 
 logger = logging.getLogger(__name__)
+
+
+# --- Campaigns (R1.5c): create + list + detail. Sending logic lives in
+# apps.whatsapp.campaigns, same split as apps.whatsapp.numbers (setup UI) vs
+# apps.whatsapp.tasks (sending). This file is the module boundary rule's
+# exempted "views.py", so the ContactList import above is allowed here and
+# nowhere else in this app. ------------------------------------------------
+
+@login_required
+@module_required("whatsapp")
+def campaign_new(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        contact_list = ContactList.objects.filter(
+            account=account, pk=request.POST.get("contact_list")
+        ).first()
+        if contact_list is None:
+            messages.error(request, "Choose a customer list.")
+            return redirect("whatsapp-campaign-new")
+        try:
+            campaign = create_and_queue_campaign(
+                account=account, name=request.POST.get("name") or "",
+                contact_list=contact_list, template_id=request.POST.get("template_id"),
+                created_by=request.user,
+            )
+        except CampaignError as exc:
+            messages.error(request, str(exc))
+            return redirect("whatsapp-campaign-new")
+        messages.success(request, "Campaign queued — it's sending now.")
+        return redirect("whatsapp-campaign-detail", pk=campaign.pk)
+
+    return render(request, "whatsapp/campaign_new.html", {
+        "account": account,
+        "contact_lists": ContactList.objects.filter(account=account).order_by("name"),
+        "templates": MessageTemplate.objects.filter(
+            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        ).order_by("name"),
+    })
+
+
+@login_required
+@module_required("whatsapp")
+def campaign_detail(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
+    return render(request, "whatsapp/campaign_detail.html", {
+        "account": account, "campaign": campaign,
+    })
 
 
 def _verify_meta_signature(request) -> bool:
