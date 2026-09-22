@@ -165,6 +165,14 @@ def record_outbound_message(
     else:
         metrics.incr("outbound_projection_duplicates")
         record_message_status(message, status)
+        # A status-only replay can carry new information (e.g. a failure reason
+        # that wasn't known when the message was first queued/sent). Merge it in
+        # rather than requiring the caller to know whether this is a first write.
+        if metadata:
+            merged = {**message.metadata, **metadata}
+            if merged != message.metadata:
+                message.metadata = merged
+                message.save(update_fields=["metadata"])
     return message, created
 
 

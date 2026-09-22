@@ -100,6 +100,18 @@ def _is_ajax(request) -> bool:
     return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
+def _window_is_open(conversation) -> bool:
+    """Whether a free-text reply is currently allowed (R0: composer warning).
+
+    Only WhatsApp has a 24h customer-service window today; a channel without
+    one is reported open so its composer is unaffected.
+    """
+    if conversation.channel != Conversation.Channel.WHATSAPP:
+        return True
+    wa = conversation.whatsapp_conversation
+    return bool(wa and wa.window_is_open)
+
+
 @login_required
 def conversation_detail(request, public_id: str):
     account = get_current_account(request)
@@ -142,9 +154,13 @@ def conversation_detail(request, public_id: str):
         "feedUrl": reverse("conversations:messages_feed", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
         "open": conversation.status == Conversation.Status.OPEN,
+        # Only WhatsApp enforces a messaging window today; other channels report
+        # it open so the composer behaves as it always has for them.
+        "windowOpen": _window_is_open(conversation),
         "messages": [
             {"id": m.id, "direction": m.direction, "body": m.body,
-             "ts": m.timestamp.isoformat(), "status": m.status}
+             "ts": m.timestamp.isoformat(), "status": m.status,
+             "failureReason": (m.metadata or {}).get("failure_reason") or None}
             for m in thread
         ],
         "statusHtml": render_to_string("conversations/_status_badges.html", {
@@ -183,7 +199,7 @@ def messages_feed(request, public_id: str):
 
     recent_outbound = conversation.messages.filter(
         direction=Message.Direction.OUTBOUND
-    ).order_by("-id").values_list("id", "status")[:20]
+    ).order_by("-id").only("id", "status", "metadata")[:20]
 
     return JsonResponse({
         "messages": [
@@ -193,10 +209,16 @@ def messages_feed(request, public_id: str):
                 "body": m.body,
                 "timestamp": m.timestamp.isoformat(),
                 "status": m.status,
+                "failureReason": (m.metadata or {}).get("failure_reason") or None,
             }
             for m in new
         ],
-        "statuses": {str(pk): st for pk, st in recent_outbound},
+        "statuses": {str(m.id): m.status for m in recent_outbound},
+        "failureReasons": {
+            str(m.id): (m.metadata or {}).get("failure_reason")
+            for m in recent_outbound if (m.metadata or {}).get("failure_reason")
+        },
+        "windowOpen": _window_is_open(conversation),
         "status_html": render_to_string("conversations/_status_badges.html", {
             "conversation": conversation,
             "snapshot": get_conversation_state(conversation),

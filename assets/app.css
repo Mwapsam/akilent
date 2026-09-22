@@ -243,7 +243,7 @@
   * { scrollbar-width: thin; scrollbar-color: var(--color-gray-300) transparent; }
   *:hover { scrollbar-color: var(--color-gray-400) transparent; }
   @supports not (scrollbar-width: thin) {
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 2px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--color-gray-300); border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--color-gray-400); }
@@ -334,6 +334,7 @@
   .chat-msg--failed .chat-bubble { @apply bg-red-50 text-red-900 border-red-300; }
   .chat-msg--failed .chat-meta { @apply text-red-700 font-medium; }
   .chat-day { @apply text-center text-xs font-medium uppercase tracking-wide text-gray-600 py-3; }
+  .chat-window-warning { @apply text-xs text-amber-800 bg-amber-50 border-t border-amber-200 px-3 py-2; }
   .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
   .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
   @media (min-width: 1024px) { .chat-side { z-index: auto; } }

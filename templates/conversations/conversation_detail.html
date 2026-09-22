@@ -33,6 +33,7 @@
             <div class="chat-msg" :class="{ 'chat-msg--out': item.m.direction === 'outbound', 'chat-msg--pending': item.m.pending, 'chat-msg--failed': item.m.status === 'failed' }">
               <div class="chat-bubble" x-text="item.m.body || '(no text content)'"></div>
               <p class="chat-meta" x-show="item.showMeta" x-text="meta(item.m)"></p>
+              <p class="chat-meta" x-show="item.m.status === 'failed'" x-text="failureText(item.m)"></p>
             </div>
           </template>
         </div>
@@ -45,15 +46,21 @@
     </div>
 
     <template x-if="open">
-      <form method="post" class="chat-composer" x-ref="composer" @submit.prevent="send()">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="reply" />
-        <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input chat-input"
-                  placeholder="Type a reply…" aria-label="Reply" aria-describedby="composer-hint"
-                  @input="grow($event.target)" @keydown.enter="onEnter($event)"></textarea>
-        <button class="btn btn-primary" :disabled="!draft.trim() || sending">Send</button>
-        <p id="composer-hint" class="sr-only">Press Enter to send, Shift and Enter for a new line.</p>
-      </form>
+      <div>
+        <p class="chat-window-warning" x-show="!windowOpen" x-cloak>
+          This customer hasn't messaged in the last 24 hours. WhatsApp may reject a plain reply —
+          send an approved template instead if this doesn't go through.
+        </p>
+        <form method="post" class="chat-composer" x-ref="composer" @submit.prevent="send()">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reply" />
+          <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input chat-input"
+                    placeholder="Type a reply…" aria-label="Reply" aria-describedby="composer-hint"
+                    @input="grow($event.target)" @keydown.enter="onEnter($event)"></textarea>
+          <button class="btn btn-primary" :disabled="!draft.trim() || sending">Send</button>
+          <p id="composer-hint" class="sr-only">Press Enter to send, Shift and Enter for a new line.</p>
+        </form>
+      </div>
     </template>
     <template x-if="!open">
       <p class="chat-composer text-sm text-gray-600">This conversation is closed. It re-opens if the customer writes again.</p>

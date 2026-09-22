@@ -12,6 +12,7 @@ document.addEventListener('alpine:init', () => {
     messages: cfg.messages || [],
     lastId: cfg.lastId || 0,
     open: cfg.open,
+    windowOpen: cfg.windowOpen !== false,
     statusHtml: cfg.statusHtml || '',
     infoOpen: false,
     draft: '',
@@ -40,7 +41,7 @@ document.addEventListener('alpine:init', () => {
           out.push({ key: 'day-' + key, type: 'day', label: this.dayLabel(d) });
           lastDay = key;
         }
-        out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true });
+        out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true, showFailure: m.status === 'failed' });
       }
       // Only the last message of a same-direction, same-minute run shows its meta line.
       for (let i = 0; i < out.length - 1; i++) {
@@ -63,6 +64,12 @@ document.addEventListener('alpine:init', () => {
       if (m.direction !== 'outbound') return this.time(m.ts);
       const label = m.pending ? 'Sending…' : (STATUS_LABELS[m.status] || '');
       return this.time(m.ts) + (label ? ' · ' + label : '');
+    },
+    failureText(m) {
+      // A plain-language reason from apps.whatsapp.friendly_errors, translated
+      // server-side at projection time (see docs/plans R0). Falls back if a
+      // message somehow has no reason recorded.
+      return m.failureReason || 'This message could not be delivered.';
     },
 
     // ── scrolling ────────────────────────────────────────────────
@@ -112,16 +119,22 @@ document.addEventListener('alpine:init', () => {
         } else {
           inbound = true;
         }
-        this.messages.push({ id: raw.id, direction: raw.direction, body: raw.body, ts: raw.timestamp, status: raw.status });
+        this.messages.push({
+          id: raw.id, direction: raw.direction, body: raw.body, ts: raw.timestamp,
+          status: raw.status, failureReason: raw.failureReason || null,
+        });
         this.lastId = Math.max(this.lastId, raw.id);
       }
       for (const m of this.messages) {
         const s = data.statuses[String(m.id)];
         if (s !== undefined && s !== m.status) m.status = s;
+        const reason = data.failureReasons && data.failureReasons[String(m.id)];
+        if (reason) m.failureReason = reason;
       }
       this.messages.sort((a, b) => (a.pending ? 1 : 0) - (b.pending ? 1 : 0) || new Date(a.ts) - new Date(b.ts));
       if (data.status_html !== undefined) this.statusHtml = data.status_html;
       this.open = data.open;
+      if (data.windowOpen !== undefined) this.windowOpen = data.windowOpen;
       if (data.messages.length) {
         this.$nextTick(() => {
           if (stick) this.scrollBottom();

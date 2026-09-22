@@ -213,12 +213,23 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
     try:
         from apps.conversations.models import Conversation as SpineConversation
         from apps.conversations.services import record_outbound_message
+        from apps.whatsapp.friendly_errors import friendly_send_error
 
         _canonical_contact(log.account, log.contact)
         spine = SpineConversation.get_or_create_for_whatsapp(log.conversation)
+        metadata = {"message_type": log.message_type}
+        if log.status == MessageLog.Status.FAILED:
+            # OutboundMessage carries the error code; MessageLog doesn't. A
+            # human/template/workflow reply that fails to send is the one place
+            # an agent needs a *reason*, not just "Failed" — so it's translated
+            # here, once, for every send path (see docs/plans amendment R0).
+            outbound = getattr(log, "outbound_source", None)
+            error_code = getattr(outbound, "error_code", "") or ""
+            metadata["error_code"] = error_code
+            metadata["failure_reason"] = friendly_send_error(error_code)
         record_outbound_message(
             conversation=spine, body=log.content, timestamp=log.timestamp, status=log.status,
-            metadata={"message_type": log.message_type}, whatsapp_message=log,
+            metadata=metadata, whatsapp_message=log,
         )
     except Exception:
         metrics.incr("outbound_projection_failures")
