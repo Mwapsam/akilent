@@ -1,21 +1,33 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Email templates — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Templates — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
 
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Templates</h1>
-    <p class="mt-1 text-sm text-gray-600">Reusable subject/body content with <code>{% verbatim %}{{ variable }}{% endverbatim %}</code> interpolation, usable in single sends and bulk campaigns.</p>
+    <p class="mt-1 text-sm text-gray-600">
+      {% if channel == 'whatsapp' %}Templates approved by Meta for use in replies, workflows and campaigns.
+      {% else %}Reusable subject/body content with <code>{% verbatim %}{{ variable }}{% endverbatim %}</code> interpolation, usable in single sends and bulk campaigns.{% endif %}
+    </p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
+    {% if channel == 'whatsapp' %}
+    <form method="post" action="{% url 'whatsapp-templates-sync' %}">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-sm">
+        {% include "components/icon.html" with name="refresh" class="w-4 h-4" %} Sync from WhatsApp
+      </button>
+    </form>
+    {% else %}
     <a href="/email/templates/assets/" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="image" class="w-4 h-4" %} Media library
     </a>
     <a href="/email/campaigns/" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="send" class="w-4 h-4" %} Campaigns
     </a>
+    {% endif %}
   </div>
 </header>
 
@@ -25,6 +37,46 @@
   <span>Admin view — showing every tenant's templates with full access.</span>
 </div>
 {% endif %}
+
+{% if whatsapp_enabled %}
+<div class="tabs mb-4" role="tablist" aria-label="Channel">
+  <a href="?channel=email" role="tab" aria-selected="{% if channel != 'whatsapp' %}true{% else %}false{% endif %}"
+     class="tab{% if channel != 'whatsapp' %} tab-active{% endif %}">Email</a>
+  <a href="?channel=whatsapp" role="tab" aria-selected="{% if channel == 'whatsapp' %}true{% else %}false{% endif %}"
+     class="tab{% if channel == 'whatsapp' %} tab-active{% endif %}">WhatsApp</a>
+</div>
+{% endif %}
+
+{% if channel == 'whatsapp' %}
+  {% if whatsapp_templates %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Name</th><th>Category</th><th>Language</th><th>Status</th><th>Variables</th></tr></thead>
+      <tbody>
+        {% for t in whatsapp_templates %}
+        <tr>
+          <td data-label="Name" class="font-medium text-ink">{{ t.name }}</td>
+          <td data-label="Category">{{ t.get_category_display }}</td>
+          <td data-label="Language">{{ t.language_code }}</td>
+          <td data-label="Status">
+            {% if t.approval_status == 'approved' %}<span class="badge badge-success">Approved</span>
+            {% elif t.approval_status == 'rejected' %}<span class="badge badge-danger">Rejected</span>
+            {% elif t.approval_status == 'paused' %}<span class="badge badge-danger">Paused by Meta</span>
+            {% elif t.approval_status == 'pending' %}<span class="badge badge-warning">Pending Meta approval</span>
+            {% else %}<span class="badge badge-neutral">Draft (local only)</span>{% endif %}
+          </td>
+          <td data-label="Variables" class="text-gray-500">{% if t.variables %}{{ t.variables|join:", " }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="message-circle" title="No templates yet" message="Create a template in Meta Business Manager, then sync here to use it in replies, workflows and campaigns." %}
+  </div>
+  {% endif %}
+{% else %}
 
 {% if not templates_enabled %}
 <div class="alert alert-warning mb-6">
@@ -179,5 +231,6 @@ requests.post(
 </div>
 {% endif %}
 
+{% endif %}
 {% endif %}
 {% endblock %}

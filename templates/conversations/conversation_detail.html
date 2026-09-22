@@ -49,7 +49,7 @@
       <div>
         <p class="chat-window-warning" x-show="!windowOpen" x-cloak>
           This customer hasn't messaged in the last 24 hours. WhatsApp may reject a plain reply —
-          send an approved template instead if this doesn't go through.
+          send an approved template below instead if this doesn't go through.
         </p>
         <form method="post" class="chat-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
@@ -60,6 +60,36 @@
           <button class="btn btn-primary" :disabled="!draft.trim() || sending">Send</button>
           <p id="composer-hint" class="sr-only">Press Enter to send, Shift and Enter for a new line.</p>
         </form>
+        {% if approved_templates %}
+        <details class="chat-template-picker">
+          <summary>Send a template instead{% if not windowOpen %} (needed — this conversation is outside the 24h window){% endif %}</summary>
+          <form method="post" class="chat-template-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="send_template" />
+            <label class="label" for="template-select">Template</label>
+            <select id="template-select" name="template_id" class="select" required onchange="
+              document.querySelectorAll('[data-template-vars]').forEach(function (el) {
+                el.hidden = el.dataset.templateVars !== this.value;
+              }.bind(this));
+            ">
+              <option value="" disabled selected>Choose a template…</option>
+              {% for t in approved_templates %}
+              <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+              {% endfor %}
+            </select>
+            {% for t in approved_templates %}
+            {% if t.variables %}
+            <div hidden data-template-vars="{{ t.pk }}" class="grid gap-2 mt-2">
+              {% for v in t.variables %}
+              <label class="text-xs">{{ v }}<input class="input input-sm w-full mt-0.5" name="var__{{ t.pk }}__{{ v }}" /></label>
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            <button class="btn btn-secondary btn-sm mt-2">Send template</button>
+          </form>
+        </details>
+        {% endif %}
       </div>
     </template>
     <template x-if="!open">

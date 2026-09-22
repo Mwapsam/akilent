@@ -126,6 +126,35 @@ def conversation_detail(request, public_id: str):
             if action == "reply":
                 run_action("reply", ctx, conversation=conversation, body=request.POST.get("body", "").strip())
                 conversation.mark_read()
+            elif action == "send_template":
+                # The composer's answer to "outside the 24h window" (R1.5c
+                # follow-up): send an approved WhatsApp template instead of a
+                # plain reply, without leaving the conversation.
+                template_id = request.POST.get("template_id")
+                if not template_id:
+                    raise ActionError("Choose a template.")
+                from apps.whatsapp.models import MessageTemplate
+
+                template = MessageTemplate.objects.filter(
+                    account=account, pk=template_id, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+                ).first()
+                if template is None:
+                    raise ActionError("That template isn't available.")
+                # Field names are namespaced per template (var__<template_id>__<var>) —
+                # several templates can declare the same variable name, and only one
+                # <details> section is visible at a time but all its sibling inputs
+                # are still submitted (HTML "hidden" doesn't exclude them from the
+                # POST), so an unqualified name could silently read another
+                # template's stale value.
+                params = {
+                    var: request.POST.get(f"var__{template.pk}__{var}", "")
+                    for var in (template.variables or [])
+                }
+                run_action(
+                    "send_whatsapp", ctx, account=account,
+                    phone=conversation.contact.phone, template_id=template.id, params=params,
+                )
+                conversation.mark_read()
             elif action == "assign":
                 run_action("assign_conversation", ctx, conversation=conversation, user=request.user)
             elif action == "add_note":
@@ -169,6 +198,16 @@ def conversation_detail(request, public_id: str):
             "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
         }),
     }
+    approved_templates = []
+    if conversation.channel == Conversation.Channel.WHATSAPP:
+        from apps.whatsapp.models import MessageTemplate
+
+        approved_templates = list(
+            MessageTemplate.objects.filter(
+                account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+            ).order_by("name")
+        )
+
     open_lead = None
     try:
         from apps.crm.models import Lead
@@ -188,6 +227,7 @@ def conversation_detail(request, public_id: str):
         "snapshot": snapshot,
         "notes": conversation.notes.select_related("author"),
         "open_lead": open_lead,
+        "approved_templates": approved_templates,
     })
 
 

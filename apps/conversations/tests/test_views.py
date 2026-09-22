@@ -137,6 +137,49 @@ def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, open
 
 
 @pytest.mark.django_db
+def test_send_template_from_composer(logged_in, open_conversation):
+    """R1.5c follow-up: the composer's answer to being outside the 24h window
+    — send an approved template without leaving the conversation."""
+    from apps.whatsapp.models import MessageTemplate, OutboundMessage
+
+    client, account, _ = logged_in
+    template = MessageTemplate.objects.create(
+        account=account, name="Follow up", whatsapp_template_name="follow_up",
+        language_code="en", content="Hi {{1}}", variables=["name"],
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+
+    resp = client.get(f"/inbox/{open_conversation.public_id}/")
+    assert "Send a template instead" in resp.content.decode()
+
+    resp = client.post(f"/inbox/{open_conversation.public_id}/", {
+        "action": "send_template", "template_id": template.pk,
+        f"var__{template.pk}__name": "Ada",
+    })
+    assert resp.status_code == 302
+    msg = OutboundMessage.objects.get(account=account, template=template)
+    assert msg.payload["params"] == {"name": "Ada"}
+
+
+@pytest.mark.django_db
+def test_send_template_rejects_unapproved_template(logged_in, open_conversation):
+    from apps.whatsapp.models import MessageTemplate
+
+    client, account, _ = logged_in
+    draft = MessageTemplate.objects.create(
+        account=account, name="Draft", whatsapp_template_name="draft", content="x",
+        approval_status=MessageTemplate.ApprovalStatus.DRAFT,
+    )
+    resp = client.post(f"/inbox/{open_conversation.public_id}/", {
+        "action": "send_template", "template_id": draft.pk,
+    }, follow=True)
+    assert resp.status_code == 200
+    # Flash messages are JSON-embedded (escapejs) for the client-side toast, not
+    # plain HTML — check for the message text without relying on quote escaping.
+    assert b"That template" in resp.content
+
+
+@pytest.mark.django_db
 def test_messages_feed_returns_only_newer_messages(logged_in, open_conversation):
     client, _, _ = logged_in
     first = open_conversation.messages.first()

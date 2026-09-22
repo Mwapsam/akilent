@@ -335,6 +335,9 @@
   .chat-msg--failed .chat-meta { @apply text-red-700 font-medium; }
   .chat-day { @apply text-center text-xs font-medium uppercase tracking-wide text-gray-600 py-3; }
   .chat-window-warning { @apply text-xs text-amber-800 bg-amber-50 border-t border-amber-200 px-3 py-2; }
+  .chat-template-picker { @apply px-3 pb-3 text-sm; }
+  .chat-template-picker > summary { @apply text-xs text-brand-600 hover:text-brand-700 cursor-pointer select-none; }
+  .chat-template-form { @apply mt-2 space-y-2 rounded-xl border border-border bg-surface-muted p-3; }
   .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
   .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
   @media (min-width: 1024px) { .chat-side { z-index: auto; } }

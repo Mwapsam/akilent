@@ -12,15 +12,43 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import ContactList
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
 from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
-from apps.whatsapp.tasks import process_whatsapp_event
+from apps.whatsapp.tasks import process_whatsapp_event, sync_templates_for_account
 
 logger = logging.getLogger(__name__)
+
+
+# --- Templates: a manual "Sync from Meta" action. Meta is the source of
+# truth for approval/status (see docs/plans); Akilent never lets a business
+# edit a template's content locally, since that would silently desync from
+# what Meta actually approved. Creating a new template has to happen in Meta
+# Business Manager (or a future "submit for approval" API call, not built —
+# no evidence yet that a pilot needs it in-app). The list itself lives on the
+# WhatsApp tab of /email/templates/ (apps.email.views.templates_list) — one
+# "Templates" page, two channels, same pattern as Campaigns. -------------
+
+@login_required
+@module_required("whatsapp")
+@require_POST
+def templates_sync(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    result = sync_templates_for_account(account)
+    if result["errors"]:
+        messages.error(
+            request,
+            "Couldn't reach WhatsApp for one or more numbers — check your connection under Connections.",
+        )
+    else:
+        messages.success(request, f"Synced {result['synced']} template(s) from WhatsApp.")
+    return redirect("/email/templates/?channel=whatsapp")
 
 
 # --- Campaigns (R1.5c): create + list + detail. Sending logic lives in

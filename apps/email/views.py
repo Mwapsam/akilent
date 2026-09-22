@@ -788,6 +788,8 @@ def api_send(request):
 
 @login_required
 def templates_list(request):
+    from django.conf import settings
+
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplate
     from apps.email.starter_templates import STARTER_TEMPLATES
@@ -796,6 +798,11 @@ def templates_list(request):
     account = get_current_account(request)
     if account is None and not admin:
         return redirect("dashboard")
+
+    # R1.5c follow-up: Templates is channel-neutral like Campaigns — one page,
+    # one nav entry, a tab per channel (see docs/plans). WhatsApp templates are
+    # read-only here (Meta is the source of truth for approval/content).
+    channel = request.GET.get("channel") or "email"
 
     templates_enabled = admin or (account and LimitChecker(account).has_feature("email_templates"))
     templates = list(_scoped(EmailTemplate.objects, request, account).filter(is_active=True))
@@ -812,12 +819,23 @@ def templates_list(request):
         for s in STARTER_TEMPLATES
     ]
 
+    whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
+    whatsapp_templates = []
+    if whatsapp_enabled and (admin or account):
+        from apps.whatsapp.models import MessageTemplate
+
+        wa_qs = MessageTemplate.objects if admin else MessageTemplate.objects.filter(account=account)
+        whatsapp_templates = list(wa_qs.order_by("name", "language_code"))
+
     return render(request, "email/templates.html", {
         "account": account,
         "is_admin": admin,
+        "channel": channel,
         "templates": templates,
         "templates_enabled": templates_enabled,
         "starter_templates_json": json.dumps(starters),
+        "whatsapp_enabled": whatsapp_enabled,
+        "whatsapp_templates": whatsapp_templates,
     })
 
 
