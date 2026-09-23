@@ -11,7 +11,11 @@
   /* ── Conversation view. Tune --cv-top to your base layout's header + padding height. ── */
   .cv { --cv-top: 7rem; --cv-accent: var(--wa-accent, #0866ff); --cv-out: #d9fdd3; --cv-line: #e5e7eb;
         display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem;
+        /* minmax(0, 1fr) caps the row at the container's height. With the default
+           `auto` row, the pane grows to fit every message and the thread never scrolls. */
+        grid-template-rows: minmax(0, 1fr);
         height: calc(100dvh - var(--cv-top)); min-height: 520px; }
+  .cv > * { min-height: 0; }
   @media (min-width: 1024px) { .cv { grid-template-columns: minmax(0, 1fr) 340px; } }
 
   /* Chat pane */
