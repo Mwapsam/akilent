@@ -30,6 +30,9 @@
  * POSTs to apps.contacts.views.create_custom_field (the field belongs to
  * Contact, not to WhatsApp) and, on success, is immediately searchable in
  * every picker on the page — no page reload needed.
+ *
+ * Anything user-controlled (custom field labels, examples, body text) is
+ * HTML-escaped before it touches innerHTML.
  */
 (function () {
   "use strict";
@@ -45,6 +48,30 @@
     var d = ICON_PATHS[name] || ICON_PATHS.sliders;
     return '<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">' +
       '<path stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/></svg>';
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // WhatsApp's inline formatting: *bold*, _italic_, ~strike~, ```mono```.
+  // Markers only count at word boundaries, so URLs and snake_case survive.
+  var FMT_BEFORE = "(^|[\\s(\\[])";
+  var FMT_AFTER = "(?=$|[\\s.,!?:;)\\]])";
+  var RE_BOLD = new RegExp(FMT_BEFORE + "\\*([^*\\n]+?)\\*" + FMT_AFTER, "g");
+  var RE_ITALIC = new RegExp(FMT_BEFORE + "_([^_\\n]+?)_" + FMT_AFTER, "g");
+  var RE_STRIKE = new RegExp(FMT_BEFORE + "~([^~\\n]+?)~" + FMT_AFTER, "g");
+
+  function formatWhatsApp(text) {
+    return escapeHtml(text)
+      .replace(/```([\s\S]+?)```/g, "<code>$1</code>")
+      .replace(RE_BOLD, "$1<strong>$2</strong>")
+      .replace(RE_ITALIC, "$1<em>$2</em>")
+      .replace(RE_STRIKE, "$1<s>$2</s>")
+      // Variables with no example yet show as a chip so they're easy to spot.
+      .replace(/\{\{(\d+)\}\}/g, '<span class="wa-var">{{$1}}</span>');
   }
 
   function debounce(fn, wait) {
@@ -143,27 +170,32 @@
         expectedNext++;
       }
       variableWarningEl.textContent =
-        "Variables must be numbered in order starting at {{1}} — you're missing {{" + expectedNext + "}}.";
+        "Variables must be numbered in order starting at {{1}} — {{" + expectedNext + "}} is missing.";
       variableWarningEl.classList.remove("hidden");
       if (submitBtn) submitBtn.disabled = true;
     }
 
     function buildVariableCard(n) {
       var card = document.createElement("div");
-      card.className = "card card-pad space-y-2";
+      card.className = "wa-varcard space-y-3";
       card.dataset.n = String(n);
       card.dataset.source = "";
       card.innerHTML =
         '<div class="flex items-center gap-2">' +
-          '<span class="inline-flex items-center justify-center w-9 h-7 rounded-full bg-gray-100 text-xs font-semibold text-gray-600 shrink-0">{{' + n + '}}</span>' +
-          '<input class="input flex-1" name="variable_label" placeholder="Label, e.g. Customer name" />' +
+          '<span class="wa-var-chip">{{' + n + '}}</span>' +
+          '<input class="input flex-1" name="variable_label" placeholder="Label, e.g. Customer name" aria-label="Label for variable ' + n + '" />' +
         '</div>' +
-        '<div data-role="picker-mount"></div>' +
-        '<div>' +
-          '<label class="text-xs text-gray-400 block mb-1">Example</label>' +
-          '<input class="input" name="variable_example" placeholder="e.g. Ada" />' +
+        '<div class="grid sm:grid-cols-2 gap-2">' +
+          '<div>' +
+            '<span class="text-xs text-gray-500 block mb-1">Akilent data</span>' +
+            '<div data-role="picker-mount"></div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-xs text-gray-500 block mb-1" for="wa-var-example-' + n + '">Example value</label>' +
+            '<input class="input" id="wa-var-example-' + n + '" name="variable_example" placeholder="e.g. Ada" />' +
+          '</div>' +
         '</div>' +
-        '<p class="text-xs text-gray-400">Used to generate an example for Meta’s approval — not yet a live binding when this template is sent.</p>';
+        '<p class="text-xs text-gray-400">Meta uses the example to review your template. It isn’t sent to customers.</p>';
 
       var labelInput = card.querySelector('[name="variable_label"]');
       var exampleInput = card.querySelector('[name="variable_example"]');
@@ -261,10 +293,10 @@
         wrap.innerHTML =
           '<button type="button" class="input w-full flex items-center gap-2 text-left" data-role="chip">' +
             icon(found ? found.group.icon : "sliders") +
-            '<span class="flex-1 truncate">' +
-              (found ? found.group.label + " → " + found.field.label : "Insert Akilent data field…") +
+            '<span class="flex-1 truncate' + (found ? "" : " text-gray-400") + '">' +
+              (found ? escapeHtml(found.group.label) + " → " + escapeHtml(found.field.label) : "Choose a field…") +
             '</span>' +
-            (found ? '<span data-role="clear" class="text-gray-400 hover:text-gray-600 px-1">×</span>' : '') +
+            (found ? '<span data-role="clear" class="text-gray-400 hover:text-gray-600 px-1" aria-label="Clear field">×</span>' : '') +
           '</button>';
         wrap.querySelector('[data-role="chip"]').addEventListener("click", function (e) {
           if (e.target.closest('[data-role="clear"]')) {
@@ -279,7 +311,7 @@
       function renderSearch() {
         wrap.innerHTML =
           '<input type="text" class="input w-full" placeholder="Search fields…" data-role="search" autocomplete="off" />' +
-          '<div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-64 overflow-y-auto" data-role="panel"></div>';
+          '<div class="absolute z-20 mt-1 w-full min-w-[16rem] bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto" data-role="panel"></div>';
         var searchInput = wrap.querySelector('[data-role="search"]');
         var panel = wrap.querySelector('[data-role="panel"]');
 
@@ -294,18 +326,20 @@
         function renderPanel(query) {
           var q = (query || "").toLowerCase();
           panel.innerHTML = "";
+          var anyMatch = false;
           dataFields.groups.forEach(function (g) {
             var matches = g.fields.filter(function (f) { return f.label.toLowerCase().indexOf(q) !== -1; });
             if (!matches.length) return;
+            anyMatch = true;
             var heading = document.createElement("div");
-            heading.className = "px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 flex items-center gap-1.5 uppercase";
-            heading.innerHTML = icon(g.icon) + "<span>" + g.label + "</span>";
+            heading.className = "px-3 pt-2 pb-1 text-xs font-semibold text-gray-500 flex items-center gap-1.5";
+            heading.innerHTML = icon(g.icon) + "<span>" + escapeHtml(g.label) + "</span>";
             panel.appendChild(heading);
             matches.forEach(function (f) {
               var row = document.createElement("button");
               row.type = "button";
-              row.className = "w-full text-left px-3 py-1.5 hover:bg-gray-50 text-sm";
-              row.innerHTML = '<span class="block text-ink">' + f.label + '</span><span class="block text-xs text-gray-400">' + f.sample + '</span>';
+              row.className = "w-full text-left px-3 py-1.5 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none text-sm";
+              row.innerHTML = '<span class="block text-ink">' + escapeHtml(f.label) + '</span><span class="block text-xs text-gray-400">' + escapeHtml(f.sample) + '</span>';
               row.addEventListener("click", function () {
                 opts.onSelect((g.prefix || g.key) + "." + f.key, { label: f.label, sample: f.sample });
                 renderChip();
@@ -318,6 +352,12 @@
               panel.appendChild(row);
             });
           });
+          if (!anyMatch) {
+            var empty = document.createElement("p");
+            empty.className = "px-3 py-2 text-sm text-gray-500";
+            empty.textContent = "No fields match. Create a custom field below.";
+            panel.appendChild(empty);
+          }
           if (dataFields.create_custom_field_url) {
             var createRow = document.createElement("button");
             createRow.type = "button";
@@ -371,8 +411,9 @@
       if (!customFieldPanel) return;
       pendingCreateCallback = onCreated;
       if (customFieldErrorEl) customFieldErrorEl.classList.add("hidden");
-      if (customFieldLabelEl) { customFieldLabelEl.value = ""; customFieldLabelEl.focus(); }
       customFieldPanel.classList.remove("hidden");
+      customFieldPanel.scrollIntoView({ block: "nearest" });
+      if (customFieldLabelEl) { customFieldLabelEl.value = ""; customFieldLabelEl.focus(); }
     }
 
     function closeCustomFieldPanel() {
@@ -393,6 +434,7 @@
           return;
         }
         var csrfInput = form.querySelector('[name="csrfmiddlewaretoken"]');
+        customFieldCreateBtn.disabled = true;
         fetch(dataFields.create_custom_field_url, {
           method: "POST",
           headers: {
@@ -419,10 +461,11 @@
           })
           .catch(function () {
             if (customFieldErrorEl) {
-              customFieldErrorEl.textContent = "Couldn't reach the server — try again.";
+              customFieldErrorEl.textContent = "Couldn't reach the server. Check your connection and try again.";
               customFieldErrorEl.classList.remove("hidden");
             }
-          });
+          })
+          .then(function () { customFieldCreateBtn.disabled = false; });
       });
     }
 
@@ -437,7 +480,12 @@
       renderPreview();
     }
     if (headerModeNone) headerModeNone.addEventListener("change", updateHeaderVisibility);
-    if (headerModeText) headerModeText.addEventListener("change", updateHeaderVisibility);
+    if (headerModeText) {
+      headerModeText.addEventListener("change", function () {
+        updateHeaderVisibility();
+        if (headerModeText.checked) headerEl.focus();
+      });
+    }
 
     if (footerAddBtn) {
       footerAddBtn.addEventListener("click", function () {
@@ -451,6 +499,7 @@
         footerEl.value = "";
         footerField.classList.add("hidden");
         footerAddBtn.classList.remove("hidden");
+        footerAddBtn.focus();
         renderPreview();
       });
     }
@@ -470,6 +519,7 @@
         toggleButtonExampleField();
         buttonField.classList.add("hidden");
         buttonAddBtn.classList.remove("hidden");
+        buttonAddBtn.focus();
         renderPreview();
       });
     }
@@ -493,6 +543,7 @@
         buttonVariablePicker.appendChild(opt);
       });
       buttonVariablePicker.value = selected;
+      buttonVariablePicker.disabled = variableCardsEl.children.length === 0;
     }
 
     function toggleButtonExampleField() {
@@ -536,18 +587,19 @@
     function renderPreview() {
       var map = variableExampleMap();
       if (previewHeader) previewHeader.textContent = headerEl.classList.contains("hidden") ? "" : headerEl.value;
-      if (previewBody) previewBody.textContent = substitute(bodyEl.value, map);
+      if (previewBody) {
+        var body = substitute(bodyEl.value, map);
+        previewBody.innerHTML = body.trim()
+          ? formatWhatsApp(body)
+          : '<span class="text-gray-400">Your message appears here.</span>';
+      }
       if (previewFooter) previewFooter.textContent = footerField.classList.contains("hidden") ? "" : footerEl.value;
 
       var buttonText = (!buttonField.classList.contains("hidden") && buttonTextEl.value.trim()) || "";
       if (previewButton) {
-        if (buttonText) {
-          previewButton.textContent = "🔗 " + buttonText;
-          previewButton.classList.remove("hidden");
-        } else {
-          previewButton.textContent = "";
-          previewButton.classList.add("hidden");
-        }
+        // The link icon is drawn in CSS (#wa-preview-button::before).
+        previewButton.textContent = buttonText;
+        previewButton.classList.toggle("hidden", !buttonText);
       }
     }
 
@@ -555,11 +607,13 @@
     // Wiring
     // ------------------------------------------------------------------
 
-    var debouncedReconcile = debounce(reconcileVariableCards, 150);
-    bodyEl.addEventListener("input", debouncedReconcile);
+    // Preview updates on every keystroke; card reconciliation stays debounced
+    // so typing "{{1" doesn't create and destroy cards mid-token.
+    bodyEl.addEventListener("input", renderPreview);
+    bodyEl.addEventListener("input", debounce(reconcileVariableCards, 150));
     if (headerEl) headerEl.addEventListener("input", renderPreview);
-    if (footerEl) footerEl.addEventListener("input", debounce(renderPreview, 150));
-    if (buttonTextEl) buttonTextEl.addEventListener("input", debounce(renderPreview, 150));
+    if (footerEl) footerEl.addEventListener("input", renderPreview);
+    if (buttonTextEl) buttonTextEl.addEventListener("input", renderPreview);
 
     reconcileVariableCards();
     applyInitialVariables();

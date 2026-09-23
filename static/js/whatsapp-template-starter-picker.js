@@ -1,11 +1,15 @@
 /*
  * "Start with a template" picker on the WhatsApp create-template form.
- * Two levels: category cards (plus a trailing "Start from scratch" card), then
+ * Two levels: category tiles (plus a trailing "Start from scratch" tile), then
  * the scenarios within a category ("Payment reminder", "Payment received",
  * ...). Selecting one prefills the form below — the owner still reviews,
  * edits and submits it themselves; nothing here talks to the server. Reads
  * starter data from #wa-starter-picker's data-starters attribute
  * (apps.whatsapp.starter_templates.STARTER_CATEGORIES).
+ *
+ * After a starter (or scratch) is applied, dispatches `wa:starter-applied` on
+ * document so the page's UI layer can refresh counters, the category control
+ * and the stepper — fields set programmatically don't fire input events.
  */
 (function () {
   "use strict";
@@ -23,9 +27,19 @@
     check: "m4.5 12.75 6 6 9-13.5",
   };
 
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   function icon(path) {
     return '<svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">' +
       '<path stroke-linecap="round" stroke-linejoin="round" d="' + path + '"/></svg>';
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   function init() {
@@ -48,15 +62,23 @@
     var categoryEl = document.getElementById("tpl-category");
     var bodyEl = document.getElementById("tpl-body");
     var variableCardsEl = document.getElementById("variable-cards");
+    var lastCategoryTile = null;
+
+    function announceApplied(starter) {
+      document.dispatchEvent(new CustomEvent("wa:starter-applied", { detail: { starter: starter || null } }));
+    }
 
     function showForm() {
       formSection.hidden = false;
-      formSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      formSection.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
     }
 
     function applyStarter(starter) {
       nameEl.value = starter.slug || "";
-      if (categoryEl) categoryEl.value = starter.meta_category || "";
+      if (categoryEl) {
+        categoryEl.value = starter.meta_category || "";
+        categoryEl.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       bodyEl.value = starter.body || "";
 
       var preview = window.WhatsAppTemplatePreview;
@@ -82,6 +104,7 @@
         preview.render();
       }
       showForm();
+      announceApplied(starter);
     }
 
     function useScratch() {
@@ -96,33 +119,37 @@
         preview.render();
       }
       showForm();
+      announceApplied(null);
+      nameEl.focus({ preventScroll: true });
+    }
+
+    function tile(iconPath, title, subtitle, extraClass) {
+      var el = document.createElement("button");
+      el.type = "button";
+      el.className = "wa-tile" + (extraClass ? " " + extraClass : "");
+      el.innerHTML =
+        '<span class="wa-tile-icon">' + icon(iconPath) + "</span>" +
+        '<span class="min-w-0">' +
+          '<span class="text-sm font-semibold text-ink block">' + escapeHtml(title) + "</span>" +
+          '<span class="text-xs text-gray-500 block mt-0.5">' + escapeHtml(subtitle) + "</span>" +
+        "</span>";
+      return el;
     }
 
     function renderGrid() {
       gridEl.innerHTML = "";
       categories.forEach(function (cat) {
-        var card = document.createElement("button");
-        card.type = "button";
-        card.className = "card card-pad card-hover text-left flex items-start gap-3";
-        card.innerHTML =
-          icon(CATEGORY_ICON_PATHS[cat.icon] || CATEGORY_ICON_PATHS.workflow) +
-          '<span class="min-w-0">' +
-            '<span class="text-sm font-semibold text-ink block">' + cat.label + '</span>' +
-            '<span class="text-xs text-gray-500 block mt-0.5">' + cat.blurb + '</span>' +
-          '</span>';
-        card.addEventListener("click", function () { renderTemplates(cat); });
+        var count = (cat.templates || []).length;
+        var subtitle = cat.blurb || (count + (count === 1 ? " template" : " templates"));
+        var card = tile(CATEGORY_ICON_PATHS[cat.icon] || CATEGORY_ICON_PATHS.workflow, cat.label, subtitle);
+        card.addEventListener("click", function () {
+          lastCategoryTile = card;
+          renderTemplates(cat);
+        });
         gridEl.appendChild(card);
       });
 
-      var scratchCard = document.createElement("button");
-      scratchCard.type = "button";
-      scratchCard.className = "card card-pad card-hover text-left flex items-start gap-3";
-      scratchCard.innerHTML =
-        icon(SCRATCH_ICON_PATH) +
-        '<span class="min-w-0">' +
-          '<span class="text-sm font-semibold text-ink block">Start from scratch</span>' +
-          '<span class="text-xs text-gray-500 block mt-0.5">Build your own template</span>' +
-        '</span>';
+      var scratchCard = tile(SCRATCH_ICON_PATH, "Start from scratch", "Write your own message", "wa-tile-dashed");
       scratchCard.addEventListener("click", useScratch);
       gridEl.appendChild(scratchCard);
     }
@@ -131,28 +158,39 @@
       gridEl.hidden = true;
       templatesSection.classList.remove("hidden");
       templateListEl.innerHTML = "";
-      cat.templates.forEach(function (tpl) {
+
+      var heading = document.createElement("p");
+      heading.className = "text-sm font-semibold text-ink";
+      heading.textContent = cat.label;
+      templateListEl.appendChild(heading);
+
+      (cat.templates || []).forEach(function (tpl) {
         var row = document.createElement("div");
-        row.className = "card card-pad flex items-center justify-between gap-3";
+        row.className = "wa-row";
         var info = document.createElement("div");
+        info.className = "min-w-0";
         info.innerHTML =
-          '<p class="text-sm font-medium text-ink">' + tpl.name + "</p>" +
-          '<p class="text-xs text-gray-500">' + tpl.use_case + "</p>";
+          '<p class="text-sm font-medium text-ink">' + escapeHtml(tpl.name) + "</p>" +
+          '<p class="text-xs text-gray-500">' + escapeHtml(tpl.use_case) + "</p>";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn btn-secondary btn-sm shrink-0";
         btn.textContent = "Use template";
+        btn.setAttribute("aria-label", "Use template: " + (tpl.name || ""));
         btn.addEventListener("click", function () { applyStarter(tpl); });
         row.appendChild(info);
         row.appendChild(btn);
         templateListEl.appendChild(row);
       });
+
+      if (backBtn) backBtn.focus({ preventScroll: true });
     }
 
     if (backBtn) {
       backBtn.addEventListener("click", function () {
         gridEl.hidden = false;
         templatesSection.classList.add("hidden");
+        if (lastCategoryTile) lastCategoryTile.focus({ preventScroll: true });
       });
     }
 
