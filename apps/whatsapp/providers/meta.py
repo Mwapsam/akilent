@@ -16,6 +16,7 @@ from django.conf import settings
 
 from apps.whatsapp.providers.base import WhatsAppProvider, WhatsAppProviderError
 from apps.whatsapp.types import (
+    MediaHandleResult,
     MediaUploadResult,
     MediaUrlResult,
     ReadReceiptResult,
@@ -74,15 +75,18 @@ class MetaCloudAPIProvider(WhatsAppProvider):
     Sends messages via Meta's official WhatsApp Cloud API.
     """
 
-    def __init__(self, access_token: str, phone_number_id: str):
+    def __init__(self, access_token: str, phone_number_id: str, app_id: str = ""):
         """Initialize with Meta API credentials.
 
         Args:
             access_token: Meta API bearer token.
             phone_number_id: WhatsApp Business Phone Number ID.
+            app_id: Meta app id — only needed for upload_template_media()'s
+                app-scoped resumable upload, unused by every other method.
         """
         self.phone_number_id = phone_number_id
         self._access_token = access_token
+        self._app_id = app_id
         self._session = requests.Session()
         self._session.headers.update({
             "Authorization": f"Bearer {access_token}",
@@ -246,6 +250,39 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             return MediaUploadResult(media_id=response.json()["id"], success=True)
         except (requests.RequestException, KeyError, ValueError) as e:
             raise WhatsAppProviderError(f"Failed to upload media: {e}") from e
+
+    def upload_template_media(
+        self, content: bytes, mime_type: str, filename: str = "upload"
+    ) -> MediaHandleResult:
+        """App-scoped resumable upload, used only for a template's header media
+        example (`example.header_handle`). Two steps: start an upload session
+        against the app, then push the bytes to that session to get a handle.
+        """
+        if not self._app_id:
+            raise WhatsAppProviderError("WHATSAPP_APP_ID is not configured.")
+        try:
+            start = requests.post(
+                f"{_graph_api_base()}/{self._app_id}/uploads",
+                params={
+                    "file_length": len(content),
+                    "file_type": mime_type,
+                    "access_token": self._access_token,
+                },
+                timeout=30,
+            )
+            start.raise_for_status()
+            session_id = start.json()["id"]
+
+            push = requests.post(
+                f"{_graph_api_base()}/{session_id}",
+                headers={"Authorization": f"OAuth {self._access_token}"},
+                data=content,
+                timeout=60,
+            )
+            push.raise_for_status()
+            return MediaHandleResult(handle=push.json()["h"], success=True)
+        except (requests.RequestException, KeyError, ValueError) as e:
+            raise WhatsAppProviderError(f"Failed to upload template media: {e}") from e
 
     def get_media_url(self, media_id: str) -> MediaUrlResult:
         """Retrieve the download URL for an uploaded media file."""

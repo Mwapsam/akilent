@@ -145,6 +145,74 @@ class ValidateFieldsTest(TestCase):
             buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"}],
         )
 
+    def test_accepts_phone_number_button(self):
+        validate_fields(
+            name="welcome", category="utility", language="en",
+            body="Welcome!", variable_labels=[], variable_examples=[],
+            buttons=[{"type": "phone_number", "text": "Call us", "phone_number": "+15551234567"}],
+        )
+
+    def test_rejects_phone_number_button_with_bad_format(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome", category="utility", language="en",
+                body="Welcome!", variable_labels=[], variable_examples=[],
+                buttons=[{"type": "phone_number", "text": "Call us", "phone_number": "555-1234"}],
+            )
+
+    def test_rejects_phone_number_button_missing_number(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome", category="utility", language="en",
+                body="Welcome!", variable_labels=[], variable_examples=[],
+                buttons=[{"type": "phone_number", "text": "Call us"}],
+            )
+
+    def test_accepts_voice_call_button(self):
+        validate_fields(
+            name="welcome", category="utility", language="en",
+            body="Welcome!", variable_labels=[], variable_examples=[],
+            buttons=[{"type": "voice_call", "text": "Call on WhatsApp", "phone_number": "+15551234567"}],
+        )
+
+    def test_accepts_copy_code_button(self):
+        validate_fields(
+            name="welcome", category="utility", language="en",
+            body="Welcome!", variable_labels=[], variable_examples=[],
+            buttons=[{"type": "copy_code", "text": "Copy offer code", "example": "SAVE20"}],
+        )
+
+    def test_rejects_copy_code_button_without_example(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome", category="utility", language="en",
+                body="Welcome!", variable_labels=[], variable_examples=[],
+                buttons=[{"type": "copy_code", "text": "Copy offer code"}],
+            )
+
+    def test_rejects_unsupported_button_type(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome", category="utility", language="en",
+                body="Welcome!", variable_labels=[], variable_examples=[],
+                buttons=[{"type": "share_contact", "text": "Share contact"}],
+            )
+
+    def test_rejects_image_header_without_handle(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome", category="utility", language="en",
+                body="Welcome!", variable_labels=[], variable_examples=[],
+                header_format="image", header_media_handle="",
+            )
+
+    def test_accepts_image_header_with_handle(self):
+        validate_fields(
+            name="welcome", category="utility", language="en",
+            body="Welcome!", variable_labels=[], variable_examples=[],
+            header_format="image", header_media_handle="handle123",
+        )
+
 
 class BuildMetaPayloadTest(TestCase):
     def test_includes_body_and_examples(self):
@@ -181,6 +249,17 @@ class BuildMetaPayloadTest(TestCase):
         )
         buttons_component = next(c for c in payload["components"] if c["type"] == "BUTTONS")
         self.assertEqual(buttons_component["buttons"], [{"type": "URL", "text": "Learn more", "url": "https://example.com"}])
+
+    def test_media_header_uses_handle_and_ignores_text_header(self):
+        payload = build_meta_payload(
+            name="welcome", category="utility", language="en", body="Welcome!",
+            variable_examples=[], header="ignored when media is set",
+            header_format="image", header_media_handle="handle123",
+        )
+        header_component = next(c for c in payload["components"] if c["type"] == "HEADER")
+        self.assertEqual(header_component, {
+            "type": "HEADER", "format": "IMAGE", "example": {"header_handle": ["handle123"]},
+        })
 
 
 class CreateAndSubmitTemplateTest(TestCase):
@@ -246,6 +325,29 @@ class CreateAndSubmitTemplateTest(TestCase):
                 self.account, name="payment_reminder", category="utility", language="en",
                 body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
             )
+
+    def test_persists_image_header_media(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.whatsapp.models import MessageTemplateAsset
+
+        asset = MessageTemplateAsset.objects.create(
+            account=self.account,
+            file=SimpleUploadedFile("logo.png", b"fake-bytes", content_type="image/png"),
+            content_type="image/png", meta_handle="handle123",
+        )
+        provider = _FakeProvider()
+        with patch("apps.whatsapp.template_builder.get_whatsapp_provider", return_value=provider):
+            tpl = create_and_submit_template(
+                self.account, name="promo", category="marketing", language="en",
+                body="Big sale!", variable_labels=[], variable_examples=[],
+                header_format="image", header_media=asset,
+            )
+        self.assertEqual(tpl.header_format, "image")
+        self.assertEqual(tpl.header_media_id, asset.id)
+        self.assertEqual(tpl.header, "")
+        header_component = next(c for c in provider.calls[0][1]["components"] if c["type"] == "HEADER")
+        self.assertEqual(header_component["example"]["header_handle"], ["handle123"])
 
     def test_requires_a_connected_number(self):
         WhatsAppBusinessNumber.objects.all().delete()

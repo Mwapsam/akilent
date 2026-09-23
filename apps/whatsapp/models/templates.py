@@ -1,6 +1,29 @@
 from django.db import models
 
 
+class MessageTemplateAsset(models.Model):
+    """A file uploaded for use as a template's header media (image/video/document).
+
+    Separate from MessageTemplate so the upload endpoint can create one, get
+    Meta's app-scoped handle back, and hand the builder UI a preview — all
+    before the surrounding template form is submitted.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="whatsapp_template_assets"
+    )
+    file = models.FileField(upload_to="whatsapp_headers/%Y/%m/")
+    content_type = models.CharField(max_length=100, blank=True, default="")
+    meta_handle = models.CharField(max_length=512, blank=True, default="")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return self.file.name
+
+
 class MessageTemplate(models.Model):
 
     class ApprovalStatus(models.TextChoices):
@@ -31,7 +54,17 @@ class MessageTemplate(models.Model):
     variables = models.JSONField(default=list)  # ["name", "company"]
     variable_examples = models.JSONField(default=list, blank=True)  # example values, same order as `variables`
 
-    header = models.CharField(max_length=60, blank=True, default="")
+    class HeaderFormat(models.TextChoices):
+        TEXT = "text", "Text"
+        IMAGE = "image", "Image"
+        VIDEO = "video", "Video"
+        DOCUMENT = "document", "Document"
+
+    header_format = models.CharField(max_length=10, choices=HeaderFormat.choices, default=HeaderFormat.TEXT)
+    header = models.CharField(max_length=60, blank=True, default="")  # header_format == TEXT only
+    header_media = models.ForeignKey(
+        MessageTemplateAsset, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     footer = models.CharField(max_length=60, blank=True, default="")
     buttons = models.JSONField(default=list, blank=True)  # Meta BUTTONS component shape
 

@@ -2,11 +2,13 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 
 from apps.accounts.models import Account, Membership
-from apps.whatsapp.models import MessageTemplate
+from apps.whatsapp.models import MessageTemplate, MessageTemplateAsset
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+from apps.whatsapp.types import MediaHandleResult
 
 _wa_urls = override_settings(ROOT_URLCONF="apps.whatsapp.tests.urls_enabled", WHATSAPP_ENABLED=True)
 
@@ -97,3 +99,86 @@ def test_templates_page_has_create_button(logged_in):
     resp = client.get("/email/templates/?channel=whatsapp")
     assert resp.status_code == 200
     assert "/whatsapp/templates/new/" in resp.content.decode()
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_media_upload_returns_handle(logged_in):
+    client, account = logged_in
+    with patch("apps.whatsapp.views.get_whatsapp_provider") as get_provider:
+        get_provider.return_value.upload_template_media.return_value = MediaHandleResult(handle="handle-abc")
+        resp = client.post("/whatsapp/templates/media/upload/", {
+            "header_format": "image",
+            "file": SimpleUploadedFile("logo.png", b"fake-bytes", content_type="image/png"),
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["handle"] == "handle-abc"
+    asset = MessageTemplateAsset.objects.get(pk=data["asset_id"])
+    assert asset.account_id == account.id
+    assert asset.meta_handle == "handle-abc"
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_media_upload_rejects_unsupported_content_type(logged_in):
+    client, _ = logged_in
+    resp = client.post("/whatsapp/templates/media/upload/", {
+        "header_format": "image",
+        "file": SimpleUploadedFile("doc.txt", b"hello", content_type="text/plain"),
+    })
+    assert resp.status_code == 400
+    assert MessageTemplateAsset.objects.count() == 0
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_media_upload_rejects_oversized_file(logged_in):
+    client, _ = logged_in
+    resp = client.post("/whatsapp/templates/media/upload/", {
+        "header_format": "image",
+        "file": SimpleUploadedFile("logo.png", b"x" * (6 * 1024 * 1024), content_type="image/png"),
+    })
+    assert resp.status_code == 400
+    assert MessageTemplateAsset.objects.count() == 0
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_media_upload_deletes_asset_if_meta_upload_fails(logged_in):
+    from apps.whatsapp.providers import WhatsAppProviderError
+
+    client, _ = logged_in
+    with patch("apps.whatsapp.views.get_whatsapp_provider") as get_provider:
+        get_provider.return_value.upload_template_media.side_effect = WhatsAppProviderError("nope")
+        resp = client.post("/whatsapp/templates/media/upload/", {
+            "header_format": "image",
+            "file": SimpleUploadedFile("logo.png", b"fake-bytes", content_type="image/png"),
+        })
+    assert resp.status_code == 400
+    assert MessageTemplateAsset.objects.count() == 0
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_create_template_with_media_header_and_phone_button(logged_in):
+    client, account = logged_in
+    asset = MessageTemplateAsset.objects.create(
+        account=account,
+        file=SimpleUploadedFile("logo.png", b"fake-bytes", content_type="image/png"),
+        content_type="image/png", meta_handle="handle-abc",
+    )
+    with patch("apps.whatsapp.template_builder.get_whatsapp_provider") as get_provider:
+        get_provider.return_value.create_template.return_value = {"id": "1", "status": "PENDING"}
+        resp = client.post("/whatsapp/templates/new/", {
+            "name": "promo", "category": "marketing", "language": "en",
+            "body": "Big sale this week!",
+            "header_format": "image", "header_media_asset_id": asset.id,
+            "button_type": "phone_number", "button_text": "Call us",
+            "button_phone_number": "+15551234567",
+        })
+    assert resp.status_code == 302
+    tpl = MessageTemplate.objects.get(account=account, whatsapp_template_name="promo")
+    assert tpl.header_format == "image"
+    assert tpl.header_media_id == asset.id
+    assert tpl.buttons == [{"type": "PHONE_NUMBER", "text": "Call us", "phone_number": "+15551234567"}]

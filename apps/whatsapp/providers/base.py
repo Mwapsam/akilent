@@ -13,6 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from apps.whatsapp.types import (
+    MediaHandleResult,
     MediaUploadResult,
     MediaUrlResult,
     ReadReceiptResult,
@@ -151,6 +152,20 @@ class WhatsAppProvider(ABC):
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support media upload"
+        )
+
+    def upload_template_media(
+        self, content: bytes, mime_type: str, filename: str = "upload"
+    ) -> MediaHandleResult:
+        """Upload a local file and return a Meta app-scoped handle for use in a
+        template creation payload's `example.header_handle`.
+
+        Optional capability — distinct from upload_media(), which is
+        phone-number-scoped and used for sending messages, not template
+        creation. Providers that cannot upload raise NotImplementedError.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support template media upload"
         )
 
     @abstractmethod

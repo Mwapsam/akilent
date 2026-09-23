@@ -6,6 +6,7 @@ from apps.whatsapp.views import WhatsAppWebhookView
 urlpatterns = [
     path("templates/sync/", views.templates_sync, name="whatsapp-templates-sync"),
     path("templates/new/", views.template_create, name="whatsapp-template-create"),
+    path("templates/media/upload/", views.template_media_upload, name="whatsapp-template-media-upload"),
     path("campaigns/new/", views.campaign_new, name="whatsapp-campaign-new"),
     path("campaigns/<int:pk>/", views.campaign_detail, name="whatsapp-campaign-detail"),
     path("numbers/", numbers.numbers_list, name="whatsapp-numbers"),

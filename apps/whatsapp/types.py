@@ -49,6 +49,23 @@ class MediaUploadResult:
 
 
 @dataclass
+class MediaHandleResult:
+    """Result of Meta's app-scoped resumable upload, used for template header media.
+
+    Distinct from MediaUploadResult: that one is phone-number-scoped and used
+    to send a message; this handle is app-scoped and referenced in a template
+    creation payload's `example.header_handle`.
+    """
+
+    handle: str
+    """Opaque handle referencing the uploaded file for template creation."""
+
+    success: bool = True
+
+    error: Optional[str] = None
+
+
+@dataclass
 class MediaUrlResult:
     """Result of a media URL retrieval operation."""
 

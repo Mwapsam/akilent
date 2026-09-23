@@ -4,7 +4,7 @@ from .contact import CrmBinding, WhatsAppContact, normalize_phone
 from .conversation import Conversation
 from .message import MessageLog
 from .outbound import OutboundMessage
-from .templates import MessageTemplate
+from .templates import MessageTemplate, MessageTemplateAsset
 from .tenant import TenantResolutionError, WhatsAppBusinessNumber, get_account_for_webhook
 from .verification import ConnectionTest
 from .webhook import WebhookEventLog
@@ -17,6 +17,7 @@ __all__ = [
     "EncryptedTextField",
     "MessageLog",
     "MessageTemplate",
+    "MessageTemplateAsset",
     "OutboundMessage",
     "WebhookEventLog",
     "WhatsAppCampaign",

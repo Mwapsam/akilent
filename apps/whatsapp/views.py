@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -19,7 +19,8 @@ from apps.accounts.utils import get_current_account
 from apps.contacts.models import ContactList, CustomAttributeDef
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
-from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
+from apps.whatsapp.models import MessageTemplate, MessageTemplateAsset, WebhookEventLog, WhatsAppCampaign
+from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 from apps.whatsapp.starter_templates import STARTER_CATEGORIES
 from apps.whatsapp.tasks import process_whatsapp_event, sync_templates_for_account
 from apps.whatsapp.template_builder import TemplateBuilderError, create_and_submit_template
@@ -108,6 +109,57 @@ def _data_fields_json(account) -> str:
     })
 
 
+_HEADER_MEDIA_LIMITS = {
+    "image": ({"image/jpeg", "image/png"}, 5 * 1024 * 1024),
+    "video": ({"video/mp4"}, 16 * 1024 * 1024),
+    "document": ({"application/pdf"}, 100 * 1024 * 1024),
+}
+
+
+@login_required
+@module_required("whatsapp")
+@require_POST
+def template_media_upload(request):
+    """Uploads a header media file (image/video/document) for the template
+    builder: stores it locally (for a preview URL) then immediately uploads
+    it to Meta's app-scoped resumable-upload API to get the handle the
+    template payload's `example.header_handle` needs. Client-side JSON
+    endpoint — the builder form itself never uploads a file directly.
+    """
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+
+    header_format = request.POST.get("header_format", "")
+    limits = _HEADER_MEDIA_LIMITS.get(header_format)
+    if limits is None:
+        return JsonResponse({"error": "Choose a header type of image, video or document."}, status=400)
+    allowed_types, max_bytes = limits
+
+    f = request.FILES.get("file")
+    if f is None:
+        return JsonResponse({"error": "No file provided."}, status=400)
+    if f.content_type not in allowed_types:
+        return JsonResponse({"error": f"\"{f.content_type}\" isn't a supported {header_format} type."}, status=400)
+    if f.size > max_bytes:
+        return JsonResponse({"error": f"File is too large for a {header_format} header."}, status=400)
+
+    asset = MessageTemplateAsset.objects.create(account=account, file=f, content_type=f.content_type)
+    try:
+        provider = get_whatsapp_provider(account)
+        result = provider.upload_template_media(f.read(), f.content_type, filename=f.name)
+    except (WhatsAppProviderError, NotImplementedError) as exc:
+        asset.delete()
+        return JsonResponse({"error": f"Couldn't upload to WhatsApp: {exc}"}, status=400)
+
+    asset.meta_handle = result.handle
+    asset.save(update_fields=["meta_handle"])
+    return JsonResponse({
+        "asset_id": asset.id, "url": asset.file.url, "handle": asset.meta_handle,
+        "content_type": asset.content_type,
+    })
+
+
 @login_required
 @module_required("whatsapp")
 def template_create(request):
@@ -118,10 +170,28 @@ def template_create(request):
     if request.method == "POST":
         labels = [v.strip() for v in request.POST.getlist("variable_label") if v.strip()]
         examples = [v.strip() for v in request.POST.getlist("variable_example") if v.strip()]
+
+        button_type = request.POST.get("button_type", "url").strip().lower()
         button_text = request.POST.get("button_text", "").strip()
-        button_url = request.POST.get("button_url", "").strip()
-        button_example = request.POST.get("button_url_example", "").strip()
-        buttons = [{"text": button_text, "url": button_url, "example": button_example}] if (button_text or button_url) else []
+        buttons = []
+        if button_text or request.POST.get("button_url") or request.POST.get("button_phone_number"):
+            button = {"type": button_type, "text": button_text}
+            if button_type == "url":
+                button["url"] = request.POST.get("button_url", "").strip()
+                button["example"] = request.POST.get("button_url_example", "").strip()
+            elif button_type in ("phone_number", "voice_call"):
+                button["phone_number"] = request.POST.get("button_phone_number", "").strip()
+            elif button_type == "copy_code":
+                button["example"] = request.POST.get("button_code_example", "").strip()
+            buttons = [button]
+
+        header_format = request.POST.get("header_format", "text").strip().lower()
+        header_media = None
+        if header_format != "text":
+            header_media = MessageTemplateAsset.objects.filter(
+                account=account, pk=request.POST.get("header_media_asset_id"),
+            ).first()
+
         try:
             create_and_submit_template(
                 account,
@@ -134,6 +204,8 @@ def template_create(request):
                 variable_labels=labels,
                 variable_examples=examples,
                 buttons=buttons,
+                header_format=header_format,
+                header_media=header_media,
             )
         except TemplateBuilderError as exc:
             messages.error(request, str(exc))
@@ -143,6 +215,7 @@ def template_create(request):
                 "initial_variables_json": json.dumps(list(zip(labels, examples))),
                 "data_fields_json": _data_fields_json(account),
                 "custom_field_types": CustomAttributeDef.Type.choices,
+                "media_upload_url": reverse("whatsapp-template-media-upload"),
             })
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
@@ -153,6 +226,7 @@ def template_create(request):
         "initial_variables_json": "[]",
         "data_fields_json": _data_fields_json(account),
         "custom_field_types": CustomAttributeDef.Type.choices,
+        "media_upload_url": reverse("whatsapp-template-media-upload"),
     })
 
 

@@ -91,7 +91,14 @@
 
     var headerModeNone = document.getElementById("tpl-header-mode-none");
     var headerModeText = document.getElementById("tpl-header-mode-text");
+    var headerModeRadios = Array.prototype.slice.call(document.querySelectorAll('input[name="header_format"]'));
     var headerEl = document.getElementById("tpl-header");
+    var headerMediaField = document.getElementById("wa-header-media-field");
+    var headerMediaFile = document.getElementById("tpl-header-media-file");
+    var headerMediaAssetId = document.getElementById("tpl-header-media-asset-id");
+    var headerMediaLabel = document.getElementById("wa-header-media-label");
+    var headerMediaStatus = document.getElementById("wa-header-media-status");
+    var headerMediaError = document.getElementById("wa-header-media-error");
     var bodyEl = document.getElementById("tpl-body");
     var footerEl = document.getElementById("tpl-footer");
     var footerAddBtn = document.getElementById("wa-footer-add");
@@ -100,6 +107,12 @@
     var buttonAddBtn = document.getElementById("wa-button-add");
     var buttonRemoveBtn = document.getElementById("wa-button-remove");
     var buttonField = document.getElementById("wa-button-field");
+    var buttonTypeEl = document.getElementById("tpl-button-type");
+    var buttonUrlFields = document.getElementById("wa-button-url-fields");
+    var buttonPhoneFields = document.getElementById("wa-button-phone-fields");
+    var buttonCodeFields = document.getElementById("wa-button-code-fields");
+    var buttonPhoneNumberEl = document.getElementById("tpl-button-phone-number");
+    var buttonCodeExampleEl = document.getElementById("tpl-button-code-example");
     var buttonTextEl = document.getElementById("tpl-button-text");
     var buttonUrlEl = document.getElementById("tpl-button-url");
     var buttonExampleEl = document.getElementById("tpl-button-example");
@@ -113,6 +126,9 @@
     var previewBody = document.getElementById("wa-preview-body");
     var previewFooter = document.getElementById("wa-preview-footer");
     var previewButton = document.getElementById("wa-preview-button");
+
+    var mediaUploadUrl = builder.getAttribute("data-media-upload-url") || "";
+    var MEDIA_ACCEPT = { image: "image/jpeg,image/png", video: "video/mp4", document: "application/pdf" };
 
     var dataFields = { groups: [] };
     try {
@@ -473,17 +489,79 @@
     // Progressive disclosure: header / footer / button
     // ------------------------------------------------------------------
 
+    function currentHeaderFormat() {
+      var checked = headerModeRadios.filter(function (r) { return r.checked; })[0];
+      return checked ? checked.value : "none";
+    }
+
+    function resetHeaderMediaField() {
+      if (headerMediaFile) headerMediaFile.value = "";
+      if (headerMediaAssetId) headerMediaAssetId.value = "";
+      if (headerMediaLabel) headerMediaLabel.textContent = "Drag and drop, or choose a file";
+      if (headerMediaStatus) headerMediaStatus.textContent = "";
+      if (headerMediaError) headerMediaError.classList.add("hidden");
+    }
+
     function updateHeaderVisibility() {
-      var showText = headerModeText && headerModeText.checked;
+      var format = currentHeaderFormat();
+      var showText = format === "text";
+      var showMedia = format === "image" || format === "video" || format === "document";
       headerEl.classList.toggle("hidden", !showText);
       if (!showText) headerEl.value = "";
+      if (headerMediaField) headerMediaField.classList.toggle("hidden", !showMedia);
+      if (!showMedia) {
+        resetHeaderMediaField();
+      } else if (headerMediaFile) {
+        headerMediaFile.accept = MEDIA_ACCEPT[format] || "";
+      }
       renderPreview();
     }
-    if (headerModeNone) headerModeNone.addEventListener("change", updateHeaderVisibility);
-    if (headerModeText) {
-      headerModeText.addEventListener("change", function () {
+    headerModeRadios.forEach(function (radio) {
+      radio.addEventListener("change", function () {
         updateHeaderVisibility();
-        if (headerModeText.checked) headerEl.focus();
+        if (radio === headerModeText) headerEl.focus();
+      });
+    });
+
+    function uploadHeaderMedia(file) {
+      var format = currentHeaderFormat();
+      if (!mediaUploadUrl || !file) return;
+      if (headerMediaError) headerMediaError.classList.add("hidden");
+      if (headerMediaStatus) headerMediaStatus.textContent = "Uploading…";
+      if (headerMediaFile) headerMediaFile.disabled = true;
+
+      var csrfInput = form.querySelector('[name="csrfmiddlewaretoken"]');
+      var formData = new FormData();
+      formData.append("header_format", format);
+      formData.append("file", file);
+
+      fetch(mediaUploadUrl, {
+        method: "POST",
+        headers: csrfInput ? { "X-CSRFToken": csrfInput.value } : {},
+        body: formData,
+      })
+        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.data.error || "Upload failed.");
+          if (headerMediaAssetId) headerMediaAssetId.value = result.data.asset_id;
+          if (headerMediaLabel) headerMediaLabel.textContent = file.name;
+          if (headerMediaStatus) headerMediaStatus.textContent = "Uploaded";
+        })
+        .catch(function (err) {
+          resetHeaderMediaField();
+          if (headerMediaError) {
+            headerMediaError.textContent = err.message || "Couldn't upload this file.";
+            headerMediaError.classList.remove("hidden");
+          }
+        })
+        .then(function () {
+          if (headerMediaFile) headerMediaFile.disabled = false;
+        });
+    }
+    if (headerMediaFile) {
+      headerMediaFile.addEventListener("change", function () {
+        var file = headerMediaFile.files[0];
+        if (file) uploadHeaderMedia(file);
       });
     }
 
@@ -504,6 +582,15 @@
       });
     }
 
+    function updateButtonTypeVisibility() {
+      var type = buttonTypeEl ? buttonTypeEl.value : "url";
+      if (buttonUrlFields) buttonUrlFields.classList.toggle("hidden", type !== "url");
+      if (buttonPhoneFields) buttonPhoneFields.classList.toggle("hidden", type !== "phone_number" && type !== "voice_call");
+      if (buttonCodeFields) buttonCodeFields.classList.toggle("hidden", type !== "copy_code");
+    }
+    if (buttonTypeEl) buttonTypeEl.addEventListener("change", function () { updateButtonTypeVisibility(); renderPreview(); });
+    updateButtonTypeVisibility();
+
     if (buttonAddBtn) {
       buttonAddBtn.addEventListener("click", function () {
         buttonAddBtn.classList.add("hidden");
@@ -516,6 +603,10 @@
         buttonTextEl.value = "";
         buttonUrlEl.value = "";
         buttonExampleEl.value = "";
+        if (buttonPhoneNumberEl) buttonPhoneNumberEl.value = "";
+        if (buttonCodeExampleEl) buttonCodeExampleEl.value = "";
+        if (buttonTypeEl) buttonTypeEl.value = "url";
+        updateButtonTypeVisibility();
         toggleButtonExampleField();
         buttonField.classList.add("hidden");
         buttonAddBtn.classList.remove("hidden");
@@ -586,7 +677,17 @@
 
     function renderPreview() {
       var map = variableExampleMap();
-      if (previewHeader) previewHeader.textContent = headerEl.classList.contains("hidden") ? "" : headerEl.value;
+      if (previewHeader) {
+        var format = currentHeaderFormat();
+        if (format === "text") {
+          previewHeader.textContent = headerEl.value;
+        } else if (format === "image" || format === "video" || format === "document") {
+          var name = headerMediaLabel && headerMediaAssetId && headerMediaAssetId.value ? headerMediaLabel.textContent : "";
+          previewHeader.textContent = name ? "[" + format + "] " + name : "[" + format + " header]";
+        } else {
+          previewHeader.textContent = "";
+        }
+      }
       if (previewBody) {
         var body = substitute(bodyEl.value, map);
         previewBody.innerHTML = body.trim()
@@ -614,6 +715,8 @@
     if (headerEl) headerEl.addEventListener("input", renderPreview);
     if (footerEl) footerEl.addEventListener("input", renderPreview);
     if (buttonTextEl) buttonTextEl.addEventListener("input", renderPreview);
+    if (buttonPhoneNumberEl) buttonPhoneNumberEl.addEventListener("input", renderPreview);
+    if (buttonCodeExampleEl) buttonCodeExampleEl.addEventListener("input", renderPreview);
 
     reconcileVariableCards();
     applyInitialVariables();
@@ -640,6 +743,8 @@
         }
       },
       setButton: function (button) {
+        if (buttonTypeEl) buttonTypeEl.value = "url";
+        updateButtonTypeVisibility();
         buttonTextEl.value = (button && button.text) || "";
         buttonUrlEl.value = (button && button.url) || "";
         buttonExampleEl.value = (button && button.example) || "";

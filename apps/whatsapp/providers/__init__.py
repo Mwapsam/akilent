@@ -51,6 +51,7 @@ def get_whatsapp_provider(account) -> WhatsAppProvider:
     return MetaCloudAPIProvider(
         access_token=access_token,
         phone_number_id=number.phone_number_id,
+        app_id=settings.WHATSAPP_APP_ID,
     )
 
 

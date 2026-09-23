@@ -67,3 +67,24 @@ class MetaProviderTest(TestCase):
         result = self.provider.upload_media(b"bytes", "image/png", "x.png")
         self.assertTrue(result.success)
         self.assertEqual(result.media_id, "media-123")
+
+    @responses.activate
+    def test_upload_template_media_returns_handle(self):
+        provider = MetaCloudAPIProvider(access_token="tok", phone_number_id="PNID", app_id="APPID")
+        responses.add(
+            responses.POST, f"{_graph_api_base()}/APPID/uploads",
+            json={"id": "upload:session123"}, status=200,
+        )
+        responses.add(
+            responses.POST, f"{_graph_api_base()}/upload:session123",
+            json={"h": "handle-abc"}, status=200,
+        )
+        result = provider.upload_template_media(b"bytes", "image/png", "x.png")
+        self.assertTrue(result.success)
+        self.assertEqual(result.handle, "handle-abc")
+
+    def test_upload_template_media_requires_app_id(self):
+        from apps.whatsapp.providers.base import WhatsAppProviderError
+
+        with self.assertRaises(WhatsAppProviderError):
+            self.provider.upload_template_media(b"bytes", "image/png", "x.png")
