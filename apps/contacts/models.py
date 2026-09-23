@@ -132,6 +132,11 @@ class ContactListMembership(models.Model):
         ]
 
 
+_SAMPLE_VALUE_BY_ATTRIBUTE_TYPE = {
+    "string": "Sample text", "number": "123", "boolean": "Yes", "date": "2026-09-26",
+}
+
+
 class CustomAttributeDef(models.Model):
     class Type(models.TextChoices):
         STRING = "string", "Text"
@@ -156,6 +161,12 @@ class CustomAttributeDef(models.Model):
 
     def __str__(self):
         return f"{self.key} ({self.type})"
+
+    @property
+    def sample_value(self) -> str:
+        """A plausible display value for pickers/previews that have no real
+        Contact to read from yet (e.g. apps.whatsapp's template builder)."""
+        return _SAMPLE_VALUE_BY_ATTRIBUTE_TYPE[self.type]
 
 
 class ContactImport(models.Model):

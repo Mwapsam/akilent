@@ -64,6 +64,15 @@
         window.addVariableRow(v.label, v.example);
       });
       if (!(starter.variables || []).length) window.addVariableRow();
+      // Reflect each variable's known source ("contact.first_name" etc.) in
+      // its row's picker, so a starter visibly teaches the Akilent data
+      // model instead of just dropping in static example text.
+      var rows = variableRows.children;
+      (starter.variables || []).forEach(function (v, i) {
+        if (!v.source || !rows[i]) return;
+        var picker = rows[i].querySelector('[data-role="data-field-picker"]');
+        if (picker) picker.value = v.source;
+      });
       showForm();
       if (window.WhatsAppTemplatePreview) window.WhatsAppTemplatePreview.render();
     }

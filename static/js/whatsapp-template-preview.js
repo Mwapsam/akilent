@@ -11,6 +11,11 @@
  * sending. Runtime substitution still happens via the campaign's own
  * variable_mapping (apps.whatsapp.campaigns), which has no UI yet.
  *
+ * The picker's "+ Create custom field…" option POSTs to
+ * apps.contacts.views.create_custom_field (the field belongs to Contact, not
+ * to WhatsApp) and, on success, adds it to every open picker on the page and
+ * selects it in the row that triggered creation — no page reload needed.
+ *
  * A button's {{n}} isn't an independent placeholder — it must reference one
  * of the message's own variables (apps.whatsapp.template_builder
  * ._validate_buttons), so the button doesn't get its own data-field picker;
@@ -58,15 +63,47 @@
       dataFields = { groups: [] };
     }
 
-    function populateDataFieldPicker(select) {
-      if (!select || select.dataset.populated) return;
-      select.dataset.populated = "1";
+    var customFieldPanel = document.getElementById("wa-custom-field-panel");
+    var customFieldLabelEl = document.getElementById("wa-custom-field-label");
+    var customFieldTypeEl = document.getElementById("wa-custom-field-type");
+    var customFieldErrorEl = document.getElementById("wa-custom-field-error");
+    var customFieldCreateBtn = document.getElementById("wa-custom-field-create");
+    var customFieldCancelBtn = document.getElementById("wa-custom-field-cancel");
+    var activeCustomFieldSelect = null;
+
+    function fillRowFromOption(select, label, sample) {
+      var row = select.closest("div");
+      var labelInput = row.querySelector('[name="variable_label"]');
+      var exampleInput = row.querySelector('[name="variable_example"]');
+      if (labelInput) labelInput.value = label;
+      if (exampleInput) exampleInput.value = sample;
+      refreshButtonVariablePicker();
+      renderPreview();
+    }
+
+    function openCustomFieldPanel(select) {
+      if (!customFieldPanel) return;
+      activeCustomFieldSelect = select;
+      if (customFieldErrorEl) customFieldErrorEl.classList.add("hidden");
+      if (customFieldLabelEl) { customFieldLabelEl.value = ""; customFieldLabelEl.focus(); }
+      customFieldPanel.classList.remove("hidden");
+    }
+
+    function closeCustomFieldPanel() {
+      if (!customFieldPanel) return;
+      customFieldPanel.classList.add("hidden");
+      activeCustomFieldSelect = null;
+    }
+
+    function buildDataFieldOptions(select) {
+      var previousValue = select.value;
+      select.innerHTML = '<option value="">Insert Akilent data field…</option>';
       dataFields.groups.forEach(function (group) {
         var optgroup = document.createElement("optgroup");
         optgroup.label = group.label;
         group.fields.forEach(function (field) {
           var opt = document.createElement("option");
-          opt.value = group.key + "." + field.key;
+          opt.value = (group.prefix || group.key) + "." + field.key;
           opt.textContent = field.label;
           opt.dataset.label = field.label;
           opt.dataset.sample = field.sample;
@@ -74,16 +111,88 @@
         });
         select.appendChild(optgroup);
       });
+      if (dataFields.create_custom_field_url) {
+        var createOpt = document.createElement("option");
+        createOpt.value = "__create__";
+        createOpt.textContent = "+ Create custom field…";
+        select.appendChild(createOpt);
+      }
+      if (previousValue && previousValue !== "__create__") select.value = previousValue;
+    }
+
+    function refreshAllDataFieldPickers() {
+      Array.prototype.forEach.call(
+        document.querySelectorAll('[data-role="data-field-picker"]'),
+        buildDataFieldOptions
+      );
+    }
+
+    function populateDataFieldPicker(select) {
+      if (!select) return;
+      buildDataFieldOptions(select);
+      if (select.dataset.wired) return;
+      select.dataset.wired = "1";
       select.addEventListener("change", function () {
         var opt = select.selectedOptions[0];
         if (!opt || !opt.value) return;
-        var row = select.closest("div");
-        var labelInput = row.querySelector('[name="variable_label"]');
-        var exampleInput = row.querySelector('[name="variable_example"]');
-        if (labelInput) labelInput.value = opt.dataset.label;
-        if (exampleInput) exampleInput.value = opt.dataset.sample;
-        refreshButtonVariablePicker();
-        renderPreview();
+        if (opt.value === "__create__") {
+          openCustomFieldPanel(select);
+          select.value = "";
+          return;
+        }
+        fillRowFromOption(select, opt.dataset.label, opt.dataset.sample);
+      });
+    }
+
+    if (customFieldCancelBtn) customFieldCancelBtn.addEventListener("click", closeCustomFieldPanel);
+
+    if (customFieldCreateBtn) {
+      customFieldCreateBtn.addEventListener("click", function () {
+        var label = (customFieldLabelEl && customFieldLabelEl.value || "").trim();
+        if (!label) {
+          if (customFieldErrorEl) {
+            customFieldErrorEl.textContent = "Give the field a name.";
+            customFieldErrorEl.classList.remove("hidden");
+          }
+          return;
+        }
+        var csrfInput = form.querySelector('[name="csrfmiddlewaretoken"]');
+        fetch(dataFields.create_custom_field_url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfInput ? csrfInput.value : "",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: JSON.stringify({ label: label, type: customFieldTypeEl ? customFieldTypeEl.value : "string" }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              if (customFieldErrorEl) {
+                customFieldErrorEl.textContent = result.data.error || "Couldn't create the field.";
+                customFieldErrorEl.classList.remove("hidden");
+              }
+              return;
+            }
+            var group = dataFields.groups.filter(function (g) { return g.key === "contact_custom"; })[0];
+            if (group) group.fields.push(result.data);
+            refreshAllDataFieldPickers();
+            if (activeCustomFieldSelect) {
+              var select = activeCustomFieldSelect;
+              select.value = "contact." + result.data.key;
+              fillRowFromOption(select, result.data.label, result.data.sample);
+            }
+            closeCustomFieldPanel();
+          })
+          .catch(function () {
+            if (customFieldErrorEl) {
+              customFieldErrorEl.textContent = "Couldn't reach the server — try again.";
+              customFieldErrorEl.classList.remove("hidden");
+            }
+          });
       });
     }
 
