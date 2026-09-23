@@ -162,20 +162,22 @@
   --z-modal: 1050;
   --z-toast: 1080;
 
-  /* Sidebar layout dimensions (icon rail at md, collapsible full at lg). */
-  --sidebar-rail-w: 4.75rem;
-  --sidebar-full-w: 16rem;
-  /* Resolved current width: rail by default (icon rail at md, and the lg
-     default before JS/media queries apply); full once >=1024px, unless the
-     user collapsed it. Computed in plain CSS so it's correct on first paint
-     — Alpine only needs to animate it on an actual toggle click, not on
-     every page navigation. */
-  --sidebar-current-w: var(--sidebar-rail-w);
-
   /* Motion. */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Sidebar layout dimensions (icon rail at md, collapsible full at lg).
+   Kept in one plain, unlayered block (not inside @theme, which Tailwind
+   puts in @layer theme) so the default and its overrides below share a
+   single, unambiguous cascade origin — both the aside's inline `style`
+   and .app-shell-pl's class rule read the same resolved value.
+   --sidebar-current-w is correct on first paint (no JS needed for the
+   default state); Alpine only animates it on an actual toggle click. */
+:root {
+  --sidebar-rail-w: 4.75rem;
+  --sidebar-full-w: 16rem;
+  --sidebar-current-w: var(--sidebar-rail-w);
+}
 @media (min-width: 1024px) {
   :root { --sidebar-current-w: var(--sidebar-full-w); }
 }
