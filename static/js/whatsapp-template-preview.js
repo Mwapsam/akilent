@@ -494,12 +494,18 @@
       return checked ? checked.value : "none";
     }
 
+    var headerMediaObjectUrl = null;
+
     function resetHeaderMediaField() {
       if (headerMediaFile) headerMediaFile.value = "";
       if (headerMediaAssetId) headerMediaAssetId.value = "";
       if (headerMediaLabel) headerMediaLabel.textContent = "Drag and drop, or choose a file";
       if (headerMediaStatus) headerMediaStatus.textContent = "";
       if (headerMediaError) headerMediaError.classList.add("hidden");
+      if (headerMediaObjectUrl) {
+        URL.revokeObjectURL(headerMediaObjectUrl);
+        headerMediaObjectUrl = null;
+      }
     }
 
     function updateHeaderVisibility() {
@@ -530,6 +536,13 @@
       if (headerMediaStatus) headerMediaStatus.textContent = "Uploading…";
       if (headerMediaFile) headerMediaFile.disabled = true;
 
+      // Preview immediately from the local file — no need to wait on the
+      // network round-trip (or Meta's upload) just to show what was picked.
+      if (headerMediaObjectUrl) URL.revokeObjectURL(headerMediaObjectUrl);
+      headerMediaObjectUrl = (format === "image" || format === "video") ? URL.createObjectURL(file) : null;
+      if (headerMediaLabel) headerMediaLabel.textContent = file.name;
+      renderPreview();
+
       var csrfInput = form.querySelector('[name="csrfmiddlewaretoken"]');
       var formData = new FormData();
       formData.append("header_format", format);
@@ -544,7 +557,6 @@
         .then(function (result) {
           if (!result.ok) throw new Error(result.data.error || "Upload failed.");
           if (headerMediaAssetId) headerMediaAssetId.value = result.data.asset_id;
-          if (headerMediaLabel) headerMediaLabel.textContent = file.name;
           if (headerMediaStatus) headerMediaStatus.textContent = "Uploaded";
         })
         .catch(function (err) {
@@ -553,6 +565,7 @@
             headerMediaError.textContent = err.message || "Couldn't upload this file.";
             headerMediaError.classList.remove("hidden");
           }
+          renderPreview();
         })
         .then(function () {
           if (headerMediaFile) headerMediaFile.disabled = false;
@@ -681,9 +694,25 @@
         var format = currentHeaderFormat();
         if (format === "text") {
           previewHeader.textContent = headerEl.value;
+        } else if (format === "image" && headerMediaObjectUrl) {
+          previewHeader.innerHTML = "";
+          var img = document.createElement("img");
+          img.src = headerMediaObjectUrl;
+          img.className = "w-full rounded-md mb-2 max-h-56 object-cover";
+          img.alt = "";
+          previewHeader.appendChild(img);
+        } else if (format === "video" && headerMediaObjectUrl) {
+          previewHeader.innerHTML = "";
+          var video = document.createElement("video");
+          video.src = headerMediaObjectUrl;
+          video.controls = true;
+          video.className = "w-full rounded-md mb-2 max-h-56";
+          previewHeader.appendChild(video);
         } else if (format === "image" || format === "video" || format === "document") {
-          var name = headerMediaLabel && headerMediaAssetId && headerMediaAssetId.value ? headerMediaLabel.textContent : "";
-          previewHeader.textContent = name ? "[" + format + "] " + name : "[" + format + " header]";
+          var name = headerMediaLabel ? headerMediaLabel.textContent : "";
+          previewHeader.textContent = name && name !== "Drag and drop, or choose a file"
+            ? "[" + format + "] " + name
+            : "[" + format + " header]";
         } else {
           previewHeader.textContent = "";
         }
