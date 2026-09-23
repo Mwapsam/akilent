@@ -5,6 +5,10 @@
 @source "../templates";
 @source "../apps";
 @source "../static/js";
+/* Tests talk *about* class names - a docstring showing `bg-[#FFB020]/40` as an
+   example of what not to write would otherwise be scanned and emitted as a real
+   rule. Test files never legitimately introduce a utility, so exclude them. */
+@source not "../apps/**/tests/**";
 
 /* ---------------------------------------------------------------------------
    Design tokens — brand color system (see docs/brand-colors.md)
