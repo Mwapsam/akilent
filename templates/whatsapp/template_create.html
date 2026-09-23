@@ -27,7 +27,8 @@
   <button type="button" id="wa-start-scratch" class="btn btn-ghost btn-sm">Start from a blank template</button>
 </p>
 
-<div class="card card-pad max-w-2xl" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
+<div class="grid lg:grid-cols-[1fr,340px] gap-6 items-start" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
+  <div class="card card-pad">
   <form method="post" class="space-y-4">
     {% csrf_token %}
     <div>
@@ -71,11 +72,24 @@
     </div>
 
     <div>
+      <label class="label">Button (optional)</label>
+      <p class="text-xs text-gray-400 mb-2">A "visit website" button. Leave blank to skip. Use {% verbatim %}{{1}}{% endverbatim %} in the URL for a link that changes per customer (e.g. an order page).</p>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="tpl-button-text" name="button_text" class="input" placeholder="Button text, e.g. Pay now" maxlength="25" value="{{ form.button_text|default:'' }}" />
+        <input id="tpl-button-url" name="button_url" class="input" placeholder="{% verbatim %}https://example.com or https://example.com/{{1}}{% endverbatim %}" value="{{ form.button_url|default:'' }}" />
+      </div>
+      <input id="tpl-button-example" name="button_url_example" class="input mt-2 hidden" placeholder="{% verbatim %}Example URL for {{1}}, e.g. https://example.com/1029{% endverbatim %}" value="{{ form.button_url_example|default:'' }}" />
+    </div>
+
+    <div>
       <label class="label">Variables</label>
-      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval.</p>
-      <div id="variable-rows" class="space-y-2">
+      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval. Pick "Insert from contact field" to autofill a row from your customer data.</p>
+      <div id="variable-rows" class="space-y-2" data-contact-fields='{{ contact_fields_json }}'>
         {% for label, example in variable_rows %}
         <div class="flex gap-2">
+          <select class="select" data-role="contact-field-picker">
+            <option value="">Insert from contact field…</option>
+          </select>
           <input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="{{ label }}" />
           <input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="{{ example }}" />
           <button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>
@@ -92,6 +106,19 @@
       <button class="btn btn-primary btn-sm">Submit for approval</button>
     </div>
   </form>
+  </div>
+
+  <div class="card card-pad lg:sticky lg:top-4">
+    <h2 class="text-sm font-semibold text-ink mb-3">Preview</h2>
+    <div class="rounded-lg p-3" style="background-color:#e5ddd5;">
+      <div id="wa-preview-bubble" class="rounded-lg bg-white p-3 text-sm text-ink shadow-sm">
+        <div id="wa-preview-header" class="font-semibold mb-1"></div>
+        <div id="wa-preview-body" class="whitespace-pre-wrap"></div>
+        <div id="wa-preview-footer" class="text-xs text-gray-500 mt-1"></div>
+        <div id="wa-preview-button" class="mt-2 pt-2 border-t border-black/10 text-center text-sm text-blue-600 font-medium hidden"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -100,12 +127,15 @@
     const row = document.createElement('div');
     row.className = 'flex gap-2';
     row.innerHTML =
+      '<select class="select" data-role="contact-field-picker"><option value="">Insert from contact field…</option></select>' +
       '<input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="' + (label || '').replace(/"/g, '&quot;') + '" />' +
       '<input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="' + (example || '').replace(/"/g, '&quot;') + '" />' +
       '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>';
     container.appendChild(row);
+    if (window.WhatsAppTemplatePreview) window.WhatsAppTemplatePreview.populateContactPicker(row.querySelector('[data-role="contact-field-picker"]'));
   }
 </script>
 {% load static %}
 <script src="{% static 'js/whatsapp-template-starter-picker.js' %}"></script>
+<script src="{% static 'js/whatsapp-template-preview.js' %}"></script>
 {% endblock %}

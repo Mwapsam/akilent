@@ -15,7 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.contacts.models import ContactList
+from apps.contacts.models import ContactList, CustomAttributeDef
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
 from apps.whatsapp.models import MessageTemplate, WebhookEventLog, WhatsAppCampaign
@@ -58,6 +58,33 @@ def templates_sync(request):
 # builder in front of it. Akilent validates and submits to Meta; Meta stays
 # the approval source of truth (apps.whatsapp.template_builder). ------------
 
+_CONTACT_FIELD_SAMPLES = {
+    "string": "Sample text", "number": "123", "boolean": "Yes", "date": "2026-09-26",
+}
+
+
+def _contact_fields_json(account) -> str:
+    """"Insert from contact field" picker data for the variable-row/preview JS.
+
+    Client-side autofill only — picking a field here just fills in a variable
+    row's label/example text, it doesn't bind the template to that field (see
+    apps.whatsapp.campaigns.variable_mapping for the separate, not-yet-UI'd
+    send-time binding).
+    """
+    return json.dumps({
+        "built_in": [
+            {"key": "first_name", "label": "First name", "sample": "Ada"},
+            {"key": "last_name", "label": "Last name", "sample": "Smith"},
+            {"key": "email", "label": "Email", "sample": "ada@example.com"},
+            {"key": "phone", "label": "Phone", "sample": "+15551234567"},
+        ],
+        "custom": [
+            {"key": a.key, "label": a.label or a.key, "sample": _CONTACT_FIELD_SAMPLES[a.type]}
+            for a in CustomAttributeDef.objects.filter(account=account).order_by("key")
+        ],
+    })
+
+
 @login_required
 @module_required("whatsapp")
 def template_create(request):
@@ -68,6 +95,10 @@ def template_create(request):
     if request.method == "POST":
         labels = [v.strip() for v in request.POST.getlist("variable_label") if v.strip()]
         examples = [v.strip() for v in request.POST.getlist("variable_example") if v.strip()]
+        button_text = request.POST.get("button_text", "").strip()
+        button_url = request.POST.get("button_url", "").strip()
+        button_example = request.POST.get("button_url_example", "").strip()
+        buttons = [{"text": button_text, "url": button_url, "example": button_example}] if (button_text or button_url) else []
         try:
             create_and_submit_template(
                 account,
@@ -79,6 +110,7 @@ def template_create(request):
                 footer=request.POST.get("footer", ""),
                 variable_labels=labels,
                 variable_examples=examples,
+                buttons=buttons,
             )
         except TemplateBuilderError as exc:
             messages.error(request, str(exc))
@@ -86,7 +118,7 @@ def template_create(request):
             return render(request, "whatsapp/template_create.html", {
                 "account": account, "categories": MessageTemplate.Category.choices,
                 "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
-                "variable_rows": rows,
+                "variable_rows": rows, "contact_fields_json": _contact_fields_json(account),
             })
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
@@ -94,6 +126,7 @@ def template_create(request):
     return render(request, "whatsapp/template_create.html", {
         "account": account, "categories": MessageTemplate.Category.choices, "form": {},
         "starters_json": json.dumps(STARTER_CATEGORIES),
+        "contact_fields_json": _contact_fields_json(account),
     })
 
 

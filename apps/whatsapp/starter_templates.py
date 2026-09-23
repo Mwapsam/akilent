@@ -149,11 +149,13 @@ STARTER_CATEGORIES: list[dict] = [
                 "name": "Payment reminder",
                 "use_case": "Unpaid order",
                 "meta_category": "utility",
-                "body": "Hi {{1}}, your order {{2}} is still awaiting payment.\n\nComplete your payment here:\n{{3}}\n\nReply to this message if you need any help.",
+                "body": "Hi {{1}}, your order {{2}} is still awaiting payment.\n\nReply to this message if you need any help.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {"label": "Payment link", "example": "https://pay.example.com/1029"},
+                ],
+                "buttons": [
+                    {"text": "Pay now", "url": "https://pay.example.com/{{1}}", "example": "https://pay.example.com/1029"},
                 ],
             },
             {
@@ -462,11 +464,13 @@ STARTER_CATEGORIES: list[dict] = [
                 "name": "New offer",
                 "use_case": "General promotion",
                 "meta_category": "marketing",
-                "body": "Hi {{1}}, we have a special offer for you.\n\n{{2}}\n\nLearn more here:\n{{3}}\n\nReply to this message if you'd like more information.",
+                "body": "Hi {{1}}, we have a special offer for you.\n\n{{2}}\n\nReply to this message if you'd like more information.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Offer details", "example": "20% off all orders this week"},
-                    {"label": "Link", "example": "https://example.com/offer"},
+                ],
+                "buttons": [
+                    {"text": "Learn more", "url": "https://example.com/offer", "example": ""},
                 ],
             },
             {

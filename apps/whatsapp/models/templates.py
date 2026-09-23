@@ -29,6 +29,11 @@ class MessageTemplate(models.Model):
 
     content = models.TextField()
     variables = models.JSONField(default=list)  # ["name", "company"]
+    variable_examples = models.JSONField(default=list, blank=True)  # example values, same order as `variables`
+
+    header = models.CharField(max_length=60, blank=True, default="")
+    footer = models.CharField(max_length=60, blank=True, default="")
+    buttons = models.JSONField(default=list, blank=True)  # Meta BUTTONS component shape
 
     created_at = models.DateTimeField(auto_now_add=True)
 

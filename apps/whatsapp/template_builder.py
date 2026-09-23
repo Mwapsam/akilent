@@ -19,6 +19,7 @@ from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 
 _NAME_RE = re.compile(r"^[a-z0-9_]{1,512}$")
 _VAR_RE = re.compile(r"\{\{(\d+)\}\}")
+_URL_RE = re.compile(r"^https?://")
 
 
 class TemplateBuilderError(Exception):
@@ -29,9 +30,42 @@ def _extract_variable_numbers(body: str) -> list[int]:
     return [int(n) for n in _VAR_RE.findall(body)]
 
 
+def _validate_buttons(buttons: list[dict]) -> None:
+    if len(buttons) > 1:
+        raise TemplateBuilderError("Only one button is supported per template.")
+    if not buttons:
+        return
+    button = buttons[0]
+    text = (button.get("text") or "").strip()
+    url = (button.get("url") or "").strip()
+    example = (button.get("example") or "").strip()
+
+    if not text:
+        raise TemplateBuilderError("The button needs text, e.g. \"Visit website\".")
+    if len(text) > 25:
+        raise TemplateBuilderError("Button text must be 25 characters or fewer.")
+    if not url:
+        raise TemplateBuilderError("The button needs a URL.")
+    if not _URL_RE.match(url):
+        raise TemplateBuilderError("The button URL must start with http:// or https://.")
+
+    numbers = _extract_variable_numbers(url)
+    if numbers not in ([], [1]):
+        raise TemplateBuilderError(
+            "The button URL can only use one variable — {{1}} — for the dynamic part of the link."
+        )
+    if numbers == [1] and not example:
+        raise TemplateBuilderError(
+            "Give an example URL for the button's {{1}} — required by WhatsApp for approval."
+        )
+    if numbers == [] and example:
+        raise TemplateBuilderError("Remove the button's example URL, or add {{1}} to the URL to use it.")
+
+
 def validate_fields(
     *, name: str, category: str, language: str, body: str,
     variable_labels: list[str], header: str = "", footer: str = "",
+    buttons: list[dict] | None = None,
 ) -> None:
     if not name or not _NAME_RE.match(name):
         raise TemplateBuilderError(
@@ -57,6 +91,15 @@ def validate_fields(
         )
     if any(not label.strip() for label in variable_labels):
         raise TemplateBuilderError("Every variable needs a label.")
+
+    _validate_buttons(buttons or [])
+
+
+def _build_button(*, text: str, url: str, example: str = "") -> dict:
+    btn = {"type": "URL", "text": text.strip(), "url": url.strip()}
+    if example.strip():
+        btn["example"] = [example.strip()]
+    return btn
 
 
 def build_meta_payload(
@@ -100,9 +143,11 @@ def create_and_submit_template(
     """
     variable_labels = variable_labels or []
     variable_examples = variable_examples or []
+    buttons = buttons or []
     validate_fields(
         name=name, category=category, language=language, body=body,
         variable_labels=variable_labels, header=header, footer=footer,
+        buttons=buttons,
     )
 
     number = (
@@ -117,9 +162,10 @@ def create_and_submit_template(
     ).exists():
         raise TemplateBuilderError("A template with that name and language already exists.")
 
+    meta_buttons = [_build_button(**buttons[0])] if buttons else []
     payload = build_meta_payload(
         name=name, category=category, language=language, body=body,
-        variable_examples=variable_examples, header=header, footer=footer, buttons=buttons,
+        variable_examples=variable_examples, header=header, footer=footer, buttons=meta_buttons,
     )
     try:
         provider = get_whatsapp_provider(account)
@@ -130,5 +176,6 @@ def create_and_submit_template(
     return MessageTemplate.objects.create(
         account=account, name=name, whatsapp_template_name=name, language_code=language,
         category=category, approval_status=MessageTemplate.ApprovalStatus.PENDING,
-        content=body.strip(), variables=variable_labels,
+        content=body.strip(), variables=variable_labels, variable_examples=variable_examples,
+        header=header.strip(), footer=footer.strip(), buttons=meta_buttons,
     )

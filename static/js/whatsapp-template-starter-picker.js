@@ -31,7 +31,17 @@
     var headerEl = document.getElementById("tpl-header");
     var bodyEl = document.getElementById("tpl-body");
     var footerEl = document.getElementById("tpl-footer");
+    var buttonTextEl = document.getElementById("tpl-button-text");
+    var buttonUrlEl = document.getElementById("tpl-button-url");
+    var buttonExampleEl = document.getElementById("tpl-button-example");
     var variableRows = document.getElementById("variable-rows");
+
+    function setButtonFields(button) {
+      if (buttonTextEl) buttonTextEl.value = (button && button.text) || "";
+      if (buttonUrlEl) buttonUrlEl.value = (button && button.url) || "";
+      if (buttonExampleEl) buttonExampleEl.value = (button && button.example) || "";
+      if (buttonUrlEl) buttonUrlEl.dispatchEvent(new Event("input"));
+    }
 
     function showForm() {
       formSection.hidden = false;
@@ -48,12 +58,14 @@
       headerEl.value = "";
       bodyEl.value = starter.body;
       footerEl.value = "";
+      setButtonFields((starter.buttons || [])[0]);
       clearVariableRows();
       (starter.variables || []).forEach(function (v) {
         window.addVariableRow(v.label, v.example);
       });
       if (!(starter.variables || []).length) window.addVariableRow();
       showForm();
+      if (window.WhatsAppTemplatePreview) window.WhatsAppTemplatePreview.render();
     }
 
     function renderCategories() {
@@ -107,7 +119,9 @@
       scratchBtn.addEventListener("click", function () {
         clearVariableRows();
         window.addVariableRow();
+        setButtonFields(null);
         showForm();
+        if (window.WhatsAppTemplatePreview) window.WhatsAppTemplatePreview.render();
       });
     }
 
