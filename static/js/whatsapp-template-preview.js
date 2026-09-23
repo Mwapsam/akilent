@@ -607,5 +607,13 @@
     };
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  // A script-execution-deferring proxy (e.g. Cloudflare Rocket Loader) can
+  // delay this file's actual execution until after DOMContentLoaded has
+  // already fired — listening for it unconditionally would then never call
+  // init(). Run immediately if the DOM is already parsed.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
