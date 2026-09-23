@@ -31,7 +31,7 @@
     </div>
   </section>
 
-  <div class="grid md:grid-cols-[1fr,340px] gap-6 items-start" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
+  <div class="grid md:grid-cols-[1fr_340px] gap-6 items-start" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
     <form method="post" id="wa-form" class="space-y-6">
       {% csrf_token %}
 
