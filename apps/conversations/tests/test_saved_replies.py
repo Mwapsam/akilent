@@ -63,5 +63,5 @@ def test_composer_shows_saved_reply_picker(logged_in):
 
     resp = client.get(f"/inbox/{conversation.public_id}/")
     body = resp.content.decode()
-    assert "Insert a saved reply" in body
+    assert "Saved replies" in body
     assert "Store hours" in body

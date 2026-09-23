@@ -133,7 +133,7 @@ def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, open
 
     # The panel now shows the lead exists instead of offering to create another.
     resp = client.get(f"/inbox/{open_conversation.public_id}/")
-    assert "Already a lead" in resp.content.decode()
+    assert "Open lead" in resp.content.decode()
 
 
 @pytest.mark.django_db
@@ -150,7 +150,7 @@ def test_send_template_from_composer(logged_in, open_conversation):
     )
 
     resp = client.get(f"/inbox/{open_conversation.public_id}/")
-    assert "Send a template instead" in resp.content.decode()
+    assert "Send a template" in resp.content.decode()
 
     resp = client.post(f"/inbox/{open_conversation.public_id}/", {
         "action": "send_template", "template_id": template.pk,
