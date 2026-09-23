@@ -4,61 +4,73 @@
 {% block content %}
 {% verbatim %}
 <style>
-  /* ── Scoped to the builder. Change --wa-accent to match your brand. ── */
-  #wa-builder { --wa-accent: #0866ff; --wa-green: #008069; --wa-link: #027eb5; --wa-line: #e5e7eb; }
+  /* ── Scoped to the builder. Change --wa-accent to match your brand.
+     --wa-line/--wa-fg/--wa-fg-muted/--wa-surface-hover ride the app's own
+     theme tokens (assets/app.css) so this whole block follows dark mode
+     automatically instead of needing its own light/dark duplication. ── */
+  #wa-builder {
+    --wa-accent: #0866ff; --wa-green: #008069; --wa-link: #027eb5;
+    --wa-line: var(--color-border);
+    --wa-surface: var(--color-surface);
+    --wa-surface-hover: var(--color-hover);
+    --wa-fg: var(--color-ink);
+    --wa-fg-muted: var(--color-ink-muted);
+    --wa-fg-subtle: var(--color-ink-subtle);
+  }
 
   /* Stepper */
   .wa-steps { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
   .wa-step { display: inline-flex; align-items: center; gap: .5rem; padding: .375rem .75rem; border-radius: .5rem;
-             font-size: .875rem; font-weight: 500; color: #9ca3af; transition: background-color .2s, color .2s; }
+             font-size: .875rem; font-weight: 500; color: var(--wa-fg-subtle); transition: background-color .2s, color .2s; }
   .wa-step-dot { position: relative; width: 1.125rem; height: 1.125rem; border-radius: 999px; border: 2px solid currentColor;
                  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .wa-step-dot svg { width: .7rem; height: .7rem; color: #fff; display: none; }
-  .wa-step[data-state="active"] { color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 9%, white); }
+  .wa-step-dot svg { width: .7rem; height: .7rem; color: var(--wa-surface); display: none; }
+  .wa-step[data-state="active"] { color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 9%, var(--wa-surface)); }
   .wa-step[data-state="active"] .wa-step-dot { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-  .wa-step[data-state="done"] { color: #374151; }
+  .wa-step[data-state="done"] { color: var(--wa-fg); }
   .wa-step[data-state="done"] .wa-step-dot { background: #16a34a; border-color: #16a34a; }
   .wa-step[data-state="done"] .wa-step-dot svg { display: block; }
-  .wa-step-sep { color: #d1d5db; letter-spacing: 2px; font-size: .75rem; }
+  .wa-step-sep { color: var(--wa-line); letter-spacing: 2px; font-size: .75rem; }
 
   /* Category segmented control */
-  .wa-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid #d1d5db; border-radius: .5rem; overflow: hidden; }
+  .wa-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid var(--wa-line); border-radius: .5rem; overflow: hidden; }
   .wa-cat-btn { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .625rem .75rem;
-                font-size: .875rem; font-weight: 500; color: #374151; background: #fff; border-left: 1px solid #d1d5db; }
+                font-size: .875rem; font-weight: 500; color: var(--wa-fg); background: var(--wa-surface); border-left: 1px solid var(--wa-line); }
   .wa-cat-btn:first-child { border-left: 0; }
-  .wa-cat-btn:hover { background: #f9fafb; }
+  .wa-cat-btn:hover { background: var(--wa-surface-hover); }
   .wa-cat-btn svg { width: 1rem; height: 1rem; }
-  .wa-cat-btn.is-active { background: color-mix(in srgb, var(--wa-accent) 8%, white); color: var(--wa-accent); box-shadow: inset 0 -2px 0 var(--wa-accent); }
+  .wa-cat-btn.is-active { background: color-mix(in srgb, var(--wa-accent) 8%, var(--wa-surface)); color: var(--wa-accent); box-shadow: inset 0 -2px 0 var(--wa-accent); }
   .wa-cat-btn:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: -2px; }
 
-  /* Pill toggle (header none / text) */
-  .wa-pills { display: inline-flex; padding: 2px; background: #f3f4f6; border-radius: .5rem; }
-  .wa-pills label { position: relative; padding: .3rem .8rem; border-radius: .375rem; font-size: .8125rem; color: #4b5563; cursor: pointer; }
-  .wa-pills label:has(input:checked) { background: #fff; color: #111827; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  /* Pill toggle (header none / text / image / video / document) */
+  .wa-pills { display: inline-flex; flex-wrap: wrap; padding: 2px; background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); border-radius: .5rem; }
+  .wa-pills label { position: relative; padding: .3rem .8rem; border-radius: .375rem; font-size: .8125rem; color: var(--wa-fg-muted); cursor: pointer; }
+  .wa-pills label:has(input:checked) { background: var(--wa-surface); color: var(--wa-fg); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .wa-pills label:has(input:focus-visible) { outline: 2px solid var(--wa-accent); }
   .wa-pills input { position: absolute; opacity: 0; pointer-events: none; }
 
   /* Character counters */
   .wa-counted { position: relative; }
   .wa-counted > .input { padding-right: 4.75rem; }
-  .wa-count { position: absolute; right: .75rem; top: .625rem; font-size: .75rem; color: #9ca3af; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .wa-count { position: absolute; right: .75rem; top: .625rem; font-size: .75rem; color: var(--wa-fg-subtle); font-variant-numeric: tabular-nums; pointer-events: none; }
   .wa-counted:has(> .hidden) .wa-count { display: none; }
   .wa-count.is-over { color: #dc2626; }
 
   /* Body editor: textarea + formatting toolbar in one frame */
-  .wa-editor { border: 1px solid #d1d5db; border-radius: .5rem; background: #fff; transition: border-color .15s, box-shadow .15s; }
+  .wa-editor { border: 1px solid var(--wa-line); border-radius: .5rem; background: var(--wa-surface); transition: border-color .15s, box-shadow .15s; }
   .wa-editor:focus-within { border-color: var(--wa-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wa-accent) 18%, transparent); }
   .wa-editor .input, .wa-editor .input:focus { border: 0; box-shadow: none; outline: none; border-radius: .5rem .5rem 0 0; resize: vertical; }
   .wa-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; padding: .375rem .5rem; border-top: 1px solid var(--wa-line); }
   .wa-tool { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; height: 2rem; padding: 0 .4rem;
-             border-radius: .375rem; color: #4b5563; font-size: .875rem; }
-  .wa-tool:hover { background: #f3f4f6; color: #111827; }
+             border-radius: .375rem; color: var(--wa-fg-muted); font-size: .875rem; }
+  .wa-tool:hover { background: var(--wa-surface-hover); color: var(--wa-fg); }
   .wa-tool:focus-visible { outline: 2px solid var(--wa-accent); }
   .wa-tool svg { width: 1rem; height: 1rem; }
   .wa-tool-divider { width: 1px; height: 1.25rem; background: var(--wa-line); margin: 0 .25rem; }
 
   /* Info banner */
-  .wa-note { display: flex; gap: .5rem; align-items: flex-start; padding: .625rem .75rem; border-radius: .5rem; background: #f3f4f6; font-size: .8125rem; color: #374151; }
+  .wa-note { display: flex; gap: .5rem; align-items: flex-start; padding: .625rem .75rem; border-radius: .5rem;
+             background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); font-size: .8125rem; color: var(--wa-fg); }
   .wa-note svg { width: 1rem; height: 1rem; flex-shrink: 0; margin-top: .1rem; }
 
   /* The hidden attribute must win over utility classes like .grid / .flex */
@@ -66,27 +78,34 @@
 
   /* Starter tiles + scenario rows (rendered by whatsapp-template-starter-picker.js) */
   .wa-tile { display: flex; align-items: flex-start; gap: .75rem; width: 100%; padding: 1rem; text-align: left;
-             background: #fff; border: 1px solid var(--wa-line); border-radius: .625rem; transition: border-color .15s, background-color .15s; }
-  .wa-tile:hover { border-color: color-mix(in srgb, var(--wa-accent) 40%, white); background: color-mix(in srgb, var(--wa-accent) 3%, white); }
+             background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; transition: border-color .15s, background-color .15s; }
+  .wa-tile:hover { border-color: color-mix(in srgb, var(--wa-accent) 40%, var(--wa-surface)); background: color-mix(in srgb, var(--wa-accent) 3%, var(--wa-surface)); }
   .wa-tile:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
   .wa-tile-dashed { border-style: dashed; }
   .wa-tile-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0;
-                  border-radius: .5rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, white); }
+                  border-radius: .5rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, var(--wa-surface)); }
   .wa-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 1rem;
-            background: #fff; border: 1px solid var(--wa-line); border-radius: .625rem; }
-  .wa-row:hover { background: #f9fafb; }
+            background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; }
+  .wa-row:hover { background: var(--wa-surface-hover); }
 
   /* Variable cards (rendered by whatsapp-template-preview.js) */
-  .wa-varcard { padding: .875rem; background: #fff; border: 1px solid var(--wa-line); border-radius: .625rem; }
+  .wa-varcard { padding: .875rem; background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; }
   .wa-var-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 2.5rem; height: 1.75rem; padding: 0 .5rem; flex-shrink: 0;
-                 border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, white); }
+                 border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, var(--wa-surface)); }
 
   /* Sticky action bar */
   .wa-actionbar { position: sticky; bottom: 0; z-index: 10; margin-top: 1.5rem; padding: .875rem 1rem;
-                  background: rgba(255,255,255,.92); backdrop-filter: blur(6px); border: 1px solid var(--wa-line); border-radius: .75rem;
-                  box-shadow: 0 -4px 16px rgba(17,24,39,.06); }
+                  background: color-mix(in srgb, var(--wa-surface) 92%, transparent); backdrop-filter: blur(6px);
+                  border: 1px solid var(--wa-line); border-radius: .75rem; box-shadow: 0 -4px 16px rgba(0,0,0,.12); }
 
-  /* WhatsApp preview */
+  /* Header media drop zone */
+  #wa-header-media-drop .wa-tile-icon { color: var(--wa-fg-muted); background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); }
+
+  /* WhatsApp preview — deliberately kept as its own light "device screen" by
+     default, since that's genuinely what recipients see; a dark-mode variant
+     below switches it to WhatsApp's own real dark chat colors rather than
+     the app's unrelated navy theme, so it still reads as an authentic
+     WhatsApp screen instead of a mismatched hybrid. */
   .wa-phone { border-radius: 1rem; overflow: hidden; border: 1px solid var(--wa-line); }
   .wa-phone-bar { background: var(--wa-green); color: #fff; }
   .wa-chat { background-color: #efeae2; min-height: 360px;
@@ -96,11 +115,33 @@
   .wa-bubble::before { content: ""; position: absolute; left: -7px; top: 0; width: 8px; height: 13px; background: #fff; clip-path: polygon(0 0, 100% 0, 100% 100%); }
   #wa-preview-body strong { font-weight: 600; }
   #wa-preview-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; }
-  #wa-preview-body .wa-var { padding: 0 .25rem; border-radius: .25rem; font-size: .8125rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, white); }
+  #wa-preview-body .wa-var { padding: 0 .25rem; border-radius: .25rem; font-size: .8125rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, #fff); }
   #wa-preview-button { color: var(--wa-link); }
   #wa-preview-button::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; background: currentColor;
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'/%3E%3C/svg%3E") center / contain no-repeat;
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'/%3E%3C/svg%3E") center / contain no-repeat; }
+
+  /* WhatsApp's own dark theme for the phone screen (not the app's navy dark
+     mode) — same resolution order as assets/app.css: OS preference unless
+     the user explicitly picked "light", or an explicit data-theme="dark". */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .wa-chat {
+      background-color: #0b141a;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23fff' stroke-opacity='.05' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E");
+    }
+    :root:not([data-theme="light"]) .wa-daychip { background: #182229; color: #8696a0; }
+    :root:not([data-theme="light"]) .wa-bubble { background: #202c33; color: #e9edef; box-shadow: 0 1px .5px rgba(0,0,0,.3); }
+    :root:not([data-theme="light"]) .wa-bubble::before { background: #202c33; }
+    :root:not([data-theme="light"]) #wa-preview-body .wa-var { background: color-mix(in srgb, var(--wa-accent) 20%, #202c33); }
+  }
+  :root[data-theme="dark"] .wa-chat {
+    background-color: #0b141a;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23fff' stroke-opacity='.05' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E");
+  }
+  :root[data-theme="dark"] .wa-daychip { background: #182229; color: #8696a0; }
+  :root[data-theme="dark"] .wa-bubble { background: #202c33; color: #e9edef; box-shadow: 0 1px .5px rgba(0,0,0,.3); }
+  :root[data-theme="dark"] .wa-bubble::before { background: #202c33; }
+  :root[data-theme="dark"] #wa-preview-body .wa-var { background: color-mix(in srgb, var(--wa-accent) 20%, #202c33); }
 
   @media (prefers-reduced-motion: reduce) { .wa-step, .wa-editor { transition: none; } }
 </style>
@@ -328,8 +369,8 @@
         </div>
         <p id="wa-personalize-create-field-status" class="hidden text-xs text-green-600"></p>
         <div id="variable-cards" class="space-y-3"></div>
-        <div id="wa-no-variables-hint" class="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">{% verbatim %}{{ }}{% endverbatim %}</span>
+        <div id="wa-no-variables-hint" class="flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-sm text-gray-500">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-gray-600">{% verbatim %}{{ }}{% endverbatim %}</span>
           <span>Click <strong class="font-medium text-ink">Add variable</strong> or type {% verbatim %}{{1}}{% endverbatim %} in the body to add your first one.</span>
         </div>
       </section>
@@ -397,7 +438,7 @@
           <button type="button" id="wa-button-remove" class="btn btn-ghost btn-sm text-red-600">Remove button</button>
         </div>
 
-        <div id="wa-custom-field-panel" class="hidden border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+        <div id="wa-custom-field-panel" class="hidden border border-border rounded-lg p-4 space-y-3 bg-surface-muted">
           <div>
             <p class="text-sm font-medium text-ink">Create custom contact field</p>
             <p class="text-xs text-gray-500">Saved to your Contacts so you can reuse it on any future message.</p>
