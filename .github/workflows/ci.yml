@@ -26,20 +26,16 @@ jobs:
       # production - nothing rebuilds it on the server. Tailwind's build is
       # purge-scanned, so a template using a class no other template uses will
       # silently lose its styling unless the author rebuilt. Rebuild here and
-      # fail if the committed file is stale.
+      # compare. The comparison is order-insensitive on purpose: the standalone
+      # CLI orders rules slightly differently on Windows and Linux, so a byte
+      # diff would fail on every PR authored from Windows.
       - name: Verify compiled CSS is up to date
         run: |
           set -e
-          curl -sSL -o /tmp/tailwindcss             https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64
-          chmod +x /tmp/tailwindcss
-          /tmp/tailwindcss -i assets/app.css -o /tmp/app.built.css --minify
-          if ! diff -q /tmp/app.built.css static/css/app.css > /dev/null; then
-            echo "::error file=static/css/app.css::Compiled CSS is stale. Run:"
-            echo "  tools/tailwindcss -i assets/app.css -o static/css/app.css --minify"
-            diff <(head -c 2000 static/css/app.css) <(head -c 2000 /tmp/app.built.css) || true
-            exit 1
-          fi
-          echo "Compiled CSS matches assets/app.css."
+          curl -sSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          chmod +x "$RUNNER_TEMP/tailwindcss"
+          "$RUNNER_TEMP/tailwindcss" -i assets/app.css -o "$RUNNER_TEMP/app.built.css" --minify
+          python tools/check_css_build.py "$RUNNER_TEMP/app.built.css" static/css/app.css
         env:
           TAILWIND_VERSION: "4.3.3"
 
