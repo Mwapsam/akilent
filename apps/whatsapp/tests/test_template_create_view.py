@@ -69,7 +69,7 @@ def test_create_template_page_includes_starter_library(logged_in):
     client, _ = logged_in
     resp = client.get("/whatsapp/templates/new/")
     body = resp.content.decode()
-    assert "Start with a template" in body
+    assert "Set up your template" in body
     assert "payment_reminder" in body  # a starter slug present in the JSON blob
 
 
