@@ -1,0 +1,56 @@
+{% comment %}Work queue — the dashboard's primary question, "what needs me right now?".
+
+Rendered inline by the dashboard for the first byte, then re-fetched by HTMX so
+the counts stay current. The outer element carries the hx-* attributes and is
+swapped whole (outerHTML), so this one file is the single source for both paths.
+The poll is gated on document visibility — a backgrounded tab stops asking.
+{% endcomment %}
+<div id="work-queue"
+     hx-get="{% url 'dashboard-work-queue' %}"
+     hx-trigger="every 30s [document.visibilityState === 'visible']"
+     hx-swap="outerHTML"
+     class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+
+  {% with waiting=customers_waiting_count missed=missed_count leads=new_leads_count due=followups_due_count %}
+
+  <a href="/inbox/?view=needs_attention"
+     class="work-tile{% if waiting %} work-tile--active{% endif %}"
+     aria-label="{{ waiting }} customer{{ waiting|pluralize }} waiting for you — open the inbox">
+    {% include "components/icon.html" with name="message-circle" class="w-5 h-5 shrink-0" %}
+    <span class="work-tile-value">{{ waiting }}</span>
+    <span class="work-tile-label">customer{{ waiting|pluralize }} waiting</span>
+  </a>
+
+  <a href="/inbox/?view=missed"
+     class="work-tile{% if missed %} work-tile--warn{% endif %}"
+     aria-label="{{ missed }} missed conversation{{ missed|pluralize }} — open the inbox">
+    {% include "components/icon.html" with name="alert" class="w-5 h-5 shrink-0" %}
+    <span class="work-tile-value">{{ missed }}</span>
+    <span class="work-tile-label">missed conversation{{ missed|pluralize }}</span>
+  </a>
+
+  <a href="/sales/"
+     class="work-tile{% if leads %} work-tile--good{% endif %}"
+     aria-label="{{ leads }} new lead{{ leads|pluralize }} — open sales">
+    {% include "components/icon.html" with name="building" class="w-5 h-5 shrink-0" %}
+    <span class="work-tile-value">{{ leads }}</span>
+    <span class="work-tile-label">new lead{{ leads|pluralize }}</span>
+  </a>
+
+  <a href="/inbox/followups/"
+     class="work-tile{% if due %} work-tile--active{% endif %}"
+     aria-label="{{ due }} follow-up{{ due|pluralize }} due — open follow-ups">
+    {% include "components/icon.html" with name="clock" class="w-5 h-5 shrink-0" %}
+    <span class="work-tile-value">{{ due }}</span>
+    <span class="work-tile-label">follow-up{{ due|pluralize }} due</span>
+  </a>
+
+  {% if not waiting and not missed and not leads and not due %}
+    <p class="col-span-2 lg:col-span-4 flex items-center gap-2 text-sm text-gray-500 mt-1">
+      {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
+      Nothing waiting. You're on top of it.
+    </p>
+  {% endif %}
+
+  {% endwith %}
+</div>

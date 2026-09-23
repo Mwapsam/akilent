@@ -9,6 +9,10 @@ urlpatterns = [
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("onboarding/", views.onboarding, name="onboarding"),
     path("dashboard/", views.dashboard, name="dashboard"),
+    # Dashboard fragments (HTMX). The work queue is polled; the secondary
+    # panels are lazy-loaded so their aggregates stay off the first byte.
+    path("dashboard/work-queue/", views.dashboard_work_queue, name="dashboard-work-queue"),
+    path("dashboard/panels/", views.dashboard_panels, name="dashboard-panels"),
     path("channels/", views.channels, name="channels"),
 
     # Self-service account settings (profile / security / team).

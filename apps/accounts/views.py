@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
+from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -445,6 +446,61 @@ def dashboard(request):
         # Authenticated user with no tenant (e.g. a staff-only admin user).
         return render(request, "accounts/dashboard.html", {"account": None})
 
+    from django.utils import timezone
+
+    from apps.accounts import onboarding as ob
+
+    hour = timezone.localtime().hour
+    greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
+
+    state = ob.get_state(account)
+
+    # Only the work queue is rendered on the first byte - it answers the
+    # dashboard's primary question and is cheap (three counts). Everything
+    # statistical, plus the domain/number/subscription lookups behind it, is
+    # fetched by dashboard_panels once the page is on screen, so none of it
+    # blocks first paint.
+    return render(
+        request,
+        "accounts/dashboard.html",
+        {
+            "account": account,
+            "onboarding_complete": state["complete"],
+            "onboarding_done": state["required_done"],
+            "onboarding_total": state["required_total"],
+            "onboarding_next": state["next_step"],
+            "greeting": greeting,
+            **_work_queue(account),
+        },
+    )
+
+
+@login_required
+def dashboard_work_queue(request):
+    """The work-queue tiles on their own, polled by HTMX to stay current.
+
+    Returns the same fragment the full page renders inline, so a swap is a
+    straight replacement and the counts can never drift from the first paint.
+    """
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponseForbidden("no account")
+    return render(
+        request, "accounts/_dashboard_work_queue.html", _work_queue(account)
+    )
+
+
+@login_required
+def dashboard_panels(request):
+    """Everything below the work queue, loaded once the page is on screen.
+
+    Keeps _email_stats / _upcoming_sends / _attention_items - and the joins
+    behind them - off the critical path for the first byte.
+    """
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponseForbidden("no account")
+
     from django.conf import settings
 
     numbers = []
@@ -466,39 +522,19 @@ def dashboard(request):
         pass
 
     subscription = getattr(account, "subscription", None)
-
-    from django.utils import timezone
-
-    from apps.accounts import onboarding as ob
-
-    hour = timezone.localtime().hour
-    greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
-
-    state = ob.get_state(account)
     stats = _email_stats(account, subscription)
-    scheduling = _upcoming_sends(account)
-    attention = _attention_items(
-        account, stats, numbers, email_domains, subscription
-    )
-    work_queue = _work_queue(account)
 
     return render(
         request,
-        "accounts/dashboard.html",
+        "accounts/_dashboard_panels.html",
         {
             "account": account,
-            "numbers": numbers,
-            "email_domains": email_domains,
             "subscription": subscription,
-            "onboarding_complete": state["complete"],
-            "onboarding_done": state["required_done"],
-            "onboarding_total": state["required_total"],
-            "onboarding_next": state["next_step"],
-            "attention_items": attention,
-            "greeting": greeting,
+            "attention_items": _attention_items(
+                account, stats, numbers, email_domains, subscription
+            ),
             **stats,
-            **scheduling,
-            **work_queue,
+            **_upcoming_sends(account),
         },
     )
 

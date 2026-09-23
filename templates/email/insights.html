@@ -101,18 +101,20 @@
       <h2 class="font-semibold">Engagement — {{ selected }}</h2>
     </div>
     {% if stats %}
-      <table class="table table--cards">
-        <thead><tr><th>Day</th><th>Opens</th><th>Clicks</th></tr></thead>
-        <tbody>
-          {% for s in stats %}
-            <tr>
-              <td data-label="Day" class="tabular-nums">{{ s.day|default:"—" }}</td>
-              <td data-label="Opens" class="tabular-nums">{{ s.opens|default:0 }}</td>
-              <td data-label="Clicks" class="tabular-nums">{{ s.clicks|default:0 }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <thead><tr><th>Day</th><th>Opens</th><th>Clicks</th></tr></thead>
+          <tbody>
+            {% for s in stats %}
+              <tr>
+                <td data-label="Day" class="tabular-nums">{{ s.day|default:"—" }}</td>
+                <td data-label="Opens" class="tabular-nums">{{ s.opens|default:0 }}</td>
+                <td data-label="Clicks" class="tabular-nums">{{ s.clicks|default:0 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       {% include "components/empty_state.html" with icon="check-circle" title="No engagement yet" message="Open & click events appear here once tracked emails are opened." %}
     {% endif %}
@@ -124,27 +126,29 @@
       <h2 class="font-semibold">Delivery logs</h2>
     </div>
     {% if logs %}
-        <table class="table table--cards">
-          <thead><tr>
-            <th>Time</th><th>Sender</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Error</th>
-          </tr></thead>
-          <tbody>
-            {% for row in logs %}
-              <tr>
-                <td data-label="Time" class="text-gray-400 whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
-                <td data-label="Sender">{{ row.from_email|default:"—" }}</td>
-                <td data-label="Recipient" class="font-medium text-ink">{{ row.to_email|default:"—" }}</td>
-                <td data-label="Subject" class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
-                <td data-label="Status">
-                  {% if row.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
-                  {% elif row.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
-                  {% else %}<span class="badge badge-neutral">{{ row.get_status_display }}</span>{% endif %}
-                </td>
-                <td data-label="Error" class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="table table--cards">
+            <thead><tr>
+              <th>Time</th><th>Sender</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Error</th>
+            </tr></thead>
+            <tbody>
+              {% for row in logs %}
+                <tr>
+                  <td data-label="Time" class="text-gray-400 whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
+                  <td data-label="Sender">{{ row.from_email|default:"—" }}</td>
+                  <td data-label="Recipient" class="font-medium text-ink">{{ row.to_email|default:"—" }}</td>
+                  <td data-label="Subject" class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
+                  <td data-label="Status">
+                    {% if row.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
+                    {% elif row.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
+                    {% else %}<span class="badge badge-neutral">{{ row.get_status_display }}</span>{% endif %}
+                  </td>
+                  <td data-label="Error" class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
     {% else %}
       {% include "components/empty_state.html" with icon="inbox" title="No delivery logs" message="Logs from the mail server appear here as you send." %}
     {% endif %}

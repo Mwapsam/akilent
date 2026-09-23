@@ -161,18 +161,21 @@
                x-ref="csvInput" :disabled="recipientMethod !== 'csv'" @change="onCsvChange($event)">
         <p x-show="csvError" class="field-error" x-text="csvError"></p>
         <div x-show="csv.rows.length" class="rounded-xl border border-border overflow-hidden">
+          {# Column headers come from the uploaded CSV, so width is unbounded. #}
           <div class="px-4 py-2 bg-surface-muted text-xs text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
             <span><strong x-text="csv.rows.length"></strong> recipients</span>
             <span x-show="csv.variables.length">Fields: <span x-text="csv.variables.join(', ')"></span></span>
           </div>
-          <table class="table">
-            <thead><tr><template x-for="h in csv.headers" :key="h"><th x-text="h"></th></template></tr></thead>
-            <tbody>
-              <template x-for="(row, i) in csv.rows.slice(0, 5)" :key="i">
-                <tr><template x-for="h in csv.headers" :key="h"><td class="text-xs" x-text="row[h]"></td></template></tr>
-              </template>
-            </tbody>
-          </table>
+          <div class="table-scroll">
+            <table class="table">
+              <thead><tr><template x-for="h in csv.headers" :key="h"><th x-text="h"></th></template></tr></thead>
+              <tbody>
+                <template x-for="(row, i) in csv.rows.slice(0, 5)" :key="i">
+                  <tr><template x-for="h in csv.headers" :key="h"><td class="text-xs" x-text="row[h]"></td></template></tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

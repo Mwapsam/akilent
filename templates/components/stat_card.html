@@ -1,18 +1,24 @@
 {% comment %}Stat card.
-Usage: include components/stat_card.html with label="Sent" value=42 icon="inbox" sub="98% delivered" tone="success"{% endcomment %}
-<div class="card card-pad">
+Usage: include components/stat_card.html with label="Sent" value=42 icon="inbox" sub="98% delivered" tone="success"
+Optional: delta="8%" delta_dir="up|down"{% endcomment %}
+<div class="stat-card">
   <div class="flex items-start justify-between gap-3">
-    <p class="text-sm font-medium text-gray-500">{{ label }}</p>
+    <p class="stat-card-label">{{ label }}</p>
     {% if icon %}
-      <span class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl
-        {% if tone == 'success' %}bg-green-50 text-green-600
+      <span class="stat-card-icon
+        {% if tone == 'success' %}bg-teal-50 text-teal-600
         {% elif tone == 'warning' %}bg-amber-50 text-amber-600
-        {% elif tone == 'danger' %}bg-red-50 text-red-600
+        {% elif tone == 'danger' %}bg-coral-50 text-coral-600
         {% else %}bg-brand-50 text-brand-600{% endif %}">
         {% include "components/icon.html" with name=icon class="w-5 h-5" %}
       </span>
     {% endif %}
   </div>
-  <p class="mt-3 text-3xl font-semibold tracking-tight text-ink">{{ value }}</p>
-  {% if sub %}<p class="mt-1 text-xs text-gray-400">{{ sub }}</p>{% endif %}
+  <p class="stat-card-value">{{ value }}</p>
+  {% if delta %}
+    <p class="stat-card-delta mt-1" data-dir="{{ delta_dir|default:'up' }}">
+      {% if delta_dir == 'down' %}&#8595;{% else %}&#8593;{% endif %} {{ delta }}
+    </p>
+  {% endif %}
+  {% if sub %}<p class="stat-card-sub">{{ sub }}</p>{% endif %}
 </div>

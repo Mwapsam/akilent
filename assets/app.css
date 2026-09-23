@@ -186,7 +186,7 @@
 }
 
 .app-shell-pl { padding-left: 0; }
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .app-shell-pl { padding-left: var(--sidebar-current-w); }
 }
 
@@ -399,9 +399,17 @@
   .field-error { @apply text-xs text-red-600 mt-1; }
 
   /* Tables -------------------------------------------------------------- */
+  /* Scrolls horizontally rather than clipping. `overflow-hidden` here used to
+     silently cut wide tables off with no scrollbar; the radius still clips the
+     corners because the scroll container is the rounded box itself. */
   .table-wrap {
-    @apply bg-surface border border-border rounded-2xl shadow-card overflow-hidden;
+    @apply bg-surface border border-border rounded-2xl shadow-card;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
+  /* Scroll-only wrapper, for a table already inside a .card where .table-wrap
+     would double the border/shadow/radius. */
+  .table-scroll { overflow-x: auto; }
   .table { @apply w-full text-sm; color: var(--color-ink); }
   .table thead { @apply text-left; background-color: var(--color-surface-muted); color: var(--color-ink-subtle); }
   .table th { @apply px-4 py-3 font-medium whitespace-nowrap; }
@@ -429,10 +437,52 @@
     .table--cards td:last-child { @apply pb-0; }
   }
 
+  /* Touch targets ------------------------------------------------------- */
+  /* Desktop density stays as designed; coarse pointers (touch) get the 44px
+     minimum. .btn-sm is the default in the inbox filter bar and every table
+     row action, so it is the one that matters most here. */
+  @media (pointer: coarse) {
+    .btn-sm { @apply px-3.5; min-height: 2.75rem; }
+    .btn-icon, .btn-icon.btn-sm { min-height: 2.75rem; min-width: 2.75rem; }
+    .nav-link { min-height: 2.75rem; }
+    .tab { min-height: 2.75rem; }
+  }
+
   /* Skeleton ------------------------------------------------------------ */
   .skeleton { @apply animate-pulse rounded-md; background-color: var(--color-border); }
   .skeleton-row { @apply border-b border-border; }
   .skeleton-row td { @apply py-3 px-4; }
+
+  /* Composed skeletons — these mirror the real layout so a loading panel is
+     the same shape as the content that replaces it (spec §9: skeletons, never
+     a spinner, for page content). */
+  .skeleton-text {
+    @apply animate-pulse rounded-md h-3.5 w-full;
+    background-color: var(--color-border);
+  }
+  .skeleton-table-row {
+    @apply flex items-center gap-4 px-4 py-3 border-b border-border;
+  }
+  .skeleton-table-row > * {
+    @apply animate-pulse rounded-md h-3.5;
+    background-color: var(--color-border);
+  }
+  .skeleton-card {
+    @apply bg-surface border border-border rounded-2xl p-5 sm:p-6 space-y-3;
+    box-shadow: var(--shadow-card);
+  }
+  .skeleton-stat {
+    @apply bg-surface border border-border rounded-2xl p-5 sm:p-6;
+    box-shadow: var(--shadow-card);
+  }
+  .skeleton-stat::before,
+  .skeleton-stat::after {
+    content: "";
+    @apply animate-pulse rounded-md block;
+    background-color: var(--color-border);
+  }
+  .skeleton-stat::before { @apply h-3 w-24; }
+  .skeleton-stat::after { @apply h-8 w-16 mt-3; }
 
   /* App shell nav ------------------------------------------------------- */
   .nav-link {
@@ -555,4 +605,127 @@
       text-gray-400 hover:text-white rounded-lg px-2 py-1.5 text-xs font-mono transition-colors;
   }
   .copy-btn.copied { @apply text-teal-400; }
+
+  /* Avatar -------------------------------------------------------------- */
+  .avatar {
+    @apply inline-flex items-center justify-center shrink-0 rounded-full
+      bg-brand-100 text-brand-700 font-semibold uppercase select-none
+      overflow-hidden;
+  }
+  .avatar img { @apply w-full h-full object-cover; }
+  .avatar-sm { @apply w-7 h-7 text-xs; }
+  .avatar-md { @apply w-9 h-9 text-sm; }
+  .avatar-lg { @apply w-12 h-12 text-base; }
+
+  /* Tooltip ------------------------------------------------------------- */
+  /* CSS-only, hover/focus driven. Used by the collapsed sidebar rail, where a
+     label is otherwise unavailable. Hidden on coarse pointers, which cannot
+     hover — those contexts must keep a visible label instead. */
+  .tooltip { @apply relative; }
+  .tooltip::after {
+    content: attr(data-tooltip);
+    @apply absolute left-full top-1/2 ml-2 -translate-y-1/2 z-10
+      whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium
+      opacity-0 pointer-events-none transition-opacity;
+    background-color: var(--color-ink);
+    color: var(--color-surface);
+    box-shadow: var(--shadow-pop);
+  }
+  .tooltip:hover::after,
+  .tooltip:focus-visible::after { @apply opacity-100; }
+  @media (pointer: coarse) {
+    .tooltip::after { content: none; }
+  }
+
+  /* Timeline ------------------------------------------------------------ */
+  /* Vertical rail + nodes: message lifecycle on campaign detail, delivery
+     events on message detail. */
+  .timeline { @apply relative pl-6; }
+  .timeline::before {
+    content: "";
+    @apply absolute left-2 top-1 bottom-1 w-px;
+    background-color: var(--color-border);
+  }
+  .timeline-item { @apply relative pb-5 last:pb-0; }
+  .timeline-item::before {
+    content: "";
+    @apply absolute -left-[1.125rem] top-1 w-2.5 h-2.5 rounded-full ring-2;
+    background-color: var(--color-border-strong);
+    --tw-ring-color: var(--color-surface);
+  }
+  .timeline-item[data-state="done"]::before { @apply bg-teal-500; }
+  .timeline-item[data-state="current"]::before { @apply bg-amber-400; }
+  .timeline-item[data-state="failed"]::before { @apply bg-coral-500; }
+  .timeline-title { @apply text-sm font-medium; color: var(--color-ink); }
+  .timeline-meta { @apply text-xs mt-0.5; color: var(--color-ink-subtle); }
+
+  /* Stat card ----------------------------------------------------------- */
+  /* The shape components/stat_card.html composes. Having it as a class lets
+     the style guide show variants and keeps the partial declarative. */
+  .stat-card {
+    @apply bg-surface border border-border rounded-2xl p-5 sm:p-6;
+    box-shadow: var(--shadow-card);
+  }
+  .stat-card-label { @apply text-sm font-medium; color: var(--color-ink-subtle); }
+  .stat-card-value {
+    @apply mt-3 text-3xl font-semibold tracking-tight tabular-nums;
+    color: var(--color-ink);
+  }
+  .stat-card-sub { @apply mt-1 text-xs; color: var(--color-ink-subtle); }
+  .stat-card-icon {
+    @apply shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl;
+  }
+  .stat-card-delta { @apply inline-flex items-center gap-1 text-xs font-medium; }
+  .stat-card-delta[data-dir="up"] { @apply text-teal-600; }
+  .stat-card-delta[data-dir="down"] { @apply text-coral-600; }
+
+  /* Work queue ---------------------------------------------------------- */
+  /* The dashboard's primary tiles. A tile with nothing in it stays quiet; a
+     tile with work in it takes on its tone, so the page reads at a glance
+     without the user parsing four numbers. */
+  .work-tile {
+    @apply flex flex-col gap-1 rounded-xl border p-4 transition-colors;
+    border-color: var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-ink-subtle);
+    transition-timing-function: var(--ease-emphasized);
+  }
+  .work-tile:hover {
+    border-color: var(--color-brand-300);
+    box-shadow: var(--shadow-pop);
+  }
+  .work-tile-value {
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums;
+    color: var(--color-ink);
+  }
+  .work-tile-label { @apply text-xs sm:text-sm leading-snug; }
+
+  .work-tile--active { @apply bg-brand-50 border-brand-200 text-brand-700; }
+  .work-tile--active .work-tile-value { @apply text-brand-800; }
+  .work-tile--warn { @apply bg-amber-50 border-amber-200 text-amber-800; }
+  .work-tile--warn .work-tile-value { @apply text-amber-900; }
+  .work-tile--good { @apply bg-teal-50 border-teal-200 text-teal-800; }
+  .work-tile--good .work-tile-value { @apply text-teal-900; }
+
+  /* Section that carries the page's primary answer. Slightly lifted off the
+     canvas so it out-ranks the cards below it without shouting. */
+  .panel-primary {
+    @apply rounded-2xl border p-5 sm:p-6;
+    background-color: var(--color-surface);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-pop);
+  }
+
+  /* Empty state --------------------------------------------------------- */
+  .empty-state { @apply text-center py-12 px-6; }
+  .empty-state-icon {
+    @apply inline-flex items-center justify-center w-12 h-12 rounded-2xl;
+    background-color: var(--color-canvas);
+    color: var(--color-ink-subtle);
+  }
+  .empty-state-title { @apply mt-4 text-base font-semibold; color: var(--color-ink); }
+  .empty-state-message {
+    @apply mt-1 text-sm max-w-sm mx-auto;
+    color: var(--color-ink-subtle);
+  }
 }

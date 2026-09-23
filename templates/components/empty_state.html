@@ -1,17 +1,17 @@
-{% comment %}Empty state — icon + title + one line + (optional) one primary action.
+{% comment %}Empty state - icon + title + one line + (optional) one primary action.
 Usage:
   {% include "components/empty_state.html" with icon="send" title="No campaigns yet"
      message="Create your first campaign to reach your contacts."
      action_url="/email/campaigns/new/" action_label="New campaign" %}
 {% endcomment %}
-<div class="text-center py-12 px-6">
+<div class="empty-state">
   {% if icon %}
-    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-canvas text-gray-400">
+    <span class="empty-state-icon">
       {% include "components/icon.html" with name=icon class="w-6 h-6" %}
     </span>
   {% endif %}
-  <p class="mt-4 text-base font-semibold text-ink">{{ title }}</p>
-  {% if message %}<p class="mt-1 text-sm text-gray-600 max-w-sm mx-auto">{{ message }}</p>{% endif %}
+  <p class="empty-state-title">{{ title }}</p>
+  {% if message %}<p class="empty-state-message">{{ message }}</p>{% endif %}
   {% if action_url and action_label %}
     <a href="{{ action_url }}" class="btn btn-primary btn-sm mt-4">{{ action_label }}</a>
   {% endif %}

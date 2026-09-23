@@ -18,7 +18,11 @@
   .article-body strong { color: #12182B; font-weight: 600; }
   .article-body .note { border: 1px solid var(--tw-border, #E8EDF3); background: #FAFBFC;
                         border-radius: 0.75rem; padding: 0.85rem 1rem; font-size: 0.9rem; }
-  .article-body table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  /* display:block + overflow-x lets a wide table scroll instead of forcing the
+     page to scroll horizontally - same treatment the developer docs use. */
+  .article-body table { display: block; width: fit-content; max-width: 100%;
+                        overflow-x: auto; -webkit-overflow-scrolling: touch;
+                        border-collapse: collapse; font-size: 0.875rem; }
   .article-body th, .article-body td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #E8EDF3; vertical-align: top; }
   .article-body th { color: #657089; font-weight: 600; }
 </style>

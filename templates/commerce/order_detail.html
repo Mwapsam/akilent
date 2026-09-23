@@ -24,16 +24,18 @@
   <section class="lg:col-span-2 space-y-6">
     <div class="card card-pad">
       <h2 class="text-lg font-semibold text-ink mb-3">Items</h2>
-      <table class="table table--cards">
-        <tbody>
-          {% for item in items %}
-          <tr>
-            <td data-label="Item">{{ item.quantity }} &times; {{ item.name }}</td>
-            <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td data-label="Item">{{ item.quantity }} &times; {{ item.name }}</td>
+              <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card card-pad">

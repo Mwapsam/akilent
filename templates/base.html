@@ -25,11 +25,18 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   
+  {# HTMX drives every partial swap/poll. Deferred like Alpine so it does not
+     block paint; the CSRF token rides on every hx-* request via hx-headers on
+     <body>, which all descendants inherit. #}
+  <script defer src="{% static 'js/htmx.min.js' %}"></script>
+
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
+  {% block extra_head %}{% endblock %}
 </head>
-<body class="h-full bg-canvas text-ink antialiased" x-data>
+<body class="h-full bg-canvas text-ink antialiased" x-data
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
@@ -39,9 +46,11 @@
 
   {% if user.is_authenticated %}
 
-    {# ─── Desktop sidebar — icon rail at md, full (collapsible) at lg ──────── #}
-    {# Three-tier layout: mobile drawer (below md) / md icon-rail / lg collapsible full. #}
-    <aside class="hidden md:flex md:flex-col fixed inset-y-0 left-0 bg-surface
+    {# ─── Desktop sidebar — full, collapsible to an icon rail ──────────────── #}
+    {# Two tiers: off-canvas drawer below lg / full sidebar at lg, which the user
+       may collapse to a rail. There is deliberately no permanent md rail: a
+       touch tablet cannot hover, so an icon-only rail there is unlabelled nav. #}
+    <aside class="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 bg-surface
                   border-r border-border transition-[width] duration-200"
            style="width: var(--sidebar-current-w); z-index: var(--z-sticky)">
 
@@ -125,9 +134,9 @@
                      flex items-center gap-2 sm:gap-3 px-4 sm:px-6"
               style="z-index: var(--z-sticky)">
 
-        {# Mobile menu trigger — drawer is the nav below md #}
+        {# Mobile menu trigger — drawer is the nav below lg #}
         <button type="button"
-                class="md:hidden btn btn-ghost btn-icon"
+                class="lg:hidden btn btn-ghost btn-icon"
                 @click="$store.ui.openDrawer()"
                 aria-label="Open menu">
           {% include "components/icon.html" with name="menu" class="w-5 h-5" %}
@@ -282,6 +291,8 @@
     {% include "components/onboarding_widget.html" %}
     {% include "components/welcome_tour.html" %}
   {% endif %}
+
+  {% block extra_js %}{% endblock %}
 
 </body>
 </html>

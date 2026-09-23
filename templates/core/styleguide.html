@@ -180,5 +180,75 @@
     </div>
   </section>
 
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Avatar</h2>
+    <div class="card card-pad flex items-center gap-4">
+      <span class="avatar avatar-sm">AK</span>
+      <span class="avatar avatar-md">MW</span>
+      <span class="avatar avatar-lg">JD</span>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Tooltip</h2>
+    <p class="text-sm text-gray-600 mb-3">
+      Hover or focus the button. Suppressed on touch, which cannot hover &mdash; those
+      contexts must keep a visible label.
+    </p>
+    <div class="card card-pad">
+      <button type="button" class="btn btn-secondary btn-sm tooltip" data-tooltip="Campaigns">
+        {% include "components/icon.html" with name="send" class="w-4 h-4" %}
+      </button>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Timeline</h2>
+    <div class="card card-pad">
+      <ol class="timeline">
+        <li class="timeline-item" data-state="done">
+          <p class="timeline-title">Draft created</p>
+          <p class="timeline-meta">Mar 4, 09:12</p>
+        </li>
+        <li class="timeline-item" data-state="done">
+          <p class="timeline-title">Scheduled</p>
+          <p class="timeline-meta">Mar 4, 09:20 &middot; for Mar 5, 08:00</p>
+        </li>
+        <li class="timeline-item" data-state="current">
+          <p class="timeline-title">Sending</p>
+          <p class="timeline-meta">1,204 of 4,210 dispatched</p>
+        </li>
+        <li class="timeline-item">
+          <p class="timeline-title">Sent</p>
+          <p class="timeline-meta">Not yet reached</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Skeletons</h2>
+    <p class="text-sm text-gray-600 mb-3">
+      Loading placeholders mirror the shape of the content that replaces them.
+      Page content never uses a spinner (spec &sect;9).
+    </p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="skeleton-stat"></div>
+      <div class="skeleton-stat"></div>
+      <div class="skeleton-stat"></div>
+      <div class="skeleton-stat"></div>
+    </div>
+    <div class="table-wrap">
+      {% for _ in "123" %}
+      <div class="skeleton-table-row">
+        <span class="w-1/4"></span>
+        <span class="w-1/3"></span>
+        <span class="w-16"></span>
+        <span class="w-20 ml-auto"></span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
 </div>
 {% endblock %}

@@ -1,0 +1,141 @@
+{% comment %}Everything below the work queue, loaded by HTMX after first paint.
+
+Swapped in for the skeleton placeholder in dashboard.html. Deliberately has no
+hx-trigger of its own, so it loads exactly once.
+{% endcomment %}
+<div id="dashboard-panels" class="space-y-6">
+
+  {# ── Upcoming sends (2 cols) + Setup (1 col), per spec §12 ──────────── #}
+  <div class="grid gap-6 lg:grid-cols-3">
+
+    <div class="card overflow-hidden lg:col-span-2">
+      <div class="flex items-center justify-between card-pad pb-3">
+        <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
+        <a href="/email/campaigns/?status=scheduled"
+           class="text-sm text-brand-600 hover:text-brand-700">View all</a>
+      </div>
+      {% if upcoming_sends %}
+        <ul class="divide-y divide-border">
+          {% for s in upcoming_sends %}
+          <li class="px-5 sm:px-6 py-3 flex items-start gap-3">
+            {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0 mt-0.5" %}
+            {# Stacks under sm: a fixed-width time column beside a truncating
+               label does not fit a 360px screen. #}
+            <div class="min-w-0 flex-1 sm:flex sm:items-center sm:gap-3">
+              <span class="block text-xs sm:text-sm text-gray-500 tabular-nums sm:w-40 sm:shrink-0">
+                {{ s.when|date:"D M j, H:i" }}
+              </span>
+              <span class="block text-sm font-medium text-ink truncate sm:flex-1">{{ s.label }}</span>
+            </div>
+            {% include "components/channel_tag.html" with channel=s.channel %}
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign and it will show up here." action_url="/email/campaigns/new/" action_label="Schedule a send" %}
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="text-lg font-semibold text-ink mb-3">Setup</h2>
+      {% if attention_items %}
+        <ul class="space-y-2">
+          {% for a in attention_items %}
+          <li>
+            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
+              {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
+              <span>{{ a.text }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="flex items-center gap-2 text-sm text-gray-500">
+          {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500 shrink-0" %}
+          All clear — nothing to configure.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Email stats (secondary; "Scheduled" lives in the panel above) ──── #}
+  <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
+    {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
+    {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
+  </div>
+
+  {# ── Recent activity ───────────────────────────────────────────────── #}
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between card-pad pb-3">
+      <h2 class="text-lg font-semibold text-ink">Recent activity</h2>
+      <a href="/logs/messages/" class="text-sm text-brand-600 hover:text-brand-700">View activity log</a>
+    </div>
+    {% if recent_sends %}
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <thead>
+            <tr><th>Recipient</th><th>Subject</th><th>Status</th><th class="text-right">When</th></tr>
+          </thead>
+          <tbody>
+            {% for m in recent_sends %}
+            <tr>
+              <td data-label="Recipient" class="font-medium text-ink">{{ m.to_email }}</td>
+              <td data-label="Subject" class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
+              <td data-label="Status">
+                {% include "components/status.html" with state=m.status badge=True %}
+              </td>
+              <td data-label="When" class="text-gray-400 text-right tabular-nums">{{ m.created_at|date:"M j, H:i" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="send" title="No messages sent yet" message="Send your first campaign and recent activity will appear here." %}
+    {% endif %}
+  </div>
+
+  {# ── Subscription ──────────────────────────────────────────────────── #}
+  {% if subscription %}
+  <div class="card card-pad">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-ink">{{ subscription.plan.name }} plan</h2>
+        <p class="mt-1 text-sm text-gray-600">
+          {% if subscription.status == 'active' %}<span class="badge badge-success">Active</span>
+          {% elif subscription.status == 'trialing' %}<span class="badge badge-info">Trialing</span>
+          {% elif subscription.status == 'past_due' %}<span class="badge badge-warning">Past due</span>
+          {% else %}<span class="badge badge-neutral capitalize">{{ subscription.status }}</span>{% endif %}
+          {% if subscription.current_period_end %} · renews {{ subscription.current_period_end|date:"M j, Y" }}{% endif %}
+        </p>
+      </div>
+      <a href="/billing/plans/" class="btn btn-secondary btn-sm">Manage plan</a>
+    </div>
+    {% if email_quota and email_quota > 0 %}
+    <div class="mt-4">
+      <div class="flex items-end justify-between mb-1.5 text-sm">
+        <span class="text-gray-600" id="quota-label">Email usage this month</span>
+        <span class="text-gray-500 tabular-nums">{{ emails_used }} / {{ email_quota }} · {{ usage_pct }}%</span>
+      </div>
+      <div class="h-2 rounded-full bg-canvas overflow-hidden" role="progressbar"
+           aria-labelledby="quota-label"
+           aria-valuenow="{{ usage_pct }}" aria-valuemin="0" aria-valuemax="100"
+           aria-valuetext="{{ emails_used }} of {{ email_quota }} emails used, {{ usage_pct }} percent">
+        <div class="h-full rounded-full transition-all {% if usage_pct >= 90 %}bg-coral-500{% elif usage_pct >= 75 %}bg-amber-500{% else %}bg-brand-600{% endif %}"
+             style="width: {{ usage_pct }}%"></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card card-pad flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">No active plan</h2>
+      <p class="mt-1 text-sm text-gray-600">Choose a plan to raise your sending limits.</p>
+    </div>
+    <a href="/billing/plans/" class="btn btn-primary btn-sm">Choose a plan</a>
+  </div>
+  {% endif %}
+
+</div>
