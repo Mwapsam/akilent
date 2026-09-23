@@ -67,6 +67,13 @@
       toggleSidebar() {
         this.sidebarCollapsed = !this.sidebarCollapsed;
         localStorage.setItem("sidebarCollapsed", this.sidebarCollapsed ? "1" : "0");
+        // Keep the CSS var (set pre-hydration by the head script) in sync so
+        // --sidebar-current-w — and anything else reading it — stays correct.
+        if (this.sidebarCollapsed) {
+          document.documentElement.setAttribute("data-sidebar-collapsed", "1");
+        } else {
+          document.documentElement.removeAttribute("data-sidebar-collapsed");
+        }
       },
       openDrawer() { this.drawerOpen = true; },
       closeDrawer() { this.drawerOpen = false; },

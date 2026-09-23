@@ -165,9 +165,27 @@
   /* Sidebar layout dimensions (icon rail at md, collapsible full at lg). */
   --sidebar-rail-w: 4.75rem;
   --sidebar-full-w: 16rem;
+  /* Resolved current width: rail by default (icon rail at md, and the lg
+     default before JS/media queries apply); full once >=1024px, unless the
+     user collapsed it. Computed in plain CSS so it's correct on first paint
+     — Alpine only needs to animate it on an actual toggle click, not on
+     every page navigation. */
+  --sidebar-current-w: var(--sidebar-rail-w);
 
   /* Motion. */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (min-width: 1024px) {
+  :root { --sidebar-current-w: var(--sidebar-full-w); }
+}
+:root[data-sidebar-collapsed="1"] {
+  --sidebar-current-w: var(--sidebar-rail-w);
+}
+
+.app-shell-pl { padding-left: 0; }
+@media (min-width: 768px) {
+  .app-shell-pl { padding-left: var(--sidebar-current-w); }
 }
 
 /* Self-hosted variable font — swap to avoid invisible text / CLS. */
@@ -225,6 +243,10 @@
   html {
     -webkit-text-size-adjust: 100%;
     font-feature-settings: "cv11", "ss01";
+    /* Reserve the vertical scrollbar's space on every page so the layout
+       (sidebar included) doesn't shift horizontally when a page is short
+       enough to hide it. */
+    scrollbar-gutter: stable;
   }
   body {
     font-family: var(--font-sans);

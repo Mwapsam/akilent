@@ -12,6 +12,12 @@
       try {
         var t = localStorage.getItem("akilent:theme");
         if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+        // Apply the saved sidebar width before first paint too — otherwise the
+        // sidebar (and main content padding) render at their default width,
+        // then jump once Alpine hydrates on every page navigation.
+        if (localStorage.getItem("sidebarCollapsed") === "1") {
+          document.documentElement.setAttribute("data-sidebar-collapsed", "1");
+        }
       } catch (e) {}
     })();
   </script>
@@ -37,8 +43,7 @@
     {# Three-tier layout: mobile drawer (below md) / md icon-rail / lg collapsible full. #}
     <aside class="hidden md:flex md:flex-col fixed inset-y-0 left-0 bg-surface
                   border-r border-border transition-[width] duration-200"
-           style="width: var(--sidebar-rail-w); z-index: var(--z-sticky)"
-           :style="window.matchMedia('(min-width: 1024px)').matches && !$store.ui.sidebarCollapsed ? 'width: var(--sidebar-full-w)' : null">
+           style="width: var(--sidebar-current-w); z-index: var(--z-sticky)">
 
       <div class="h-16 flex items-center gap-2 px-4 border-b border-border">
         {% include "components/brand_mark.html" with class="w-9 h-9" %}
@@ -113,8 +118,7 @@
 
   {# ─── Main column ─────────────────────────────────────────────────────── #}
   {% if user.is_authenticated %}
-    <div class="transition-[padding] duration-200"
-         :style="`padding-left: ${window.matchMedia('(min-width: 768px)').matches ? (window.matchMedia('(min-width: 1024px)').matches && !$store.ui.sidebarCollapsed ? 'var(--sidebar-full-w)' : 'var(--sidebar-rail-w)') : '0'}`">
+    <div class="app-shell-pl transition-[padding] duration-200">
 
       {# Topbar #}
       <header class="sticky top-0 h-16 bg-surface/90 backdrop-blur border-b border-border
