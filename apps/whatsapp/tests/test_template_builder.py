@@ -33,40 +33,55 @@ class ValidateFieldsTest(TestCase):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="Payment Reminder", category="utility", language="en",
-                body="Hi {{1}}", variable_labels=["name"],
+                body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
             )
 
     def test_rejects_non_sequential_variables(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="reminder", category="utility", language="en",
-                body="Hi {{2}}", variable_labels=["name"],
+                body="Hi {{2}}", variable_labels=["name"], variable_examples=["Ada"],
             )
 
     def test_rejects_mismatched_label_count(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="reminder", category="utility", language="en",
-                body="Hi {{1}}, order {{2}}", variable_labels=["name"],
+                body="Hi {{1}}, order {{2}}", variable_labels=["name"], variable_examples=["Ada", "1029"],
+            )
+
+    def test_rejects_mismatched_example_count(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="reminder", category="utility", language="en",
+                body="Hi {{1}}, order {{2}}", variable_labels=["name", "order"], variable_examples=["Ada"],
+            )
+
+    def test_rejects_blank_example(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="reminder", category="utility", language="en",
+                body="Hi {{1}}", variable_labels=["name"], variable_examples=["  "],
             )
 
     def test_accepts_valid_fields(self):
         validate_fields(
             name="payment_reminder", category="utility", language="en",
-            body="Hi {{1}}, order {{2}} is unpaid.", variable_labels=["name", "order"],
+            body="Hi {{1}}, order {{2}} is unpaid.",
+            variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
         )
 
     def test_accepts_no_variables(self):
         validate_fields(
             name="welcome", category="utility", language="en",
-            body="Welcome to our store!", variable_labels=[],
+            body="Welcome to our store!", variable_labels=[], variable_examples=[],
         )
 
     def test_rejects_button_text_too_long(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[],
+                body="Welcome!", variable_labels=[], variable_examples=[],
                 buttons=[{"text": "x" * 26, "url": "https://example.com"}],
             )
 
@@ -74,47 +89,60 @@ class ValidateFieldsTest(TestCase):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[],
+                body="Welcome!", variable_labels=[], variable_examples=[],
                 buttons=[{"text": "Visit", "url": "example.com"}],
             )
 
     def test_rejects_dynamic_button_url_without_example(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[],
-                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{1}}"}],
+                name="reminder", category="utility", language="en",
+                body="Hi {{1}}, order {{2}} is unpaid.",
+                variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
+                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}"}],
             )
 
-    def test_rejects_button_url_with_extra_placeholder(self):
+    def test_rejects_button_url_referencing_variable_not_in_body(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[],
+                name="reminder", category="utility", language="en",
+                body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
                 buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1"}],
+            )
+
+    def test_rejects_button_url_with_more_than_one_placeholder(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="reminder", category="utility", language="en",
+                body="Hi {{1}}, order {{2}} is unpaid.",
+                variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
+                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{1}}/{{2}}", "example": "https://pay.example.com/1"}],
             )
 
     def test_rejects_more_than_one_button(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
                 name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[],
+                body="Welcome!", variable_labels=[], variable_examples=[],
                 buttons=[
                     {"text": "One", "url": "https://example.com"},
                     {"text": "Two", "url": "https://example.com"},
                 ],
             )
 
-    def test_accepts_static_and_dynamic_button(self):
+    def test_accepts_static_button(self):
         validate_fields(
             name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[],
+            body="Welcome!", variable_labels=[], variable_examples=[],
             buttons=[{"text": "Learn more", "url": "https://example.com"}],
         )
+
+    def test_accepts_button_sharing_a_body_variable(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[],
-            buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{1}}", "example": "https://pay.example.com/1029"}],
+            name="reminder", category="utility", language="en",
+            body="Hi {{1}}, order {{2}} is unpaid.",
+            variable_labels=["Customer name", "Order number"], variable_examples=["Ada", "1029"],
+            buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"}],
         )
 
 
@@ -185,13 +213,13 @@ class CreateAndSubmitTemplateTest(TestCase):
                 variable_labels=["Customer name", "Order number"],
                 variable_examples=["Ada", "1029"],
                 header="Order update", footer="Thanks for your business",
-                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{1}}", "example": "https://pay.example.com/1029"}],
+                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"}],
             )
         self.assertEqual(tpl.header, "Order update")
         self.assertEqual(tpl.footer, "Thanks for your business")
         self.assertEqual(tpl.variable_examples, ["Ada", "1029"])
         self.assertEqual(tpl.buttons, [{
-            "type": "URL", "text": "Pay now", "url": "https://pay.example.com/{{1}}",
+            "type": "URL", "text": "Pay now", "url": "https://pay.example.com/{{2}}",
             "example": ["https://pay.example.com/1029"],
         }])
         # regression guard: campaigns.py::_resolve_campaign_variables treats

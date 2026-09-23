@@ -30,7 +30,12 @@ def _extract_variable_numbers(body: str) -> list[int]:
     return [int(n) for n in _VAR_RE.findall(body)]
 
 
-def _validate_buttons(buttons: list[dict]) -> None:
+def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> None:
+    """Button URL variables aren't a separate namespace from the body's — a
+    button referencing {{2}} means "the same {{2}} the body already defines"
+    (same label/example), giving Akilent one coherent variable system instead
+    of Meta's independent per-component numbering.
+    """
     if len(buttons) > 1:
         raise TemplateBuilderError("Only one button is supported per template.")
     if not buttons:
@@ -50,21 +55,21 @@ def _validate_buttons(buttons: list[dict]) -> None:
         raise TemplateBuilderError("The button URL must start with http:// or https://.")
 
     numbers = _extract_variable_numbers(url)
-    if numbers not in ([], [1]):
+    if len(numbers) > 1:
+        raise TemplateBuilderError("The button URL can contain only one variable.")
+    if numbers and numbers[0] not in body_variable_numbers:
+        raise TemplateBuilderError("The button URL must use a variable that's already in the message.")
+    if numbers and not example:
         raise TemplateBuilderError(
-            "The button URL can only use one variable — {{1}} — for the dynamic part of the link."
+            f"Give an example URL for the button's {{{{{numbers[0]}}}}} — required by WhatsApp for approval."
         )
-    if numbers == [1] and not example:
-        raise TemplateBuilderError(
-            "Give an example URL for the button's {{1}} — required by WhatsApp for approval."
-        )
-    if numbers == [] and example:
-        raise TemplateBuilderError("Remove the button's example URL, or add {{1}} to the URL to use it.")
+    if not numbers and example:
+        raise TemplateBuilderError("Remove the button's example URL, or reference a message variable in the URL to use it.")
 
 
 def validate_fields(
     *, name: str, category: str, language: str, body: str,
-    variable_labels: list[str], header: str = "", footer: str = "",
+    variable_labels: list[str], variable_examples: list[str], header: str = "", footer: str = "",
     buttons: list[dict] | None = None,
 ) -> None:
     if not name or not _NAME_RE.match(name):
@@ -84,15 +89,17 @@ def validate_fields(
         raise TemplateBuilderError(
             "Variables must be numbered in order starting at {{1}} — e.g. {{1}}, {{2}}, {{3}}."
         )
-    if len(variable_labels) != len(numbers):
+    if len(variable_labels) != len(numbers) or len(variable_examples) != len(numbers):
         raise TemplateBuilderError(
             "Every variable needs a label and an example value (used to show agents "
             "what to fill in, and required by WhatsApp for approval)."
         )
     if any(not label.strip() for label in variable_labels):
         raise TemplateBuilderError("Every variable needs a label.")
+    if any(not example.strip() for example in variable_examples):
+        raise TemplateBuilderError("Every variable needs an example value.")
 
-    _validate_buttons(buttons or [])
+    _validate_buttons(buttons or [], numbers)
 
 
 def _build_button(*, text: str, url: str, example: str = "") -> dict:
@@ -146,8 +153,8 @@ def create_and_submit_template(
     buttons = buttons or []
     validate_fields(
         name=name, category=category, language=language, body=body,
-        variable_labels=variable_labels, header=header, footer=footer,
-        buttons=buttons,
+        variable_labels=variable_labels, variable_examples=variable_examples,
+        header=header, footer=footer, buttons=buttons,
     )
 
     number = (

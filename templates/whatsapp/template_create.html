@@ -73,26 +73,31 @@
 
     <div>
       <label class="label">Button (optional)</label>
-      <p class="text-xs text-gray-400 mb-2">A "visit website" button. Leave blank to skip. Use {% verbatim %}{{1}}{% endverbatim %} in the URL for a link that changes per customer (e.g. an order page).</p>
+      <p class="text-xs text-gray-400 mb-2">A "visit website" button. Leave blank to skip. A dynamic link reuses one of the variables already defined below (e.g. {% verbatim %}{{2}}{% endverbatim %} for an order number) — pick it instead of typing the number.</p>
       <div class="grid grid-cols-2 gap-2">
         <input id="tpl-button-text" name="button_text" class="input" placeholder="Button text, e.g. Pay now" maxlength="25" value="{{ form.button_text|default:'' }}" />
-        <input id="tpl-button-url" name="button_url" class="input" placeholder="{% verbatim %}https://example.com or https://example.com/{{1}}{% endverbatim %}" value="{{ form.button_url|default:'' }}" />
+        <input id="tpl-button-url" name="button_url" class="input" placeholder="{% verbatim %}https://example.com or https://example.com/{{2}}{% endverbatim %}" value="{{ form.button_url|default:'' }}" />
       </div>
-      <input id="tpl-button-example" name="button_url_example" class="input mt-2 hidden" placeholder="{% verbatim %}Example URL for {{1}}, e.g. https://example.com/1029{% endverbatim %}" value="{{ form.button_url_example|default:'' }}" />
+      <div class="flex gap-2 mt-2">
+        <select id="tpl-button-variable-picker" class="select" data-role="button-variable-picker">
+          <option value="">Use a message variable…</option>
+        </select>
+        <input id="tpl-button-example" name="button_url_example" class="input hidden" placeholder="{% verbatim %}Example URL, e.g. https://example.com/1029{% endverbatim %}" value="{{ form.button_url_example|default:'' }}" />
+      </div>
     </div>
 
     <div>
       <label class="label">Variables</label>
-      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval. Pick "Insert from contact field" to autofill a row from your customer data.</p>
-      <div id="variable-rows" class="space-y-2" data-contact-fields='{{ contact_fields_json }}'>
+      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval. Pick "Insert Akilent data field" to autofill a row from Contact, Order or Payment data.</p>
+      <div id="variable-rows" class="space-y-2" data-fields='{{ data_fields_json }}'>
         {% for label, example in variable_rows %}
         <div class="flex gap-2">
-          <select class="select" data-role="contact-field-picker">
-            <option value="">Insert from contact field…</option>
+          <select class="select" data-role="data-field-picker" data-target="variable">
+            <option value="">Insert Akilent data field…</option>
           </select>
           <input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="{{ label }}" />
           <input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="{{ example }}" />
-          <button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove(); window.WhatsAppTemplatePreview &amp;&amp; window.WhatsAppTemplatePreview.refreshButtonVariablePicker();">Remove</button>
         </div>
         {% endfor %}
       </div>
@@ -127,12 +132,15 @@
     const row = document.createElement('div');
     row.className = 'flex gap-2';
     row.innerHTML =
-      '<select class="select" data-role="contact-field-picker"><option value="">Insert from contact field…</option></select>' +
+      '<select class="select" data-role="data-field-picker"><option value="">Insert Akilent data field…</option></select>' +
       '<input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="' + (label || '').replace(/"/g, '&quot;') + '" />' +
       '<input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="' + (example || '').replace(/"/g, '&quot;') + '" />' +
-      '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">Remove</button>';
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove(); window.WhatsAppTemplatePreview && window.WhatsAppTemplatePreview.refreshButtonVariablePicker();">Remove</button>';
     container.appendChild(row);
-    if (window.WhatsAppTemplatePreview) window.WhatsAppTemplatePreview.populateContactPicker(row.querySelector('[data-role="contact-field-picker"]'));
+    if (window.WhatsAppTemplatePreview) {
+      window.WhatsAppTemplatePreview.populateDataFieldPicker(row.querySelector('[data-role="data-field-picker"]'));
+      window.WhatsAppTemplatePreview.refreshButtonVariablePicker();
+    }
   }
 </script>
 {% load static %}

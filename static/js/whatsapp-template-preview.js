@@ -1,14 +1,21 @@
 /*
  * Live chat-bubble preview for the WhatsApp create-template form, plus the
- * "insert from contact field" picker on each variable row. Pure client-side:
- * WhatsApp template bodies are plain text with {{n}} substitution (no HTML/
- * Django-template rendering like the email builder's preview), so no server
- * round-trip is needed here.
+ * "insert Akilent data field" picker on each variable row and the button's
+ * "use a message variable" picker. Pure client-side: WhatsApp template
+ * bodies are plain text with {{n}} substitution (no HTML/Django-template
+ * rendering like the email builder's preview), so no server round-trip is
+ * needed here.
  *
- * "Insert from contact field" only autofills a variable row's label/example
+ * "Insert Akilent data field" only autofills a variable row's label/example
  * text at creation time — it does not bind the template to that field for
  * sending. Runtime substitution still happens via the campaign's own
  * variable_mapping (apps.whatsapp.campaigns), which has no UI yet.
+ *
+ * A button's {{n}} isn't an independent placeholder — it must reference one
+ * of the message's own variables (apps.whatsapp.template_builder
+ * ._validate_buttons), so the button doesn't get its own data-field picker;
+ * it gets a "use a message variable" picker built from the current variable
+ * rows instead.
  */
 (function () {
   "use strict";
@@ -35,6 +42,7 @@
     var buttonTextEl = document.getElementById("tpl-button-text");
     var buttonUrlEl = document.getElementById("tpl-button-url");
     var buttonExampleEl = document.getElementById("tpl-button-example");
+    var buttonVariablePicker = document.getElementById("tpl-button-variable-picker");
     var variableRows = document.getElementById("variable-rows");
 
     var previewHeader = document.getElementById("wa-preview-header");
@@ -42,25 +50,29 @@
     var previewFooter = document.getElementById("wa-preview-footer");
     var previewButton = document.getElementById("wa-preview-button");
 
-    var contactFields = { built_in: [], custom: [] };
+    var dataFields = { groups: [] };
     try {
-      contactFields = JSON.parse((variableRows && variableRows.getAttribute("data-contact-fields")) || "{}");
-      if (!contactFields.built_in) contactFields.built_in = [];
-      if (!contactFields.custom) contactFields.custom = [];
+      dataFields = JSON.parse((variableRows && variableRows.getAttribute("data-fields")) || "{}");
+      if (!dataFields.groups) dataFields.groups = [];
     } catch (e) {
-      contactFields = { built_in: [], custom: [] };
+      dataFields = { groups: [] };
     }
 
-    function populateContactPicker(select) {
+    function populateDataFieldPicker(select) {
       if (!select || select.dataset.populated) return;
       select.dataset.populated = "1";
-      contactFields.built_in.concat(contactFields.custom).forEach(function (field) {
-        var opt = document.createElement("option");
-        opt.value = field.key;
-        opt.textContent = field.label;
-        opt.dataset.label = field.label;
-        opt.dataset.sample = field.sample;
-        select.appendChild(opt);
+      dataFields.groups.forEach(function (group) {
+        var optgroup = document.createElement("optgroup");
+        optgroup.label = group.label;
+        group.fields.forEach(function (field) {
+          var opt = document.createElement("option");
+          opt.value = group.key + "." + field.key;
+          opt.textContent = field.label;
+          opt.dataset.label = field.label;
+          opt.dataset.sample = field.sample;
+          optgroup.appendChild(opt);
+        });
+        select.appendChild(optgroup);
       });
       select.addEventListener("change", function () {
         var opt = select.selectedOptions[0];
@@ -70,16 +82,33 @@
         var exampleInput = row.querySelector('[name="variable_example"]');
         if (labelInput) labelInput.value = opt.dataset.label;
         if (exampleInput) exampleInput.value = opt.dataset.sample;
+        refreshButtonVariablePicker();
         renderPreview();
       });
     }
 
-    function variableExamples() {
+    function variableLabelsAndExamples() {
       if (!variableRows) return [];
-      return Array.prototype.map.call(
-        variableRows.querySelectorAll('[name="variable_example"]'),
-        function (input) { return input.value; }
-      );
+      var labels = variableRows.querySelectorAll('[name="variable_label"]');
+      var examples = variableRows.querySelectorAll('[name="variable_example"]');
+      return Array.prototype.map.call(labels, function (input, i) {
+        return { label: input.value, example: examples[i] ? examples[i].value : "" };
+      });
+    }
+
+    function refreshButtonVariablePicker() {
+      if (!buttonVariablePicker) return;
+      var selected = buttonVariablePicker.value;
+      buttonVariablePicker.innerHTML = '<option value="">Use a message variable…</option>';
+      variableLabelsAndExamples().forEach(function (v, i) {
+        var opt = document.createElement("option");
+        var n = i + 1;
+        opt.value = String(n);
+        opt.textContent = "{{" + n + "}} " + (v.label || "Variable " + n);
+        opt.dataset.example = v.example;
+        buttonVariablePicker.appendChild(opt);
+      });
+      buttonVariablePicker.value = selected;
     }
 
     function substitute(text, examples) {
@@ -91,12 +120,12 @@
 
     function toggleButtonExampleField() {
       if (!buttonUrlEl || !buttonExampleEl) return;
-      var needsExample = /\{\{1\}\}/.test(buttonUrlEl.value);
+      var needsExample = /\{\{\d+\}\}/.test(buttonUrlEl.value);
       buttonExampleEl.classList.toggle("hidden", !needsExample);
     }
 
     function renderPreview() {
-      var examples = variableExamples();
+      var examples = variableLabelsAndExamples().map(function (v) { return v.example; });
 
       if (headerEl && previewHeader) previewHeader.textContent = headerEl.value;
       if (bodyEl && previewBody) previewBody.textContent = substitute(bodyEl.value, examples);
@@ -115,24 +144,40 @@
     }
 
     var debouncedRender = debounce(renderPreview, 150);
+    var debouncedRefreshButtonPicker = debounce(refreshButtonVariablePicker, 150);
 
     [headerEl, bodyEl, footerEl, buttonTextEl, buttonUrlEl].forEach(function (el) {
       if (el) el.addEventListener("input", debouncedRender);
     });
     if (buttonUrlEl) buttonUrlEl.addEventListener("input", toggleButtonExampleField);
+    if (buttonVariablePicker) {
+      buttonVariablePicker.addEventListener("change", function () {
+        var opt = buttonVariablePicker.selectedOptions[0];
+        if (!opt || !opt.value || !buttonUrlEl) return;
+        buttonUrlEl.value = buttonUrlEl.value.replace(/\{\{\d+\}\}/, "").replace(/\/?$/, "/") + "{{" + opt.value + "}}";
+        if (buttonExampleEl) buttonExampleEl.value = opt.dataset.example || "";
+        toggleButtonExampleField();
+        renderPreview();
+      });
+    }
     if (variableRows) {
-      variableRows.addEventListener("input", debouncedRender);
+      variableRows.addEventListener("input", function () {
+        debouncedRender();
+        debouncedRefreshButtonPicker();
+      });
       Array.prototype.forEach.call(
-        variableRows.querySelectorAll('[data-role="contact-field-picker"]'),
-        populateContactPicker
+        variableRows.querySelectorAll('[data-role="data-field-picker"]'),
+        populateDataFieldPicker
       );
     }
 
     toggleButtonExampleField();
+    refreshButtonVariablePicker();
     renderPreview();
 
     window.WhatsAppTemplatePreview = {
-      populateContactPicker: populateContactPicker,
+      populateDataFieldPicker: populateDataFieldPicker,
+      refreshButtonVariablePicker: refreshButtonVariablePicker,
       render: renderPreview,
     };
   }

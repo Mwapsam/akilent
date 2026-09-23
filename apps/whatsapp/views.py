@@ -58,29 +58,45 @@ def templates_sync(request):
 # builder in front of it. Akilent validates and submits to Meta; Meta stays
 # the approval source of truth (apps.whatsapp.template_builder). ------------
 
-_CONTACT_FIELD_SAMPLES = {
+_CUSTOM_ATTR_SAMPLES = {
     "string": "Sample text", "number": "123", "boolean": "Yes", "date": "2026-09-26",
 }
 
 
-def _contact_fields_json(account) -> str:
-    """"Insert from contact field" picker data for the variable-row/preview JS.
+def _data_fields_json(account) -> str:
+    """Akilent data-field picker ("insert Contact/Order/Payment field") data
+    for the variable-row/button/preview JS, grouped the same way a business
+    owner already thinks about a message: who it's for (Contact), what it's
+    about (Order), how they pay (Payment).
 
-    Client-side autofill only — picking a field here just fills in a variable
-    row's label/example text, it doesn't bind the template to that field (see
-    apps.whatsapp.campaigns.variable_mapping for the separate, not-yet-UI'd
-    send-time binding).
+    Client-side autofill only, keyed as "<group>.<field>" (e.g.
+    "contact.first_name", "order.number", "payment.link") — picking one just
+    fills in a variable/button row's label/example text with a realistic
+    sample, it doesn't bind the template to that field for sending. Runtime
+    substitution with the real value still happens at campaign send time via
+    apps.whatsapp.campaigns.variable_mapping, which has no UI yet — a
+    deliberately separate, not-in-scope gap.
     """
+    contact_fields = [
+        {"key": "first_name", "label": "First name", "sample": "Ada"},
+        {"key": "last_name", "label": "Last name", "sample": "Smith"},
+        {"key": "email", "label": "Email", "sample": "ada@example.com"},
+        {"key": "phone", "label": "Phone", "sample": "+15551234567"},
+    ] + [
+        {"key": a.key, "label": a.label or a.key, "sample": _CUSTOM_ATTR_SAMPLES[a.type]}
+        for a in CustomAttributeDef.objects.filter(account=account).order_by("key")
+    ]
     return json.dumps({
-        "built_in": [
-            {"key": "first_name", "label": "First name", "sample": "Ada"},
-            {"key": "last_name", "label": "Last name", "sample": "Smith"},
-            {"key": "email", "label": "Email", "sample": "ada@example.com"},
-            {"key": "phone", "label": "Phone", "sample": "+15551234567"},
-        ],
-        "custom": [
-            {"key": a.key, "label": a.label or a.key, "sample": _CONTACT_FIELD_SAMPLES[a.type]}
-            for a in CustomAttributeDef.objects.filter(account=account).order_by("key")
+        "groups": [
+            {"key": "contact", "label": "Contact", "fields": contact_fields},
+            {"key": "order", "label": "Order", "fields": [
+                {"key": "number", "label": "Order number", "sample": "1029"},
+                {"key": "total", "label": "Order total", "sample": "49.99"},
+            ]},
+            {"key": "payment", "label": "Payment", "fields": [
+                {"key": "link", "label": "Payment link", "sample": "https://pay.example.com/1029"},
+                {"key": "amount", "label": "Payment amount", "sample": "49.99"},
+            ]},
         ],
     })
 
@@ -118,7 +134,7 @@ def template_create(request):
             return render(request, "whatsapp/template_create.html", {
                 "account": account, "categories": MessageTemplate.Category.choices,
                 "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
-                "variable_rows": rows, "contact_fields_json": _contact_fields_json(account),
+                "variable_rows": rows, "data_fields_json": _data_fields_json(account),
             })
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
@@ -126,7 +142,7 @@ def template_create(request):
     return render(request, "whatsapp/template_create.html", {
         "account": account, "categories": MessageTemplate.Category.choices, "form": {},
         "starters_json": json.dumps(STARTER_CATEGORIES),
-        "contact_fields_json": _contact_fields_json(account),
+        "data_fields_json": _data_fields_json(account),
     })
 
 

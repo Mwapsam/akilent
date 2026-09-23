@@ -11,6 +11,8 @@ row within it.
 """
 from __future__ import annotations
 
+import re
+
 STARTER_CATEGORIES: list[dict] = [
     {
         "key": "conversations",
@@ -155,7 +157,7 @@ STARTER_CATEGORIES: list[dict] = [
                     {"label": "Order number", "example": "1029"},
                 ],
                 "buttons": [
-                    {"text": "Pay now", "url": "https://pay.example.com/{{1}}", "example": "https://pay.example.com/1029"},
+                    {"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"},
                 ],
             },
             {
@@ -575,3 +577,41 @@ STARTER_CATEGORIES: list[dict] = [
         ],
     },
 ]
+
+
+# A starter should teach the Akilent data-field picker (apps.whatsapp.views
+# .template_create's "insert Contact/Order/Payment field"), not just show
+# static example text — so any variable whose label matches one of Akilent's
+# well-known fields gets tagged with its source ("<group>.<field>", matching
+# the picker's option values). A button's own {{n}} isn't a separate
+# namespace — it references a body variable (validated in
+# apps.whatsapp.template_builder._validate_buttons) — so its source is
+# whatever that referenced variable's source already is. Doing this as a
+# pass over the category data, rather than hand-annotating every entry
+# above, keeps the starter library's business-scenario-first readability
+# intact.
+_VAR_NUM_RE = re.compile(r"\{\{(\d+)\}\}")
+_LABEL_SOURCES = {
+    "Customer name": "contact.first_name",
+    "Order number": "order.number",
+    "Payment link": "payment.link",
+}
+
+
+def _annotate_sources() -> None:
+    for category in STARTER_CATEGORIES:
+        for template in category["templates"]:
+            variables = template.get("variables", [])
+            for variable in variables:
+                source = _LABEL_SOURCES.get(variable["label"])
+                if source:
+                    variable["source"] = source
+            for button in template.get("buttons", []):
+                numbers = _VAR_NUM_RE.findall(button.get("url", ""))
+                if numbers:
+                    referenced = variables[int(numbers[0]) - 1]
+                    if referenced.get("source"):
+                        button.setdefault("source", referenced["source"])
+
+
+_annotate_sources()
