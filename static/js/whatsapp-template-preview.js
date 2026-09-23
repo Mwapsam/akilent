@@ -1,29 +1,51 @@
 /*
- * Live chat-bubble preview for the WhatsApp create-template form, plus the
- * "insert Akilent data field" picker on each variable row and the button's
- * "use a message variable" picker. Pure client-side: WhatsApp template
+ * WhatsApp create-template page: live chat-bubble preview, the variable
+ * "Personalize" cards (auto-generated from {{n}} tokens typed in the body),
+ * the Contact/Order/Payment command-menu data-field picker, and progressive
+ * disclosure for header/footer/button. Pure client-side — WhatsApp template
  * bodies are plain text with {{n}} substitution (no HTML/Django-template
  * rendering like the email builder's preview), so no server round-trip is
- * needed here.
+ * needed for any of this.
  *
- * "Insert Akilent data field" only autofills a variable row's label/example
- * text at creation time — it does not bind the template to that field for
- * sending. Runtime substitution still happens via the campaign's own
- * variable_mapping (apps.whatsapp.campaigns), which has no UI yet.
- *
- * The picker's "+ Create custom field…" option POSTs to
- * apps.contacts.views.create_custom_field (the field belongs to Contact, not
- * to WhatsApp) and, on success, adds it to every open picker on the page and
- * selects it in the row that triggered creation — no page reload needed.
+ * Variable cards are the single source of truth for "which variables exist"
+ * and it lives in the DOM (each card's own label/example inputs + a
+ * data-source attribute), not a parallel JS object — reconcileVariableCards()
+ * only adds/removes cards for numbers that appeared/disappeared in the body,
+ * moving (not recreating) surviving cards, so a keystroke never clobbers an
+ * already-filled-in card. The frontend mirrors template_builder.py's
+ * sequential-numbering rule (extractVariableNumbers/isSequential) so a
+ * non-sequential body (e.g. {{1}} and {{3}} with no {{2}}) shows an inline
+ * warning instead of the UI silently inventing or renumbering a variable —
+ * "insert Akilent data field" only autofills a card's label/example text at
+ * creation time, it does not bind the template to that field for sending.
+ * Runtime substitution still happens via the campaign's own variable_mapping
+ * (apps.whatsapp.campaigns), which has no UI yet.
  *
  * A button's {{n}} isn't an independent placeholder — it must reference one
  * of the message's own variables (apps.whatsapp.template_builder
- * ._validate_buttons), so the button doesn't get its own data-field picker;
- * it gets a "use a message variable" picker built from the current variable
- * rows instead.
+ * ._validate_buttons), so the button gets a "use a message variable" select
+ * built from the current cards, not its own data-field picker.
+ *
+ * The picker's "+ Create custom field…" opens a small shared panel that
+ * POSTs to apps.contacts.views.create_custom_field (the field belongs to
+ * Contact, not to WhatsApp) and, on success, is immediately searchable in
+ * every picker on the page — no page reload needed.
  */
 (function () {
   "use strict";
+
+  var ICON_PATHS = {
+    user: "M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z",
+    sliders: "M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75",
+    building: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21",
+    card: "M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M3.75 5.25h16.5a1.5 1.5 0 0 1 1.5 1.5v10.5a1.5 1.5 0 0 1-1.5 1.5H3.75a1.5 1.5 0 0 1-1.5-1.5V6.75a1.5 1.5 0 0 1 1.5-1.5Z",
+  };
+
+  function icon(name) {
+    var d = ICON_PATHS[name] || ICON_PATHS.sliders;
+    return '<svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/></svg>';
+  }
 
   function debounce(fn, wait) {
     var timer;
@@ -31,24 +53,34 @@
       var args = arguments;
       var ctx = this;
       clearTimeout(timer);
-      timer = setTimeout(function () {
-        fn.apply(ctx, args);
-      }, wait);
+      timer = setTimeout(function () { fn.apply(ctx, args); }, wait);
     };
   }
 
   function init() {
-    var form = document.getElementById("wa-template-form");
-    if (!form) return;
+    var builder = document.getElementById("wa-builder");
+    var form = document.getElementById("wa-form");
+    if (!builder || !form) return;
 
+    var headerModeNone = document.getElementById("tpl-header-mode-none");
+    var headerModeText = document.getElementById("tpl-header-mode-text");
     var headerEl = document.getElementById("tpl-header");
     var bodyEl = document.getElementById("tpl-body");
     var footerEl = document.getElementById("tpl-footer");
+    var footerAddBtn = document.getElementById("wa-footer-add");
+    var footerRemoveBtn = document.getElementById("wa-footer-remove");
+    var footerField = document.getElementById("wa-footer-field");
+    var buttonAddBtn = document.getElementById("wa-button-add");
+    var buttonRemoveBtn = document.getElementById("wa-button-remove");
+    var buttonField = document.getElementById("wa-button-field");
     var buttonTextEl = document.getElementById("tpl-button-text");
     var buttonUrlEl = document.getElementById("tpl-button-url");
     var buttonExampleEl = document.getElementById("tpl-button-example");
     var buttonVariablePicker = document.getElementById("tpl-button-variable-picker");
-    var variableRows = document.getElementById("variable-rows");
+    var variableCardsEl = document.getElementById("variable-cards");
+    var noVariablesHint = document.getElementById("wa-no-variables-hint");
+    var variableWarningEl = document.getElementById("wa-variable-warning");
+    var submitBtn = document.getElementById("wa-submit-btn");
 
     var previewHeader = document.getElementById("wa-preview-header");
     var previewBody = document.getElementById("wa-preview-body");
@@ -57,11 +89,275 @@
 
     var dataFields = { groups: [] };
     try {
-      dataFields = JSON.parse((variableRows && variableRows.getAttribute("data-fields")) || "{}");
+      dataFields = JSON.parse(builder.getAttribute("data-fields") || "{}");
       if (!dataFields.groups) dataFields.groups = [];
     } catch (e) {
       dataFields = { groups: [] };
     }
+
+    var initialVariables = [];
+    try {
+      initialVariables = JSON.parse(builder.getAttribute("data-initial-variables") || "[]") || [];
+    } catch (e) {
+      initialVariables = [];
+    }
+
+    // ------------------------------------------------------------------
+    // Variables: extraction, sequencing, and card reconciliation
+    // ------------------------------------------------------------------
+
+    function extractVariableNumbers(body) {
+      var matches = (body || "").match(/\{\{(\d+)\}\}/g) || [];
+      return matches.map(function (m) { return parseInt(m.replace(/\D/g, ""), 10); });
+    }
+
+    function distinctSorted(numbers) {
+      var seen = {};
+      var out = [];
+      numbers.forEach(function (n) {
+        if (!seen[n]) { seen[n] = true; out.push(n); }
+      });
+      out.sort(function (a, b) { return a - b; });
+      return out;
+    }
+
+    function isSequential(numbers) {
+      for (var i = 0; i < numbers.length; i++) {
+        if (numbers[i] !== i + 1) return false;
+      }
+      return true;
+    }
+
+    function updateVariableWarning(rawNumbers) {
+      if (!variableWarningEl) return;
+      var valid = isSequential(rawNumbers);
+      if (valid) {
+        variableWarningEl.classList.add("hidden");
+        variableWarningEl.textContent = "";
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+      var expectedNext = 1;
+      for (var i = 0; i < rawNumbers.length; i++) {
+        if (rawNumbers[i] !== expectedNext) break;
+        expectedNext++;
+      }
+      variableWarningEl.textContent =
+        "Variables must be numbered in order starting at {{1}} — you're missing {{" + expectedNext + "}}.";
+      variableWarningEl.classList.remove("hidden");
+      if (submitBtn) submitBtn.disabled = true;
+    }
+
+    function buildVariableCard(n) {
+      var card = document.createElement("div");
+      card.className = "card card-pad space-y-2";
+      card.dataset.n = String(n);
+      card.dataset.source = "";
+      card.innerHTML =
+        '<div class="flex items-center gap-2">' +
+          '<span class="inline-flex items-center justify-center w-9 h-7 rounded-full bg-gray-100 text-xs font-semibold text-gray-600 shrink-0">{{' + n + '}}</span>' +
+          '<input class="input flex-1" name="variable_label" placeholder="Label, e.g. Customer name" />' +
+        '</div>' +
+        '<div data-role="picker-mount"></div>' +
+        '<div>' +
+          '<label class="text-xs text-gray-400 block mb-1">Example</label>' +
+          '<input class="input" name="variable_example" placeholder="e.g. Ada" />' +
+        '</div>' +
+        '<p class="text-xs text-gray-400">Used to generate an example for Meta’s approval — not yet a live binding when this template is sent.</p>';
+
+      var labelInput = card.querySelector('[name="variable_label"]');
+      var exampleInput = card.querySelector('[name="variable_example"]');
+      var mount = card.querySelector('[data-role="picker-mount"]');
+
+      card._picker = createDataFieldPicker(mount, {
+        getValue: function () { return card.dataset.source; },
+        onSelect: function (value, meta) {
+          card.dataset.source = value;
+          if (meta) {
+            labelInput.value = meta.label;
+            exampleInput.value = meta.sample;
+          }
+          refreshButtonVariablePicker();
+          renderPreview();
+        },
+      });
+
+      labelInput.addEventListener("input", renderPreview);
+      exampleInput.addEventListener("input", debounce(function () {
+        refreshButtonVariablePicker();
+        renderPreview();
+      }, 150));
+
+      return card;
+    }
+
+    function renderVariableCards(present) {
+      var existing = {};
+      Array.prototype.forEach.call(variableCardsEl.children, function (card) {
+        existing[card.dataset.n] = card;
+      });
+      // Remove cards for numbers no longer present.
+      Object.keys(existing).forEach(function (n) {
+        if (present.indexOf(parseInt(n, 10)) === -1) existing[n].remove();
+      });
+      // Create cards for newly-seen numbers, then reorder (append moves an
+      // existing node rather than recreating it, preserving its state).
+      present.forEach(function (n) {
+        var card = variableCardsEl.querySelector('[data-n="' + n + '"]');
+        if (!card) card = buildVariableCard(n);
+        variableCardsEl.appendChild(card);
+      });
+      if (noVariablesHint) noVariablesHint.classList.toggle("hidden", present.length > 0);
+    }
+
+    function applyInitialVariables() {
+      // Populate freshly-created cards from the server's error-repost state
+      // (label, example) by position — best-effort only; source isn't
+      // persisted server-side so it can't be restored here.
+      initialVariables.forEach(function (pair, i) {
+        var card = variableCardsEl.children[i];
+        if (!card) return;
+        var labelInput = card.querySelector('[name="variable_label"]');
+        var exampleInput = card.querySelector('[name="variable_example"]');
+        if (labelInput && !labelInput.value) labelInput.value = pair[0] || "";
+        if (exampleInput && !exampleInput.value) exampleInput.value = pair[1] || "";
+      });
+    }
+
+    function reconcileVariableCards() {
+      var raw = extractVariableNumbers(bodyEl.value);
+      var present = distinctSorted(raw);
+      renderVariableCards(present);
+      updateVariableWarning(raw);
+      refreshButtonVariablePicker();
+      renderPreview();
+    }
+
+    // ------------------------------------------------------------------
+    // Command-menu data-field picker
+    // ------------------------------------------------------------------
+
+    function fieldByValue(value) {
+      if (!value) return null;
+      for (var i = 0; i < dataFields.groups.length; i++) {
+        var g = dataFields.groups[i];
+        for (var j = 0; j < g.fields.length; j++) {
+          if ((g.prefix || g.key) + "." + g.fields[j].key === value) {
+            return { group: g, field: g.fields[j] };
+          }
+        }
+      }
+      return null;
+    }
+
+    function createDataFieldPicker(mount, opts) {
+      var wrap = document.createElement("div");
+      wrap.className = "relative";
+      mount.appendChild(wrap);
+
+      function renderChip() {
+        var value = opts.getValue();
+        var found = fieldByValue(value);
+        wrap.innerHTML =
+          '<button type="button" class="input w-full flex items-center gap-2 text-left" data-role="chip">' +
+            icon(found ? found.group.icon : "sliders") +
+            '<span class="flex-1 truncate">' +
+              (found ? found.group.label + " → " + found.field.label : "Insert Akilent data field…") +
+            '</span>' +
+            (found ? '<span data-role="clear" class="text-gray-400 hover:text-gray-600 px-1">×</span>' : '') +
+          '</button>';
+        wrap.querySelector('[data-role="chip"]').addEventListener("click", function (e) {
+          if (e.target.closest('[data-role="clear"]')) {
+            opts.onSelect("", null);
+            renderChip();
+            return;
+          }
+          renderSearch();
+        });
+      }
+
+      function renderSearch() {
+        wrap.innerHTML =
+          '<input type="text" class="input w-full" placeholder="Search fields…" data-role="search" autocomplete="off" />' +
+          '<div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-64 overflow-y-auto" data-role="panel"></div>';
+        var searchInput = wrap.querySelector('[data-role="search"]');
+        var panel = wrap.querySelector('[data-role="panel"]');
+
+        function focusSibling(row, dir) {
+          var buttons = Array.prototype.filter.call(panel.children, function (el) { return el.tagName === "BUTTON"; });
+          var idx = buttons.indexOf(row);
+          var next = buttons[idx + dir];
+          if (next) next.focus();
+          else if (dir < 0) searchInput.focus();
+        }
+
+        function renderPanel(query) {
+          var q = (query || "").toLowerCase();
+          panel.innerHTML = "";
+          dataFields.groups.forEach(function (g) {
+            var matches = g.fields.filter(function (f) { return f.label.toLowerCase().indexOf(q) !== -1; });
+            if (!matches.length) return;
+            var heading = document.createElement("div");
+            heading.className = "px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 flex items-center gap-1.5 uppercase";
+            heading.innerHTML = icon(g.icon) + "<span>" + g.label + "</span>";
+            panel.appendChild(heading);
+            matches.forEach(function (f) {
+              var row = document.createElement("button");
+              row.type = "button";
+              row.className = "w-full text-left px-3 py-1.5 hover:bg-gray-50 text-sm";
+              row.innerHTML = '<span class="block text-ink">' + f.label + '</span><span class="block text-xs text-gray-400">' + f.sample + '</span>';
+              row.addEventListener("click", function () {
+                opts.onSelect((g.prefix || g.key) + "." + f.key, { label: f.label, sample: f.sample });
+                renderChip();
+              });
+              row.addEventListener("keydown", function (e) {
+                if (e.key === "Escape") { renderChip(); }
+                else if (e.key === "ArrowDown") { e.preventDefault(); focusSibling(row, 1); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); focusSibling(row, -1); }
+              });
+              panel.appendChild(row);
+            });
+          });
+          if (dataFields.create_custom_field_url) {
+            var createRow = document.createElement("button");
+            createRow.type = "button";
+            createRow.className = "w-full text-left px-3 py-2 border-t border-gray-100 text-sm font-medium text-blue-600 hover:bg-gray-50";
+            createRow.textContent = "+ Create custom field…";
+            createRow.addEventListener("click", function () {
+              openCustomFieldPanel(function (created) {
+                opts.onSelect("contact." + created.key, { label: created.label, sample: created.sample });
+                renderChip();
+              });
+            });
+            panel.appendChild(createRow);
+          }
+        }
+
+        renderPanel("");
+        searchInput.focus();
+        searchInput.addEventListener("input", function () { renderPanel(searchInput.value); });
+        searchInput.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") { renderChip(); }
+          else if (e.key === "ArrowDown") { e.preventDefault(); focusSibling(null, 1); }
+        });
+
+        function onDocClick(e) {
+          if (!wrap.contains(e.target)) {
+            document.removeEventListener("mousedown", onDocClick);
+            renderChip();
+          }
+        }
+        document.addEventListener("mousedown", onDocClick);
+      }
+
+      renderChip();
+      return { refresh: renderChip };
+    }
+
+    // ------------------------------------------------------------------
+    // "Create custom field" — shared panel, callback-driven so any picker
+    // instance can trigger it.
+    // ------------------------------------------------------------------
 
     var customFieldPanel = document.getElementById("wa-custom-field-panel");
     var customFieldLabelEl = document.getElementById("wa-custom-field-label");
@@ -69,21 +365,11 @@
     var customFieldErrorEl = document.getElementById("wa-custom-field-error");
     var customFieldCreateBtn = document.getElementById("wa-custom-field-create");
     var customFieldCancelBtn = document.getElementById("wa-custom-field-cancel");
-    var activeCustomFieldSelect = null;
+    var pendingCreateCallback = null;
 
-    function fillRowFromOption(select, label, sample) {
-      var row = select.closest("div");
-      var labelInput = row.querySelector('[name="variable_label"]');
-      var exampleInput = row.querySelector('[name="variable_example"]');
-      if (labelInput) labelInput.value = label;
-      if (exampleInput) exampleInput.value = sample;
-      refreshButtonVariablePicker();
-      renderPreview();
-    }
-
-    function openCustomFieldPanel(select) {
+    function openCustomFieldPanel(onCreated) {
       if (!customFieldPanel) return;
-      activeCustomFieldSelect = select;
+      pendingCreateCallback = onCreated;
       if (customFieldErrorEl) customFieldErrorEl.classList.add("hidden");
       if (customFieldLabelEl) { customFieldLabelEl.value = ""; customFieldLabelEl.focus(); }
       customFieldPanel.classList.remove("hidden");
@@ -92,60 +378,10 @@
     function closeCustomFieldPanel() {
       if (!customFieldPanel) return;
       customFieldPanel.classList.add("hidden");
-      activeCustomFieldSelect = null;
-    }
-
-    function buildDataFieldOptions(select) {
-      var previousValue = select.value;
-      select.innerHTML = '<option value="">Insert Akilent data field…</option>';
-      dataFields.groups.forEach(function (group) {
-        var optgroup = document.createElement("optgroup");
-        optgroup.label = group.label;
-        group.fields.forEach(function (field) {
-          var opt = document.createElement("option");
-          opt.value = (group.prefix || group.key) + "." + field.key;
-          opt.textContent = field.label;
-          opt.dataset.label = field.label;
-          opt.dataset.sample = field.sample;
-          optgroup.appendChild(opt);
-        });
-        select.appendChild(optgroup);
-      });
-      if (dataFields.create_custom_field_url) {
-        var createOpt = document.createElement("option");
-        createOpt.value = "__create__";
-        createOpt.textContent = "+ Create custom field…";
-        select.appendChild(createOpt);
-      }
-      if (previousValue && previousValue !== "__create__") select.value = previousValue;
-    }
-
-    function refreshAllDataFieldPickers() {
-      Array.prototype.forEach.call(
-        document.querySelectorAll('[data-role="data-field-picker"]'),
-        buildDataFieldOptions
-      );
-    }
-
-    function populateDataFieldPicker(select) {
-      if (!select) return;
-      buildDataFieldOptions(select);
-      if (select.dataset.wired) return;
-      select.dataset.wired = "1";
-      select.addEventListener("change", function () {
-        var opt = select.selectedOptions[0];
-        if (!opt || !opt.value) return;
-        if (opt.value === "__create__") {
-          openCustomFieldPanel(select);
-          select.value = "";
-          return;
-        }
-        fillRowFromOption(select, opt.dataset.label, opt.dataset.sample);
-      });
+      pendingCreateCallback = null;
     }
 
     if (customFieldCancelBtn) customFieldCancelBtn.addEventListener("click", closeCustomFieldPanel);
-
     if (customFieldCreateBtn) {
       customFieldCreateBtn.addEventListener("click", function () {
         var label = (customFieldLabelEl && customFieldLabelEl.value || "").trim();
@@ -166,9 +402,7 @@
           },
           body: JSON.stringify({ label: label, type: customFieldTypeEl ? customFieldTypeEl.value : "string" }),
         })
-          .then(function (res) {
-            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
-          })
+          .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
           .then(function (result) {
             if (!result.ok) {
               if (customFieldErrorEl) {
@@ -179,13 +413,9 @@
             }
             var group = dataFields.groups.filter(function (g) { return g.key === "contact_custom"; })[0];
             if (group) group.fields.push(result.data);
-            refreshAllDataFieldPickers();
-            if (activeCustomFieldSelect) {
-              var select = activeCustomFieldSelect;
-              select.value = "contact." + result.data.key;
-              fillRowFromOption(select, result.data.label, result.data.sample);
-            }
+            var callback = pendingCreateCallback;
             closeCustomFieldPanel();
+            if (callback) callback(result.data);
           })
           .catch(function () {
             if (customFieldErrorEl) {
@@ -196,35 +426,73 @@
       });
     }
 
-    function variableLabelsAndExamples() {
-      if (!variableRows) return [];
-      var labels = variableRows.querySelectorAll('[name="variable_label"]');
-      var examples = variableRows.querySelectorAll('[name="variable_example"]');
-      return Array.prototype.map.call(labels, function (input, i) {
-        return { label: input.value, example: examples[i] ? examples[i].value : "" };
+    // ------------------------------------------------------------------
+    // Progressive disclosure: header / footer / button
+    // ------------------------------------------------------------------
+
+    function updateHeaderVisibility() {
+      var showText = headerModeText && headerModeText.checked;
+      headerEl.classList.toggle("hidden", !showText);
+      if (!showText) headerEl.value = "";
+      renderPreview();
+    }
+    if (headerModeNone) headerModeNone.addEventListener("change", updateHeaderVisibility);
+    if (headerModeText) headerModeText.addEventListener("change", updateHeaderVisibility);
+
+    if (footerAddBtn) {
+      footerAddBtn.addEventListener("click", function () {
+        footerAddBtn.classList.add("hidden");
+        footerField.classList.remove("hidden");
+        footerEl.focus();
       });
     }
+    if (footerRemoveBtn) {
+      footerRemoveBtn.addEventListener("click", function () {
+        footerEl.value = "";
+        footerField.classList.add("hidden");
+        footerAddBtn.classList.remove("hidden");
+        renderPreview();
+      });
+    }
+
+    if (buttonAddBtn) {
+      buttonAddBtn.addEventListener("click", function () {
+        buttonAddBtn.classList.add("hidden");
+        buttonField.classList.remove("hidden");
+        buttonTextEl.focus();
+      });
+    }
+    if (buttonRemoveBtn) {
+      buttonRemoveBtn.addEventListener("click", function () {
+        buttonTextEl.value = "";
+        buttonUrlEl.value = "";
+        buttonExampleEl.value = "";
+        toggleButtonExampleField();
+        buttonField.classList.add("hidden");
+        buttonAddBtn.classList.remove("hidden");
+        renderPreview();
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // Button's "use a message variable" picker
+    // ------------------------------------------------------------------
 
     function refreshButtonVariablePicker() {
       if (!buttonVariablePicker) return;
       var selected = buttonVariablePicker.value;
       buttonVariablePicker.innerHTML = '<option value="">Use a message variable…</option>';
-      variableLabelsAndExamples().forEach(function (v, i) {
+      Array.prototype.forEach.call(variableCardsEl.children, function (card) {
+        var n = card.dataset.n;
+        var labelInput = card.querySelector('[name="variable_label"]');
+        var exampleInput = card.querySelector('[name="variable_example"]');
         var opt = document.createElement("option");
-        var n = i + 1;
-        opt.value = String(n);
-        opt.textContent = "{{" + n + "}} " + (v.label || "Variable " + n);
-        opt.dataset.example = v.example;
+        opt.value = n;
+        opt.textContent = "{{" + n + "}} " + ((labelInput && labelInput.value) || "Variable " + n);
+        opt.dataset.example = (exampleInput && exampleInput.value) || "";
         buttonVariablePicker.appendChild(opt);
       });
       buttonVariablePicker.value = selected;
-    }
-
-    function substitute(text, examples) {
-      return (text || "").replace(/\{\{(\d+)\}\}/g, function (match, n) {
-        var value = examples[parseInt(n, 10) - 1];
-        return value ? value : match;
-      });
     }
 
     function toggleButtonExampleField() {
@@ -233,31 +501,6 @@
       buttonExampleEl.classList.toggle("hidden", !needsExample);
     }
 
-    function renderPreview() {
-      var examples = variableLabelsAndExamples().map(function (v) { return v.example; });
-
-      if (headerEl && previewHeader) previewHeader.textContent = headerEl.value;
-      if (bodyEl && previewBody) previewBody.textContent = substitute(bodyEl.value, examples);
-      if (footerEl && previewFooter) previewFooter.textContent = footerEl.value;
-
-      var buttonText = buttonTextEl ? buttonTextEl.value.trim() : "";
-      if (previewButton) {
-        if (buttonText) {
-          previewButton.textContent = "🔗 " + buttonText;
-          previewButton.classList.remove("hidden");
-        } else {
-          previewButton.textContent = "";
-          previewButton.classList.add("hidden");
-        }
-      }
-    }
-
-    var debouncedRender = debounce(renderPreview, 150);
-    var debouncedRefreshButtonPicker = debounce(refreshButtonVariablePicker, 150);
-
-    [headerEl, bodyEl, footerEl, buttonTextEl, buttonUrlEl].forEach(function (el) {
-      if (el) el.addEventListener("input", debouncedRender);
-    });
     if (buttonUrlEl) buttonUrlEl.addEventListener("input", toggleButtonExampleField);
     if (buttonVariablePicker) {
       buttonVariablePicker.addEventListener("change", function () {
@@ -269,25 +512,98 @@
         renderPreview();
       });
     }
-    if (variableRows) {
-      variableRows.addEventListener("input", function () {
-        debouncedRender();
-        debouncedRefreshButtonPicker();
+
+    // ------------------------------------------------------------------
+    // Preview
+    // ------------------------------------------------------------------
+
+    function variableExampleMap() {
+      var map = {};
+      Array.prototype.forEach.call(variableCardsEl.children, function (card) {
+        var exampleInput = card.querySelector('[name="variable_example"]');
+        map[card.dataset.n] = exampleInput ? exampleInput.value : "";
       });
-      Array.prototype.forEach.call(
-        variableRows.querySelectorAll('[data-role="data-field-picker"]'),
-        populateDataFieldPicker
-      );
+      return map;
     }
 
-    toggleButtonExampleField();
+    function substitute(text, map) {
+      return (text || "").replace(/\{\{(\d+)\}\}/g, function (match, n) {
+        var value = map[n];
+        return value ? value : match;
+      });
+    }
+
+    function renderPreview() {
+      var map = variableExampleMap();
+      if (previewHeader) previewHeader.textContent = headerEl.classList.contains("hidden") ? "" : headerEl.value;
+      if (previewBody) previewBody.textContent = substitute(bodyEl.value, map);
+      if (previewFooter) previewFooter.textContent = footerField.classList.contains("hidden") ? "" : footerEl.value;
+
+      var buttonText = (!buttonField.classList.contains("hidden") && buttonTextEl.value.trim()) || "";
+      if (previewButton) {
+        if (buttonText) {
+          previewButton.textContent = "🔗 " + buttonText;
+          previewButton.classList.remove("hidden");
+        } else {
+          previewButton.textContent = "";
+          previewButton.classList.add("hidden");
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Wiring
+    // ------------------------------------------------------------------
+
+    var debouncedReconcile = debounce(reconcileVariableCards, 150);
+    bodyEl.addEventListener("input", debouncedReconcile);
+    if (headerEl) headerEl.addEventListener("input", renderPreview);
+    if (footerEl) footerEl.addEventListener("input", debounce(renderPreview, 150));
+    if (buttonTextEl) buttonTextEl.addEventListener("input", debounce(renderPreview, 150));
+
+    reconcileVariableCards();
+    applyInitialVariables();
     refreshButtonVariablePicker();
     renderPreview();
 
     window.WhatsAppTemplatePreview = {
-      populateDataFieldPicker: populateDataFieldPicker,
+      reconcileVariableCards: reconcileVariableCards,
       refreshButtonVariablePicker: refreshButtonVariablePicker,
       render: renderPreview,
+      setHeaderMode: function (hasHeader) {
+        if (headerModeNone) headerModeNone.checked = !hasHeader;
+        if (headerModeText) headerModeText.checked = hasHeader;
+        updateHeaderVisibility();
+      },
+      setFooter: function (value) {
+        footerEl.value = value || "";
+        if (value) {
+          footerAddBtn.classList.add("hidden");
+          footerField.classList.remove("hidden");
+        } else {
+          footerField.classList.add("hidden");
+          footerAddBtn.classList.remove("hidden");
+        }
+      },
+      setButton: function (button) {
+        buttonTextEl.value = (button && button.text) || "";
+        buttonUrlEl.value = (button && button.url) || "";
+        buttonExampleEl.value = (button && button.example) || "";
+        toggleButtonExampleField();
+        if (button && (button.text || button.url)) {
+          buttonAddBtn.classList.add("hidden");
+          buttonField.classList.remove("hidden");
+        } else {
+          buttonField.classList.add("hidden");
+          buttonAddBtn.classList.remove("hidden");
+        }
+      },
+      setVariableSource: function (n, source) {
+        var card = variableCardsEl.querySelector('[data-n="' + n + '"]');
+        if (!card) return;
+        card.dataset.source = source || "";
+        if (card._picker) card._picker.refresh();
+      },
     };
   }
 

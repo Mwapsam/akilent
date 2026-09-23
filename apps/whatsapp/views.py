@@ -89,16 +89,16 @@ def _data_fields_json(account) -> str:
     ]
     return json.dumps({
         "groups": [
-            {"key": "contact", "label": "Contact", "fields": built_in_contact_fields},
+            {"key": "contact", "label": "Contact", "icon": "user", "fields": built_in_contact_fields},
             {
-                "key": "contact_custom", "label": "Contact → Custom fields",
+                "key": "contact_custom", "label": "Contact → Custom fields", "icon": "sliders",
                 "prefix": "contact", "fields": custom_contact_fields,
             },
-            {"key": "order", "label": "Order", "fields": [
+            {"key": "order", "label": "Order", "icon": "building", "fields": [
                 {"key": "number", "label": "Order number", "sample": "1029"},
                 {"key": "total", "label": "Order total", "sample": "49.99"},
             ]},
-            {"key": "payment", "label": "Payment", "fields": [
+            {"key": "payment", "label": "Payment", "icon": "card", "fields": [
                 {"key": "link", "label": "Payment link", "sample": "https://pay.example.com/1029"},
                 {"key": "amount", "label": "Payment amount", "sample": "49.99"},
             ]},
@@ -137,11 +137,11 @@ def template_create(request):
             )
         except TemplateBuilderError as exc:
             messages.error(request, str(exc))
-            rows = list(zip(labels, examples)) or [("", "")]
             return render(request, "whatsapp/template_create.html", {
                 "account": account, "categories": MessageTemplate.Category.choices,
                 "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
-                "variable_rows": rows, "data_fields_json": _data_fields_json(account),
+                "initial_variables_json": json.dumps(list(zip(labels, examples))),
+                "data_fields_json": _data_fields_json(account),
                 "custom_field_types": CustomAttributeDef.Type.choices,
             })
         messages.success(request, "Template submitted to WhatsApp for approval.")
@@ -150,6 +150,7 @@ def template_create(request):
     return render(request, "whatsapp/template_create.html", {
         "account": account, "categories": MessageTemplate.Category.choices, "form": {},
         "starters_json": json.dumps(STARTER_CATEGORIES),
+        "initial_variables_json": "[]",
         "data_fields_json": _data_fields_json(account),
         "custom_field_types": CustomAttributeDef.Type.choices,
     })

@@ -11,156 +11,199 @@
   <p class="mt-1 text-sm text-gray-600">Akilent submits this to WhatsApp for approval — no need to use Meta Business Manager directly.</p>
 </header>
 
-{# Prefills the form below on "Use template" (whatsapp-template-starter-picker.js) — nothing is submitted here. #}
-<div id="wa-starter-picker" data-starters='{{ starters_json }}' class="mb-6">
-  <h2 class="text-lg font-semibold text-ink mb-3">Start with a template</h2>
-  <div id="wa-starter-categories" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
-  <div id="wa-starter-templates" class="hidden">
-    <button type="button" id="wa-starter-back" class="btn btn-ghost btn-sm mb-3">
-      {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %} All categories
-    </button>
-    <div id="wa-starter-template-list" class="space-y-2"></div>
-  </div>
-</div>
+<div id="wa-builder" data-fields='{{ data_fields_json }}' data-initial-variables='{{ initial_variables_json }}'>
 
-<p class="mb-6">
-  <button type="button" id="wa-start-scratch" class="btn btn-ghost btn-sm">Start from a blank template</button>
-</p>
-
-<div class="grid lg:grid-cols-[1fr,340px] gap-6 items-start" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
-  <div class="card card-pad">
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    <div>
-      <label class="label" for="tpl-name">Template name</label>
-      <input id="tpl-name" name="name" class="input" placeholder="e.g. payment_reminder"
-             pattern="[a-z0-9_]+" value="{{ form.name|default:'' }}" required />
-      <p class="text-xs text-gray-400 mt-1">Lowercase letters, numbers and underscores only — this is fixed once submitted.</p>
+  {# ① Start — the starter grid is the page's first, unambiguous step. #}
+  <section class="mb-8">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink text-white text-xs font-semibold shrink-0">1</span>
+      <h2 class="text-lg font-semibold text-ink">Start with a template</h2>
     </div>
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="label" for="tpl-category">Category</label>
-        <select id="tpl-category" name="category" class="select" required>
-          {% for value, label in categories %}
-          <option value="{{ value }}" {% if form.category == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="label" for="tpl-language">Language</label>
-        <select id="tpl-language" name="language" class="select" required>
-          <option value="en" {% if form.language == "en" or not form.language %}selected{% endif %}>English</option>
-          <option value="es" {% if form.language == "es" %}selected{% endif %}>Spanish</option>
-          <option value="fr" {% if form.language == "fr" %}selected{% endif %}>French</option>
-          <option value="pt_PT" {% if form.language == "pt_PT" %}selected{% endif %}>Portuguese</option>
-        </select>
+    <p class="text-sm text-gray-600 mb-3">Choose a common use case to get started, or start from scratch.</p>
+    <div id="wa-starter-picker" data-starters='{{ starters_json }}'>
+      <div id="wa-starter-grid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+      <div id="wa-starter-templates" class="hidden mt-4">
+        <button type="button" id="wa-starter-back" class="btn btn-ghost btn-sm mb-3">
+          {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %} All categories
+        </button>
+        <div id="wa-starter-template-list" class="space-y-2"></div>
       </div>
     </div>
-    <div>
-      <label class="label" for="tpl-header">Header (optional)</label>
-      <input id="tpl-header" name="header" class="input" placeholder="e.g. Order update" value="{{ form.header|default:'' }}" />
-    </div>
-    <div>
-      <label class="label" for="tpl-body">Message</label>
-      <textarea id="tpl-body" name="body" rows="5" class="input" required
-                placeholder="{% verbatim %}Hi {{1}}, your order {{2}} is still awaiting payment.{% endverbatim %}">{{ form.body|default:'' }}</textarea>
-      <p class="text-xs text-gray-400 mt-1">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… in order for anything that changes per customer.</p>
-    </div>
-    <div>
-      <label class="label" for="tpl-footer">Footer (optional)</label>
-      <input id="tpl-footer" name="footer" class="input" placeholder="e.g. Thank you for your business" value="{{ form.footer|default:'' }}" />
-    </div>
+  </section>
 
-    <div>
-      <label class="label">Button (optional)</label>
-      <p class="text-xs text-gray-400 mb-2">A "visit website" button. Leave blank to skip. A dynamic link reuses one of the variables already defined below (e.g. {% verbatim %}{{2}}{% endverbatim %} for an order number) — pick it instead of typing the number.</p>
-      <div class="grid grid-cols-2 gap-2">
-        <input id="tpl-button-text" name="button_text" class="input" placeholder="Button text, e.g. Pay now" maxlength="25" value="{{ form.button_text|default:'' }}" />
-        <input id="tpl-button-url" name="button_url" class="input" placeholder="{% verbatim %}https://example.com or https://example.com/{{2}}{% endverbatim %}" value="{{ form.button_url|default:'' }}" />
-      </div>
-      <div class="flex gap-2 mt-2">
-        <select id="tpl-button-variable-picker" class="select" data-role="button-variable-picker">
-          <option value="">Use a message variable…</option>
-        </select>
-        <input id="tpl-button-example" name="button_url_example" class="input hidden" placeholder="{% verbatim %}Example URL, e.g. https://example.com/1029{% endverbatim %}" value="{{ form.button_url_example|default:'' }}" />
-      </div>
-    </div>
+  <div class="grid lg:grid-cols-[1fr,340px] gap-6 items-start" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
+    <form method="post" id="wa-form" class="space-y-6">
+      {% csrf_token %}
 
-    <div>
-      <label class="label">Variables</label>
-      <p class="text-xs text-gray-400 mb-2">One row per {% verbatim %}{{n}}{% endverbatim %} in the message, in order. The label is shown to agents; the example is required by WhatsApp for approval. Pick "Insert Akilent data field" to autofill a row from Contact, Order or Payment data — including your own custom contact fields, or create a new one on the spot.</p>
-      <div id="variable-rows" class="space-y-2" data-fields='{{ data_fields_json }}'>
-        {% for label, example in variable_rows %}
+      {# ② Template details #}
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink text-white text-xs font-semibold shrink-0">2</span>
+          <h2 class="text-lg font-semibold text-ink">Template details</h2>
+        </div>
+        <div class="card card-pad space-y-4">
+          <div>
+            <label class="label" for="tpl-name">Template name</label>
+            <input id="tpl-name" name="name" class="input" placeholder="e.g. payment_reminder"
+                   pattern="[a-z0-9_]+" value="{{ form.name|default:'' }}" required />
+            <p class="text-xs text-gray-400 mt-1">Lowercase letters, numbers and underscores only — this is fixed once submitted.</p>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" for="tpl-category">Category</label>
+              <select id="tpl-category" name="category" class="select" required>
+                {% for value, label in categories %}
+                <option value="{{ value }}" {% if form.category == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="tpl-language">Language</label>
+              <select id="tpl-language" name="language" class="select" required>
+                <option value="en" {% if form.language == "en" or not form.language %}selected{% endif %}>English</option>
+                <option value="es" {% if form.language == "es" %}selected{% endif %}>Spanish</option>
+                <option value="fr" {% if form.language == "fr" %}selected{% endif %}>French</option>
+                <option value="pt_PT" {% if form.language == "pt_PT" %}selected{% endif %}>Portuguese</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {# ③ Message — header/footer behind progressive disclosure. #}
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink text-white text-xs font-semibold shrink-0">3</span>
+          <h2 class="text-lg font-semibold text-ink">Message</h2>
+        </div>
+        <div class="card card-pad space-y-4">
+          <div>
+            <label class="label">Header</label>
+            <div class="flex items-center gap-4 mb-2">
+              <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                <input type="radio" name="header_mode" value="none" id="tpl-header-mode-none" {% if not form.header %}checked{% endif %} /> No header
+              </label>
+              <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                <input type="radio" name="header_mode" value="text" id="tpl-header-mode-text" {% if form.header %}checked{% endif %} /> Header text
+              </label>
+            </div>
+            <input id="tpl-header" name="header" class="input {% if not form.header %}hidden{% endif %}" placeholder="e.g. Order update" value="{{ form.header|default:'' }}" />
+          </div>
+
+          <div>
+            <label class="label" for="tpl-body">Body</label>
+            <textarea id="tpl-body" name="body" rows="5" class="input" required
+                      placeholder="{% verbatim %}Hi {{1}}, your order {{2}} is still awaiting payment.{% endverbatim %}">{{ form.body|default:'' }}</textarea>
+            <p class="text-xs text-gray-400 mt-1">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… in order for anything that changes per customer — a card for each one appears below automatically.</p>
+            <p id="wa-variable-warning" class="hidden text-xs text-amber-600 mt-1"></p>
+          </div>
+
+          <div>
+            <button type="button" id="wa-footer-add" class="btn btn-ghost btn-sm {% if form.footer %}hidden{% endif %}">
+              {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add footer
+            </button>
+            <div id="wa-footer-field" class="{% if not form.footer %}hidden{% endif %}">
+              <label class="label" for="tpl-footer">Footer</label>
+              <div class="flex gap-2">
+                <input id="tpl-footer" name="footer" class="input" placeholder="e.g. Thank you for your business" value="{{ form.footer|default:'' }}" />
+                <button type="button" id="wa-footer-remove" class="btn btn-ghost btn-sm shrink-0">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {# ④ Personalize — one mapping card per {{n}} found in the body, auto-generated. #}
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink text-white text-xs font-semibold shrink-0">4</span>
+          <h2 class="text-lg font-semibold text-ink">Personalize</h2>
+        </div>
+        <div class="card card-pad">
+          <p class="text-xs text-gray-400 mb-3">These values are filled in per customer. Connect each one to Akilent data, or leave it as free text.</p>
+          <div id="variable-cards" class="space-y-3"></div>
+          <p class="text-xs text-gray-400 mt-2" id="wa-no-variables-hint">Type {% verbatim %}{{1}}{% endverbatim %} in your message above to add your first variable.</p>
+        </div>
+      </section>
+
+      {# ⑤ Actions — one "visit website" button, behind progressive disclosure. #}
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink text-white text-xs font-semibold shrink-0">5</span>
+          <h2 class="text-lg font-semibold text-ink">Actions</h2>
+        </div>
+        <div class="card card-pad">
+          <button type="button" id="wa-button-add" class="btn btn-ghost btn-sm {% if form.button_text or form.button_url %}hidden{% endif %}">
+            {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add button
+          </button>
+          <div id="wa-button-field" class="space-y-2 {% if not form.button_text and not form.button_url %}hidden{% endif %}">
+            <p class="text-xs text-gray-400">A "visit website" button. A dynamic link reuses one of the variables already defined above (e.g. {% verbatim %}{{2}}{% endverbatim %} for an order number).</p>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="tpl-button-text" name="button_text" class="input" placeholder="Button text, e.g. Pay now" maxlength="25" value="{{ form.button_text|default:'' }}" />
+              <input id="tpl-button-url" name="button_url" class="input" placeholder="{% verbatim %}https://example.com or https://example.com/{{2}}{% endverbatim %}" value="{{ form.button_url|default:'' }}" />
+            </div>
+            <div class="flex gap-2">
+              <select id="tpl-button-variable-picker" class="select" data-role="button-variable-picker">
+                <option value="">Use a message variable…</option>
+              </select>
+              <input id="tpl-button-example" name="button_url_example" class="input hidden" placeholder="{% verbatim %}Example URL, e.g. https://example.com/1029{% endverbatim %}" value="{{ form.button_url_example|default:'' }}" />
+            </div>
+            <button type="button" id="wa-button-remove" class="btn btn-ghost btn-sm">Remove button</button>
+          </div>
+
+          <div id="wa-custom-field-panel" class="hidden border border-gray-200 rounded-md p-3 mt-3 space-y-2">
+            <p class="text-sm font-medium text-ink">Create custom contact field</p>
+            <p class="text-xs text-gray-400">Saved to your Contacts so you can reuse it on any future message.</p>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="wa-custom-field-label" class="input" placeholder="Field name, e.g. Membership number" />
+              <select id="wa-custom-field-type" class="select">
+                {% for value, label in custom_field_types %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <p id="wa-custom-field-error" class="text-xs text-red-600 hidden"></p>
+            <div class="flex justify-end gap-2">
+              <button type="button" id="wa-custom-field-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+              <button type="button" id="wa-custom-field-create" class="btn btn-primary btn-sm">Create field</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="flex flex-col items-end gap-1 pt-1">
+        <p class="text-xs text-gray-400">Your template will be submitted to Meta for review — you can use it once approved.</p>
         <div class="flex gap-2">
-          <select class="select" data-role="data-field-picker" data-target="variable">
-            <option value="">Insert Akilent data field…</option>
-          </select>
-          <input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="{{ label }}" />
-          <input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="{{ example }}" />
-          <button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove(); window.WhatsAppTemplatePreview &amp;&amp; window.WhatsAppTemplatePreview.refreshButtonVariablePicker();">Remove</button>
-        </div>
-        {% endfor %}
-      </div>
-      <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="addVariableRow()">
-        {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add variable
-      </button>
-
-      <div id="wa-custom-field-panel" class="hidden border border-gray-200 rounded-md p-3 mt-2 space-y-2">
-        <p class="text-sm font-medium text-ink">Create custom contact field</p>
-        <p class="text-xs text-gray-400">Saved to your Contacts so you can reuse it on any future message.</p>
-        <div class="grid grid-cols-2 gap-2">
-          <input id="wa-custom-field-label" class="input" placeholder="Field name, e.g. Membership number" />
-          <select id="wa-custom-field-type" class="select">
-            {% for value, label in custom_field_types %}
-            <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <p id="wa-custom-field-error" class="text-xs text-red-600 hidden"></p>
-        <div class="flex justify-end gap-2">
-          <button type="button" id="wa-custom-field-cancel" class="btn btn-ghost btn-sm">Cancel</button>
-          <button type="button" id="wa-custom-field-create" class="btn btn-primary btn-sm">Create field</button>
+          <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Cancel</a>
+          <button id="wa-submit-btn" class="btn btn-primary btn-sm">Submit for Meta approval</button>
         </div>
       </div>
-    </div>
+    </form>
 
-    <div class="flex justify-end gap-2 pt-1">
-      <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Cancel</a>
-      <button class="btn btn-primary btn-sm">Submit for approval</button>
-    </div>
-  </form>
-  </div>
-
-  <div class="card card-pad lg:sticky lg:top-4">
-    <h2 class="text-sm font-semibold text-ink mb-3">Preview</h2>
-    <div class="rounded-lg p-3" style="background-color:#e5ddd5;">
-      <div id="wa-preview-bubble" class="rounded-lg bg-white p-3 text-sm text-ink shadow-sm">
-        <div id="wa-preview-header" class="font-semibold mb-1"></div>
-        <div id="wa-preview-body" class="whitespace-pre-wrap"></div>
-        <div id="wa-preview-footer" class="text-xs text-gray-500 mt-1"></div>
-        <div id="wa-preview-button" class="mt-2 pt-2 border-t border-black/10 text-center text-sm text-blue-600 font-medium hidden"></div>
+    <div class="card card-pad lg:sticky lg:top-4">
+      <h2 class="text-sm font-semibold text-ink mb-3">Preview</h2>
+      <div class="rounded-lg overflow-hidden border border-gray-200">
+        <div class="bg-[#075e54] text-white px-3 py-2 flex items-center gap-2">
+          {% include "components/icon.html" with name="user" class="w-6 h-6 rounded-full bg-white/20 p-1" %}
+          <div class="leading-tight">
+            <p class="text-sm font-medium">Your business</p>
+            <p class="text-xs text-white/70">WhatsApp Business</p>
+          </div>
+        </div>
+        <div class="p-3" style="background-color:#e5ddd5;">
+          <div id="wa-preview-bubble" class="rounded-lg bg-white p-3 text-sm text-ink shadow-sm">
+            <div id="wa-preview-header" class="font-semibold mb-1"></div>
+            <div id="wa-preview-body" class="whitespace-pre-wrap"></div>
+            <div id="wa-preview-footer" class="text-xs text-gray-500 mt-1"></div>
+            <p class="text-right text-[10px] text-gray-400 mt-1">12:04 <span class="text-blue-500">&#10003;&#10003;</span></p>
+            <div id="wa-preview-button" class="mt-2 pt-2 border-t border-black/10 text-center text-sm text-blue-600 font-medium hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<script>
-  function addVariableRow(label, example) {
-    const container = document.getElementById('variable-rows');
-    const row = document.createElement('div');
-    row.className = 'flex gap-2';
-    row.innerHTML =
-      '<select class="select" data-role="data-field-picker"><option value="">Insert Akilent data field…</option></select>' +
-      '<input class="input" name="variable_label" placeholder="Label, e.g. Customer name" value="' + (label || '').replace(/"/g, '&quot;') + '" />' +
-      '<input class="input" name="variable_example" placeholder="Example, e.g. Ada" value="' + (example || '').replace(/"/g, '&quot;') + '" />' +
-      '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentElement.remove(); window.WhatsAppTemplatePreview && window.WhatsAppTemplatePreview.refreshButtonVariablePicker();">Remove</button>';
-    container.appendChild(row);
-    if (window.WhatsAppTemplatePreview) {
-      window.WhatsAppTemplatePreview.populateDataFieldPicker(row.querySelector('[data-role="data-field-picker"]'));
-      window.WhatsAppTemplatePreview.refreshButtonVariablePicker();
-    }
-  }
-</script>
 {% load static %}
 <script src="{% static 'js/whatsapp-template-starter-picker.js' %}"></script>
 <script src="{% static 'js/whatsapp-template-preview.js' %}"></script>
