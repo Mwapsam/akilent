@@ -485,6 +485,24 @@
       });
     }
 
+    // Standalone entry point in the Personalize section header — the only
+    // other way to reach "Create custom field" is via a variable card's data
+    // field picker, which doesn't exist yet if the body has no {{n}} tokens.
+    var personalizeCreateFieldBtn = document.getElementById("wa-personalize-create-field");
+    var personalizeCreateFieldStatus = document.getElementById("wa-personalize-create-field-status");
+    if (personalizeCreateFieldBtn) {
+      personalizeCreateFieldBtn.addEventListener("click", function () {
+        if (personalizeCreateFieldStatus) personalizeCreateFieldStatus.classList.add("hidden");
+        openCustomFieldPanel(function (created) {
+          if (personalizeCreateFieldStatus) {
+            personalizeCreateFieldStatus.textContent =
+              "✓ \"" + created.label + "\" created — pick it from any variable's field picker.";
+            personalizeCreateFieldStatus.classList.remove("hidden");
+          }
+        });
+      });
+    }
+
     // ------------------------------------------------------------------
     // Progressive disclosure: header / footer / button
     // ------------------------------------------------------------------
