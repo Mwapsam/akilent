@@ -25,9 +25,11 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   
-  {# HTMX drives every partial swap/poll. Deferred like Alpine so it does not
-     block paint; the CSRF token rides on every hx-* request via hx-headers on
-     <body>, which all descendants inherit. #}
+  {% comment %}
+    HTMX drives every partial swap/poll. Deferred like Alpine so it does not
+    block paint; the CSRF token rides on every hx-* request via hx-headers on
+    <body>, which all descendants inherit.
+  {% endcomment %}
   <script defer src="{% static 'js/htmx.min.js' %}"></script>
 
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
@@ -47,9 +49,11 @@
   {% if user.is_authenticated %}
 
     {# ─── Desktop sidebar — full, collapsible to an icon rail ──────────────── #}
-    {# Two tiers: off-canvas drawer below lg / full sidebar at lg, which the user
-       may collapse to a rail. There is deliberately no permanent md rail: a
-       touch tablet cannot hover, so an icon-only rail there is unlabelled nav. #}
+    {% comment %}
+      Two tiers: off-canvas drawer below lg / full sidebar at lg, which the user
+      may collapse to a rail. There is deliberately no permanent md rail: a
+      touch tablet cannot hover, so an icon-only rail there is unlabelled nav.
+    {% endcomment %}
     <aside class="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 bg-surface
                   border-r border-border transition-[width] duration-200"
            style="width: var(--sidebar-current-w); z-index: var(--z-sticky)">

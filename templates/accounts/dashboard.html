@@ -47,8 +47,10 @@
   </div>
   {% endif %}
 
-  {# ── Work queue — the dashboard's one job, and the only thing on the
-       first byte. Lifted above the rest so it reads first. ──────────── #}
+  {% comment %}
+    ── Work queue — the dashboard's one job, and the only thing on the
+    first byte. Lifted above the rest so it reads first. ────────────
+  {% endcomment %}
   <section class="panel-primary" aria-labelledby="work-queue-label">
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-base font-semibold text-ink" id="work-queue-label">
@@ -79,8 +81,10 @@
     </a>
   </div>
 
-  {# ── Secondary panels — skeletons until HTMX swaps the real thing in.
-       Their aggregates are deliberately off the first byte. ─────────── #}
+  {% comment %}
+    ── Secondary panels — skeletons until HTMX swaps the real thing in.
+    Their aggregates are deliberately off the first byte. ───────────
+  {% endcomment %}
   <div id="dashboard-panels"
        class="space-y-6 mt-6"
        hx-get="{% url 'dashboard-panels' %}"

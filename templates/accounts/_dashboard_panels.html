@@ -19,8 +19,10 @@ hx-trigger of its own, so it loads exactly once.
           {% for s in upcoming_sends %}
           <li class="px-5 sm:px-6 py-3 flex items-start gap-3">
             {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0 mt-0.5" %}
-            {# Stacks under sm: a fixed-width time column beside a truncating
-               label does not fit a 360px screen. #}
+            {% comment %}
+              Stacks under sm: a fixed-width time column beside a truncating
+              label does not fit a 360px screen.
+            {% endcomment %}
             <div class="min-w-0 flex-1 sm:flex sm:items-center sm:gap-3">
               <span class="block text-xs sm:text-sm text-gray-500 tabular-nums sm:w-40 sm:shrink-0">
                 {{ s.when|date:"D M j, H:i" }}
