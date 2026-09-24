@@ -6,7 +6,7 @@ Usually reached via components/form.html, but can be used directly:
 {% with is_checkbox=field.field.widget.input_type|default:"" %}
 <div class="{% if is_checkbox == 'checkbox' %}flex items-start gap-2{% endif %}">
   {% if is_checkbox == "checkbox" %}
-    {% render_field field extra_class="mt-0.5 rounded border-border-strong text-brand-600 focus:ring-brand-500" %}
+    {% render_field field extra_class="mt-0.5 rounded border-border-strong text-accent focus:ring-brand-500" %}
     <label class="label !mb-0" for="{{ field.id_for_label }}">{{ field.label }}</label>
   {% else %}
     {% if field.label %}

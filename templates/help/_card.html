@@ -1,11 +1,11 @@
 {% comment %}A help article card. Needs: a (Article).{% endcomment %}
 <a href="{% url 'help-article' a.slug %}"
    class="card card-pad flex items-start gap-3 hover:shadow-pop transition group">
-  <span class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-50 text-brand-600">
+  <span class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-50 text-accent">
     {% include "components/icon.html" with name=a.icon class="w-5 h-5" %}
   </span>
   <span class="min-w-0">
-    <span class="block font-medium text-ink group-hover:text-brand-700">{{ a.title }}</span>
+    <span class="block font-medium text-ink group-hover:text-accent-strong">{{ a.title }}</span>
     <span class="block text-sm text-gray-500 mt-0.5">{{ a.summary }}</span>
   </span>
 </a>

@@ -13,9 +13,9 @@
 
     <div class="card card-pad sm:!p-8">
       {% if form.non_field_errors %}
-        <div class="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          {% include "components/icon.html" with name="alert" class="w-4 h-4 text-red-500 shrink-0 mt-0.5" %}
-          <p class="text-sm text-red-700">{{ form.non_field_errors|join:" " }}</p>
+        <div class="mb-5 alert alert-danger">
+          {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+          <p>{{ form.non_field_errors|join:" " }}</p>
         </div>
       {% endif %}
 
@@ -32,7 +32,7 @@
         <div>
           <div class="flex items-center justify-between">
             <label for="id_password" class="label">Password</label>
-            <a href="{% url 'password_reset' %}" class="text-xs text-brand-600 hover:text-brand-700">Forgot password?</a>
+            <a href="{% url 'password_reset' %}" class="text-xs text-accent hover:text-accent-strong">Forgot password?</a>
           </div>
           {% include "components/password_field.html" with id="id_password" name="password" autocomplete="current-password" error=form.password.errors %}
           {% if form.password.errors %}<p class="field-error">{{ form.password.errors|join:" " }}</p>{% endif %}
@@ -42,9 +42,9 @@
     </div>
 
     <p class="text-center text-xs text-gray-400 mt-6">
-      New here? <a href="{% url 'signup' %}" class="text-brand-600 hover:text-brand-700">Create an account</a>
+      New here? <a href="{% url 'signup' %}" class="text-accent hover:text-accent-strong">Create an account</a>
       &middot;
-      <a href="{% url 'resend-verification' %}" class="text-brand-600 hover:text-brand-700">Resend confirmation link</a>
+      <a href="{% url 'resend-verification' %}" class="text-accent hover:text-accent-strong">Resend confirmation link</a>
     </p>
   </div>
 </div>

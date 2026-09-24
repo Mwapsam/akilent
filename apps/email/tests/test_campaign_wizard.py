@@ -22,7 +22,12 @@ def _clear_cache():
 @pytest.fixture
 def account(db):
     user = User.objects.create_user("owner", "owner@example.com", "pw")
-    acc = Account.objects.create(company_name="Acme")
+    acc = Account.objects.create(
+        company_name="Acme",
+        address_line1="1 Market St",
+        city="Lusaka",
+        country="ZM",
+    )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     return acc
 

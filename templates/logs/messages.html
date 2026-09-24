@@ -27,9 +27,22 @@
 </div>
 {% endif %}
 
-<form method="get" class="flex flex-wrap items-center gap-2 mb-4">
-  <input type="search" name="q" value="{{ q }}" placeholder="Recipient email…" class="input w-full sm:w-64" />
-  <select name="status" class="select w-full sm:w-44">
+{% comment %}
+  Filtering swaps the results instead of reloading. hx-push-url keeps a
+  filtered log linkable and the back button working. The plain GET form
+  underneath still works with HTMX switched off.
+{% endcomment %}
+<form method="get"
+      hx-get="/logs/messages/"
+      hx-target="#message-results"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-indicator="#message-results"
+      hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
+      class="flex flex-wrap items-center gap-2 mb-4">
+  <input type="search" name="q" value="{{ q }}" placeholder="Recipient email…"
+         class="input w-full sm:w-64" aria-label="Search by recipient" />
+  <select name="status" class="select w-full sm:w-44" aria-label="Filter by status">
     <option value="">Any status</option>
     {% for value, label in status_choices %}
       <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
@@ -39,37 +52,5 @@
   {% if q or status %}<a href="/logs/messages/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
-{% if page %}
-<div class="table-wrap">
-  <table class="table table--cards">
-    <thead>
-      <tr><th>Message</th><th>To</th><th>Subject</th><th>Status</th><th>Created</th></tr>
-    </thead>
-    <tbody>
-      {% for m in page %}
-      <tr>
-        <td data-label="Message" class="font-mono text-xs">
-          <a href="/logs/messages/{{ m.public_id }}/" class="text-brand-600 hover:text-brand-700">{{ m.public_id }}</a>
-        </td>
-        <td data-label="To" class="font-medium text-ink">{{ m.to_email }}</td>
-        <td data-label="Subject" class="max-w-xs truncate text-gray-500">{{ m.subject|default:"—" }}</td>
-        <td data-label="Status">
-          {% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
-          {% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}
-          {% elif m.status == 'queued' or m.status == 'sending' %}{% include "components/status.html" with state="sending" badge=True %}
-          {% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}
-        </td>
-        <td data-label="Created" class="text-gray-500 tabular-nums">{{ m.created_at|date:"Y-m-d H:i:s" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<div class="table-wrap">
-  {% include "components/empty_state.html" with icon="list" title="No messages yet" message="Once you send email, every message shows up here with its full delivery history." %}
-</div>
-{% endif %}
-
-{% include "components/pagination.html" with page=page %}
+{% include "logs/_messages_results.html" %}
 {% endblock %}

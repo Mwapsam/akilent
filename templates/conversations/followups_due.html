@@ -18,7 +18,7 @@
         <tr>
           <td data-label="Customer">
             {% if f.conversation %}
-            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-brand-600 hover:text-brand-700">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
+            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-accent hover:text-accent-strong">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
             {% else %}
             {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
             {% endif %}
@@ -55,7 +55,7 @@
         <tr>
           <td data-label="Customer">
             {% if f.conversation %}
-            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-brand-600 hover:text-brand-700">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
+            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-accent hover:text-accent-strong">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
             {% else %}
             {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
             {% endif %}

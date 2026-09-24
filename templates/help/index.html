@@ -5,7 +5,7 @@
 <div class="max-w-4xl mx-auto">
 
   <div class="text-center mb-8">
-    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-accent mb-4">
       {% include "components/icon.html" with name="book-open" class="w-6 h-6" %}
     </span>
     <h1 class="text-2xl font-semibold tracking-tight">How can we help?</h1>
@@ -26,7 +26,7 @@
     {# Search results #}
     <div class="mb-4 flex items-center justify-between">
       <p class="text-sm text-gray-500">{{ results|length }} result{{ results|length|pluralize }} for “{{ q }}”</p>
-      <a href="{% url 'help' %}" class="text-sm text-brand-600 hover:text-brand-700">Clear</a>
+      <a href="{% url 'help' %}" class="text-sm text-accent hover:text-accent-strong">Clear</a>
     </div>
     {% if results %}
       <div class="grid sm:grid-cols-2 gap-4">

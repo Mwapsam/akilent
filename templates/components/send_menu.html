@@ -44,7 +44,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
           <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <a href="/email/campaigns/new/"
                class="card card-hover card-pad flex flex-col gap-2 no-underline">
-              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-amber">
                 {% include "components/icon.html" with name="mail" class="w-5 h-5" %}
               </span>
               <span class="font-semibold text-ink">Email</span>
@@ -54,7 +54,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
             {% if WHATSAPP_ENABLED %}
             <a href="/whatsapp/numbers/"
                class="card card-hover card-pad flex flex-col gap-2 no-underline">
-              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-teal-50 text-teal-800">
+              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-teal">
                 {% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}
               </span>
               <span class="font-semibold text-ink">WhatsApp</span>
@@ -62,7 +62,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
             </a>
             {% else %}
             <div class="card card-pad flex flex-col gap-2 opacity-60">
-              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-gray-100 text-gray-400">
+              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-neutral-bg text-gray-400">
                 {% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}
               </span>
               <span class="font-semibold text-ink">WhatsApp</span>

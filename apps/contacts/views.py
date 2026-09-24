@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import re
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -14,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import Contact, CustomAttributeDef
+from apps.contacts.services import upsert_contact, upsert_contact_by_phone
 from apps.email.models import EmailMessage
 
 _PAGE_SIZE = 50
@@ -38,14 +41,19 @@ def contact_list(request):
         qs = qs.filter(status=st)
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
-    return render(request, "contacts/list.html", {
+    context = {
         "account": account,
         "page": page,
         "q": q,
         "status": st,
         "status_choices": Contact.Status.choices,
         "total": Contact.objects.filter(account=account).count(),
-    })
+    }
+    # HTMX asks for the results on its own; a full navigation gets the page.
+    # Same view, same context - only the wrapper differs.
+    if request.headers.get("HX-Request"):
+        return render(request, "contacts/_list_results.html", context)
+    return render(request, "contacts/list.html", context)
 
 
 @login_required
@@ -84,6 +92,96 @@ def contact_detail(request, public_id: str):
         "lists": contact.lists.all(),
         "attribute_rows": attribute_rows,
     })
+
+
+# --- Add / edit a customer by hand. Until now contacts could only arrive via
+# the API, a CSV import or an inbound message, so a business owner couldn't add
+# someone they met offline or fix a misspelled name. --------------------------
+
+def _clean_identity(request) -> tuple[str, str]:
+    """Return ``(email, phone)`` from the POST, normalized, or raise ValueError."""
+    from apps.whatsapp.models.contact import normalize_phone
+
+    email = (request.POST.get("email") or "").strip().lower()
+    phone_raw = (request.POST.get("phone") or "").strip()
+    if not email and not phone_raw:
+        raise ValueError("Add a phone number or an email address — we need one to reach them.")
+
+    phone = ""
+    if phone_raw:
+        try:
+            phone = normalize_phone(phone_raw)
+        except Exception as exc:
+            raise ValueError(
+                "That phone number doesn't look right. Include the country code, e.g. +260971234567."
+            ) from exc
+    return email, phone
+
+
+@login_required
+@require_POST
+def contact_create(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    try:
+        email, phone = _clean_identity(request)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("contacts:list")
+
+    fields = {
+        "first_name": (request.POST.get("first_name") or "").strip(),
+        "last_name": (request.POST.get("last_name") or "").strip(),
+    }
+    # Phone is the identity for a WhatsApp-first business; email only leads when
+    # that's all we were given.
+    if phone:
+        contact, created = upsert_contact_by_phone(account, phone, email=email or None, **fields)
+    else:
+        contact, created = upsert_contact(account, email, **fields)
+
+    label = contact.full_name or str(contact)
+    messages.success(
+        request,
+        f"{label} added." if created else f"{label} already existed — details updated.",
+    )
+    return redirect("contacts:detail", public_id=contact.public_id)
+
+
+@login_required
+@require_POST
+def contact_edit(request, public_id: str):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    try:
+        contact = Contact.objects.get(account=account, public_id=public_id)
+    except Contact.DoesNotExist:
+        return render(request, "contacts/not_found.html", status=404)
+
+    try:
+        email, phone = _clean_identity(request)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("contacts:detail", public_id=public_id)
+
+    contact.first_name = (request.POST.get("first_name") or "").strip()
+    contact.last_name = (request.POST.get("last_name") or "").strip()
+    # Null, not "", so the partial unique constraints keep ignoring empty values.
+    contact.email = email or None
+    contact.phone = phone or None
+    try:
+        contact.save(update_fields=["first_name", "last_name", "email", "phone", "updated_at"])
+    except IntegrityError:
+        messages.error(
+            request, "Another customer already has that phone number or email address."
+        )
+        return redirect("contacts:detail", public_id=public_id)
+
+    messages.success(request, "Customer updated.")
+    return redirect("contacts:detail", public_id=public_id)
 
 
 def _unique_attribute_key(account, base_key: str) -> str:

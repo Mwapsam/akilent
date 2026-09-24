@@ -32,7 +32,7 @@
 {% endif %}
 
 {# ── Setup console: sequential, one primary action ────────────────────── #}
-<div class="card card-pad mb-6 {% if console.current %}border-brand-200{% endif %}">
+<div class="card card-pad mb-6 {% if console.current %}tone-brand-border{% endif %}">
   <h2 class="font-semibold">
     {% if console.current and console.number %}Continue setting up WhatsApp{% else %}Setup progress{% endif %}
   </h2>
@@ -43,7 +43,7 @@
     {% for step in console.steps %}
     <li class="flex items-start gap-3">
       {% if step.state == "done" %}
-        <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600">
+        <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full tone-teal">
           {% include "components/icon.html" with name="check" class="w-4 h-4" %}
         </span>
       {% elif step.state == "current" %}
@@ -66,13 +66,13 @@
                data-since="{{ step.action.since }}" role="status" aria-live="polite">
               Waiting for your message… this page updates automatically.
             </p>
-            <div class="hidden mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800" data-wa-poll-help>
+            <div class="hidden mt-2 rounded-lg tone-amber border tone-amber-border px-3 py-2 text-xs" data-wa-poll-help>
               Still nothing? Make sure you sent the message to {% if step.action.number %}<strong>{{ step.action.number }}</strong>{% else %}this WhatsApp number{% endif %}
               from WhatsApp.
               {% if step.action.url %}<a href="{{ step.action.url }}" target="_blank" rel="noopener" class="underline font-medium">Open WhatsApp again</a> &middot;{% endif %}
               <a href="{{ step.action.help_url }}" class="underline font-medium">Troubleshoot</a>
             </div>
-            <button type="button" class="mt-2 text-xs text-brand-600 hover:text-brand-700 underline"
+            <button type="button" class="mt-2 text-xs text-accent hover:text-accent-strong underline"
                     x-show="!skip" @click="skip = true">Skip — send a template test instead</button>
             <div x-show="skip" x-cloak>
               {% include "whatsapp/_verify_form.html" with url=step.action.verify_url label="Send test message" prefill="" %}
@@ -103,15 +103,15 @@
   <h2 class="font-semibold">What's next?</h2>
   <p class="text-sm text-gray-500 mt-1">WhatsApp is sending. Start using it:</p>
   <div class="mt-4 grid gap-3 sm:grid-cols-3">
-    <a href="/inbox/" class="rounded-xl border border-gray-200 p-4 hover:border-brand-200 hover:bg-gray-50">
+    <a href="/inbox/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Open Inbox</p>
       <p class="text-xs text-gray-500 mt-1">Read and reply to customer messages.</p>
     </a>
-    <a href="/contacts/" class="rounded-xl border border-gray-200 p-4 hover:border-brand-200 hover:bg-gray-50">
+    <a href="/contacts/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Add contacts</p>
       <p class="text-xs text-gray-500 mt-1">Bring in the people you'll message.</p>
     </a>
-    <a href="/automations/" class="rounded-xl border border-gray-200 p-4 hover:border-brand-200 hover:bg-gray-50">
+    <a href="/automations/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Create an automation</p>
       <p class="text-xs text-gray-500 mt-1">Reply and follow up automatically.</p>
     </a>
@@ -136,7 +136,7 @@
       </a>
     </div>
   {% else %}
-    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <div class="mt-4 rounded-xl border tone-amber-border tone-amber px-4 py-3 text-sm">
       {% if show_config_detail %}
         Embedded Signup isn't configured. Set <code>WHATSAPP_APP_ID</code> and
         <code>WHATSAPP_CONFIG_ID</code> in the environment, or add a number
@@ -151,7 +151,7 @@
   {# Manual fallback #}
   <div x-data="{ open: {% if not numbers and not embedded_enabled %}true{% else %}false{% endif %} }" class="mt-4">
     <button type="button"
-            class="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700"
+            class="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent-strong"
             @click="open = !open" :aria-expanded="open">
       <span class="inline-flex transition-transform" :class="open ? 'rotate-180' : ''">
         {% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}
@@ -172,7 +172,7 @@
       </p>
       <form id="wa-manual-form" method="post" action="/whatsapp/numbers/create/" class="grid sm:grid-cols-2 gap-4">
         {% csrf_token %}
-        <p id="wa-manual-error" class="hidden sm:col-span-2 text-sm text-red-700 rounded-xl border border-red-200 bg-red-50 px-3 py-2" role="alert"></p>
+        <p id="wa-manual-error" class="hidden sm:col-span-2 text-sm rounded-xl border tone-coral-border tone-coral px-3 py-2" role="alert"></p>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1.5">Phone number ID *</label>
           <input name="phone_number_id" required class="input w-full">
@@ -392,7 +392,7 @@
           <button type="submit" class="btn {% if action.primary %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">{{ action.label }}</button>
         </form>
         {% else %}
-        <a href="{{ action.url }}" class="{% if action.primary %}btn btn-primary btn-sm{% else %}text-sm text-brand-600 hover:text-brand-700{% endif %}">{{ action.label }}</a>
+        <a href="{{ action.url }}" class="{% if action.primary %}btn btn-primary btn-sm{% else %}text-sm text-accent hover:text-accent-strong{% endif %}">{{ action.label }}</a>
         {% endif %}
       {% endfor %}
     </div>

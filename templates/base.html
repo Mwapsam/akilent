@@ -185,10 +185,9 @@
                   class="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-canvas"
                   @click="open = !open"
                   :aria-expanded="open"
-                  aria-haspopup="menu"
+                  aria-label="Account menu"
                   aria-controls="user-menu-panel">
-            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full
-                         bg-brand-100 text-brand-700 text-sm font-semibold"
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full tone-brand text-sm font-semibold"
                   aria-hidden="true">
               {{ user.get_username|default:"?"|first|upper }}
             </span>
@@ -203,7 +202,7 @@
                @click.outside="open = false"
                class="absolute right-0 mt-2 w-56 card shadow-pop p-1.5"
                style="z-index: var(--z-dropdown)"
-               role="menu">
+               aria-label="Account">
 
             <div class="px-3 py-2 border-b border-border mb-1">
               <p class="text-sm font-medium text-ink truncate">{{ user.get_username }}</p>
@@ -212,11 +211,11 @@
               {% endif %}
             </div>
 
-            <a href="{% url 'settings-profile' %}" class="nav-link w-full" role="menuitem">
+            <a href="{% url 'settings-profile' %}" class="nav-link w-full">
               {% include "components/icon.html" with name="user" class="w-4 h-4 shrink-0" %}
               <span>Profile</span>
             </a>
-            <a href="{% url 'settings-team' %}" class="nav-link w-full" role="menuitem">
+            <a href="{% url 'settings-team' %}" class="nav-link w-full">
               {% include "components/icon.html" with name="users" class="w-4 h-4 shrink-0" %}
               <span>Team</span>
             </a>
@@ -240,9 +239,9 @@
 
             <div class="my-1 border-t border-border"></div>
 
-            <form method="post" action="/auth/logout/" role="none">
+            <form method="post" action="/auth/logout/">
               {% csrf_token %}
-              <button class="nav-link w-full text-left" role="menuitem">
+              <button class="nav-link w-full text-left">
                 {% include "components/icon.html" with name="log-out" class="w-4 h-4 shrink-0" %}
                 <span>Sign out</span>
               </button>

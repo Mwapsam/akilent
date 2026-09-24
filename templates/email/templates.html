@@ -142,7 +142,7 @@
       {% for t in templates %}
       <tr>
         <td data-label="Name">
-          <a href="/email/templates/{{ t.pk }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ t.name }}</a>
+          <a href="/email/templates/{{ t.pk }}/" class="font-medium text-accent hover:text-accent-strong">{{ t.name }}</a>
         </td>
         <td data-label="Type" class="text-gray-600">{% if t.builder_mode == 'blocks' %}Drag &amp; Drop{% else %}Raw HTML{% endif %}</td>
         <td data-label="Updated" class="text-gray-500 tabular-nums">{{ t.updated_at|date:"M j, H:i" }}</td>

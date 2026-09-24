@@ -11,9 +11,9 @@
     </div>
 
     <div class="card card-pad sm:!p-8">
-      <div class="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-        {% include "components/icon.html" with name="alert" class="w-4 h-4 text-red-500 shrink-0 mt-0.5" %}
-        <p class="text-sm text-red-700">
+      <div class="alert alert-danger">
+        {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+        <p>
           This confirmation link is invalid or has expired. Request a new one
           below, or sign in if you've already confirmed your email.
         </p>

@@ -6,9 +6,9 @@
   <p class="text-sm text-gray-500 mb-4">Choose a strong password you don't use anywhere else.</p>
 
   {% if form.non_field_errors %}
-    <div class="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-      {% include "components/icon.html" with name="alert" class="w-4 h-4 text-red-500 shrink-0 mt-0.5" %}
-      <p class="text-sm text-red-700">{{ form.non_field_errors|join:" " }}</p>
+    <div class="mb-4 alert alert-danger">
+      {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+      <p>{{ form.non_field_errors|join:" " }}</p>
     </div>
   {% endif %}
 

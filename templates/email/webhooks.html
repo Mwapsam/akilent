@@ -16,17 +16,17 @@
 {% block content %}
 
 {% if is_admin %}
-<div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-700">
+<div class="mb-6 rounded-2xl border tone-brand-border tone-brand px-5 py-3 text-sm">
   Admin view — showing every tenant's webhook endpoints with full access.
 </div>
 {% endif %}
 
 {% if not webhooks_enabled %}
-<div class="card card-pad mb-6 border-amber-200 bg-amber-50/40">
+<div class="card card-pad mb-6 tone-amber-border tone-amber-bg">
   <h2 class="font-semibold flex items-center gap-2">
     {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Webhooks
   </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include outbound webhooks. <a href="/billing/plans/" class="text-brand-600 font-medium">Upgrade your plan</a> to subscribe an endpoint.</p>
+  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include outbound webhooks. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to subscribe an endpoint.</p>
 </div>
 {% else %}
 
@@ -64,11 +64,11 @@
         <p class="font-medium text-ink break-all">
           {{ e.url }}
           {% if e.health == "healthy" %}
-            <span class="ml-2 inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Connected</span>
+            <span class="ml-2 inline-flex items-center rounded-full tone-teal px-2 py-0.5 text-xs font-medium">Connected</span>
           {% elif e.health == "degraded" %}
-            <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Degraded · {{ e.consecutive_failures }} fail{{ e.consecutive_failures|pluralize }}</span>
+            <span class="ml-2 inline-flex items-center rounded-full tone-amber px-2 py-0.5 text-xs font-medium">Degraded · {{ e.consecutive_failures }} fail{{ e.consecutive_failures|pluralize }}</span>
           {% else %}
-            <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Disabled</span>
+            <span class="ml-2 inline-flex items-center rounded-full tone-coral px-2 py-0.5 text-xs font-medium">Disabled</span>
           {% endif %}
         </p>
         <p class="text-xs text-gray-500 mt-1">{{ e.event_types|join:", " }}</p>

@@ -34,19 +34,33 @@ class SendWhatsAppAction(Action):
     def input_schema(self) -> dict:
         return {
             "required": ["account", "phone", "template_id"],
-            "optional": ["params", "scheduled_at"],
+            "optional": ["params", "scheduled_at", "conversation"],
         }
 
     def execute(self, context: dict, *, account, phone: str, template_id: int,
-                params: dict | None = None, scheduled_at=None) -> dict:
+                params: dict | None = None, scheduled_at=None, conversation=None) -> dict:
         from apps.automation.workflows import send_whatsapp_message
 
+        wa_conversation = getattr(conversation, "whatsapp_conversation", None)
+        if wa_conversation is not None:
+            # The conversation names the exact WhatsApp identity to reply to.
+            # Matching on the canonical Contact's phone instead can resolve to a
+            # different WhatsAppContact (same person, differently formatted
+            # number), which sends the reply into someone else's thread.
+            phone = wa_conversation.contact.phone_number or phone
         if not phone:
             raise ActionError("send_whatsapp requires a phone number")
-        msg = send_whatsapp_message(
-            account, phone=phone, template_id=template_id,
-            params=params or {}, scheduled_at=scheduled_at,
-        )
+        try:
+            msg = send_whatsapp_message(
+                account, phone=phone, template_id=template_id,
+                params=params or {}, scheduled_at=scheduled_at,
+                conversation=wa_conversation,
+            )
+        except ValueError as exc:
+            # Unsendable template or no WhatsApp/opt-in record for this number:
+            # the caller's problem to fix, so it surfaces as a message rather
+            # than a 500.
+            raise ActionError(str(exc)) from exc
         return {"outbound_message_id": msg.id}
 
 

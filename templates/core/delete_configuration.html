@@ -33,9 +33,9 @@
   <div class="max-w-2xl">
     <div class="card p-6 sm:p-8">
 
-      <div class="flex gap-3 rounded-xl bg-red-50 border border-red-100 p-4 mb-6">
-        {% include "components/icon.html" with name="alert-triangle" class="w-5 h-5 text-red-500 shrink-0 mt-0.5" %}
-        <p class="text-sm text-red-700">
+      <div class="mb-6 alert alert-danger">
+        {% include "components/icon.html" with name="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5" %}
+        <p>
           You're about to permanently delete this configuration. Any part of the
           application relying on it will stop working until it's recreated.
         </p>

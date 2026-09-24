@@ -159,6 +159,14 @@ def test_send_template_from_composer(logged_in, open_conversation):
     assert resp.status_code == 302
     msg = OutboundMessage.objects.get(account=account, template=template)
     assert msg.payload["params"] == {"name": "Ada"}
+    # Meta's wire shape, not the label -> value record: sending `params` as the
+    # components list is what previously broke every variable template.
+    assert msg.payload["components"] == [
+        {"type": "body", "parameters": [{"type": "text", "text": "Ada"}]}
+    ]
+    # Pinned to the conversation it was sent from, so the reply can't surface
+    # in a new thread once the 24h window has lapsed.
+    assert msg.payload["_conversation_id"] == open_conversation.whatsapp_conversation_id
 
 
 @pytest.mark.django_db

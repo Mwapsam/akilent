@@ -22,7 +22,7 @@
       <tbody>
         {% for lead in leads %}
         <tr>
-          <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-brand-600 hover:text-brand-700">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a></td>
+          <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-accent hover:text-accent-strong">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a></td>
           <td data-label="Source">{{ lead.source|default:"—" }}</td>
           <td data-label="Status"><span class="badge badge-neutral">{{ lead.get_status_display }}</span></td>
           <td data-label="Created" class="text-gray-500 tabular-nums">{{ lead.created_at|date:"Y-m-d" }}</td>

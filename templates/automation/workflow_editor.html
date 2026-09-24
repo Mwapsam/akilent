@@ -202,7 +202,7 @@
                   Auto-create a WhatsApp contact if none exists (does not opt them in — consent rules still apply)
                 </label>
                 <div x-show="whatsappSelected(step) && (whatsappSelected(step).variables || []).length"
-                     class="sm:col-span-2 grid gap-1.5 mt-1 border-t border-gray-100 pt-2">
+                     class="sm:col-span-2 grid gap-1.5 mt-1 border-t border-border pt-2">
                   <p class="text-xs text-gray-500">Template variables</p>
                   <template x-for="v in (whatsappSelected(step) || {}).variables || []" :key="v">
                     <label class="text-xs flex items-center gap-2">
@@ -334,35 +334,35 @@ function workflowEditor() {
     highlighted: null,
     stepTypeMeta: {
       send_email: {
-        label: "Send email", border: "border-l-amber-500", chip: "bg-amber-50 text-amber-700",
+        label: "Send email", border: "border-l-amber-500", chip: "tone-amber",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/>',
       },
       send_whatsapp: {
-        label: "Send WhatsApp", border: "border-l-teal-500", chip: "bg-teal-50 text-teal-700",
+        label: "Send WhatsApp", border: "border-l-teal-500", chip: "tone-teal",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>',
       },
       wait: {
-        label: "Wait", border: "border-l-brand-500", chip: "bg-brand-50 text-brand-700",
+        label: "Wait", border: "border-l-brand-500", chip: "tone-brand",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
       },
       branch: {
-        label: "Branch", border: "border-l-blue-500", chip: "bg-blue-50 text-blue-700",
+        label: "Branch", border: "border-l-blue-500", chip: "tone-info",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM15.75 18a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0ZM6 8.25v3.75a2.25 2.25 0 0 0 2.25 2.25H15m0 0-2.25-2.25M15 14.25l-2.25 2.25"/>',
       },
       webhook: {
-        label: "Webhook", border: "border-l-purple-500", chip: "bg-purple-50 text-purple-700",
+        label: "Webhook", border: "border-l-purple-500", chip: "tone-purple",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/>',
       },
       set_attribute: {
-        label: "Set attribute", border: "border-l-green-500", chip: "bg-green-50 text-green-700",
+        label: "Set attribute", border: "border-l-green-500", chip: "tone-teal",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"/>',
       },
       stop: {
-        label: "Stop", border: "border-l-red-500", chip: "bg-red-50 text-red-700",
+        label: "Stop", border: "border-l-red-500", chip: "tone-coral",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5"/>',
       },
       exit: {
-        label: "Exit", border: "border-l-red-500", chip: "bg-red-50 text-red-700",
+        label: "Exit", border: "border-l-red-500", chip: "tone-coral",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5"/>',
       },
     },

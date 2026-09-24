@@ -1,7 +1,18 @@
-{# Toast region — included once in base.html. Driven by Alpine $store.toasts. #}
+{% comment %}
+  Toast region - included once in base.html. Driven by Alpine $store.toasts.
+
+  The live region is this container, which exists at page load: a live region
+  added to the DOM at the same time as its content is not reliably announced.
+
+  aria-atomic is false so only the toast that was just added gets read. With
+  it true, adding a second toast re-announced the first one as well.
+
+  The toasts themselves deliberately carry no role="status" - that would nest
+  a second live region inside this one and announce each message twice.
+{% endcomment %}
 <div class="fixed top-4 right-4 w-[22rem] max-w-[calc(100vw-2rem)] space-y-2"
      style="z-index: var(--z-toast)"
-     aria-live="polite" aria-atomic="true" x-data>
+     aria-live="polite" aria-atomic="false" x-data>
   <template x-for="t in $store.toasts.items" :key="t.id">
     <div x-transition.opacity.duration.200ms
          class="card card-pad !p-4 flex items-start gap-3 shadow-pop"
@@ -10,8 +21,7 @@
            'border-l-4 border-l-red-500': t.type === 'danger',
            'border-l-4 border-l-amber-500': t.type === 'warning',
            'border-l-4 border-l-brand-500': t.type === 'info' || !t.type,
-         }"
-         role="status">
+         }">
       <p class="flex-1 text-sm text-gray-700" x-text="t.message"></p>
       <button type="button" class="text-gray-400 hover:text-gray-600 shrink-0"
               @click="$store.toasts.remove(t.id)" aria-label="Dismiss">

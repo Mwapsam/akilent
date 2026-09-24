@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from apps.email.exceptions import UnverifiedDomainError
+from apps.email.exceptions import MissingPostalAddressError, UnverifiedDomainError
 from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
 
 _CREATE_BATCH_SIZE = 1000
@@ -43,7 +43,13 @@ def create_campaign(
     if domain is None:
         raise UnverifiedDomainError(from_domain)
 
-    scheduled = initial_status == BulkEmailCampaign.Status.SCHEDULED
+    # Every campaign email carries the sender's postal address in its footer;
+    # without one we cannot send a CAN-SPAM compliant message at all. This is
+    # the single choke point for both the composer UI and the API.
+    if not account.has_postal_address:
+        raise MissingPostalAddressError()
+
+    scheduled =initial_status == BulkEmailCampaign.Status.SCHEDULED
     campaign = BulkEmailCampaign.objects.create(
         account=account,
         domain=domain,

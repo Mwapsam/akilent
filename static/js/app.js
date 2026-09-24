@@ -32,12 +32,15 @@
   };
 
   // --- Navigation keyboard shortcuts ------------------------------------
+  // Scoped to the whole nav, not to a [role="group"]. Inbox and Dashboard sit
+  // above the first group, so group scoping meant arrow keys did nothing at
+  // all on the two most-used links in the product.
   window.navFocusLink = function (e, dir) {
     const link = e.target.closest('a[data-nav-link]');
     if (!link) return;
-    const group = link.closest('[role="group"]');
-    if (!group) return;
-    const links = Array.from(group.querySelectorAll('a[data-nav-link]'));
+    const scope = link.closest('nav');
+    if (!scope) return;
+    const links = Array.from(scope.querySelectorAll('a[data-nav-link]'));
     const idx = links.indexOf(link);
     if (idx === -1) return;
     const next = dir === 'up' ? links[idx - 1] : links[idx + 1];

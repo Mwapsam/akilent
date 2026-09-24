@@ -133,6 +133,28 @@ def _send_sandbox_message(msg: EmailMessage, text_body: str, html_body: str) -> 
         record_message_event(msg, event_type, source="sandbox")
 
 
+def _drop_message(msg: EmailMessage, reason: str) -> None:
+    """Permanently fail a message without retrying, releasing its quota.
+
+    Used for conditions that a retry cannot fix (reputation halt, missing
+    compliance footer). Keeps the campaign counters and the reserved send quota
+    consistent.
+    """
+    msg.mark_failed(reason)
+    if msg.campaign_id:
+        msg.campaign.increment_counts(failed=1)
+        BulkEmailRecipient.objects.filter(message=msg).update(
+            status=BulkEmailRecipient.Status.FAILED, error=reason[:5000]
+        )
+        _maybe_complete_campaign(msg.campaign)
+    try:
+        from apps.billing.limits import LimitChecker
+
+        LimitChecker(msg.account).release_email()
+    except Exception:
+        logger.exception("_drop_message: quota release failed for %s", msg.pk)
+
+
 def _send_email_message(
     task, msg: EmailMessage, text_body: str, html_body: str, *, attachments=None
 ) -> None:
@@ -167,19 +189,7 @@ def _send_email_message(
     allowed, reason = check_can_send(msg.account)
     if not allowed:
         logger.warning("Reputation halt: dropping send for account=%s (%s)", msg.account_id, reason)
-        msg.mark_failed(f"Sender reputation halt: {reason}")
-        if msg.campaign_id:
-            msg.campaign.increment_counts(failed=1)
-            BulkEmailRecipient.objects.filter(message=msg).update(
-                status=BulkEmailRecipient.Status.FAILED, error=f"Sender reputation halt: {reason}"[:5000]
-            )
-            _maybe_complete_campaign(msg.campaign)
-        try:
-            from apps.billing.limits import LimitChecker
-
-            LimitChecker(msg.account).release_email()
-        except Exception:
-            logger.exception("reputation halt: quota release failed for %s", msg.pk)
+        _drop_message(msg, f"Sender reputation halt: {reason}")
         return
 
     if html_body:
@@ -200,18 +210,36 @@ def _send_email_message(
 
     headers: dict[str, str] = {}
     if msg.campaign_id:
-        # Bulk / marketing mail: attach RFC 8058 one-click unsubscribe headers
-        # (Gmail/Yahoo 2024 bulk-sender requirement). Never let this block a send.
+        # Bulk / marketing mail carries RFC 8058 one-click unsubscribe headers
+        # (Gmail/Yahoo 2024 bulk-sender requirement) *and* a CAN-SPAM footer in
+        # the body with the same unsubscribe link plus the sender's postal
+        # address. One token backs both.
+        #
+        # This runs after the click-tracking rewrite above on purpose: the
+        # unsubscribe link must not become a tracked redirect.
+        #
+        # Unlike the headers, the footer is not best-effort — a marketing email
+        # without a visible opt-out is a CAN-SPAM violation, so we fail closed.
         try:
-            from apps.email.services.unsubscribe import build_list_unsubscribe_headers
+            from apps.email.services.compliance_footer import append_footer
+            from apps.email.services.unsubscribe import build_unsubscribe_context
 
-            headers = build_list_unsubscribe_headers(
+            ctx = build_unsubscribe_context(
                 msg.account, msg.to_email, campaign_id=msg.campaign_id
+            )
+            headers = ctx["headers"]
+            text_body, html_body = append_footer(
+                text_body,
+                html_body,
+                account=msg.account,
+                unsubscribe_url=ctx["url"],
             )
         except Exception:
             logger.exception(
-                "_send_email_message: List-Unsubscribe header build failed for %s", msg.pk
+                "_send_email_message: compliance footer injection failed for %s", msg.pk
             )
+            _drop_message(msg, "Compliance footer injection failed")
+            return
 
     try:
         result = get_send_provider().send(OutboundEmail(

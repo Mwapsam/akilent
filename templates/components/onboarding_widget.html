@@ -43,7 +43,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
            class="flex items-start gap-2.5 rounded-xl px-2.5 py-2 {% if step.url and not step.done %}hover:bg-canvas{% endif %}
            {% if not step.url %}pointer-events-none{% endif %}">
           <span class="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center
-            {% if step.done %}bg-green-100 text-green-600{% elif step.key == onboarding.next_step.key %}bg-brand-100 text-brand-600{% else %}bg-gray-100 text-gray-400{% endif %}">
+            {% if step.done %}tone-teal{% elif step.key == onboarding.next_step.key %}tone-brand{% else %}tone-neutral-bg text-gray-400{% endif %}">
             {% if step.done %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5" %}
             {% else %}<span class="block w-1.5 h-1.5 rounded-full bg-current"></span>{% endif %}
           </span>
@@ -56,7 +56,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
             {% endif %}
           </span>
           {% if not step.done and step.cta %}
-            <span class="shrink-0 self-center text-xs font-medium text-brand-600">{{ step.cta }} →</span>
+            <span class="shrink-0 self-center text-xs font-medium text-accent">{{ step.cta }} →</span>
           {% endif %}
         </a>
       </li>
@@ -64,7 +64,7 @@ a small launcher so it stays available without getting in the way.{% endcomment 
     </ul>
 
     <div class="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-muted">
-      <button type="button" class="text-xs font-medium text-brand-600 hover:text-brand-700"
+      <button type="button" class="text-xs font-medium text-accent hover:text-accent-strong"
               @click="$dispatch('open-welcome-tour')">
         {% include "components/icon.html" with name="sparkles" class="w-3.5 h-3.5 inline -mt-0.5" %} Take the tour
       </button>

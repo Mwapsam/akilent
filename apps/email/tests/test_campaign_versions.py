@@ -15,7 +15,12 @@ from apps.email.services.campaign_versions import restore_campaign_version, snap
 @pytest.fixture
 def account(db):
     user = User.objects.create_user("o", "o@example.com", "pw")
-    acc = Account.objects.create(company_name="Acme")
+    acc = Account.objects.create(
+        company_name="Acme",
+        address_line1="1 Market St",
+        city="Lusaka",
+        country="ZM",
+    )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     Plan.objects.create(slug="p", name="P", price_monthly=Decimal("1"))
     return acc

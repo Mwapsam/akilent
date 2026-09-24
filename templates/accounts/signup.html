@@ -21,7 +21,7 @@
         <li class="flex items-center gap-2">
           <button type="button" @click="goTo(i)" :aria-current="i === step ? 'step' : null"
                   class="flex items-center gap-1.5"
-                  :class="i === step ? 'text-brand-600' : (i < step ? 'text-gray-500 hover:text-gray-700' : 'text-gray-300 cursor-default')">
+                  :class="i === step ? 'text-accent' : (i < step ? 'text-gray-500 hover:text-gray-700' : 'text-gray-300 cursor-default')">
             <span class="w-5 h-5 rounded-full border flex items-center justify-center text-[11px]"
                   :class="i < step ? 'bg-brand-600 border-brand-600 text-white' : (i === step ? 'border-brand-600' : 'border-gray-300')"
                   x-text="i < step ? '✓' : (i + 1)"></span>
@@ -33,9 +33,9 @@
     </ol>
 
     {% if form.non_field_errors %}
-      <div class="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-        {% include "components/icon.html" with name="alert" class="w-4 h-4 text-red-500 shrink-0 mt-0.5" %}
-        <p class="text-sm text-red-700">{{ form.non_field_errors|join:" " }}</p>
+      <div class="mb-5 alert alert-danger">
+        {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+        <p>{{ form.non_field_errors|join:" " }}</p>
       </div>
     {% endif %}
 
@@ -50,7 +50,7 @@
         <template x-for="c in serviceCards" :key="c.value">
           <button type="button" @click="selectService(c.value)" role="radio" :aria-checked="services === c.value"
                   class="w-full text-left rounded-xl border px-4 py-4 flex items-center gap-3 transition"
-                  :class="services === c.value ? 'border-brand-600 ring-2 ring-brand-100 bg-brand-50/40' : 'border-border hover:border-gray-300'">
+                  :class="services === c.value ? 'border-brand-600 ring-2 ring-brand-100 tone-brand-bg' : 'border-border hover:border-gray-300'">
             <span class="w-4 h-4 rounded-full border flex-shrink-0"
                   :class="services === c.value ? 'border-brand-600 bg-brand-600' : 'border-gray-300'"></span>
             <span class="font-medium text-ink" x-text="c.label"></span>
@@ -78,7 +78,7 @@
                     :class="plan === p.slug ? 'border-brand-600 ring-2 ring-brand-100' : 'border-border hover:border-gray-300'">
               <div class="flex items-center justify-between">
                 <span class="font-semibold text-ink" x-text="p.name"></span>
-                <span x-show="p.popular" class="text-[10px] uppercase tracking-wide bg-brand-100 text-brand-700 rounded px-1.5 py-0.5">Popular</span>
+                <span x-show="p.popular" class="text-[10px] uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
               </div>
               <div class="mt-1 text-lg font-bold text-ink" x-text="priceLabel(p)"></div>
               <div x-show="p.trialDays" class="text-xs text-gray-400" x-text="p.trialDays + '-day free trial'"></div>
@@ -162,7 +162,7 @@
         <p class="text-xs text-gray-400 pt-2">
           Your account starts on a trial where available — you can add payment details later from Billing.
           We'll email a link to confirm your address; you can keep setting up in the meantime.
-          <button type="button" @click="step = 2" class="text-brand-600 hover:text-brand-700 font-medium">Edit details</button>
+          <button type="button" @click="step = 2" class="text-accent hover:text-accent-strong font-medium">Edit details</button>
         </p>
       </div>
 
@@ -176,7 +176,7 @@
     </form>
 
     <p class="text-center text-xs text-gray-400 mt-6">
-      Already have an account? <a href="{% url 'login' %}" class="text-brand-600 hover:text-brand-700">Sign in</a>
+      Already have an account? <a href="{% url 'login' %}" class="text-accent hover:text-accent-strong">Sign in</a>
     </p>
   </div>
 </div>

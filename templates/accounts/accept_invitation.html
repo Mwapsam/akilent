@@ -34,7 +34,7 @@
       {% else %}
         <p class="text-sm text-gray-600 mb-5">Create your account for <span class="font-medium">{{ invite.email }}</span>.</p>
         {% if form.non_field_errors %}
-          <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ form.non_field_errors|join:" " }}</div>
+          <div class="mb-4 alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
         {% endif %}
         <form method="post" novalidate class="space-y-4">
           {% csrf_token %}

@@ -1,6 +1,13 @@
 {% comment %}Pagination for a Django Paginator Page.
+
   {% include "components/pagination.html" with page=page %}
+  {% include "components/pagination.html" with page=page target="#contact-results" %}
+
 Preserves existing query params (q, status, …) and swaps ?page=.
+
+Passing `target` makes the links swap that element over HTMX instead of
+reloading the page. The href stays a real URL either way, so the control still
+works without JavaScript and middle-click/open-in-new-tab behave normally.
 {% endcomment %}
 {% if page.has_other_pages %}
 <nav class="flex items-center justify-between gap-3 mt-4 text-sm" aria-label="Pagination">
@@ -8,11 +15,15 @@ Preserves existing query params (q, status, …) and swaps ?page=.
   <div class="flex gap-2">
     {% if page.has_previous %}
       <a class="btn btn-secondary btn-sm" rel="prev"
-         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.previous_page_number }}">Previous</a>
+         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.previous_page_number }}"
+         {% if target %}hx-get="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.previous_page_number }}"
+         hx-target="{{ target }}" hx-swap="outerHTML" hx-push-url="true" hx-indicator="{{ target }}"{% endif %}>Previous</a>
     {% endif %}
     {% if page.has_next %}
       <a class="btn btn-secondary btn-sm" rel="next"
-         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.next_page_number }}">Next</a>
+         href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.next_page_number }}"
+         {% if target %}hx-get="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page.next_page_number }}"
+         hx-target="{{ target }}" hx-swap="outerHTML" hx-push-url="true" hx-indicator="{{ target }}"{% endif %}>Next</a>
     {% endif %}
   </div>
 </nav>

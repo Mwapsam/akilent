@@ -2,8 +2,7 @@
 Usage: include components/copy_field.html with value=key label="Copy"{% endcomment %}
 <div class="copy-row flex items-stretch gap-2">
   <span class="copy-value">{{ value|default:"—" }}</span>
-  <button type="button" class="copy-btn shrink-0 inline-flex items-center gap-1
-    text-brand-600 border border-border rounded-lg px-2.5 text-xs hover:bg-gray-50">
+  <button type="button" class="copy-btn shrink-0 inline-flex items-center gap-1 text-accent border border-border rounded-lg px-2.5 text-xs hover:tone-neutral-bg">
     {% include "components/icon.html" with name="copy" class="w-3.5 h-3.5" %}
     <span>{{ label|default:"Copy" }}</span>
   </button>

@@ -13,7 +13,7 @@ from typing import Optional
 
 from django.db import transaction
 
-from apps.email.models import SuppressionListEntry, EmailMessage
+from apps.email.models import GlobalSuppression, SuppressionListEntry, EmailMessage
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,15 @@ def is_suppressed(account, email: str) -> bool:
         SuppressionListEntry.Reason.MANUAL,
         SuppressionListEntry.Reason.INVALID,
     ]
-    return SuppressionListEntry.objects.filter(
+    if SuppressionListEntry.objects.filter(
         account=account,
         email=email,
         reason__in=blocking_reasons,
-    ).exists()
+    ).exists():
+        return True
+    # A hard bounce or complaint for any tenant blocks the address for all of
+    # them — AWS meters those rates against our whole SES account.
+    return GlobalSuppression.objects.filter(email=email).exists()
 
 
 def is_suppressed_globally(email: str) -> bool:
@@ -51,10 +55,12 @@ def is_suppressed_globally(email: str) -> bool:
         SuppressionListEntry.Reason.MANUAL,
         SuppressionListEntry.Reason.INVALID,
     ]
-    return SuppressionListEntry.objects.filter(
+    if SuppressionListEntry.objects.filter(
         email=email,
         reason__in=blocking_reasons,
-    ).exists()
+    ).exists():
+        return True
+    return GlobalSuppression.objects.filter(email=email).exists()
 
 
 def get_suppressed_emails(account, emails: list[str]) -> set[str]:
@@ -69,13 +75,20 @@ def get_suppressed_emails(account, emails: list[str]) -> set[str]:
         SuppressionListEntry.Reason.MANUAL,
         SuppressionListEntry.Reason.INVALID,
     ]
-    return set(
+    suppressed = set(
         SuppressionListEntry.objects.filter(
             account=account,
             email__in=emails,
             reason__in=blocking_reasons,
         ).values_list("email", flat=True)
     )
+    # Second query, not a join: this is the hot bulk-dispatch path.
+    suppressed |= set(
+        GlobalSuppression.objects.filter(email__in=emails).values_list(
+            "email", flat=True
+        )
+    )
+    return suppressed
 
 
 def record_event(

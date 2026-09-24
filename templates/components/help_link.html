@@ -1,7 +1,7 @@
 {% comment %}Inline "Learn more" link to a help article.
 Usage: include components/help_link.html with slug="dns-setup" text="DNS setup guide"{% endcomment %}
 <a href="{% url 'help-article' slug %}"
-   class="inline-flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700">
+   class="inline-flex items-center gap-1 text-sm text-accent hover:text-accent-strong">
   {% include "components/icon.html" with name="book-open" class="w-3.5 h-3.5" %}
   {{ text|default:"Learn more" }}
 </a>

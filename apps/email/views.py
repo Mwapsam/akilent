@@ -1438,7 +1438,7 @@ def campaign_create(request):
         create_and_queue_campaign,
     )
     from apps.billing.limits import PlanLimitExceeded
-    from apps.email.exceptions import UnverifiedDomainError
+    from apps.email.exceptions import MissingPostalAddressError, UnverifiedDomainError
     from apps.scheduler.api import SchedulingError
 
     admin = _is_admin(request)
@@ -1522,6 +1522,8 @@ def campaign_create(request):
             )
         except UnverifiedDomainError as exc:
             errors["from_email"] = str(exc)
+        except MissingPostalAddressError as exc:
+            errors["form"] = str(exc)
         except SchedulingError as exc:
             errors["scheduled_at"] = str(exc)
         except (PlanLimitExceeded, RecipientCapExceededError, TemplateMissingContentError) as exc:

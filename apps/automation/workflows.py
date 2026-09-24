@@ -53,7 +53,7 @@ def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = Fa
 
 def send_whatsapp_message(
     account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None,
-    auto_create_contact: bool = False, link_contact=None,
+    auto_create_contact: bool = False, link_contact=None, conversation=None,
 ) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
@@ -68,12 +68,19 @@ def send_whatsapp_message(
     ``link_contact`` is forwarded to ``_resolve_or_provision_contact`` — see
     there for what it does on auto-create.
 
+    ``conversation`` (a ``whatsapp.Conversation``), when given, pins the send to
+    that conversation instead of letting the sender open a fresh one. Without
+    it, a template sent into a lapsed conversation starts a new session row and
+    the reply surfaces in a *different* inbox thread than the one the agent
+    sent it from.
+
     Raises ``ValueError`` (with an actionable message) if there's no matching
     ``WhatsAppContact`` and ``auto_create_contact`` is not set, or
     ``MessageTemplate.DoesNotExist`` if the template can't be resolved for this
     account.
     """
     from apps.whatsapp.models import MessageTemplate
+    from apps.whatsapp.send_components import build_send_components
 
     contact = _resolve_or_provision_contact(
         account, phone, auto_create=auto_create_contact, link_contact=link_contact
@@ -84,16 +91,23 @@ def send_whatsapp_message(
     if scheduled_at is not None:
         kwargs["scheduled_at"] = scheduled_at
 
+    payload = {
+        "type": "template",
+        "template_name": template.whatsapp_template_name,
+        "language": template.language_code,
+        # `params` stays the human-readable record (label -> value) that the UI
+        # and tests read; `components` is the wire shape Meta actually needs.
+        "params": params or {},
+        "components": build_send_components(template, params),
+    }
+    if conversation is not None:
+        payload["_conversation_id"] = conversation.pk
+
     return OutboundMessage.objects.create(
         account=account,
         contact=contact,
         template=template,
-        payload={
-            "type": "template",
-            "template_name": template.whatsapp_template_name,
-            "language": template.language_code,
-            "params": params or {},
-        },
+        payload=payload,
         **kwargs,
     )
 

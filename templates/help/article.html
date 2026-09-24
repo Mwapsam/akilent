@@ -4,27 +4,27 @@
 {% block content %}
 <style>
   /* Scoped prose styling for help articles (no Tailwind typography plugin). */
-  .article-body { color: #46516B; font-size: 0.95rem; line-height: 1.7; }
+  .article-body { color: var(--color-ink-muted); font-size: 0.95rem; line-height: 1.7; }
   .article-body > * + * { margin-top: 1rem; }
-  .article-body h2 { font-size: 1.15rem; font-weight: 600; color: #12182B; margin-top: 2rem; }
-  .article-body h3 { font-size: 1rem; font-weight: 600; color: #12182B; margin-top: 1.5rem; }
+  .article-body h2 { font-size: 1.15rem; font-weight: 600; color: var(--color-ink); margin-top: 2rem; }
+  .article-body h3 { font-size: 1rem; font-weight: 600; color: var(--color-ink); margin-top: 1.5rem; }
   .article-body ul, .article-body ol { padding-left: 1.25rem; }
   .article-body ul { list-style: disc; }
   .article-body ol { list-style: decimal; }
   .article-body li + li { margin-top: 0.35rem; }
-  .article-body a { color: #35517D; text-decoration: underline; text-underline-offset: 2px; }
-  .article-body code { background: #F3F5F7; border-radius: 0.375rem; padding: 0.1rem 0.35rem;
+  .article-body a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+  .article-body code { background: var(--color-canvas); border-radius: 0.375rem; padding: 0.1rem 0.35rem;
                        font-size: 0.85em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .article-body strong { color: #12182B; font-weight: 600; }
-  .article-body .note { border: 1px solid var(--tw-border, #E8EDF3); background: #FAFBFC;
+  .article-body strong { color: var(--color-ink); font-weight: 600; }
+  .article-body .note { border: 1px solid var(--color-border); background: var(--color-surface-muted);
                         border-radius: 0.75rem; padding: 0.85rem 1rem; font-size: 0.9rem; }
   /* display:block + overflow-x lets a wide table scroll instead of forcing the
      page to scroll horizontally - same treatment the developer docs use. */
   .article-body table { display: block; width: fit-content; max-width: 100%;
                         overflow-x: auto; -webkit-overflow-scrolling: touch;
                         border-collapse: collapse; font-size: 0.875rem; }
-  .article-body th, .article-body td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #E8EDF3; vertical-align: top; }
-  .article-body th { color: #657089; font-weight: 600; }
+  .article-body th, .article-body td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  .article-body th { color: var(--color-ink-subtle); font-weight: 600; }
 </style>
 
 <div class="max-w-3xl mx-auto">
@@ -32,7 +32,7 @@
     {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %} All guides
   </a>
 
-  <p class="text-xs font-semibold uppercase tracking-wider text-brand-600 mb-2">{{ article.category }}</p>
+  <p class="text-xs font-semibold uppercase tracking-wider text-accent mb-2">{{ article.category }}</p>
   <h1 class="text-2xl font-semibold tracking-tight mb-2">{{ article.title }}</h1>
   <p class="text-gray-500 mb-8">{{ article.summary }}</p>
 
@@ -52,7 +52,7 @@
   <div class="mt-8 text-sm text-gray-500">
     Still stuck?
     {% if site.support_email %}
-      <a href="mailto:{{ site.support_email }}" class="text-brand-600 hover:text-brand-700">Contact support</a>.
+      <a href="mailto:{{ site.support_email }}" class="text-accent hover:text-accent-strong">Contact support</a>.
     {% else %}
       Reach out to your administrator for help.
     {% endif %}

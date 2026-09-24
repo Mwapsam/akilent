@@ -19,29 +19,50 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         <div class="card shadow-modal overflow-hidden">
           <div class="flex items-center gap-2 px-3 border-b border-border">
             {% include "components/icon.html" with name="search" class="w-4 h-4 text-gray-400 shrink-0" %}
+            {% comment %}
+              role=combobox + aria-activedescendant is what makes the
+              highlighted row audible. Focus stays in the input the whole time,
+              so without it a screen reader announces nothing as you arrow
+              through the results.
+            {% endcomment %}
             <input type="text" x-model="q" x-ref="input"
                    @keydown.arrow-down.prevent="move(1)"
                    @keydown.arrow-up.prevent="move(-1)"
                    @keydown.enter.prevent="run()"
                    class="w-full bg-transparent py-3 text-sm text-ink placeholder:text-gray-400 focus:outline-none"
                    placeholder="Search pages and actions…"
-                   aria-label="Search pages and actions">
+                   aria-label="Search pages and actions"
+                   role="combobox"
+                   aria-controls="cmdk-results"
+                   aria-expanded="true"
+                   aria-autocomplete="list"
+                   :aria-activedescendant="filtered.length ? 'cmdk-option-' + active : null">
             <kbd class="hidden sm:block text-[11px] text-gray-400 border border-border rounded px-1.5 py-0.5">esc</kbd>
           </div>
 
-          <ul class="max-h-80 overflow-y-auto py-1.5" role="listbox">
+          <ul class="max-h-80 overflow-y-auto py-1.5" role="listbox"
+              id="cmdk-results" aria-label="Results">
             <template x-for="(item, i) in filtered" :key="item.label">
-              <li>
+              {% comment %}
+                role=option goes on the anchor rather than the li: an option
+                must not contain its own interactive element, and the anchor is
+                what the pointer actually targets.
+              {% endcomment %}
+              <li role="presentation">
                 <a :href="item.href"
+                   role="option"
+                   :id="'cmdk-option-' + i"
+                   :aria-selected="active === i ? 'true' : 'false'"
                    @mouseenter="active = i"
-                   :class="active === i ? 'bg-brand-50 text-brand-700' : 'text-ink'"
+                   :class="active === i ? 'tone-brand' : 'text-ink'"
                    class="flex items-center gap-3 px-3 py-2 text-sm">
                   <span class="text-gray-400" x-text="item.group"></span>
                   <span x-text="item.label" class="font-medium"></span>
                 </a>
               </li>
             </template>
-            <li x-show="filtered.length === 0" class="px-3 py-6 text-center text-sm text-gray-500">
+            <li role="presentation" x-show="filtered.length === 0"
+                class="px-3 py-6 text-center text-sm text-gray-500">
               No matches
             </li>
           </ul>

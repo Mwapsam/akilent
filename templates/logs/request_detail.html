@@ -18,7 +18,7 @@
     <div class="flex justify-between"><span class="text-gray-500">Time</span><span>{{ row.created_at|date:"Y-m-d H:i:s" }}</span></div>
     {% if linked_message %}
     <div class="pt-2">
-      <a href="/logs/messages/{{ linked_message.public_id }}/" class="text-brand-600 font-mono text-xs">{{ linked_message.public_id }}</a>
+      <a href="/logs/messages/{{ linked_message.public_id }}/" class="text-accent font-mono text-xs">{{ linked_message.public_id }}</a>
     </div>
     {% endif %}
   </section>

@@ -176,6 +176,7 @@ def conversation_detail(request, public_id: str):
                 run_action(
                     "send_whatsapp", ctx, account=account,
                     phone=conversation.contact.phone, template_id=template.id, params=params,
+                    conversation=conversation,
                 )
                 conversation.mark_read()
             elif action == "create_followup":

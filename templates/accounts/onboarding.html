@@ -51,7 +51,7 @@
       <li class="card card-pad flex items-start gap-4
                  {% if step.key == next_step.key %}ring-1 ring-brand-200{% endif %}">
         <div class="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center
-          {% if step.done %}bg-teal-50 text-teal-700{% else %}bg-canvas text-gray-400{% endif %}">
+          {% if step.done %}tone-teal{% else %}bg-canvas text-gray-400{% endif %}">
           {% if step.done %}
             {% include "components/icon.html" with name="check" class="w-5 h-5" %}
           {% else %}

@@ -37,7 +37,7 @@ versa.{% endcomment %}
     <div class="p-7 text-center">
       {# Slide — welcome #}
       <div x-show="current === 'welcome'">
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Welcome to {{ site.app_name|default:"Automator" }}</h2>
@@ -46,7 +46,7 @@ versa.{% endcomment %}
 
       {# Slide — domains #}
       <div x-show="current === 'domain'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="globe" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Set up a sending domain</h2>
@@ -56,7 +56,7 @@ versa.{% endcomment %}
 
       {# Slide — mailboxes #}
       <div x-show="current === 'mailboxes'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="inbox" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Create mailboxes &amp; aliases</h2>
@@ -66,7 +66,7 @@ versa.{% endcomment %}
 
       {# Slide — WhatsApp #}
       <div x-show="current === 'whatsapp'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="chat" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Connect a WhatsApp number</h2>
@@ -76,7 +76,7 @@ versa.{% endcomment %}
 
       {# Slide — team #}
       <div x-show="current === 'team'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="user" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Invite your team</h2>
@@ -86,7 +86,7 @@ versa.{% endcomment %}
 
       {# Slide — help #}
       <div x-show="current === 'help'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-brand-600 mb-4">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="book-open" class="w-6 h-6" %}
         </span>
         <h2 class="text-lg font-semibold">Help is always a click away</h2>
@@ -100,7 +100,7 @@ versa.{% endcomment %}
       <div class="flex items-center gap-1.5">
         <template x-for="(s, i) in slides" :key="s">
           <span class="w-1.5 h-1.5 rounded-full transition-colors"
-                :class="i === step ? 'bg-brand-600' : 'bg-gray-200'"></span>
+                :class="i === step ? 'bg-brand-600' : 'tone-neutral-bg'"></span>
         </template>
       </div>
       <div class="flex items-center gap-2">

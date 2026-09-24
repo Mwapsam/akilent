@@ -21,7 +21,7 @@
   <section class="lg:col-span-2 card card-pad">
     {% if lead.status == 'converted' %}
     <p class="text-sm text-gray-600">This lead has been converted.
-      {% if lead.converted_to_deal %}<a href="{% url 'crm:deal-detail' lead.converted_to_deal.public_id %}" class="text-brand-600">View the deal</a>.{% endif %}
+      {% if lead.converted_to_deal %}<a href="{% url 'crm:deal-detail' lead.converted_to_deal.public_id %}" class="text-accent">View the deal</a>.{% endif %}
     </p>
     {% else %}
     <h2 class="text-lg font-semibold text-ink mb-3">Follow up</h2>

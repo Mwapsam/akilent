@@ -6,7 +6,7 @@
 Anything else renders as upcoming (hollow).
 {% endcomment %}
 <li class="inline-flex items-center gap-1.5
-    {% if current in active_states %}text-brand-700
+    {% if current in active_states %}text-accent-strong
     {% elif current in done_states %}text-teal-700
     {% else %}text-gray-400{% endif %}">
   {% if current in done_states %}

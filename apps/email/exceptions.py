@@ -126,3 +126,18 @@ class UnverifiedDomainError(Exception):
         super().__init__(
             f"'{domain}' is not a verified sending domain for this account"
         )
+
+
+class MissingPostalAddressError(Exception):
+    """The account has no mailing address, so its campaigns can't be CAN-SPAM compliant.
+
+    Every marketing email must carry the sender's physical postal address, which
+    is rendered from the Account business profile (see
+    apps.email.services.compliance_footer).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A physical mailing address is required before sending campaigns. "
+            "Add one in your business profile settings."
+        )

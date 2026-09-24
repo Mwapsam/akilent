@@ -1,0 +1,44 @@
+{% comment %}The results half of the activity log: swapped on filter and paging.
+
+Returned on its own for HX-Request. The outer div is the swap target and
+re-renders itself, so it carries its own id.
+{% endcomment %}
+<div id="message-results">
+  {% if page %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr><th>Message</th><th>To</th><th>Subject</th><th>Status</th><th>Created</th></tr>
+      </thead>
+      <tbody>
+        {% for m in page %}
+        <tr>
+          <td data-label="Message" class="font-mono text-xs">
+            <a href="/logs/messages/{{ m.public_id }}/" class="text-accent hover:text-accent-strong">{{ m.public_id }}</a>
+          </td>
+          <td data-label="To" class="font-medium text-ink">{{ m.to_email }}</td>
+          <td data-label="Subject" class="max-w-xs truncate text-gray-500">{{ m.subject|default:"—" }}</td>
+          <td data-label="Status">
+            {% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
+            {% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}
+            {% elif m.status == 'queued' or m.status == 'sending' %}{% include "components/status.html" with state="sending" badge=True %}
+            {% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}
+          </td>
+          <td data-label="Created" class="text-gray-500 tabular-nums">{{ m.created_at|date:"Y-m-d H:i:s" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif q or status %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="search" title="No messages match those filters" message="Try a different recipient or status, or clear the filters to see everything." action_url="/logs/messages/" action_label="Clear filters" %}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="list" title="No messages yet" message="Once you send email, every message shows up here with its full delivery history." %}
+  </div>
+  {% endif %}
+
+  {% include "components/pagination.html" with page=page target="#message-results" %}
+</div>

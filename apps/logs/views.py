@@ -33,14 +33,19 @@ def message_list(request):
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
     total_ever = qs.model.objects.filter(account=account).exists() if (q or st) else qs.exists()
-    return render(request, "logs/messages.html", {
+    context = {
         "account": account,
         "page": page,
         "q": q,
         "status": st,
         "status_choices": _STATUS_CHOICES,
         "show_quickstart": not total_ever,
-    })
+    }
+    # HTMX asks for the results region on its own; a normal navigation gets
+    # the whole page. Same view, same context.
+    if request.headers.get("HX-Request"):
+        return render(request, "logs/_messages_results.html", context)
+    return render(request, "logs/messages.html", context)
 
 
 @login_required
@@ -91,12 +96,15 @@ def request_list(request):
         qs = qs.filter(path__icontains=path_q)
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
-    return render(request, "logs/requests.html", {
+    context = {
         "account": account,
         "page": page,
         "status_code": status_code,
         "path": path_q,
-    })
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "logs/_requests_results.html", context)
+    return render(request, "logs/requests.html", context)
 
 
 @login_required

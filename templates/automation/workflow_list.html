@@ -27,7 +27,7 @@
     <tbody>
       {% for wf in workflows %}
       <tr>
-        <td data-label="Name"><a href="/automations/{{ wf.slug }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ wf.name }}</a></td>
+        <td data-label="Name"><a href="/automations/{{ wf.slug }}/" class="font-medium text-accent hover:text-accent-strong">{{ wf.name }}</a></td>
         <td data-label="When">{{ wf.trigger_label }}</td>
         <td data-label="Status">
           {% if wf.status == "published" %}<span class="badge badge-success">On (v{{ wf.version }})</span>
@@ -36,7 +36,7 @@
         </td>
         <td data-label="Steps" class="tabular-nums">{{ wf.definition.steps|length }}</td>
         <td data-label="Runs" class="tabular-nums">
-          <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-brand-700 hover:underline">{{ wf.runs.count }}</a>
+          <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-accent-strong hover:underline">{{ wf.runs.count }}</a>
         </td>
         <td data-label="Updated" class="text-gray-500 tabular-nums">{{ wf.updated_at|date:"M j, H:i" }}</td>
       </tr>

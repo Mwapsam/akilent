@@ -17,6 +17,7 @@ from apps.api.services import (
     UnverifiedDomainError,
 )
 from apps.billing.limits import PlanLimitExceeded
+from apps.email.exceptions import MissingPostalAddressError
 from apps.email.models import BulkEmailCampaign, EmailMessage, EmailTemplate
 
 
@@ -59,6 +60,14 @@ def custom_exception_handler(exc, context):
 
     if isinstance(exc, UnverifiedDomainError):
         return _envelope("unverified_domain", str(exc), status.HTTP_403_FORBIDDEN, context)
+
+    if isinstance(exc, MissingPostalAddressError):
+        return _envelope(
+            "missing_postal_address",
+            str(exc),
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            context,
+        )
 
     if isinstance(exc, RecipientCapExceededError):
         return _envelope(

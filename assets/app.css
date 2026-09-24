@@ -152,6 +152,12 @@
      hover     = neutral hover fill for ghost buttons, nav links, menu rows */
   --color-ink-muted: #46516B;   /* gray-700 */
   --color-ink-subtle: #657089;  /* gray-600 — AA floor on white */
+
+  /* Link / accent text on a plain surface. The brand ramp does NOT flip with
+     the theme, so text-accent measured 2.05:1 on the dark surface - and
+     its hover step was worse at 1.52:1. These lift on dark instead. */
+  --color-accent: var(--color-brand-600);
+  --color-accent-strong: var(--color-brand-700);
   --color-hover: #F3F5F7;       /* gray-100 */
 
   /* Elevation (navy-tinted). */
@@ -187,6 +193,13 @@
   --tone-coral-bg: color-mix(in srgb, var(--color-coral-500) 10%, var(--color-surface));
   --tone-coral-border: color-mix(in srgb, var(--color-coral-500) 26%, var(--color-surface));
   --tone-coral-fg: var(--color-coral-600);
+
+  /* The automation canvas tells node types apart by hue, and webhook's is
+     the one accent outside the brand palette. Declared here so it follows
+     the theme like every other tone rather than staying a light chip. */
+  --tone-purple-bg: color-mix(in srgb, var(--color-purple-500) 10%, var(--color-surface));
+  --tone-purple-border: color-mix(in srgb, var(--color-purple-500) 26%, var(--color-surface));
+  --tone-purple-fg: var(--color-purple-700);
 
   /* Z-index layers. */
   --z-dropdown: 1000;
@@ -266,6 +279,9 @@
     --tone-coral-fg: var(--color-coral-300);
     --tone-neutral-fg: var(--color-ink-muted);
     --tone-info-fg: var(--color-blue-200);
+    --tone-purple-fg: var(--color-purple-200);
+    --color-accent: var(--color-brand-200);
+    --color-accent-strong: var(--color-brand-100);
   }
 }
 :root[data-theme="dark"] {
@@ -293,6 +309,111 @@
   --tone-coral-fg: var(--color-coral-300);
   --tone-neutral-fg: var(--color-ink-muted);
   --tone-info-fg: var(--color-blue-200);
+  --tone-purple-fg: var(--color-purple-200);
+  --color-accent: var(--color-brand-200);
+  --color-accent-strong: var(--color-brand-100);
+}
+
+/* ---------------------------------------------------------------------------
+   Tinted-surface utilities
+
+   Templates kept reaching for a light ramp step - bg-brand-50, bg-gray-100,
+   bg-red-50 - to tint a tile or a chip. Those steps hold the same value in
+   both themes, so every one of them rendered as a bright patch on the dark
+   canvas. These utilities carry the same tint through the tone tokens, which
+   are mixed against --color-surface and therefore follow the theme.
+
+   Declared with @utility rather than in @layer components so variants work:
+   hover:tone-neutral is a real thing, .tone-neutral in a component layer
+   would not be.
+--------------------------------------------------------------------------- */
+@utility tone-brand {
+  background-color: var(--tone-brand-bg);
+  color: var(--tone-brand-fg);
+}
+@utility tone-amber {
+  background-color: var(--tone-amber-bg);
+  color: var(--tone-amber-fg);
+}
+@utility tone-teal {
+  background-color: var(--tone-teal-bg);
+  color: var(--tone-teal-fg);
+}
+@utility tone-coral {
+  background-color: var(--tone-coral-bg);
+  color: var(--tone-coral-fg);
+}
+@utility tone-info {
+  background-color: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+}
+@utility tone-neutral {
+  background-color: var(--tone-neutral-bg);
+  color: var(--tone-neutral-fg);
+}
+@utility tone-purple {
+  background-color: var(--tone-purple-bg);
+  color: var(--tone-purple-fg);
+}
+
+/* Background only, for tiles that set their own text colour. */
+@utility tone-surface {
+  background-color: var(--color-surface-muted);
+}
+
+/* Background only: hover states and anywhere the foreground is set
+   separately. Pairing a tinted background with an unrelated text
+   colour is common enough that folding both into one class would
+   silently recolour the text. */
+@utility tone-brand-bg {
+  background-color: var(--tone-brand-bg);
+}
+@utility tone-amber-bg {
+  background-color: var(--tone-amber-bg);
+}
+@utility tone-teal-bg {
+  background-color: var(--tone-teal-bg);
+}
+@utility tone-coral-bg {
+  background-color: var(--tone-coral-bg);
+}
+@utility tone-info-bg {
+  background-color: var(--tone-info-bg);
+}
+@utility tone-neutral-bg {
+  background-color: var(--tone-neutral-bg);
+}
+@utility tone-purple-bg {
+  background-color: var(--tone-purple-bg);
+}
+
+/* Accent text that stays legible in both themes. */
+@utility text-accent {
+  color: var(--color-accent);
+}
+@utility text-accent-strong {
+  color: var(--color-accent-strong);
+}
+
+/* Border only. A light ramp border is the same defect as a light ramp
+   fill - it stays put while the surface under it goes dark. */
+@utility tone-brand-border {
+  border-color: var(--tone-brand-border);
+}
+@utility tone-amber-border {
+  border-color: var(--tone-amber-border);
+}
+@utility tone-teal-border {
+  border-color: var(--tone-teal-border);
+}
+@utility tone-coral-border {
+  border-color: var(--tone-coral-border);
+}
+@utility tone-info-border {
+  border-color: var(--tone-info-border);
+}
+@utility tone-purple-border {
+  border-color: var(--tone-purple-border);
 }
 
 /* ---------------------------------------------------------------------------
@@ -431,7 +552,7 @@
     color: var(--tone-amber-fg);
   }
   .chat-template-picker { @apply px-3 pb-3 text-sm; }
-  .chat-template-picker > summary { @apply text-xs text-brand-600 hover:text-brand-700 cursor-pointer select-none; }
+  .chat-template-picker > summary { @apply text-xs text-accent hover:text-accent-strong cursor-pointer select-none; }
   .chat-template-form { @apply mt-2 space-y-2 rounded-xl border border-border bg-surface-muted p-3; }
   .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
   .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
@@ -604,7 +725,7 @@
   }
   .tab:hover { color: var(--color-ink); }
   .tab[aria-selected="true"], .tab.tab-active {
-    @apply border-brand-500 text-brand-700;
+    @apply border-brand-500 text-accent-strong;
   }
 
   /* Alerts — block-level, distinct from inline .badge and transient toasts. */
@@ -826,6 +947,16 @@
   }
 
   /* Empty state --------------------------------------------------------- */
+  /* HTMX in-flight state. hx-indicator puts .htmx-request on the named
+     element for the duration of the request, so a filter or a page change
+     shows that something is happening instead of sitting there looking
+     unresponsive. Styled once here rather than per screen. */
+  .htmx-request {
+    opacity: 0.55;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
   .empty-state { @apply text-center py-12 px-6; }
   .empty-state-icon {
     @apply inline-flex items-center justify-center w-12 h-12 rounded-2xl;

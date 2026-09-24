@@ -32,7 +32,7 @@
 
   <section class="lg:col-span-2 card card-pad">
     <h2 class="text-lg font-semibold text-ink mb-3">Activity</h2>
-    <ol class="relative border-l border-gray-200 ml-2 space-y-3">
+    <ol class="relative border-l border-border ml-2 space-y-3">
       {% for e in events %}
       <li class="ml-4">
         <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
@@ -56,7 +56,7 @@
       <tbody>
         {% for m in messages_to %}
         <tr>
-          <td class="py-1.5 font-mono text-xs"><a href="/logs/messages/{{ m.public_id }}/" class="text-brand-600">{{ m.public_id }}</a></td>
+          <td class="py-1.5 font-mono text-xs"><a href="/logs/messages/{{ m.public_id }}/" class="text-accent">{{ m.public_id }}</a></td>
           <td class="py-1.5">{{ m.subject|default:"—"|truncatechars:50 }}</td>
           <td data-label="Status">{% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}</td>
           <td class="py-1.5 text-gray-400">{{ m.created_at|date:"Y-m-d H:i" }}</td>

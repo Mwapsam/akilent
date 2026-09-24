@@ -27,18 +27,18 @@
 {% block content %}
 
 {% if is_admin %}
-<div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-700">
+<div class="mb-6 rounded-2xl border tone-brand-border tone-brand px-5 py-3 text-sm">
   Admin view — showing every tenant's domains with full access.
 </div>
 {% endif %}
 
 {# API key (per-tenant; hidden for account-less admins) #}
 {% if account and not email_apis_enabled %}
-<div class="card card-pad mb-6 border-amber-200 bg-amber-50/40">
+<div class="card card-pad mb-6 tone-amber-border tone-amber-bg">
   <h2 class="font-semibold flex items-center gap-2">
     {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Email API &amp; SMTP relay
   </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include the email API. <a href="/billing/plans/" class="text-brand-600 font-medium">Upgrade your plan</a> to generate a key and send.</p>
+  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include the email API. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to generate a key and send.</p>
 </div>
 {% elif account %}
 <div class="card card-pad mb-6">
@@ -52,7 +52,7 @@
     </form>
   </div>
   {% if new_api_key_plaintext %}
-    <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 mb-3">
+    <div class="rounded-xl border border-amber-300 tone-amber-bg px-4 py-3 mb-3">
       <p class="text-sm font-medium text-amber-800">Copy your key now — it won't be shown again.</p>
       <div class="mt-2">
         {% include "components/copy_field.html" with value=new_api_key_plaintext label="Copy" %}

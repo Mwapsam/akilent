@@ -90,6 +90,17 @@ class Account(models.Model):
         membership = self.memberships.filter(role=Membership.Role.OWNER).first()
         return membership.user if membership else None
 
+    @property
+    def has_postal_address(self) -> bool:
+        """Whether this account can send CAN-SPAM compliant marketing email.
+
+        Every campaign footer renders the sender's physical mailing address, so
+        campaign creation is gated on this (apps.email.services.bulk).
+        """
+        from apps.email.services.compliance_footer import has_postal_address
+
+        return has_postal_address(self)
+
     def __str__(self):
         return self.company_name
 

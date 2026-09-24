@@ -30,7 +30,7 @@
           {% for req in pending %}
           <tr>
             <td data-label="Submitted">{{ req.created_at|date:"M j, Y H:i" }}</td>
-            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
             <td data-label="Plan">{{ req.plan.name }}</td>
             <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
             <td data-label="Actions" class="text-right">
@@ -89,7 +89,7 @@
           {% for req in recent_resolved %}
           <tr>
             <td data-label="Submitted">{{ req.created_at|date:"M j, Y" }}</td>
-            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-brand-600 font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
             <td data-label="Plan">{{ req.plan.name }}</td>
             <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
             <td data-label="Resolved">{{ req.reviewed_at|date:"M j, Y" }}</td>

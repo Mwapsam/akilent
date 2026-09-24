@@ -526,11 +526,15 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
 
     try:
         if msg_type == "template":
+            # Only `components` is Meta's wire shape. `payload["params"]` is the
+            # label -> value record kept for display and must never be sent as-is
+            # (a dict where Meta expects a list is rejected with a 400).
+            components = payload.get("components")
             result = provider.send_template(
                 to,
                 payload["template_name"],
                 payload.get("language", "en"),
-                payload.get("components", payload.get("params", [])) or [],
+                components if isinstance(components, list) else [],
             )
         elif msg_type in ("image", "audio", "video", "document", "sticker"):
             media_id = payload.get("media_id")
@@ -648,7 +652,16 @@ def _ensure_outbound_log(msg: OutboundMessage) -> MessageLog:
     if msg.message_log_id:
         return msg.message_log
 
-    if (msg.payload or {}).get("_consent_ack"):
+    payload = msg.payload or {}
+    pinned_id = payload.get("_conversation_id")
+    if pinned_id:
+        # The caller sent this from a specific conversation (e.g. an agent
+        # replying with a template in the inbox). Opening a new one instead
+        # would surface their message in a different thread.
+        conversation = Conversation.objects.filter(
+            pk=pinned_id, contact=msg.contact
+        ).first() or Conversation.get_or_open(msg.contact)
+    elif payload.get("_consent_ack"):
         # A consent acknowledgement must not resurrect a closed conversation —
         # attach it to the most recent one (open or closed) if any exists.
         conversation = (

@@ -43,7 +43,7 @@
 
 {% if not has_analytics %}
   <div class="card card-pad text-center max-w-lg mx-auto mt-6">
-    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-50 text-brand-600">
+    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand">
       {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
     </span>
     <h2 class="mt-4 font-semibold">Detailed analytics &amp; insights</h2>
@@ -84,8 +84,8 @@
         {% endfor %}
       </ul>
       {% if deliverability.recommendations %}
-      <div class="mt-4 rounded-xl bg-brand-50 border border-brand-200 p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-brand-700 mb-2">What to do next</p>
+      <div class="mt-4 rounded-xl tone-brand-bg border tone-brand-border p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-accent-strong mb-2">What to do next</p>
         <ul class="list-disc list-inside space-y-1 text-sm text-brand-800">
           {% for r in deliverability.recommendations %}<li>{{ r }}</li>{% endfor %}
         </ul>

@@ -57,3 +57,56 @@ def test_tone_tokens_are_defined_and_overridden_for_dark():
         "the dark overrides should appear once for prefers-color-scheme and "
         "once for [data-theme=dark]"
     )
+
+
+# --- The same rule, applied to templates ---------------------------------
+
+TEMPLATES = Path(settings.BASE_DIR) / "templates"
+
+# Deliberately exempt. The marketing and docs shells are their own always-light
+# design with a self-contained palette; example-embed.html is a plain HTML
+# sample with no Django tags at all.
+EXEMPT = (
+    "docs/",
+    "help/",
+    "accounts/landing.html",
+    "example-embed.html",
+)
+
+# Fills and borders from a ramp step that is light in both themes. Mid steps
+# (-400 and up) are deliberate brand colour and stay.
+LIGHT_RAMP_IN_TEMPLATE = re.compile(
+    r"\b(?:bg|border|border-[lrtxy])-"
+    r"(?:brand|amber|yellow|teal|green|emerald|coral|red|rose|blue|indigo|purple|gray|slate|zinc|neutral)-"
+    r"(?:50|100|200)(?![0-9])"
+)
+
+
+def _app_templates():
+    for path in sorted(TEMPLATES.rglob("*.html")):
+        rel = path.relative_to(TEMPLATES).as_posix()
+        if not any(rel.startswith(e) or rel == e for e in EXEMPT):
+            yield rel, path
+
+
+def test_no_template_tints_from_a_light_only_ramp_step():
+    """Templates were the larger half of this defect.
+
+    The component layer was converted first, but ~100 sites lived in template
+    utility stacks - error callouts re-implementing .alert-danger, icon tiles,
+    Alpine :class bindings and Django inline {% if %}s. Those are invisible to
+    the component-layer check above, so they get their own.
+
+    Use the tone-* utilities (tone-amber, tone-neutral-bg, tone-brand-border)
+    or an existing component class (.alert-danger, .badge-*) instead.
+    """
+    offenders = []
+    for rel, path in _app_templates():
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            match = LIGHT_RAMP_IN_TEMPLATE.search(line)
+            if match:
+                offenders.append(f"{rel}:{number} -> {match.group(0)}")
+    assert not offenders, (
+        "These tint a surface from a ramp step that is light in both themes, so "
+        "they render as a bright patch in dark mode: " + str(offenders)
+    )

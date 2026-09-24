@@ -1,0 +1,46 @@
+{% comment %}The results half of the API request log: swapped on filter and paging.
+
+Returned on its own for HX-Request. The outer div is the swap target and
+re-renders itself, so it carries its own id.
+{% endcomment %}
+<div id="request-results">
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr>
+          <th class="px-4 py-2">Time</th>
+          <th class="px-4 py-2">Method</th>
+          <th class="px-4 py-2">Path</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2">Latency</th>
+          <th class="px-4 py-2">Request ID</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border">
+        {% for r in page %}
+        <tr class="hover:tone-neutral-bg">
+          <td data-label="Time" class="text-gray-500 tabular-nums">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td data-label="Method" class="font-mono text-xs">{{ r.method }}</td>
+          <td data-label="Path" class="font-mono text-xs">
+            <a href="/logs/requests/{{ r.public_id }}/" class="text-accent hover:text-accent-strong">{{ r.path }}</a>
+            {% if r.idempotency_replayed %}<span class="badge badge-neutral ml-1">replayed</span>{% endif %}
+          </td>
+          <td data-label="Status" class="tabular-nums">{{ r.status_code }}{% if r.error_code %} <span class="text-gray-400">({{ r.error_code }})</span>{% endif %}</td>
+          <td data-label="Latency" class="text-gray-500 tabular-nums">{{ r.latency_ms }} ms</td>
+          <td data-label="Request ID" class="font-mono text-xs text-gray-400">{{ r.request_id|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">
+          {% if path or status_code %}
+            {% include "components/empty_state.html" with icon="search" title="No requests match those filters" message="Try a different path or status code, or clear the filters." action_url="/logs/requests/" action_label="Clear filters" %}
+          {% else %}
+            {% include "components/empty_state.html" with icon="code-bracket" title="No API requests yet" message="Calls to the Akilent API show up here with timing and payloads." %}
+          {% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "components/pagination.html" with page=page target="#request-results" %}
+</div>

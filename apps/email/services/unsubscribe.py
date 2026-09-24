@@ -64,6 +64,37 @@ def get_unsubscribe_header(token: str, request=None) -> str:
     return f"<{get_unsubscribe_url(token, request)}>"
 
 
+def build_unsubscribe_context(
+    account: "Account",
+    email: str,
+    *,
+    campaign: "BulkEmailCampaign | None" = None,
+    campaign_id: int | None = None,
+) -> dict:
+    """Mint one token and return everything a send needs from it.
+
+    Returns ``{"token", "url", "headers"}``. One token backs both the RFC 8058
+    headers and the body footer link, so a recipient who clicks either lands on
+    the same row.
+    """
+    if campaign is None and campaign_id is not None:
+        from apps.email.models import BulkEmailCampaign
+
+        campaign = BulkEmailCampaign.objects.filter(pk=campaign_id).first()
+
+    token = create_unsubscribe_token(account, email, campaign=campaign)
+    https = get_unsubscribe_url(token)
+    mailto = getattr(settings, "DEFAULT_FROM_EMAIL", "") or "unsubscribe@localhost"
+    return {
+        "token": token,
+        "url": https,
+        "headers": {
+            "List-Unsubscribe": f"<{https}>, <mailto:{mailto}?subject=unsubscribe>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+    }
+
+
 def build_list_unsubscribe_headers(
     account: "Account",
     email: str,
@@ -77,16 +108,10 @@ def build_list_unsubscribe_headers(
     ``List-Unsubscribe-Post`` so Gmail/Yahoo (2024+) show a one-click
     unsubscribe control. The https endpoint accepts the POST; the mailto is a
     fallback for clients that don't do one-click.
+
+    Callers that also need the link (to build a body footer) should use
+    :func:`build_unsubscribe_context` instead, so only one token is minted.
     """
-    if campaign is None and campaign_id is not None:
-        from apps.email.models import BulkEmailCampaign
-
-        campaign = BulkEmailCampaign.objects.filter(pk=campaign_id).first()
-
-    token = create_unsubscribe_token(account, email, campaign=campaign)
-    https = get_unsubscribe_url(token)
-    mailto = getattr(settings, "DEFAULT_FROM_EMAIL", "") or "unsubscribe@localhost"
-    return {
-        "List-Unsubscribe": f"<{https}>, <mailto:{mailto}?subject=unsubscribe>",
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    }
+    return build_unsubscribe_context(
+        account, email, campaign=campaign, campaign_id=campaign_id
+    )["headers"]

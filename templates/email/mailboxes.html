@@ -17,13 +17,13 @@
 {% block content %}
 
 {% if is_admin %}
-<div class="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-700">
+<div class="mb-6 rounded-2xl border tone-brand-border tone-brand px-5 py-3 text-sm">
   Admin view — showing every tenant's mailboxes &amp; aliases with full access.
 </div>
 {% endif %}
 
 {% if not domains %}
-<div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-700">
+<div class="mb-6 rounded-2xl border tone-amber-border tone-amber px-5 py-3 text-sm">
   Add and verify a sending domain first, then you can create mailboxes on it.
 </div>
 {% endif %}

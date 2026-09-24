@@ -43,10 +43,10 @@
     <template x-for="(label, i) in stepLabels" :key="i">
       <li class="flex items-center gap-2">
         <span class="w-6 h-6 rounded-full flex items-center justify-center text-[11px]"
-              :class="i === step ? 'bg-brand-600 text-white' : (i < step ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400')"
+              :class="i === step ? 'bg-brand-600 text-white' : (i < step ? 'tone-teal' : 'tone-neutral-bg text-gray-400')"
               x-text="i < step ? '✓' : (i + 1)"></span>
         <span :class="i === step ? 'text-gray-900' : 'text-gray-400'" x-text="label"></span>
-        <span x-show="i < stepLabels.length - 1" class="w-6 h-px bg-gray-200 hidden sm:inline-block"></span>
+        <span x-show="i < stepLabels.length - 1" class="w-6 h-px tone-neutral-bg hidden sm:inline-block"></span>
       </li>
     </template>
   </ol>
@@ -104,7 +104,7 @@
           </span>
           <div class="flex flex-wrap gap-1.5 mt-1.5">
             <template x-for="f in mergeFields" :key="f">
-              <button type="button" class="badge badge-neutral hover:bg-gray-200"
+              <button type="button" class="badge badge-neutral hover:tone-neutral-bg"
                       @click="insertField(f)" x-text="f"></button>
             </template>
           </div>
@@ -133,10 +133,10 @@
             </button>
           </div>
         </div>
-        <p class="help">Need a different design? <a href="/email/templates/" class="text-brand-600 font-medium">Create a template</a> first, then come back.</p>
+        <p class="help">Need a different design? <a href="/email/templates/" class="text-accent font-medium">Create a template</a> first, then come back.</p>
         {% else %}
         <div class="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-gray-600">
-          You don't have any templates yet. <a href="/email/templates/" class="text-brand-600 font-medium">Create one</a>, or switch to “Write a message”.
+          You don't have any templates yet. <a href="/email/templates/" class="text-accent font-medium">Create one</a>, or switch to “Write a message”.
         </div>
         {% endif %}
       </div>
@@ -155,7 +155,7 @@
         <p class="text-sm text-gray-600">
           One row per person. Include a <code>to</code> column for the email address; any other columns
           (like <code>first_name</code>) become personalisation fields.
-          <a href="{% url 'email-campaign-sample-csv' %}" class="text-brand-600 font-medium">Download a sample CSV</a>.
+          <a href="{% url 'email-campaign-sample-csv' %}" class="text-accent font-medium">Download a sample CSV</a>.
         </p>
         <input type="file" name="recipients_csv" accept=".csv" class="input"
                x-ref="csvInput" :disabled="recipientMethod !== 'csv'" @change="onCsvChange($event)">

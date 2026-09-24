@@ -7,9 +7,26 @@
   <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
 </header>
 
-<form method="get" class="flex flex-wrap items-center gap-2 mb-4" @submit="$el.classList.add('is-submitting')">
-  <input type="search" name="q" value="{{ q }}" placeholder="Search email, phone or name…" class="input w-full sm:w-64" />
-  <select name="status" class="select w-full sm:w-44">
+{% comment %}
+  The filter swaps the results rather than reloading the page. hx-push-url
+  keeps the address bar honest, so a filtered list is still linkable and the
+  back button still works.
+
+  The search box fires on a 400ms pause rather than per keystroke; the select
+  fires immediately. The submit button stays for keyboard and no-JS use - the
+  form is a real GET form, so everything here works with HTMX switched off.
+{% endcomment %}
+<form method="get"
+      hx-get="{% url 'contacts:list' %}"
+      hx-target="#contact-results"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-indicator="#contact-results"
+      hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
+      class="flex flex-wrap items-center gap-2 mb-4">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search email, phone or name…"
+         class="input w-full sm:w-64" aria-label="Search contacts" />
+  <select name="status" class="select w-full sm:w-44" aria-label="Filter by status">
     <option value="">Any status</option>
     {% for value, label in status_choices %}
       <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
@@ -19,35 +36,5 @@
   {% if q or status %}<a href="/contacts/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
-{% if page %}
-<div class="table-wrap">
-  <table class="table table--cards">
-    <thead>
-      <tr><th>Contact</th><th>Name</th><th>Phone</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
-    </thead>
-    <tbody>
-      {% for c in page %}
-      <tr>
-        <td data-label="Contact"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-brand-600 hover:text-brand-700">{{ c.email|default:c.phone|default:"Unknown contact" }}</a></td>
-        <td data-label="Name">{{ c.full_name|default:"—" }}</td>
-        <td data-label="Phone" class="tabular-nums">{{ c.phone|default:"—" }}</td>
-        <td data-label="Status">
-          <span class="badge {% if c.status == 'subscribed' or c.status == 'active' %}badge-success{% elif c.status == 'unsubscribed' or c.status == 'bounced' or c.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">
-            {{ c.get_status_display }}
-          </span>
-        </td>
-        <td data-label="Last engaged" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"Y-m-d"|default:"—" }}</td>
-        <td data-label="First seen" class="text-gray-500 tabular-nums">{{ c.first_seen|date:"Y-m-d" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<div class="table-wrap">
-  {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Contacts are the people Akilent communicates with. They appear automatically when someone messages your WhatsApp number, or you can import them from a CSV or add them via the API." action_url="/docs/" action_label="View API docs" %}
-</div>
-{% endif %}
-
-{% include "components/pagination.html" with page=page %}
+{% include "contacts/_list_results.html" %}
 {% endblock %}

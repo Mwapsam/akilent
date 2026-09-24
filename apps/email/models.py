@@ -1272,6 +1272,50 @@ class SuppressionListEntry(models.Model):
         return f"{self.email} ({self.get_reason_display()})"
 
 
+class GlobalSuppression(models.Model):
+    """Platform-wide suppression, independent of any one tenant.
+
+    AWS meters bounce and complaint rates against our *account*, not against
+    each tenant, so an address that hard-bounced or complained for one tenant
+    must not be mailed by another. SuppressionListEntry stays account-scoped
+    (it also carries unsubscribes, which are a per-sender consent withdrawal);
+    this table is the cross-tenant block list.
+
+    It is also where bounce/complaint events land when SES reports them for a
+    message we can no longer attribute to an account — previously those were
+    dropped outright.
+    """
+
+    class Reason(models.TextChoices):
+        BOUNCE = "bounce", "Hard Bounce"
+        COMPLAINT = "complaint", "Complaint (Abuse Report)"
+        INVALID = "invalid", "Failed Validation"
+        MANUAL = "manual", "Manually Suppressed"
+
+    email = models.EmailField(unique=True, db_index=True)
+    reason = models.CharField(
+        max_length=20, choices=Reason.choices, default=Reason.BOUNCE
+    )
+    bounce_type = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="SES bounce type: Permanent, Transient, or Undetermined",
+    )
+    source = models.CharField(
+        max_length=40, default="ses_webhook",
+        help_text="Where this suppression came from, e.g. ses_webhook, orphan_sns, manual",
+    )
+    hit_count = models.PositiveIntegerField(default=1)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_seen"]
+        indexes = [models.Index(fields=["reason"])]
+
+    def __str__(self):
+        return f"{self.email} ({self.get_reason_display()}, platform-wide)"
+
+
 class SendReputation(models.Model):
     """Rolling bounce / complaint counters per account, with a circuit breaker.
 

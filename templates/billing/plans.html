@@ -8,8 +8,8 @@
 </div>
 
 {% if is_admin %}
-<div x-data="{ create: false }" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 px-5 py-3">
-  <p class="text-sm text-brand-700">Admin — manage packages below. Inactive packages are hidden from customers.</p>
+<div x-data="{ create: false }" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border tone-brand-border tone-brand-bg px-5 py-3">
+  <p class="text-sm text-accent-strong">Admin — manage packages below. Inactive packages are hidden from customers.</p>
   <button class="btn btn-primary btn-sm" @click="create = true">
     {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add package
   </button>
@@ -313,15 +313,15 @@
 
       {% comment %} CTA {% endcomment %}
       {% if plan.slug == current_plan_slug %}
-        <span class="block w-full text-center bg-blue-50 text-blue-700 text-sm font-medium py-2.5 rounded-xl cursor-default border border-blue-200">
+        <span class="block w-full text-center tone-info text-sm font-medium py-2.5 rounded-xl cursor-default border tone-info-border">
           Current plan
         </span>
       {% elif plan.slug == 'trial' %}
-        <span class="block w-full text-center bg-gray-100 text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
+        <span class="block w-full text-center tone-neutral-bg text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
           Auto-applied on signup
         </span>
       {% elif not payments_enabled or not payment_methods %}
-        <span class="block w-full text-center bg-gray-100 text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
+        <span class="block w-full text-center tone-neutral-bg text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
           Billing currently unavailable
         </span>
       {% elif payment_methods|length == 1 %}
