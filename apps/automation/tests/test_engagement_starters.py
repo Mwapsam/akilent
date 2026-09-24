@@ -121,7 +121,7 @@ def test_the_gallery_shows_a_starter_that_is_already_on(logged_in, approved_temp
     assert "See what it does" in body
 
 
-@pytest.mark.parametrize("key", list(STARTERS_BY_KEY))
+@pytest.mark.parametrize("key", [k for k, s in STARTERS_BY_KEY.items() if not s.get("welcome")])
 def test_every_starter_waits_then_checks_the_customer_is_still_quiet(key):
     """The branch is what makes these safe to turn on — without it they would
     message customers who are mid-conversation."""
@@ -211,3 +211,44 @@ def test_a_customer_who_stayed_quiet_reaches_the_send_step(logged_in, running_ch
     run_due()
     run.refresh_from_db()
     assert "send" in _sent_step_ids(run)
+
+
+# --- welcome starter -----------------------------------------------------------
+
+
+def _welcome_workflow(account):
+    from apps.automation import api as automation_api
+
+    MessageTemplate.objects.create(
+        account=account, name="Welcome", whatsapp_template_name="welcome_new_customer",
+        content="Hi {{1}}, thanks for contacting {{2}}.", variables=["1", "2"],
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+
+    definition = build_definition(
+        STARTERS_BY_KEY["welcome-new-enquiry"], template_name="welcome_new_customer",
+        variable_mapping={"1": "there", "2": "Mwamba Kitchen"},
+    )
+    return automation_api.upsert_published_workflow(
+        account, slug="welcome-new-enquiry", name="Welcome", definition=definition)
+
+
+@pytest.mark.django_db
+def test_welcome_definition_is_valid_and_only_for_customers_who_messaged_first(logged_in):
+    _, account = logged_in
+    workflow = _welcome_workflow(account)
+    assert not validate_definition(workflow.definition, account=account)
+    assert workflow.definition["trigger"]["type"] == "contact.created"
+    steps = {s["id"]: s for s in workflow.definition["steps"]}
+    assert steps["messaged_first"]["field"] == "source" and steps["messaged_first"]["value"] == "whatsapp"
+    assert steps["messaged_first"]["on_false"] == "stop"
+
+
+@pytest.mark.django_db
+def test_welcome_is_sent_to_a_whatsapp_enquirer_but_not_an_imported_contact(logged_in):
+    _, account = logged_in
+    workflow = _welcome_workflow(account)
+    enquirer = Contact.objects.create(account=account, phone="+260971111111", source="whatsapp")
+    imported = Contact.objects.create(account=account, phone="+260972222222", source="import")
+    assert "send" in _sent_step_ids(enroll(workflow, enquirer))
+    assert "send" not in _sent_step_ids(enroll(workflow, imported))

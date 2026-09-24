@@ -30,6 +30,19 @@ _DAY = 86400
 
 ENGAGEMENT_STARTERS = [
     {
+        "key": "welcome-new-enquiry",
+        "name": "Welcome every new enquiry",
+        "goal": "Nobody who messages you for the first time is left waiting in silence.",
+        "explain": (
+            "The moment someone messages your WhatsApp number for the first "
+            "time, send them a warm welcome."
+        ),
+        "stop_condition": "Sent once per customer, and only to people who messaged you first.",
+        "trigger": "contact.created",
+        "welcome": True,
+        "suggested_template": "welcome_new_customer",
+    },
+    {
         "key": "quiet-customer-check-in",
         "name": "Check in when a customer goes quiet",
         "goal": "Nobody who asked you something gets forgotten.",
@@ -80,6 +93,8 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
     really has been quiet, then send. The branch is what makes this safe to turn
     on — without it the workflow would chase customers mid-conversation.
     """
+    if starter.get("welcome"):
+        return _welcome_definition(starter, template_name, variable_mapping)
     days = starter["quiet_days"]
     return {
         "trigger": {"type": starter["trigger"]},
@@ -88,6 +103,32 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
             {
                 "id": "still_quiet", "type": "branch",
                 "field": "last_engaged_days", "operator": "gte", "value": days,
+                "on_true": "send", "on_false": "stop",
+            },
+            {
+                "id": "send", "type": "send_whatsapp",
+                "template": template_name,
+                "variable_mapping": variable_mapping or {},
+                "next": "stop",
+            },
+            {"id": "stop", "type": "stop"},
+        ],
+    }
+
+
+def _welcome_definition(starter: dict, template_name: str, variable_mapping: dict | None) -> dict:
+    """Welcome a brand-new WhatsApp enquirer immediately, once.
+
+    ``contact.created`` fires once per customer, so the welcome is never repeated. The branch
+    on ``source`` keeps it to people who messaged first: a contact imported from a CSV or
+    added by email has not opted in to WhatsApp and must not receive a template.
+    """
+    return {
+        "trigger": {"type": starter["trigger"]},
+        "steps": [
+            {
+                "id": "messaged_first", "type": "branch",
+                "field": "source", "operator": "eq", "value": "whatsapp",
                 "on_true": "send", "on_false": "stop",
             },
             {
