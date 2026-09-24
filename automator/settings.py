@@ -324,13 +324,19 @@ if not DEBUG:
             raise ValueError("AWS_SECRET_ACCESS_KEY is required when using the SES backend")
         if not AWS_REGION:
             raise ValueError("AWS_REGION is required when using the SES backend")
+        # Bounce/complaint feedback is not optional. Without a configuration
+        # set publishing to an SNS topic we send blind: no suppression of bad
+        # addresses, no visibility of our own reputation. Refuse to boot rather
+        # than start a worker that can only discover problems from AWS.
+        if not SES_CONFIGURATION_SET:
+            raise ValueError(
+                "SES_CONFIGURATION_SET is required when using the SES backend — "
+                "without it no bounce/complaint events are emitted"
+            )
         if not SES_SNS_TOPIC_ARN:
-            import warnings
-
-            warnings.warn(
-                "SES_SNS_TOPIC_ARN is not set — bounce/complaint notifications "
-                "will not be ingested until it is configured.",
-                RuntimeWarning,
+            raise ValueError(
+                "SES_SNS_TOPIC_ARN is required when using the SES backend — "
+                "without it bounce/complaint notifications are never ingested"
             )
     else:
         if not STALWART_API_BASE:

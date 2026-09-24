@@ -91,6 +91,45 @@ def get_suppressed_emails(account, emails: list[str]) -> set[str]:
     return suppressed
 
 
+def record_global_event(
+    email: str,
+    reason: str,
+    bounce_type: str = "",
+    source: str = "ses_webhook",
+) -> GlobalSuppression:
+    """Suppress an address platform-wide, across every tenant.
+
+    Upserts: a repeat event bumps ``hit_count`` and refreshes ``last_seen``
+    rather than creating a second row. Only hard failures belong here —
+    unsubscribes are a per-sender consent withdrawal and stay account-scoped.
+    """
+    with transaction.atomic():
+        entry, created = GlobalSuppression.objects.select_for_update().get_or_create(
+            email=email,
+            defaults={
+                "reason": reason,
+                "bounce_type": bounce_type,
+                "source": source,
+            },
+        )
+        if not created:
+            entry.hit_count += 1
+            entry.reason = reason
+            if bounce_type:
+                entry.bounce_type = bounce_type
+            if source:
+                entry.source = source
+            entry.save()
+        else:
+            logger.info(
+                "Platform-wide suppression for %s (reason=%s, source=%s)",
+                email,
+                reason,
+                source,
+            )
+    return entry
+
+
 def record_event(
     account,
     email: str,
@@ -155,5 +194,15 @@ def record_event(
                 entry.reason = SuppressionListEntry.Reason.BOUNCE
 
             entry.save()
+
+    # Hard failures are a property of the address, not of the tenant that hit
+    # it: mirror them into the platform-wide list so no other account mails it.
+    if reason in (
+        SuppressionListEntry.Reason.BOUNCE,
+        SuppressionListEntry.Reason.COMPLAINT,
+    ):
+        record_global_event(
+            email, reason, bounce_type=bounce_type, source="ses_webhook"
+        )
 
     return entry

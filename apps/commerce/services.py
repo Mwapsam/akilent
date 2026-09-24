@@ -111,7 +111,26 @@ def mark_paid(payment: Payment, *, transaction_id: str, raw_payload: dict | None
     )
     _enroll_workflows(order.account, "order.paid", order.contact, {"order_id": order.public_id},
                       subject_key=f"order:{order.public_id}")
+    _note_in_conversation(
+        order, f"Payment received — {order.currency} {order.total}",
+        {"kind": "payment.succeeded", "order_id": order.public_id},
+    )
     return order
+
+
+def _note_in_conversation(order: Order, body: str, metadata: dict) -> None:
+    """Mirror a commercial outcome into the customer's conversation, so the
+    thread stays the whole story rather than the business having to go looking
+    in Orders. Best-effort: a missing conversation or a failure here must never
+    cost us the payment record."""
+    from apps.conversations.services import record_system_message
+
+    try:
+        record_system_message(
+            account=order.account, contact=order.contact, body=body, metadata=metadata,
+        )
+    except Exception:
+        logger.exception("could not mirror order %s into a conversation", order.public_id)
 
 
 def mark_failed(payment: Payment, *, error: str = "") -> Order:

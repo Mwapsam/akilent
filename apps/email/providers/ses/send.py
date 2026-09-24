@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import boto3
 from botocore.exceptions import ClientError
 
-from apps.email.exceptions import EmailProviderError
+from apps.email.exceptions import ConfigurationError, EmailProviderError
 from apps.email.types import OutboundEmail, SendResult
 
 from ..send_base import EmailSendProvider
@@ -32,17 +32,33 @@ class SesSendProvider(EmailSendProvider):
         # Read region and configuration set from MailProviderSettings; fall back to env/defaults
         region = "us-east-1"
         self.configuration_set: str | None = None
-        # Set when a configured configuration set is missing and tracking had to
-        # be disabled — operators/tests can inspect this without parsing logs.
+        # Retained so existing callers/tests keep working; the provider no
+        # longer degrades, so this is always False.
         self.tracking_degraded = False
+        sns_topic_arn = ""
+        is_active_backend = False
 
         try:
             settings = MailProviderSettings.load()
             region = settings.aws_region or os.getenv("AWS_REGION", "us-east-1")
             self.configuration_set = settings.ses_configuration_set or None
+            sns_topic_arn = settings.ses_sns_topic_arn or ""
+            is_active_backend = settings.send_backend == "ses"
         except Exception:
             logger.exception("Failed to load MailProviderSettings; falling back to env/defaults")
             region = os.getenv("AWS_REGION", "us-east-1")
+
+        # Fail closed. Without a configuration set and its SNS event
+        # destinations we receive no bounce or complaint feedback, which means
+        # we cannot suppress bad addresses and cannot see our own reputation
+        # collapsing. Sending blind is worse than not sending.
+        if is_active_backend and not (self.configuration_set and sns_topic_arn):
+            raise ConfigurationError(
+                "SES is the active send backend but bounce/complaint feedback is "
+                "not configured: both MailProviderSettings.ses_configuration_set "
+                "and .ses_sns_topic_arn are required. Run `manage.py "
+                "setup_ses_reputation_monitoring` to provision them."
+            )
 
         self.client: SESv2Client = boto3.client("sesv2", region_name=region)
 
@@ -51,28 +67,29 @@ class SesSendProvider(EmailSendProvider):
 
 
     def _ensure_configuration_set(self) -> None:
+        """Confirm the configured set exists, or refuse to send.
+
+        This used to degrade to sending without a configuration set. That left
+        the worker delivering mail with no bounce/complaint feedback at all,
+        which is precisely the blind spot SES production-access review asks
+        about — so it now fails closed instead.
+        """
         try:
             self.client.get_configuration_set(ConfigurationSetName=self.configuration_set)
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
             if code == "NotFoundException":
-                logger.error(
-                    "SES configuration set %r does not exist — DEGRADED: bounce/"
-                    "complaint/delivery tracking is OFF for this process. Create it "
-                    "and its SNS event destinations (see `manage.py "
-                    "setup_ses_reputation_monitoring`), then clear/reset "
-                    "MailProviderSettings.ses_configuration_set.",
-                    self.configuration_set,
-                )
-                # Degrade rather than fail: outbound mail still goes out, just
-                # without a config set attached. The error log above is the
-                # operator signal; we deliberately do not crash the worker.
-                self.tracking_degraded = True
-                self.configuration_set = None
-            else:
-                logger.exception(
-                    "Error checking SES configuration set %r", self.configuration_set
-                )
+                raise ConfigurationError(
+                    f"SES configuration set {self.configuration_set!r} does not "
+                    "exist, so bounce/complaint tracking would be off. Create it "
+                    "and its SNS event destinations (`manage.py "
+                    "setup_ses_reputation_monitoring`), then retry."
+                ) from exc
+            # Any other error means we cannot prove tracking is attached.
+            raise ConfigurationError(
+                f"Could not verify SES configuration set "
+                f"{self.configuration_set!r}: {exc}"
+            ) from exc
 
     def send(self, message: OutboundEmail) -> SendResult:
         if not message.html_body and not message.text_body:

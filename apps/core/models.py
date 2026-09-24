@@ -142,6 +142,15 @@ class MailProviderSettings(models.Model):
         default=3,
         help_text="Number of transient bounces before escalating to hard suppression (default 3)"
     )
+    require_explicit_consent = models.BooleanField(
+        default=False,
+        help_text=(
+            "Refuse campaign recipients whose Contact has no recorded opt-in. "
+            "Opted-out contacts are always refused regardless of this setting. "
+            "Leave off until imported lists carry a consent attestation, "
+            "otherwise every pre-consent contact becomes unmailable."
+        ),
+    )
 
     # Reputation circuit breaker — per-account bounce/complaint rate limits.
     # SES enforcement kicks in around bounce >5% (review) / >10% (pause) and

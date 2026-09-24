@@ -14,6 +14,7 @@ incomplete, and that's fine as long as it degrades gracefully.
 
 _EXACT = {
     "lead.created": "Became a lead",
+    "lead.auto_created": "Asked about buying — opened as a lead",
     "deal.created": "A deal was opened",
     "deal.stage_changed": "Deal stage changed",
     "order.created": "Placed an order",
@@ -54,4 +55,6 @@ def event_detail(event_type: str, data: dict | None) -> str:
         return f"Amount: {data['amount']}"
     if event_type == "email.clicked" and data.get("url"):
         return data["url"]
+    if event_type == "lead.auto_created" and data.get("signal"):
+        return f"They said “{data['signal']}”"
     return ""

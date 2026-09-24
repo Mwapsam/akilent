@@ -10,7 +10,7 @@ versa.{% endcomment %}
         wantsWhatsapp: {{ onboarding_wants_whatsapp|yesno:'true,false' }},
         get slides() {
           var s = ['welcome'];
-          if (this.wantsEmail) s.push('domain', 'mailboxes');
+          if (this.wantsEmail) s.push('domain');
           if (this.wantsWhatsapp) s.push('whatsapp');
           s.push('team', 'help');
           return s;
@@ -52,16 +52,6 @@ versa.{% endcomment %}
         <h2 class="text-lg font-semibold">Set up a sending domain</h2>
         <p class="text-sm text-gray-500 mt-2">Add your domain, copy the DNS records we generate, and we'll verify them automatically — no technical know-how required.</p>
         <a href="/email/domains/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to Domains</a>
-      </div>
-
-      {# Slide — mailboxes #}
-      <div x-show="current === 'mailboxes'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="inbox" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">Create mailboxes &amp; aliases</h2>
-        <p class="text-sm text-gray-500 mt-2">Once your domain is verified, add real mailboxes and forwarding aliases for your team in a couple of clicks.</p>
-        <a href="/email/mailboxes/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to Mailboxes</a>
       </div>
 
       {# Slide — WhatsApp #}

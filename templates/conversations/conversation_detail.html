@@ -216,7 +216,12 @@
               <template x-if="item.type === 'day'">
                 <div class="cv-day"><span x-text="item.label"></span></div>
               </template>
-              <template x-if="item.type === 'msg'">
+              {# Neither party speaking — a commercial fact (payment received)
+                 belonging to this customer's story, shown like a day divider. #}
+              <template x-if="item.type === 'msg' && item.m.direction === 'system'">
+                <div class="cv-day"><span x-text="item.m.body"></span></div>
+              </template>
+              <template x-if="item.type === 'msg' && item.m.direction !== 'system'">
                 <div class="cv-msg" :class="{ 'cv-msg--out': item.m.direction === 'outbound', 'cv-msg--pending': item.m.pending, 'cv-msg--failed': item.m.status === 'failed', 'cv-msg--last': item.showMeta }">
                   <div class="cv-bubble">
                     <p class="cv-text" :class="{ 'italic text-gray-500': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>

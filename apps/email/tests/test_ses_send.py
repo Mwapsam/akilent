@@ -12,7 +12,7 @@ import boto3
 from botocore.exceptions import ClientError
 from django.test import TestCase
 
-from apps.email.exceptions import EmailProviderError
+from apps.email.exceptions import ConfigurationError, EmailProviderError
 from apps.email.providers.ses.send import SesSendProvider
 from apps.email.types import OutboundEmail
 
@@ -21,7 +21,9 @@ def _settings(**over):
     base = dict(
         aws_region="us-east-1",
         ses_configuration_set="",
+        ses_sns_topic_arn="",
         ses_send_rate_limit=14,
+        send_backend="smtp",
     )
     base.update(over)
     m = MagicMock()
@@ -106,13 +108,42 @@ class SesSendProviderTests(TestCase):
             provider.send(self._msg())
         self.assertEqual(spy.call_args.kwargs["ConfigurationSetName"], "primary")
 
-    def test_missing_configuration_set_degrades_but_still_sends(self):
-        provider = self._provider(ses_configuration_set="does-not-exist")
-        # Degraded: tracking disabled rather than a hard failure.
-        self.assertIsNone(provider.configuration_set)
-        self.assertTrue(provider.tracking_degraded)
-        res = provider.send(self._msg())
-        self.assertTrue(res.success)
+    def test_missing_configuration_set_fails_closed(self):
+        """A config set that doesn't exist means no bounce/complaint feedback.
+
+        Sending anyway would leave us delivering blind, so construction raises
+        rather than degrading.
+        """
+        with self.assertRaises(ConfigurationError):
+            self._provider(ses_configuration_set="does-not-exist")
+
+    def test_ses_backend_requires_feedback_wiring(self):
+        client = boto3.client("sesv2", region_name="us-east-1")
+        client.create_configuration_set(ConfigurationSetName="primary")
+
+        # Config set but no SNS topic: the events have nowhere to go.
+        with self.assertRaises(ConfigurationError):
+            self._provider(
+                send_backend="ses",
+                ses_configuration_set="primary",
+                ses_sns_topic_arn="",
+            )
+
+        # SNS topic but no config set: nothing publishes to it.
+        with self.assertRaises(ConfigurationError):
+            self._provider(
+                send_backend="ses",
+                ses_configuration_set="",
+                ses_sns_topic_arn="arn:aws:sns:us-east-1:1:ses-events",
+            )
+
+        # Both present: constructs fine.
+        provider = self._provider(
+            send_backend="ses",
+            ses_configuration_set="primary",
+            ses_sns_topic_arn="arn:aws:sns:us-east-1:1:ses-events",
+        )
+        self.assertEqual(provider.configuration_set, "primary")
 
     def test_throttling_raises_provider_error_for_retry(self):
         provider = self._provider()

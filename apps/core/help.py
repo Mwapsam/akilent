@@ -38,7 +38,7 @@ ARTICLES = [
         "Set up your workspace and send your first email in a few quick steps.",
         "Getting started", icon="sparkles",
         keywords=("intro", "setup", "quickstart", "begin", "first", "overview"),
-        related=("domains", "dns-setup", "mailboxes"),
+        related=("domains", "dns-setup"),
     ),
     Article(
         "domains",
@@ -46,7 +46,7 @@ ARTICLES = [
         "Provision a domain, understand each status, and enable or disable sending.",
         "Email setup", icon="globe",
         keywords=("domain", "sending", "provision", "verify", "verified", "pending", "disable"),
-        related=("dns-setup", "mailboxes", "troubleshooting"),
+        related=("dns-setup", "troubleshooting"),
     ),
     Article(
         "dns-setup",
@@ -56,14 +56,6 @@ ARTICLES = [
         keywords=("dns", "txt", "dkim", "spf", "dmarc", "cloudflare", "godaddy",
                   "namecheap", "google domains", "records", "nameserver", "cname", "host"),
         related=("domains", "troubleshooting"),
-    ),
-    Article(
-        "mailboxes",
-        "Create mailboxes & aliases",
-        "Add real mailboxes with quotas and passwords, and forward mail with aliases.",
-        "Email setup", icon="inbox",
-        keywords=("mailbox", "alias", "quota", "storage", "password", "forward", "inbox", "user@"),
-        related=("domains", "security"),
     ),
     Article(
         "whatsapp-setup",

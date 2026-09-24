@@ -6,6 +6,8 @@ still a real GET form underneath, so the screen keeps working with HTMX off -
 that is what these pin.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -97,3 +99,43 @@ def test_the_form_still_works_without_htmx(client, account, contacts):
     body = client.get("/contacts/?q=grace").content.decode()
     assert "grace@example.com" in body
     assert "ada@example.com" not in body
+
+
+@pytest.mark.django_db
+def test_pagination_is_handed_an_ordered_queryset(client, account):
+    """The Paginator must never be handed an unordered queryset.
+
+    Ordering currently comes from Contact.Meta.ordering rather than the view,
+    which is easy to delete without noticing: paginating an unordered queryset
+    is undefined behaviour and a contact can then appear on two pages or on
+    none. Django only raises UnorderedObjectListWarning, and that is emitted
+    once per call site, so it is useless as an assertion once anything earlier
+    in the run has tripped it. QuerySet.ordered is the direct check.
+    """
+    for n in range(5):
+        Contact.objects.create(account=account, email="c%d@example.com" % n)
+
+    client.force_login(account.owner)
+    page = client.get("/contacts/").context["page"]
+    assert page.paginator.object_list.ordered, (
+        "the Paginator was handed an unordered queryset - row order across "
+        "pages is whatever the database feels like"
+    )
+
+
+@pytest.mark.django_db
+def test_contacts_are_listed_newest_first(client, account):
+    """The order is not just stable, it is the one the table implies."""
+    from django.utils import timezone
+
+    made = []
+    for n in range(3):
+        contact = Contact.objects.create(account=account, email="c%d@example.com" % n)
+        Contact.objects.filter(pk=contact.pk).update(
+            first_seen=timezone.now() - timedelta(days=n)
+        )
+        made.append(contact.email)
+
+    client.force_login(account.owner)
+    page = client.get("/contacts/").context["page"]
+    assert [c.email for c in page] == made, "expected newest first_seen first"

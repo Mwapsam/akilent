@@ -14,9 +14,11 @@ import logging
 from datetime import datetime
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from apps.conversations import metrics
 from apps.conversations.models import Conversation, Event, Message
+from apps.core.actions import run_action
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +108,68 @@ def record_inbound_whatsapp_message(
             "record_inbound_whatsapp_message: workflow enrollment failed for conversation=%s",
             conversation.pk,
         )
+
+    capture_opportunity(conversation, contact, message_log.content)
     return conversation
+
+
+def record_system_message(*, account, contact, body: str, metadata: dict | None = None) -> Message | None:
+    """Put a fact about the customer's story into their conversation thread.
+
+    For things that happened outside the chat but belong to it — "Payment
+    received — K450" — so the conversation stays the whole story instead of the
+    business having to go and look in Orders (docs/plans — "payment result is
+    reflected back into the conversation").
+
+    Lands on the customer's most recent conversation. Returns ``None`` when
+    they have none, since there's no thread to write to. A system line is
+    neither party speaking, so it never changes who is waiting for whom.
+    """
+    conversation = (
+        Conversation.objects.filter(account=account, contact=contact)
+        .order_by("-last_message_at", "-created_at")
+        .first()
+    )
+    if conversation is None:
+        return None
+
+    return Message.objects.create(
+        account=account, conversation=conversation,
+        direction=Message.Direction.SYSTEM, body=body,
+        timestamp=timezone.now(), metadata=metadata or {},
+    )
+
+
+def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
+    """Open a lead when a customer's message asks to buy something.
+
+    The architectural intent is that a Lead *originates from the conversation*
+    the same way a Contact does, rather than being typed into a CRM — so this
+    runs on every inbound message rather than waiting for an agent to press a
+    button (docs/plans — "conversation-originated Lead/Order is core scope").
+
+    Never more than one open lead per customer: a customer asking three
+    questions is one opportunity, not three. Best-effort — a failure here must
+    not cost us the message.
+    """
+    from apps.conversations.intent import detect_buying_intent
+
+    try:
+        phrase = detect_buying_intent(body)
+        if phrase is None:
+            return
+        # Goes through the registry, so module gating ("Track potential sales"
+        # switched off) and CRM's own rules apply exactly as they do for the
+        # agent's manual button — and no crm model is imported here.
+        run_action(
+            "capture_conversation_lead", {"account": conversation.account},
+            account=conversation.account, contact=contact,
+            conversation_id=conversation.public_id, signal=phrase,
+        )
+    except Exception:
+        logger.exception(
+            "capture_opportunity failed for conversation=%s", conversation.pk
+        )
 
 
 def _enroll_workflows(conversation: Conversation, contact, message_log) -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import secrets
 
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -22,6 +23,20 @@ class Contact(models.Model):
         UNSUBSCRIBED = "unsubscribed", "Unsubscribed"
         BOUNCED = "bounced", "Bounced"
         COMPLAINED = "complained", "Complained"
+
+    class ConsentStatus(models.TextChoices):
+        """Provenance of the recipient's permission to be emailed.
+
+        Deliberately separate from ``status``: ``status`` is the *effective*
+        deliverability state (what segments and exports filter on), while this
+        records *how we know* we may mail them. An address can be SUBSCRIBED
+        with UNKNOWN consent — that is exactly the pre-consent backlog we need
+        to be able to see and report on.
+        """
+
+        UNKNOWN = "unknown", "Unknown"
+        OPTED_IN = "opted_in", "Opted in"
+        OPTED_OUT = "opted_out", "Opted out"
 
     public_id = models.CharField(
         max_length=40, unique=True, default=_contact_public_id, editable=False
@@ -50,6 +65,21 @@ class Contact(models.Model):
     )
     source = models.CharField(max_length=40, blank=True, default="")
 
+    # --- Email consent (CAN-SPAM / SES: we must be able to show how a
+    # recipient came to be on a list). Mirrors the shape already used for
+    # WhatsApp in apps.whatsapp.models.contact.WhatsAppContact.
+    consent_status = models.CharField(
+        max_length=20, choices=ConsentStatus.choices, default=ConsentStatus.UNKNOWN
+    )
+    consent_source = models.CharField(max_length=100, blank=True, default="")
+    consent_at = models.DateTimeField(blank=True, null=True)
+    consent_ip = models.GenericIPAddressField(blank=True, null=True)
+    # Free-form proof: signup form URL, import id, the attestation text shown
+    # to the operator, etc.
+    consent_evidence = models.JSONField(default=dict, blank=True)
+    opt_out_at = models.DateTimeField(blank=True, null=True)
+    opt_out_reason = models.CharField(max_length=255, blank=True, default="")
+
     first_seen = models.DateTimeField(auto_now_add=True)
     last_engaged_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -69,6 +99,7 @@ class Contact(models.Model):
         ]
         indexes = [
             models.Index(fields=["account", "status"]),
+            models.Index(fields=["account", "consent_status"]),
             models.Index(fields=["account", "last_engaged_at"]),
             models.Index(fields=["account", "phone"]),
         ]
@@ -89,6 +120,42 @@ class Contact(models.Model):
         touched by a WhatsApp opt-out (nor does an email unsubscribe opt out of WhatsApp).
         """
         return self.whatsapp_contacts.filter(opt_in_status="opted_out").exists()
+
+    @property
+    def is_opted_out(self) -> bool:
+        return self.consent_status == self.ConsentStatus.OPTED_OUT
+
+    def record_opt_in(self, source: str, *, ip: str = "", evidence: dict | None = None) -> None:
+        """Record proof that this contact agreed to be emailed.
+
+        Callers own the timeline entry — unlike the WhatsApp equivalent this
+        does not emit a ContactEvent, so an unsubscribe flow can write a single
+        event covering both the consent change and the status change.
+        """
+        self.consent_status = self.ConsentStatus.OPTED_IN
+        self.consent_source = source[:100]
+        self.consent_at = timezone.now()
+        self.consent_ip = ip or None
+        self.consent_evidence = evidence or {}
+        self.opt_out_at = None
+        self.opt_out_reason = ""
+        self.save(update_fields=[
+            "consent_status", "consent_source", "consent_at", "consent_ip",
+            "consent_evidence", "opt_out_at", "opt_out_reason", "updated_at",
+        ])
+
+    def record_opt_out(self, reason: str) -> None:
+        """Withdraw consent, preserving the original opt-in proof.
+
+        ``consent_source``/``consent_at``/``consent_evidence`` are deliberately
+        left intact so we can still show how the address got onto the list.
+        """
+        self.consent_status = self.ConsentStatus.OPTED_OUT
+        self.opt_out_at = timezone.now()
+        self.opt_out_reason = reason[:255]
+        self.save(update_fields=[
+            "consent_status", "opt_out_at", "opt_out_reason", "updated_at",
+        ])
 
 
 class ContactList(models.Model):

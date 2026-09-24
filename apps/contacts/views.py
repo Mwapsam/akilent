@@ -7,7 +7,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -28,7 +28,10 @@ def contact_list(request):
     if account is None:
         return redirect("dashboard")
 
-    qs = Contact.objects.filter(account=account)
+    # Contact.Meta already orders by -first_seen; -id is added purely as a
+    # tiebreaker so rows sharing a first_seen (a bulk import writing many
+    # contacts at once) keep a stable position across pages.
+    qs = Contact.objects.filter(account=account).order_by("-first_seen", "-id")
     q = (request.GET.get("q") or "").strip()
     st = (request.GET.get("status") or "").strip()
     if q:
@@ -173,7 +176,10 @@ def contact_edit(request, public_id: str):
     contact.email = email or None
     contact.phone = phone or None
     try:
-        contact.save(update_fields=["first_name", "last_name", "email", "phone", "updated_at"])
+        # Savepoint: a unique-constraint failure otherwise poisons the whole
+        # request transaction and nothing after this point can query.
+        with transaction.atomic():
+            contact.save(update_fields=["first_name", "last_name", "email", "phone", "updated_at"])
     except IntegrityError:
         messages.error(
             request, "Another customer already has that phone number or email address."

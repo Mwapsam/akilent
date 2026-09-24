@@ -682,14 +682,14 @@ def unsubscribe(request, token: str):
     Marks the token as used and adds the recipient to the suppression list.
     Returns a confirmation page.
     """
-    from apps.email.services.suppression import record_event
+    from apps.email.services.unsubscribe import apply_unsubscribe
 
     email = None
     try:
         with transaction.atomic():
-            unsub_token = UnsubscribeToken.objects.select_related("account").get(
-                token=token, is_used=False
-            )
+            unsub_token = UnsubscribeToken.objects.select_related(
+                "account", "campaign"
+            ).get(token=token, is_used=False)
             email = unsub_token.email
             account = unsub_token.account
 
@@ -698,11 +698,13 @@ def unsubscribe(request, token: str):
             unsub_token.used_at = timezone.now()
             unsub_token.save(update_fields=["is_used", "used_at"])
 
-            # Add to suppression list
-            record_event(
+            # Suppress, and mirror the opt-out onto the Contact so the UI,
+            # segments and exports stop showing them as subscribed.
+            apply_unsubscribe(
                 account=account,
                 email=email,
-                reason="unsubscribe",
+                campaign=unsub_token.campaign,
+                source="post" if request.method == "POST" else "get",
             )
             logger.info("Unsubscribed %s via token %s", email, token[:8])
     except UnsubscribeToken.DoesNotExist:

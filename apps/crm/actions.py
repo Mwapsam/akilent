@@ -19,6 +19,50 @@ class CreateLeadAction(Action):
         return {"lead_id": lead.public_id}
 
 
+class CaptureConversationLeadAction(Action):
+    """Open a lead for a customer whose message showed buying interest.
+
+    Distinct from ``create_lead`` in one way that matters: it's idempotent per
+    customer. It's called on every inbound message, so a customer asking three
+    questions must stay one opportunity. Returns the existing lead's id (and
+    ``created: False``) instead of raising, since "already a lead" is the
+    normal case, not an error.
+    """
+
+    name = "capture_conversation_lead"
+    module = "crm"
+    scope_kwarg = "account"
+
+    def input_schema(self) -> dict:
+        return {
+            "required": ["account", "contact"],
+            "optional": ["conversation_id", "signal", "owner"],
+        }
+
+    def execute(self, context: dict, *, account, contact, conversation_id: str = "",
+                signal: str = "", owner=None) -> dict:
+        from apps.crm.models import Lead
+        from apps.crm.services import create_lead
+
+        existing = Lead.objects.filter(
+            account=account, contact=contact,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        ).first()
+        if existing is not None:
+            return {"lead_id": existing.public_id, "created": False}
+
+        lead = create_lead(account, contact, source="conversation", owner=owner)
+        # Record what the customer said that opened this, on the timeline the
+        # customer page already renders: an owner who sees an unexpected lead
+        # has to be able to tell why it exists.
+        from apps.contacts.services import record_contact_event
+
+        record_contact_event(contact, "lead.auto_created", data={
+            "signal": signal, "conversation_id": conversation_id, "lead_id": lead.public_id,
+        })
+        return {"lead_id": lead.public_id, "created": True}
+
+
 class CreateDealAction(Action):
     name = "create_deal"
     module = "crm"
@@ -52,5 +96,6 @@ class ChangeDealStageAction(Action):
 
 
 register(CreateLeadAction())
+register(CaptureConversationLeadAction())
 register(CreateDealAction())
 register(ChangeDealStageAction())

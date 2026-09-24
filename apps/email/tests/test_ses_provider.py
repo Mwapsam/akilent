@@ -158,12 +158,20 @@ class SesFactoryResolutionTests(TestCase):
         self.assertIsInstance(provider, _SesProvider)
 
     def test_get_send_provider_resolves_ses(self):
+        import boto3
+
         from apps.email.providers import get_send_provider
         from apps.email.providers.ses import SesSendProvider as _SesSendProvider
 
+        # The SES send backend now refuses to construct without bounce/complaint
+        # feedback wiring, so the resolution test has to provide it.
+        boto3.client("sesv2", region_name="us-east-1").create_configuration_set(
+            ConfigurationSetName="primary"
+        )
         with patch("apps.core.models.MailProviderSettings.load") as load:
             load.return_value.send_backend = "ses"
             load.return_value.aws_region = "us-east-1"
-            load.return_value.ses_configuration_set = ""
+            load.return_value.ses_configuration_set = "primary"
+            load.return_value.ses_sns_topic_arn = "arn:aws:sns:us-east-1:1:ses-events"
             provider = get_send_provider()
         self.assertIsInstance(provider, _SesSendProvider)

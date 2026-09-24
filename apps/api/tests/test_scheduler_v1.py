@@ -17,7 +17,12 @@ JOBS_URL = "/api/v1/scheduled-jobs"
 @pytest.fixture
 def api_key(db):
     user = User.objects.create_user("owner", "owner@example.com", "pw")
-    acc = Account.objects.create(company_name="Acme")
+    acc = Account.objects.create(
+        company_name="Acme",
+        address_line1="1 Market St",
+        city="Lusaka",
+        country="ZM",
+    )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
         slug="p", name="P", price_monthly=Decimal("10"),

@@ -465,12 +465,32 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     from apps.email.services.validation import validate_recipient
 
     # Check for suppressed recipients (bounces, complaints, unsubscribes)
-    suppressed_emails = get_suppressed_emails(campaign.account, [r.to_email for r in chunk])
+    chunk_emails = [r.to_email for r in chunk]
+    suppressed_emails = get_suppressed_emails(campaign.account, chunk_emails)
+
+    # Consent gate. A contact that opted out is always refused; when the
+    # platform requires explicit consent, an unproven (UNKNOWN) contact is too.
+    # Addresses with no Contact row at all are left to the other gates — this
+    # check is about honoring recorded consent, not about inventing it.
+    from apps.contacts.models import Contact
+    from apps.core.models import MailProviderSettings
+
+    require_consent = MailProviderSettings.load().require_explicit_consent
+    blocked_consent = {
+        email.lower()
+        for email, consent in Contact.objects.filter(
+            account=campaign.account, email__in=chunk_emails
+        ).values_list("email", "consent_status")
+        if consent == Contact.ConsentStatus.OPTED_OUT
+        or (require_consent and consent != Contact.ConsentStatus.OPTED_IN)
+    }
 
     to_process, failed_recipients = [], []
     for r in chunk:
         if r.to_email in suppressed_emails:
             failed_recipients.append((r, "Recipient is suppressed (bounce, complaint, or unsubscribe)."))
+        elif r.to_email.lower() in blocked_consent:
+            failed_recipients.append((r, "Recipient has not consented to receive this email."))
         elif not validate_recipient(r.to_email):
             failed_recipients.append((r, "Recipient failed validation (invalid syntax or no MX record)."))
         else:

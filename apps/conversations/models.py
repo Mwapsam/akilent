@@ -161,6 +161,11 @@ class Message(models.Model):
     class Direction(models.TextChoices):
         INBOUND = "inbound", "Inbound"
         OUTBOUND = "outbound", "Outbound"
+        # Neither party speaking: a fact about the customer's story that belongs
+        # in the thread ("Payment received"). Deliberately matches neither
+        # direction filter in apps.conversations.state, so it can never make a
+        # waiting customer look answered.
+        SYSTEM = "system", "System"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="conversation_messages"

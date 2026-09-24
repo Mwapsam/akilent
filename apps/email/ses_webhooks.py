@@ -336,7 +336,7 @@ def ses_sns_webhook(request):
 
 def _handle_bounce(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     from apps.email.services.reputation import record_bounce
-    from apps.email.services.suppression import record_event
+    from apps.email.services.suppression import record_event, record_global_event
 
     bounce = ses_message.get("bounce", {})
     bounce_type = bounce.get("bounceType", "Undetermined")
@@ -371,8 +371,30 @@ def _handle_bounce(ses_message: dict[str, Any], sns_message_id: str = "") -> Non
         if sender:
             account = _find_account_for_sender_domain(sender)
         if not account:
+            # We can no longer attribute this event to a tenant (pruned rows, or
+            # a domain that has since been removed). Dropping it would leave a
+            # known-bad address mailable and keep costing us bounce rate, so
+            # suppress it platform-wide instead.
+            # Only hard bounces block platform-wide; a transient failure for
+            # one tenant is no reason to block the address for everyone, and
+            # without an account there is no soft-bounce counter to escalate.
+            if bounce_type == "Permanent":
+                for recipient in recipients:
+                    bounced = (
+                        recipient.get("emailAddress")
+                        if isinstance(recipient, dict)
+                        else recipient
+                    )
+                    if bounced:
+                        record_global_event(
+                            bounced,
+                            "bounce",
+                            bounce_type=bounce_type,
+                            source="orphan_sns",
+                        )
             logger.warning(
-                "No account found for SES bounce (messageId=%s, sender=%s); dropping event",
+                "SES bounce with no resolvable account (messageId=%s, sender=%s); "
+                "recorded platform-wide suppression",
                 message_id,
                 sender,
             )
@@ -406,7 +428,7 @@ def _handle_bounce(ses_message: dict[str, Any], sns_message_id: str = "") -> Non
 
 def _handle_complaint(ses_message: dict[str, Any], sns_message_id: str = "") -> None:
     from apps.email.services.reputation import record_complaint
-    from apps.email.services.suppression import record_event
+    from apps.email.services.suppression import record_event, record_global_event
 
     complaint = ses_message.get("complaint", {})
     recipients = complaint.get("complainedRecipients", [])
@@ -432,8 +454,17 @@ def _handle_complaint(ses_message: dict[str, Any], sns_message_id: str = "") -> 
         if sender:
             account = _find_account_for_sender_domain(sender)
         if not account:
+            # Same reasoning as the bounce path: an unattributable complaint is
+            # still a complaint against our SES account.
+            for recipient in recipients:
+                complained = recipient.get("emailAddress") if isinstance(recipient, dict) else recipient
+                if complained:
+                    record_global_event(
+                        complained, "complaint", source="orphan_sns"
+                    )
             logger.warning(
-                "No account found for SES complaint (messageId=%s, sender=%s); dropping event",
+                "SES complaint with no resolvable account (messageId=%s, sender=%s); "
+                "recorded platform-wide suppression",
                 message_id,
                 sender,
             )

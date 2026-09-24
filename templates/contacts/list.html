@@ -1,10 +1,16 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Contacts — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6">
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Contacts</h1>
-  <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Contacts</h1>
+    <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
+  </div>
+  <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-contact')">
+    {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add customer
+  </button>
 </header>
 
 {% comment %}
@@ -37,4 +43,33 @@
 </form>
 
 {% include "contacts/_list_results.html" %}
+
+{% modal "new-contact" title="Add customer" %}
+  <form method="post" action="{% url 'contacts:create' %}" class="space-y-4">
+    {% csrf_token %}
+    <div class="grid sm:grid-cols-2 gap-3">
+      <div>
+        <label class="label" for="new-contact-first">First name</label>
+        <input id="new-contact-first" name="first_name" class="input" placeholder="Ada" />
+      </div>
+      <div>
+        <label class="label" for="new-contact-last">Last name</label>
+        <input id="new-contact-last" name="last_name" class="input" placeholder="Mwape" />
+      </div>
+    </div>
+    <div>
+      <label class="label" for="new-contact-phone">WhatsApp number</label>
+      <input id="new-contact-phone" name="phone" class="input" placeholder="+260971234567" />
+      <p class="text-xs text-gray-400 mt-1">Include the country code so WhatsApp can reach them.</p>
+    </div>
+    <div>
+      <label class="label" for="new-contact-email">Email <span class="font-normal text-gray-400">(optional)</span></label>
+      <input id="new-contact-email" name="email" type="email" class="input" placeholder="name@example.com" />
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Add customer</button>
+    </div>
+  </form>
+{% endmodal %}
 {% endblock %}

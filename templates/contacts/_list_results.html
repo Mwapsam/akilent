@@ -40,7 +40,7 @@ the swap target and re-renders itself, which is why it carries its own id.
     </div>
   {% else %}
   <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Contacts are the people Akilent communicates with. They appear automatically when someone messages your WhatsApp number, or you can import them from a CSV or add them via the API." action_url="/docs/" action_label="View API docs" %}
+    {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Anyone who messages your WhatsApp number is added automatically. You can also add someone you met offline." %}
   </div>
   {% endif %}
 

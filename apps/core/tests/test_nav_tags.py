@@ -41,8 +41,8 @@ class NavActiveTests(SimpleTestCase):
         )
 
     def test_space_separated_targets(self):
-        tag = "{% nav_active 'email/domains email/mailboxes' %}"
-        self.assertEqual(_render("/email/mailboxes/", tag), "nav-link-active")
+        tag = "{% nav_active 'email/domains email/webhooks' %}"
+        self.assertEqual(_render("/email/webhooks/", tag), "nav-link-active")
         self.assertEqual(_render("/contacts/", tag), "")
 
     def test_is_nav_active_is_boolean(self):

@@ -115,3 +115,67 @@ def build_list_unsubscribe_headers(
     return build_unsubscribe_context(
         account, email, campaign=campaign, campaign_id=campaign_id
     )["headers"]
+
+
+def apply_unsubscribe(
+    *,
+    account: "Account",
+    email: str,
+    campaign: "BulkEmailCampaign | None" = None,
+    source: str = "link",
+) -> None:
+    """Honor an unsubscribe everywhere it needs to be visible.
+
+    Shared by the footer link (GET) and the RFC 8058 one-click POST. Writes:
+
+    * the account suppression entry, which is what actually blocks future sends;
+    * the Contact's consent fields and ``status``, so the UI, segments and
+      exports stop showing the recipient as subscribed;
+    * a ``MessageEvent`` so stats and outbound webhooks see the opt-out.
+
+    Everything past the suppression entry is best-effort — a missing Contact or
+    a stats failure must never stop us honoring the request.
+    """
+    from apps.email.services.suppression import record_event
+
+    record_event(account=account, email=email, reason="unsubscribe")
+
+    try:
+        from apps.contacts.models import Contact
+        from apps.contacts.services import record_contact_event
+
+        contact = Contact.objects.filter(account=account, email__iexact=email).first()
+        if contact is not None:
+            contact.record_opt_out(f"email_unsubscribe:{source}")
+            # record_contact_event owns the status flip and the
+            # contact.unsubscribed webhook; record_opt_out deliberately emits
+            # no event of its own so this is the only one.
+            record_contact_event(
+                contact,
+                "email.unsubscribed",
+                data={
+                    "source": source,
+                    "campaign": campaign.pk if campaign else None,
+                },
+            )
+    except Exception:
+        logger.exception("apply_unsubscribe: contact update failed for %s", email)
+
+    if campaign is not None:
+        try:
+            from apps.email.models import EmailMessage
+            from apps.logs.services import record_message_event
+
+            msg = (
+                EmailMessage.objects.filter(
+                    account=account, to_email__iexact=email, campaign=campaign
+                )
+                .order_by("-id")
+                .first()
+            )
+            if msg is not None:
+                record_message_event(
+                    msg, "unsubscribed", source="tracking_link", data={"to": email}
+                )
+        except Exception:
+            logger.exception("apply_unsubscribe: event recording failed for %s", email)
