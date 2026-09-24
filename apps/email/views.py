@@ -542,11 +542,14 @@ def _conversation_insights(account):
     """
     if account is None:
         return None
+    from apps.conversations.performance import followup_completion, team_performance
     from apps.conversations.state import average_first_response_seconds, missed, needs_attention
 
     now = timezone.now()
     avg_seconds = average_first_response_seconds(account)
     return {
+        "followups": followup_completion(account, now=now),
+        "team": team_performance(account, now=now),
         "waiting_count": needs_attention(account, now).count(),
         "missed_count": missed(account, now).count(),
         "avg_first_response_minutes": round(avg_seconds / 60) if avg_seconds is not None else None,

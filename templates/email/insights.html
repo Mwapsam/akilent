@@ -24,6 +24,41 @@
       <p class="text-sm text-gray-600">average first reply, recent conversations</p>
     </div>
   </div>
+
+  {% with f=conversation_stats.followups %}
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{% if f.completion_pct is not None %}{{ f.completion_pct }}%{% else %}—{% endif %}</p>
+      <p class="text-sm text-gray-600">of follow-ups completed, last {{ f.days }} days{% if f.due %} ({{ f.completed }} of {{ f.due }}){% endif %}</p>
+    </div>
+    <a href="/inbox/followups/" class="card-hover rounded-xl border border-border p-4 block">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ f.overdue }}</p>
+      <p class="text-sm text-gray-600">overdue follow-up{{ f.overdue|pluralize }}</p>
+    </a>
+  </div>
+  {% endwith %}
+
+  {% if conversation_stats.team %}
+  <div class="table-wrap mt-4">
+    <table class="table table--cards">
+      <caption class="sr-only">Team performance, by who owns the conversation</caption>
+      <thead>
+        <tr><th>Team member</th><th>Conversations owned</th><th>Waiting now</th><th>Average first reply</th></tr>
+      </thead>
+      <tbody>
+        {% for row in conversation_stats.team %}
+        <tr>
+          <td data-label="Team member">{{ row.name }}</td>
+          <td data-label="Conversations owned">{{ row.conversations }}</td>
+          <td data-label="Waiting now">{{ row.waiting }}</td>
+          <td data-label="Average first reply">{% if row.avg_first_reply_minutes is not None %}{{ row.avg_first_reply_minutes }} min{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500 mt-2">Based on who each conversation is assigned to, last 30 days.</p>
+  {% endif %}
 </section>
 {% endif %}
 
