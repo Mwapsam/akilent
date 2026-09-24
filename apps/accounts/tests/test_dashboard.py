@@ -6,6 +6,7 @@ panel fragment holding the heavier aggregates. These tests pin that split so a
 future change cannot quietly move an expensive query back onto first paint.
 """
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -173,3 +174,40 @@ def test_progress_bars_have_accessible_names(client, account):
     for chunk in body.split('role="progressbar"')[1:]:
         head = chunk[:400]
         assert "aria-labelledby" in head or "aria-label" in head
+
+
+# --- Swap-target layout parity -------------------------------------------
+
+def _class_attr(html, element_id):
+    """The class list of the element carrying `element_id`, as a set."""
+    m = re.search(
+        r'<div[^>]*\bid="%s"[^>]*>' % re.escape(element_id), html
+    )
+    assert m, "no element with id=%r in the rendered HTML" % element_id
+    cls = re.search(r'\bclass="([^"]*)"', m.group(0))
+    return set(cls.group(1).split()) if cls else set()
+
+
+@pytest.mark.django_db
+def test_panels_fragment_keeps_the_skeletons_layout_classes(client, account):
+    """An outerHTML swap replaces the element, so the fragment root must carry
+    the placeholder's layout classes itself.
+
+    This caught a real bug: the skeleton was `space-y-6 mt-6` but the fragment
+    root was only `space-y-6`, so the gap above the panels collapsed to zero
+    the moment HTMX swapped them in - correct for one frame, wrong thereafter.
+    Spacing regressions like this are invisible to every other test here.
+    """
+    client.force_login(account.owner)
+    page = client.get("/dashboard/").content.decode()
+    fragment = client.get("/dashboard/panels/", HTTP_HX_REQUEST="true").content.decode()
+
+    placeholder = _class_attr(page, "dashboard-panels")
+    swapped_in = _class_attr(fragment, "dashboard-panels")
+
+    layout = {c for c in placeholder if re.match(r"^(mt|mb|space-y|grid|gap)-", c)}
+    missing = layout - swapped_in
+    assert not missing, (
+        "the panels fragment drops layout classes the skeleton had: %s - "
+        "the page will shift when HTMX swaps it in" % sorted(missing)
+    )
