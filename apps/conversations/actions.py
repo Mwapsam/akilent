@@ -96,7 +96,12 @@ class ReplyAction(Action):
 
 
 class AssignConversationAction(Action):
-    """Assign a generic Conversation to a team member."""
+    """Assign a generic Conversation to a team member, or to nobody (``user=None``).
+
+    The assignee must be a member of the conversation's own account: this is the one place
+    that is enforced, so the inbox, workflows and the API cannot hand a customer's
+    conversation to someone outside the business.
+    """
 
     name = "assign_conversation"
     scope_kwarg = "conversation"
@@ -105,8 +110,14 @@ class AssignConversationAction(Action):
         return {"required": ["conversation", "user"]}
 
     def execute(self, context: dict, *, conversation, user) -> dict:
+        from apps.accounts.models import Membership
+
+        if user is not None and not Membership.objects.filter(
+            account_id=conversation.account_id, user=user
+        ).exists():
+            raise ActionError("That person isn't on your team.")
         conversation.assign(user)
-        return {"conversation_id": conversation.id, "assigned_to_id": user.id}
+        return {"conversation_id": conversation.id, "assigned_to_id": user.id if user else None}
 
 
 class AddInternalNoteAction(Action):

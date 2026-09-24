@@ -135,6 +135,25 @@ def _window_is_open(conversation) -> bool:
     return bool(wa and wa.window_is_open)
 
 
+def _team_members(account):
+    from django.contrib.auth import get_user_model
+
+    return get_user_model().objects.filter(memberships__account=account).order_by("first_name", "username")
+
+
+def _resolve_assignee(account, request):
+    """Who an "assign" POST means: the requester (default), a teammate, or nobody ("none")."""
+    raw = (request.POST.get("assignee") or "").strip()
+    if not raw:
+        return request.user
+    if raw == "none":
+        return None
+    user = _team_members(account).filter(pk=raw).first() if raw.isdigit() else None
+    if user is None:
+        raise ActionError("That person isn't on your team.")
+    return user
+
+
 @login_required
 def conversation_detail(request, public_id: str):
     account = get_current_account(request)
@@ -193,7 +212,10 @@ def conversation_detail(request, public_id: str):
                 )
                 messages.success(request, "Follow-up scheduled.")
             elif action == "assign":
-                run_action("assign_conversation", ctx, conversation=conversation, user=request.user)
+                run_action(
+                    "assign_conversation", ctx, conversation=conversation,
+                    user=_resolve_assignee(account, request),
+                )
             elif action == "add_note":
                 run_action(
                     "add_internal_note", ctx, conversation=conversation,
@@ -272,6 +294,7 @@ def conversation_detail(request, public_id: str):
         "approved_templates": approved_templates,
         "saved_replies": saved_replies,
         "open_followup": open_followup,
+        "team_members": _team_members(account),
     })
 
 

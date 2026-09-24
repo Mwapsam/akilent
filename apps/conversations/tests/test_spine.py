@@ -3,7 +3,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from apps.accounts.models import Account
+from apps.accounts.models import Account, Membership
 from apps.automation.models import Workflow
 from apps.automation.workflow_engine import enroll_for_trigger
 from apps.contacts.models import Contact
@@ -163,6 +163,7 @@ def test_action_registry_assign_conversation(
         whatsapp_conversation=wa_conversation, message_log=message_log,
     )
     user = get_user_model().objects.create(username="mwape", email="mwape@example.com")
+    Membership.objects.create(user=user, account=conversation.account)
 
     result = run_action("assign_conversation", {}, conversation=conversation, user=user)
 

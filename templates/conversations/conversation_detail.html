@@ -192,6 +192,20 @@
             <span class="hidden md:inline">{% if conversation.assigned_to_id == request.user.id %}Assigned to you{% elif conversation.assigned_to %}Take over{% else %}Assign to me{% endif %}</span>
           </button>
         </form>
+        {% if team_members|length > 1 %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="assign" />
+          <label class="sr-only" for="assignee">Assign to a teammate</label>
+          <select id="assignee" name="assignee" class="select" onchange="this.form.submit()">
+            <option value="" disabled {% if not conversation.assigned_to_id %}selected{% endif %}>Assign to…</option>
+            {% for member in team_members %}
+            <option value="{{ member.pk }}" {% if member.pk == conversation.assigned_to_id %}selected{% endif %}>{{ member.get_full_name|default:member.username }}</option>
+            {% endfor %}
+            <option value="none">Unassigned</option>
+          </select>
+        </form>
+        {% endif %}
         {# Driven by the live `open` flag, so it reappears if the customer writes again while the page is open. #}
         <form method="post" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %}>
           {% csrf_token %}

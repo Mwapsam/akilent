@@ -288,3 +288,55 @@ def test_inbox_feed_returns_rendered_list(logged_in, open_conversation):
     resp = client.get("/inbox/feed/?view=all")
     assert resp.status_code == 200
     assert "blue dress" in resp.json()["html"]
+
+
+@pytest.fixture
+def teammate(logged_in):
+    _, account, _ = logged_in
+    user = User.objects.create_user("sam", "sam@example.com", "pw")
+    Membership.objects.create(user=user, account=account, role=Membership.Role.MEMBER)
+    return user
+
+
+@pytest.mark.django_db
+def test_assign_to_a_teammate(logged_in, open_conversation, teammate):
+    client, _, _ = logged_in
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign", "assignee": teammate.pk})
+    open_conversation.refresh_from_db()
+    assert open_conversation.assigned_to_id == teammate.pk
+
+
+@pytest.mark.django_db
+def test_unassign(logged_in, open_conversation, teammate):
+    client, _, _ = logged_in
+    open_conversation.assign(teammate)
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign", "assignee": "none"})
+    open_conversation.refresh_from_db()
+    assert open_conversation.assigned_to_id is None
+
+
+@pytest.mark.django_db
+def test_cannot_assign_to_someone_outside_the_business(logged_in, open_conversation):
+    client, _, _ = logged_in
+    stranger = User.objects.create_user("stranger", "s@example.com", "pw")
+    other = Account.objects.create(company_name="Other Co")
+    Membership.objects.create(user=stranger, account=other, role=Membership.Role.OWNER)
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign", "assignee": stranger.pk})
+    open_conversation.refresh_from_db()
+    assert open_conversation.assigned_to_id is None
+
+
+@pytest.mark.django_db
+def test_the_action_itself_refuses_a_non_member(open_conversation):
+    from apps.conversations.actions import ActionError, run_action
+
+    stranger = User.objects.create_user("stranger", "s@example.com", "pw")
+    with pytest.raises(ActionError):
+        run_action("assign_conversation", {}, conversation=open_conversation, user=stranger)
+
+
+@pytest.mark.django_db
+def test_the_picker_lists_teammates(logged_in, open_conversation, teammate):
+    client, _, _ = logged_in
+    body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+    assert 'name="assignee"' in body and "sam" in body
