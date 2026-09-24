@@ -471,6 +471,30 @@
         <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
       </div>
 
+      {# Tags #}
+      <div class="cv-section">
+        <h2 class="cv-h">Tags</h2>
+        <div class="flex flex-wrap gap-1 mb-2">
+          {% for t in conversation.contact.tags.all %}
+          <form method="post" action="{% url 'contacts:tag_remove' conversation.contact.public_id %}" class="inline-flex">
+            {% csrf_token %}
+            <input type="hidden" name="tag" value="{{ t.name }}" />
+            <input type="hidden" name="next" value="{{ request.path }}" />
+            <span class="badge badge-neutral inline-flex items-center gap-1">{{ t.name }}
+              <button class="opacity-60 hover:opacity-100" aria-label="Remove tag {{ t.name }}" title="Remove tag">&times;</button>
+            </span>
+          </form>
+          {% empty %}<span class="text-sm text-gray-400">No tags yet.</span>{% endfor %}
+        </div>
+        <form method="post" action="{% url 'contacts:tag_add' conversation.contact.public_id %}" class="flex gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.path }}" />
+          <label class="sr-only" for="conversation-add-tag">Add a tag</label>
+          <input id="conversation-add-tag" name="tag" class="input" maxlength="40" placeholder="Add a tag…" />
+          <button class="btn btn-secondary btn-sm">Add</button>
+        </form>
+      </div>
+
       {# Sales #}
       {% comment %}
         Record, not decision: the action to start tracking someone lives under

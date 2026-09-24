@@ -84,6 +84,9 @@ class Contact(models.Model):
     last_engaged_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Owner-facing labels ("pricing-enquiry", "vip"). Managed through apps.contacts.tags.
+    tags = models.ManyToManyField("contacts.Tag", blank=True, related_name="contacts")
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -156,6 +159,31 @@ class Contact(models.Model):
         self.save(update_fields=[
             "consent_status", "opt_out_at", "opt_out_reason", "updated_at",
         ])
+
+
+class Tag(models.Model):
+    """A label an owner (or an automation) puts on customers: "pricing-enquiry", "vip".
+
+    ``slug`` is the identity ("VIP" and "vip " are one tag); ``name`` is how it was first
+    written and is what people see. Created on demand by ``apps.contacts.tags``, never by
+    hand, so there is no tag-management screen to maintain.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="contact_tags"
+    )
+    name = models.CharField(max_length=40)
+    slug = models.SlugField(max_length=60)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["account", "slug"], name="uniq_contacttag_account_slug")
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
 
 
 class ContactList(models.Model):

@@ -38,8 +38,14 @@
       <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+  {% if tags %}
+  <select name="tag" class="select w-full sm:w-44" aria-label="Filter by tag">
+    <option value="">Any tag</option>
+    {% for t in tags %}<option value="{{ t.slug }}" {% if t.slug == tag %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
   <button class="btn btn-primary btn-sm">Filter</button>
-  {% if q or status %}<a href="/contacts/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  {% if q or status or tag %}<a href="/contacts/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
 {% include "contacts/_list_results.html" %}

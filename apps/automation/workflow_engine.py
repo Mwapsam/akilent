@@ -42,6 +42,8 @@ _STEP_TYPES = {
     "send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit",
     # Free-text reply into the conversation that triggered the run (message triggers only).
     "reply_text",
+    # Label the customer ("pricing-enquiry"); adding or removing is idempotent.
+    "add_tag", "remove_tag",
     # Phase 4: a generic step that calls through the shared Action Registry
     # (apps.core.actions) by name, rather than requiring a hand-written
     # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
@@ -205,6 +207,13 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     "because it replies in that conversation",
                     step_id=sid, field="type",
                 )
+        if step.get("type") in ("add_tag", "remove_tag"):
+            from apps.contacts import tags as contact_tags
+
+            try:
+                contact_tags.clean_name(step.get("tag") or "")
+            except contact_tags.TagError as exc:
+                _error(f"step {sid!r}: {exc}", step_id=sid, field="tag")
         if step.get("type") == "webhook" and not step.get("url"):
             _error(f"step {sid!r}: webhook needs a url", step_id=sid, field="url")
         if step.get("type") == "branch" and not (
@@ -422,6 +431,17 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
         raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
 
 
+def _run_tag_step(run: WorkflowRun, step: dict) -> dict:
+    from apps.contacts import tags as contact_tags
+
+    change = contact_tags.add_tag if step["type"] == "add_tag" else contact_tags.remove_tag
+    try:
+        changed = change(run.contact, step.get("tag") or "")
+    except contact_tags.TagError as exc:
+        raise ValueError(f"{step['type']} step {step.get('id')!r}: {exc}") from exc
+    return {"tag": step.get("tag"), "changed": changed}
+
+
 def _resolve_whatsapp_template(account, name):
     if not name:
         return None
@@ -623,6 +643,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_action_step(run, step)
             elif stype == "reply_text":
                 result = _run_reply_text(run, step)
+            elif stype in ("add_tag", "remove_tag"):
+                result = _run_tag_step(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}

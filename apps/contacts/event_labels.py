@@ -28,6 +28,8 @@ _EXACT = {
     "email.bounced": "Email bounced",
     "email.complained": "Marked an email as spam",
     "email.unsubscribed": "Unsubscribed from email",
+    "tag.added": "Tag added",
+    "tag.removed": "Tag removed",
 }
 
 
@@ -55,6 +57,8 @@ def event_detail(event_type: str, data: dict | None) -> str:
         return f"Amount: {data['amount']}"
     if event_type == "email.clicked" and data.get("url"):
         return data["url"]
+    if event_type in ("tag.added", "tag.removed") and data.get("tag"):
+        return data["tag"]
     if event_type == "lead.auto_created" and data.get("signal"):
         return f"They said “{data['signal']}”"
     return ""

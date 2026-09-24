@@ -10,12 +10,12 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.contacts.models import Contact, CustomAttributeDef
+from apps.contacts.models import Contact, CustomAttributeDef, Tag
 from apps.contacts.services import upsert_contact, upsert_contact_by_phone
 from apps.email.models import EmailMessage
 
@@ -42,13 +42,18 @@ def contact_list(request):
         )
     if st:
         qs = qs.filter(status=st)
+    tag_slug = (request.GET.get("tag") or "").strip()
+    if tag_slug:
+        qs = qs.filter(tags__slug=tag_slug)
 
-    page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
+    page = Paginator(qs.prefetch_related("tags"), _PAGE_SIZE).get_page(request.GET.get("page"))
     context = {
         "account": account,
         "page": page,
         "q": q,
         "status": st,
+        "tag": tag_slug,
+        "tags": Tag.objects.filter(account=account),
         "status_choices": Contact.Status.choices,
         "total": Contact.objects.filter(account=account).count(),
     }
@@ -94,7 +99,47 @@ def contact_detail(request, public_id: str):
         "messages_to": messages_to,
         "lists": contact.lists.all(),
         "attribute_rows": attribute_rows,
+        "contact_tags": contact.tags.all(),
+        "known_tags": Tag.objects.filter(account=account),
     })
+
+
+def _back_to(request, contact):
+    """Where to return after a tag change: the page it was made from, else the profile."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    target = request.POST.get("next") or ""
+    if target and url_has_allowed_host_and_scheme(
+        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(target)
+    return redirect("contacts:detail", public_id=contact.public_id)
+
+
+def _change_tag(request, public_id: str, action: str):
+    from apps.contacts import tags as contact_tags
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact = get_object_or_404(Contact, account=account, public_id=public_id)
+    try:
+        getattr(contact_tags, action)(contact, request.POST.get("tag", ""))
+    except contact_tags.TagError as exc:
+        messages.error(request, str(exc))
+    return _back_to(request, contact)
+
+
+@login_required
+@require_POST
+def contact_tag_add(request, public_id: str):
+    return _change_tag(request, public_id, "add_tag")
+
+
+@login_required
+@require_POST
+def contact_tag_remove(request, public_id: str):
+    return _change_tag(request, public_id, "remove_tag")
 
 
 # --- Add / edit a customer by hand. Until now contacts could only arrive via

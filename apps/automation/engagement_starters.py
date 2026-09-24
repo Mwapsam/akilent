@@ -95,6 +95,7 @@ _REPLY_STARTERS = [
         "stop_condition": "Answers the same customer at most once an hour.",
         "mode": "contains",
         "keywords": ["price", "prices", "pricing", "cost", "how much"],
+        "tag": "pricing-enquiry",
         "reply_hint": "Our prices start at K50. Tell us what you need and we'll send an exact quote.",
     },
     {
@@ -105,6 +106,7 @@ _REPLY_STARTERS = [
         "stop_condition": "Answers the same customer at most once an hour.",
         "mode": "contains",
         "keywords": ["where", "location", "address", "directions"],
+        "tag": "location-enquiry",
         "reply_hint": "We're at Plot 12, Cairo Road, Lusaka. Open 8am to 5pm, Monday to Saturday.",
     },
     {
@@ -130,17 +132,20 @@ STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
 
 
 def build_reply_definition(starter: dict, *, text: str) -> dict:
-    """A keyword auto-reply: when the message matches, answer once, then stop."""
+    """A keyword auto-reply: when the message matches, answer once, tag the customer if the
+    starter names a tag (so the owner can later see who asked about prices), then stop."""
+    tag = starter.get("tag")
+    steps = [{"id": "reply", "type": "reply_text", "text": text, "next": "tag" if tag else "stop"}]
+    if tag:
+        steps.append({"id": "tag", "type": "add_tag", "tag": tag, "next": "stop"})
+    steps.append({"id": "stop", "type": "stop"})
     return {
         "trigger": {
             "type": starter["trigger"],
             "match": {"mode": starter["mode"], "any": list(starter["keywords"])},
             "cooldown_minutes": 60,
         },
-        "steps": [
-            {"id": "reply", "type": "reply_text", "text": text, "next": "stop"},
-            {"id": "stop", "type": "stop"},
-        ],
+        "steps": steps,
     }
 
 

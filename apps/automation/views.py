@@ -18,7 +18,8 @@ from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 from apps.core.module_gate import module_required
 
-_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "webhook", "wait", "branch", "set_attribute", "stop"]
+_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "add_tag", "remove_tag", "webhook", "wait", "branch",
+               "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
                   "email.opened", "email.clicked", "conversation.message_received"]
 

@@ -24,6 +24,27 @@
       <p class="text-gray-500 mb-1">Lists</p>
       {% for l in lists %}<span class="badge badge-neutral mr-1">{{ l.name }}</span>{% empty %}<span class="text-gray-400">None</span>{% endfor %}
     </div>
+    <div class="pt-2">
+      <p class="text-gray-500 mb-1">Tags</p>
+      <div class="flex flex-wrap gap-1 mb-2">
+        {% for t in contact_tags %}
+        <form method="post" action="{% url 'contacts:tag_remove' contact.public_id %}" class="inline-flex">
+          {% csrf_token %}
+          <input type="hidden" name="tag" value="{{ t.name }}" />
+          <span class="badge badge-neutral inline-flex items-center gap-1">{{ t.name }}
+            <button class="opacity-60 hover:opacity-100" aria-label="Remove tag {{ t.name }}" title="Remove tag">&times;</button>
+          </span>
+        </form>
+        {% empty %}<span class="text-gray-400">None</span>{% endfor %}
+      </div>
+      <form method="post" action="{% url 'contacts:tag_add' contact.public_id %}" class="flex gap-2">
+        {% csrf_token %}
+        <label class="sr-only" for="add-tag">Add a tag</label>
+        <input id="add-tag" name="tag" class="input" list="known-tags" maxlength="40" placeholder="Add a tag…" />
+        <datalist id="known-tags">{% for t in known_tags %}<option value="{{ t.name }}">{% endfor %}</datalist>
+        <button class="btn btn-secondary btn-sm">Add</button>
+      </form>
+    </div>
     {% if attribute_rows %}
     <div class="pt-2">
       <p class="text-gray-500 mb-1">Customer information</p>

@@ -13,6 +13,8 @@ Fields:
   attributes.<key>                                        -> JSON attribute
   last_engaged_days                                       -> whole days since last_engaged_at
   in_list                                                 -> value is a ContactList slug
+  tag                                                     -> value is a tag name ("VIP" == "vip");
+                                                             operators eq ne in exists not_exists
   opened_in_last_90d                                      -> bool
 
 Operators: eq ne gt gte lt lte contains in exists not_exists
@@ -44,6 +46,23 @@ class SegmentError(ValueError):
     pass
 
 
+def _tag_q(op: str, value) -> Q:
+    from django.utils.text import slugify
+
+    if op == "exists":
+        return Q(tags__isnull=False)
+    if op == "not_exists":
+        return Q(tags__isnull=True)
+    if op == "in":
+        if not isinstance(value, (list, tuple)) or not value:
+            raise SegmentError("tag 'in' needs a list of tag names")
+        return Q(tags__slug__in=[slugify(str(v))[:60] for v in value])
+    if op not in ("eq", "ne") or not isinstance(value, str) or not value.strip():
+        raise SegmentError("tag supports eq/ne/in/exists/not_exists with a tag name")
+    has = Q(tags__slug=slugify(value)[:60])
+    return ~has if op == "ne" else has
+
+
 def _leaf_q(cond: dict) -> Q:
     field = cond.get("field")
     op = cond.get("operator", "eq")
@@ -68,6 +87,9 @@ def _leaf_q(cond: dict) -> Q:
         cutoff = timezone.now() - timedelta(days=90)
         recent = Q(events__type__endswith="opened", events__occurred_at__gte=cutoff)
         return recent if value else ~recent
+
+    if field == "tag":
+        return _tag_q(op, value)
 
     if field == "in_list":
         member = Q(lists__slug=value)

@@ -9,7 +9,7 @@ the swap target and re-renders itself, which is why it carries its own id.
   <div class="table-wrap">
     <table class="table table--cards">
       <thead>
-        <tr><th>Contact</th><th>Name</th><th>Phone</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
+        <tr><th>Contact</th><th>Name</th><th>Phone</th><th>Tags</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
       </thead>
       <tbody>
         {% for c in page %}
@@ -17,6 +17,7 @@ the swap target and re-renders itself, which is why it carries its own id.
           <td data-label="Contact"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-accent hover:text-accent-strong">{{ c.email|default:c.phone|default:"Unknown contact" }}</a></td>
           <td data-label="Name">{{ c.full_name|default:"—" }}</td>
           <td data-label="Phone" class="tabular-nums">{{ c.phone|default:"—" }}</td>
+          <td data-label="Tags">{% for t in c.tags.all %}<span class="badge badge-neutral mr-1">{{ t.name }}</span>{% empty %}—{% endfor %}</td>
           <td data-label="Status">
             <span class="badge {% if c.status == 'subscribed' or c.status == 'active' %}badge-success{% elif c.status == 'unsubscribed' or c.status == 'bounced' or c.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">
               {{ c.get_status_display }}
@@ -29,7 +30,7 @@ the swap target and re-renders itself, which is why it carries its own id.
       </tbody>
     </table>
   </div>
-  {% elif q or status %}
+  {% elif q or status or tag %}
     {% comment %}
       A filter that matched nothing is a different state from having no
       contacts at all, and it needs a different way out: clear the filter
