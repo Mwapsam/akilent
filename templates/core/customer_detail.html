@@ -79,7 +79,8 @@
             <td>{{ module_name }}</td>
             <td>
               {% with ms=module_subscriptions|dictsort:"module"|first %}
-              <form method="post" action="/manage/customers/{{ account.pk }}/modules/{{ module_value }}/toggle/" class="inline" data-ajax>
+              <form method="post" action="/manage/customers/{{ account.pk }}/modules/{{ module_value }}/toggle/" class="inline"
+                    hx-post="/manage/customers/{{ account.pk }}/modules/{{ module_value }}/toggle/" hx-swap="none">
                 {% csrf_token %}
                 <button type="submit" class="badge {% if ms.enabled %}badge-success{% else %}badge-neutral{% endif %}">
                   {% if ms.enabled %}Enabled{% else %}Disabled{% endif %}

@@ -19,7 +19,12 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.forms import AcceptInvitationForm, InviteForm, ProfileForm
 from apps.accounts.models import Invitation, Membership
-from apps.accounts.utils import get_current_account, is_ajax, set_current_account
+from apps.accounts.utils import (
+    ajax_redirect,
+    get_current_account,
+    is_ajax,
+    set_current_account,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +285,7 @@ def member_remove(request, pk):
     # next request (a JS toast would be lost when we navigate via `redirect`).
     messages.success(request, f"{username} removed from the workspace.")
     if is_ajax(request):
-        return JsonResponse({"redirect": reverse("settings-team")})
+        return ajax_redirect(reverse("settings-team"))
     return redirect("settings-team")
 
 

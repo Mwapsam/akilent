@@ -61,9 +61,10 @@
                 <input type="hidden" name="role" value="{% if m.role == 'admin' %}member{% else %}admin{% endif %}">
                 <button class="btn btn-ghost btn-sm" type="submit">Make {% if m.role == 'admin' %}member{% else %}admin{% endif %}</button>
               </form>
-              <form data-ajax method="post" action="{% url 'member-remove' m.pk %}"
-                    data-confirm="Remove {{ m.user.get_username }} from {{ account.company_name }}? They lose access immediately."
-                    data-confirm-danger data-confirm-label="Remove">
+              <form method="post" action="{% url 'member-remove' m.pk %}"
+                    hx-confirm="Remove {{ m.user.get_username }} from {{ account.company_name }}? They lose access immediately."
+                    hx-confirm-danger hx-confirm-label="Remove"
+                    hx-post="{% url 'member-remove' m.pk %}" hx-swap="none">
                 {% csrf_token %}
                 <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Remove {{ m.user.get_username }}">
                   {% include "components/icon.html" with name="trash" class="w-4 h-4" %}

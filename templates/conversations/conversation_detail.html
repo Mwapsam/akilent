@@ -216,8 +216,9 @@
               <template x-if="item.type === 'day'">
                 <div class="cv-day"><span x-text="item.label"></span></div>
               </template>
-              {# Neither party speaking — a commercial fact (payment received)
-                 belonging to this customer's story, shown like a day divider. #}
+              {% comment %} Neither party speaking — a commercial fact (payment
+                 received) belonging to this customer's story, shown like a day
+                 divider. {% endcomment %}
               <template x-if="item.type === 'msg' && item.m.direction === 'system'">
                 <div class="cv-day"><span x-text="item.m.body"></span></div>
               </template>

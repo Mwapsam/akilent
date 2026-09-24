@@ -20,10 +20,12 @@
     <form method="post" action="/automations/{{ wf.slug }}/publish/">{% csrf_token %}
       <button class="btn btn-primary btn-sm">Publish</button>
     </form>
-    <form method="post" action="/automations/{{ wf.slug }}/archive/" data-ajax data-confirm="Archive this workflow?">{% csrf_token %}
+    <form method="post" action="/automations/{{ wf.slug }}/archive/" hx-confirm="Archive this workflow?"
+      hx-post="/automations/{{ wf.slug }}/archive/" hx-swap="none">{% csrf_token %}
       <button class="btn btn-secondary btn-sm">Archive</button>
     </form>
-    <form method="post" action="/automations/{{ wf.slug }}/delete/" data-ajax data-confirm="Delete this workflow permanently?" data-confirm-danger>{% csrf_token %}
+    <form method="post" action="/automations/{{ wf.slug }}/delete/" hx-confirm="Delete this workflow permanently?" hx-confirm-danger
+      hx-post="/automations/{{ wf.slug }}/delete/" hx-swap="none">{% csrf_token %}
       <button class="btn btn-danger-ghost btn-sm">Delete</button>
     </form>
   </div>

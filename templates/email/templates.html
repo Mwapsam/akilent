@@ -162,7 +162,8 @@
                 {% include "components/icon.html" with name="copy" class="w-4 h-4" %}
               </button>
             </form>
-            <form method="post" action="/email/templates/{{ t.pk }}/delete/" data-ajax data-confirm="Delete this template?" data-confirm-danger class="inline">
+            <form method="post" action="/email/templates/{{ t.pk }}/delete/" hx-confirm="Delete this template?" hx-confirm-danger class="inline"
+                  hx-post="/email/templates/{{ t.pk }}/delete/" hx-swap="none">
               {% csrf_token %}
               <button class="btn btn-ghost btn-icon btn-sm hover:text-red-600" type="submit" title="Delete" aria-label="Delete {{ t.name }}">
                 {% include "components/icon.html" with name="trash" class="w-4 h-4" %}

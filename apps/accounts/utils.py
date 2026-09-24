@@ -63,5 +63,31 @@ def user_accounts(user):
 
 
 def is_ajax(request) -> bool:
-    """Was this request made via fetch/XHR with the conventional marker header?"""
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+    """Was this request made in the background rather than as a navigation?
+
+    Accepts both markers so a view can serve the hand-rolled ``data-ajax``
+    engine and HTMX at once: templates move across one at a time, and the view
+    behind them does not have to move on the same commit. ``HX-Request`` is set
+    by HTMX on every request it makes; ``X-Requested-With`` is what
+    ``handleAjaxForm`` in static/js/app.js sends.
+    """
+    return (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or request.headers.get("hx-request") == "true"
+    )
+
+
+def ajax_redirect(url: str):
+    """Tell a background request to navigate the browser to ``url``.
+
+    Speaks to both background clients at once. The hand-rolled engine in
+    static/js/app.js reads ``{"redirect": ...}`` out of the JSON body; HTMX
+    ignores the body entirely and acts on the ``HX-Redirect`` header. One
+    response therefore works whether or not the calling template has moved
+    across to hx-* yet.
+    """
+    from django.http import JsonResponse
+
+    response = JsonResponse({"redirect": url})
+    response["HX-Redirect"] = url
+    return response

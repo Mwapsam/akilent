@@ -1,7 +1,12 @@
-/* App-wide interactivity: CSRF, toasts, sidebar/drawer state, and AJAX forms.
- * Works alongside (and registers stores on) Alpine. Progressive enhancement:
- * forms without data-ajax keep their normal submit/redirect behaviour, and if
- * JS is disabled everything still works server-side.
+/* App-wide interactivity: CSRF, toasts, sidebar/drawer state, and the bridge
+ * between HTMX and this app's own Alpine stores. Works alongside (and
+ * registers stores on) Alpine.
+ *
+ * Background requests are HTMX's job — this file used to carry a hand-rolled
+ * engine (`data-ajax`/`data-swap`/`data-append`) that did the same thing less
+ * well, and it is gone. Progressive enhancement is unchanged: every hx-post
+ * form still carries a real method/action, so it submits and redirects
+ * normally with JavaScript off.
  */
 (function () {
   "use strict";
@@ -118,76 +123,6 @@
     });
   });
 
-  // --- AJAX form submission ---------------------------------------------
-  // Opt in with <form data-ajax ...>. Optional attributes:
-  //   data-confirm="message"   -> ask the confirm dialog first
-  //   data-swap="#sel"         -> replace target's outerHTML with returned HTML
-  //   data-append="#sel"       -> append returned HTML into target
-  //   data-remove="#sel"       -> remove target on success (e.g. delete)
-  //   data-reset               -> reset the form on success
-  // Server returns an HTML partial (for swap/append) and/or an `X-Toast`
-  // header ("type|message"); or JSON { redirect, toast }.
-  async function handleAjaxForm(form, opts) {
-    const silent = !!(opts && opts.silent); // auto-poll: swap DOM but stay quiet
-    const submitBtn = form.querySelector('[type="submit"]');
-    const setBusy = (b) => {
-      if (submitBtn) { submitBtn.disabled = b; submitBtn.setAttribute("aria-busy", b ? "true" : "false"); }
-      form.classList.toggle("is-submitting", b);
-    };
-    setBusy(true);
-    try {
-      const res = await fetch(form.action, {
-        method: (form.method || "POST").toUpperCase(),
-        headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": CSRF() },
-        body: new FormData(form),
-        credentials: "same-origin",
-      });
-
-      const toastHeader = res.headers.get("X-Toast");
-      const ctype = res.headers.get("Content-Type") || "";
-
-      if (!res.ok) {
-        let msg = "Something went wrong.";
-        if (ctype.includes("application/json")) {
-          const j = await res.json().catch(() => ({}));
-          msg = j.error || j.toast || msg;
-        } else if (toastHeader) {
-          msg = decodeToast(toastHeader).message || msg;
-        }
-        if (!silent) window.toast("danger", msg);
-        return;
-      }
-
-      if (ctype.includes("application/json")) {
-        const j = await res.json().catch(() => ({}));
-        if (j.toast) window.toast(j.toast.type || "success", j.toast.message);
-        if (j.redirect) { window.location.href = j.redirect; return; }
-      } else {
-        const html = await res.text();
-        const swap = form.dataset.swap && document.querySelector(form.dataset.swap);
-        const append = form.dataset.append && document.querySelector(form.dataset.append);
-        if (html.trim() && swap) swap.outerHTML = html;
-        else if (html.trim() && append) append.insertAdjacentHTML("beforeend", html);
-      }
-
-      if (form.dataset.remove) {
-        const el = document.querySelector(form.dataset.remove);
-        if (el) el.remove();
-      }
-      if (form.hasAttribute("data-reset")) form.reset();
-      if (toastHeader) {
-        const t = decodeToast(toastHeader);
-        // While auto-polling, only surface good news (e.g. "verified") — don't
-        // nag with "not found yet" every cycle.
-        if (!silent || t.type === "success") window.toast(t.type, t.message);
-      }
-    } catch (e) {
-      if (!silent) window.toast("danger", "Network error — please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // --- Copy to clipboard -------------------------------------------------
   // Any .copy-btn copies the .copy-value text in its .copy-row.
   function copyText(text, btn) {
@@ -217,32 +152,91 @@
     if (el) copyText(el.textContent.trim(), btn);
   });
 
-  // --- AJAX form submission ----------------------------------------------
-  document.addEventListener("submit", function (e) {
-    const form = e.target.closest("form[data-ajax]");
-    if (!form) return;
+  // --- HTMX bridge -------------------------------------------------------
+  // Elements whose *current* request is an automatic one. Membership is set
+  // just before firing and cleared once the toast handlers below have read it.
+  const silentRequests = new WeakSet();
+  function isSilent(el) {
+    return !!el && (silentRequests.has(el) || el.hasAttribute("hx-toast-silent"));
+  }
+
+  // Three things the hand-rolled data-ajax engine did that HTMX does not do
+  // on its own. Keeping the wire format (the X-Toast header) means views stay
+  // untouched as their templates move across to hx-*.
+
+  // 1. hx-confirm would otherwise open the browser's native confirm() dialog.
+  //    Route it to the same Alpine confirm store the rest of the app uses, so
+  //    a destructive HTMX action looks like every other destructive action.
+  //    hx-confirm-danger opts into the red styling; hx-confirm-label renames
+  //    the button.
+  document.addEventListener("htmx:confirm", function (e) {
+    const question = e.detail.question;
+    if (!question) return; // no hx-confirm on this element — nothing to gate
+    const store = window.Alpine && Alpine.store("confirm");
+    if (!store) return; // Alpine not up yet: let HTMX fall back to confirm()
     e.preventDefault();
-    const confirmMsg = form.dataset.confirm;
-    if (confirmMsg && window.Alpine && Alpine.store("confirm")) {
-      Alpine.store("confirm")
-        .ask({ message: confirmMsg, danger: form.hasAttribute("data-confirm-danger"),
-               confirmLabel: form.dataset.confirmLabel || "Confirm" })
-        .then((ok) => { if (ok) handleAjaxForm(form); });
-    } else {
-      handleAjaxForm(form);
-    }
+    const el = e.detail.elt;
+    store
+      .ask({
+        message: question,
+        danger: el.hasAttribute("hx-confirm-danger"),
+        confirmLabel: el.getAttribute("hx-confirm-label") || "Confirm",
+      })
+      .then(function (ok) { if (ok) e.detail.issueRequest(true); });
+  });
+
+  // 2. Surface the X-Toast response header. hx-toast-silent suppresses all but
+  //    good news, which is what an auto-poll wants — "not verified yet" every
+  //    20s is nagging, "verified" is the thing you are waiting for.
+  document.addEventListener("htmx:afterRequest", function (e) {
+    const xhr = e.detail.xhr;
+    if (!xhr) return;
+    const header = xhr.getResponseHeader("X-Toast");
+    if (!header) return;
+    const t = decodeToast(header);
+    if (isSilent(e.detail.elt) && t.type !== "success") return;
+    window.toast(t.type, t.message);
+  });
+
+  // 3. A 4xx/5xx or a dropped connection is silent in HTMX by default — it
+  //    swaps nothing and says nothing, so the button just looks broken.
+  document.addEventListener("htmx:responseError", function (e) {
+    if (isSilent(e.detail.elt)) return;
+    if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-Toast")) return; // already toasted above
+    window.toast("danger", "Something went wrong.");
+  });
+  document.addEventListener("htmx:sendError", function (e) {
+    if (isSilent(e.detail.elt)) return;
+    window.toast("danger", "Network error — please try again.");
+  });
+
+  // Silence lasts one request. A successful poll swaps the element away and
+  // takes its entry with it, but a failed one leaves the same element in place
+  // — and the next click on it is the user's, which must not be silent. The
+  // timeout defers the clear past the toast handlers above, whatever order
+  // HTMX fires them in.
+  document.addEventListener("htmx:afterRequest", function (e) {
+    const el = e.detail.elt;
+    if (silentRequests.has(el)) setTimeout(function () { silentRequests.delete(el); }, 0);
   });
 
   // --- DNS auto-poll -----------------------------------------------------
   // Re-check pending domains so they flip to verified on their own once DNS
   // propagates. One global timer; polls only visible, pending, idle check
   // forms — verified cards drop the data-domain-pending marker and stop.
+  //
+  // The form carries hx-post/hx-target already, so the poll just fires it.
+  // The poll marks the form silent for that one request only: the same form
+  // clicked by hand should still say "not in DNS yet", while a poll running
+  // every 20 seconds should keep that to itself.
   setInterval(function () {
     if (document.visibilityState && document.visibilityState !== "visible") return;
-    document.querySelectorAll("form[data-dns-check][data-auto]").forEach(function (form) {
+    if (!window.htmx) return;
+    document.querySelectorAll("form[data-dns-check]").forEach(function (form) {
       if (!form.closest('[data-domain-pending="1"]')) return;
-      if (form.classList.contains("is-submitting")) return;
-      handleAjaxForm(form, { silent: true });
+      if (form.classList.contains("htmx-request")) return;
+      silentRequests.add(form);
+      window.htmx.trigger(form, "submit");
     });
   }, 20000);
 })();

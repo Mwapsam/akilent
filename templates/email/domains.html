@@ -42,7 +42,8 @@
     <h2 class="font-semibold flex items-center gap-2">
       {% include "components/icon.html" with name="key" class="w-4 h-4 text-gray-400" %} API key
     </h2>
-    <form data-ajax method="post" action="/email/keys/create/" data-confirm="Regenerate the API key? The current key stops working immediately." data-confirm-label="Regenerate">
+    <form method="post" action="/email/keys/create/" hx-confirm="Regenerate the API key? The current key stops working immediately." hx-confirm-label="Regenerate"
+          hx-post="/email/keys/create/" hx-swap="none">
       {% csrf_token %}
       <button class="btn btn-ghost btn-sm" type="submit">Regenerate</button>
     </form>

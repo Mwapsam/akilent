@@ -2,7 +2,9 @@
 loop and returned by AJAX create/check/toggle. Needs: d, is_admin.
 
 `data-domain-pending="1"` marks unverified cards for the JS auto-poll, which
-re-submits the data-dns-check form until the domain verifies itself.{% endcomment %}
+re-fires the data-dns-check form's hx-post until the domain verifies itself.
+That poll is silent unless the news is good, so a card that is still waiting on
+DNS does not toast every 20 seconds.{% endcomment %}
 <div id="domain-card-{{ d.pk }}" class="card card-pad"{% if not d.is_verified %} data-domain-pending="1"{% endif %}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
@@ -16,22 +18,25 @@ re-submits the data-dns-check form until the domain verifies itself.{% endcommen
       {% if is_admin %}<p class="text-xs text-gray-400 mt-1">{{ d.account.company_name }}</p>{% endif %}
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
-      <form data-ajax data-dns-check data-auto method="post" action="/email/domains/{{ d.pk }}/verify/"
-            data-swap="#domain-card-{{ d.pk }}">
+      <form data-dns-check method="post" action="/email/domains/{{ d.pk }}/verify/"
+            hx-post="/email/domains/{{ d.pk }}/verify/"
+            hx-target="#domain-card-{{ d.pk }}" hx-swap="outerHTML">
         {% csrf_token %}
         <button class="btn btn-secondary btn-sm" type="submit">
           {% include "components/icon.html" with name="refresh" class="w-4 h-4" %}
           {% if d.is_verified %}Re-check DNS{% else %}Check DNS{% endif %}
         </button>
       </form>
-      <form data-ajax method="post" action="/email/domains/{{ d.pk }}/toggle/"
-            data-swap="#domain-card-{{ d.pk }}">
+      <form method="post" action="/email/domains/{{ d.pk }}/toggle/"
+            hx-post="/email/domains/{{ d.pk }}/toggle/"
+            hx-target="#domain-card-{{ d.pk }}" hx-swap="outerHTML">
         {% csrf_token %}
         <button class="btn btn-ghost btn-sm" type="submit">{% if d.is_active %}Disable{% else %}Enable{% endif %}</button>
       </form>
-      <form data-ajax method="post" action="/email/domains/{{ d.pk }}/delete/"
-            data-confirm="Delete {{ d.domain }}? It will stop sending and its DNS records are removed."
-            data-confirm-danger data-confirm-label="Delete">
+      <form method="post" action="/email/domains/{{ d.pk }}/delete/"
+            hx-post="/email/domains/{{ d.pk }}/delete/" hx-swap="none"
+            hx-confirm="Delete {{ d.domain }}? It will stop sending and its DNS records are removed."
+            hx-confirm-danger hx-confirm-label="Delete">
         {% csrf_token %}
         <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Delete {{ d.domain }}">
           {% include "components/icon.html" with name="trash" class="w-4 h-4" %}
@@ -59,11 +64,15 @@ re-submits the data-dns-check form until the domain verifies itself.{% endcommen
         </p>
       {% endif %}
       <div class="flex items-center gap-1.5 mt-2">
-        <form data-ajax method="post" action="/email/smtp/{{ cred.pk }}/rotate/" data-confirm="Rotate this SMTP password? The old one stops working immediately." data-confirm-label="Rotate">
+        <form method="post" action="/email/smtp/{{ cred.pk }}/rotate/"
+              hx-post="/email/smtp/{{ cred.pk }}/rotate/" hx-swap="none"
+              hx-confirm="Rotate this SMTP password? The old one stops working immediately." hx-confirm-label="Rotate">
           {% csrf_token %}
           <button class="btn btn-ghost btn-sm" type="submit">Rotate</button>
         </form>
-        <form data-ajax method="post" action="/email/smtp/{{ cred.pk }}/revoke/" data-confirm="Revoke SMTP relay access for {{ cred.username }}?" data-confirm-danger data-confirm-label="Revoke">
+        <form method="post" action="/email/smtp/{{ cred.pk }}/revoke/"
+              hx-post="/email/smtp/{{ cred.pk }}/revoke/" hx-swap="none"
+              hx-confirm="Revoke SMTP relay access for {{ cred.username }}?" hx-confirm-danger hx-confirm-label="Revoke">
           {% csrf_token %}
           <button class="btn btn-danger-ghost btn-sm" type="submit">Revoke</button>
         </form>

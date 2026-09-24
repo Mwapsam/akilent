@@ -353,9 +353,10 @@
           {% endif %}
         </dl>
       </div>
-      <form data-ajax method="post" action="/whatsapp/numbers/{{ n.pk }}/delete/"
-            data-confirm="Disconnect this WhatsApp number? It stops sending and receiving immediately."
-            data-confirm-danger data-confirm-label="Disconnect">
+      <form method="post" action="/whatsapp/numbers/{{ n.pk }}/delete/"
+            hx-confirm="Disconnect this WhatsApp number? It stops sending and receiving immediately."
+            hx-confirm-danger hx-confirm-label="Disconnect"
+            hx-post="/whatsapp/numbers/{{ n.pk }}/delete/" hx-swap="none">
         {% csrf_token %}
         <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Disconnect number">
           {% include "components/icon.html" with name="trash" class="w-4 h-4" %}

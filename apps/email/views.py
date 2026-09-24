@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.models import Account
-from apps.accounts.utils import get_current_account, is_ajax
+from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
 from apps.email import dnscheck
 from apps.email.verification import refresh_domain
 from apps.email.models import (
@@ -203,7 +203,7 @@ def domain_create(request):
     detail_url = reverse("email-domain-detail", args=[record.pk])
     messages.add_message(request, _MSG_LEVEL[kind], message)
     if ajax:
-        return JsonResponse({"redirect": detail_url})
+        return ajax_redirect(detail_url)
     return redirect(detail_url)
 
 
@@ -296,7 +296,7 @@ def domain_delete(request, pk):
     record.delete()
     messages.success(request, f"{domain_name} deleted.")
     if ajax:
-        return JsonResponse({"redirect": reverse("email-domains")})
+        return ajax_redirect(reverse("email-domains"))
     return redirect("email-domains")
 
 
@@ -371,7 +371,7 @@ def smtp_rotate(request, pk):
         messages.success(request, "SMTP relay password rotated — copy it now, it won't be shown again.")
 
     if is_ajax(request):
-        return JsonResponse({"redirect": detail_url})
+        return ajax_redirect(detail_url)
     return redirect(detail_url)
 
 
@@ -392,7 +392,7 @@ def smtp_revoke(request, pk):
         messages.error(request, f"Could not revoke SMTP relay credential: {exc}")
 
     if is_ajax(request):
-        return JsonResponse({"redirect": detail_url})
+        return ajax_redirect(detail_url)
     return redirect(detail_url)
 
 

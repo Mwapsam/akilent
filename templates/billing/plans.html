@@ -83,7 +83,8 @@
           {% elif subscription.fw_subscription_id %}Recurring monthly billing via Flutterwave.
           {% else %}Billed {{ subscription.get_billing_period_display|lower }}.{% endif %}
         </p>
-        <form method="post" action="{% url 'billing:cancel' %}" data-ajax data-confirm="Cancel your subscription? Recurring billing will stop." data-confirm-danger>
+        <form method="post" action="{% url 'billing:cancel' %}" hx-confirm="Cancel your subscription? Recurring billing will stop." hx-confirm-danger
+              hx-post="{% url 'billing:cancel' %}" hx-swap="none">
           {% csrf_token %}
           <button class="btn btn-danger-ghost btn-sm" type="submit">Cancel subscription</button>
         </form>
@@ -353,7 +354,8 @@
             {% csrf_token %}
             <button class="btn btn-ghost btn-sm" type="submit">{% if plan.is_active %}Deactivate{% else %}Activate{% endif %}</button>
           </form>
-          <form method="post" action="{% url 'billing:plan-delete' plan.pk %}" data-ajax data-confirm="Delete package {{ plan.name|escapejs }}? This cannot be undone." data-confirm-danger>
+          <form method="post" action="{% url 'billing:plan-delete' plan.pk %}" hx-confirm="Delete package {{ plan.name|escapejs }}? This cannot be undone." hx-confirm-danger
+                hx-post="{% url 'billing:plan-delete' plan.pk %}" hx-swap="none">
             {% csrf_token %}
             <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Delete {{ plan.name }}">
               {% include "components/icon.html" with name="trash" class="w-4 h-4" %}

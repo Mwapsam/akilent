@@ -171,3 +171,27 @@ def test_send_test_requires_content(client, account, bulk_plan, verified_domain)
     )
     assert resp.status_code == 400
     assert "subject" in resp.json()["error"].lower()
+
+
+@pytest.mark.django_db
+def test_campaign_requires_a_postal_address(client, account, bulk_plan, verified_domain):
+    """Every marketing email must carry the sender's physical address.
+
+    Without one on the Account there is nothing to render into the footer, so
+    the campaign is refused at creation rather than sent non-compliant.
+    """
+    account.address_line1 = ""
+    account.save(update_fields=["address_line1"])
+
+    client.force_login(account.owner)
+    resp = client.post("/email/campaigns/create/", {
+        "mode": "text",
+        "from_email": "hello@mail.acme.com",
+        "subject": "Hi",
+        "text_body": "Hello",
+        "recipients_text": "ada@example.com",
+    })
+
+    assert resp.status_code == 400
+    assert b"mailing address" in resp.content
+    assert not BulkEmailCampaign.objects.exists()

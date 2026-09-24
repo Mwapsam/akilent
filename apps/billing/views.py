@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from apps.accounts.utils import get_current_account, is_ajax
+from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
 from apps.core.models import SiteSettings
 from .models import ManualPaymentRequest, Plan, PaymentMethod, ProcessedWebhookEvent, Subscription, UsageSummary
 from .flutterwave import FlutterwaveError, get_fw_client
@@ -345,7 +345,7 @@ def _back_to_plans(request):
     return the JSON {redirect} shape app.js turns into a real navigation. The
     queued flash message is then shown by that fresh page load."""
     if is_ajax(request):
-        return JsonResponse({"redirect": "/billing/plans/"})
+        return ajax_redirect("/billing/plans/")
     return redirect("/billing/plans/")
 
 

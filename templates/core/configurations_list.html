@@ -82,9 +82,9 @@
                     <form method="post"
                           action="{% url 'core:delete-configuration' configuration.pk %}"
                           class="inline"
-                          data-ajax
-                          data-confirm="Delete this configuration?"
-                          data-confirm-danger>
+                          hx-confirm="Delete this configuration?"
+                          hx-confirm-danger
+                          hx-post="{% url 'core:delete-configuration' configuration.pk %}" hx-swap="none">
                       {% csrf_token %}
 
                       <button type="submit"
