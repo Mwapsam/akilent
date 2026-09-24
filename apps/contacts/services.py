@@ -11,7 +11,15 @@ from apps.contacts.models import Contact, ContactEvent, ContactImport
 
 logger = logging.getLogger(__name__)
 
+# Email engagement, which also fires the matching ``email.*`` workflow trigger.
 _ENGAGEMENT_EVENTS = {"opened", "clicked"}
+
+# Anything that means "we heard from this customer", whatever the channel. This
+# is what stamps ``last_engaged_at``, and therefore what the ``last_engaged_days``
+# segment field (apps.contacts.segments) measures. A customer who replies on
+# WhatsApp is plainly engaged, so keeping this to email opens would make
+# "hasn't replied in three days" wrong for every WhatsApp-first business.
+_ACTIVITY_EVENTS = _ENGAGEMENT_EVENTS | {"message_received"}
 
 
 def _normalize_phone_soft(raw: str) -> str:
@@ -128,9 +136,10 @@ def record_contact_event(contact: Contact, event_type: str, *, occurred_at=None,
     )
     kind = event_type.split(".")[-1]  # "email.opened" -> "opened"
     updates = []
-    if kind in _ENGAGEMENT_EVENTS:
+    if kind in _ACTIVITY_EVENTS:
         contact.last_engaged_at = ev.occurred_at
         updates.append("last_engaged_at")
+    if kind in _ENGAGEMENT_EVENTS:
         _trigger_workflows(contact, f"email.{kind}", {"event": data or {}})
     if kind == "unsubscribed" and contact.status != Contact.Status.UNSUBSCRIBED:
         contact.status = Contact.Status.UNSUBSCRIBED

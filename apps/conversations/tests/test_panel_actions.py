@@ -1,5 +1,5 @@
-"""The conversation side panel's three commercial actions, driven exactly as
-the template submits them: set a follow-up, create a lead, create an order.
+"""The conversation side panel's engagement actions, driven exactly as the
+template submits them: set a follow-up, track an interested customer.
 
 These are the paths a pilot agent uses all day, so they're covered end to end
 (button renders -> form posts -> record exists -> agent lands back in the
@@ -66,24 +66,34 @@ def conversation_without_a_lead(logged_in):
 
 
 @pytest.mark.django_db
-def test_panel_renders_all_three_actions(logged_in, conversation_without_a_lead):
+def test_panel_renders_the_engagement_actions(logged_in, conversation_without_a_lead):
     client, _, _ = logged_in
     body = client.get(f"/inbox/{conversation_without_a_lead.public_id}/").content.decode()
-    assert "Create lead" in body
-    assert "Create order" in body
+    assert "Track as interested" in body
     assert "Set reminder" in body
+
+
+@pytest.mark.django_db
+def test_panel_does_not_offer_orders(logged_in, conversation_without_a_lead):
+    """Orders are out of the near-term product. A new account has commerce off,
+    and the conversation panel no longer offers it at all — the decisions here
+    are about the customer, not about taking money."""
+    client, _, _ = logged_in
+    body = client.get(f"/inbox/{conversation_without_a_lead.public_id}/").content.decode()
+    assert "Create order" not in body
+    assert "chat-new-order" not in body
 
 
 @pytest.mark.django_db
 def test_panel_shows_the_open_lead_instead_of_offering_another(logged_in, conversation):
     """The counterpart: this conversation opened with "How much for the blue
-    dress?", so capture_opportunity already banked the opportunity. Offering
-    "Create lead" here would invite a second lead for one customer, which the
+    dress?", so capture_opportunity already banked the opportunity. Offering to
+    track them again would invite a second lead for one customer, which the
     service explicitly refuses to create."""
     client, _, _ = logged_in
     body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
-    assert "Open lead" in body
-    assert "Create lead" not in body
+    assert "Where they stand" in body
+    assert "Track as interested" not in body
 
 
 @pytest.mark.django_db
@@ -119,19 +129,3 @@ def test_create_lead_from_the_panel(logged_in, conversation):
     assert resp["Location"] == f"/inbox/{conversation.public_id}/"
     lead = Lead.objects.get(account=account, contact=conversation.contact)
     assert lead.source == "conversation"
-
-
-@pytest.mark.django_db
-def test_create_order_from_the_panel(logged_in, conversation):
-    from apps.commerce.models import Order
-
-    client, account, _ = logged_in
-    resp = client.post("/orders/create/", {
-        "contact": conversation.contact.phone,
-        "next": f"/inbox/{conversation.public_id}/",
-        "name": "Blue dress", "unit_price": "250", "quantity": "1", "currency": "ZMW",
-    })
-    assert resp.status_code == 302
-    assert resp["Location"] == f"/inbox/{conversation.public_id}/"
-    order = Order.objects.get(account=account, contact=conversation.contact)
-    assert order.currency == "ZMW"

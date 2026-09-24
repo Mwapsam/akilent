@@ -1,0 +1,101 @@
+"""One-click engagement follow-ups.
+
+These are the relationship-maintenance jobs a busy owner means when they say
+"I'll get back to them" and then doesn't: check in when someone goes quiet,
+check back after they showed interest, say thank you. Each installs as a
+complete, published workflow — not a draft in an editor — because a starter
+that leaves you inside a step editor hasn't saved anyone any work.
+
+Deliberately built from primitives that already exist (``wait``, ``branch`` on
+the ``last_engaged_days`` segment field, ``send_whatsapp``), so there is no new
+engine machinery to keep correct. Two properties matter and both come from
+those primitives:
+
+* **It stops when the customer replies.** Every starter's branch asks whether
+  the customer has been quiet for the whole waiting period; an inbound message
+  stamps ``Contact.last_engaged_at`` (apps.contacts.services), so a customer
+  who wrote back yesterday is never chased today.
+* **One customer, one run.** ``enroll`` is a no-op while a run is already
+  active for the contact, so five messages in a row do not become five
+  check-ins.
+
+Each starter names a *suggested* starter template (apps.whatsapp.starter_templates)
+rather than a fixed WhatsApp template name: the owner chooses which of their
+own approved templates to send, because only Meta-approved templates can be
+sent and only the owner knows which of theirs fits.
+"""
+from __future__ import annotations
+
+_DAY = 86400
+
+ENGAGEMENT_STARTERS = [
+    {
+        "key": "quiet-customer-check-in",
+        "name": "Check in when a customer goes quiet",
+        "goal": "Nobody who asked you something gets forgotten.",
+        "explain": (
+            "Three days after a customer messages you, if you still haven't "
+            "heard from them, send a short check-in."
+        ),
+        "stop_condition": "Nothing is sent if the customer writes back first.",
+        "trigger": "conversation.message_received",
+        "quiet_days": 3,
+        "suggested_template": "checking_in",
+    },
+    {
+        "key": "interested-customer-check-back",
+        "name": "Check back after someone shows interest",
+        "goal": "Interest turns into a sale more often when someone follows up.",
+        "explain": (
+            "Two days after a customer is tracked as interested, if they've "
+            "gone quiet, ask whether they still want to go ahead."
+        ),
+        "stop_condition": "Nothing is sent if the customer writes back first.",
+        "trigger": "lead.created",
+        "quiet_days": 2,
+        "suggested_template": "still_interested",
+    },
+    {
+        "key": "thank-you-after-a-conversation",
+        "name": "Say thank you after a conversation",
+        "goal": "A customer who feels looked after comes back.",
+        "explain": (
+            "A day after a conversation ends, thank the customer for getting "
+            "in touch."
+        ),
+        "stop_condition": "Nothing is sent while the conversation is still going.",
+        "trigger": "conversation.message_received",
+        "quiet_days": 1,
+        "suggested_template": "thank_you",
+    },
+]
+
+STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
+
+
+def build_definition(starter: dict, *, template_name: str, variable_mapping: dict | None = None) -> dict:
+    """Turn a starter plus the owner's chosen template into a workflow definition.
+
+    The shape is always the same: wait out the quiet period, check the customer
+    really has been quiet, then send. The branch is what makes this safe to turn
+    on — without it the workflow would chase customers mid-conversation.
+    """
+    days = starter["quiet_days"]
+    return {
+        "trigger": {"type": starter["trigger"]},
+        "steps": [
+            {"id": "wait", "type": "wait", "seconds": days * _DAY, "next": "still_quiet"},
+            {
+                "id": "still_quiet", "type": "branch",
+                "field": "last_engaged_days", "operator": "gte", "value": days,
+                "on_true": "send", "on_false": "stop",
+            },
+            {
+                "id": "send", "type": "send_whatsapp",
+                "template": template_name,
+                "variable_mapping": variable_mapping or {},
+                "next": "stop",
+            },
+            {"id": "stop", "type": "stop"},
+        ],
+    }

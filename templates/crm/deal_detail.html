@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ deal.title }} — Sales{% endblock %}
+{% block title %}{{ deal.title }} — Interested customers{% endblock %}
 
 {% block content %}
 <div class="mb-6">
-  <a href="{% url 'crm:sales' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Sales</a>
+  <a href="{% url 'crm:sales' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Interested customers</a>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">{{ deal.title }}</h1>
   <p class="text-sm text-gray-500">
     <span class="badge {% if deal.status == 'won' %}badge-success{% elif deal.status == 'lost' %}badge-danger{% else %}badge-neutral{% endif %}">{{ deal.get_status_display }}</span>
@@ -14,13 +14,13 @@
 <div class="grid gap-6 lg:grid-cols-3">
   <section class="card card-pad text-sm space-y-2">
     <div class="flex justify-between"><span class="text-gray-500">Customer</span><span>{{ deal.contact.full_name|default:deal.contact.phone }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Value</span><span>{{ deal.currency }} {{ deal.value }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Owner</span><span>{{ deal.owner|default:"Unassigned" }}</span></div>
+    <div class="flex justify-between"><span class="text-gray-500">What it could be worth</span><span>{{ deal.currency }} {{ deal.value }}</span></div>
+    <div class="flex justify-between"><span class="text-gray-500">Looked after by</span><span>{{ deal.owner|default:"Unassigned" }}</span></div>
     <a href="{% url 'contacts:detail' deal.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 
   <section class="lg:col-span-2 card card-pad">
-    <h2 class="text-lg font-semibold text-ink mb-3">Move stage</h2>
+    <h2 class="text-lg font-semibold text-ink mb-3">Where do they stand now?</h2>
     <form method="post" class="flex flex-wrap gap-2">
       {% csrf_token %}
       <input type="hidden" name="action" value="move_stage" />

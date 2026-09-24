@@ -18,6 +18,82 @@
   </div>
 </header>
 
+{% comment %}
+  One-click engagement follow-ups. These install published and running, because
+  a starter that drops you into a step editor hasn't saved anyone any work. A
+  card that can't work says so instead of installing and failing at send time.
+{% endcomment %}
+<section class="mb-8">
+  <h2 class="text-lg font-semibold text-ink mb-1">Ready to turn on</h2>
+  <p class="text-sm text-gray-600 mb-3">Pick what should happen on its own. Each one stops as soon as the customer replies.</p>
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for starter in engagement_starters %}
+    <div class="card card-pad flex flex-col">
+      <h3 class="font-semibold text-ink">{{ starter.name }}</h3>
+      <p class="mt-1 text-sm text-gray-600">{{ starter.explain }}</p>
+      <p class="mt-2 text-xs text-gray-500">{{ starter.stop_condition }}</p>
+      <div class="mt-auto pt-3">
+        {% if starter.installed %}
+        <p class="text-sm text-success-700 flex items-center gap-1">
+          {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
+        </p>
+        <a href="{% url 'automation:editor' starter.installed.slug %}" class="text-xs text-gray-500 underline">See what it does</a>
+        {% elif approved_templates %}
+        <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">
+          Turn this on
+        </button>
+        {% else %}
+        <p class="text-sm text-gray-500">
+          Needs a message WhatsApp has approved.
+          <a href="/whatsapp/templates/new/" class="text-accent underline">Create one</a> — Akilent has a
+          ready-made "{{ starter.suggested_template }}" message you can start from.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% for starter in engagement_starters %}
+{% if not starter.installed and approved_templates %}
+{% modal starter.key title=starter.name %}
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4" x-data="{ tpl: '' }">
+    {% csrf_token %}
+    <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    <div>
+      <label class="label" for="tpl-{{ starter.key }}">Which message should go out?</label>
+      <select id="tpl-{{ starter.key }}" name="template_id" class="select" x-model="tpl" required>
+        <option value="">Choose an approved message…</option>
+        {% for t in approved_templates %}
+        <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-gray-400 mt-1">Only messages WhatsApp has approved can be sent automatically.</p>
+    </div>
+    {% for t in approved_templates %}
+      {% if t.variables %}
+      <div x-show="tpl === '{{ t.pk }}'" x-cloak class="space-y-3">
+        <p class="text-xs text-gray-500">Fill in the blanks in: "{{ t.content|truncatechars:120 }}"</p>
+        {% for v in t.variables %}
+        <div>
+          <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">{{ v }}</label>
+          <input id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ v }}" class="input" />
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm" :disabled="!tpl">Turn it on</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
+{% endfor %}
+
 {% if workflows %}
 <div class="table-wrap">
   <table class="table table--cards">

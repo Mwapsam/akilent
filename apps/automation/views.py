@@ -12,6 +12,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.automation import api as automation_api
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
@@ -40,11 +41,95 @@ def workflow_list(request):
         # note in apps.whatsapp for the same "translate once, in Python" rule.
         trigger = (wf.definition or {}).get("trigger") or {}
         wf.trigger_label = trigger_label(trigger.get("type", ""), trigger.get("name", ""))
+    engagement, approved_templates = _engagement_starters(account, workflows)
     return render(request, "automation/workflow_list.html", {
         "account": account,
         "workflows": workflows,
         "starters": list_templates(),
+        "engagement_starters": engagement,
+        "approved_templates": approved_templates,
     })
+
+
+def _engagement_starters(account, workflows):
+    """The one-click follow-up cards, each told whether it's already on.
+
+    A card that can't work is said so plainly rather than installed and left to
+    fail at send time: WhatsApp only delivers templates Meta has approved, so
+    with no approved message there is nothing to send.
+    """
+    from apps.automation.engagement_starters import ENGAGEMENT_STARTERS
+    from apps.whatsapp.models import MessageTemplate
+
+    approved = list(
+        MessageTemplate.objects.filter(
+            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        ).order_by("name")
+    )
+    installed = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED}
+    cards = [
+        {**starter, "installed": installed.get(starter["key"])}
+        for starter in ENGAGEMENT_STARTERS
+    ]
+    return cards, approved
+
+
+@login_required
+@module_required("automation")
+@require_POST
+def starter_install(request):
+    """Install an engagement follow-up in one click — published and running.
+
+    The owner picks which of their approved templates to send, because only
+    Meta-approved templates can be sent and only they know which of theirs fits.
+    Installing the same starter again updates it in place (the slug is the
+    starter key), so a second click changes the template rather than leaving two
+    workflows chasing the same customers.
+    """
+    from apps.automation.engagement_starters import STARTERS_BY_KEY, build_definition
+    from apps.whatsapp.models import MessageTemplate
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    starter = STARTERS_BY_KEY.get(request.POST.get("starter") or "")
+    if starter is None:
+        messages.error(request, "That follow-up isn't available.")
+        return redirect("automation:list")
+
+    template = MessageTemplate.objects.filter(
+        account=account, pk=request.POST.get("template_id") or 0,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    ).first()
+    if template is None:
+        messages.error(request, "Choose an approved message to send.")
+        return redirect("automation:list")
+
+    # Namespaced per template, like the conversation composer's template
+    # picker: an x-show'd field is still submitted, so an unqualified name
+    # could silently read a different template's stale value.
+    variable_mapping = {
+        var: value
+        for var in (template.variables or [])
+        if (value := (request.POST.get(f"var__{template.pk}__{var}") or "").strip())
+    }
+    missing = [var for var in (template.variables or []) if var not in variable_mapping]
+    if missing:
+        messages.error(request, "Fill in what should go in every blank of the message.")
+        return redirect("automation:list")
+
+    automation_api.upsert_published_workflow(
+        account,
+        slug=starter["key"],
+        name=starter["name"],
+        definition=build_definition(
+            starter, template_name=template.whatsapp_template_name,
+            variable_mapping=variable_mapping,
+        ),
+    )
+    messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
 
 
 @login_required

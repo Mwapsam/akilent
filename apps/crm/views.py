@@ -1,5 +1,6 @@
-"""Sales surface: a thin projection over Lead/Deal, built to the same UX
-rules as Inbox — one primary action per screen, business language ("Sales"),
+"""Interested-customers surface: a thin projection over Lead/Deal, built to the
+same UX rules as Inbox — one primary action per screen, plain language (the
+words on screen are "interested customers", not "leads" and "deals"),
 teaching empty states.
 """
 from __future__ import annotations

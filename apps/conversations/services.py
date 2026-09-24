@@ -109,8 +109,50 @@ def record_inbound_whatsapp_message(
             conversation.pk,
         )
 
+    _record_customer_activity(contact, message_log)
+    _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, message_log.content)
     return conversation
+
+
+def _record_customer_activity(contact, message_log) -> None:
+    """Put the customer's message on their own timeline, and stamp them as
+    recently engaged.
+
+    Without this a WhatsApp-first business has an empty customer history and a
+    ``last_engaged_at`` that only ever moves when someone opens an email — which
+    would make any "hasn't been in touch for N days" rule silently wrong.
+    Best-effort: the message is already recorded, and losing its timeline entry
+    must not lose the message."""
+    from apps.contacts.services import record_contact_event
+
+    try:
+        record_contact_event(
+            contact, "conversation.message_received",
+            occurred_at=message_log.timestamp,
+            data={"body": (message_log.content or "")[:280]},
+        )
+    except Exception:
+        logger.exception("could not record customer activity for contact=%s", contact.pk)
+
+
+def _clear_obsolete_followups(conversation, contact) -> None:
+    """A reminder to chase someone who has just written back is noise.
+
+    The customer replying is the thing the reminder was waiting for, so the
+    business shouldn't have to tick it off by hand. Only *due-in-the-future or
+    overdue but still open* reminders for this customer are closed; anything
+    already marked done is left alone."""
+    from apps.conversations.models import FollowUp
+
+    try:
+        open_followups = FollowUp.objects.filter(
+            account=conversation.account, contact=contact, done_at__isnull=True,
+        )
+        for followup in open_followups:
+            followup.mark_done()
+    except Exception:
+        logger.exception("could not close follow-ups for contact=%s", contact.pk)
 
 
 def record_system_message(*, account, contact, body: str, metadata: dict | None = None) -> Message | None:

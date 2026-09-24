@@ -12,7 +12,7 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Work</p>
     {% include "components/_nav_item.html" with href="/contacts/" label="Customers" icon="users" collapsible=collapsible %}
     {% if crm_enabled|default:True %}
-    {% include "components/_nav_item.html" with href="/sales/" label="Sales" icon="building" match="sales" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/sales/" label="Interested" icon="building" match="sales" collapsible=collapsible %}
     {% endif %}
     {% if commerce_enabled|default:True %}
     {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" collapsible=collapsible %}

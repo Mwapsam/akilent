@@ -244,6 +244,7 @@ def signup(request):
                     user=user, account=account, role=Membership.Role.OWNER
                 )
                 _apply_selected_plan(account, cd.get("plan"))
+                _set_default_modules(account)
 
             login(request, user, backend="apps.accounts.backends.EmailBackend")
             set_current_account(request, account)
@@ -294,6 +295,28 @@ def signup(request):
     form = SignupForm()
     config = _build_signup_wizard_config(request)
     return render(request, "accounts/signup.html", {"form": form, "wizard_config": config})
+
+
+def _set_default_modules(account):
+    """Decide which optional tools a brand-new account starts with.
+
+    Orders and payments are deliberately off for a new account: the product a
+    business meets on day one is about conversations — reply faster, remember
+    people, follow up — and an Orders tab they have no use for is a question
+    they have to answer before they can start. They can turn it on any time in
+    Settings -> Optional tools.
+
+    Only *new* accounts are touched. An existing account has no
+    ``ModuleSubscription`` row and therefore keeps commerce enabled under
+    ``module_enabled``'s "no row = enabled" rule — nothing is taken away from
+    anyone already using it.
+    """
+    from apps.billing.api import set_module_enabled
+
+    try:
+        set_module_enabled(account, "commerce", False)
+    except Exception:
+        logger.exception("could not set default modules for account %s", account.pk)
 
 
 def _apply_selected_plan(account, plan_slug):

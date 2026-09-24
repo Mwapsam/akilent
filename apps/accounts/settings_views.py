@@ -123,7 +123,8 @@ OPTIONAL_TOOLS = [
     ("crm", "Track potential sales",
      "See customers who are considering buying, and where each one stands."),
     ("commerce", "Create orders and collect payments",
-     "Turn a conversation into an order, and send a payment link."),
+     "Off unless you turn it on. Adds an Orders section for recording what a "
+     "customer bought and sending them a payment link."),
 ]
 
 

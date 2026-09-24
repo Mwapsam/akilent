@@ -137,13 +137,14 @@ def test_conversation_detail_renders_thread(logged_in, open_conversation):
 
 @pytest.mark.django_db
 def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, conversation_without_a_lead):
-    """R1.5a: the inbox side panel is the fix for the "orphaned CRM" finding —
-    a lead can be created from the conversation, and creating one returns the
-    agent to the conversation (via the hidden "next" field) rather than to Sales."""
+    """R1.5a: the conversation is the fix for the "orphaned CRM" finding — an
+    interested customer can be tracked from the conversation, and doing so
+    returns the agent to the conversation (via the hidden "next" field) rather
+    than dropping them into a separate CRM screen."""
     client, _, _ = logged_in
     resp = client.get(f"/inbox/{conversation_without_a_lead.public_id}/")
     body = resp.content.decode()
-    assert "Create lead" in body
+    assert "Track as interested" in body
     assert f'/inbox/{conversation_without_a_lead.public_id}/' in body  # the "next" hidden field
 
     create_resp = client.post("/sales/leads/create/", {
@@ -159,9 +160,9 @@ def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, conv
     lead = Lead.objects.get(contact=conversation_without_a_lead.contact)
     assert lead.source == "conversation"  # provenance, so this path is measurable later
 
-    # The panel now shows the lead exists instead of offering to create another.
+    # The panel now reports where they stand instead of offering to track them twice.
     resp = client.get(f"/inbox/{conversation_without_a_lead.public_id}/")
-    assert "Open lead" in resp.content.decode()
+    assert "Where they stand" in resp.content.decode()
 
 
 @pytest.mark.django_db
