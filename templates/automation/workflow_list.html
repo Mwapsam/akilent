@@ -38,7 +38,7 @@
           {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
         </p>
         <a href="{% url 'automation:editor' starter.installed.slug %}" class="text-xs text-gray-500 underline">See what it does</a>
-        {% elif approved_templates %}
+        {% elif approved_templates or starter.reply %}
         <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">
           Turn this on
         </button>
@@ -56,7 +56,24 @@
 </section>
 
 {% for starter in engagement_starters %}
-{% if not starter.installed and approved_templates %}
+{% if not starter.installed and starter.reply %}
+{% modal starter.key title=starter.name %}
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    <div>
+      <label class="label" for="reply-{{ starter.key }}">What should the reply say?</label>
+      <textarea id="reply-{{ starter.key }}" name="reply_text" class="textarea" rows="4" maxlength="1000" required placeholder="{{ starter.reply_hint }}"></textarea>
+      <p class="text-xs text-gray-400 mt-1">Use {first_name} to include the customer's name. It reacts to these words: {{ starter.keywords|join:", " }}. You can change them later in the editor.</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Turn it on</button>
+    </div>
+  </form>
+{% endmodal %}
+{% elif not starter.installed and approved_templates %}
 {% modal starter.key title=starter.name %}
   <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4" x-data="{ tpl: '' }">
     {% csrf_token %}

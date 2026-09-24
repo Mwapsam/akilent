@@ -40,6 +40,8 @@ _MAX_STEPS_PER_CALL = 50
 
 _STEP_TYPES = {
     "send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit",
+    # Free-text reply into the conversation that triggered the run (message triggers only).
+    "reply_text",
     # Phase 4: a generic step that calls through the shared Action Registry
     # (apps.core.actions) by name, rather than requiring a hand-written
     # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
@@ -66,6 +68,11 @@ _TRIGGER_TYPES = {
     "order.created",
     "order.paid",
 }
+
+# Triggers that carry the customer's message, so a keyword ``match`` can be applied to them.
+_MESSAGE_TRIGGERS = {"conversation.message_received", "whatsapp.received"}
+# A keyword workflow answers a repeated question once per window, not once per message.
+DEFAULT_KEYWORD_COOLDOWN_MINUTES = 60
 
 
 def validate_definition(definition: dict, account=None) -> list[dict]:
@@ -96,6 +103,18 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         _error(f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}", field="trigger.type")
     elif trig.get("type") == "business_event" and not trig.get("name"):
         _error("business_event trigger requires trigger.name", field="trigger.name")
+
+    if "match" in trig:
+        from apps.automation import keywords
+
+        if trig.get("type") not in _MESSAGE_TRIGGERS:
+            _error("trigger.match only works on a 'customer messages you' trigger", field="trigger.match")
+        else:
+            for problem in keywords.validate(trig["match"]):
+                _error(problem, field="trigger.match")
+    cooldown = trig.get("cooldown_minutes")
+    if cooldown is not None and (not isinstance(cooldown, int) or isinstance(cooldown, bool) or cooldown < 0):
+        _error("trigger.cooldown_minutes must be a whole number of minutes (0 or more)", field="trigger.cooldown_minutes")
 
     steps = definition.get("steps")
     if not isinstance(steps, list) or not steps:
@@ -177,6 +196,15 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                             f"{field_name!r} in params (or {field_name}_id)",
                             step_id=sid, field="params",
                         )
+        if step.get("type") == "reply_text":
+            if not (step.get("text") or "").strip():
+                _error(f"step {sid!r}: reply_text needs the text to send", step_id=sid, field="text")
+            if trig.get("type") != "conversation.message_received":
+                _error(
+                    f"step {sid!r}: reply_text needs the 'customer messages you' trigger, "
+                    "because it replies in that conversation",
+                    step_id=sid, field="type",
+                )
         if step.get("type") == "webhook" and not step.get("url"):
             _error(f"step {sid!r}: webhook needs a url", step_id=sid, field="url")
         if step.get("type") == "branch" and not (
@@ -365,6 +393,33 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
         link_contact=contact,
     )
     return {"outbound_message_id": msg.id}
+
+
+def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
+    """Send free text into the conversation that started this run.
+
+    Goes through the ``reply`` action, so the WhatsApp 24h window, opt-out and consent
+    checks apply exactly as they do for a human reply in the inbox. A message trigger is
+    always inside the window, which is why this needs no template.
+    """
+    from apps.conversations.models import Conversation
+    from apps.core.actions import ActionError, run_action
+
+    public_id = (run.context or {}).get("conversation_id")
+    conversation = (
+        Conversation.objects.filter(account=run.workflow.account, public_id=public_id).first()
+        if public_id else None
+    )
+    if conversation is None:
+        raise ValueError(f"reply_text step {step.get('id')!r}: this run has no conversation to reply in")
+    # Plain replace, not str.format: the text is owner-written and must not be able to
+    # reach into objects with "{contact.__class__}" style placeholders.
+    first_name = (run.contact.first_name or "").strip() or "there"
+    text = (step.get("text") or "").replace("{first_name}", first_name)
+    try:
+        return run_action("reply", {"account": run.workflow.account}, conversation=conversation, body=text)
+    except ActionError as exc:
+        raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
 
 
 def _resolve_whatsapp_template(account, name):
@@ -566,6 +621,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_webhook(run, step)
             elif stype == "action":
                 result = _run_action_step(run, step)
+            elif stype == "reply_text":
+                result = _run_reply_text(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}
@@ -668,7 +725,10 @@ def enroll_for_trigger(
     )
     n = 0
     for wf in workflows:
-        if (wf.definition or {}).get("trigger", {}).get("type") != trigger_type:
+        trigger = (wf.definition or {}).get("trigger", {})
+        if trigger.get("type") != trigger_type:
+            continue
+        if not _trigger_allows(wf, trigger, contact, context or {}):
             continue
         try:
             with transaction.atomic():
@@ -677,6 +737,27 @@ def enroll_for_trigger(
         except Exception:  # noqa: BLE001
             logger.exception("enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type)
     return n
+
+
+def _trigger_allows(workflow: Workflow, trigger: dict, contact, context: dict) -> bool:
+    """Trigger-level filters: a keyword ``match`` on the message, then a per-contact cooldown.
+
+    A trigger with neither is unaffected. The cooldown defaults to an hour for keyword
+    workflows, so a customer who sends "price?" three times gets one answer.
+    """
+    match = trigger.get("match")
+    if match:
+        from apps.automation import keywords
+
+        body = ((context or {}).get("message") or {}).get("body") or ""
+        if not keywords.matches(match, body):
+            return False
+    cooldown = trigger.get("cooldown_minutes", DEFAULT_KEYWORD_COOLDOWN_MINUTES if match else 0)
+    if cooldown:
+        since = timezone.now() - timedelta(minutes=cooldown)
+        if WorkflowRun.objects.filter(workflow=workflow, contact=contact, started_at__gte=since).exists():
+            return False
+    return True
 
 
 _RUN_DUE_BATCH = 200

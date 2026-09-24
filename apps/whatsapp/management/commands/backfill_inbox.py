@@ -1,15 +1,17 @@
-"""Project already-received WhatsApp messages into the Inbox.
+"""Project already-logged WhatsApp messages into the Inbox.
 
 Before the Inbox stopped depending on the automation-events flag, inbound
-messages were logged (MessageLog) but never appeared in the Inbox. This
-recreates those conversations. Safe to re-run; never starts Workflows.
+messages were logged (MessageLog) but never appeared in the Inbox. Outbound
+messages sent before outbound projection existed are missing too, which leaves
+answered customers looking unanswered. This recreates both, inbound first so
+outbound lands in the same conversations. Safe to re-run; never starts Workflows.
 
     python manage.py backfill_inbox [--account <id>]
 """
 from django.core.management.base import BaseCommand
 
 from apps.whatsapp.models import MessageLog
-from apps.whatsapp.tasks import project_to_inbox
+from apps.whatsapp.tasks import project_outbound_to_inbox, project_to_inbox
 
 
 class Command(BaseCommand):
@@ -35,10 +37,29 @@ class Command(BaseCommand):
                 continue
             project_to_inbox(log.account, log.contact, log.conversation, log, enroll_workflows=False)
             done += 1
+        out_done, out_skipped = self._backfill_outbound(options.get("account"))
         self.stdout.write(self.style.SUCCESS(
             f"Backfilled {done} message(s); {skipped} already in the Inbox. "
+            f"Outbound: backfilled {out_done}; {out_skipped} already in the Inbox. "
             f"Linked {contacts} WhatsApp contact(s) to Contacts."
         ))
+
+    def _backfill_outbound(self, account_id) -> tuple[int, int]:
+        from apps.conversations.models import Message
+
+        logs = MessageLog.objects.filter(direction=MessageLog.Direction.OUTBOUND).select_related(
+            "account", "contact", "conversation"
+        ).order_by("timestamp")
+        if account_id:
+            logs = logs.filter(account_id=account_id)
+        done = skipped = 0
+        for log in logs:
+            if Message.objects.filter(whatsapp_message=log).exists():
+                skipped += 1
+                continue
+            project_outbound_to_inbox(log)
+            done += 1
+        return done, skipped
 
     def _link_contacts(self, account_id) -> int:
         """Every WhatsApp identity should have a canonical Contact (phone-only is fine)."""

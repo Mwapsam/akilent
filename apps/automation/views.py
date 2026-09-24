@@ -18,9 +18,9 @@ from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 from apps.core.module_gate import module_required
 
-_STEP_TYPES = ["send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop"]
+_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "webhook", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
-                  "email.opened", "email.clicked"]
+                  "email.opened", "email.clicked", "conversation.message_received"]
 
 
 @login_required
@@ -98,6 +98,9 @@ def starter_install(request):
         messages.error(request, "That follow-up isn't available.")
         return redirect("automation:list")
 
+    if starter.get("reply"):
+        return _install_reply_starter(request, account, starter)
+
     template = MessageTemplate.objects.filter(
         account=account, pk=request.POST.get("template_id") or 0,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
@@ -127,6 +130,28 @@ def starter_install(request):
             starter, template_name=template.whatsapp_template_name,
             variable_mapping=variable_mapping,
         ),
+    )
+    messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
+
+
+_MAX_REPLY_LENGTH = 1000
+
+
+def _install_reply_starter(request, account, starter):
+    """Install a keyword auto-reply: the owner's own words, sent as a normal message."""
+    from apps.automation.engagement_starters import build_reply_definition
+
+    text = (request.POST.get("reply_text") or "").strip()
+    if not text:
+        messages.error(request, "Write the reply customers should get.")
+        return redirect("automation:list")
+    if len(text) > _MAX_REPLY_LENGTH:
+        messages.error(request, f"Keep the reply under {_MAX_REPLY_LENGTH} characters.")
+        return redirect("automation:list")
+    automation_api.upsert_published_workflow(
+        account, slug=starter["key"], name=starter["name"],
+        definition=build_reply_definition(starter, text=text),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
     return redirect("automation:list")

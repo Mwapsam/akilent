@@ -77,6 +77,32 @@
           <p class="field-error" x-show="triggerFieldError('trigger.name')" x-text="triggerFieldError('trigger.name')"></p>
         </label>
       </div>
+
+      {# Keyword filter: only for triggers that carry the customer's message. #}
+      <div class="mt-3 grid gap-3 sm:grid-cols-3" x-show="isMessageTrigger()" x-cloak>
+        <label class="text-sm sm:col-span-2">
+          <span class="text-gray-600">Only when the message has these words <span class="text-gray-400">(separate with commas; leave empty for every message)</span></span>
+          <input class="input mt-1" x-model="keywordDraft" @input="applyKeywords()" placeholder="price, pricing, cost"
+                 :class="triggerFieldError('trigger.match') && 'input-error'" />
+          <p class="field-error" x-show="triggerFieldError('trigger.match')" x-text="triggerFieldError('trigger.match')"></p>
+        </label>
+        <label class="text-sm">
+          <span class="text-gray-600">The message</span>
+          <select class="select mt-1" x-model="matchMode" @change="applyKeywords()">
+            <option value="contains">contains the word</option>
+            <option value="starts_with">starts with the word</option>
+            <option value="exact">is exactly the word</option>
+          </select>
+        </label>
+        <label class="text-sm" x-show="definition.trigger.match">
+          <span class="text-gray-600">Don't answer the same customer again for</span>
+          <div class="flex items-center gap-2 mt-1">
+            <input type="number" min="0" class="input w-24" :value="cooldownMinutes()" @input="setCooldown($event.target.value)" />
+            <span class="text-gray-500">minutes</span>
+          </div>
+          <p class="field-error" x-show="triggerFieldError('trigger.cooldown_minutes')" x-text="triggerFieldError('trigger.cooldown_minutes')"></p>
+        </label>
+      </div>
     </div>
 
     <div class="relative pl-8 ml-1">
@@ -240,6 +266,23 @@
                 </label>
               </div>
 
+              {# ---- reply_text ---- #}
+              <div class="space-y-2" x-show="step.type === 'reply_text'">
+                <label class="text-xs block">What to say
+                  <textarea class="textarea w-full mt-0.5" rows="3" x-model="step.text"
+                            placeholder="Hi {first_name}, our prices start at K50."
+                            :class="fieldError(step.id, 'text') && 'input-error'"></textarea>
+                  <span class="field-error" x-show="fieldError(step.id, 'text')" x-text="fieldError(step.id, 'text')"></span>
+                </label>
+                <p class="text-xs text-gray-400">{first_name} becomes the customer's name. Sent as a normal message, which works because they just wrote to you.</p>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
               {# ---- wait ---- #}
               <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'wait'">
                 <label class="text-xs">Seconds<input type="number" class="input input-sm w-full mt-0.5" x-model.number="step.seconds" /></label>
@@ -309,6 +352,8 @@ function workflowEditor() {
   return {
     tab: "visual",
     advanced: false,
+    keywordDraft: "",
+    matchMode: "contains",
     definition: {{ definition_json|safe }},
     stepTypes: {{ step_types|safe }},
     triggerTypes: {{ trigger_types|safe }},
@@ -343,6 +388,10 @@ function workflowEditor() {
         label: "Send WhatsApp", border: "border-l-teal-500", chip: "tone-teal",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>',
       },
+      reply_text: {
+        label: "Send a reply", border: "border-l-teal-500", chip: "tone-teal",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/>',
+      },
       wait: {
         label: "Wait", border: "border-l-brand-500", chip: "tone-brand",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
@@ -372,7 +421,34 @@ function workflowEditor() {
       if (!this.definition.trigger) this.definition.trigger = { type: "manual" };
       if (!Array.isArray(this.definition.steps)) this.definition.steps = [];
       this.deriveModes();
+      this.loadKeywords();
       this.syncToCode();
+    },
+    isMessageTrigger() {
+      return ["conversation.message_received", "whatsapp.received"].includes(this.definition.trigger.type);
+    },
+    loadKeywords() {
+      const match = this.definition.trigger.match || {};
+      this.keywordDraft = (match.any || []).join(", ");
+      this.matchMode = match.mode || "contains";
+    },
+    applyKeywords() {
+      // Empty box = every message, so the filter (and its cooldown) is removed entirely.
+      const words = this.keywordDraft.split(",").map((w) => w.trim()).filter(Boolean);
+      if (!words.length) {
+        delete this.definition.trigger.match;
+        delete this.definition.trigger.cooldown_minutes;
+        return;
+      }
+      this.definition.trigger.match = { mode: this.matchMode, any: words };
+    },
+    cooldownMinutes() {
+      const c = this.definition.trigger.cooldown_minutes;
+      return c === undefined ? 60 : c;
+    },
+    setCooldown(value) {
+      const n = parseInt(value, 10);
+      this.definition.trigger.cooldown_minutes = Number.isNaN(n) ? 60 : Math.max(0, n);
     },
     deriveModes() {
       this.definition.steps.forEach((s) => this.deriveMode(s));
@@ -421,7 +497,7 @@ function workflowEditor() {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
-    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping"],
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text"],
     hasStepLevelError(stepId) {
       return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },
@@ -474,6 +550,7 @@ function workflowEditor() {
         this.definition = JSON.parse(this.codeText);
         if (!Array.isArray(this.definition.steps)) this.definition.steps = [];
         this.deriveModes();
+        this.loadKeywords();
         this.codeError = "";
       } catch (e) { this.codeError = "Invalid JSON: " + e.message; }
     },

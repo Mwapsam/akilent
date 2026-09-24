@@ -105,7 +105,8 @@ def test_the_gallery_explains_itself_when_nothing_is_approved(logged_in):
     body = client.get(LIST_URL).content.decode()
     assert "Check in when a customer goes quiet" in body
     assert "Needs a message WhatsApp has approved" in body
-    assert "Turn this on" not in body
+    # No template picker is offered: the follow-ups that need a template can't be installed.
+    assert 'name="template_id"' not in body
 
 
 @pytest.mark.django_db
@@ -121,7 +122,7 @@ def test_the_gallery_shows_a_starter_that_is_already_on(logged_in, approved_temp
     assert "See what it does" in body
 
 
-@pytest.mark.parametrize("key", [k for k, s in STARTERS_BY_KEY.items() if not s.get("welcome")])
+@pytest.mark.parametrize("key", [k for k, s in STARTERS_BY_KEY.items() if "quiet_days" in s])
 def test_every_starter_waits_then_checks_the_customer_is_still_quiet(key):
     """The branch is what makes these safe to turn on — without it they would
     message customers who are mid-conversation."""
@@ -252,3 +253,65 @@ def test_welcome_is_sent_to_a_whatsapp_enquirer_but_not_an_imported_contact(logg
     imported = Contact.objects.create(account=account, phone="+260972222222", source="import")
     assert "send" in _sent_step_ids(enroll(workflow, enquirer))
     assert "send" not in _sent_step_ids(enroll(workflow, imported))
+
+
+# --- keyword reply starters -------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_keyword_reply_installs_without_any_approved_template(logged_in):
+    """These reply inside the 24h window, so no Meta-approved template is involved."""
+    client, account = logged_in
+    body = client.get(LIST_URL).content.decode()
+    assert "Answer pricing questions" in body and 'name="reply_text"' in body
+
+    resp = client.post(INSTALL_URL, {"starter": "answer-pricing-questions", "reply_text": "Prices start at K50."})
+    assert resp.status_code == 302
+    workflow = Workflow.objects.get(account=account, slug="answer-pricing-questions")
+    assert workflow.status == Workflow.Status.PUBLISHED
+    assert not validate_definition(workflow.definition, account=account)
+    trigger = workflow.definition["trigger"]
+    assert trigger["type"] == "conversation.message_received"
+    assert "price" in trigger["match"]["any"] and trigger["cooldown_minutes"] == 60
+    assert workflow.definition["steps"][0]["text"] == "Prices start at K50."
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("text", ["", "   ", "x" * 1001])
+def test_a_keyword_reply_needs_sensible_text(logged_in, text):
+    client, account = logged_in
+    client.post(INSTALL_URL, {"starter": "answer-pricing-questions", "reply_text": text})
+    assert not Workflow.objects.filter(account=account, slug="answer-pricing-questions").exists()
+
+
+@pytest.mark.django_db
+def test_an_installed_keyword_reply_shows_as_on_and_updates_in_place(logged_in):
+    client, account = logged_in
+    for text in ("First answer", "Second answer"):
+        client.post(INSTALL_URL, {"starter": "greet-hello", "reply_text": text})
+    assert Workflow.objects.filter(account=account, slug="greet-hello").count() == 1
+    assert "See what it does" in client.get(LIST_URL).content.decode()
+
+
+@pytest.mark.django_db
+def test_an_installed_keyword_reply_answers_end_to_end(logged_in):
+    """Through the real trigger path: a matching message gets one reply, another does not."""
+    from apps.conversations.models import Conversation
+    from apps.whatsapp.models import Conversation as WhatsAppConversation
+    from apps.whatsapp.models import OutboundMessage, WhatsAppContact
+
+    client, account = logged_in
+    client.post(INSTALL_URL, {"starter": "answer-where-are-you", "reply_text": "Cairo Road, Lusaka."})
+    contact = Contact.objects.create(account=account, phone="+260971234567", source="whatsapp")
+    wa = WhatsAppContact.objects.create(account=account, phone_number="+260971234567", contact=contact)
+    conversation = Conversation.get_or_create_for_whatsapp(WhatsAppConversation.get_or_open(wa))
+
+    from apps.automation.workflow_engine import enroll_for_trigger
+
+    def customer_says(body):
+        return enroll_for_trigger(account.id, "conversation.message_received", contact, context={
+            "conversation_id": conversation.public_id, "message": {"body": body, "type": "text"}})
+
+    assert customer_says("Hello, where are you located?") == 1
+    assert customer_says("What time do you open?") == 0
+    assert [m.payload["body"] for m in OutboundMessage.objects.all()] == ["Cairo Road, Lusaka."]

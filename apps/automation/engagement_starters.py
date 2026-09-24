@@ -83,7 +83,65 @@ ENGAGEMENT_STARTERS = [
     },
 ]
 
+# Keyword auto-replies. Unlike the follow-ups above these need no approved template: the
+# customer has just written, so a plain message is allowed (WhatsApp's 24-hour window). The
+# owner supplies the answer; the keywords are a starting point they can edit afterwards.
+_REPLY_STARTERS = [
+    {
+        "key": "answer-pricing-questions",
+        "name": "Answer pricing questions",
+        "goal": "Someone asking the price gets an answer straight away, not tomorrow.",
+        "explain": "When a message asks about price, cost or pricing, reply with your prices.",
+        "stop_condition": "Answers the same customer at most once an hour.",
+        "mode": "contains",
+        "keywords": ["price", "prices", "pricing", "cost", "how much"],
+        "reply_hint": "Our prices start at K50. Tell us what you need and we'll send an exact quote.",
+    },
+    {
+        "key": "answer-where-are-you",
+        "name": "Answer location questions",
+        "goal": "Customers find you without waiting for someone to reply.",
+        "explain": "When a message asks where you are, reply with your address and directions.",
+        "stop_condition": "Answers the same customer at most once an hour.",
+        "mode": "contains",
+        "keywords": ["where", "location", "address", "directions"],
+        "reply_hint": "We're at Plot 12, Cairo Road, Lusaka. Open 8am to 5pm, Monday to Saturday.",
+    },
+    {
+        "key": "greet-hello",
+        "name": "Greet people who say hello",
+        "goal": "Nobody who says hi is met with silence.",
+        "explain": "When a message starts with hello, hi or hey, send a friendly greeting.",
+        "stop_condition": "Answers the same customer at most once an hour.",
+        "mode": "starts_with",
+        "keywords": ["hello", "hi", "hey", "good morning", "good afternoon"],
+        "reply_hint": "Hi {first_name}, thanks for getting in touch. How can we help?",
+    },
+]
+for _starter in _REPLY_STARTERS:
+    _starter.update({
+        "trigger": "conversation.message_received",
+        "reply": True,
+        "suggested_template": "",
+    })
+ENGAGEMENT_STARTERS.extend(_REPLY_STARTERS)
+
 STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
+
+
+def build_reply_definition(starter: dict, *, text: str) -> dict:
+    """A keyword auto-reply: when the message matches, answer once, then stop."""
+    return {
+        "trigger": {
+            "type": starter["trigger"],
+            "match": {"mode": starter["mode"], "any": list(starter["keywords"])},
+            "cooldown_minutes": 60,
+        },
+        "steps": [
+            {"id": "reply", "type": "reply_text", "text": text, "next": "stop"},
+            {"id": "stop", "type": "stop"},
+        ],
+    }
 
 
 def build_definition(starter: dict, *, template_name: str, variable_mapping: dict | None = None) -> dict:

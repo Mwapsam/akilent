@@ -84,6 +84,17 @@ class AutoReplyTest(Base):
         self.assertEqual((test.status, test.recipient), ("sent", PHONE))
         self.assertIsNotNone(self.number.last_successful_test())
 
+    def test_the_confirmation_is_logged_and_answers_the_customer_in_the_inbox(self):
+        from apps.conversations.models import Conversation as Spine
+        from apps.conversations.state import get_conversation_state
+
+        with self._ok():
+            self.receive()
+        out = MessageLog.objects.get(direction="out")
+        self.assertEqual((out.message_id, out.content, out.status), ("wamid.out", AUTO_REPLY_BODY, "sent"))
+        snapshot = get_conversation_state(Spine.objects.get())
+        self.assertFalse(snapshot.needs_attention)  # the setup message is not left "waiting"
+
     def test_only_replies_once_during_setup(self):
         with self._ok() as send:
             self.receive(msg_id="wamid.1")

@@ -154,11 +154,34 @@ def _auto_reply_during_setup(phone_number_id: str, contact) -> None:
     Never lets a failure here fail (and retry) the inbound event itself.
     """
     try:
-        from apps.whatsapp.verification import maybe_auto_reply
+        from apps.whatsapp.verification import AUTO_REPLY_BODY, maybe_auto_reply
 
-        maybe_auto_reply(get_number_for_webhook(phone_number_id), contact.phone_number)
+        result = maybe_auto_reply(get_number_for_webhook(phone_number_id), contact.phone_number)
+        if result and result.get("ok") and result.get("message_id"):
+            _log_setup_reply(contact, result["message_id"], AUTO_REPLY_BODY)
     except Exception as exc:
         logger.warning("auto-reply during setup failed for %s: %s", phone_number_id, exc)
+
+
+def _log_setup_reply(contact, message_id: str, body: str) -> None:
+    """Record the setup confirmation as a real outbound message.
+
+    It is sent straight to the provider, so without this the inbox would show the owner's
+    test message as unanswered forever (and Missed recovery would remind the team about it).
+    Logging it, then projecting like any other outbound, keeps the conversation truthful.
+    """
+    log = MessageLog.objects.create(
+        account=contact.account,
+        conversation=Conversation.get_or_open(contact),
+        contact=contact,
+        direction=MessageLog.Direction.OUTBOUND,
+        message_type=MessageLog.MessageType.TEXT,
+        message_id=message_id,
+        content=body,
+        status=MessageLog.Status.SENT,
+        timestamp=timezone.now(),
+    )
+    project_outbound_to_inbox(log)
 
 
 def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *, enroll_workflows: bool):

@@ -31,8 +31,9 @@ def evaluate_conditions(rule: AutomationRule, context: dict) -> bool:
         actual = context.get(key)
         if actual is None:
             return False
-        if isinstance(expected, str) and expected.lower() not in str(actual).lower():
-            return False
+        if isinstance(expected, str):
+            if expected.lower() not in str(actual).lower():
+                return False
         elif expected != actual:
             return False
 
