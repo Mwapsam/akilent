@@ -62,15 +62,15 @@
     {% endif %}
 
     <h2 class="text-lg font-semibold text-ink mt-5 mb-3">Webhook deliveries</h2>
-    <table class="table text-xs">
+    <table class="table table--cards text-xs">
       <tbody>
         {% for d in webhook_deliveries %}
         <tr>
-          <td class="py-1.5">{{ d.event_type }}</td>
-          <td class="py-1.5">{{ d.get_status_display }}</td>
-          <td class="py-1.5">{{ d.response_code|default:"—" }}</td>
-          <td class="py-1.5 text-gray-400">{{ d.attempt_count }} attempt(s)</td>
-          <td class="py-1.5 text-right">
+          <td data-label="Event" class="py-1.5">{{ d.event_type }}</td>
+          <td data-label="Status" class="py-1.5">{{ d.get_status_display }}</td>
+          <td data-label="Response" class="py-1.5">{{ d.response_code|default:"—" }}</td>
+          <td data-label="Attempts" class="py-1.5 text-gray-400">{{ d.attempt_count }} attempt(s)</td>
+          <td data-label="Action" class="py-1.5 text-right">
             <form method="post" action="/email/webhooks/deliveries/{{ d.pk }}/resend/">
               {% csrf_token %}
               <input type="hidden" name="next" value="/logs/messages/{{ msg.public_id }}/" />

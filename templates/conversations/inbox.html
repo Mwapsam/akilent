@@ -22,39 +22,24 @@
   </div>
 </header>
 
-<div id="inbox-body" data-feed-url="{% url 'conversations:inbox_feed' %}">
+{% comment %}
+  Live refresh, driven by HTMX rather than a bespoke fetch loop.
+
+  The trigger filter skips a poll when the tab is hidden (no work in a
+  background tab) and when focus is inside the list - re-writing the DOM under a
+  keyboard user would throw their focus away every 8 seconds.
+
+  The server answers 204 when the rendered list is byte-identical to the digest
+  we send back in ?h=, and HTMX swaps nothing on a 204. after-request stores the
+  new digest so the next poll can be compared against it.
+{% endcomment %}
+<div id="inbox-body"
+     data-hash=""
+     hx-get="{% url 'conversations:inbox_feed' %}?view={{ view|urlencode }}&channel={{ channel|urlencode }}"
+     hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))]"
+     hx-swap="innerHTML"
+     hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
+     hx-on::after-request="if (event.detail.xhr.status === 200) this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''">
   {% include "conversations/_inbox_body.html" %}
 </div>
-
-<script>
-  // Live refresh: re-render the tabs + list every few seconds while the tab is visible.
-  (() => {
-    const box = document.getElementById('inbox-body');
-    let interval = 8000, timer = null;
-    const schedule = (d) => { clearTimeout(timer); timer = setTimeout(poll, d ?? interval); };
-    async function poll() {
-      if (document.hidden) return;
-      try {
-        const r = await fetch(box.dataset.feedUrl + window.location.search, {
-          credentials: 'same-origin',
-          headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
-        });
-        if (!r.ok) throw new Error(r.status);
-        const { html } = await r.json();
-        if (html.trim() !== box.innerHTML.trim()) {
-          const top = window.scrollY;
-          box.innerHTML = html;
-          window.scrollTo({ top });
-        }
-        interval = 8000;
-      } catch (e) {
-        interval = Math.min(interval * 2, 60000);
-      } finally {
-        schedule();
-      }
-    }
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(0); });
-    schedule();
-  })();
-</script>
 {% endblock %}

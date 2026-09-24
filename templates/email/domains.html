@@ -127,21 +127,21 @@
 <div class="mt-8">
   <h2 class="font-semibold mb-3">Recent sends</h2>
   <div class="table-wrap">
-    <table class="table">
+    <table class="table table--cards">
       <thead><tr>
         <th>To</th><th>Subject</th><th>Status</th><th>When</th>
       </tr></thead>
       <tbody>
         {% for m in recent %}
           <tr>
-            <td>{{ m.to_email }}</td>
-            <td class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
-            <td>
+            <td data-label="To">{{ m.to_email }}</td>
+            <td data-label="Subject" class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
+            <td data-label="Status">
               {% if m.status == 'sent' %}<span class="badge badge-success">Sent</span>
               {% elif m.status == 'failed' %}<span class="badge badge-danger">Failed</span>
               {% else %}<span class="badge badge-warning">Queued</span>{% endif %}
             </td>
-            <td class="text-gray-400">{{ m.created_at|date:"M j, H:i" }}</td>
+            <td data-label="When" class="text-gray-400">{{ m.created_at|date:"M j, H:i" }}</td>
           </tr>
         {% endfor %}
       </tbody>

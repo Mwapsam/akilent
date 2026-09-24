@@ -119,3 +119,38 @@ def test_campaigns_list_shows_whatsapp_tab(logged_in, django_capture_on_commit_c
     # Email tab (default) never shows the WhatsApp row.
     resp = client.get("/email/campaigns/")
     assert "Sept promo" not in resp.content.decode()
+
+
+# --- Dead-end guards ------------------------------------------------------
+# Both selects are `required`, so a form rendered with no options could never be
+# satisfied and nothing would say why. The page already sidesteps that by
+# replacing the form with an explanation; these pin that it keeps doing so.
+
+@_wa_urls
+@pytest.mark.django_db
+def test_campaign_new_explains_a_missing_contact_list(logged_in, approved_template):
+    client, _ = logged_in
+    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert "have any customer lists yet" in body
+    assert 'href="/contacts/"' in body
+    # The unsatisfiable form must not be shown at all.
+    assert 'name="contact_list"' not in body
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_campaign_new_explains_a_missing_template(logged_in, contact_list):
+    client, _ = logged_in
+    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert "Meta-approved WhatsApp templates yet" in body
+    assert 'name="template_id"' not in body
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_campaign_new_shows_the_form_when_both_exist(logged_in, approved_template, contact_list):
+    client, _ = logged_in
+    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert 'name="contact_list"' in body
+    assert 'name="template_id"' in body
+    assert "have any customer lists yet" not in body

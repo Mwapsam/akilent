@@ -10,11 +10,12 @@
   </p>
 </header>
 
-<div class="card card-pad">
+<div class="card{% if candidates %} card-pad{% endif %}">
+  {% if candidates %}
   <form method="post" action="/whatsapp/connect/redirect/select/" class="space-y-3">
     {% csrf_token %}
     {% for candidate in candidates %}
-    <label class="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:border-brand-400">
+    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3 cursor-pointer hover:border-brand-400">
       <input type="radio" name="phone_number_id" value="{{ candidate.id }}"
              {% if forloop.first %}checked{% endif %} class="mt-1">
       <span class="min-w-0">
@@ -29,5 +30,8 @@
     {% endfor %}
     <button type="submit" class="btn btn-primary mt-2">Connect this number</button>
   </form>
+  {% else %}
+    {% include "components/empty_state.html" with icon="message-circle" title="No numbers to connect" message="Meta did not return a WhatsApp number for this account. Add one in Meta Business Manager, then start the connection again." action_url="/whatsapp/numbers/" action_label="Back to WhatsApp" %}
+  {% endif %}
 </div>
 {% endblock %}

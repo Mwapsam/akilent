@@ -159,6 +159,35 @@
   --shadow-pop: 0 4px 6px -2px rgb(14 21 38 / 0.05), 0 12px 16px -4px rgb(14 21 38 / 0.1);
   --shadow-modal: 0 8px 8px -4px rgb(14 21 38 / 0.04), 0 20px 24px -4px rgb(14 21 38 / 0.12);
 
+  /* Tinted surfaces (tiles, chips, callouts). Mixed against the surface token
+     so they follow the theme instead of staying light. */
+  --tone-brand-bg: color-mix(in srgb, var(--color-brand-500) 8%, var(--color-surface));
+  --tone-brand-border: color-mix(in srgb, var(--color-brand-500) 22%, var(--color-surface));
+  --tone-brand-fg: var(--color-brand-700);
+  --tone-brand-strong: var(--color-brand-800);
+
+  --tone-amber-bg: color-mix(in srgb, var(--color-amber-400) 14%, var(--color-surface));
+  --tone-amber-border: color-mix(in srgb, var(--color-amber-400) 34%, var(--color-surface));
+  --tone-amber-fg: var(--color-amber-800);
+  --tone-amber-strong: var(--color-amber-900);
+
+  --tone-teal-bg: color-mix(in srgb, var(--color-teal-500) 10%, var(--color-surface));
+  --tone-teal-border: color-mix(in srgb, var(--color-teal-500) 26%, var(--color-surface));
+  --tone-teal-fg: var(--color-teal-700);
+  --tone-teal-strong: var(--color-teal-800);
+
+  --tone-neutral-bg: color-mix(in srgb, var(--color-gray-500) 10%, var(--color-surface));
+  --tone-neutral-border: color-mix(in srgb, var(--color-gray-500) 24%, var(--color-surface));
+  --tone-neutral-fg: var(--color-ink-subtle);
+
+  --tone-info-bg: color-mix(in srgb, var(--color-blue-500) 10%, var(--color-surface));
+  --tone-info-border: color-mix(in srgb, var(--color-blue-500) 26%, var(--color-surface));
+  --tone-info-fg: var(--color-blue-700);
+
+  --tone-coral-bg: color-mix(in srgb, var(--color-coral-500) 10%, var(--color-surface));
+  --tone-coral-border: color-mix(in srgb, var(--color-coral-500) 26%, var(--color-surface));
+  --tone-coral-fg: var(--color-coral-600);
+
   /* Z-index layers. */
   --z-dropdown: 1000;
   --z-sticky: 1020;
@@ -225,6 +254,18 @@
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
     --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
     --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+
+    /* On dark the tint stays (it is mixed against the dark surface), but the
+       foreground has to lift off it. */
+    --tone-brand-fg: var(--color-brand-200);
+    --tone-brand-strong: #FFFFFF;
+    --tone-amber-fg: var(--color-amber-200);
+    --tone-amber-strong: var(--color-amber-100);
+    --tone-teal-fg: var(--color-teal-200);
+    --tone-teal-strong: var(--color-teal-100);
+    --tone-coral-fg: var(--color-coral-300);
+    --tone-neutral-fg: var(--color-ink-muted);
+    --tone-info-fg: var(--color-blue-200);
   }
 }
 :root[data-theme="dark"] {
@@ -240,6 +281,18 @@
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
   --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
   --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+
+  /* On dark the tint stays (it is mixed against the dark surface), but the
+     foreground has to lift off it. */
+  --tone-brand-fg: var(--color-brand-200);
+  --tone-brand-strong: #FFFFFF;
+  --tone-amber-fg: var(--color-amber-200);
+  --tone-amber-strong: var(--color-amber-100);
+  --tone-teal-fg: var(--color-teal-200);
+  --tone-teal-strong: var(--color-teal-100);
+  --tone-coral-fg: var(--color-coral-300);
+  --tone-neutral-fg: var(--color-ink-muted);
+  --tone-info-fg: var(--color-blue-200);
 }
 
 /* ---------------------------------------------------------------------------
@@ -313,7 +366,10 @@
   .btn-ghost { color: var(--color-ink-subtle); }
   .btn-ghost:hover { background-color: var(--color-hover); color: var(--color-ink); }
   .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800; } /* red-600 = coral #CC4530, AA with white */
-  .btn-danger-ghost { @apply text-red-600 hover:bg-red-50; }
+  .btn-danger-ghost {
+    @apply text-coral-600;
+  }
+  .btn-danger-ghost:hover { background-color: var(--tone-coral-bg); }
   /* Square icon-only button. */
   .btn-icon { @apply p-2 rounded-xl; }
   .btn-icon.btn-sm { @apply p-1.5 rounded-lg; }
@@ -346,7 +402,9 @@
   .chat-input { @apply flex-1 resize-none py-2.5; max-height: 9rem; }
   .chat-avatar {
     @apply inline-flex items-center justify-center shrink-0 rounded-full
-      bg-brand-100 text-brand-700 font-semibold;
+      font-semibold;
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
   }
   .chat-msg { @apply flex flex-col items-start; }
   .chat-msg--out { @apply items-end; }
@@ -359,10 +417,19 @@
   .chat-msg--out .chat-bubble { @apply bg-brand-600 text-white border-transparent; }
   .chat-msg--pending .chat-bubble { opacity: 0.6; }
   .chat-meta { @apply text-xs text-gray-600 mt-0.5 px-1; }
-  .chat-msg--failed .chat-bubble { @apply bg-red-50 text-red-900 border-red-300; }
+  .chat-msg--failed .chat-bubble {
+    background-color: var(--tone-coral-bg);
+    border-color: var(--tone-coral-border);
+    color: var(--tone-coral-fg);
+  }
   .chat-msg--failed .chat-meta { @apply text-red-700 font-medium; }
   .chat-day { @apply text-center text-xs font-medium uppercase tracking-wide text-gray-600 py-3; }
-  .chat-window-warning { @apply text-xs text-amber-800 bg-amber-50 border-t border-amber-200 px-3 py-2; }
+  .chat-window-warning {
+    @apply text-xs border-t px-3 py-2;
+    background-color: var(--tone-amber-bg);
+    border-color: var(--tone-amber-border);
+    color: var(--tone-amber-fg);
+  }
   .chat-template-picker { @apply px-3 pb-3 text-sm; }
   .chat-template-picker > summary { @apply text-xs text-brand-600 hover:text-brand-700 cursor-pointer select-none; }
   .chat-template-form { @apply mt-2 space-y-2 rounded-xl border border-border bg-surface-muted p-3; }
@@ -375,12 +442,14 @@
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
       text-xs font-medium;
   }
-  .badge-neutral { @apply bg-gray-100 text-gray-600; }
-  .badge-brand { @apply bg-brand-50 text-brand-700; }
-  .badge-success { @apply bg-green-50 text-green-800; }
-  .badge-warning { @apply bg-amber-50 text-amber-700; }
-  .badge-danger { @apply bg-red-50 text-red-700; }
-  .badge-info { @apply bg-blue-50 text-blue-700; }
+  /* Tinted via tone tokens: the raw -50/-100 ramp steps are light in both
+     themes, so a badge used to be a bright pill on the dark canvas. */
+  .badge-neutral { background-color: var(--tone-neutral-bg); color: var(--tone-neutral-fg); }
+  .badge-brand { background-color: var(--tone-brand-bg); color: var(--tone-brand-fg); }
+  .badge-success { background-color: var(--tone-teal-bg); color: var(--tone-teal-fg); }
+  .badge-warning { background-color: var(--tone-amber-bg); color: var(--tone-amber-fg); }
+  .badge-danger { background-color: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+  .badge-info { background-color: var(--tone-info-bg); color: var(--tone-info-fg); }
 
   /* Forms --------------------------------------------------------------- */
   .label { @apply block text-sm font-medium mb-1.5; color: var(--color-ink-muted); }
@@ -398,7 +467,10 @@
     background-position: right 0.75rem center;
   }
   .textarea { min-height: 6rem; resize: vertical; }
-  .input-error { @apply border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500; }
+  .input-error {
+    @apply border-coral-400 focus:ring-coral-500 focus:border-coral-500;
+    background-color: var(--tone-coral-bg);
+  }
   .help { @apply text-xs mt-1; color: var(--color-ink-subtle); }
   .field-error { @apply text-xs text-red-600 mt-1; }
 
@@ -500,7 +572,10 @@
     outline-offset: -2px;
   }
   .nav-link-active,
-  .nav-link-active:hover { @apply bg-brand-50 text-brand-700; }
+  .nav-link-active:hover {
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
+  }
   .nav-link-active:focus-visible {
     outline-color: var(--color-brand-700);
   }
@@ -537,10 +612,10 @@
     @apply flex items-start gap-3 rounded-xl border p-4 text-sm;
   }
   .alert > svg { @apply w-5 h-5 shrink-0 mt-px; }
-  .alert-info { @apply bg-blue-50 border-blue-200 text-blue-700; }
-  .alert-success { @apply bg-green-50 border-green-200 text-green-800; }
-  .alert-warning { @apply bg-amber-50 border-amber-200 text-amber-700; }
-  .alert-danger { @apply bg-red-50 border-red-200 text-red-700; }
+  .alert-info { background-color: var(--tone-info-bg); border-color: var(--tone-info-border); color: var(--tone-info-fg); }
+  .alert-success { background-color: var(--tone-teal-bg); border-color: var(--tone-teal-border); color: var(--tone-teal-fg); }
+  .alert-warning { background-color: var(--tone-amber-bg); border-color: var(--tone-amber-border); color: var(--tone-amber-fg); }
+  .alert-danger { background-color: var(--tone-coral-bg); border-color: var(--tone-coral-border); color: var(--tone-coral-fg); }
 
   /* Status indicator — dot + label for the message lifecycle
      (Draft → Scheduled → Sending → Sent / Failed / Paused). See status.html. */
@@ -613,8 +688,10 @@
   /* Avatar -------------------------------------------------------------- */
   .avatar {
     @apply inline-flex items-center justify-center shrink-0 rounded-full
-      bg-brand-100 text-brand-700 font-semibold uppercase select-none
+      font-semibold uppercase select-none
       overflow-hidden;
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
   }
   .avatar img { @apply w-full h-full object-cover; }
   .avatar-sm { @apply w-7 h-7 text-xs; }
@@ -678,6 +755,20 @@
   .stat-card-sub { @apply mt-1 text-xs; color: var(--color-ink-subtle); }
   .stat-card-icon {
     @apply shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl;
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
+  }
+  .stat-card-icon[data-tone="success"] {
+    background-color: var(--tone-teal-bg);
+    color: var(--tone-teal-fg);
+  }
+  .stat-card-icon[data-tone="warning"] {
+    background-color: var(--tone-amber-bg);
+    color: var(--tone-amber-fg);
+  }
+  .stat-card-icon[data-tone="danger"] {
+    background-color: var(--tone-coral-bg);
+    color: var(--tone-coral-fg);
   }
   .stat-card-delta { @apply inline-flex items-center gap-1 text-xs font-medium; }
   .stat-card-delta[data-dir="up"] { @apply text-teal-600; }
@@ -704,12 +795,26 @@
   }
   .work-tile-label { @apply text-xs sm:text-sm leading-snug; }
 
-  .work-tile--active { @apply bg-brand-50 border-brand-200 text-brand-700; }
-  .work-tile--active .work-tile-value { @apply text-brand-800; }
-  .work-tile--warn { @apply bg-amber-50 border-amber-200 text-amber-800; }
-  .work-tile--warn .work-tile-value { @apply text-amber-900; }
-  .work-tile--good { @apply bg-teal-50 border-teal-200 text-teal-800; }
-  .work-tile--good .work-tile-value { @apply text-teal-900; }
+  /* Tones read the tint tokens, so a tile with work in it stays legible on a
+     dark canvas instead of becoming a light patch. */
+  .work-tile--active {
+    background-color: var(--tone-brand-bg);
+    border-color: var(--tone-brand-border);
+    color: var(--tone-brand-fg);
+  }
+  .work-tile--active .work-tile-value { color: var(--tone-brand-strong); }
+  .work-tile--warn {
+    background-color: var(--tone-amber-bg);
+    border-color: var(--tone-amber-border);
+    color: var(--tone-amber-fg);
+  }
+  .work-tile--warn .work-tile-value { color: var(--tone-amber-strong); }
+  .work-tile--good {
+    background-color: var(--tone-teal-bg);
+    border-color: var(--tone-teal-border);
+    color: var(--tone-teal-fg);
+  }
+  .work-tile--good .work-tile-value { color: var(--tone-teal-strong); }
 
   /* Section that carries the page's primary answer. Slightly lifted off the
      canvas so it out-ranks the cards below it without shouting. */

@@ -38,7 +38,11 @@ hx-trigger of its own, so it loads exactly once.
       {% endif %}
     </div>
 
-    <div class="card card-pad">
+    {% comment %}
+      self-start so this hugs its content instead of stretching to match the
+      taller panel beside it - it usually holds one or two lines.
+    {% endcomment %}
+    <div class="card card-pad lg:self-start">
       <h2 class="text-lg font-semibold text-ink mb-3">Setup</h2>
       {% if attention_items %}
         <ul class="space-y-2">

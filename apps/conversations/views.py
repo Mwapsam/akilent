@@ -4,10 +4,12 @@ store. See docs/plans — "UI/UX Principle: Complex Architecture, Simple Product
 """
 from __future__ import annotations
 
+import hashlib
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -87,13 +89,33 @@ def inbox(request):
 
 @login_required
 def inbox_feed(request):
-    """Rendered inbox body (tabs + list), polled so new conversations appear live."""
+    """Rendered inbox body (tabs + list), polled so new conversations appear live.
+
+    HTMX gets the fragment itself, plus a digest of it in ``X-Inbox-Hash``. The
+    poller sends the digest it is currently showing back as ``?h=``; when they
+    match we answer 204, which HTMX treats as "swap nothing". That keeps the
+    original hand-rolled loop's most important property - an unchanged list is
+    never re-written into the DOM, so a keyboard user does not lose focus and
+    the list does not flicker every 8 seconds.
+
+    Non-HTMX callers keep the original ``{"html": ...}`` JSON shape.
+    """
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"error": "no account"}, status=403)
+
     html = render_to_string(
         "conversations/_inbox_body.html", _inbox_context(request, account), request=request
     )
+
+    if request.headers.get("HX-Request"):
+        digest = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]
+        if request.GET.get("h") == digest:
+            return HttpResponse(status=204)
+        response = HttpResponse(html)
+        response["X-Inbox-Hash"] = digest
+        return response
+
     return JsonResponse({"html": html})
 
 

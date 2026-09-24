@@ -32,6 +32,8 @@
               <td data-label="Item">{{ item.quantity }} &times; {{ item.name }}</td>
               <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
             </tr>
+            {% empty %}
+            <tr><td data-label="Item" class="text-gray-500">This order has no line items.</td></tr>
             {% endfor %}
           </tbody>
         </table>

@@ -34,6 +34,10 @@
       </form>
     {% endif %}
   </div>
+  {% empty %}
+  <div class="md:col-span-2">
+    {% include "components/empty_state.html" with icon="workflow" title="No starter automations available" message="None are published for your account yet. You can still build a workflow from scratch." action_url="/automations/" action_label="Go to automations" %}
+  </div>
   {% endfor %}
 </div>
 {% endblock %}
