@@ -506,6 +506,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.automation.tasks.run_due_workflows",
         "schedule": 60.0,  # workflow wait-timers resolve at minute granularity
     },
+    "remind-missed-conversations": {
+        "task": "apps.conversations.tasks.remind_missed_conversations",
+        "schedule": 3600.0,  # a conversation becomes "missed" at 24h; hourly is prompt enough
+    },
     "run-due-scheduled-jobs": {
         "task": "apps.scheduler.tasks.run_due_jobs",
         "schedule": 60.0,  # send-later / scheduled campaigns resolve at minute granularity
