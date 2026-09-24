@@ -39,6 +39,34 @@ def open_conversation(logged_in):
     )
 
 
+@pytest.fixture
+def conversation_without_a_lead(logged_in):
+    """Like ``open_conversation``, but opened with a question that carries no
+    buying intent, so ``capture_opportunity`` leaves it alone.
+
+    "Do you have the blue dress?" trips the "do you have" phrase in
+    apps.conversations.intent, which means the usual fixture arrives with a
+    Lead already banked — fine for most tests, but not for one about creating
+    the first one.
+    """
+    _, account, _ = logged_in
+    contact = Contact.objects.create(account=account, phone="+260979999999")
+    wa_contact = WhatsAppContact.objects.create(
+        account=account, phone_number="+260979999999", contact=contact,
+    )
+    wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
+    message_log = MessageLog.objects.create(
+        account=account, conversation=wa_conversation, contact=wa_contact,
+        message_id="wamid.NOLEAD", direction=MessageLog.Direction.INBOUND,
+        message_type=MessageLog.MessageType.TEXT, content="Are you open on Sunday?",
+        status=MessageLog.Status.DELIVERED, timestamp=timezone.now(),
+    )
+    return record_inbound_whatsapp_message(
+        contact=contact, wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation, message_log=message_log,
+    )
+
+
 @pytest.mark.django_db
 def test_inbox_lists_conversations_needing_reply(logged_in, open_conversation):
     client, _, _ = logged_in
@@ -108,31 +136,31 @@ def test_conversation_detail_renders_thread(logged_in, open_conversation):
 
 
 @pytest.mark.django_db
-def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, open_conversation):
+def test_conversation_detail_offers_create_lead_when_crm_enabled(logged_in, conversation_without_a_lead):
     """R1.5a: the inbox side panel is the fix for the "orphaned CRM" finding —
     a lead can be created from the conversation, and creating one returns the
     agent to the conversation (via the hidden "next" field) rather than to Sales."""
     client, _, _ = logged_in
-    resp = client.get(f"/inbox/{open_conversation.public_id}/")
+    resp = client.get(f"/inbox/{conversation_without_a_lead.public_id}/")
     body = resp.content.decode()
     assert "Create lead" in body
-    assert f'/inbox/{open_conversation.public_id}/' in body  # the "next" hidden field
+    assert f'/inbox/{conversation_without_a_lead.public_id}/' in body  # the "next" hidden field
 
     create_resp = client.post("/sales/leads/create/", {
-        "contact": open_conversation.contact.phone,
-        "next": f"/inbox/{open_conversation.public_id}/",
+        "contact": conversation_without_a_lead.contact.phone,
+        "next": f"/inbox/{conversation_without_a_lead.public_id}/",
         "source": "conversation",  # hidden field set by the panel's form, not typed by the agent
     })
     assert create_resp.status_code == 302
-    assert create_resp["Location"] == f"/inbox/{open_conversation.public_id}/"
+    assert create_resp["Location"] == f"/inbox/{conversation_without_a_lead.public_id}/"
 
     from apps.crm.models import Lead
 
-    lead = Lead.objects.get(contact=open_conversation.contact)
+    lead = Lead.objects.get(contact=conversation_without_a_lead.contact)
     assert lead.source == "conversation"  # provenance, so this path is measurable later
 
     # The panel now shows the lead exists instead of offering to create another.
-    resp = client.get(f"/inbox/{open_conversation.public_id}/")
+    resp = client.get(f"/inbox/{conversation_without_a_lead.public_id}/")
     assert "Open lead" in resp.content.decode()
 
 

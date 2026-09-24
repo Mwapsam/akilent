@@ -32,8 +32,32 @@
 <div id="template-editor-config" data-config='{{ builder_config }}' hidden></div>
 {% include "email/_template_settings.html" %}
 
+{% comment %}Below lg the two panes are tabs, not a stack. Stacked, they came to
+roughly 185vh of viewport on a phone — you scrolled past a full-height editor to
+reach a full-height preview — and the split gutter between them is desktop-only
+anyway. Only one pane is in the layout at a time, so the page stays one screen
+tall. At lg and up nothing changes: both panes show side by side.{% endcomment %}
+<div x-data="{ pane: 'editor' }">
+  <div class="lg:hidden inline-flex rounded-lg border border-border-strong p-0.5 mb-3"
+       role="group" aria-label="Editor or preview">
+    <button type="button" class="btn btn-sm" :class="pane === 'editor' ? 'btn-primary' : 'btn-ghost'"
+            @click="pane = 'editor'" :aria-pressed="pane === 'editor'">Editor</button>
+    <button type="button" class="btn btn-sm" :class="pane === 'preview' ? 'btn-primary' : 'btn-ghost'"
+            @click="pane = 'preview'" :aria-pressed="pane === 'preview'">Preview</button>
+  </div>
+
+{% if mode == 'blocks' %}
+  {% comment %}The block builder is drag-and-drop, which has no touch story at
+  all. Say so rather than letting someone discover it by failing to drag.{% endcomment %}
+  <p class="lg:hidden alert alert-info mb-3">
+    The drag-and-drop builder needs a mouse. On a phone you can preview this
+    template and edit its details, but arranging blocks needs a larger screen.
+  </p>
+{% endif %}
+
 <div id="editor-split" class="grid grid-cols-1 lg:grid-cols-[1fr_10px_1fr] gap-4 lg:gap-0 items-stretch mb-6">
-  <div id="editor-pane" class="card card-pad flex flex-col min-h-[65vh]">
+  <div id="editor-pane" class="card card-pad flex flex-col min-h-[65vh]"
+       :class="pane === 'editor' ? '' : 'hidden lg:flex'">
     {% if mode == 'blocks' %}
     <div id="email-builder" class="flex-1" data-config='{{ builder_config }}'></div>
     {% else %}
@@ -59,6 +83,7 @@
        aria-label="Resize editor and preview panes" tabindex="0"></div>
 
   <div id="preview-pane" class="card card-pad flex flex-col min-h-[65vh]"
+       :class="pane === 'preview' ? '' : 'hidden lg:flex'"
        x-data="{ fullscreen: false, device: 'desktop' }"
        :class="{ 'preview-fullscreen': fullscreen }"
        :role="fullscreen ? 'dialog' : 'region'"
@@ -89,6 +114,7 @@
               title="Email preview" sandbox="allow-same-origin"></iframe>
     </div>
   </div>
+</div>
 </div>
 
 <script src="{% static 'js/merge-tag-autocomplete.js' %}"></script>

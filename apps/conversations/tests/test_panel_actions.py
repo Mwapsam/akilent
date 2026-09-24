@@ -26,9 +26,13 @@ def logged_in(client, db):
     return client, account, user
 
 
-@pytest.fixture
-def conversation(logged_in):
-    _, account, _ = logged_in
+def _conversation_opening_with(account, body: str, message_id: str):
+    """A conversation whose first inbound message says ``body``.
+
+    The message matters: ``capture_opportunity`` runs on every inbound message
+    and opens a Lead when it reads buying intent, so whether a lead already
+    exists is decided entirely by this text.
+    """
     contact = Contact.objects.create(account=account, phone="+260971234567")
     wa_contact = WhatsAppContact.objects.create(
         account=account, phone_number="+260971234567", contact=contact,
@@ -36,8 +40,8 @@ def conversation(logged_in):
     wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
     log = MessageLog.objects.create(
         account=account, conversation=wa_conversation, contact=wa_contact,
-        message_id="wamid.PANEL", direction=MessageLog.Direction.INBOUND,
-        message_type=MessageLog.MessageType.TEXT, content="How much for the blue dress?",
+        message_id=message_id, direction=MessageLog.Direction.INBOUND,
+        message_type=MessageLog.MessageType.TEXT, content=body,
         status=MessageLog.Status.DELIVERED, timestamp=timezone.now(),
     )
     return record_inbound_whatsapp_message(
@@ -46,13 +50,40 @@ def conversation(logged_in):
     )
 
 
+@pytest.fixture
+def conversation(logged_in):
+    _, account, _ = logged_in
+    return _conversation_opening_with(account, "How much for the blue dress?", "wamid.PANEL")
+
+
+@pytest.fixture
+def conversation_without_a_lead(logged_in):
+    """A conversation that did *not* trip buying-intent capture, so the panel
+    still has a lead to offer. "Are you open on Sunday?" matches none of the
+    phrases in apps.conversations.intent."""
+    _, account, _ = logged_in
+    return _conversation_opening_with(account, "Are you open on Sunday?", "wamid.PANELQ")
+
+
 @pytest.mark.django_db
-def test_panel_renders_all_three_actions(logged_in, conversation):
+def test_panel_renders_all_three_actions(logged_in, conversation_without_a_lead):
     client, _, _ = logged_in
-    body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
+    body = client.get(f"/inbox/{conversation_without_a_lead.public_id}/").content.decode()
     assert "Create lead" in body
     assert "Create order" in body
     assert "Set reminder" in body
+
+
+@pytest.mark.django_db
+def test_panel_shows_the_open_lead_instead_of_offering_another(logged_in, conversation):
+    """The counterpart: this conversation opened with "How much for the blue
+    dress?", so capture_opportunity already banked the opportunity. Offering
+    "Create lead" here would invite a second lead for one customer, which the
+    service explicitly refuses to create."""
+    client, _, _ = logged_in
+    body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
+    assert "Open lead" in body
+    assert "Create lead" not in body
 
 
 @pytest.mark.django_db
