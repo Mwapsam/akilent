@@ -65,8 +65,11 @@ def record_inbound_whatsapp_message(
     ``enroll_workflows=False`` records the Inbox conversation/message without
     starting any Workflow (used when automation events are switched off).
     """
+    from apps.whatsapp.interactive import reply_for_log
+
     conversation = Conversation.get_or_create_for_whatsapp(whatsapp_conversation)
     conversation.register_inbound(message_log.timestamp)
+    reply = reply_for_log(message_log)  # a tapped button or list choice, else None
 
     message, created = Message.objects.get_or_create(
         whatsapp_message=message_log,
@@ -77,7 +80,7 @@ def record_inbound_whatsapp_message(
             "body": message_log.content,
             "timestamp": message_log.timestamp,
             "status": message_log.status,
-            "metadata": {"message_type": message_log.message_type},
+            "metadata": {"message_type": message_log.message_type, **({"reply": reply} if reply else {})},
         },
     )
     if not created:
@@ -215,19 +218,25 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
 
 
 def _enroll_workflows(conversation: Conversation, contact, message_log) -> None:
-    from apps.automation.workflow_engine import enroll_for_trigger
+    from apps.automation.workflow_engine import enroll_for_trigger, resume_on_reply
+    from apps.whatsapp.interactive import reply_for_log
+
+    message = {"body": message_log.content, "type": message_log.message_type}
+    reply = reply_for_log(message_log)
+    if reply:
+        message["reply_id"] = reply["id"]
+        message["reply_title"] = reply["title"]
+
+    # A customer answering a question an automation asked ("Prices or Booking?") continues
+    # that conversation; it must not also start unrelated keyword workflows.
+    if resume_on_reply(conversation.account_id, contact, message):
+        return
 
     enroll_for_trigger(
         conversation.account_id,
         "conversation.message_received",
         contact,
-        context={
-            "conversation_id": conversation.public_id,
-            "message": {
-                "body": message_log.content,
-                "type": message_log.message_type,
-            },
-        },
+        context={"conversation_id": conversation.public_id, "message": message},
     )
 
 

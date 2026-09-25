@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load charts %}
 {% block title %}{{ wf.name }} — Stats — Automations{% endblock %}
 
 {% block content %}
@@ -40,7 +41,7 @@
 <div class="table-wrap">
   <table class="table table--cards">
     <thead>
-      <tr><th>Step</th><th>Type</th><th>Succeeded</th><th>Failed</th></tr>
+      <tr><th>Step</th><th>Type</th><th>Succeeded</th><th>Failed</th><th>Failure rate</th></tr>
     </thead>
     <tbody>
       {% for row in step_breakdown %}
@@ -48,7 +49,22 @@
         <td data-label="Step"><code class="text-xs">{{ row.step_id }}</code></td>
         <td data-label="Type">{{ row.step_type }}</td>
         <td data-label="Succeeded" class="tabular-nums">{{ row.ok }}</td>
-        <td data-label="Failed" class="tabular-nums {% if row.error %}text-red-600 font-medium{% endif %}">{{ row.error }}</td>
+        <td data-label="Failed" class="tabular-nums {% if row.error %}text-coral-600 font-medium{% endif %}">{{ row.error }}</td>
+        {% comment %}A rate, because a raw count answers the wrong question —
+        50 failures in 10,000 runs is noise and 50 in 60 is the problem, and
+        the counts alone make the reader do that division for every row. The
+        percentage is written out beside the bar, so the ranking never depends
+        on reading bar lengths or on colour.{% endcomment %}
+        <td data-label="Failure rate">
+          <span class="flex items-center gap-2">
+            <span class="w-20 shrink-0">
+              {% if row.error_rate >= 25 %}{% meter row.error row.total label="Failure rate" tone="critical" %}
+              {% elif row.error_rate > 0 %}{% meter row.error row.total label="Failure rate" tone="warning" %}
+              {% else %}{% meter row.error row.total label="Failure rate" tone="good" %}{% endif %}
+            </span>
+            <span class="tabular-nums text-xs text-gray-600">{{ row.error_rate }}%</span>
+          </span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

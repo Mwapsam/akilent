@@ -34,6 +34,9 @@
 
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
+  {% comment %}Before Alpine, like app.js: it defines the chartHover() factory
+  that charts reference in x-data.{% endcomment %}
+  <script defer src="{% static 'js/chart-hover.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   {% block extra_head %}{% endblock %}
 </head>

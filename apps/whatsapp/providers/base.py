@@ -120,6 +120,17 @@ class WhatsAppProvider(ABC):
             WhatsAppProviderError: on network failure, etc.
         """
 
+    def send_interactive(self, to: str, interactive: dict) -> SendResult:
+        """Send an interactive message (reply buttons or a list).
+
+        Optional capability. ``interactive`` is Meta's ``interactive`` object, built by
+        ``apps.whatsapp.interactive`` (which enforces WhatsApp's limits). Like free text it is
+        only deliverable inside the 24-hour customer-service window.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support interactive messages"
+        )
+
     def list_templates(self, waba_id: str) -> list[dict]:
         """List message templates for a WhatsApp Business Account.
 

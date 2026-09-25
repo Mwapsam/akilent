@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load charts %}
 {% block title %}Insights — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
@@ -105,9 +106,19 @@
       <span class="text-2xl font-bold tabular-nums">{{ deliverability.score }}<span class="text-sm text-gray-400"> / 100</span></span>
     </div>
     <div class="px-5 sm:px-6 py-4">
-      <p class="text-sm mb-3">
-        <span class="badge {% if deliverability.score >= 90 %}badge-success{% elif deliverability.score >= 75 %}badge-info{% elif deliverability.score >= 60 %}badge-warning{% else %}badge-danger{% endif %}">{{ deliverability.grade }}</span>
-      </p>
+      <div class="mb-4">
+        <p class="text-sm mb-2">
+          <span class="badge {% if deliverability.score >= 90 %}badge-success{% elif deliverability.score >= 75 %}badge-info{% elif deliverability.score >= 60 %}badge-warning{% else %}badge-danger{% endif %}">{{ deliverability.grade }}</span>
+        </p>
+        {% comment %}One value against a limit: a meter answers "how far
+        along" at a glance, where the number alone makes the reader supply the
+        scale. The grade badge beside it carries the same information in text,
+        so the reading never depends on the bar's colour.{% endcomment %}
+        {% if deliverability.score >= 90 %}{% meter deliverability.score 100 label="Deliverability score" tone="good" %}
+        {% elif deliverability.score >= 75 %}{% meter deliverability.score 100 label="Deliverability score" tone="brand" %}
+        {% elif deliverability.score >= 60 %}{% meter deliverability.score 100 label="Deliverability score" tone="warning" %}
+        {% else %}{% meter deliverability.score 100 label="Deliverability score" tone="critical" %}{% endif %}
+      </div>
       <ul class="space-y-1.5 text-sm">
         {% for c in deliverability.checks %}
         <li class="flex items-start gap-2">
@@ -136,19 +147,13 @@
       <h2 class="font-semibold">Engagement — {{ selected }}</h2>
     </div>
     {% if stats %}
-      <div class="table-scroll">
-        <table class="table table--cards">
-          <thead><tr><th>Day</th><th>Opens</th><th>Clicks</th></tr></thead>
-          <tbody>
-            {% for s in stats %}
-              <tr>
-                <td data-label="Day" class="tabular-nums">{{ s.day|default:"—" }}</td>
-                <td data-label="Opens" class="tabular-nums">{{ s.opens|default:0 }}</td>
-                <td data-label="Clicks" class="tabular-nums">{{ s.clicks|default:0 }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      {% comment %}Opens and clicks are a trend over time, which is a line's
+      job — the table underneath it is the same numbers, kept because a chart
+      alone is unreadable to a screen reader and unusable for looking up an
+      exact figure. One y-axis for both series: they are counts of the same
+      kind, so they are honestly comparable on one scale.{% endcomment %}
+      <div class="px-5 sm:px-6 py-5">
+        {% line_chart engagement_series engagement_days unit="Day" %}
       </div>
     {% else %}
       {% include "components/empty_state.html" with icon="check-circle" title="No engagement yet" message="Open & click events appear here once tracked emails are opened." %}

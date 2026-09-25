@@ -283,6 +283,98 @@
                 </label>
               </div>
 
+              {# ---- send_buttons ---- #}
+              <div class="space-y-2" x-show="step.type === 'send_buttons'">
+                <label class="text-xs block">Question
+                  <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.text" maxlength="1024"
+                            placeholder="What do you need, {first_name}?"></textarea>
+                </label>
+                <div class="text-xs">Buttons <span class="text-gray-400">(up to 3, labels up to 20 characters)</span></div>
+                <template x-for="(b, bi) in (step.buttons || [])" :key="bi">
+                  <div class="flex items-center gap-2">
+                    <input class="input input-sm flex-1" x-model="b.title" maxlength="20" placeholder="Button label" />
+                    <button type="button" class="btn btn-danger-ghost btn-xs" @click="step.buttons.splice(bi, 1)">Remove</button>
+                  </div>
+                </template>
+                <button type="button" class="btn btn-ghost btn-xs" x-show="(step.buttons || []).length < 3"
+                        @click="step.buttons.push({ title: '' })">+ Add button</button>
+                <span class="field-error block" x-show="fieldError(step.id, 'buttons')" x-text="fieldError(step.id, 'buttons')"></span>
+                <p class="text-xs text-gray-400">Customers can tap these within 24 hours of writing to you. Use a “Wait for reply” step next to act on their choice.</p>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- send_list ---- #}
+              <div class="space-y-2" x-show="step.type === 'send_list'">
+                <label class="text-xs block">Question
+                  <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.text" maxlength="1024" placeholder="Which product are you interested in?"></textarea>
+                </label>
+                <label class="text-xs block">Button that opens the list <span class="text-gray-400">(up to 20 characters)</span>
+                  <input class="input input-sm w-full mt-0.5" x-model="step.button" maxlength="20" placeholder="See products" />
+                </label>
+                <div class="text-xs">Choices <span class="text-gray-400">(up to 10)</span></div>
+                <template x-for="(r, ri) in (step.rows || [])" :key="ri">
+                  <div class="flex items-center gap-2">
+                    <input class="input input-sm w-1/3" x-model="r.title" maxlength="24" placeholder="Choice" />
+                    <input class="input input-sm flex-1" x-model="r.description" maxlength="72" placeholder="Short description (optional)" />
+                    <button type="button" class="btn btn-danger-ghost btn-xs" @click="step.rows.splice(ri, 1)">Remove</button>
+                  </div>
+                </template>
+                <button type="button" class="btn btn-ghost btn-xs" x-show="(step.rows || []).length < 10"
+                        @click="step.rows.push({ title: '', description: '' })">+ Add choice</button>
+                <span class="field-error block" x-show="fieldError(step.id, 'rows')" x-text="fieldError(step.id, 'rows')"></span>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- wait_for_reply ---- #}
+              <div class="space-y-2" x-show="step.type === 'wait_for_reply'">
+                <p class="text-xs text-gray-500">Wait for the customer to answer, then go to the step that matches what they chose.</p>
+                <div class="text-xs">When they choose… <span class="text-gray-400">(type the button or choice name)</span></div>
+                <template x-for="(route, ri) in (step._routes || [])" :key="ri">
+                  <div class="flex items-center gap-2">
+                    <input class="input input-sm flex-1" x-model="route.key" @input="syncRoutes(step)" list="choice-names" placeholder="Prices" />
+                    <span class="text-gray-400 text-xs">→</span>
+                    <select class="select select-sm flex-1" x-model="route.target" @change="syncRoutes(step)">
+                      <option value="">— go to step —</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                    <button type="button" class="btn btn-danger-ghost btn-xs" @click="step._routes.splice(ri, 1); syncRoutes(step)">Remove</button>
+                  </div>
+                </template>
+                <datalist id="choice-names"><template x-for="c in choiceNames()" :key="c"><option :value="c"></option></template></datalist>
+                <button type="button" class="btn btn-ghost btn-xs" @click="step._routes.push({ key: '', target: '' })">+ Add choice</button>
+                <span class="field-error block" x-show="fieldError(step.id, 'routes')" x-text="fieldError(step.id, 'routes')"></span>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <label class="text-xs">Anything else →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.default">
+                      <option value="">Ignore it</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If they don't answer →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_timeout">
+                      <option value="">Stop</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">…after (hours)
+                    <input type="number" min="0.02" max="720" step="0.5" class="input input-sm w-full mt-0.5"
+                           :value="(step.timeout_seconds || 86400) / 3600"
+                           @input="step.timeout_seconds = Math.round(parseFloat($event.target.value || 24) * 3600)" />
+                    <span class="field-error" x-show="fieldError(step.id, 'timeout_seconds')" x-text="fieldError(step.id, 'timeout_seconds')"></span>
+                  </label>
+                </div>
+              </div>
+
               {# ---- add_tag / remove_tag ---- #}
               <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'add_tag' || step.type === 'remove_tag'">
                 <label class="text-xs">Tag
@@ -415,6 +507,18 @@ function workflowEditor() {
         label: "Remove tag", border: "border-l-green-500", chip: "tone-teal",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/>',
       },
+      send_buttons: {
+        label: "Send buttons", border: "border-l-teal-500", chip: "tone-teal",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6Z"/>',
+      },
+      send_list: {
+        label: "Send a list", border: "border-l-teal-500", chip: "tone-teal",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>',
+      },
+      wait_for_reply: {
+        label: "Wait for reply", border: "border-l-brand-500", chip: "tone-brand",
+        icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
+      },
       wait: {
         label: "Wait", border: "border-l-brand-500", chip: "tone-brand",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
@@ -485,9 +589,34 @@ function workflowEditor() {
     },
     deriveMode(step) {
       if (step.type === "send_email") step._mode = step.template ? "template" : "write";
+      if (step.type === "send_buttons" && !Array.isArray(step.buttons)) step.buttons = [{ title: "" }, { title: "" }];
+      if (step.type === "send_list") {
+        if (!Array.isArray(step.rows)) step.rows = [{ title: "", description: "" }];
+        if (step.button === undefined) step.button = "See options";
+      }
+      if (step.type === "wait_for_reply" && step._routes === undefined) {
+        step._routes = Object.entries(step.routes || {}).map(([key, target]) => ({ key, target }));
+        if (!step._routes.length) step._routes.push({ key: "", target: "" });
+        if (step.timeout_seconds === undefined) step.timeout_seconds = 86400;
+      }
       if (step.type === "webhook" && step._bodyText === undefined) {
         step._bodyText = Object.keys(step.body || {}).length ? JSON.stringify(step.body, null, 2) : "";
       }
+    },
+    syncRoutes(step) {
+      // The editor lists choices as rows; the definition stores them as {choice: step}.
+      const routes = {};
+      (step._routes || []).forEach((r) => { if ((r.key || "").trim()) routes[r.key.trim()] = r.target; });
+      step.routes = routes;
+    },
+    choiceNames() {
+      // Labels already offered by the buttons and lists in this workflow, to pick from.
+      const names = [];
+      this.definition.steps.forEach((s) => {
+        (s.buttons || []).forEach((b) => b.title && names.push(b.title));
+        (s.rows || []).forEach((r) => r.title && names.push(r.title));
+      });
+      return [...new Set(names)];
     },
     syncWebhookBody(step) {
       if (!step._bodyText || !step._bodyText.trim()) {
@@ -520,7 +649,7 @@ function workflowEditor() {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
-    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag"],
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag", "buttons", "rows", "routes", "timeout_seconds"],
     hasStepLevelError(stepId) {
       return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },
@@ -582,7 +711,19 @@ function workflowEditor() {
       if (this.codeError) return;
       this.busy = true;
       try {
-        const cleanSteps = this.definition.steps.map(({ _mode, _bodyText, _bodyError, ...rest }) => rest);
+        const cleanSteps = this.definition.steps.map(({ _mode, _bodyText, _bodyError, _routes, ...rest }) => {
+          // Half-filled rows are just unfinished, not mistakes worth an error.
+          if (rest.type === "send_buttons") rest.buttons = (rest.buttons || []).filter((b) => (b.title || "").trim());
+          if (rest.type === "send_list") {
+            rest.rows = (rest.rows || []).filter((r) => (r.title || "").trim())
+              .map((r) => (r.description && r.description.trim() ? r : { title: r.title }));
+          }
+          if (rest.type === "wait_for_reply") {
+            if (!rest.default) delete rest.default;
+            if (!rest.on_timeout) delete rest.on_timeout;
+          }
+          return rest;
+        });
         const r = await fetch("/automations/{{ wf.slug }}/save/", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },

@@ -121,6 +121,18 @@ _REPLY_STARTERS = [
     },
 ]
 _REPLY_STARTERS.append({
+    "key": "offer-a-menu",
+    "name": "Offer a menu when someone says hello",
+    "goal": "Customers get to what they need in one tap, without waiting for a person.",
+    "explain": (
+        "When someone says hello, ask what they need and offer up to three buttons. "
+        "Each button gets its own answer. Use this instead of the plain greeting."
+    ),
+    "stop_condition": "Asks the same customer at most once an hour, and waits a day for their tap.",
+    "menu": True,
+    "hello_words": ["hello", "hi", "hey", "good morning", "good afternoon"],
+})
+_REPLY_STARTERS.append({
     "key": "reply-when-closed",
     "name": "Reply when you're closed",
     "goal": "Customers who write after hours know when to expect an answer.",
@@ -167,6 +179,40 @@ def build_reply_definition(starter: dict, *, text: str) -> dict:
         "trigger": {
             "type": starter["trigger"],
             "match": {"mode": starter["mode"], "any": list(starter["keywords"])},
+            "cooldown_minutes": 60,
+        },
+        "steps": steps,
+    }
+
+
+def build_menu_definition(starter: dict, *, question: str, options: list[dict]) -> dict:
+    """A guided menu: greet with buttons, wait for the tap, answer it, and tag what they chose.
+
+    ``options`` is ``[{"title": "Prices", "reply": "Prices start at K50."}, ...]`` (1 to 3).
+    Each choice is tagged ``asked-<choice>`` so the owner can later see what customers want.
+    """
+    from django.utils.text import slugify
+
+    steps = [
+        {"id": "ask", "type": "send_buttons", "text": question,
+         "buttons": [{"title": o["title"]} for o in options], "next": "wait"},
+    ]
+    routes = {}
+    answers = []
+    for n, option in enumerate(options, start=1):
+        key = slugify(option["title"])[:200]
+        routes[key] = f"answer_{n}"
+        answers.append({"id": f"answer_{n}", "type": "reply_text", "text": option["reply"], "next": f"tag_{n}"})
+        answers.append({"id": f"tag_{n}", "type": "add_tag",
+                        "tag": f"asked-{slugify(option['title'])}"[:40], "next": "stop"})
+    steps.append({"id": "wait", "type": "wait_for_reply", "timeout_seconds": 86400,
+                  "routes": routes, "on_timeout": "stop"})
+    steps.extend(answers)
+    steps.append({"id": "stop", "type": "stop"})
+    return {
+        "trigger": {
+            "type": starter.get("trigger", "conversation.message_received"),
+            "match": {"mode": "starts_with", "any": list(starter["hello_words"])},
             "cooldown_minutes": 60,
         },
         "steps": steps,

@@ -151,6 +151,20 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         except (KeyError, IndexError, WhatsAppProviderError) as e:
             return self._fail(to, "text message", e)
 
+    def send_interactive(self, to: str, interactive: dict) -> SendResult:
+        """Send reply buttons or a list (Meta's ``interactive`` message)."""
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to.lstrip("+"),
+            "type": "interactive",
+            "interactive": interactive,
+        }
+        try:
+            result = self._post_message(payload)
+            return SendResult(message_id=result["messages"][0]["id"], success=True)
+        except (KeyError, IndexError, WhatsAppProviderError) as e:
+            return self._fail(to, "interactive message", e)
+
     def send_template(
         self,
         to: str,

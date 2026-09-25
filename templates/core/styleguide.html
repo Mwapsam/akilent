@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load ui %}
+{% load charts %}
 {% block title %}Style guide — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -247,6 +248,49 @@
         <span class="w-20 ml-auto"></span>
       </div>
       {% endfor %}
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-lg font-semibold text-ink mb-1">Charts</h2>
+    <p class="text-sm text-gray-500 mb-4">
+      Server-rendered SVG driven by <code class="text-xs">apps.core.charts</code>. The
+      series colours are CSS variables, so switching the theme above re-colours
+      every chart on this page with no redraw. Both palettes were validated for
+      colourblind separation and contrast against their own surface, not picked
+      by eye.
+    </p>
+
+    <div class="card card-pad mb-4">
+      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Line chart — two series</p>
+      {% line_chart styleguide_series styleguide_days unit="Day" title="Engagement" %}
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 mb-4">
+      <div class="card card-pad">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Sparkline in a stat card</p>
+        {% include "components/stat_card.html" with label="Messages sent" value="1,284" icon="inbox" trend=styleguide_trend trend_label="Messages sent per day, last 14 days" %}
+      </div>
+      <div class="card card-pad">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Flat and single-point series</p>
+        <p class="text-xs text-gray-500 mb-2">A flat series draws a straight line; one reading draws nothing.</p>
+        {% include "components/stat_card.html" with label="Steady" value="4" trend=styleguide_flat trend_label="Flat" %}
+      </div>
+    </div>
+
+    <div class="card card-pad mb-4">
+      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Meter — one value against its limit</p>
+      <div class="space-y-3 max-w-sm">
+        <div>{% meter 94 100 label="Good" tone="good" %}</div>
+        <div>{% meter 72 100 label="Brand" tone="brand" %}</div>
+        <div>{% meter 48 100 label="Warning" tone="warning" %}</div>
+        <div>{% meter 12 100 label="Critical" tone="critical" %}</div>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Stacked bar — part to whole</p>
+      <div class="max-w-md">{% stacked_bar styleguide_segments label="Step outcomes" %}</div>
     </div>
   </section>
 

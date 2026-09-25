@@ -1,0 +1,16 @@
+{% comment %}One value against its limit. Rendered by {% meter %}.
+
+A meter, not a two-slice pie: a pie of two slices makes the reader compare
+angles to answer "how far along", which a bar answers at a glance. The track is
+the same hue as the fill, so the pair reads as one scale rather than two
+categories.
+
+role="meter" with the real numbers on it, so the value is available without
+reading the geometry.{% endcomment %}
+<div class="meter" role="meter" aria-valuenow="{{ meter.value|floatformat:"-2" }}"
+     aria-valuemin="0" aria-valuemax="{{ meter.maximum|floatformat:"-2" }}"
+     {% if label %}aria-label="{{ label }}"{% endif %}>
+  <div class="meter-track">
+    <div class="meter-fill meter-fill--{{ tone }}" style="width: {{ meter.percent }}%"></div>
+  </div>
+</div>

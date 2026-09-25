@@ -18,8 +18,8 @@ from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 from apps.core.module_gate import module_required
 
-_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "add_tag", "remove_tag", "webhook", "wait", "branch",
-               "set_attribute", "stop"]
+_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "send_buttons", "send_list", "wait_for_reply",
+               "add_tag", "remove_tag", "webhook", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
                   "email.opened", "email.clicked", "conversation.message_received"]
 
@@ -99,6 +99,8 @@ def starter_install(request):
         messages.error(request, "That follow-up isn't available.")
         return redirect("automation:list")
 
+    if starter.get("menu"):
+        return _install_menu_starter(request, account, starter)
     if starter.get("reply"):
         return _install_reply_starter(request, account, starter)
 
@@ -137,6 +139,43 @@ def starter_install(request):
 
 
 _MAX_REPLY_LENGTH = 1000
+_MENU_OPTIONS = 3
+
+
+def _install_menu_starter(request, account, starter):
+    """Install a guided menu from the owner's question and up to three options with answers."""
+    from apps.automation.engagement_starters import build_menu_definition
+    from apps.whatsapp import interactive as wa_interactive
+
+    question = (request.POST.get("menu_text") or "").strip()
+    options = []
+    for n in range(1, _MENU_OPTIONS + 1):
+        title = (request.POST.get(f"opt_title_{n}") or "").strip()
+        reply = (request.POST.get(f"opt_reply_{n}") or "").strip()
+        if not title and not reply:
+            continue
+        if not title or not reply:
+            messages.error(request, f"Option {n} needs both a button label and an answer.")
+            return redirect("automation:list")
+        if len(reply) > _MAX_REPLY_LENGTH:
+            messages.error(request, f"Keep option {n}'s answer under {_MAX_REPLY_LENGTH} characters.")
+            return redirect("automation:list")
+        options.append({"title": title, "reply": reply})
+    if not options:
+        messages.error(request, "Add at least one button and its answer.")
+        return redirect("automation:list")
+    try:
+        # The same checks WhatsApp's limits imply, so a bad label is caught here in plain words.
+        wa_interactive.build_buttons(question, [{"title": o["title"]} for o in options])
+    except wa_interactive.InteractiveError as exc:
+        messages.error(request, str(exc))
+        return redirect("automation:list")
+    automation_api.upsert_published_workflow(
+        account, slug=starter["key"], name=starter["name"],
+        definition=build_menu_definition(starter, question=question, options=options),
+    )
+    messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
 
 
 def _install_reply_starter(request, account, starter):
@@ -267,12 +306,22 @@ def workflow_stats(request, slug: str):
         else:
             entry["ok"] += row["count"]
 
+    # The page's own question is "where are people dropping out", which is a
+    # rate, not a count: 50 failures out of 10,000 is noise, 50 out of 60 is
+    # the answer. Computed here so the template compares like with like.
+    breakdown = list(steps_by_id.values())
+    for entry in breakdown:
+        entry["total"] = entry["ok"] + entry["error"]
+        entry["error_rate"] = (
+            round(entry["error"] / entry["total"] * 100, 1) if entry["total"] else 0
+        )
+
     return render(request, "automation/workflow_stats.html", {
         "account": account,
         "wf": wf,
         "total_enrolled": total_enrolled,
         "run_counts": run_counts,
-        "step_breakdown": list(steps_by_id.values()),
+        "step_breakdown": breakdown,
     })
 
 

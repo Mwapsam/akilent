@@ -44,6 +44,8 @@ _STEP_TYPES = {
     "reply_text",
     # Label the customer ("pricing-enquiry"); adding or removing is idempotent.
     "add_tag", "remove_tag",
+    # WhatsApp reply buttons / lists, and "ask, then wait for the customer's choice".
+    "send_buttons", "send_list", "wait_for_reply",
     # Phase 4: a generic step that calls through the shared Action Registry
     # (apps.core.actions) by name, rather than requiring a hand-written
     # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
@@ -75,6 +77,10 @@ _TRIGGER_TYPES = {
 _MESSAGE_TRIGGERS = {"conversation.message_received", "whatsapp.received"}
 # A keyword workflow answers a repeated question once per window, not once per message.
 DEFAULT_KEYWORD_COOLDOWN_MINUTES = 60
+# How long a "wait for reply" step waits for the customer's choice by default (a day), and
+# the longest it may wait.
+DEFAULT_REPLY_TIMEOUT_SECONDS = 86400
+MAX_REPLY_TIMEOUT_SECONDS = 30 * 86400
 
 
 def validate_definition(definition: dict, account=None) -> list[dict]:
@@ -114,6 +120,13 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         else:
             for problem in keywords.validate(trig["match"]):
                 _error(problem, field="trigger.match")
+    if "reply_id" in trig:
+        wanted = trig["reply_id"]
+        wanted = [wanted] if isinstance(wanted, str) else wanted
+        if trig.get("type") not in _MESSAGE_TRIGGERS:
+            _error("trigger.reply_id only works on a 'customer messages you' trigger", field="trigger.reply_id")
+        elif not isinstance(wanted, list) or not wanted or not all(isinstance(w, str) and w.strip() for w in wanted):
+            _error("trigger.reply_id must be a button name or a list of them", field="trigger.reply_id")
     cooldown = trig.get("cooldown_minutes")
     if cooldown is not None and (not isinstance(cooldown, int) or isinstance(cooldown, bool) or cooldown < 0):
         _error("trigger.cooldown_minutes must be a whole number of minutes (0 or more)", field="trigger.cooldown_minutes")
@@ -207,6 +220,29 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     "because it replies in that conversation",
                     step_id=sid, field="type",
                 )
+        if step.get("type") in ("send_buttons", "send_list"):
+            from apps.whatsapp import interactive as wa_interactive
+
+            try:
+                if step["type"] == "send_buttons":
+                    wa_interactive.build_buttons(step.get("text"), step.get("buttons"))
+                else:
+                    wa_interactive.build_list(step.get("text"), step.get("button"), step.get("rows"))
+            except wa_interactive.InteractiveError as exc:
+                _error(f"step {sid!r}: {exc}", step_id=sid, field="buttons" if step["type"] == "send_buttons" else "rows")
+            if trig.get("type") != "conversation.message_received":
+                _error(
+                    f"step {sid!r}: {step['type']} needs the 'customer messages you' trigger, "
+                    "because it replies in that conversation",
+                    step_id=sid, field="type",
+                )
+        if step.get("type") == "wait_for_reply":
+            routes = step.get("routes")
+            if not isinstance(routes, dict) or not routes:
+                _error(f"step {sid!r}: wait_for_reply needs at least one choice to route", step_id=sid, field="routes")
+            timeout = step.get("timeout_seconds", DEFAULT_REPLY_TIMEOUT_SECONDS)
+            if not isinstance(timeout, int) or isinstance(timeout, bool) or not 60 <= timeout <= MAX_REPLY_TIMEOUT_SECONDS:
+                _error(f"step {sid!r}: wait between 1 minute and 30 days", step_id=sid, field="timeout_seconds")
         if step.get("type") in ("add_tag", "remove_tag"):
             from apps.contacts import tags as contact_tags
 
@@ -235,6 +271,11 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         if step.get("type") == "branch":
             _check(step.get("on_true"), sid, "on_true")
             _check(step.get("on_false"), sid, "on_false")
+        elif step.get("type") == "wait_for_reply":
+            for target in (step.get("routes") or {}).values():
+                _check(target, sid, "routes")
+            _check(step.get("default"), sid, "default")
+            _check(step.get("on_timeout"), sid, "on_timeout")
         elif step.get("type") not in ("stop", "exit"):
             _check(step.get("next"), sid, "next")
     return errors
@@ -418,15 +459,9 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     return {"outbound_message_id": msg.id}
 
 
-def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
-    """Send free text into the conversation that started this run.
-
-    Goes through the ``reply`` action, so the WhatsApp 24h window, opt-out and consent
-    checks apply exactly as they do for a human reply in the inbox. A message trigger is
-    always inside the window, which is why this needs no template.
-    """
+def _conversation_for_run(run: WorkflowRun, step: dict):
+    """The conversation that started this run, or a clear failure if it has none."""
     from apps.conversations.models import Conversation
-    from apps.core.actions import ActionError, run_action
 
     public_id = (run.context or {}).get("conversation_id")
     conversation = (
@@ -434,11 +469,108 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
         if public_id else None
     )
     if conversation is None:
-        raise ValueError(f"reply_text step {step.get('id')!r}: this run has no conversation to reply in")
+        raise ValueError(f"{step.get('type')} step {step.get('id')!r}: this run has no conversation to reply in")
+    return conversation
+
+
+def _first_name_merge(run: WorkflowRun, text: str) -> str:
     # Plain replace, not str.format: the text is owner-written and must not be able to
     # reach into objects with "{contact.__class__}" style placeholders.
-    first_name = (run.contact.first_name or "").strip() or "there"
-    text = (step.get("text") or "").replace("{first_name}", first_name)
+    return (text or "").replace("{first_name}", (run.contact.first_name or "").strip() or "there")
+
+
+def _run_interactive(run: WorkflowRun, step: dict) -> dict:
+    """Send reply buttons or a list into the conversation that started this run.
+
+    WhatsApp-only, and like a plain reply it goes through the outbound queue, so opt-out,
+    consent and the 24-hour window apply. A tap comes back as an inbound message.
+    """
+    from apps.whatsapp import api as whatsapp_api
+    from apps.whatsapp import interactive as wa_interactive
+
+    conversation = _conversation_for_run(run, step)
+    if conversation.channel != conversation.Channel.WHATSAPP or conversation.whatsapp_conversation is None:
+        raise ValueError(f"{step['type']} step {step.get('id')!r}: buttons and lists are WhatsApp-only")
+    text = _first_name_merge(run, step.get("text"))
+    try:
+        if step["type"] == "send_buttons":
+            interactive = wa_interactive.build_buttons(text, step.get("buttons"))
+        else:
+            interactive = wa_interactive.build_list(text, step.get("button"), step.get("rows"))
+    except wa_interactive.InteractiveError as exc:
+        raise ValueError(f"{step['type']} step {step.get('id')!r}: {exc}") from exc
+    msg = whatsapp_api.send_interactive(
+        run.workflow.account, conversation.whatsapp_conversation.contact, interactive)
+    conversation.whatsapp_conversation.register_outbound(msg.created_at)
+    return {"outbound_message_id": msg.id}
+
+
+def _route_for_reply(step: dict, message: dict) -> str | None:
+    """Which step a customer's answer leads to, or None if this step has no place for it.
+
+    A tapped button matches its id (case-insensitively). A typed answer matches a choice
+    written the same way (ignoring case and punctuation), so "prices" works for a choice
+    named ``prices``. Anything else goes to ``default``, if the step has one.
+    """
+    from apps.automation import keywords
+
+    routes = {str(k).casefold(): v for k, v in (step.get("routes") or {}).items()}
+    reply_id = (message.get("reply_id") or "").casefold()
+    if reply_id and reply_id in routes:
+        return routes[reply_id]
+    typed = keywords.normalize(message.get("body") or "")
+    for key, target in (step.get("routes") or {}).items():
+        if typed and typed == keywords.normalize(str(key)):
+            return target
+    return step.get("default") or None
+
+
+def resume_on_reply(account_id: int, contact, message: dict) -> bool:
+    """Continue a run that is waiting for this customer's answer. True if one took it.
+
+    Only runs parked on a ``wait_for_reply`` step are considered, and only if the step has a
+    place for this answer (a matching choice, or a ``default``), so an unrelated message
+    still reaches the normal keyword workflows.
+    """
+    waiting = WorkflowRun.objects.filter(
+        contact=contact, workflow__account_id=account_id,
+        status=WorkflowRun.Status.WAITING, next_due_at__isnull=False,
+    ).select_related("workflow")
+    for run in waiting:
+        step = _steps_by_id(run.workflow).get(run.current_step)
+        if step is None or step.get("type") != "wait_for_reply":
+            continue
+        target = _route_for_reply(step, message)
+        if not target:
+            continue
+        with transaction.atomic():
+            run = WorkflowRun.objects.select_for_update().select_related("workflow").get(pk=run.pk)
+            if run.status != WorkflowRun.Status.WAITING or run.current_step != step["id"]:
+                continue  # another worker already handled it
+            reply = {"id": message.get("reply_id", ""), "title": message.get("reply_title", ""),
+                     "text": message.get("body", "")}
+            _record(run, step, {"reply": reply, "went_to": target})
+            run.context = {**(run.context or {}), "reply": reply}
+            run.status = WorkflowRun.Status.ACTIVE
+            run.next_due_at = None
+            run.current_step = target
+            run.save(update_fields=["context", "status", "next_due_at", "current_step"])
+        advance_run(run)
+        return True
+    return False
+
+
+def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
+    """Send free text into the conversation that started this run.
+
+    Goes through the ``reply`` action, so the WhatsApp 24h window, opt-out and consent
+    checks apply exactly as they do for a human reply in the inbox. A message trigger is
+    always inside the window, which is why this needs no template.
+    """
+    from apps.core.actions import ActionError, run_action
+
+    conversation = _conversation_for_run(run, step)
+    text = _first_name_merge(run, step.get("text"))
     try:
         return run_action("reply", {"account": run.workflow.account}, conversation=conversation, body=text)
     except ActionError as exc:
@@ -637,6 +769,23 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.save(update_fields=["status", "next_due_at"])
             return run
 
+        if stype == "wait_for_reply":
+            if run.status == WorkflowRun.Status.WAITING and run.next_due_at and run.next_due_at <= timezone.now():
+                # Nobody answered in time: take the timeout path (or simply end).
+                _record(run, step, {"timed_out": True})
+                run.status = WorkflowRun.Status.ACTIVE
+                run.next_due_at = None
+                run.current_step = step.get("on_timeout") or ""
+                run.save(update_fields=["status", "next_due_at", "current_step"])
+                if not run.current_step:
+                    return _complete(run)
+                continue
+            timeout = int(step.get("timeout_seconds", DEFAULT_REPLY_TIMEOUT_SECONDS))
+            run.status = WorkflowRun.Status.WAITING
+            run.next_due_at = timezone.now() + timedelta(seconds=timeout)
+            run.save(update_fields=["status", "next_due_at"])
+            return run
+
         # Non-wait step: skip if already executed (idempotent re-entry).
         if WorkflowStepRun.objects.filter(run=run, step_id=step["id"]).exists():
             nxt = _next_after(step, run)
@@ -659,6 +808,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_reply_text(run, step)
             elif stype in ("add_tag", "remove_tag"):
                 result = _run_tag_step(run, step)
+            elif stype in ("send_buttons", "send_list"):
+                result = _run_interactive(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}
@@ -787,6 +938,11 @@ def _trigger_allows(workflow: Workflow, trigger: dict, contact, context: dict) -
 
         body = ((context or {}).get("message") or {}).get("body") or ""
         if not keywords.matches(match, body):
+            return False
+    wanted = trigger.get("reply_id")
+    if wanted:
+        wanted = {w.casefold() for w in ([wanted] if isinstance(wanted, str) else wanted)}
+        if (((context or {}).get("message") or {}).get("reply_id") or "").casefold() not in wanted:
             return False
     cooldown = trigger.get("cooldown_minutes", DEFAULT_KEYWORD_COOLDOWN_MINUTES if match else 0)
     if cooldown:

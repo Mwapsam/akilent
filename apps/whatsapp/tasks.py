@@ -26,6 +26,7 @@ from apps.whatsapp.models.tenant import (
     get_account_for_webhook,
     get_number_for_webhook,
 )
+from apps.whatsapp.interactive import extract_reply
 from apps.whatsapp.models.contact import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ _PAYLOAD_TYPE_TO_LOG_TYPE = {
     "video": MessageLog.MessageType.VIDEO,
     "document": MessageLog.MessageType.DOCUMENT,
     "sticker": MessageLog.MessageType.STICKER,
+    "interactive": MessageLog.MessageType.TEXT,
 }
 _AUTOMATION_EVENTS_CACHE_KEY = "whatsapp_automation_events_enabled"
 _AUTOMATION_EVENTS_CACHE_TTL = 60  # 60 second cache for SiteSettings flag
@@ -348,8 +350,14 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
     msg_type = message.get("type", "unknown")
     content = ""
     media_id = media_mime_type = None
+    reply = extract_reply(message)
 
-    if msg_type == "text":
+    if reply is not None:
+        # A tap on a button or list choice. Its title is what the customer saw, so it is the
+        # message text; it is stored as text so the inbox shows it, while ``msg_type`` stays
+        # "interactive"/"button" so STOP-keyword handling still only reads typed messages.
+        content = reply["title"]
+    elif msg_type == "text":
         content = message.get("text", {}).get("body", "")
     elif msg_type in ("image", "audio", "video", "document", "sticker"):
         block = message.get(msg_type, {})
@@ -368,7 +376,10 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
             "conversation": conversation,
             "contact": contact,
             "direction": MessageLog.Direction.INBOUND,
-            "message_type": msg_type if msg_type in valid_types else MessageLog.MessageType.UNKNOWN,
+            "message_type": (
+                MessageLog.MessageType.TEXT if reply is not None
+                else msg_type if msg_type in valid_types else MessageLog.MessageType.UNKNOWN
+            ),
             "content": content,
             "media_id": media_id,
             "media_mime_type": media_mime_type,
@@ -574,6 +585,8 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
             result = provider.send_media(
                 to, msg_type, media_id, payload.get("caption", "")
             )
+        elif msg_type == "interactive":
+            result = provider.send_interactive(to, payload["interactive"])
         else:
             result = provider.send_text(to, payload.get("body", payload.get("text", "")))
 
@@ -600,6 +613,11 @@ def _log_content_for_payload(payload: dict) -> str:
         return payload.get("body", payload.get("text", "")) or ""
     if ptype == "template":
         return payload.get("template_name", "") or ""
+    if ptype == "interactive":
+        # The transcript should show what the customer was offered, not just the question.
+        body = payload.get("body", "") or ""
+        options = payload.get("options") or []
+        return f"{body}\n\n[{' | '.join(options)}]" if options else body
     return payload.get("caption", "") or ""
 
 

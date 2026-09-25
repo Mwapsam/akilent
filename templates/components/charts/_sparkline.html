@@ -1,0 +1,25 @@
+{% comment %}Trend shape beside a number. Rendered by {% sparkline %}.
+
+Not a chart and deliberately so: no axes, no grid, no hover, no legend. The
+number it sits next to is the value; this only says which way it went. A single
+reading has no direction, so it draws nothing rather than a misleading dot.
+
+aria-hidden on the SVG with the summary in visually-hidden text: a screen
+reader gets "Opens over the last 7 days" rather than a path element it cannot
+do anything with.{% endcomment %}
+{% if has_data %}
+<span class="sparkline">
+  <svg viewBox="0 0 96 24" class="sparkline-svg" preserveAspectRatio="none"
+       aria-hidden="true" focusable="false">
+    <path d="{{ line.area }}" fill="var(--chart-series-1)" opacity="0.14" />
+    <path d="{{ line.path }}" fill="none" stroke="var(--chart-series-1)"
+          stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
+          vector-effect="non-scaling-stroke" />
+    {% if line.last %}
+    <circle cx="{{ line.last.x }}" cy="{{ line.last.y }}" r="2"
+            fill="var(--chart-series-1)" vector-effect="non-scaling-stroke" />
+    {% endif %}
+  </svg>
+  {% if label %}<span class="sr-only">{{ label }}</span>{% endif %}
+</span>
+{% endif %}

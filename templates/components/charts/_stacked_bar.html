@@ -1,0 +1,32 @@
+{% comment %}Part-to-whole in a single bar. Rendered by {% stacked_bar %}.
+
+Horizontal, because the categories here have long names and a horizontal bar
+gives them room to be read rather than rotated.
+
+Segments are separated by a 2px gap in the surface colour rather than a border,
+so two adjacent fills never blend into one block.
+
+Every segment is labelled underneath. These carry *status* colours — reserved
+for state, never reused as a series hue — and status is never colour alone.{% endcomment %}
+{% if segments %}
+<div class="stacked-bar" {% if label %}role="group" aria-label="{{ label }}"{% endif %}>
+  <div class="stacked-bar-track">
+    {% for s in segments %}
+    {% if s.width %}
+    <span class="stacked-bar-segment stacked-bar-segment--{{ s.tone }}"
+          style="width: {{ s.width }}%"
+          title="{{ s.label }}: {{ s.value|floatformat:"-2" }} ({{ s.percent }}%)"></span>
+    {% endif %}
+    {% endfor %}
+  </div>
+  <div class="stacked-bar-key">
+    {% for s in segments %}
+    <span class="stacked-bar-key-item">
+      <span class="chart-swatch chart-swatch--{{ s.tone }}"></span>
+      {{ s.label }}
+      <span class="tabular-nums text-ink">{{ s.value|floatformat:"-2" }}</span>
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

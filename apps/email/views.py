@@ -592,10 +592,21 @@ def insights(request):
             except Exception:
                 logger.exception("insights: deliverability score failed")
 
+    # Shaped for the chart here rather than in the template: a template cannot
+    # check that the two series line up with the days, and a chart drawn from
+    # mismatched columns is wrong without looking wrong.
+    engagement_days = [row["day"] for row in stats]
+    engagement_series = [
+        ("Opens", [row["opens"] for row in stats]),
+        ("Clicks", [row["clicks"] for row in stats]),
+    ]
+
     return render(request, "email/insights.html", {
         "account": account,
         "is_admin": admin,
         "has_analytics": has_analytics,
+        "engagement_days": engagement_days,
+        "engagement_series": engagement_series,
         "conversation_stats": conversation_stats,
         "domains": domains,
         "selected": selected,

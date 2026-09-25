@@ -1,6 +1,13 @@
 {% comment %}Stat card.
 Usage: include components/stat_card.html with label="Sent" value=42 icon="inbox" sub="98% delivered" tone="success"
-Optional: delta="8%" delta_dir="up|down"{% endcomment %}
+Optional: delta="8%" delta_dir="up|down"
+Optional: trend=<list of numbers> trend_label="Sent per day, last 14 days"
+
+`trend` draws a sparkline under the value. It is context, not the reading —
+the number is the value and the line only says which way it went, which is why
+it has no axes and no hover. Fewer than two points draws nothing rather than a
+dot that implies a direction it cannot know.{% endcomment %}
+{% load charts %}
 <div class="stat-card">
   <div class="flex items-start justify-between gap-3">
     <p class="stat-card-label">{{ label }}</p>
@@ -16,5 +23,6 @@ Optional: delta="8%" delta_dir="up|down"{% endcomment %}
       {% if delta_dir == 'down' %}&#8595;{% else %}&#8593;{% endif %} {{ delta }}
     </p>
   {% endif %}
+  {% if trend %}<p class="mt-2">{% sparkline trend label=trend_label %}</p>{% endif %}
   {% if sub %}<p class="stat-card-sub">{{ sub }}</p>{% endif %}
 </div>

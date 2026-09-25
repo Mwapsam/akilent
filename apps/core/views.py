@@ -386,8 +386,24 @@ def styleguide(request):
 
     Renders every design-system primitive so drift is visible and new screens
     have a reference. See docs/design/akilent-ui-spec.md §7.
+
+    The chart samples include the two shapes that break naive scaling — a flat
+    series and a single reading — so a regression in apps.core.charts is
+    visible on this page rather than only on a customer's dashboard.
     """
-    return render(request, "core/styleguide.html")
+    return render(request, "core/styleguide.html", {
+        "styleguide_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "styleguide_series": [
+            ("Opens", [42, 58, 51, 74, 66, 31, 39]),
+            ("Clicks", [8, 14, 11, 22, 19, 6, 9]),
+        ],
+        "styleguide_trend": [12, 18, 15, 24, 21, 30, 27, 34, 31, 42, 38, 47, 44, 52],
+        "styleguide_flat": [4, 4, 4, 4, 4, 4],
+        "styleguide_segments": [
+            ("Succeeded", 842, "good"),
+            ("Failed", 37, "critical"),
+        ],
+    })
 
 
 @admin_required

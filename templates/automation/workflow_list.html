@@ -38,7 +38,7 @@
           {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
         </p>
         <a href="{% url 'automation:editor' starter.installed.slug %}" class="text-xs text-gray-500 underline">See what it does</a>
-        {% elif approved_templates or starter.reply %}
+        {% elif approved_templates or starter.reply or starter.menu %}
         <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">
           Turn this on
         </button>
@@ -56,7 +56,33 @@
 </section>
 
 {% for starter in engagement_starters %}
-{% if not starter.installed and starter.reply %}
+{% if not starter.installed and starter.menu %}
+{% modal starter.key title=starter.name %}
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    <div>
+      <label class="label" for="menu-text">What should they be asked?</label>
+      <textarea id="menu-text" name="menu_text" class="textarea" rows="2" maxlength="1024" required placeholder="Hi {first_name}, what do you need today?"></textarea>
+    </div>
+    {% for n in "123" %}
+    <div class="rounded-xl border border-border p-3 space-y-2">
+      <p class="text-xs font-medium text-gray-500">Button {{ n }}{% if n != "1" %} <span class="font-normal text-gray-400">(optional)</span>{% endif %}</p>
+      <label class="sr-only" for="opt-title-{{ n }}">Button {{ n }} label</label>
+      <input id="opt-title-{{ n }}" name="opt_title_{{ n }}" class="input" maxlength="20" {% if n == "1" %}required{% endif %} placeholder="{% if n == '1' %}Prices{% elif n == '2' %}Book a visit{% else %}Talk to someone{% endif %}" />
+      <label class="sr-only" for="opt-reply-{{ n }}">Answer for button {{ n }}</label>
+      <textarea id="opt-reply-{{ n }}" name="opt_reply_{{ n }}" class="textarea" rows="2" maxlength="1000" {% if n == "1" %}required{% endif %} placeholder="What they get when they tap it"></textarea>
+    </div>
+    {% endfor %}
+    <p class="text-xs text-gray-400">Button labels can be up to 20 characters. Customers who tap a button are tagged with what they chose. Use {first_name} for their name.</p>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Turn it on</button>
+    </div>
+  </form>
+{% endmodal %}
+{% elif not starter.installed and starter.reply %}
 {% modal starter.key title=starter.name %}
   <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
     {% csrf_token %}

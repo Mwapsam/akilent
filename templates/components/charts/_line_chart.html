@@ -1,0 +1,136 @@
+{% comment %}Multi-series trend over time. Rendered by {% line_chart %}.
+
+Server-rendered SVG, so the chart is in the first paint and works with
+JavaScript off — the hover layer is the only thing that needs JS, and its
+absence costs a tooltip, not the chart.
+
+Dark mode needs nothing here: the strokes name CSS variables, so they
+re-resolve when the theme changes. There is no redraw and no theme-watching
+JavaScript, which is the main reason this is SVG and not canvas.
+
+Identity is never colour alone — every series is in the legend, and a series
+that ends on screen is also labelled at its own line end.{% endcomment %}
+{% if chart.has_data %}
+<figure class="chart" x-data="chartHover('{{ uid }}')" role="group"
+        {% if title %}aria-label="{{ title }}"{% endif %}>
+  {% if title %}<figcaption class="chart-title">{{ title }}</figcaption>{% endif %}
+
+  <div class="chart-legend">
+    {% for s in chart.series %}
+    <span class="chart-legend-item">
+      <span class="chart-swatch" style="background: var(--chart-series-{{ forloop.counter }})"></span>
+      {{ s.label }}
+    </span>
+    {% endfor %}
+  </div>
+
+  <div class="chart-plot">
+    <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" class="chart-svg"
+         preserveAspectRatio="none" aria-hidden="true" focusable="false"
+         @mouseleave="active = null">
+      {% comment %}Grid first, so data always draws over it.{% endcomment %}
+      <g class="chart-grid">
+        {% for t in chart.y_ticks %}
+        <line x1="0" y1="{{ t.y }}" x2="{{ chart.width }}" y2="{{ t.y }}" />
+        {% endfor %}
+      </g>
+
+      {% for s in chart.series %}
+        {% if s.area %}
+        <path d="{{ s.area }}" fill="var(--chart-series-{{ forloop.counter }})"
+              opacity="0.12" />
+        {% endif %}
+        <path d="{{ s.path }}" fill="none" stroke="var(--chart-series-{{ forloop.counter }})"
+              stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+              vector-effect="non-scaling-stroke" />
+      {% endfor %}
+
+      {% comment %}Crosshair and the marker on each series at the hovered
+      column. A 2px ring in the surface colour keeps two markers legible where
+      the lines cross.{% endcomment %}
+      <template x-if="active !== null">
+        <g>
+          <line class="chart-crosshair" :x1="columns[active].centre" y1="0"
+                :x2="columns[active].centre" y2="{{ chart.height }}" />
+          <template x-for="(r, i) in columns[active].readings" :key="i">
+            <circle :cx="columns[active].centre" :cy="r.y" r="4"
+                    :fill="'var(--chart-series-' + (i + 1) + ')'"
+                    stroke="var(--color-surface)" stroke-width="2"
+                    vector-effect="non-scaling-stroke" />
+          </template>
+        </g>
+      </template>
+
+      {% comment %}Full-height hit areas: the target is the column, not the
+      2px line, which is the difference between usable and not on a phone.{% endcomment %}
+      <g>
+        {% for c in chart.columns %}
+        <rect x="{{ c.x }}" y="0" width="{{ c.width }}" height="{{ chart.height }}"
+              fill="transparent" @mouseenter="active = {{ c.index }}" />
+        {% endfor %}
+      </g>
+    </svg>
+
+    {% comment %}Axis labels sit in HTML, not SVG: preserveAspectRatio="none"
+    stretches the viewBox horizontally, which would distort any text inside
+    it.{% endcomment %}
+    <div class="chart-y-axis" aria-hidden="true">
+      {% for t in chart.y_ticks %}
+      <span style="top: {{ t.y }}px">{{ t.value|floatformat:"-2" }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="chart-tooltip" x-show="active !== null" x-cloak
+         :style="tooltipStyle()" role="status" aria-live="polite">
+      <p class="chart-tooltip-label" x-text="active !== null ? columns[active].label : ''"></p>
+      <template x-for="(r, i) in (active !== null ? columns[active].readings : [])" :key="i">
+        <p class="chart-tooltip-row">
+          <span class="chart-swatch" :style="'background: var(--chart-series-' + (i + 1) + ')'"></span>
+          <span x-text="r.label"></span>
+          <span class="chart-tooltip-value tabular-nums" x-text="r.value"></span>
+        </p>
+      </template>
+    </div>
+  </div>
+
+  {% comment %}The end labels anchor to their edges instead of centring on
+  their tick. Centred, the first and last would hang off both sides of the plot
+  — which at 360px is the difference between a readable axis and one clipped at
+  both ends.{% endcomment %}
+  <div class="chart-x-axis" aria-hidden="true">
+    {% for t in chart.x_ticks %}
+    <span style="left: {{ t.x }}px"
+          {% if forloop.first %}data-anchor="start"{% elif forloop.last %}data-anchor="end"{% endif %}>{{ t.label }}</span>
+    {% endfor %}
+  </div>
+
+  {% comment %}The table view. Required, not a nicety: it is how a screen
+  reader, a printout and anyone who cannot separate the two hues reads the same
+  numbers.{% endcomment %}
+  <details class="chart-table">
+    <summary>View as table</summary>
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{{ unit|default:"Period" }}</th>
+            {% for s in chart.series %}<th>{{ s.label }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in chart.columns %}
+          <tr>
+            <td class="tabular-nums">{{ c.label }}</td>
+            {% for r in c.readings %}<td class="tabular-nums">{{ r.value|floatformat:"-2" }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  {% comment %}json_script escapes for us, so the hover layer reads the same
+  numbers the table shows without a second server round trip.{% endcomment %}
+  {{ columns_data|json_script:uid }}
+</figure>
+{% endif %}

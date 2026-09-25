@@ -145,6 +145,31 @@
   --color-border: #E8EDF3;
   --color-border-strong: #DCE1E8;
 
+  /* Chart tokens.
+     Series colours are a *categorical* palette: they say which series, not how
+     much, so they are assigned in fixed order and never cycled. A 3rd series
+     folds into "Other" rather than inventing a hue — a generated one is
+     indistinguishable from an existing one to a colourblind reader.
+
+     Both pairs below were validated, not chosen by eye: OKLCH lightness band,
+     chroma floor, CVD separation (deutan/protan/tritan), normal-vision
+     separation, and >= 3:1 against their own surface. Dark is *selected*, not a
+     flip — its steps are picked against #161F35, which is why series-1 lifts a
+     step while series-2 stays put.
+
+     Status colours are reserved for state and are never reused as "series 3";
+     they always ship with a label, never colour alone. */
+  --chart-series-1: var(--color-blue-600);
+  --chart-series-2: var(--color-teal-600);
+  --chart-good: var(--color-teal-600);
+  --chart-critical: var(--color-coral-600);
+  /* Recessive by design: the data is the subject, the scaffolding is not. */
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-ink-subtle);
+  /* The de-emphasis grey for the emphasis form (one series in colour, the
+     rest pushed back) and for an empty track. */
+  --chart-muted: var(--color-border-strong);
+
   /* Semantic text + interaction tokens (theme-aware — see dark overrides).
      ink       = primary body / headings
      ink-muted = secondary text, form labels, nav labels  (AA on both themes)
@@ -260,6 +285,13 @@
     --color-canvas: #0E1526;         /* Night Ops Navy page ground     */
     --color-border: #26314A;         /* hairline                       */
     --color-border-strong: #46516B;
+    --chart-series-1: var(--color-blue-500);
+    --chart-series-2: var(--color-teal-600);
+    --chart-good: var(--color-teal-500);
+    --chart-critical: var(--color-coral-400);
+    --chart-grid: var(--color-border);
+    --chart-axis: var(--color-ink-subtle);
+    --chart-muted: var(--color-border-strong);
     --color-ink: #FAFBFC;
     --color-ink-muted: #A8B2C4;      /* gray-400 — secondary text      */
     --color-ink-subtle: #838EA3;     /* gray-500 — tertiary            */
@@ -290,6 +322,13 @@
   --color-canvas: #0E1526;
   --color-border: #26314A;
   --color-border-strong: #46516B;
+  --chart-series-1: var(--color-blue-500);
+  --chart-series-2: var(--color-teal-600);
+  --chart-good: var(--color-teal-500);
+  --chart-critical: var(--color-coral-400);
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-ink-subtle);
+  --chart-muted: var(--color-border-strong);
   --color-ink: #FAFBFC;
   --color-ink-muted: #A8B2C4;
   --color-ink-subtle: #838EA3;
@@ -776,6 +815,83 @@
   .split-gutter.is-dragging::before {
     @apply bg-brand-400;
   }
+  /* --- Charts -----------------------------------------------------------
+     Scaffolding is recessive on purpose: the grid and axes are there to be
+     referred to, not read. The data is the only thing at full strength. */
+  .chart { @apply block w-full; }
+  .chart-title { @apply text-sm font-medium text-ink mb-1; }
+
+  .chart-legend { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs text-gray-600; }
+  .chart-legend-item { @apply inline-flex items-center gap-1.5; }
+  .chart-swatch { @apply inline-block w-2.5 h-2.5 rounded-sm shrink-0; }
+  .chart-swatch--good { background: var(--chart-good); }
+  .chart-swatch--critical { background: var(--chart-critical); }
+  .chart-swatch--series-1 { background: var(--chart-series-1); }
+  .chart-swatch--series-2 { background: var(--chart-series-2); }
+
+  /* The y-axis labels are absolutely positioned against this box, so the
+     plot needs room for them on the left. */
+  .chart-plot { @apply relative w-full pl-8; }
+  .chart-svg { @apply w-full block overflow-visible; height: 200px; }
+  .chart-grid line { stroke: var(--chart-grid); stroke-width: 1; }
+  .chart-crosshair { stroke: var(--chart-axis); stroke-width: 1; stroke-dasharray: 3 3; }
+
+  .chart-y-axis { @apply absolute left-0 top-0 h-full w-8 pointer-events-none; }
+  .chart-y-axis span {
+    @apply absolute right-1 text-[10px] tabular-nums leading-none;
+    color: var(--chart-axis);
+    transform: translateY(-50%);
+  }
+  .chart-x-axis { @apply relative h-4 mt-1 ml-8; }
+  .chart-x-axis span {
+    @apply absolute text-[10px] whitespace-nowrap;
+    color: var(--chart-axis);
+    transform: translateX(-50%);
+  }
+  .chart-x-axis span[data-anchor="start"] { transform: translateX(0); }
+  .chart-x-axis span[data-anchor="end"] { transform: translateX(-100%); }
+
+  .chart-tooltip {
+    @apply absolute z-10 pointer-events-none rounded-lg border border-border
+      bg-surface px-2.5 py-1.5 text-xs shadow-lg min-w-28;
+  }
+  .chart-tooltip-label { @apply font-medium text-ink mb-1; }
+  .chart-tooltip-row { @apply flex items-center gap-1.5 text-gray-600; }
+  .chart-tooltip-value { @apply ml-auto font-medium text-ink; }
+
+  .chart-table { @apply mt-3 text-sm; }
+  .chart-table summary { @apply cursor-pointer text-gray-500 hover:text-ink text-xs; }
+  .chart-table[open] summary { @apply mb-2; }
+
+  /* Sparkline: shape only, sized to sit on a line of text. */
+  .sparkline { @apply inline-block align-middle; }
+  .sparkline-svg { @apply block w-24 h-6 overflow-visible; }
+
+  /* Meter: one ratio against its limit. Track and fill share a hue so the
+     pair reads as one scale. */
+  .meter { @apply w-full; }
+  .meter-track { @apply w-full h-2 rounded-full overflow-hidden; background: var(--chart-muted); }
+  .meter-fill { @apply h-full rounded-full transition-[width] duration-500; }
+  .meter-fill--brand { background: var(--chart-series-1); }
+  .meter-fill--good { background: var(--chart-good); }
+  .meter-fill--warning { background: var(--color-amber-500); }
+  .meter-fill--critical { background: var(--chart-critical); }
+
+  /* Stacked bar. The gap is a real gap in the surface colour, not a border —
+     a border would darken against a dark surface and read as a third fill. */
+  .stacked-bar { @apply w-full; }
+  .stacked-bar-track {
+    @apply flex w-full h-2.5 rounded-full overflow-hidden gap-0.5;
+    background: var(--chart-muted);
+  }
+  .stacked-bar-segment { @apply block h-full first:rounded-l-full last:rounded-r-full; }
+  .stacked-bar-segment--good { background: var(--chart-good); }
+  .stacked-bar-segment--critical { background: var(--chart-critical); }
+  .stacked-bar-segment--series-1 { background: var(--chart-series-1); }
+  .stacked-bar-segment--series-2 { background: var(--chart-series-2); }
+  .stacked-bar-key { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-600; }
+  .stacked-bar-key-item { @apply inline-flex items-center gap-1.5; }
+
   .device-frame {
     @apply mx-auto w-full transition-[max-width] duration-200;
   }

@@ -105,6 +105,44 @@ def send_message(
     return msg
 
 
+def send_interactive(
+    account: Account,
+    contact: WhatsAppContact,
+    interactive: dict,
+    *,
+    idempotency_key: Optional[str] = None,
+) -> OutboundMessage:
+    """Queue reply buttons or a list for a contact.
+
+    ``interactive`` comes from ``apps.whatsapp.interactive.build_buttons`` / ``build_list``.
+    It goes through the same outbound queue as free text, so consent, opt-out, the 24-hour
+    window and rate limits all apply.
+    """
+    from apps.whatsapp import interactive as interactive_messages
+
+    body = interactive["body"]["text"]
+    key = idempotency_key or uuid.uuid4().hex
+    msg, created = OutboundMessage.objects.get_or_create(
+        account=account,
+        idempotency_key=key,
+        defaults={
+            "contact": contact,
+            "payload": {
+                "type": "interactive",
+                "body": body,
+                "interactive": interactive,
+                "options": interactive_messages.option_titles(interactive),
+            },
+        },
+    )
+    if not created:
+        return msg
+
+    from apps.whatsapp.tasks import drain_outbound_queue
+    drain_outbound_queue.delay()
+    return msg
+
+
 # --- Webhook event access---
 
 
