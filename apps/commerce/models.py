@@ -55,6 +55,11 @@ class Order(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=8, default="USD")
+    # The conversation this came from, fixed when it was created so a later reply never
+    # rewrites history. Null when nothing in the inbox led here (walk-in, manual entry).
+    conversation = models.ForeignKey(
+        "conversations.Conversation", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

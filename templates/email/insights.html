@@ -39,6 +39,36 @@
   </div>
   {% endwith %}
 
+  {% with fn=conversation_stats.funnel %}
+  <h3 class="text-base font-semibold text-ink mt-6 mb-2">From conversation to sale, last {{ fn.days }} days</h3>
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ fn.wrote_in }}</p><p class="text-sm text-gray-600">wrote in</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ fn.leads }}</p><p class="text-sm text-gray-600">tracked as interested</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ fn.deals }}</p><p class="text-sm text-gray-600">in your pipeline</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ fn.won }}</p><p class="text-sm text-gray-600">deals won</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ fn.paid }}</p><p class="text-sm text-gray-600">paid orders</p></div>
+  </div>
+  {% endwith %}
+
+  {% if conversation_stats.revenue %}
+  <div class="table-wrap mt-4">
+    <table class="table table--cards">
+      <caption class="sr-only">Paid revenue by where the customer came from</caption>
+      <thead><tr><th>Came from</th><th>Paid orders</th><th>Revenue</th></tr></thead>
+      <tbody>
+        {% for row in conversation_stats.revenue %}
+        <tr>
+          <td data-label="Came from">{{ row.label }}</td>
+          <td data-label="Paid orders">{{ row.orders }}</td>
+          <td data-label="Revenue">{{ row.currency }} {{ row.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500 mt-2">Paid orders only. Each order is credited to the conversation it started from, or to the customer's latest chat in the 30 days before it.</p>
+  {% endif %}
+
   {% if conversation_stats.team %}
   <div class="table-wrap mt-4">
     <table class="table table--cards">

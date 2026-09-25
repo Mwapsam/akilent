@@ -17,15 +17,21 @@ from apps.conversations.services import emit_event
 logger = logging.getLogger(__name__)
 
 
-def create_order(account, contact, items: list[dict], *, currency: str = "USD") -> Order:
+def create_order(account, contact, items: list[dict], *, currency: str = "USD",
+                 conversation_id: str = "") -> Order:
     """Create an Order from a list of ``{"product": Product | None, "name": str,
     "unit_price": Decimal, "quantity": int}`` line items (product optional —
     a WhatsApp-taken order may not map to a catalog entry)."""
     if not items:
         raise ValueError("create_order requires at least one item")
 
+    from apps.conversations.attribution import resolve_conversation
+
     with transaction.atomic():
-        order = Order.objects.create(account=account, contact=contact, currency=currency)
+        order = Order.objects.create(
+            account=account, contact=contact, currency=currency,
+            conversation=resolve_conversation(account, contact, public_id=conversation_id),
+        )
         for item in items:
             OrderItem.objects.create(
                 order=order,

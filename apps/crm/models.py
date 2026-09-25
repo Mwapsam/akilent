@@ -105,6 +105,12 @@ class Lead(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_leads"
     )
 
+    # The conversation this came from, fixed when it was created so a later reply never
+    # rewrites history. Null when nothing in the inbox led here (walk-in, manual entry).
+    conversation = models.ForeignKey(
+        "conversations.Conversation", on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
+    )
+
     converted_at = models.DateTimeField(blank=True, null=True)
     converted_to_deal = models.ForeignKey(
         "crm.Deal", on_delete=models.SET_NULL, null=True, blank=True, related_name="originating_leads"
@@ -143,6 +149,11 @@ class Deal(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_deals"
     )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    # The conversation this came from, fixed when it was created so a later reply never
+    # rewrites history. Null when nothing in the inbox led here (walk-in, manual entry).
+    conversation = models.ForeignKey(
+        "conversations.Conversation", on_delete=models.SET_NULL, null=True, blank=True, related_name="deals"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -31,7 +31,12 @@ def create_lead(account, contact, *, source: str = "", owner=None, conversation_
     if existing is not None:
         return existing
 
-    lead = Lead.objects.create(account=account, contact=contact, source=source, owner=owner)
+    from apps.conversations.attribution import resolve_conversation
+
+    lead = Lead.objects.create(
+        account=account, contact=contact, source=source, owner=owner,
+        conversation=resolve_conversation(account, contact, public_id=conversation_id),
+    )
 
     emit_event(
         account=account, type="lead.created", occurred_at=lead.created_at,
@@ -88,6 +93,8 @@ def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
     if lead.status == Lead.Status.CONVERTED:
         raise ValueError(f"lead {lead.pk} is already converted")
 
+    from apps.conversations.attribution import resolve_conversation
+
     pipeline = pipeline or Pipeline.ensure_default(lead.account)
     first_stage = pipeline.stages.filter(is_won=False, is_lost=False).order_by("order").first()
     if first_stage is None:
@@ -97,6 +104,7 @@ def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
         deal = Deal.objects.create(
             account=lead.account, contact=lead.contact, pipeline=pipeline, stage=first_stage,
             title=title or f"{lead.contact}", value=value,
+            conversation=lead.conversation or resolve_conversation(lead.account, lead.contact),
         )
         lead.status = Lead.Status.CONVERTED
         lead.converted_at = timezone.now()
