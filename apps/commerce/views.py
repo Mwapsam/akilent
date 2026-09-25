@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -54,6 +55,10 @@ def create_order_view(request):
     if request.method == "POST":
         # See apps.crm.views.create_lead_view — same "return to the conversation" support.
         next_url = request.POST.get("next") or None
+        # Only ever return to a page on this site, never an address a form was handed.
+        if next_url and not url_has_allowed_host_and_scheme(
+                next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            next_url = None
 
         query = (request.POST.get("contact") or "").strip()
         contact = Contact.objects.filter(account=account).filter(

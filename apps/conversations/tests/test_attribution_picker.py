@@ -108,3 +108,15 @@ def test_nothing_chosen_and_no_contact_is_an_error(logged_in):
     client, account = logged_in
     client.post("/sales/leads/create/", {})
     assert not Lead.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
+def test_forms_never_redirect_to_another_site(logged_in):
+    client, account = logged_in
+    c = chat(account, "+260971000111")
+    for url, data in (("/sales/leads/create/", {"contact": c.contact.phone}),
+                      ("/orders/create/", {"contact": c.contact.phone, "name": "T", "unit_price": "1"})):
+        for bad in ("https://evil.example/", "//evil.example/"):
+            response = client.post(url, {**data, "next": bad})
+            assert response.status_code == 302 and "evil.example" not in response["Location"]
+        assert client.post(url, {**data, "next": "/inbox/"})["Location"] == "/inbox/"

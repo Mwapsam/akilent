@@ -8,6 +8,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.utils import get_current_account
@@ -59,6 +60,10 @@ def create_lead_view(request):
         # in the conversation with a confirmation, instead of being pulled into
         # Sales mid-reply (see docs/plans R1.5a UX review).
         next_url = request.POST.get("next") or None
+        # Only ever return to a page on this site, never an address a form was handed.
+        if next_url and not url_has_allowed_host_and_scheme(
+                next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            next_url = None
 
         query = (request.POST.get("contact") or "").strip()
         contact = Contact.objects.filter(account=account).filter(
