@@ -58,6 +58,11 @@ def _inbox_context(request, account) -> dict:
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
     for c in page:
         c.snapshot = snapshot_of(c, now)
+        # Missed is a kind of waiting that has gone on too long, so both show
+        # how long the customer has been waiting rather than the last activity.
+        c.is_waiting = bool(
+            c.snapshot.missed or c.snapshot.state == ConversationState.WAITING_FOR_AGENT
+        ) and c.snapshot.last_customer_message_at is not None
         last = c.messages.order_by("-timestamp", "-id").only("body", "direction").first()
         c.preview = last
 

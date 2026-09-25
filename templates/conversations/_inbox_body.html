@@ -8,7 +8,12 @@ Built phone-first. The row puts one fact in each place: who (name), how long
 the state (a single badge). The previous row said the wait time twice — once
 as "7 minutes ago", once as "Waiting 7 minutes" — and the long timesince strings
 took the width the contact's name needed.{% endcomment %}
-<nav class="inbox-tabs" aria-label="Inbox views">
+{% comment %}x-init scrolls the current tab into view. On a phone the tabs
+overflow, and landing on "All" showed a row in which nothing looked selected
+because the selected tab was off-screen. scrollLeft rather than scrollIntoView,
+which would also scroll the page vertically.{% endcomment %}
+<nav class="inbox-tabs relative" aria-label="Inbox views"
+     x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
   {% with ch=channel|yesno:"&channel=,"|add:channel %}
   <a href="?view=needs_attention{{ ch }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
     Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
@@ -31,10 +36,7 @@ took the width the contact's name needed.{% endcomment %}
 {% if page and page.object_list %}
 <ul class="inbox-list">
   {% for c in page %}
-  {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone waiting=c.snapshot.state == WAITING_FOR_AGENT %}
-  {% comment %}While the customer is waiting, the time shown is how long they
-  have been waiting — the inbox's own question — not the last activity.{% endcomment %}
-  {% if c.snapshot.missed or waiting %}{% with t=c.snapshot.last_customer_message_at %}{% endwith %}{% endif %}
+  {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone %}
   <li>
     <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}">
       {% comment %}A phone number's first character is "+", which is not an
@@ -49,7 +51,10 @@ took the width the contact's name needed.{% endcomment %}
         <div class="flex items-center gap-2">
           <p class="inbox-name">{{ name }}</p>
           {% if c.is_unread %}<span class="inbox-unread" aria-hidden="true"></span><span class="sr-only">Unread.</span>{% endif %}
-          {% if c.snapshot.missed or waiting %}
+          {% comment %}While the customer is waiting, the time shown is how
+          long they have been waiting — the inbox's own question — rather than
+          the last activity of any kind.{% endcomment %}
+          {% if c.is_waiting %}
             <time class="inbox-time is-urgent" datetime="{{ c.snapshot.last_customer_message_at|date:'c' }}"
                   title="Waiting since {{ c.snapshot.last_customer_message_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_customer_message_at|ago:now }}</time>
           {% elif c.snapshot.last_activity_at %}
@@ -64,7 +69,7 @@ took the width the contact's name needed.{% endcomment %}
 
         <div class="inbox-meta">
           {% if c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
-          {% elif waiting %}<span class="badge badge-warning">Waiting</span>
+          {% elif c.snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting</span>
           {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
           {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
           {% include "components/channel_tag.html" with channel=c.channel compact=True %}

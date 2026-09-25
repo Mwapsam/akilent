@@ -568,6 +568,71 @@
     color: var(--tone-brand-fg);
   }
 
+  /* Inbox ----------------------------------------------------------------
+     Phone-first. The tabs scroll sideways with a fade on the trailing edge,
+     because four labelled tabs do not fit in 328px and the old row simply cut
+     the last two off with nothing to say there was more. */
+  .inbox-tabs {
+    @apply flex gap-1.5 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 mb-3 sm:mb-4;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    /* Without this, snapping aligns the first tab to the container's edge and
+       ignores its padding, so the first pill sat flush against the screen. */
+    scroll-padding-inline: 1rem;
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+  .inbox-tabs::-webkit-scrollbar { display: none; }
+  /* A trailing spacer as wide as the fade, so the last tab can scroll clear
+     of it. Without one, scrolling to "All" left the selected tab half-faded.
+     A pseudo-element rather than padding-right, which scroll containers do
+     not reliably honour at the end of the scroll. */
+  .inbox-tabs::after { content: ""; flex: 0 0 1.5rem; }
+  @media (min-width: 640px) { .inbox-tabs { mask-image: none; } }
+  .inbox-tab {
+    @apply inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full
+      border border-border bg-surface px-3.5 text-sm font-medium text-gray-600
+      transition-colors hover:text-ink hover:border-border-strong;
+    min-height: 2.25rem;
+    scroll-snap-align: start;
+  }
+  .inbox-tab[aria-current="page"] {
+    @apply border-transparent text-white;
+    background-color: var(--color-brand-600);
+  }
+  .inbox-tab-count {
+    @apply inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full
+      text-xs font-semibold tabular-nums;
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink);
+  }
+  .inbox-tab[aria-current="page"] .inbox-tab-count { background-color: rgb(255 255 255 / 0.2); color: #fff; }
+  .inbox-tab-count--danger { background-color: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+
+  /* Edge to edge on a phone: the card's side margins and border cost 34px of
+     a 360px screen, which is most of a contact's surname. */
+  .inbox-list {
+    @apply -mx-4 border-y border-border bg-surface divide-y divide-border
+      sm:mx-0 sm:border sm:rounded-2xl sm:shadow-card sm:overflow-hidden;
+  }
+  .inbox-row {
+    @apply flex items-start gap-3 px-4 py-3 transition-colors
+      hover:bg-hover focus-visible:bg-hover;
+  }
+  .inbox-avatar { @apply w-10 h-10 text-sm mt-0.5; }
+  .inbox-name { @apply flex-1 min-w-0 truncate text-[0.9375rem] font-medium text-ink; }
+  .inbox-row.is-unread .inbox-name { @apply font-semibold; }
+  .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full bg-amber-500; }
+  .inbox-time { @apply shrink-0 text-xs tabular-nums text-gray-500; }
+  /* The wait is the inbox's whole question, so it gets the emphasis the
+     badge used to carry. */
+  .inbox-time.is-urgent { @apply font-semibold; color: var(--tone-amber-fg); }
+  .inbox-preview { @apply mt-0.5 truncate text-sm text-gray-600; }
+  .inbox-row.is-unread .inbox-preview { @apply text-ink; }
+  .inbox-meta { @apply mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1; }
+  .inbox-assignee { @apply inline-flex items-center gap-1 text-xs text-gray-600; }
+  /* Square 44px icon buttons on a phone; normal text buttons from sm up. */
+  .inbox-header-link { @apply w-11 h-11 !p-0 justify-center sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
+
   /* Badges -------------------------------------------------------------- */
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
@@ -764,8 +829,20 @@
   /* Channel tag — icon + label in the channel colour. Never colour alone. */
   .channel-tag { @apply inline-flex items-center gap-1.5 text-sm font-medium; }
   .channel-tag > svg { @apply w-4 h-4 shrink-0; }
-  .channel-tag[data-channel="email"] { color: var(--color-amber-700); }
-  .channel-tag[data-channel="whatsapp"] { color: var(--color-teal-700); }
+  /* Tone tokens rather than fixed ramp steps: teal-700 and amber-700 were
+     chosen against a white surface and drop well below AA on the dark one. */
+  .channel-tag[data-channel="email"] { color: var(--tone-amber-fg); }
+  .channel-tag[data-channel="whatsapp"] { color: var(--tone-teal-fg); }
+  .channel-tag[data-channel="sms"] { color: var(--tone-info-fg); }
+  /* In a list row the label goes quiet and only the icon keeps the channel
+     colour: repeated on every row in full colour, "WhatsApp" was louder than
+     the status badge that actually needs reading. */
+  .channel-tag--compact { @apply text-xs gap-1 font-normal text-gray-600; }
+  .channel-tag--compact[data-channel] { color: var(--color-ink-muted); }
+  .channel-tag--compact[data-channel="email"] > svg { color: var(--tone-amber-fg); }
+  .channel-tag--compact[data-channel="whatsapp"] > svg { color: var(--tone-teal-fg); }
+  .channel-tag--compact[data-channel="sms"] > svg { color: var(--tone-info-fg); }
+  .channel-tag--compact > svg { @apply w-3.5 h-3.5; }
 
   /* Copy field ---------------------------------------------------------- */
   .copy-value {
