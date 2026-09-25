@@ -476,6 +476,24 @@
         <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
       </div>
 
+      {# What automations did #}
+      <div class="cv-section">
+        <h2 class="cv-h">What automations did</h2>
+        {% for item in automation_activity %}
+        <div class="mb-3 text-sm">
+          <p class="font-medium text-ink">{{ item.automation }} <span class="font-normal text-gray-400">· {{ item.when|date:"j M, H:i" }}</span></p>
+          <ul class="mt-0.5 space-y-0.5">
+            {% for line in item.lines %}
+            <li class="{% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">{% if line.ok %}✓{% else %}✗{% endif %} {{ line.text }}</li>
+            {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
+          </ul>
+        </div>
+        {% empty %}
+        <p class="text-sm text-gray-400">Nothing yet. <a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" class="underline">Why didn't it reply?</a></p>
+        {% endfor %}
+        {% if automation_activity %}<a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" class="text-xs underline text-gray-500">Why didn't it reply?</a>{% endif %}
+      </div>
+
       {# Tags #}
       <div class="cv-section">
         <h2 class="cv-h">Tags</h2>

@@ -239,7 +239,8 @@ def build_menu_definition(starter: dict, *, question: str, options: list[dict]) 
     }
 
 
-def build_definition(starter: dict, *, template_name: str, variable_mapping: dict | None = None) -> dict:
+def build_definition(starter: dict, *, template_name: str, variable_mapping: dict | None = None,
+                     variable_fallbacks: dict | None = None) -> dict:
     """Turn a starter plus the owner's chosen template into a workflow definition.
 
     The shape is always the same: wait out the quiet period, check the customer
@@ -247,7 +248,7 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
     on — without it the workflow would chase customers mid-conversation.
     """
     if starter.get("welcome"):
-        return _welcome_definition(starter, template_name, variable_mapping)
+        return _welcome_definition(starter, template_name, variable_mapping, variable_fallbacks)
     days = starter["quiet_days"]
     return {
         "trigger": {"type": starter["trigger"]},
@@ -262,6 +263,7 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
                 "id": "send", "type": "send_whatsapp",
                 "template": template_name,
                 "variable_mapping": variable_mapping or {},
+                "variable_fallbacks": variable_fallbacks or {},
                 "next": "stop",
             },
             {"id": "stop", "type": "stop"},
@@ -269,7 +271,8 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
     }
 
 
-def _welcome_definition(starter: dict, template_name: str, variable_mapping: dict | None) -> dict:
+def _welcome_definition(starter: dict, template_name: str, variable_mapping: dict | None,
+                        variable_fallbacks: dict | None = None) -> dict:
     """Welcome a brand-new WhatsApp enquirer immediately, once.
 
     ``contact.created`` fires once per customer, so the welcome is never repeated. The branch
@@ -288,6 +291,7 @@ def _welcome_definition(starter: dict, template_name: str, variable_mapping: dic
                 "id": "send", "type": "send_whatsapp",
                 "template": template_name,
                 "variable_mapping": variable_mapping or {},
+                "variable_fallbacks": variable_fallbacks or {},
                 "next": "stop",
             },
             {"id": "stop", "type": "stop"},

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Why didn't it reply? — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="{% url 'automation:list' %}" class="hover:text-ink">Automations</a>
+    <span aria-hidden="true">/</span><span class="text-ink">Why didn't it reply?</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Why didn't it reply?</h1>
+  <p class="mt-1 text-sm text-gray-600">Pick a customer's message and see what each of your automations did with it.</p>
+</header>
+
+{% if not message %}
+  {% include "components/empty_state.html" with icon="chat" title="No customer messages yet" message="Once a customer messages you on WhatsApp, you can see here what your automations did with it." %}
+{% else %}
+<section class="rounded-xl border border-border p-4 mb-6">
+  <p class="text-xs text-gray-500">Checking the latest message from</p>
+  <p class="font-medium text-ink">{{ contact.full_name|default:contact.phone|default:contact.email }} <span class="text-gray-400 font-normal">· {{ message.timestamp|date:"j M, H:i" }}</span></p>
+  <p class="mt-1 text-sm text-gray-700">“{{ message.body|truncatechars:200 }}”</p>
+  <form method="get" class="mt-3 flex flex-wrap items-center gap-2">
+    <label class="sr-only" for="why-conversation">Check a different conversation</label>
+    <select id="why-conversation" name="conversation" class="select sm:w-72" onchange="this.form.submit()">
+      <option value="">Check a different conversation…</option>
+      {% for c in choices %}<option value="{{ c.public_id }}">{{ c.customer }} · {{ c.channel }} · {{ c.last_message_at|date:"j M, H:i" }}</option>{% endfor %}
+    </select>
+    <a href="{% url 'conversations:detail' conversation.public_id %}" class="btn btn-ghost btn-sm">Open the conversation</a>
+  </form>
+</section>
+
+{% for note in notes %}
+<div class="alert alert-warning mb-3">{{ note }}</div>
+{% endfor %}
+
+{% if not verdicts %}
+  {% include "components/empty_state.html" with icon="sparkles" title="You have no automations for messages yet" message="Turn one on and it will answer customers automatically." action_label="Choose an automation" action_url="/automations/" %}
+{% else %}
+<ul class="space-y-3">
+  {% for v in verdicts %}
+  <li class="rounded-xl border border-border p-4">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div class="min-w-0">
+        <p class="font-medium text-ink">
+          {{ v.name }}
+          {% if v.tone == "replied" %}<span class="badge badge-success ml-1">Replied</span>
+          {% elif v.tone == "problem" %}<span class="badge badge-danger ml-1">Problem</span>
+          {% elif v.tone == "waiting" %}<span class="badge badge-warning ml-1">Waiting</span>
+          {% else %}<span class="badge badge-neutral ml-1">Didn't reply</span>{% endif %}
+        </p>
+        <p class="mt-1 text-sm text-gray-700">{{ v.headline }}</p>
+        {% if v.detail %}<p class="mt-1 text-sm text-gray-500">{{ v.detail }}</p>{% endif %}
+      </div>
+      {% if v.fix %}<a href="{{ v.fix.url }}" class="btn btn-secondary btn-sm">{{ v.fix.label }}</a>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+{% endblock %}

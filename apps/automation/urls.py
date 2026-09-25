@@ -9,6 +9,7 @@ urlpatterns = [
     path("create/", views.workflow_create, name="create"),
     # Before the <slug> route, which would otherwise swallow it.
     path("starters/install/", views.starter_install, name="starter-install"),
+    path("why-not/", views.why_not, name="why-not"),
     path("<slug:slug>/", views.workflow_editor, name="editor"),
     path("<slug:slug>/stats/", views.workflow_stats, name="stats"),
     path("<slug:slug>/save/", views.workflow_save, name="save"),

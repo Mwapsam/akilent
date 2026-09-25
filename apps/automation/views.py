@@ -34,7 +34,15 @@ def workflow_list(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    workflows = list(Workflow.objects.filter(account=account))
+    from django.db.models import Max, Q
+
+    workflows = list(
+        Workflow.objects.filter(account=account).annotate(
+            last_ran=Max("runs__started_at"),
+            helped=Count("runs__contact", distinct=True),
+            failed_runs=Count("runs", filter=Q(runs__status="failed"), distinct=True),
+        )
+    )
     for wf in workflows:
         # Computed here, not in the template: a dict without a "name" key makes
         # `{{ trigger.name }}` used as a *filter argument* raise
@@ -51,7 +59,14 @@ def workflow_list(request):
         "starters": list_templates(),
         "engagement_starters": engagement,
         "approved_templates": approved_templates,
+        "blank_choices": wa_variables_choices(),
     })
+
+
+def wa_variables_choices():
+    from apps.automation.variables import CHOICES
+
+    return [{"key": key, "label": label} for key, _source, label, _fallback in CHOICES]
 
 
 def _engagement_starters(account, workflows):
@@ -69,6 +84,13 @@ def _engagement_starters(account, workflows):
             account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
         ).order_by("name")
     )
+    from apps.automation import variables as wa_variables
+
+    # Each blank of each template, with the safest way to fill it already chosen.
+    for template in approved:
+        template.blanks = [
+            {"name": name, "default": wa_variables.default_choice(name)} for name in (template.variables or [])
+        ]
     installed = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED}
     cards = [
         {**starter, "installed": installed.get(starter["key"])}
@@ -119,11 +141,18 @@ def starter_install(request):
     # Namespaced per template, like the conversation composer's template
     # picker: an x-show'd field is still submitted, so an unqualified name
     # could silently read a different template's stale value.
-    variable_mapping = {
-        var: value
-        for var in (template.variables or [])
-        if (value := (request.POST.get(f"var__{template.pk}__{var}") or "").strip())
-    }
+    from apps.automation import variables as wa_variables
+
+    variable_mapping, variable_fallbacks = {}, {}
+    for var in template.variables or []:
+        key = f"{template.pk}__{var}"
+        source, fallback = wa_variables.entry_from_choice(
+            request.POST.get(f"var__{key}") or "", request.POST.get(f"lit__{key}") or "",
+            request.POST.get(f"fb__{key}") or "")
+        if source:
+            variable_mapping[var] = source
+            if fallback:
+                variable_fallbacks[var] = fallback
     missing = [var for var in (template.variables or []) if var not in variable_mapping]
     if missing:
         messages.error(request, "Fill in what should go in every blank of the message.")
@@ -135,7 +164,7 @@ def starter_install(request):
         name=starter["name"],
         definition=build_definition(
             starter, template_name=template.whatsapp_template_name,
-            variable_mapping=variable_mapping,
+            variable_mapping=variable_mapping, variable_fallbacks=variable_fallbacks,
         ),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
@@ -425,3 +454,55 @@ def workflow_delete(request, slug: str):
     wf.delete()
     messages.success(request, "Workflow deleted.")
     return redirect("automation:list")
+
+
+@login_required
+@module_required("automation")
+def why_not(request):
+    """"Why didn't it reply?": what each automation did with a customer's latest message, in plain words.
+
+    Defaults to the most recent customer message in the business; ``?conversation=`` picks another.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.automation import explain
+    from apps.automation.workflow_engine import explain_enrollment
+    from apps.conversations import attribution
+    from apps.conversations.models import Conversation, Message
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    inbound = Message.objects.filter(account=account, direction=Message.Direction.INBOUND)
+    public_id = (request.GET.get("conversation") or "").strip()
+    latest = None
+    if public_id:
+        latest = inbound.filter(conversation__public_id=public_id).select_related("conversation__contact").order_by("-timestamp").first()
+    if latest is None and not public_id:
+        latest = inbound.select_related("conversation__contact").order_by("-timestamp").first()
+
+    ctx = {
+        "account": account, "message": None, "verdicts": [], "notes": [],
+        "choices": attribution.recent_choices(account),
+    }
+    if latest is not None:
+        conversation, contact = latest.conversation, latest.conversation.contact
+        reply = (latest.metadata or {}).get("reply") or {}
+        message = {"body": latest.body, "reply_id": reply.get("id", ""), "reply_title": reply.get("title", "")}
+        earlier = inbound.filter(conversation__contact=contact, timestamp__lt=latest.timestamp).exists()
+        verdicts = explain_enrollment(
+            account.id, contact, message=message, message_at=latest.timestamp, is_first_message=not earlier)
+        notes = []
+        if getattr(contact, "whatsapp_opted_out", False):
+            notes.append("This customer has opted out of messages, so no automation will send to them.")
+        if timezone.now() - latest.timestamp > timedelta(hours=24):
+            notes.append(
+                "It has been more than 24 hours since this message, so only an approved message can be sent now.")
+        ctx.update({
+            "message": latest, "conversation": conversation, "contact": contact,
+            "verdicts": [explain.describe_verdict(v) for v in verdicts], "notes": notes,
+        })
+    return render(request, "automation/why_not.html", ctx)

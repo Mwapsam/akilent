@@ -288,9 +288,17 @@ def conversation_detail(request, public_id: str):
     except Exception:
         pass  # crm app not installed/migrated — panel just won't show it
 
+    try:
+        from apps.automation.api import activity_for_contact
+
+        automation_activity = activity_for_contact(account, conversation.contact)
+    except Exception:
+        automation_activity = []  # never let a side panel cost the owner their conversation
+
     return render(request, "conversations/conversation_detail.html", {
         "account": account,
         "now": now,
+        "automation_activity": automation_activity,
         "conversation": conversation,
         "chat_config": chat_config,
         "snapshot": snapshot,

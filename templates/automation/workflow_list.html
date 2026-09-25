@@ -9,6 +9,7 @@
     <p class="mt-1 text-sm text-gray-600">Make sure no customer is forgotten — set up messages that go out automatically when something happens.</p>
   </div>
   <div class="flex items-center gap-2">
+    <a href="{% url 'automation:why-not' %}" class="btn btn-secondary btn-sm">Why didn't it reply?</a>
     <a href="{% url 'verticals:templates' %}" class="btn btn-ghost btn-sm">
       {% include "components/icon.html" with name="sparkles" class="w-4 h-4" %} Starter packs
     </a>
@@ -147,10 +148,24 @@
       {% if t.variables %}
       <div x-show="tpl === '{{ t.pk }}'" x-cloak class="space-y-3">
         <p class="text-xs text-gray-500">Fill in the blanks in: "{{ t.content|truncatechars:120 }}"</p>
-        {% for v in t.variables %}
-        <div>
-          <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">{{ v }}</label>
-          <input id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ v }}" class="input" />
+        {% for b in t.blanks %}
+        <div class="rounded-xl border border-border p-3 space-y-2" x-data="{ pick: '{{ b.default }}' }">
+          <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">What goes in “{{ b.name }}”?</label>
+          <select id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="pick">
+            {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
+            <option value="literal">The same text for everyone</option>
+          </select>
+          <div x-show="pick === 'first_name' || pick === 'full_name'" x-cloak>
+            <label class="text-xs block">If we don't know their name, say
+              <input name="fb__{{ t.pk }}__{{ b.name }}" class="input mt-0.5" placeholder="there" />
+            </label>
+            <p class="text-xs text-gray-400 mt-1">Each customer gets their own name, so Ada's message says Ada.</p>
+          </div>
+          <div x-show="pick === 'business'" x-cloak><p class="text-xs text-gray-400">Your business name, the same in every message.</p></div>
+          <div x-show="pick === 'literal'" x-cloak>
+            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" />
+            <p class="text-xs text-amber-700 mt-1">Every customer will get exactly this text. Don't type a person's name here.</p>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -169,7 +184,7 @@
 <div class="table-wrap">
   <table class="table table--cards">
     <thead>
-      <tr><th>Name</th><th>When</th><th>Status</th><th>Steps</th><th>Runs</th><th>Updated</th></tr>
+      <tr><th>Name</th><th>When</th><th>Status</th><th>Steps</th><th>Activity</th><th>Updated</th></tr>
     </thead>
     <tbody>
       {% for wf in workflows %}
@@ -182,8 +197,13 @@
           {% else %}<span class="badge badge-warning">Draft</span>{% endif %}
         </td>
         <td data-label="Steps" class="tabular-nums">{{ wf.definition.steps|length }}</td>
-        <td data-label="Runs" class="tabular-nums">
-          <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-accent-strong hover:underline">{{ wf.runs.count }}</a>
+        <td data-label="Activity" class="text-sm">
+          {% if wf.last_ran %}
+            <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-accent-strong hover:underline">Last ran {{ wf.last_ran|timesince }} ago</a>
+            <span class="text-gray-500">· {{ wf.helped }} customer{{ wf.helped|pluralize }} helped</span>
+            {% if wf.failed_runs %}<a href="{% url 'automation:why-not' %}" class="badge badge-danger ml-1">{{ wf.failed_runs }} didn't send</a>{% endif %}
+          {% elif wf.status == "published" %}<span class="text-gray-500">Hasn't run yet</span>
+          {% else %}<span class="text-gray-400">—</span>{% endif %}
         </td>
         <td data-label="Updated" class="text-gray-500 tabular-nums">{{ wf.updated_at|date:"M j, H:i" }}</td>
       </tr>

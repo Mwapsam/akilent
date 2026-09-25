@@ -111,3 +111,31 @@ from apps.automation.triggers import (  # noqa: E402, F401
     on_message_received,
     on_message_sent,
 )
+
+
+def activity_for_contact(account: Account, contact, *, limit: int = 8) -> list[dict]:
+    """What automations did for this customer lately, newest first, in owner words.
+
+    Each item is ``{"when", "automation", "lines": [{"ok", "text"}], "problem"}``. Tenant-scoped by
+    ``account`` as well as ``contact``.
+    """
+    from apps.automation import explain
+    from apps.automation.models import WorkflowRun
+
+    runs = (
+        WorkflowRun.objects.filter(workflow__account=account, contact=contact)
+        .select_related("workflow").prefetch_related("step_runs").order_by("-started_at")[:limit]
+    )
+    items = []
+    for run in runs:
+        steps = {s.get("id"): s for s in (run.workflow.definition or {}).get("steps", [])}
+        lines = [
+            explain.describe_step(sr.step_type, sr.status, sr.result, steps.get(sr.step_id))
+            for sr in sorted(run.step_runs.all(), key=lambda sr: sr.executed_at)
+            if sr.step_type not in ("branch", "stop")
+        ]
+        items.append({
+            "when": run.started_at, "automation": run.workflow.name, "lines": lines,
+            "problem": any(not line["ok"] for line in lines),
+        })
+    return items

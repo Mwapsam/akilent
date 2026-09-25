@@ -188,6 +188,15 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                         f"variable(s) {', '.join(missing)}",
                         step_id=sid, field="variable_mapping",
                     )
+                from apps.automation import variables as wa_variables
+
+                for var in template.variables or []:
+                    if var in mapping and wa_variables.looks_like_name(var) and wa_variables.is_fixed_text(mapping[var]):
+                        _error(
+                            f"step {sid!r}: '{var}' is fixed text, so every customer would get the same "
+                            "name. Fill it from the customer's own details instead",
+                            step_id=sid, field="variable_mapping", severity="warning",
+                        )
         if step.get("type") == "action":
             if not step.get("action"):
                 _error(f"step {sid!r}: action needs an action name", step_id=sid, field="action")
@@ -467,7 +476,8 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
         )
 
     params = _resolve_variable_mapping(
-        template.variables, step.get("variable_mapping") or {}, run, contact
+        template.variables, step.get("variable_mapping") or {}, run, contact,
+        fallbacks=step.get("variable_fallbacks") or {},
     )
 
     send_at = None
@@ -720,36 +730,23 @@ def _resolve_whatsapp_template(account, name):
     return MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
 
 
-def _resolve_variable_mapping(variables: list, mapping: dict, run: WorkflowRun, contact) -> dict:
+def _resolve_variable_mapping(variables: list, mapping: dict, run: WorkflowRun, contact,
+                              fallbacks: dict | None = None) -> dict:
     """Build the WhatsApp template ``params`` dict from an explicit, allow-listed mapping.
 
-    ``variables`` is the template's declared placeholder names (``MessageTemplate.variables``,
-    e.g. ``["name", "company"]`` — named, not Meta's positional ``{{1}}``/``{{2}}`` keys).
-    ``mapping`` is ``step["variable_mapping"]``, keyed by those same names, valued by one of:
-
-    - ``"contact.<attr>"``  -> ``contact.attributes.get(attr)``
-    - ``"context.<key>"``   -> ``run.context.get(key)``
-    - anything else         -> used verbatim as a literal constant
-
-    Only variable names present in ``variables`` are ever resolved, and only the
-    ``contact``/``context`` keys explicitly named in ``mapping`` are ever read — the
-    full ``run.context`` is never forwarded wholesale, so nothing outside the
-    declared mapping can reach the outbound WhatsApp message.
+    See ``apps.automation.variables`` for what a mapping entry can be. Only variable names the
+    template declares are resolved, and only the keys a mapping names are read, so nothing
+    outside it can reach the outbound message. A blank with no value and no fallback fails the
+    step with the blank's name rather than sending an empty value.
     """
-    params: dict = {}
-    contact_attrs = contact.attributes or {}
-    context = run.context or {}
-    for var in variables or []:
-        if var not in mapping:
-            continue
-        source = mapping[var]
-        if isinstance(source, str) and source.startswith("contact."):
-            params[var] = contact_attrs.get(source[len("contact."):])
-        elif isinstance(source, str) and source.startswith("context."):
-            params[var] = context.get(source[len("context."):])
-        else:
-            params[var] = source
-    return params
+    from apps.automation import variables as wa_variables
+
+    try:
+        return wa_variables.resolve(
+            variables, mapping, contact=contact, account=run.workflow.account, context=run.context or {},
+            fallbacks=fallbacks)
+    except wa_variables.MissingValue as exc:
+        raise ValueError(f"send_whatsapp: {exc}") from exc
 
 
 def _run_webhook(run: WorkflowRun, step: dict) -> dict:
@@ -968,6 +965,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.status = WorkflowRun.Status.FAILED
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "completed_at"])
+            _alert_failure(run, str(exc))
             return run
 
         _record(run, step, result)
@@ -1005,6 +1003,38 @@ def _record(run: WorkflowRun, step: dict, result: dict, *, status: str = "ok") -
         # this step. The .exists() guard in advance_run is best-effort; this
         # constraint is the real backstop against a double-send.
         logger.info("workflow run %s step %s already recorded", run.pk, step["id"])
+
+
+def _alert_failure(run: WorkflowRun, error: str) -> None:
+    """Email the owners when an automation fails, at most once a day per automation.
+
+    A failure nobody hears about is the worst kind: the owner thinks it is working. The daily
+    limit stops one broken automation from flooding an inbox. Best-effort: alerting must never
+    turn a recorded failure into a crash.
+    """
+    try:
+        from django.core.cache import cache
+        from django.urls import reverse
+
+        from apps.accounts import notifications
+        from apps.automation import explain
+
+        if not cache.add(f"automation-failure-alert:{run.workflow_id}", 1, 24 * 3600):
+            return
+        contact = run.contact
+        who = contact.full_name or contact.phone or contact.email or "a customer"
+        notifications.notify_team(
+            run.workflow.account, to="owners",
+            subject=f"Akilent: {run.workflow.name} couldn't send",
+            text=(
+                f"Your automation {run.workflow.name} couldn't finish for {who}.\n\n"
+                f"{explain.humanise_step_error(error)}\n\n"
+                "You'll get at most one of these emails a day for each automation."
+            ),
+            path=reverse("automation:why-not"),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("could not send the failure alert for run %s", run.pk)
 
 
 def _complete(run: WorkflowRun) -> WorkflowRun:
@@ -1069,29 +1099,94 @@ def enroll_for_trigger(
 
 
 def _trigger_allows(workflow: Workflow, trigger: dict, contact, context: dict) -> bool:
-    """Trigger-level filters: a keyword ``match`` on the message, then a per-contact cooldown.
+    """Trigger-level filters: a keyword ``match`` on the message, then a per-contact cooldown."""
+    return trigger_verdict(workflow, trigger, contact, context) is None
 
-    A trigger with neither is unaffected. The cooldown defaults to an hour for keyword
-    workflows, so a customer who sends "price?" three times gets one answer.
+
+def trigger_verdict(workflow: Workflow, trigger: dict, contact, context: dict) -> dict | None:
+    """Why a trigger's own filters refuse this event, or None if they let it through.
+
+    Returns a structured reason (``{"code": ..., "details": {...}}``), never wording; the owner-facing
+    sentences live in ``apps.automation.explain``. A trigger with neither a keyword match nor a reply
+    id nor a cooldown is unaffected. The cooldown defaults to an hour for keyword workflows, so a
+    customer who sends "price?" three times gets one answer.
     """
+    message = (context or {}).get("message") or {}
     match = trigger.get("match")
     if match:
         from apps.automation import keywords
 
-        body = ((context or {}).get("message") or {}).get("body") or ""
+        body = message.get("body") or ""
         if not keywords.matches(match, body):
-            return False
+            return {"code": "keyword_mismatch", "details": {"expected": list(match.get("any") or []),
+                                                           "mode": match.get("mode"), "received": body}}
     wanted = trigger.get("reply_id")
     if wanted:
         wanted = {w.casefold() for w in ([wanted] if isinstance(wanted, str) else wanted)}
-        if (((context or {}).get("message") or {}).get("reply_id") or "").casefold() not in wanted:
-            return False
+        got = (message.get("reply_id") or "")
+        if got.casefold() not in wanted:
+            return {"code": "reply_mismatch", "details": {"expected": sorted(wanted), "received": got}}
     cooldown = trigger.get("cooldown_minutes", DEFAULT_KEYWORD_COOLDOWN_MINUTES if match else 0)
     if cooldown:
         since = timezone.now() - timedelta(minutes=cooldown)
-        if WorkflowRun.objects.filter(workflow=workflow, contact=contact, started_at__gte=since).exists():
-            return False
-    return True
+        last = WorkflowRun.objects.filter(
+            workflow=workflow, contact=contact, started_at__gte=since).order_by("-started_at").first()
+        if last is not None:
+            return {"code": "cooldown", "details": {"minutes": cooldown, "last_started_at": last.started_at}}
+    return None
+
+
+# Triggers that a customer's message can fire. "contact.created" only fires for a brand-new customer.
+MESSAGE_TRIGGERS = ("conversation.message_received", "contact.created")
+
+
+def explain_enrollment(
+    account_id: int, contact, *, message: dict, message_at, is_first_message: bool,
+) -> list[dict]:
+    """For each automation a customer's message could have started: did it, and if not, why not.
+
+    Returns structured verdicts (``{"workflow", "code", "details"}``), never wording. Codes:
+    ``ran`` / ``already_running`` / ``not_on`` / ``not_new_customer`` / ``keyword_mismatch`` /
+    ``reply_mismatch`` / ``cooldown`` / ``no_run``. It reuses ``trigger_verdict``, the same check
+    ``enroll_for_trigger`` applies, so the explanation cannot drift from what actually happens.
+    Callers supply the message facts; this module reads no other app's data.
+    """
+    out: list[dict] = []
+    context = {"message": message}
+    for wf in Workflow.objects.filter(account_id=account_id).order_by("name"):
+        trigger = (wf.definition or {}).get("trigger", {})
+        kind = trigger.get("type")
+        if kind not in MESSAGE_TRIGGERS:
+            continue
+
+        def verdict(code: str, **details) -> None:
+            out.append({"workflow": wf, "code": code, "details": details})
+
+        if wf.status != Workflow.Status.PUBLISHED:
+            verdict("not_on", status=wf.status)
+            continue
+        if kind == "contact.created" and not is_first_message:
+            verdict("not_new_customer")
+            continue
+        run = (
+            WorkflowRun.objects.filter(workflow=wf, contact=contact, started_at__gte=message_at - timedelta(minutes=2))
+            .order_by("-started_at").first()
+        )
+        if run is not None:
+            failed = run.step_runs.filter(status="error").order_by("-id").first()
+            verdict("ran", run=run, error=(failed.result or {}).get("error", "") if failed else "")
+            continue
+        blocked = trigger_verdict(wf, trigger, contact, context) if kind == "conversation.message_received" else None
+        if blocked is not None:
+            verdict(blocked["code"], **blocked["details"])
+            continue
+        if WorkflowRun.objects.filter(
+            workflow=wf, contact=contact, status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
+        ).exists():
+            verdict("already_running")
+            continue
+        verdict("no_run")
+    return out
 
 
 _RUN_DUE_BATCH = 200
