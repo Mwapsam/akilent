@@ -22,8 +22,14 @@ TRIGGER_LABELS = {
 }
 
 STEP_LABELS = {
-    "send_email": "Send an email",
+    "reply_text": "Reply on WhatsApp",
+    "send_buttons": "Ask with buttons",
+    "send_list": "Ask with a list",
+    "wait_for_reply": "Wait for their answer",
+    "add_tag": "Add a tag",
+    "remove_tag": "Remove a tag",
     "send_whatsapp": "Send a WhatsApp message",
+    "send_email": "Send an email",
     "create_lead": "Track as interested",
     "update_lead_status": "Update how interested they are",
     "assign_conversation": "Assign to a teammate",

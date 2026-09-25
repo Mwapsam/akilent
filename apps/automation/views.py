@@ -18,12 +18,13 @@ from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 from apps.core.module_gate import module_required
 
-_STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "send_buttons", "send_list", "wait_for_reply",
+# Ordered WhatsApp first: the editor lists them in this order and the first is what "Add step" offers.
+_STEP_TYPES = ["reply_text", "send_buttons", "send_list", "wait_for_reply", "send_whatsapp",
                "create_lead", "update_lead_status", "assign_conversation", "notify_team",
-               "add_tag", "remove_tag", "webhook", "wait", "branch", "set_attribute", "stop"]
-_TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
-                  "email.opened", "email.clicked", "conversation.message_received",
-                  "lead.created", "lead.status_changed", "lead.qualified", "lead.lost"]
+               "add_tag", "remove_tag", "wait", "branch", "send_email", "webhook", "set_attribute", "stop"]
+_TRIGGER_TYPES = ["conversation.message_received", "contact.created", "lead.created",
+                  "lead.status_changed", "lead.qualified", "lead.lost", "contact.updated",
+                  "manual", "business_event", "email.opened", "email.clicked"]
 
 
 @login_required
@@ -356,7 +357,9 @@ def workflow_create(request):
 
     starter = request.POST.get("from_template") or ""
     name = (request.POST.get("name") or "").strip()
-    definition: dict = {"trigger": {"type": "manual"}, "steps": [{"id": "stop", "type": "stop"}]}
+    # A new automation starts from a WhatsApp moment (a customer messages you), not a manual run.
+    definition: dict = {
+        "trigger": {"type": "conversation.message_received"}, "steps": [{"id": "stop", "type": "stop"}]}
     if starter and starter in STARTER_TEMPLATES:
         tpl = STARTER_TEMPLATES[starter]
         definition = tpl["definition"]
@@ -593,6 +596,7 @@ def why_not(request):
     from apps.automation.workflow_engine import explain_enrollment
     from apps.conversations import attribution
     from apps.conversations.models import Conversation, Message
+    from apps.whatsapp import api as whatsapp_api
 
     account = get_current_account(request)
     if account is None:
@@ -618,6 +622,16 @@ def why_not(request):
         verdicts = explain_enrollment(
             account.id, contact, message=message, message_at=latest.timestamp, is_first_message=not earlier)
         notes = []
+        from apps.billing import api as billing_api
+
+        if not whatsapp_api.automations_start_from_messages():
+            notes.append(
+                "Automations are switched off for the whole site, so no customer message starts one, "
+                "however it is set up. This is a platform setting, not a mistake in your automation. "
+                "Ask your Akilent administrator to turn on \"automation events\"."
+            )
+        if not billing_api.module_enabled(account, "automation"):
+            notes.append("Automations are switched off for your plan.")
         if getattr(contact, "whatsapp_opted_out", False):
             notes.append("This customer has opted out of messages, so no automation will send to them.")
         if timezone.now() - latest.timestamp > timedelta(hours=24):

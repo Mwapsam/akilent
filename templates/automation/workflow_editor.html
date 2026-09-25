@@ -765,11 +765,11 @@ function workflowEditor() {
       return "step-" + (max + 1);
     },
     addStep() {
-      const step = { id: this.uniqueId(), type: "send_email", _mode: "write" };
+      const step = { id: this.uniqueId(), type: "reply_text" };
       this.definition.steps.push(step);
     },
     insertStep(i) {
-      const step = { id: this.uniqueId(), type: "send_email", _mode: "write" };
+      const step = { id: this.uniqueId(), type: "reply_text" };
       this.definition.steps.splice(i + 1, 0, step);
     },
     move(i, d) {

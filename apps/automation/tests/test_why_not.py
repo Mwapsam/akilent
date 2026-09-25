@@ -417,3 +417,55 @@ def test_send_test_will_not_use_another_businesses_contact(owner, account, monke
     monkeypatch.setattr(whatsapp_api, "send_message", lambda *a, **k: sent.append(1))
     owner.post("/automations/starters/test/", {"starter": "greet-hello", "reply_text": "Hi", "test_phone": "+260971234567"})
     assert not sent
+
+
+# ---- WhatsApp first ----
+@pytest.mark.django_db
+def test_a_new_automation_starts_from_a_whatsapp_moment(owner, account):
+    owner.post("/automations/create/", {"name": "Mine"})
+    wf = Workflow.objects.get(account=account, name="Mine")
+    assert wf.definition["trigger"]["type"] == "conversation.message_received"
+
+
+def test_the_editor_offers_whatsapp_first_and_email_later():
+    from apps.automation.views import _STEP_TYPES, _TRIGGER_TYPES
+
+    assert _STEP_TYPES[0] == "reply_text"
+    assert _STEP_TYPES.index("reply_text") < _STEP_TYPES.index("send_email")
+    assert _STEP_TYPES.index("send_whatsapp") < _STEP_TYPES.index("send_email")
+    assert _TRIGGER_TYPES[0] == "conversation.message_received"
+    assert _TRIGGER_TYPES.index("conversation.message_received") < _TRIGGER_TYPES.index("email.opened")
+
+
+@pytest.mark.django_db
+def test_add_step_in_the_editor_defaults_to_a_whatsapp_reply(owner, account):
+    wf = keyword_wf(account)
+    html = owner.get(f"/automations/{wf.slug}/").content.decode()
+    assert 'type: "reply_text"' in html and 'type: "send_email", _mode: "write"' not in html
+
+
+@pytest.mark.django_db
+def test_email_only_starters_are_labelled_as_email(owner):
+    html = owner.get("/automations/").content.decode()
+    assert "Start from scratch (WhatsApp)" in html and "Email: Welcome series" in html
+
+
+@pytest.mark.django_db
+def test_the_page_names_the_site_wide_switch_when_it_is_off(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+
+    keyword_wf(account)
+    say(account, "What is the price for the solar installation package?")
+    monkeypatch.setattr(whatsapp_api, "automations_start_from_messages", lambda: False)
+    html = owner.get("/automations/why-not/").content.decode()
+    assert "switched off for the whole site" in html
+
+
+@pytest.mark.django_db
+def test_no_site_note_when_the_switch_is_on(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+
+    keyword_wf(account)
+    say(account, "price?")
+    monkeypatch.setattr(whatsapp_api, "automations_start_from_messages", lambda: True)
+    assert "switched off for the whole site" not in owner.get("/automations/why-not/").content.decode()

@@ -206,3 +206,13 @@ def free_text_window_is_open(contact: WhatsAppContact) -> bool:
 
     conversation = Conversation.objects.filter(contact=contact).order_by("-last_message_at", "-id").first()
     return bool(conversation and conversation.window_is_open)
+
+
+def automations_start_from_messages() -> bool:
+    """Whether a customer's WhatsApp message may start automations at all (a site-wide switch)."""
+    from apps.whatsapp.tasks import _automation_events_enabled
+
+    try:
+        return bool(_automation_events_enabled())
+    except Exception:
+        return False

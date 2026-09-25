@@ -323,9 +323,9 @@
     <div>
       <label class="label" for="wf-from">Start from</label>
       <select id="wf-from" name="from_template" class="select">
-        <option value="">Start from scratch</option>
+        <option value="">Start from scratch (WhatsApp)</option>
         {% for s in starters %}
-        <option value="{{ s.id }}">{{ s.name }} — {{ s.description }}</option>
+        <option value="{{ s.id }}">Email: {{ s.name }} — {{ s.description }}</option>
         {% endfor %}
       </select>
     </div>

@@ -59,8 +59,11 @@ def describe_verdict(verdict: dict) -> dict:
         headline = "Didn't start again. It is still working through an earlier message from this customer."
         detail, tone = "", WAITING
     else:  # no_run
-        headline = "Didn't reply, and nothing stopped it that we can see."
-        detail = "It may have a condition of its own that this customer didn't meet."
+        headline = "Didn't start, although its words and settings match this message."
+        detail = (
+            "Nothing about this automation stopped it. Check the notes above for a switch that is off "
+            "for the whole site or your plan, or a condition of its own that this customer didn't meet."
+        )
         tone = NOT_REPLIED
     return {"name": name, "tone": tone, "headline": headline, "detail": detail, "fix": fix}
 
