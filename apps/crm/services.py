@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 _OPEN_LEAD_STATUSES = [Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]
 
 
-def create_lead(account, contact, *, source: str = "", owner=None, conversation_id: str = "") -> Lead:
+def create_lead(account, contact, *, source: str = "", owner=None, conversation_id: str = "",
+                workflow_run=None) -> Lead:
     """Create a Lead for ``contact``, or return its existing open one.
 
     A contact should have at most one open opportunity being tracked at a
@@ -31,12 +32,12 @@ def create_lead(account, contact, *, source: str = "", owner=None, conversation_
     if existing is not None:
         return existing
 
-    from apps.conversations.attribution import resolve_conversation
+    from apps.conversations import attribution
 
+    conversation, method = attribution.decide(account, contact, public_id=conversation_id)
     lead = Lead.objects.create(
-        account=account, contact=contact, source=source, owner=owner,
-        conversation=resolve_conversation(account, contact, public_id=conversation_id),
-    )
+        account=account, contact=contact, source=source, owner=owner, conversation=conversation)
+    attribution.record(lead, conversation, method, workflow_run=workflow_run)
 
     emit_event(
         account=account, type="lead.created", occurred_at=lead.created_at,
@@ -93,7 +94,7 @@ def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
     if lead.status == Lead.Status.CONVERTED:
         raise ValueError(f"lead {lead.pk} is already converted")
 
-    from apps.conversations.attribution import resolve_conversation
+    from apps.conversations import attribution
 
     pipeline = pipeline or Pipeline.ensure_default(lead.account)
     first_stage = pipeline.stages.filter(is_won=False, is_lost=False).order_by("order").first()
@@ -104,12 +105,22 @@ def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
         deal = Deal.objects.create(
             account=lead.account, contact=lead.contact, pipeline=pipeline, stage=first_stage,
             title=title or f"{lead.contact}", value=value,
-            conversation=lead.conversation or resolve_conversation(lead.account, lead.contact),
         )
         lead.status = Lead.Status.CONVERTED
         lead.converted_at = timezone.now()
         lead.converted_to_deal = deal
         lead.save(update_fields=["status", "converted_at", "converted_to_deal", "updated_at"])
+
+    # The deal keeps the credit its lead earned (same conversation, method and workflow run);
+    # a lead with none is looked at afresh.
+    lead_attr = getattr(lead, "attribution", None)
+    if lead_attr is not None:
+        attribution.record(
+            deal, lead_attr.conversation, lead_attr.method, workflow_run=lead_attr.workflow_run,
+            metadata={"inherited_from_lead": lead.public_id})
+    else:
+        conversation, method = attribution.decide(deal.account, deal.contact)
+        attribution.record(deal, conversation, method)
 
     emit_event(
         account=deal.account, type="deal.created", occurred_at=deal.created_at,

@@ -25,13 +25,12 @@ def create_order(account, contact, items: list[dict], *, currency: str = "USD",
     if not items:
         raise ValueError("create_order requires at least one item")
 
-    from apps.conversations.attribution import resolve_conversation
+    from apps.conversations import attribution
 
+    conversation, method = attribution.decide(account, contact, public_id=conversation_id)
     with transaction.atomic():
-        order = Order.objects.create(
-            account=account, contact=contact, currency=currency,
-            conversation=resolve_conversation(account, contact, public_id=conversation_id),
-        )
+        order = Order.objects.create(account=account, contact=contact, currency=currency, conversation=conversation)
+        attribution.record(order, conversation, method)
         for item in items:
             OrderItem.objects.create(
                 order=order,

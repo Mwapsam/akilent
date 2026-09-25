@@ -10,12 +10,15 @@ class CreateLeadAction(Action):
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
-        return {"required": ["account", "contact"], "optional": ["source", "owner"]}
+        return {"required": ["account", "contact"], "optional": ["source", "owner", "workflow_run", "conversation_id"]}
 
-    def execute(self, context: dict, *, account, contact, source: str = "", owner=None) -> dict:
+    def execute(self, context: dict, *, account, contact, source: str = "", owner=None,
+                workflow_run=None, conversation_id: str = "") -> dict:
         from apps.crm.services import create_lead
 
-        lead = create_lead(account, contact, source=source, owner=owner)
+        lead = create_lead(
+            account, contact, source=source, owner=owner, workflow_run=workflow_run,
+            conversation_id=conversation_id)
         return {"lead_id": lead.public_id}
 
 

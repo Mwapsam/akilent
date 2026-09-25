@@ -639,7 +639,8 @@ def _run_create_lead(run: WorkflowRun, step: dict) -> dict:
     try:
         result = run_action(
             "create_lead", {"account": account}, account=account, contact=run.contact,
-            source=(step.get("source") or "automation")[:50],
+            source=(step.get("source") or "automation")[:50], workflow_run=run,
+            conversation_id=(run.context or {}).get("conversation_id") or "",
         )
     except ActionError as exc:
         raise ValueError(f"create_lead step {step.get('id')!r}: {exc}") from exc

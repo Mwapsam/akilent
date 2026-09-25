@@ -159,3 +159,82 @@ def test_insights_shows_revenue_by_channel(client, account):
     response = client.get("/email/insights/")
     assert response.status_code == 200
     assert b"42.00" in response.content
+
+
+# ---- the immutable attribution record -----------------------------------------------------------
+from apps.conversations.models import ConversationAttribution as CA  # noqa: E402
+
+
+@pytest.mark.django_db
+def test_explicit_and_recent_methods_are_recorded(account):
+    conversation = chat(account)
+    explicit = create_lead(account, conversation.contact, conversation_id=conversation.public_id)
+    assert explicit.attribution.method == CA.Method.EXPLICIT
+    assert explicit.attribution.channel == "whatsapp" and explicit.attribution.conversation == conversation
+    order = create_order(account, conversation.contact, item())
+    assert order.attribution.method == CA.Method.RECENT_CONVERSATION
+
+
+@pytest.mark.django_db
+def test_no_evidence_means_no_record(account):
+    contact = Contact.objects.create(account=account, phone="+260971000030")
+    lead = create_lead(account, contact)
+    assert not CA.objects.filter(lead=lead).exists() and lead.conversation is None
+
+
+@pytest.mark.django_db
+def test_deal_inherits_method_and_workflow_run_from_its_lead(account):
+    from apps.automation.models import Workflow, WorkflowRun
+
+    conversation = chat(account)
+    workflow = Workflow.objects.create(account=account, name="Check in", slug="check-in")
+    run = WorkflowRun.objects.create(workflow=workflow, contact=conversation.contact)
+    lead = create_lead(account, conversation.contact, conversation_id=conversation.public_id, workflow_run=run)
+    deal = convert_lead_to_deal(lead, value=5)
+    assert deal.attribution.method == CA.Method.EXPLICIT
+    assert deal.attribution.workflow_run == run
+    assert deal.attribution.metadata["inherited_from_lead"] == lead.public_id
+
+
+@pytest.mark.django_db
+def test_attribution_cannot_be_edited_or_deleted(account):
+    conversation = chat(account)
+    attribution = create_order(account, conversation.contact, item()).attribution
+    attribution.method = CA.Method.EXPLICIT
+    with pytest.raises(ValueError):
+        attribution.save()
+    with pytest.raises(ValueError):
+        attribution.delete()
+
+
+@pytest.mark.django_db
+def test_a_record_needs_exactly_one_subject(account):
+    from django.db import IntegrityError, transaction
+
+    conversation = chat(account)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        CA.objects.create(account=account, conversation=conversation, channel="whatsapp", method="explicit")
+
+
+@pytest.mark.django_db
+def test_one_record_per_object(account):
+    from apps.conversations import attribution
+
+    conversation = chat(account)
+    order = create_order(account, conversation.contact, item())
+    again = attribution.record(order, conversation, CA.Method.EXPLICIT)
+    assert again == order.attribution and CA.objects.filter(order=order).count() == 1
+
+
+@pytest.mark.django_db
+def test_workflow_created_lead_credits_the_run_and_its_conversation(account):
+    from apps.automation import workflow_engine as we
+    from apps.automation.models import Workflow
+
+    conversation = chat(account)
+    workflow = Workflow.objects.create(account=account, name="Track", slug="track")
+    run = we.WorkflowRun.objects.create(
+        workflow=workflow, contact=conversation.contact, context={"conversation_id": conversation.public_id})
+    we._run_create_lead(run, {"id": "c", "type": "create_lead"})
+    lead = Lead.objects.get(account=account, contact=conversation.contact)
+    assert lead.attribution.workflow_run == run and lead.attribution.method == CA.Method.EXPLICIT

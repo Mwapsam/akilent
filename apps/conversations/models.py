@@ -329,3 +329,53 @@ class FollowUp(models.Model):
         if self.done_at is None:
             self.done_at = timezone.now()
             self.save(update_fields=["done_at"])
+
+
+class ConversationAttribution(models.Model):
+    """Why Akilent credited a lead, deal or order to a conversation. Immutable.
+
+    Exactly one of ``lead`` / ``deal`` / ``order`` is set, and each object gets at most one
+    record, made when the object is created. A correction is a new record on a new object, never
+    an edit, so a report run next year says the same as today. ``Lead/Deal/Order.conversation``
+    stay as fast shortcuts to the same answer; this is the record of how it was decided.
+    """
+
+    class Method(models.TextChoices):
+        EXPLICIT = "explicit", "Explicit"                      # a person or workflow named the conversation
+        RECENT_CONVERSATION = "recent_conversation", "Recent conversation"  # customer's latest chat, 30 days
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="attributions")
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="attributions")
+    channel = models.CharField(max_length=20, choices=Conversation.Channel.choices)
+    lead = models.OneToOneField(
+        "crm.Lead", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+    deal = models.OneToOneField(
+        "crm.Deal", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+    order = models.OneToOneField(
+        "commerce.Order", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+    workflow_run = models.ForeignKey(
+        "automation.WorkflowRun", on_delete=models.SET_NULL, null=True, blank=True, related_name="attributions")
+    method = models.CharField(max_length=24, choices=Method.choices)
+    attributed_at = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["account", "channel", "attributed_at"])]
+        constraints = [
+            models.CheckConstraint(
+                name="attribution_exactly_one_subject",
+                condition=(
+                    models.Q(lead__isnull=False, deal__isnull=True, order__isnull=True)
+                    | models.Q(lead__isnull=True, deal__isnull=False, order__isnull=True)
+                    | models.Q(lead__isnull=True, deal__isnull=True, order__isnull=False)
+                ),
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValueError("An attribution is a historical record and cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("An attribution is a historical record and cannot be deleted.")
