@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "apps.billing",
     "apps.api",
     "apps.internal_debug",
+    "apps.ai",
 ]
 
 MIDDLEWARE = [
@@ -207,6 +208,16 @@ else:
 
 
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "localhost:8000")
+
+# --- AI (optional) ---
+# "none" switches every AI feature off; Akilent works fully without it. "ollama" uses OLLAMA_BASE_URL
+# (the hosted API by default) with OLLAMA_API_KEY. Anthropic/OpenAI slot in as further backends.
+AI_PROVIDER_BACKEND = os.getenv("AI_PROVIDER_BACKEND", "none")
+AI_MODEL = os.getenv("AI_MODEL", "gpt-oss:120b")
+AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "45"))
+AI_DAILY_CALL_LIMIT = int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
 
 # --- Encryption ---

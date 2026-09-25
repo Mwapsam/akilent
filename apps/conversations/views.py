@@ -5,6 +5,7 @@ store. See docs/plans — "UI/UX Principle: Complex Architecture, Simple Product
 from __future__ import annotations
 
 import hashlib
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -27,6 +28,8 @@ from apps.conversations.state import (
     snapshot_of,
     with_activity,
 )
+
+logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 30
 
@@ -140,6 +143,73 @@ def _window_is_open(conversation) -> bool:
     return bool(wa and wa.window_is_open)
 
 
+def _ai_config(account, conversation) -> dict:
+    """What the composer needs to show AI proposals. ``enabled`` is False whenever AI is off."""
+    from apps.ai import api as ai_api
+
+    if not ai_api.is_available(account):
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "suggestUrl": reverse("conversations:ai_suggest", args=[conversation.public_id]),
+        "dismissUrl": reverse("conversations:ai_dismiss", args=[conversation.public_id]),
+        "proposal": _ai_proposal_json(account, conversation),
+    }
+
+
+def _ai_proposal_json(account, conversation):
+    try:
+        from apps.ai import api as ai_api
+
+        if not ai_api.is_available(account):
+            return None
+        return ai_api.serialize(ai_api.current_proposal(account, conversation), conversation)
+    except Exception:  # noqa: BLE001 - AI trouble must never break the inbox
+        logger.exception("could not load the AI proposal for conversation=%s", conversation.pk)
+        return None
+
+
+def _record_ai_use(account, request, sent_text: str) -> None:
+    proposal_id = request.POST.get("ai_proposal")
+    if not proposal_id:
+        return
+    try:
+        from apps.ai import api as ai_api
+
+        ai_api.record_used(account, proposal_id, sent_text)
+    except Exception:  # noqa: BLE001
+        logger.exception("could not record AI proposal use")
+
+
+@login_required
+@require_POST
+def ai_suggest(request, public_id: str):
+    """A person asked AI for a suggestion. It is drafted in the background; the feed delivers it."""
+    from apps.ai import api as ai_api
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    proposal = ai_api.request_proposal(account, conversation, request.user)
+    if proposal is None:
+        return JsonResponse({"ok": False, "error": "AI suggestions aren't switched on."}, status=400)
+    return JsonResponse({"ok": True, "proposal": ai_api.serialize(proposal, conversation)})
+
+
+@login_required
+@require_POST
+def ai_dismiss(request, public_id: str):
+    from apps.ai import api as ai_api
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    get_object_or_404(Conversation, account=account, public_id=public_id)
+    ai_api.dismiss(account, request.POST.get("proposal"))
+    return JsonResponse({"ok": True})
+
+
 def _team_members(account):
     from django.contrib.auth import get_user_model
 
@@ -173,6 +243,7 @@ def conversation_detail(request, public_id: str):
             if action == "reply":
                 run_action("reply", ctx, conversation=conversation, body=request.POST.get("body", "").strip())
                 conversation.mark_read()
+                _record_ai_use(account, request, request.POST.get("body", ""))
             elif action == "send_template":
                 # The composer's answer to "outside the 24h window" (R1.5c
                 # follow-up): send an approved WhatsApp template instead of a
@@ -203,6 +274,7 @@ def conversation_detail(request, public_id: str):
                     conversation=conversation,
                 )
                 conversation.mark_read()
+                _record_ai_use(account, request, "")
             elif action == "create_followup":
                 from apps.conversations.followups import resolve_due_at
 
@@ -250,6 +322,7 @@ def conversation_detail(request, public_id: str):
         # Only WhatsApp enforces a messaging window today; other channels report
         # it open so the composer behaves as it always has for them.
         "windowOpen": _window_is_open(conversation),
+        "ai": _ai_config(account, conversation),
         "messages": [
             {"id": m.id, "direction": m.direction, "body": m.body,
              "ts": m.timestamp.isoformat(), "status": m.status,
@@ -421,6 +494,7 @@ def messages_feed(request, public_id: str):
             for m in recent_outbound if (m.metadata or {}).get("failure_reason")
         },
         "windowOpen": _window_is_open(conversation),
+        "aiProposal": _ai_proposal_json(account, conversation),
         "status_html": render_to_string("conversations/_status_badges.html", {
             "conversation": conversation,
             "snapshot": get_conversation_state(conversation),

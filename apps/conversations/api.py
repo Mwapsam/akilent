@@ -70,3 +70,59 @@ def revenue_by_channel(account, *, days: int = DEFAULT_DAYS, now: datetime | Non
             "attributed": channel != UNATTRIBUTED,
         })
     return result
+
+
+def assistant_context(conversation, *, recent: int = 8) -> dict:
+    """Everything an assistant (AI or otherwise) may know about one conversation, and nothing more.
+
+    Only this conversation and its own customer: the last ``recent`` customer and business messages
+    (never system lines or internal notes), the customer's first name and tags, whether they're
+    tracked as interested, whether a normal reply is allowed right now, the business's approved
+    WhatsApp templates and its opening hours.
+    """
+    from apps.accounts import business_hours
+    from apps.crm.models import Lead
+    from apps.whatsapp.models import MessageTemplate
+
+    account = conversation.account
+    contact = conversation.contact
+    thread = list(
+        conversation.messages.filter(direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND])
+        .exclude(body="").order_by("-timestamp", "-id").values("id", "direction", "body")[:recent]
+    )[::-1]
+    window_open = True
+    if conversation.channel == Conversation.Channel.WHATSAPP:
+        wa = conversation.whatsapp_conversation
+        window_open = bool(wa and wa.window_is_open)
+    templates = [
+        {"name": t.whatsapp_template_name, "body": t.content or "", "blanks": list(t.variables or [])}
+        for t in MessageTemplate.objects.filter(
+            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED).order_by("name")
+        if t.whatsapp_template_name
+    ] if conversation.channel == Conversation.Channel.WHATSAPP else []
+    hours = business_hours.get_hours(account)
+    hours_text = ""
+    if hours and hours.schedule:
+        hours_text = "; ".join(
+            f"{day.title()} {slot.get('open')}-{slot.get('close')}" for day, slot in hours.schedule.items()
+        ) + f" ({hours.timezone})"
+    return {
+        "business_name": account.company_name or "",
+        "hours_text": hours_text,
+        "thread": thread,
+        "window_open": window_open,
+        "templates": templates,
+        "customer": {
+            "first_name": (contact.first_name or "").strip(),
+            "tags": list(contact.tags.values_list("name", flat=True)[:10]),
+            "interested": Lead.objects.filter(
+                account=account, contact=contact,
+                status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]).exists(),
+        },
+    }
+
+
+def newest_message_ids(conversation) -> tuple[int | None, int | None]:
+    """``(newest inbound id, newest outbound id)`` in this conversation, by arrival order."""
+    newest = lambda d: conversation.messages.filter(direction=d).order_by("-id").values_list("id", flat=True).first()  # noqa: E731
+    return newest(Message.Direction.INBOUND), newest(Message.Direction.OUTBOUND)

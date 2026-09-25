@@ -216,3 +216,14 @@ def automations_start_from_messages() -> bool:
         return bool(_automation_events_enabled())
     except Exception:
         return False
+
+
+def approved_template_by_name(account: Account, name: str):
+    """The account's approved template with this WhatsApp name, or None."""
+    from apps.whatsapp.models import MessageTemplate
+
+    if not name:
+        return None
+    return MessageTemplate.objects.filter(
+        account=account, whatsapp_template_name=name, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    ).first()

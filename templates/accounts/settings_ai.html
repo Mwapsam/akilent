@@ -1,0 +1,49 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-2xl space-y-4">
+  <div>
+    <h2 class="font-semibold mb-1">AI suggestions</h2>
+    <p class="text-sm text-gray-600">
+      When a customer writes and none of your automations answered, AI can draft a reply for your team.
+      <strong>AI never sends anything.</strong> A person on your team reads the suggestion, edits it if needed,
+      and presses Send. Everything else in Akilent works the same with AI switched off.
+    </p>
+  </div>
+
+  {% if not site_configured %}
+  <div class="alert alert-info">AI isn't set up on this Akilent installation yet. Ask your administrator to configure an AI provider.</div>
+  {% endif %}
+
+  <div class="rounded-xl border border-border p-4 text-sm text-gray-700">
+    <p class="font-medium text-ink">What is sent to the AI service</p>
+    <ul class="list-disc pl-5 mt-1 space-y-0.5">
+      <li>The last few messages of the one conversation being answered. Phone numbers and email addresses in them are hidden.</li>
+      <li>The customer's first name and tags, and whether they're tracked as interested.</li>
+      <li>Your business name, opening hours, approved templates and the notes below.</li>
+    </ul>
+    <p class="mt-1">Internal notes, other customers and other conversations are never sent.</p>
+  </div>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+      <input type="checkbox" name="enabled" class="mt-1" {% if ai.enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+      <span class="text-sm text-ink">Turn on AI suggestions. I agree that the information above is sent to the AI service to draft replies.
+        {% if ai.consented_at %}<span class="block text-xs text-gray-500 mt-0.5">Agreed {{ ai.consented_at|date:"j M Y" }}{% if ai.consented_by %} by {{ ai.consented_by.get_full_name|default:ai.consented_by.email }}{% endif %}.</span>{% endif %}
+      </span>
+    </label>
+    <div>
+      <label class="label" for="ai-notes">What AI may tell customers about your business</label>
+      <textarea id="ai-notes" name="business_notes" class="textarea" rows="8" maxlength="{{ max_notes }}" {% if not can_edit %}disabled{% endif %}
+                placeholder="Prices: 3 kW home system from K18,000, installed.&#10;Where: Plot 12, Cairo Road, Lusaka.&#10;Delivery: Lusaka next day; Copperbelt within 3 days.&#10;Payment: 50% deposit, balance on installation.">{{ ai.business_notes }}</textarea>
+      <p class="text-xs text-gray-500 mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.</p>
+    </div>
+    {% if can_edit %}
+    <div class="flex flex-wrap justify-end gap-2">
+      {% if site_configured %}<button name="action" value="test" class="btn btn-ghost btn-sm" formnovalidate>Test connection</button>{% endif %}
+      <button class="btn btn-primary btn-sm">Save</button>
+    </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

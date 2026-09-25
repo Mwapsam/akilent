@@ -34,3 +34,12 @@ def account_exists(pk: int) -> bool:
 def list_active_accounts():
     """List all active accounts (admin use)."""
     return Account.objects.filter(is_active=True).order_by("company_name")
+
+
+def is_account_admin(user, account) -> bool:
+    """Whether ``user`` is an owner or admin of ``account``."""
+    from apps.accounts.models import Membership
+
+    return Membership.objects.filter(
+        user=user, account=account, role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
+    ).exists()

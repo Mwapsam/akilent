@@ -101,16 +101,21 @@ def record_inbound_whatsapp_message(
         subject_type="conversation",
         subject_id=conversation.public_id,
     )
-    if event is None or not enroll_workflows:
+    if event is None:
         return conversation
 
-    try:
-        _enroll_workflows(conversation, contact, message_log)
-    except Exception:
-        logger.exception(
-            "record_inbound_whatsapp_message: workflow enrollment failed for conversation=%s",
-            conversation.pk,
-        )
+    handled = False
+    if enroll_workflows:
+        try:
+            handled = _enroll_workflows(conversation, contact, message_log)
+        except Exception:
+            logger.exception(
+                "record_inbound_whatsapp_message: workflow enrollment failed for conversation=%s",
+                conversation.pk,
+            )
+    _announce_processed(conversation, message, handled)
+    if not enroll_workflows:
+        return conversation
 
     _record_customer_activity(contact, message_log)
     _clear_obsolete_followups(conversation, contact)
@@ -217,7 +222,8 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
         )
 
 
-def _enroll_workflows(conversation: Conversation, contact, message_log) -> None:
+def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
+    """Start or resume workflows for this message. True if one started or resumed."""
     from apps.automation.workflow_engine import enroll_for_trigger, resume_on_reply
     from apps.whatsapp.interactive import reply_for_log
 
@@ -230,14 +236,25 @@ def _enroll_workflows(conversation: Conversation, contact, message_log) -> None:
     # A customer answering a question an automation asked ("Prices or Booking?") continues
     # that conversation; it must not also start unrelated keyword workflows.
     if resume_on_reply(conversation.account_id, contact, message):
-        return
+        return True
 
-    enroll_for_trigger(
+    return enroll_for_trigger(
         conversation.account_id,
         "conversation.message_received",
         contact,
         context={"conversation_id": conversation.public_id, "message": message},
-    )
+    ) > 0
+
+
+def _announce_processed(conversation: Conversation, message: Message, handled: bool) -> None:
+    """Let optional consumers (AI) react once deterministic automation has had its chance."""
+    from apps.conversations.signals import conversation_message_processed
+
+    for receiver, result in conversation_message_processed.send_robust(
+        sender=Conversation, conversation=conversation, message=message, handled_by_automation=bool(handled),
+    ):
+        if isinstance(result, Exception):
+            logger.error("conversation_message_processed receiver %r failed: %r", receiver, result)
 
 
 # Same ordering as the provider-side log: a status only moves forward, and "failed" is terminal.

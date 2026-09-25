@@ -21,6 +21,8 @@ document.addEventListener('alpine:init', () => {
     interval: BASE_INTERVAL,
     timer: null,
     coarse: window.matchMedia('(pointer: coarse)').matches,
+    ai: Object.assign({ enabled: false, proposal: null }, cfg.ai || {}),
+    aiUsedId: null,
 
     init() {
       this.$nextTick(() => this.scrollBottom(true));
@@ -135,12 +137,56 @@ document.addEventListener('alpine:init', () => {
       if (data.status_html !== undefined) this.statusHtml = data.status_html;
       this.open = data.open;
       if (data.windowOpen !== undefined) this.windowOpen = data.windowOpen;
+      if (this.ai.enabled && data.aiProposal !== undefined) this.ai.proposal = data.aiProposal;
       if (data.messages.length) {
         this.$nextTick(() => {
           if (stick) this.scrollBottom();
           else if (inbound) this.newBelow = true;
         });
       }
+    },
+
+    // ── AI proposals (a person always reviews and sends) ─────────
+    async aiPost(url, extra) {
+      const fd = new FormData();
+      fd.set('csrfmiddlewaretoken', this.$refs.composer.querySelector('[name=csrfmiddlewaretoken]').value);
+      for (const [k, v] of Object.entries(extra || {})) fd.set(k, v);
+      const r = await fetch(url, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) throw new Error(data.error || 'Something went wrong.');
+      return data;
+    },
+    async aiSuggest() {
+      try {
+        const data = await this.aiPost(this.ai.suggestUrl);
+        this.ai.proposal = data.proposal;
+        this.interval = BASE_INTERVAL;
+        this.schedule(3500);
+      } catch (e) { if (window.toast) window.toast('danger', e.message); }
+    },
+    async aiDismiss() {
+      const p = this.ai.proposal;
+      if (!p) return;
+      this.ai.proposal = Object.assign({}, p, { status: 'dismissed' });
+      try { await this.aiPost(this.ai.dismissUrl, { proposal: p.id }); } catch (e) { /* the card is gone either way */ }
+    },
+    aiUseReply() {
+      const p = this.ai.proposal;
+      if (!p) return;
+      this.draft = p.text || '';
+      this.aiUsedId = p.id;
+      this.$nextTick(() => { this.grow(this.$refs.input); this.$refs.input.focus(); });
+      if (window.toast) window.toast('info', 'AI draft added. Check it before sending.');
+    },
+    aiReviewTemplate() {
+      const p = this.ai.proposal;
+      if (!p || !p.templateId) return;
+      this.aiUsedId = p.id;
+      if (this.$refs.tplPicker) this.$refs.tplPicker.open = true;
+      window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values } }));
     },
 
     // ── composing ────────────────────────────────────────────────
@@ -175,6 +221,8 @@ document.addEventListener('alpine:init', () => {
         if (!r.ok || !data.ok) throw new Error(data.error || 'Could not send the message.');
         this.interval = BASE_INTERVAL;
         this.schedule(300);
+        if (this.aiUsedId && this.ai.proposal && this.ai.proposal.id === this.aiUsedId) this.ai.proposal.status = 'used';
+        this.aiUsedId = null;
       } catch (e) {
         this.messages = this.messages.filter((m) => m.id !== pending.id);
         this.draft = body;

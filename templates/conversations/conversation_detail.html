@@ -320,9 +320,62 @@
           {% endif %}
         </div>
 
+        {% comment %}
+          AI proposals (apps.ai). AI never sends: a person reviews, edits and sends through the
+          normal composer, so the 24-hour window, opt-out and template checks still apply.
+          Hidden entirely when AI is off.
+        {% endcomment %}
+        <div class="cv-ai" x-show="ai.enabled" x-cloak>
+          <template x-if="ai.proposal && ai.proposal.status === 'pending'">
+            <p class="text-xs text-gray-500 flex items-center gap-2" role="status">
+              <svg class="w-4 h-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+              Drafting a suggestion…
+            </p>
+          </template>
+          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'reply'">
+            <div class="rounded-xl border border-border p-3 text-sm">
+              <p class="text-xs font-semibold text-gray-500">Suggested reply</p>
+              <p class="mt-1 text-ink whitespace-pre-line" x-text="ai.proposal.text"></p>
+              <p class="mt-1 text-xs text-gray-400"><span x-text="ai.proposal.reason"></span> · Generated just now</p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" class="btn btn-primary btn-sm" @click="aiUseReply()">Use reply</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="aiSuggest()">Regenerate</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template'">
+            <div class="rounded-xl border border-border p-3 text-sm">
+              <p class="text-xs font-semibold text-gray-500">Suggested template</p>
+              <p class="mt-1 font-medium text-ink" x-text="ai.proposal.templateName"></p>
+              <p class="text-xs text-gray-500">Uses your approved WhatsApp template. The customer's name is filled in automatically.</p>
+              <p class="mt-1 text-xs text-gray-400" x-text="ai.proposal.reason"></p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" class="btn btn-primary btn-sm" @click="aiReviewTemplate()">Review template</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'handoff'">
+            <div class="rounded-xl border border-border p-3 text-sm">
+              <p class="text-xs font-semibold text-gray-500">AI thinks a person should answer this</p>
+              <p class="mt-1 text-ink" x-text="ai.proposal.note"></p>
+              <div class="mt-2 flex gap-2"><button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button></div>
+            </div>
+          </template>
+          <template x-if="ai.proposal && ai.proposal.status === 'error'">
+            <p class="text-xs text-gray-500">Couldn't draft a suggestion: <span x-text="ai.proposal.error"></span>
+              <button type="button" class="underline ml-1" @click="aiSuggest()">Try again</button></p>
+          </template>
+          <template x-if="!ai.proposal || ['used', 'dismissed', 'expired'].includes(ai.proposal.status)">
+            <button type="button" class="cv-next-btn" @click="aiSuggest()">Suggest a reply</button>
+          </template>
+        </div>
+
         <form method="post" class="cv-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
           <input type="hidden" name="action" value="reply" />
+          <input type="hidden" name="ai_proposal" :value="aiUsedId || ''" />
           <div class="cv-inputwrap">
             {% if saved_replies %}
             <div class="relative self-end" x-data="{ srOpen: false, q: '' }" @click.outside="srOpen = false" @keydown.escape.stop="srOpen = false">
@@ -411,9 +464,11 @@
             <span class="cv-badge" x-show="!windowOpen" x-cloak>Required</span>
             <svg class="cv-chev w-4 h-4 ml-auto text-gray-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </summary>
-          <form method="post" class="p-3 space-y-3" x-data="{ tpl: '' }">
+          <form method="post" class="p-3 space-y-3" x-data="{ tpl: '' }"
+                x-on:ai-template-apply.window="tpl = String($event.detail.templateId); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
             {% csrf_token %}
             <input type="hidden" name="action" value="send_template" />
+            <input type="hidden" name="ai_proposal" :value="aiUsedId || ''" />
             <div>
               <label class="label" for="template-select">Template</label>
               <select id="template-select" name="template_id" class="select" required x-model="tpl">

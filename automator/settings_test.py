@@ -35,3 +35,8 @@ REDIS_URL = ""
 
 # Don't fire the (network) WhatsApp read-receipt task from inbound-message tests.
 WHATSAPP_MARK_READ_ENABLED = False
+
+# Tests never talk to a real AI service or see a real key from .env.
+AI_PROVIDER_BACKEND = "none"
+OLLAMA_API_KEY = ""
+OLLAMA_BASE_URL = "http://ollama.invalid"

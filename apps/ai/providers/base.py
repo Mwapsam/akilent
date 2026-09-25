@@ -1,15 +1,11 @@
 """Provider-agnostic AIProvider interface.
 
-Any LLM backend (Anthropic Claude, OpenAI GPT, Google Gemini, local Llama, ...)
-is supported by implementing this ABC. Business logic imports only from here
-and from apps.ai.types — never from a concrete provider module.
+Any LLM backend (Ollama, Anthropic Claude, OpenAI GPT, a self-hosted model, ...) is supported by
+implementing ``chat``. Business logic imports only from here and from ``apps.ai.types``, never from
+a concrete provider module, so swapping providers is a configuration change.
 
-Design principle: every method returns a typed dataclass from apps.ai.types,
-never a raw dict. Adapters belong in the provider, not scattered across the
-service layer.
-
-PHASE 3 STUB: This file defines the interface. Phase 5 will add
-Anthropic's Claude as the first concrete implementation.
+Every method returns a typed dataclass, never a raw dict. Adapting a vendor's wire format is the
+provider's job and stays inside the provider.
 """
 from __future__ import annotations
 
@@ -20,16 +16,16 @@ from typing import Optional
 
 @dataclass
 class CompletionResult:
-    """Result of an LLM completion call."""
+    """Result of an LLM call."""
 
     text: str
-    """The generated completion text."""
+    """The generated text."""
 
     model: str
-    """Model that generated the completion."""
+    """Model that generated it."""
 
     usage: dict = None
-    """Token usage: {'input_tokens': N, 'output_tokens': M}."""
+    """Token usage: {'input_tokens': N, 'output_tokens': M} when the provider reports it."""
 
     error: Optional[str] = None
     """Error message if the call failed."""
@@ -39,20 +35,36 @@ class CompletionResult:
             self.usage = {}
 
 
+class AIProviderError(Exception):
+    """A provider could not produce a result (network, key, rate limit, bad response, timeout).
+
+    The message is safe to log. It never contains the API key or customer text.
+    """
+
+
 class AIProvider(ABC):
-    """Abstract interface for an LLM (Large Language Model) backend.
+    """Abstract interface for an LLM backend.
 
-    Implement all abstract methods to add a new provider. The factory in
-    apps.ai.providers.__init__ will resolve the concrete class at runtime.
-
-    Threading: instances are not thread-safe. Instantiate one per request,
-    per Celery task, or per service call.
-
-    PHASE 3 STUB: This interface is defined but has no implementations.
-    Phase 5 will add Anthropic Claude (and optionally others).
+    Threading: instances are not thread-safe. Instantiate one per request, per Celery task, or per
+    service call.
     """
 
     @abstractmethod
+    def chat(
+        self,
+        messages: list,
+        system: str = "",
+        max_tokens: int = 1024,
+        temperature: float = 0.3,
+        timeout: Optional[float] = None,
+    ) -> CompletionResult:
+        """Send a conversation (a list of ``apps.ai.types.ChatMessage``) and return the reply.
+
+        Raises:
+            AIProviderError: on network failure, bad credentials, rate limit, timeout, or a
+                response that is not usable.
+        """
+
     def complete(
         self,
         prompt: str,
@@ -60,23 +72,13 @@ class AIProvider(ABC):
         max_tokens: int = 1024,
         temperature: float = 0.7,
     ) -> CompletionResult:
-        """Generate a text completion from a prompt.
+        """Single-prompt convenience wrapper over ``chat``."""
+        from apps.ai.types import ChatMessage
 
-        Args:
-            prompt: User message / question to complete.
-            system: System prompt defining the model's behavior.
-            max_tokens: Maximum length of the completion.
-            temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
+        return self.chat(
+            [ChatMessage("user", prompt)], system=system, max_tokens=max_tokens, temperature=temperature,
+        )
 
-        Returns:
-            CompletionResult with generated text and usage stats.
-
-        Raises:
-            AIProviderError: on network failure, rate limit, model error, etc.
-        """
-
-
-class AIProviderError(Exception):
-    """Base exception for AI provider errors."""
-
-    pass
+    def health(self) -> CompletionResult:
+        """A tiny round trip that proves the key, the network and the model all work."""
+        return self.complete("Reply with the single word OK.", max_tokens=64, temperature=0.0)

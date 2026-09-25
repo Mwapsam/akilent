@@ -1,5 +1,7 @@
 from django.urls import path
 
+from apps.ai import views as ai_views
+
 from . import settings_views, views
 
 urlpatterns = [
@@ -21,6 +23,7 @@ urlpatterns = [
     path("settings/team/", settings_views.settings_team, name="settings-team"),
     path("settings/tools/", settings_views.settings_tools, name="settings-tools"),
     path("settings/hours/", settings_views.settings_hours, name="settings-hours"),
+    path("settings/ai/", ai_views.settings_ai, name="settings-ai"),
     path("settings/team/invite/", settings_views.invite_create, name="invite-create"),
     path("settings/team/invitations/<int:pk>/revoke/", settings_views.invite_revoke, name="invite-revoke"),
     path("settings/team/members/<int:pk>/role/", settings_views.member_role, name="member-role"),
