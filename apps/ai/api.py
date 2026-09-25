@@ -13,20 +13,34 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def is_available(account) -> bool:
-    """AI is configured for the site, the business's plan allows it, and the owner opted in."""
+def unavailable_reason(account) -> str | None:
+    """Why AI is off for this business, in plain words, or None when it is on.
+
+    Three switches, checked in order: the site's provider, the business's plan (the AI module),
+    and the owner's opt-in.
+    """
     from apps.ai.models import AISettings
     from apps.ai.providers import is_configured
     from apps.billing import api as billing_api
 
-    if account is None or not is_configured():
-        return False
+    if account is None:
+        return "No business selected."
+    if not is_configured():
+        return "AI isn't set up on this Akilent installation yet."
     try:
-        if not billing_api.module_enabled(account, "ai"):
-            return False
+        module_on = billing_api.module_enabled(account, "ai")
     except KeyError:
-        return False
-    return AISettings.objects.filter(account=account, enabled=True).exists()
+        module_on = False
+    if not module_on:
+        return "The AI module is switched off for this business's plan."
+    if not AISettings.objects.filter(account=account, enabled=True).exists():
+        return "AI suggestions aren't turned on below."
+    return None
+
+
+def is_available(account) -> bool:
+    """AI is configured for the site, the business's plan allows it, and the owner opted in."""
+    return unavailable_reason(account) is None
 
 
 def _enqueue(proposal) -> None:

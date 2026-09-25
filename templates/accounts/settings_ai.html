@@ -12,6 +12,15 @@
 
   {% if not site_configured %}
   <div class="alert alert-info">AI isn't set up on this Akilent installation yet. Ask your administrator to configure an AI provider.</div>
+  {% elif off_reason %}
+  <div class="alert alert-info">
+    <strong>AI is off in the inbox.</strong> {{ off_reason }}
+    {% if "module" in off_reason %}
+      {% if is_staff %}Turn on the AI module for this business under <a class="underline" href="{% url 'core:customer-detail' account.pk %}">Manage, then Customers</a>.{% else %}Ask Akilent support to include AI in your plan.{% endif %}
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="alert alert-success">AI is on. Open a conversation to see a suggestion above the message box.</div>
   {% endif %}
 
   <div class="rounded-xl border border-border p-4 text-sm text-gray-700">

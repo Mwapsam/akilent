@@ -109,6 +109,16 @@ def test_the_plan_can_switch_ai_off(account):
 
     ModuleSubscription.objects.create(account=account, module=ModuleSubscription.AI, enabled=False)
     assert ai_api.is_available(account) is False
+    assert "module" in ai_api.unavailable_reason(account)
+
+
+@pytest.mark.django_db
+def test_settings_page_says_why_ai_is_off(agent, account):
+    from apps.billing.models import ModuleSubscription
+
+    assert "AI is on." in agent.get("/settings/ai/").content.decode()
+    ModuleSubscription.objects.create(account=account, module=ModuleSubscription.AI, enabled=False)
+    assert "AI module is switched off" in agent.get("/settings/ai/").content.decode()
 
 
 @pytest.mark.django_db

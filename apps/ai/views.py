@@ -42,5 +42,6 @@ def settings_ai(request):
     return render(request, "accounts/settings_ai.html", {
         "account": account, "active_tab": "ai", "can_edit": can_edit,
         "site_configured": is_configured(), "ai": ai_api.settings_for(account),
-        "max_notes": ai_api.MAX_NOTES,
+        "max_notes": ai_api.MAX_NOTES, "off_reason": ai_api.unavailable_reason(account),
+        "is_staff": request.user.is_staff,
     })
