@@ -230,7 +230,11 @@ class PhaseOneAcceptanceTest(Base):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue([q for q in ctx.captured_queries if "conversations_conversation" in q["sql"]])
         self.assertFalse([q for q in ctx.captured_queries if "whatsapp_messagelog" in q["sql"]])
-        self.assertContains(resp, "3 minutes")       # waiting age is shown (timesince uses a nbsp)
+        # The waiting age is shown, in the inbox's compact form ("3m" rather
+        # than timesince's "3 minutes", which crowded names out on a phone),
+        # on the time element marked as a wait rather than plain last activity.
+        self.assertContains(resp, 'class="inbox-time is-urgent"')
+        self.assertContains(resp, ">3m</time>")
 
     def test_replaying_the_same_send_does_not_duplicate_the_spine_message(self):
         self.customer_says("Hi", "wamid.IN1")
