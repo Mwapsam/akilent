@@ -243,6 +243,10 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
         _canonical_contact(log.account, log.contact)
         spine = SpineConversation.get_or_create_for_whatsapp(log.conversation)
         metadata = {"message_type": log.message_type}
+        # An automatic AI reply (apps.ai.autonomy) is sent with an "ai-auto:" key, so the inbox
+        # can label it "Sent by AI" without WhatsApp knowing anything about AI.
+        if (getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or "").startswith("ai-auto:"):
+            metadata["sent_by"] = "ai"
         if log.status == MessageLog.Status.FAILED:
             # OutboundMessage carries the error code; MessageLog doesn't. A
             # human/template/workflow reply that fails to send is the one place

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-import requests
 from django.conf import settings
 
 from apps.ai.providers.base import AIProvider, AIProviderError, CompletionResult
+from apps.ai.providers.http import post_json
 
-_CONNECT_TIMEOUT = 5
+DEFAULT_MODEL = "gpt-oss:120b"
 
 
 class OllamaProvider(AIProvider):
@@ -22,7 +22,7 @@ class OllamaProvider(AIProvider):
         self.base_url = (base_url or getattr(settings, "OLLAMA_BASE_URL", "") or "https://ollama.com").rstrip("/")
         # None means "use the configured key"; "" means explicitly none (a local server).
         self.api_key = getattr(settings, "OLLAMA_API_KEY", "") if api_key is None else api_key
-        self.model = model or getattr(settings, "AI_MODEL", "") or "gpt-oss:120b"
+        self.model = model or getattr(settings, "AI_MODEL", "") or DEFAULT_MODEL
         self.timeout = timeout or getattr(settings, "AI_TIMEOUT_SECONDS", 0) or 45
 
     def chat(
@@ -39,33 +39,12 @@ class OllamaProvider(AIProvider):
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model, "messages": wire, "stream": False,
-                    "options": {"temperature": temperature, "num_predict": max_tokens},
-                },
-                headers=headers, timeout=(_CONNECT_TIMEOUT, timeout or self.timeout),
-            )
-        except requests.Timeout as exc:
-            raise AIProviderError("The AI service took too long to answer.") from exc
-        except requests.RequestException as exc:
-            raise AIProviderError(f"Could not reach the AI service ({type(exc).__name__}).") from exc
-
-        if response.status_code in (401, 403):
-            raise AIProviderError("The AI service rejected the API key.")
-        if response.status_code == 404:
-            raise AIProviderError(f"The AI service doesn't have the model {self.model!r}.")
-        if response.status_code == 429:
-            raise AIProviderError("The AI service is rate limiting requests.")
-        if response.status_code >= 400:
-            raise AIProviderError(f"The AI service returned an error ({response.status_code}).")
-        try:
-            data = response.json()
-            text = ((data.get("message") or {}).get("content") or "").strip()
-        except (ValueError, AttributeError) as exc:
-            raise AIProviderError("The AI service sent a response we couldn't read.") from exc
+        data = post_json(
+            f"{self.base_url}/api/chat", headers=headers, timeout=timeout or self.timeout, model=self.model,
+            body={"model": self.model, "messages": wire, "stream": False,
+                  "options": {"temperature": temperature, "num_predict": max_tokens}},
+        )
+        text = ((data.get("message") or {}).get("content") or "").strip() if isinstance(data.get("message"), dict) else ""
         if not text:
             raise AIProviderError("The AI service returned an empty answer.")
         return CompletionResult(

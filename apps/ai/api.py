@@ -103,6 +103,8 @@ def serialize(proposal, conversation) -> dict | None:
     out = {
         "id": proposal.pk, "status": proposal.status, "action": proposal.action,
         "reason": proposal.reason, "error": proposal.error, "created": proposal.created_at.isoformat(),
+        # Business on automatic replies, but this one wasn't sent: say which check held it back.
+        "autoNote": _auto_note(proposal.auto_decision),
     }
     payload = proposal.payload or {}
     if proposal.action == "reply":
@@ -130,6 +132,17 @@ def serialize(proposal, conversation) -> dict | None:
     ]
     out["lookups"] = [LOOKUP_LABELS.get(name, name) for name in (proposal.tools_used or [])]
     return out
+
+
+def _auto_note(decision: dict | None) -> str:
+    if not decision or decision.get("send"):
+        return ""
+    if decision.get("error"):
+        return f"Not sent automatically: {decision['error']}"
+    failed = next((c for c in decision.get("checks", []) if not c.get("ok")), None)
+    if failed is None or failed.get("name") == "switched_on":
+        return ""
+    return f"Not sent automatically: {failed.get('detail', '')}"
 
 
 LOOKUP_LABELS = {
@@ -233,8 +246,14 @@ def settings_for(account):
     return AISettings.objects.filter(account=account).first() or AISettings(account=account)
 
 
-def save_settings(account, user, *, enabled: bool, business_notes: str):
-    """Turn AI suggestions on or off for a business. Turning it on records who agreed and when."""
+def save_settings(account, user, *, enabled: bool, business_notes: str, reply_mode: str | None = None,
+                  auto_topics=None, auto_min_confidence=None, auto_only_when_closed: bool = False):
+    """Turn AI on or off for a business, and choose between suggestions and automatic replies.
+
+    Turning AI on, and separately choosing automatic replies, each record who agreed and when.
+    ``reply_mode=None`` leaves the reply settings as they are.
+    """
+    from apps.ai import autonomy
     from apps.ai.models import AISettings
 
     ai_settings, _ = AISettings.objects.get_or_create(account=account)
@@ -242,8 +261,82 @@ def save_settings(account, user, *, enabled: bool, business_notes: str):
         ai_settings.consented_at, ai_settings.consented_by = timezone.now(), user
     ai_settings.enabled = bool(enabled)
     ai_settings.business_notes = (business_notes or "").strip()[:MAX_NOTES]
+    if reply_mode is not None:
+        mode = reply_mode if reply_mode in AISettings.ReplyMode.values else AISettings.ReplyMode.SUGGEST
+        if mode == AISettings.ReplyMode.AUTO and ai_settings.reply_mode != mode:
+            ai_settings.auto_consented_at, ai_settings.auto_consented_by = timezone.now(), user
+        ai_settings.reply_mode = mode
+        locked = autonomy.locked_topics(account)
+        ai_settings.auto_topics = [t for t in autonomy.TOPICS if t in set(auto_topics or []) and t not in locked]
+        allowed = {value for value, _label in autonomy.CONFIDENCE_CHOICES}
+        try:
+            confidence = float(auto_min_confidence)
+        except (TypeError, ValueError):
+            confidence = ai_settings.auto_min_confidence
+        ai_settings.auto_min_confidence = confidence if confidence in allowed else 0.85
+        ai_settings.auto_only_when_closed = bool(auto_only_when_closed)
     ai_settings.save()
     return ai_settings
+
+
+def autopilot_report(account, *, days: int = 1, limit: int = 50) -> dict:
+    """What autopilot decided over the last ``days``: counts, why replies were held, and each decision.
+
+    Built from the audit trail stored on every proposal (``auto_decision``), so a row can always
+    answer "why did AI reply at 7:42?" and "why didn't it reply?".
+    """
+    from datetime import timedelta
+
+    from apps.ai import autonomy
+    from apps.ai.models import AIProposal
+
+    since = timezone.now() - timedelta(days=days)
+    decided = (AIProposal.objects.filter(account=account, created_at__gte=since)
+               .exclude(auto_decision={}).select_related("conversation__contact").order_by("-created_at"))
+    sent = held = reviewed = 0
+    reasons: dict[str, int] = {}
+    rows = []
+    for p in decided:
+        decision = p.auto_decision or {}
+        failed = next((c for c in decision.get("checks", []) if not c.get("ok")), None)
+        if decision.get("send"):
+            sent += 1
+            outcome = "Sent by AI"
+        else:
+            held += 1
+            reason = decision.get("error") and "Sending failed" or autonomy.HELD_REASONS.get(
+                (failed or {}).get("name"), "Other")
+            reasons[reason] = reasons.get(reason, 0) + 1
+            if p.status == AIProposal.Status.USED:
+                reviewed += 1
+            outcome = "Held: " + reason
+        if len(rows) < limit:
+            rows.append({
+                "at": p.auto_sent_at or p.ready_at or p.created_at, "outcome": outcome, "sent": bool(decision.get("send")),
+                "status": p.get_status_display(), "text": (p.payload or {}).get("text", "") or (p.payload or {}).get("note", ""),
+                "customer": (p.conversation.contact.first_name or "A customer") if p.conversation else "A customer",
+                "conversation_id": p.conversation.public_id if p.conversation else "",
+                "checks": decision.get("checks", []), "error": decision.get("error", ""),
+            })
+    return {
+        "days": days, "sent": sent, "held": held, "reviewed": reviewed,
+        "reasons": sorted(reasons.items(), key=lambda kv: -kv[1]), "rows": rows,
+    }
+
+
+def recent_auto_replies(account, limit: int = 20) -> list[dict]:
+    """The latest replies AI sent on its own, newest first, for the owner to review."""
+    from apps.ai import autonomy
+    from apps.ai.models import AIProposal
+
+    rows = (AIProposal.objects.filter(account=account, auto_sent_at__isnull=False)
+            .select_related("conversation__contact").order_by("-auto_sent_at")[:limit])
+    return [{
+        "sent_at": p.auto_sent_at, "text": (p.payload or {}).get("text", ""),
+        "topic": autonomy.TOPICS.get(p.intent, p.intent), "confidence": p.confidence,
+        "customer": (p.conversation.contact.first_name or "A customer") if p.conversation else "A customer",
+        "conversation_id": p.conversation.public_id if p.conversation else "",
+    } for p in rows]
 
 
 def test_connection() -> dict:

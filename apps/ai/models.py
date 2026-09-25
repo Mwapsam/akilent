@@ -19,10 +19,24 @@ class AISettings(models.Model):
     consented_at = models.DateTimeField(null=True, blank=True)
     consented_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    class ReplyMode(models.TextChoices):
+        SUGGEST = "suggest", "Suggest replies for my team to send"
+        AUTO = "auto", "Reply automatically to the questions I choose"
+
+    # Whether AI may send some replies on its own (see apps.ai.autonomy). Suggest-only by default.
+    reply_mode = models.CharField(max_length=10, choices=ReplyMode.choices, default=ReplyMode.SUGGEST)
+    # Which kinds of question it may answer alone: keys of apps.ai.autonomy.TOPICS.
+    auto_topics = models.JSONField(default=list, blank=True)
+    auto_min_confidence = models.FloatField(default=0.85)
+    auto_only_when_closed = models.BooleanField(default=False)
+    auto_consented_at = models.DateTimeField(null=True, blank=True)
+    auto_consented_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"AI settings for account {self.account_id} ({'on' if self.enabled else 'off'})"
+        return f"AI settings for account {self.account_id} ({'on' if self.enabled else 'off'}, {self.reply_mode})"
 
 
 class AIProposal(models.Model):
@@ -72,6 +86,13 @@ class AIProposal(models.Model):
     extras = models.JSONField(default=list, blank=True)
     # The look-ups the model asked for while drafting, in order, e.g. ["check_opening_hours"].
     tools_used = models.JSONField(default=list, blank=True)
+    # What the customer asked about (apps.ai.proposals.INTENTS) and which model tier answered.
+    intent = models.CharField(max_length=20, blank=True, default="")
+    route = models.CharField(max_length=10, blank=True, default="")
+    # The audit trail for replying on its own: every check and whether it passed, and when it sent.
+    # Empty when the business is suggest-only.
+    auto_decision = models.JSONField(default=dict, blank=True)
+    auto_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=["account", "status", "created_at"])]

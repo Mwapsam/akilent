@@ -41,8 +41,8 @@ class ScriptedProvider(AIProvider):
 @pytest.fixture(autouse=True)
 def scripted(settings, monkeypatch):
     settings.AI_PROVIDER_BACKEND = "ollama"
-    monkeypatch.setattr("apps.ai.agent.get_ai_provider", lambda account=None: ScriptedProvider())
-    monkeypatch.setattr("apps.ai.providers.get_ai_provider", lambda account=None: ScriptedProvider())
+    monkeypatch.setattr("apps.ai.agent.get_ai_provider", lambda *a, **k: ScriptedProvider())
+    monkeypatch.setattr("apps.ai.providers.get_ai_provider", lambda *a, **k: ScriptedProvider())
     ScriptedProvider.script, ScriptedProvider.calls = [], []
     cache.clear()
 

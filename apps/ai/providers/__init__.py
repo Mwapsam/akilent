@@ -2,7 +2,10 @@
 
 ``AI_PROVIDER_BACKEND`` picks the backend: a short alias (below) or a full dotted import path to any
 ``AIProvider`` subclass. The default, ``none``, means AI is not configured: callers treat that as a
-normal state and hide the AI features. Adding Anthropic or OpenAI later is one class plus one alias.
+normal state and hide the AI features.
+
+Two model tiers: ``standard`` uses ``AI_MODEL`` (or the provider's default) and ``fast`` uses
+``AI_MODEL_FAST`` when it is set, else the standard model. ``apps.ai.router`` picks the tier.
 """
 import importlib
 import logging
@@ -15,9 +18,17 @@ logger = logging.getLogger(__name__)
 
 _ALIASES: dict[str, str] = {
     "ollama": "apps.ai.providers.ollama.OllamaProvider",
-    # "anthropic": "apps.ai.providers.anthropic.AnthropicProvider",
-    # "openai": "apps.ai.providers.openai.OpenAIProvider",
+    "anthropic": "apps.ai.providers.anthropic.AnthropicProvider",
+    "openai": "apps.ai.providers.openai.OpenAIProvider",
 }
+TIERS = ("standard", "fast")
+
+
+def model_for(tier: str = "standard") -> str:
+    """The model name to ask for at this tier, or "" to let the provider use its default."""
+    if tier == "fast" and (getattr(settings, "AI_MODEL_FAST", "") or "").strip():
+        return settings.AI_MODEL_FAST.strip()
+    return (getattr(settings, "AI_MODEL", "") or "").strip()
 
 
 def backend_name() -> str:
@@ -29,8 +40,8 @@ def is_configured() -> bool:
     return backend_name().lower() != "none"
 
 
-def get_ai_provider(account=None) -> AIProvider:
-    """The configured provider. ``account`` is accepted so per-business providers can come later.
+def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
+    """The configured provider at ``tier``. ``account`` is accepted so per-business providers can come later.
 
     Raises:
         AIProviderError: if AI isn't configured or the backend can't be loaded.
@@ -48,7 +59,8 @@ def get_ai_provider(account=None) -> AIProvider:
         raise AIProviderError(f"Unknown AI backend {name!r}.") from exc
     if not (isinstance(cls, type) and issubclass(cls, AIProvider)):
         raise AIProviderError(f"AI backend {name!r} is not an AIProvider.")
-    return cls()
+    model = model_for(tier)
+    return cls(model=model) if model else cls()
 
 
 __all__ = ["AIProvider", "AIProviderError", "backend_name", "get_ai_provider", "is_configured"]

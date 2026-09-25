@@ -86,6 +86,7 @@ def draft_proposal(self, proposal_id: int) -> str:
         proposal.confidence, proposal.reason, proposal.payload = p["confidence"], p["reason"], p["payload"]
         proposal.extras = [dict(e, applied_at=None) for e in p.get("extras", [])]
         proposal.tools_used = out.get("tools_used", [])
+        proposal.intent, proposal.route = p.get("intent", "")[:20], out.get("route", "")[:10]
         proposal.model, proposal.provider, proposal.latency_ms = out["model"][:80], out["provider"][:40], out["latency_ms"]
         proposal.status, proposal.ready_at = AIProposal.Status.READY, timezone.now()
         proposal.save()
@@ -94,7 +95,7 @@ def draft_proposal(self, proposal_id: int) -> str:
             conversation=conversation, status=AIProposal.Status.READY,
         ).exclude(pk=proposal.pk).update(status=AIProposal.Status.EXPIRED, expired_at=timezone.now())
         _maybe_refresh_memory(conversation)
-        return "ready"
+        return _maybe_send_on_its_own(proposal, p, out, ai_settings)
     except Retry:
         raise
     except Exception:  # noqa: BLE001 - a proposal must never crash the worker loop
@@ -103,6 +104,51 @@ def draft_proposal(self, proposal_id: int) -> str:
     finally:
         if cache.get(_lock_key(conversation.pk)) == proposal.pk:
             cache.delete(_lock_key(conversation.pk))
+
+
+def _maybe_send_on_its_own(proposal, contract: dict, out: dict, ai_settings) -> str:
+    """For a business that chose automatic replies: send if every check passes, else leave the
+    suggestion for a person (the fallback is exactly suggest-only behaviour). Returns the task result.
+    """
+    from apps.ai import autonomy
+    from apps.ai.models import AIProposal
+    from apps.conversations.api import newest_message_ids
+    from apps.core.actions import ActionError, run_action
+
+    if not autonomy.is_auto_mode(ai_settings):
+        return "ready"
+    conversation = proposal.conversation
+    decision = autonomy.evaluate(
+        ai_settings=ai_settings, proposal=contract, conversation=conversation,
+        automatic=proposal.trigger_message_id is not None and proposal.requested_by_id is None,
+        window_open=out.get("window_open", False), facts=out.get("facts") or {},
+        extra_text=out.get("sources", ""), trigger_message_id=proposal.trigger_message_id,
+    )
+    record = decision.as_dict()
+    if decision.send:
+        # Drafting took a while: re-check nobody replied and the customer didn't write again.
+        newest_inbound, newest_outbound = newest_message_ids(conversation)
+        if newest_inbound != proposal.trigger_message_id or (
+                newest_outbound and newest_outbound > proposal.trigger_message_id):
+            record.update(send=False, error="The conversation moved on while AI was drafting.")
+        else:
+            try:
+                run_action("reply", {"account": proposal.account}, conversation=conversation,
+                           body=contract["payload"]["text"], idempotency_key=f"ai-auto:{proposal.pk}")
+            except ActionError as exc:
+                record.update(send=False, error=str(exc)[:300])
+            except Exception:  # noqa: BLE001 - a failed send falls back to a suggestion
+                logger.exception("automatic AI reply failed for proposal=%s", proposal.pk)
+                record.update(send=False, error="Sending failed.")
+    proposal.auto_decision = record
+    fields = ["auto_decision"]
+    if record["send"]:
+        now = timezone.now()
+        proposal.status, proposal.used_at, proposal.auto_sent_at = AIProposal.Status.USED, now, now
+        proposal.edited_before_send = False
+        fields += ["status", "used_at", "auto_sent_at", "edited_before_send"]
+    proposal.save(update_fields=fields)
+    return "sent" if record["send"] else "ready"
 
 
 def _maybe_refresh_memory(conversation) -> None:
@@ -138,7 +184,7 @@ def refresh_memory(self, conversation_id: int) -> str:
         if _over_daily_limit(conversation.account_id):
             return "limit"
         try:
-            updated = memory.refresh(conversation, get_ai_provider(conversation.account))
+            updated = memory.refresh(conversation, get_ai_provider(conversation.account, tier="fast"))
         except AIProviderError as exc:
             if self.request.retries < self.max_retries:
                 cache.delete(_memory_lock_key(conversation_id))

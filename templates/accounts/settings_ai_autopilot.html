@@ -1,0 +1,57 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-3xl space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="font-semibold mb-1">Autopilot report</h2>
+      <p class="text-sm text-gray-600">Every time AI could have replied on its own: what it sent, what it left for your team, and why.</p>
+    </div>
+    <div class="flex gap-1 text-sm" role="group" aria-label="Period">
+      <a href="?days=1" class="btn btn-sm {% if report.days == 1 %}btn-secondary{% else %}btn-ghost{% endif %}" {% if report.days == 1 %}aria-current="page"{% endif %}>Today</a>
+      <a href="?days=7" class="btn btn-sm {% if report.days == 7 %}btn-secondary{% else %}btn-ghost{% endif %}" {% if report.days == 7 %}aria-current="page"{% endif %}>Last 7 days</a>
+    </div>
+  </div>
+
+  {% if ai.reply_mode != "auto" %}
+  <div class="alert alert-info">Automatic replies are off, so AI only suggests. Choose “Reply automatically” in <a class="underline" href="{% url 'settings-ai' %}">AI settings</a> to use autopilot.</div>
+  {% endif %}
+
+  <ul class="rounded-xl border border-border divide-y divide-border text-sm">
+    <li class="flex justify-between gap-3 p-3"><span>Automatic replies sent</span><strong>{{ report.sent }}</strong></li>
+    <li class="flex justify-between gap-3 p-3"><span>Held back for your team</span><strong>{{ report.held }}</strong></li>
+    {% for reason, count in report.reasons %}
+    <li class="flex justify-between gap-3 p-3 pl-6 text-gray-600"><span>{{ reason }}</span><span>{{ count }}</span></li>
+    {% endfor %}
+    <li class="flex justify-between gap-3 p-3"><span>Held replies your team then sent</span><strong>{{ report.reviewed }}</strong></li>
+  </ul>
+
+  {% if report.rows %}
+  <div>
+    <h3 class="font-semibold text-sm mb-2">Each decision</h3>
+    <ul class="space-y-2">
+      {% for r in report.rows %}
+      <li class="rounded-xl border border-border p-3 text-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <span><a href="{% url 'conversations:detail' r.conversation_id %}" class="font-medium text-ink underline">{{ r.customer }}</a>
+            · <span class="{% if r.sent %}text-ink{% else %}text-gray-600{% endif %}">{{ r.outcome }}</span></span>
+          <span class="text-xs text-gray-500">{{ r.at|date:"j M, H:i" }}</span>
+        </div>
+        {% if r.text %}<p class="mt-1 text-gray-700 whitespace-pre-line">{{ r.text }}</p>{% endif %}
+        <details class="mt-1">
+          <summary class="text-xs text-gray-500 cursor-pointer">Why?</summary>
+          <ul class="mt-1 space-y-0.5 text-xs">
+            {% for c in r.checks %}
+            <li class="{% if c.ok %}text-gray-600{% else %}text-red-700{% endif %}">{% if c.ok %}✓{% else %}✗{% endif %} {{ c.detail }}</li>
+            {% endfor %}
+            {% if r.error %}<li class="text-red-700">✗ {{ r.error }}</li>{% endif %}
+          </ul>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-500">Nothing yet for this period.</p>
+  {% endif %}
+</div>
+{% endblock %}

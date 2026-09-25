@@ -38,28 +38,38 @@ class RequestPaymentAction(Action):
 
 
 class LookupProductsAction(Action):
-    """Read-only: active catalog products whose name matches the words in ``query`` (at most 5)."""
+    """Read-only: active catalog products whose name matches the words in ``query`` (at most 5).
+
+    ``query="*"`` lists the catalog instead (up to ``limit``, at most 50), for building the
+    business's structured facts.
+    """
 
     name = "lookup_products"
     module = "commerce"
     scope_kwarg = "account"
     LIMIT = 5
+    MAX_LIMIT = 50
 
     def input_schema(self) -> dict:
-        return {"required": ["account", "query"]}
+        return {"required": ["account", "query"], "optional": ["limit"]}
 
-    def execute(self, context: dict, *, account, query: str) -> dict:
+    def execute(self, context: dict, *, account, query: str, limit: int | None = None) -> dict:
         from django.db.models import Q
 
         from apps.commerce.models import Product
 
+        active = Product.objects.filter(account=account, is_active=True)
+        if str(query).strip() == "*":
+            size = max(1, min(int(limit or self.MAX_LIMIT), self.MAX_LIMIT))
+            return {"products": [{"name": p.name, "price": str(p.price), "currency": p.currency}
+                                 for p in active[:size]]}
         words = [w for w in str(query or "").split() if len(w) > 1][:6]
         if not words:
             return {"products": []}
         match = Q()
         for word in words:
             match |= Q(name__icontains=word)
-        products = Product.objects.filter(account=account, is_active=True).filter(match)[: self.LIMIT]
+        products = active.filter(match)[: self.LIMIT]
         return {"products": [{"name": p.name, "price": str(p.price), "currency": p.currency} for p in products]}
 
 

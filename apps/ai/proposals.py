@@ -34,6 +34,9 @@ ACTIONS = ("reply", "send_template", "handoff")
 MAX_REPLY = 1000
 MAX_VALUE = 200
 MAX_EXTRAS = 3
+# What the customer's message is about. Owners choose which of these AI may answer on its own
+# (apps.ai.autonomy); anything unrecognised is "other", which is never answered automatically.
+INTENTS = ("greeting", "hours", "location", "product_info", "price", "delivery", "payment", "other")
 EXTRA_KINDS = ("tag", "track_interest", "follow_up")
 _SOURCES = ("contact.", "account.", "context.")
 
@@ -155,7 +158,9 @@ def validate(data: dict, *, templates: dict, window_open: bool, tags=(), can_tra
     else:  # handoff
         clean = {"note": str(payload.get("note") or reason or "A teammate should reply to this.").strip()[:300]}
 
+    intent = str(data.get("intent") or "").strip().lower()
     return {"version": VERSION, "action": action, "confidence": confidence, "reason": reason, "payload": clean,
+            "intent": intent if intent in INTENTS else "other",
             "extras": clean_extras(data.get("extras"), tags=tags, can_track=can_track)}
 
 

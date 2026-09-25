@@ -210,10 +210,20 @@ else:
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "localhost:8000")
 
 # --- AI (optional) ---
-# "none" switches every AI feature off; Akilent works fully without it. "ollama" uses OLLAMA_BASE_URL
-# (the hosted API by default) with OLLAMA_API_KEY. Anthropic/OpenAI slot in as further backends.
+# "none" switches every AI feature off; Akilent works fully without it.
+#   ollama:    OLLAMA_BASE_URL (the hosted API by default) + OLLAMA_API_KEY; model default gpt-oss:120b
+#   anthropic: ANTHROPIC_API_KEY; model default claude-sonnet-5
+#   openai:    OPENAI_API_KEY (+ OPENAI_BASE_URL for compatible servers); AI_MODEL is required
+# AI_MODEL overrides the provider's default. AI_MODEL_FAST, when set, answers simple messages
+# (see apps.ai.router); leave it empty to use one model for everything.
 AI_PROVIDER_BACKEND = os.getenv("AI_PROVIDER_BACKEND", "none")
-AI_MODEL = os.getenv("AI_MODEL", "gpt-oss:120b")
+AI_MODEL = os.getenv("AI_MODEL", "")
+AI_MODEL_FAST = os.getenv("AI_MODEL_FAST", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
+# Emergency stop for AI sending on its own, for every business. Suggestions keep working.
+AI_AUTONOMY_ENABLED = os.getenv("AI_AUTONOMY_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "45"))
 AI_DAILY_CALL_LIMIT = int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")

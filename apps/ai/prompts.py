@@ -11,6 +11,7 @@ conversation or customer is sent.
 """
 from __future__ import annotations
 
+import json
 import re
 
 from apps.ai.types import ChatMessage
@@ -33,7 +34,12 @@ markdown, no lists unless the customer asked for options.
 
 Answer with ONE JSON object and nothing else:
 {"version": 1, "action": "reply" | "send_template" | "handoff", "confidence": 0.0-1.0,
+ "intent": "greeting" | "hours" | "location" | "product_info" | "price" | "delivery" | "payment" | "other",
  "reason": "<one short sentence for the team>", "payload": {...}}
+
+intent is what the customer's latest message is mainly about; use "other" for anything else, \
+including complaints, refunds, custom requests and anything you are unsure of. confidence is how \
+sure you are that your proposal is correct and complete using only the facts given.
 
 payload for "reply": {"text": "<the message>"}
 payload for "send_template": {"template": "<exact approved template name>", "variables": \
@@ -57,7 +63,7 @@ def mask(text: str) -> str:
 
 def build(*, business_name: str, business_notes: str, hours_text: str, templates: list[dict],
           customer: dict, thread: list[dict], window_open: bool, memory=None, tools_text: str = "",
-          business_tags=()) -> tuple[str, list[ChatMessage]]:
+          business_tags=(), structured_facts: dict | None = None) -> tuple[str, list[ChatMessage]]:
     """``(system, messages)`` ready for ``AIProvider.chat``.
 
     ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
@@ -69,6 +75,10 @@ def build(*, business_name: str, business_notes: str, hours_text: str, templates
     if hours_text:
         lines.append(f"Opening hours: {hours_text}")
     lines.append(business_notes.strip() if business_notes.strip() else "(The owner hasn't added any facts yet.)")
+    structured = {k: v for k, v in (structured_facts or {}).items() if k != "notes" and v}
+    if structured:
+        lines += ["", "## Facts (exact; quote prices and times only from here or the notes)",
+                  json.dumps(structured, ensure_ascii=False)]
 
     lines += ["", "## About this customer", f"First name: {customer.get('first_name') or 'unknown'}"]
     if customer.get("tags"):

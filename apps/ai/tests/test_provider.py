@@ -20,7 +20,7 @@ def _response(status=200, body=None):
 
 def test_ollama_sends_the_chat_request_with_the_key_and_reads_only_the_answer():
     provider = OllamaProvider(base_url="https://ollama.com/", api_key="secret", model="gpt-oss:120b", timeout=30)
-    with patch("apps.ai.providers.ollama.requests.post", return_value=_response()) as post:
+    with patch("apps.ai.providers.http.requests.post", return_value=_response()) as post:
         result = provider.chat([ChatMessage("user", "Hi")], system="Be kind", max_tokens=100, temperature=0.1)
     url, kwargs = post.call_args.args[0], post.call_args.kwargs
     assert url == "https://ollama.com/api/chat"
@@ -33,29 +33,29 @@ def test_ollama_sends_the_chat_request_with_the_key_and_reads_only_the_answer():
 
 
 def test_no_key_means_no_authorization_header():
-    with patch("apps.ai.providers.ollama.requests.post", return_value=_response()) as post:
+    with patch("apps.ai.providers.http.requests.post", return_value=_response()) as post:
         OllamaProvider(base_url="http://host.docker.internal:11434", api_key="").chat([ChatMessage("user", "x")])
     assert "Authorization" not in post.call_args.kwargs["headers"]
 
 
-@pytest.mark.parametrize("status,words", [(401, "API key"), (404, "model"), (429, "rate"), (500, "error")])
+@pytest.mark.parametrize("status,words", [(401, "API key"), (404, "model"), (429, "rate"), (500, "problems"), (418, "error")])
 def test_http_errors_become_readable_provider_errors(status, words):
-    with patch("apps.ai.providers.ollama.requests.post", return_value=_response(status)):
+    with patch("apps.ai.providers.http.requests.post", return_value=_response(status)):
         with pytest.raises(AIProviderError, match=words):
             OllamaProvider(api_key="k").chat([ChatMessage("user", "x")])
 
 
 def test_timeouts_network_errors_and_empty_answers_are_provider_errors():
     for side in (requests.Timeout(), requests.ConnectionError()):
-        with patch("apps.ai.providers.ollama.requests.post", side_effect=side), pytest.raises(AIProviderError):
+        with patch("apps.ai.providers.http.requests.post", side_effect=side), pytest.raises(AIProviderError):
             OllamaProvider().chat([ChatMessage("user", "x")])
-    with patch("apps.ai.providers.ollama.requests.post", return_value=_response(body={"message": {"content": " "}})):
+    with patch("apps.ai.providers.http.requests.post", return_value=_response(body={"message": {"content": " "}})):
         with pytest.raises(AIProviderError, match="empty"):
             OllamaProvider().chat([ChatMessage("user", "x")])
 
 
 def test_the_api_key_never_appears_in_an_error(settings):
-    with patch("apps.ai.providers.ollama.requests.post", return_value=_response(401)):
+    with patch("apps.ai.providers.http.requests.post", return_value=_response(401)):
         with pytest.raises(AIProviderError) as exc:
             OllamaProvider(api_key="sk-very-secret").chat([ChatMessage("user", "x")])
     assert "sk-very-secret" not in str(exc.value)
@@ -81,7 +81,7 @@ def test_a_reply_proposal_is_parsed_even_inside_a_code_fence():
     text = 'Sure:\n```json\n{"version": 1, "action": "reply", "confidence": 1.7, "reason": "Asked price", "payload": {"text": "From K18,000."}}\n```'
     p = proposals.parse(text, templates=TEMPLATES, window_open=True)
     assert p == {"version": 1, "action": "reply", "confidence": 1.0, "reason": "Asked price",
-                 "payload": {"text": "From K18,000."}, "extras": []}
+                 "payload": {"text": "From K18,000."}, "intent": "other", "extras": []}
 
 
 @pytest.mark.parametrize("bad", [

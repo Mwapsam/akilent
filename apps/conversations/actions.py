@@ -78,9 +78,9 @@ class ReplyAction(Action):
     scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
-        return {"required": ["conversation", "body"]}
+        return {"required": ["conversation", "body"], "optional": ["idempotency_key"]}
 
-    def execute(self, context: dict, *, conversation, body: str) -> dict:
+    def execute(self, context: dict, *, conversation, body: str, idempotency_key: str | None = None) -> dict:
         if not body:
             raise ActionError("reply requires a body")
 
@@ -88,7 +88,9 @@ class ReplyAction(Action):
             from apps.whatsapp import api as whatsapp_api
 
             wa_contact = conversation.whatsapp_conversation.contact
-            msg = whatsapp_api.send_message(conversation.account, wa_contact, body)
+            # A caller that may retry (an automatic AI reply) passes a fixed key, so a retry
+            # returns the first message instead of sending the customer a second one.
+            msg = whatsapp_api.send_message(conversation.account, wa_contact, body, idempotency_key=idempotency_key)
             conversation.whatsapp_conversation.register_outbound(msg.created_at)
             return {"outbound_message_id": msg.id}
 

@@ -5,8 +5,9 @@
     <h2 class="font-semibold mb-1">AI suggestions</h2>
     <p class="text-sm text-gray-600">
       When a customer writes and none of your automations answered, AI can draft a reply for your team.
-      <strong>AI never sends anything.</strong> A person on your team reads the suggestion, edits it if needed,
-      and presses Send. Everything else in Akilent works the same with AI switched off.
+      A person on your team reads the suggestion, edits it if needed, and presses Send.
+      <strong>AI sends nothing on its own unless you choose automatic replies below</strong>, and then only for the
+      kinds of question you tick. Everything else in Akilent works the same with AI switched off.
     </p>
   </div>
 
@@ -47,6 +48,61 @@
                 placeholder="Prices: 3 kW home system from K18,000, installed.&#10;Where: Plot 12, Cairo Road, Lusaka.&#10;Delivery: Lusaka next day; Copperbelt within 3 days.&#10;Payment: 50% deposit, balance on installation.">{{ ai.business_notes }}</textarea>
       <p class="text-xs text-gray-500 mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.</p>
     </div>
+
+    <fieldset class="space-y-2" x-data="{ mode: '{{ ai.reply_mode|default:'suggest' }}' }" {% if not can_edit %}disabled{% endif %}>
+      <legend class="label">How should AI help?</legend>
+      <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+        <input type="radio" name="reply_mode" value="suggest" class="mt-1" x-model="mode">
+        <span class="text-sm text-ink"><span class="font-medium">Suggest replies for my team to send</span>
+          <span class="block text-xs text-gray-500 mt-0.5">AI drafts a reply; a person checks it and presses Send. Nothing goes out without your team.</span></span>
+      </label>
+      <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+        <input type="radio" name="reply_mode" value="auto" class="mt-1" x-model="mode">
+        <span class="text-sm text-ink"><span class="font-medium">Reply automatically to the questions I choose</span>
+          <span class="block text-xs text-gray-500 mt-0.5">AI answers simple questions straight away, like a customer asking when you're open at 9 pm. Everything else stays a suggestion for your team.</span>
+          {% if ai.auto_consented_at %}<span class="block text-xs text-gray-500 mt-0.5">Chosen {{ ai.auto_consented_at|date:"j M Y" }}{% if ai.auto_consented_by %} by {{ ai.auto_consented_by.get_full_name|default:ai.auto_consented_by.email }}{% endif %}.</span>{% endif %}
+        </span>
+      </label>
+
+      <div class="rounded-xl border border-border p-4 space-y-3" x-show="mode === 'auto'" x-cloak>
+        {% if not autonomy_site_on %}
+        <div class="alert alert-info">Automatic replies are paused for everyone on this Akilent installation. AI will only suggest until they're resumed.</div>
+        {% endif %}
+        <div>
+          <p class="text-sm font-medium text-ink">AI may answer these on its own</p>
+          <div class="mt-1 grid gap-1 sm:grid-cols-2">
+            {% for topic in topics %}
+            <label class="flex items-start gap-2 text-sm min-h-[2rem] {% if topic.locked %}text-gray-400{% else %}text-ink{% endif %}">
+              <input type="checkbox" name="auto_topics" value="{{ topic.key }}" class="mt-1" {% if topic.on %}checked{% endif %} {% if topic.locked %}disabled{% endif %}>
+              <span>{{ topic.label }}{% if topic.locked %}<span class="block text-xs">{{ topic.locked }}</span>{% endif %}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <label class="label" for="ai-confidence">How sure must AI be?</label>
+          <select id="ai-confidence" name="auto_min_confidence" class="select max-w-xs">
+            {% for value, label in confidence_choices %}
+            <option value="{{ value }}" {% if value == ai.auto_min_confidence %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" name="auto_only_when_closed" {% if ai.auto_only_when_closed %}checked{% endif %}>
+          Only when we're closed (your team answers during <a href="{% url 'settings-hours' %}" class="underline">opening hours</a>)
+        </label>
+        <div class="text-xs text-gray-600">
+          <p class="font-medium text-ink">AI still hands it to your team when:</p>
+          <ul class="list-disc pl-5 mt-0.5 space-y-0.5">
+            <li>a price isn't in your catalogue or notes, a time isn't one of your opening hours, or a number or link can't be checked (so it can't invent a price or date);</li>
+            <li>a teammate has taken the conversation or replied in the last few minutes;</li>
+            <li>the 24-hour window has closed, or a template is needed;</li>
+            <li>it has already answered 5 times in a row without your team.</li>
+          </ul>
+          <p class="mt-1">Replies AI sends are marked “Sent by AI” in the inbox. The <a class="underline" href="{% url 'settings-ai-autopilot' %}">autopilot report</a> shows every reply it sent or held back, and why.</p>
+        </div>
+      </div>
+    </fieldset>
     {% if can_edit %}
     <div class="flex flex-wrap justify-end gap-2">
       {% if site_configured %}<button name="action" value="test" class="btn btn-ghost btn-sm" formnovalidate>Test connection</button>{% endif %}
@@ -54,5 +110,22 @@
     </div>
     {% endif %}
   </form>
+
+  {% if auto_replies %}
+  <div>
+    <h3 class="font-semibold text-sm mb-2">Recent automatic replies</h3>
+    <ul class="divide-y divide-border rounded-xl border border-border text-sm">
+      {% for r in auto_replies %}
+      <li class="p-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <a href="{% url 'conversations:detail' r.conversation_id %}" class="font-medium text-ink underline">{{ r.customer }}</a>
+          <span class="text-xs text-gray-500">{{ r.sent_at|date:"j M, H:i" }} · {{ r.topic }}</span>
+        </div>
+        <p class="mt-0.5 text-gray-700 whitespace-pre-line">{{ r.text }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

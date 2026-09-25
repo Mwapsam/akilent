@@ -39,7 +39,7 @@ class FakeProvider(AIProvider):
 def fake_ai(settings, monkeypatch):
     # Configured as Ollama, but every call goes to the fake: nothing leaves the machine.
     settings.AI_PROVIDER_BACKEND = "ollama"
-    monkeypatch.setattr("apps.ai.agent.get_ai_provider", lambda account=None: FakeProvider())
+    monkeypatch.setattr("apps.ai.agent.get_ai_provider", lambda *a, **k: FakeProvider())
     FakeProvider.calls, FakeProvider.fail, FakeProvider.answer = [], None, PRICE_ANSWER
     cache.clear()
     yield

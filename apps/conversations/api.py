@@ -146,6 +146,19 @@ def earlier_messages(conversation, *, keep_recent: int, after_id: int = 0, limit
     )
 
 
+def last_team_reply_at(conversation):
+    """When the business last replied other than through AI (a person or an automation), or None."""
+    from django.db.models import Q
+
+    # Not a bare .exclude(metadata__sent_by="ai"): in SQL a missing key compares as NULL, so that
+    # would also drop every message without "sent_by", i.e. every human reply.
+    not_ai = Q(metadata__sent_by__isnull=True) | ~Q(metadata__sent_by="ai")
+    return (
+        conversation.messages.filter(direction=Message.Direction.OUTBOUND).filter(not_ai)
+        .order_by("-timestamp").values_list("timestamp", flat=True).first()
+    )
+
+
 def newest_message_ids(conversation) -> tuple[int | None, int | None]:
     """``(newest inbound id, newest outbound id)`` in this conversation, by arrival order."""
     newest = lambda d: conversation.messages.filter(direction=d).order_by("-id").values_list("id", flat=True).first()  # noqa: E731

@@ -345,7 +345,8 @@ def conversation_detail(request, public_id: str):
         "messages": [
             {"id": m.id, "direction": m.direction, "body": m.body,
              "ts": m.timestamp.isoformat(), "status": m.status,
-             "failureReason": (m.metadata or {}).get("failure_reason") or None}
+             "failureReason": (m.metadata or {}).get("failure_reason") or None,
+             "byAi": (m.metadata or {}).get("sent_by") == "ai"}
             for m in thread
         ],
         "statusHtml": render_to_string("conversations/_status_badges.html", {
@@ -504,6 +505,7 @@ def messages_feed(request, public_id: str):
                 "timestamp": m.timestamp.isoformat(),
                 "status": m.status,
                 "failureReason": (m.metadata or {}).get("failure_reason") or None,
+                "byAi": (m.metadata or {}).get("sent_by") == "ai",
             }
             for m in new
         ],

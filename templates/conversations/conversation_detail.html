@@ -281,6 +281,7 @@
                     <p class="cv-text" :class="{ 'italic text-gray-500': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>
                     <div class="cv-stamp" x-show="item.showMeta" :title="new Date(item.m.ts).toLocaleString()">
                       {# Time is visible; the full status label ("Delivered", "Read"…) is kept for screen readers and hover. #}
+                      <span x-show="item.m.byAi" class="font-medium">Sent by AI ·</span>
                       <span x-text="time(item.m.ts)"></span>
                       <span class="sr-only" x-text="meta(item.m)"></span>
                       <span class="cv-ticks" x-show="item.m.direction === 'outbound' && item.m.status !== 'failed'" :class="{ 'is-read': item.m.status === 'read' }" :title="meta(item.m)" aria-hidden="true">
@@ -368,8 +369,9 @@
               <div class="mt-2 flex gap-2"><button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button></div>
             </div>
           </template>
-          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ((ai.proposal.extras || []).length || (ai.proposal.lookups || []).length)">
+          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ((ai.proposal.extras || []).length || (ai.proposal.lookups || []).length || ai.proposal.autoNote)">
             <div class="mt-2 text-xs">
+              <p class="text-gray-500" x-show="ai.proposal.autoNote" x-text="ai.proposal.autoNote"></p>
               <p class="text-gray-400" x-show="(ai.proposal.lookups || []).length">Checked: <span x-text="(ai.proposal.lookups || []).join(', ')"></span></p>
               <div class="mt-1 flex flex-wrap gap-1.5" x-show="(ai.proposal.extras || []).length">
                 <span class="text-gray-500 self-center">Also suggested:</span>
