@@ -86,13 +86,14 @@ def validate(data: dict, *, templates: dict, window_open: bool) -> dict:
         raw = payload.get("variables") if isinstance(payload.get("variables"), dict) else {}
         variables = {}
         for blank in templates[name]:
-            value = str(raw.get(blank) or "").strip()
-            if not value:
-                raise ProposalError(f"The AI left the blank {blank!r} empty.")
+            value = str(raw.get(blank) or "").strip().strip("{} ").strip()
             is_source = value.startswith(_SOURCES)
             if looks_like_name(blank) and not is_source:
-                raise ProposalError(
-                    f"The AI typed a name into {blank!r}; names must come from the customer's own details.")
+                # A name only ever comes from this customer's own details, whatever the AI wrote
+                # (or left empty). Rewriting beats rejecting: the source is the one safe answer.
+                value, is_source = "contact.first_name", True
+            if not value:
+                raise ProposalError(f"The AI left the blank {blank!r} empty.")
             variables[blank] = value if is_source else value[:MAX_VALUE]
         clean = {"template": name, "variables": variables}
     else:  # handoff

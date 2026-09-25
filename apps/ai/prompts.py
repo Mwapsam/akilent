@@ -36,8 +36,9 @@ Answer with ONE JSON object and nothing else:
 
 payload for "reply": {"text": "<the message>"}
 payload for "send_template": {"template": "<exact approved template name>", "variables": \
-{"<blank>": "<value>"}}. For a name blank use "contact.first_name". For the business name use \
-"account.company_name". Otherwise use short text taken from the facts above.
+{"<blank>": "<value>"}}. Fill EVERY blank listed for that template. For a name blank use \
+"contact.first_name". For the business name use "account.company_name". Otherwise use short text \
+taken from the facts above. If you can't fill a blank from the facts, propose a handoff instead.
 payload for "handoff": {"note": "<what the teammate should know>"}"""
 
 

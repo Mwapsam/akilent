@@ -569,11 +569,19 @@
   }
 
   /* Inbox ----------------------------------------------------------------
-     Phone-first. The tabs scroll sideways with a fade on the trailing edge,
-     because four labelled tabs do not fit in 328px and the old row simply cut
-     the last two off with nothing to say there was more. */
+     Page header (title + links out), then a toolbar that holds everything
+     that acts on the list (view tabs + channel filter), then the list. */
+  .inbox-header { @apply flex items-start justify-between gap-3 mb-4 sm:mb-6; }
+  /* Square 44px icon buttons on a phone; icon + label from sm up. */
+  .inbox-header-link { @apply w-11 h-11 !p-0 justify-center gap-1.5 sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
+
+  .inbox-toolbar { @apply flex items-center gap-2 mb-3 sm:mb-4; }
+  /* The tabs scroll sideways with a fade on the trailing edge, because four
+     labelled tabs do not fit on a phone and the old row simply cut the last
+     two off with nothing to say there was more. Full-bleed on the left only:
+     the channel filter holds the right edge. */
   .inbox-tabs {
-    @apply flex gap-1.5 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 mb-3 sm:mb-4;
+    @apply flex flex-1 min-w-0 gap-1.5 overflow-x-auto -ml-4 pl-4 sm:ml-0 sm:pl-0 py-0.5;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
     /* Without this, snapping aligns the first tab to the container's edge and
@@ -583,11 +591,10 @@
   }
   .inbox-tabs::-webkit-scrollbar { display: none; }
   /* A trailing spacer as wide as the fade, so the last tab can scroll clear
-     of it. Without one, scrolling to "All" left the selected tab half-faded.
-     A pseudo-element rather than padding-right, which scroll containers do
-     not reliably honour at the end of the scroll. */
+     of it. A pseudo-element rather than padding-right, which scroll
+     containers do not reliably honour at the end of the scroll. */
   .inbox-tabs::after { content: ""; flex: 0 0 1.5rem; }
-  @media (min-width: 640px) { .inbox-tabs { mask-image: none; } }
+  @media (min-width: 640px) { .inbox-tabs { mask-image: none; } .inbox-tabs::after { content: none; } }
   .inbox-tab {
     @apply inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full
       border border-border bg-surface px-3.5 text-sm font-medium text-gray-600
@@ -618,20 +625,57 @@
     @apply flex items-start gap-3 px-4 py-3 transition-colors
       hover:bg-hover focus-visible:bg-hover;
   }
-  .inbox-avatar { @apply w-10 h-10 text-sm mt-0.5; }
-  .inbox-name { @apply flex-1 min-w-0 truncate text-[0.9375rem] font-medium text-ink; }
+  .inbox-avatar { @apply w-10 h-10 text-sm; }
+
+  /* Phone: three lines — name | time, then the preview, then the badges.
+     sm and up: two lines — name, badges and time on the first, the preview
+     under them. The badge line was a whole third row on every desktop row. */
+  .inbox-row-body {
+    @apply flex-1 min-w-0 grid items-center gap-x-2.5;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name when" "preview preview" "meta meta";
+  }
+  @media (min-width: 640px) {
+    .inbox-row-body {
+      grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+      grid-template-areas: "name meta when" "preview preview preview";
+    }
+  }
+  .inbox-name { grid-area: name; @apply min-w-0 truncate text-[0.9375rem] font-medium text-ink; }
   .inbox-row.is-unread .inbox-name { @apply font-semibold; }
-  .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full bg-amber-500; }
-  .inbox-time { @apply shrink-0 text-xs tabular-nums text-gray-500; }
-  /* The wait is the inbox's whole question, so it gets the emphasis the
-     badge used to carry. */
+  .inbox-when { grid-area: when; @apply flex items-center gap-1.5 justify-self-end; }
+  .inbox-time { @apply text-xs tabular-nums text-gray-500 whitespace-nowrap; }
+  /* The wait is the inbox's whole question, so the time carries it — amber,
+     with a clock — instead of a separate "Waiting" badge. */
   .inbox-time.is-urgent { @apply font-semibold; color: var(--tone-amber-fg); }
-  .inbox-preview { @apply mt-0.5 truncate text-sm text-gray-600; }
+  .inbox-when-icon { color: var(--tone-amber-fg); }
+  /* Unread is the accent, not amber: amber already means "waiting", and a
+     row that was both showed two amber marks side by side. */
+  .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full; background-color: var(--color-accent); }
+  .inbox-preview { grid-area: preview; @apply mt-0.5 min-w-0 truncate text-sm text-gray-600; }
   .inbox-row.is-unread .inbox-preview { @apply text-ink; }
-  .inbox-meta { @apply mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1; }
+  .inbox-meta { grid-area: meta; @apply mt-1.5 sm:mt-0 flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0; }
+  .inbox-meta:empty { @apply hidden; }
   .inbox-assignee { @apply inline-flex items-center gap-1 text-xs text-gray-600; }
-  /* Square 44px icon buttons on a phone; normal text buttons from sm up. */
-  .inbox-header-link { @apply w-11 h-11 !p-0 justify-center sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
+
+  .inbox-filter { @apply relative shrink-0; }
+  .inbox-filter-icon {
+    @apply relative inline-flex items-center justify-center rounded-full border border-border
+      bg-surface text-gray-600 sm:hidden;
+    width: 2.25rem; height: 2.25rem;
+  }
+  .inbox-filter.is-active .inbox-filter-icon { color: var(--color-accent); border-color: var(--color-accent); }
+  .inbox-filter.is-active .inbox-filter-icon::after {
+    content: ""; @apply absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full;
+    background-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-surface);
+  }
+  .inbox-filter:focus-within .inbox-filter-icon { @apply ring-2 ring-brand-500; }
+  @media (max-width: 639px) {
+    .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; }
+  }
+
+  /* A compact select for toolbars, sized to sit beside a row of pills. */
+  .select-sm { @apply w-auto py-1.5 pl-3 pr-8 rounded-lg; min-height: 2.25rem; background-position: right 0.5rem center; }
 
   /* Badges -------------------------------------------------------------- */
   .badge {
@@ -718,6 +762,8 @@
     .btn-icon, .btn-icon.btn-sm { min-height: 2.75rem; min-width: 2.75rem; }
     .nav-link { min-height: 2.75rem; }
     .tab { min-height: 2.75rem; }
+    .select-sm, .inbox-tab { min-height: 2.75rem; }
+    .inbox-filter-icon { width: 2.75rem; height: 2.75rem; }
   }
 
   /* Skeleton ------------------------------------------------------------ */

@@ -1,37 +1,59 @@
 {% load ui %}
-{% comment %}Inbox tabs and list. Rendered inside #inbox-body by inbox.html and
+{% comment %}Inbox toolbar and list. Rendered inside #inbox-body by inbox.html and
 re-rendered on its own by the 8-second poll (views.inbox_feed), so everything
-here must work from the same context in both places.
+here must work from the same context in both places. The poll skips while
+focus is inside #inbox-body, so an open channel select is never swapped out
+from under the user.
 
-Built phone-first. The row puts one fact in each place: who (name), how long
-(the time, amber when they are waiting on us), what they said (preview), and
-the state (a single badge). The previous row said the wait time twice — once
-as "7 minutes ago", once as "Waiting 7 minutes" — and the long timesince strings
-took the width the contact's name needed.{% endcomment %}
-{% comment %}x-init scrolls the current tab into view. On a phone the tabs
-overflow, and landing on "All" showed a row in which nothing looked selected
-because the selected tab was off-screen. scrollLeft rather than scrollIntoView,
-which would also scroll the page vertically.{% endcomment %}
-<nav class="inbox-tabs relative" aria-label="Inbox views"
-     x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
-  {% with ch=channel|yesno:"&channel=,"|add:channel %}
-  <a href="?view=needs_attention{{ ch }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
-    Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
-  </a>
-  <a href="?view=missed{{ ch }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
-     title="Customers who wrote and got no reply for over 24 hours">
-    Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>{% endif %}
-  </a>
-  <a href="?view=assigned{{ ch }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
-    {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
-    third of the screen, and it was the tab that got cut off.{% endcomment %}
-    <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
-  </a>
-  <a href="?view=all{{ ch }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
-    All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
-  </a>
-  {% endwith %}
-</nav>
+One fact in one place per row: who (name), how long (the time — amber, with a
+clock, while they are waiting on us), what they said (preview), and anything
+else worth knowing (a badge only when it adds something). "Waiting" used to be
+said three times per row: the amber time, a badge, and the tab itself.{% endcomment %}
+<div class="inbox-toolbar">
+  {% comment %}x-init scrolls the current tab into view. On a phone the tabs
+  overflow, and landing on "All" showed a row in which nothing looked selected
+  because the selected tab was off-screen. scrollLeft rather than scrollIntoView,
+  which would also scroll the page vertically.{% endcomment %}
+  <nav class="inbox-tabs relative" aria-label="Inbox views"
+       x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
+    {% with ch=channel|yesno:"&channel=,"|add:channel %}
+    <a href="?view=needs_attention{{ ch }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
+      Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
+    </a>
+    <a href="?view=missed{{ ch }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
+       title="Customers who wrote and got no reply for over 24 hours">
+      Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>{% endif %}
+    </a>
+    <a href="?view=assigned{{ ch }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
+      {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
+      third of the screen, and it was the tab that got cut off.{% endcomment %}
+      <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
+    </a>
+    <a href="?view=all{{ ch }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
+      All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
+    </a>
+    {% endwith %}
+  </nav>
+
+  {% comment %}On a phone the filter is a round icon the size of a tab, with
+  the real <select> laid transparently over it: the tap still opens the native
+  picker, and assistive tech still gets a labelled select. A full-width select
+  beside the tabs left room for only two of the four. From sm up it is the
+  ordinary select. The dot marks a filter in force, since the icon alone would
+  not show which channel is selected.{% endcomment %}
+  <form method="get" class="inbox-filter{% if channel %} is-active{% endif %}">
+    <input type="hidden" name="view" value="{{ view }}" />
+    <span class="inbox-filter-icon" aria-hidden="true">
+      {% include "components/icon.html" with name="sliders" class="w-4 h-4" %}
+    </span>
+    <select name="channel" class="select select-sm" onchange="this.form.submit()" aria-label="Filter by channel">
+      <option value="">All channels</option>
+      {% for value, label in channel_choices %}
+        <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
 
 {% if page and page.object_list %}
 <ul class="inbox-list">
@@ -47,14 +69,21 @@ which would also scroll the page vertically.{% endcomment %}
         {% else %}{% include "components/icon.html" with name="user" class="w-5 h-5" %}{% endif %}
       </span>
 
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <p class="inbox-name">{{ name }}</p>
+      {% comment %}Grid areas, not nested rows, so the same four pieces lay out
+      as three lines on a phone (name/time, preview, meta) and two on a wide
+      screen (name + meta + time, preview) — where the third line of badges was
+      most of the height of every row. DOM order is the reading order.{% endcomment %}
+      <div class="inbox-row-body">
+        <p class="inbox-name">{{ name }}</p>
+
+        <div class="inbox-when">
           {% if c.is_unread %}<span class="inbox-unread" aria-hidden="true"></span><span class="sr-only">Unread.</span>{% endif %}
-          {% comment %}While the customer is waiting, the time shown is how
-          long they have been waiting — the inbox's own question — rather than
-          the last activity of any kind.{% endcomment %}
+          {% comment %}While the customer is waiting, the time is how long they
+          have been waiting — the inbox's own question — so it carries the
+          "waiting" signal itself, in amber with a clock, rather than
+          repeating it in a badge.{% endcomment %}
           {% if c.is_waiting %}
+            {% include "components/icon.html" with name="clock" class="w-3.5 h-3.5 inbox-when-icon" %}<span class="sr-only">Waiting</span>
             <time class="inbox-time is-urgent" datetime="{{ c.snapshot.last_customer_message_at|date:'c' }}"
                   title="Waiting since {{ c.snapshot.last_customer_message_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_customer_message_at|ago:now }}</time>
           {% elif c.snapshot.last_activity_at %}
@@ -68,10 +97,15 @@ which would also scroll the page vertically.{% endcomment %}
         </p>
 
         <div class="inbox-meta">
+          {% comment %}A badge only when it says something the time does not:
+          Missed is past the 24h line, Replied and Closed are not waiting at
+          all. Plain waiting is already the amber clock.{% endcomment %}
           {% if c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
-          {% elif c.snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting</span>
           {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
-          {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
+          {% elif c.snapshot.closed_reason %}<span class="badge badge-neutral"
+            title="{% if c.snapshot.closed_reason == 'inactive_24h' %}Closed automatically: the customer has not written in over 24 hours{% else %}Closed by your team{% endif %}">Closed</span>{% endif %}
+          {% comment %}No badge at all for a conversation with no messages yet
+          (state INDETERMINATE) — it used to fall through to "Closed".{% endcomment %}
           {% include "components/channel_tag.html" with channel=c.channel compact=True %}
           {% if c.assigned_to %}
           <span class="inbox-assignee">

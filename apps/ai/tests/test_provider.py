@@ -109,8 +109,17 @@ def test_template_proposals_must_be_approved_complete_and_never_type_a_name():
     for payload in (
         '{"template":"made_up","variables":{}}',
         '{"template":"checking_in","variables":{"name":"contact.first_name"}}',
-        '{"template":"checking_in","variables":{"name":"Ada","topic":"x"}}',
     ):
         with pytest.raises(proposals.ProposalError):
             proposals.parse('{"version":1,"action":"send_template","payload":%s}' % payload,
                             templates=TEMPLATES, window_open=False)
+
+
+@pytest.mark.parametrize("name_value", ['"Ada"', '""', 'null', '"{{contact.first_name}}"'])
+def test_a_name_blank_always_comes_from_the_customers_own_details(name_value):
+    # Typed, empty or wrapped in braces: the name is always read from this customer's record.
+    p = proposals.parse(
+        '{"version":1,"action":"send_template","payload":{"template":"Customer check-in",'
+        '"variables":{"Customer name":%s,"topic":"your quote"}}}' % name_value,
+        templates={"Customer check-in": ["Customer name", "topic"]}, window_open=False)
+    assert p["payload"]["variables"]["Customer name"] == "contact.first_name"

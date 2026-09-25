@@ -2,35 +2,29 @@
 {% block title %}Inbox — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
-{% comment %}One row on a phone: title, channel filter, and the two secondary
-pages as icon buttons. Their labels stay in the accessibility tree (sr-only)
-and come back as visible text from sm up — the old row wrapped each link onto
-two lines beside a 10rem select. The explanatory subtitle is desktop-only; on a
-360px screen it pushed the first conversation below the fold.{% endcomment %}
-<header class="mb-4 sm:mb-5">
-  <div class="flex items-center justify-between gap-2">
+{% comment %}Page header: the title, and links to the two neighbouring pages.
+Controls that act on the list itself — the view tabs and the channel filter —
+live with the list in _inbox_body.html, not up here: the filter used to float
+beside the title as a tall select next to two plain text links, visually
+unrelated to the list it filters.
+
+The links are icon buttons on a phone with their labels kept for screen readers
+(sr-only), and icon + label from sm up.{% endcomment %}
+<header class="inbox-header">
+  <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
-    <div class="flex items-center gap-1 sm:gap-2">
-      <form method="get">
-        <input type="hidden" name="view" value="{{ view }}" />
-        <select name="channel" class="select !w-auto sm:!w-40" onchange="this.form.submit()" aria-label="Filter by channel">
-          <option value="">All channels</option>
-          {% for value, label in channel_choices %}
-            <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Follow-ups due">
-        {% include "components/icon.html" with name="clock" class="w-5 h-5 sm:hidden" %}
-        <span class="sr-only sm:not-sr-only">Follow-ups due</span>
-      </a>
-      <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Saved replies">
-        {% include "components/icon.html" with name="book-open" class="w-5 h-5 sm:hidden" %}
-        <span class="sr-only sm:not-sr-only">Saved replies</span>
-      </a>
-    </div>
+    <p class="hidden sm:block mt-1 text-sm text-gray-600">Who is waiting on you, and for how long — across every channel.</p>
   </div>
-  <p class="hidden sm:block mt-1 text-sm text-gray-600">Who is waiting on you, and for how long — across every channel.</p>
+  <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+    <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Follow-ups due">
+      {% include "components/icon.html" with name="clock" class="w-4 h-4" %}
+      <span class="sr-only sm:not-sr-only">Follow-ups due</span>
+    </a>
+    <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Saved replies">
+      {% include "components/icon.html" with name="book-open" class="w-4 h-4" %}
+      <span class="sr-only sm:not-sr-only">Saved replies</span>
+    </a>
+  </div>
 </header>
 
 {% comment %}
