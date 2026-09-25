@@ -1,0 +1,49 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Opening hours</h2>
+  <p class="text-sm text-gray-500 mb-4">
+    Tell Akilent when you're open. Automations use this to reply differently when
+    you're closed. Leave every day unticked and you'll be treated as always open.
+  </p>
+
+  {% if configured %}
+  <p class="text-sm mb-4">
+    Right now you're
+    {% if open_now %}<span class="badge badge-success">open</span>{% else %}<span class="badge badge-neutral">closed</span>{% endif %}
+  </p>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="label" for="hours-timezone">Your timezone</label>
+      <select id="hours-timezone" name="timezone" class="select" {% if not can_edit %}disabled{% endif %}>
+        {% for tz in timezones %}<option value="{{ tz }}" {% if tz == current_tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="space-y-2">
+      {% for row in rows %}
+      <div class="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-2">
+        <label class="flex items-center gap-2 w-32">
+          <input type="checkbox" name="{{ row.key }}_open" {% if row.open %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+          <span class="font-medium text-ink">{{ row.label }}</span>
+        </label>
+        <label class="sr-only" for="{{ row.key }}-from">{{ row.label }} opens</label>
+        <input id="{{ row.key }}-from" type="time" name="{{ row.key }}_from" value="{{ row.from }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
+        <span class="text-gray-400">to</span>
+        <label class="sr-only" for="{{ row.key }}-to">{{ row.label }} closes</label>
+        <input id="{{ row.key }}-to" type="time" name="{{ row.key }}_to" value="{{ row.to }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if can_edit %}
+    <button class="btn btn-primary" type="submit">Save</button>
+    {% else %}
+    <p class="text-sm text-gray-500">Only an owner or admin can change opening hours.</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

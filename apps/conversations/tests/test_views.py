@@ -340,3 +340,51 @@ def test_the_picker_lists_teammates(logged_in, open_conversation, teammate):
     client, _, _ = logged_in
     body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
     assert 'name="assignee"' in body and "sam" in body
+
+
+@pytest.mark.django_db
+def test_a_customer_given_a_value_shows_as_tracked_in_the_pipeline(logged_in, conversation_without_a_lead):
+    """Adding an estimated value turns the lead straight into a deal, which leaves no open
+    lead. The panel used to read that as "Not tracked yet" and offer to track them again."""
+    client, _, _ = logged_in
+    page = f"/inbox/{conversation_without_a_lead.public_id}/"
+    client.post("/sales/leads/create/", {
+        "contact": conversation_without_a_lead.contact.phone, "next": page,
+        "source": "conversation", "value": "500",
+    })
+
+    from apps.crm.models import Deal, Lead
+
+    assert not Lead.objects.filter(contact=conversation_without_a_lead.contact, status="new").exists()
+    deal = Deal.objects.get(contact=conversation_without_a_lead.contact)
+    body = client.get(page).content.decode()
+    assert "Not tracked yet" not in body
+    assert "In your pipeline" in body and f"/sales/deals/{deal.public_id}/" in body
+    assert "Tracked as interested" in body
+    assert 'name="value"' not in body          # the create-lead form is not offered again
+
+
+@pytest.mark.django_db
+def test_a_lead_without_a_value_still_shows_where_they_stand(logged_in, conversation_without_a_lead):
+    client, _, _ = logged_in
+    page = f"/inbox/{conversation_without_a_lead.public_id}/"
+    client.post("/sales/leads/create/", {
+        "contact": conversation_without_a_lead.contact.phone, "next": page, "source": "conversation"})
+    body = client.get(page).content.decode()
+    assert "Where they stand" in body and "Not tracked yet" not in body
+
+
+@pytest.mark.django_db
+def test_a_closed_deal_no_longer_counts_as_tracked(logged_in, conversation_without_a_lead):
+    client, _, _ = logged_in
+    page = f"/inbox/{conversation_without_a_lead.public_id}/"
+    client.post("/sales/leads/create/", {
+        "contact": conversation_without_a_lead.contact.phone, "next": page,
+        "source": "conversation", "value": "500",
+    })
+
+    from apps.crm.models import Deal
+
+    Deal.objects.filter(contact=conversation_without_a_lead.contact).update(status=Deal.Status.WON)
+    body = client.get(page).content.decode()
+    assert "Not tracked yet" in body and "Track as interested" in body

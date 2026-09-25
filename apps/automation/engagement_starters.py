@@ -120,6 +120,16 @@ _REPLY_STARTERS = [
         "reply_hint": "Hi {first_name}, thanks for getting in touch. How can we help?",
     },
 ]
+_REPLY_STARTERS.append({
+    "key": "reply-when-closed",
+    "name": "Reply when you're closed",
+    "goal": "Customers who write after hours know when to expect an answer.",
+    "explain": "When a message arrives outside your opening hours, tell the customer when you'll reply.",
+    "stop_condition": "Tells the same customer at most once every 8 hours.",
+    "after_hours": True,
+    "reply_hint": "Thanks for getting in touch. We're closed right now and will reply when we open at 8am.",
+    "needs_hours": True,
+})
 for _starter in _REPLY_STARTERS:
     _starter.update({
         "trigger": "conversation.message_received",
@@ -132,8 +142,22 @@ STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
 
 
 def build_reply_definition(starter: dict, *, text: str) -> dict:
-    """A keyword auto-reply: when the message matches, answer once, tag the customer if the
-    starter names a tag (so the owner can later see who asked about prices), then stop."""
+    """A one-message auto-reply, then stop.
+
+    Keyword starters answer when the message matches, and tag the customer if the starter
+    names a tag (so the owner can later see who asked about prices). The after-hours starter
+    answers only while the business is closed, and at most once per customer per 8 hours.
+    """
+    if starter.get("after_hours"):
+        return {
+            "trigger": {"type": starter["trigger"], "cooldown_minutes": 480},
+            "steps": [
+                {"id": "open_now", "type": "branch", "field": "within_business_hours",
+                 "operator": "eq", "value": True, "on_true": "stop", "on_false": "reply"},
+                {"id": "reply", "type": "reply_text", "text": text, "next": "stop"},
+                {"id": "stop", "type": "stop"},
+            ],
+        }
     tag = starter.get("tag")
     steps = [{"id": "reply", "type": "reply_text", "text": text, "next": "tag" if tag else "stop"}]
     if tag:

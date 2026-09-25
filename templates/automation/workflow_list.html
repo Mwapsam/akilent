@@ -65,7 +65,7 @@
     <div>
       <label class="label" for="reply-{{ starter.key }}">What should the reply say?</label>
       <textarea id="reply-{{ starter.key }}" name="reply_text" class="textarea" rows="4" maxlength="1000" required placeholder="{{ starter.reply_hint }}"></textarea>
-      <p class="text-xs text-gray-400 mt-1">Use {first_name} to include the customer's name. It reacts to these words: {{ starter.keywords|join:", " }}. You can change them later in the editor.</p>
+      <p class="text-xs text-gray-400 mt-1">Use {first_name} to include the customer's name. {% if starter.keywords %}It reacts to these words: {{ starter.keywords|join:", " }}. You can change them later in the editor.{% elif starter.needs_hours %}It uses your <a href="{% url 'settings-hours' %}" class="text-accent underline">opening hours</a>.{% endif %}</p>
     </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>

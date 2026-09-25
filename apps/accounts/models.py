@@ -201,3 +201,20 @@ class Invitation(models.Model):
 
     def __str__(self):
         return f"invite {self.email} -> {self.account} ({self.role})"
+
+
+class BusinessHours(models.Model):
+    """When a business is open, in its own timezone (see ``apps.accounts.business_hours``).
+
+    ``schedule`` maps a weekday key (mon..sun) to ``{"open": "09:00", "close": "17:00"}``;
+    a missing day is closed. An empty schedule means "no hours set", which is treated as
+    always open.
+    """
+
+    account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="business_hours")
+    timezone = models.CharField(max_length=64, default="UTC")
+    schedule = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Hours for {self.account_id} ({self.timezone})"

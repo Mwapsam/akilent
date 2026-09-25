@@ -362,6 +362,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
               Tracked as interested
             </a>
+            {% elif open_deal %}
+            <a class="cv-next-done text-accent" href="{% url 'crm:deal-detail' open_deal.public_id %}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+              Tracked as interested
+            </a>
             {% else %}
             <button type="button" class="cv-next-btn" @click="$dispatch('modal-open', 'chat-new-lead')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -509,6 +514,11 @@
           <span class="text-gray-600">Where they stand</span>
           <span class="font-medium text-accent">{{ open_lead.get_status_display }}</span>
         </a>
+        {% elif open_deal %}
+        <a href="{% url 'crm:deal-detail' open_deal.public_id %}" class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:tone-neutral-bg">
+          <span class="text-gray-600">In your pipeline</span>
+          <span class="font-medium text-accent">{{ open_deal.stage.name }}</span>
+        </a>
         {% else %}
         <p class="text-sm text-gray-500">Not tracked yet. Use <span class="text-ink">Track as interested</span> under the message box when they ask about buying.</p>
         {% endif %}
@@ -573,7 +583,7 @@
 </div>
 
 {% with contact_identifier=conversation.contact.phone|default:conversation.contact.email %}
-{% if crm_enabled and not open_lead %}
+{% if crm_enabled and not open_lead and not open_deal %}
 {% modal "chat-new-lead" title="Create lead" %}
   <form method="post" action="{% url 'crm:create-lead' %}" class="space-y-4">
     {% csrf_token %}

@@ -152,6 +152,71 @@ def settings_tools(request):
     })
 
 
+# --- Opening hours ------------------------------------------------------------
+
+_COMMON_TIMEZONES = [
+    "Africa/Lusaka", "Africa/Harare", "Africa/Johannesburg", "Africa/Nairobi", "Africa/Lagos",
+    "Africa/Accra", "Africa/Cairo", "Europe/London", "UTC",
+]
+
+
+def _hours_rows(hours):
+    """One form row per weekday. A business with no hours yet sees Monday to Friday, 9 to 5,
+    pre-filled so the common case is one click; nothing is stored until they save."""
+    from apps.accounts import business_hours as bh
+
+    saved = hours.schedule if hours and hours.schedule else None
+    rows = []
+    for day in bh.DAYS:
+        window = (saved or {}).get(day) if saved else (bh.DEFAULT_WINDOW if day not in ("sat", "sun") else None)
+        window = window or bh.DEFAULT_WINDOW
+        is_open = bool((saved or {}).get(day)) if saved else day not in ("sat", "sun")
+        rows.append({"key": day, "label": bh.DAY_LABELS[day], "open": is_open,
+                     "from": window["open"], "to": window["close"]})
+    return rows
+
+
+@login_required
+def settings_hours(request):
+    from zoneinfo import available_timezones
+
+    from apps.accounts import business_hours as bh
+
+    account, membership = _account_and_membership(request)
+    if account is None:
+        return redirect("dashboard")
+    can_edit = _can_manage_team(membership)
+    hours = bh.get_hours(account)
+
+    if request.method == "POST":
+        if not can_edit:
+            messages.error(request, "Only an owner or admin can change opening hours.")
+            return redirect("settings-hours")
+        schedule = {
+            day: {"open": request.POST.get(f"{day}_from", ""), "close": request.POST.get(f"{day}_to", "")}
+            for day in bh.DAYS if request.POST.get(f"{day}_open") == "on"
+        }
+        try:
+            saved = bh.save_hours(account, tz=request.POST.get("timezone", ""), schedule=schedule)
+        except bh.HoursError as exc:
+            messages.error(request, str(exc))
+            return redirect("settings-hours")
+        messages.success(
+            request,
+            "Opening hours saved." if saved.schedule
+            else "Opening hours cleared. You'll be treated as always open.",
+        )
+        return redirect("settings-hours")
+
+    current_tz = hours.timezone if hours else "Africa/Lusaka"
+    zones = _COMMON_TIMEZONES + sorted(z for z in available_timezones() if z not in _COMMON_TIMEZONES)
+    return render(request, "accounts/settings_hours.html", {
+        "account": account, "active_tab": "hours", "rows": _hours_rows(hours),
+        "timezones": zones, "current_tz": current_tz, "can_edit": can_edit,
+        "configured": bh.is_configured(account), "open_now": bh.is_open(account),
+    })
+
+
 # --- Team ---------------------------------------------------------------------
 
 @login_required

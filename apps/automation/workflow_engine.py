@@ -294,9 +294,23 @@ def _notify_workflow(run: WorkflowRun, event_type: str) -> None:
         logger.exception("_notify_workflow failed for run %s", run.pk)
 
 
+_TRUTHY = {True, "true", "True", "yes", "1", 1}
+
+
 def _condition_matches(contact, step: dict) -> bool:
     from apps.contacts.models import Contact
     from apps.contacts.segments import build_q
+
+    if step["field"] == "within_business_hours":
+        # A fact about the business, not the customer, so it is answered here rather than
+        # by the contact query. value true (the default) matches while the business is
+        # open; value false, or operator "ne", matches while it is closed.
+        from apps.accounts import business_hours
+
+        wants_open = step.get("value", True) in _TRUTHY
+        if step.get("operator", "eq") == "ne":
+            wants_open = not wants_open
+        return business_hours.is_open(contact.account) is wants_open
 
     cond = {
         "field": step["field"],

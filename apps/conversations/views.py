@@ -272,14 +272,19 @@ def conversation_detail(request, public_id: str):
         account=account, contact=conversation.contact, done_at__isnull=True
     ).order_by("due_at").first()
 
-    open_lead = None
+    open_lead = open_deal = None
     try:
-        from apps.crm.models import Lead
+        from apps.crm.models import Deal, Lead
 
         open_lead = Lead.objects.filter(
             account=account, contact=conversation.contact,
             status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
         ).first()
+        # Giving a lead a value turns it straight into a deal, which leaves no open lead.
+        # A customer in the pipeline is still being tracked, so the panel must say so.
+        open_deal = Deal.objects.filter(
+            account=account, contact=conversation.contact, status=Deal.Status.OPEN,
+        ).select_related("stage").order_by("-created_at").first()
     except Exception:
         pass  # crm app not installed/migrated — panel just won't show it
 
@@ -291,6 +296,7 @@ def conversation_detail(request, public_id: str):
         "snapshot": snapshot,
         "notes": conversation.notes.select_related("author"),
         "open_lead": open_lead,
+        "open_deal": open_deal,
         "approved_templates": approved_templates,
         "saved_replies": saved_replies,
         "open_followup": open_followup,

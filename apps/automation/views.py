@@ -143,6 +143,16 @@ def _install_reply_starter(request, account, starter):
     """Install a keyword auto-reply: the owner's own words, sent as a normal message."""
     from apps.automation.engagement_starters import build_reply_definition
 
+    if starter.get("needs_hours"):
+        from apps.accounts import business_hours
+
+        if not business_hours.is_configured(account):
+            messages.error(
+                request,
+                "Set your opening hours first (Settings, then Opening hours), so Akilent knows "
+                "when you're closed.",
+            )
+            return redirect("automation:list")
     text = (request.POST.get("reply_text") or "").strip()
     if not text:
         messages.error(request, "Write the reply customers should get.")
