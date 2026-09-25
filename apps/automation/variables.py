@@ -28,6 +28,11 @@ _NAME_LIKE = ("name", "first", "customer", "client", "person")
 _BUSINESS_LIKE = ("company", "business", "shop", "store", "brand", "organisation", "organization")
 
 
+def merge_first_name(text: str, first_name: str) -> str:
+    """``{first_name}`` becomes the customer's first name, or "there" when we don't have one."""
+    return (text or "").replace("{first_name}", (first_name or "").strip() or "there")
+
+
 def default_choice(variable: str) -> str:
     """The safest choice for a blank called ``variable``: names are per customer, never fixed."""
     lowered = variable.lower()

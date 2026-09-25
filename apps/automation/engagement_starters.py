@@ -162,8 +162,23 @@ ENGAGEMENT_STARTERS.extend(_REPLY_STARTERS)
 
 STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
 
+# How the Automations home groups them: by what the owner wants help with, not by mechanism.
+GOAL_GROUPS = (
+    ("Answer customer questions", (
+        "answer-pricing-questions", "answer-where-are-you", "welcome-new-enquiry",
+        "greet-hello", "offer-a-menu",
+    )),
+    ("Never miss a customer", (
+        "interested-customer-check-back", "quiet-customer-check-in",
+        "thank-you-after-a-conversation", "reply-when-closed",
+    )),
+    ("Keep your team informed", ("route-new-leads",)),
+)
+assert {k for _, keys in GOAL_GROUPS for k in keys} == set(STARTERS_BY_KEY), "every starter belongs to a goal"
 
-def build_reply_definition(starter: dict, *, text: str) -> dict:
+
+def build_reply_definition(starter: dict, *, text: str, keywords: list[str] | None = None,
+                           tag: bool = True, notify: bool = False) -> dict:
     """A one-message auto-reply, then stop.
 
     Keyword starters answer when the message matches, and tag the customer if the starter
@@ -180,15 +195,23 @@ def build_reply_definition(starter: dict, *, text: str) -> dict:
                 {"id": "stop", "type": "stop"},
             ],
         }
-    tag = starter.get("tag")
-    steps = [{"id": "reply", "type": "reply_text", "text": text, "next": "tag" if tag else "stop"}]
-    if tag:
-        steps.append({"id": "tag", "type": "add_tag", "tag": tag, "next": "stop"})
+    tag_name = starter.get("tag") if tag else None
+    chain = [("reply", {"type": "reply_text", "text": text})]
+    if tag_name:
+        chain.append(("tag", {"type": "add_tag", "tag": tag_name}))
+    if notify:
+        chain.append(("tell", {
+            "type": "notify_team", "to": "owners",
+            "text": "{contact} sent a message that " + starter["name"] + " answered. Take a look if you'd like to follow up.",
+        }))
+    steps = []
+    for n, (sid, body) in enumerate(chain):
+        steps.append({"id": sid, **body, "next": chain[n + 1][0] if n + 1 < len(chain) else "stop"})
     steps.append({"id": "stop", "type": "stop"})
     return {
         "trigger": {
             "type": starter["trigger"],
-            "match": {"mode": starter["mode"], "any": list(starter["keywords"])},
+            "match": {"mode": starter["mode"], "any": list(keywords or starter["keywords"])},
             "cooldown_minutes": 60,
         },
         "steps": steps,

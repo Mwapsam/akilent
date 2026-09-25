@@ -29,6 +29,7 @@ _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.update
 @login_required
 @module_required("automation")
 def workflow_list(request):
+    from apps.automation import explain
     from apps.automation.labels import trigger_label
 
     account = get_current_account(request)
@@ -52,14 +53,22 @@ def workflow_list(request):
         # note in apps.whatsapp for the same "translate once, in Python" rule.
         trigger = (wf.definition or {}).get("trigger") or {}
         wf.trigger_label = trigger_label(trigger.get("type", ""), trigger.get("name", ""))
-    engagement, approved_templates = _engagement_starters(account, workflows)
+        wf.summary = explain.explain_definition(wf.definition)
+    groups, engagement, approved_templates = _engagement_starters(account, workflows)
     return render(request, "automation/workflow_list.html", {
         "account": account,
         "workflows": workflows,
         "starters": list_templates(),
         "engagement_starters": engagement,
+        "goal_groups": groups,
         "approved_templates": approved_templates,
         "blank_choices": wa_variables_choices(),
+        "template_data": {
+            "business": account.company_name or "Your business",
+            "templates": [
+                {"pk": t.pk, "content": t.content or "", "blanks": t.blanks} for t in approved_templates
+            ],
+        },
     })
 
 
@@ -76,7 +85,7 @@ def _engagement_starters(account, workflows):
     fail at send time: WhatsApp only delivers templates Meta has approved, so
     with no approved message there is nothing to send.
     """
-    from apps.automation.engagement_starters import ENGAGEMENT_STARTERS
+    from apps.automation.engagement_starters import ENGAGEMENT_STARTERS, GOAL_GROUPS
     from apps.whatsapp.models import MessageTemplate
 
     approved = list(
@@ -92,11 +101,19 @@ def _engagement_starters(account, workflows):
             {"name": name, "default": wa_variables.default_choice(name)} for name in (template.variables or [])
         ]
     installed = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED}
-    cards = [
-        {**starter, "installed": installed.get(starter["key"])}
+    paused = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.ARCHIVED}
+    cards = {
+        starter["key"]: {**starter, "installed": installed.get(starter["key"]), "paused": paused.get(starter["key"])}
         for starter in ENGAGEMENT_STARTERS
+    }
+    from apps.automation import readiness
+
+    for card in cards.values():
+        card["readiness"] = readiness.check(account, card, approved_template_count=len(approved))
+    groups = [
+        {"title": title, "cards": [cards[key] for key in keys]} for title, keys in GOAL_GROUPS
     ]
-    return cards, approved
+    return groups, list(cards.values()), approved
 
 
 @login_required
@@ -253,11 +270,79 @@ def _install_reply_starter(request, account, starter):
     if len(text) > _MAX_REPLY_LENGTH:
         messages.error(request, f"Keep the reply under {_MAX_REPLY_LENGTH} characters.")
         return redirect("automation:list")
+    keywords = None
+    if starter.get("keywords") and request.POST.get("keywords") is not None:
+        keywords = _clean_keywords(request.POST.get("keywords", ""))
+        if not keywords:
+            messages.error(request, "Add at least one word for Akilent to listen for.")
+            return redirect("automation:list")
+    # The "then" checkboxes: an old form without them keeps the starter's default (tag on).
+    from_recipe = request.POST.get("then_present") == "1"
     automation_api.upsert_published_workflow(
         account, slug=starter["key"], name=starter["name"],
-        definition=build_reply_definition(starter, text=text),
+        definition=build_reply_definition(
+            starter, text=text, keywords=keywords,
+            tag=(request.POST.get("add_tag") == "on") if from_recipe else True,
+            notify=request.POST.get("tell_team") == "on",
+        ),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
+
+
+_MAX_KEYWORDS = 12
+
+
+def _clean_keywords(raw: str) -> list[str]:
+    """Words typed as "price, cost, how much": trimmed, de-duplicated, short, and not too many."""
+    seen, words = set(), []
+    for part in raw.replace("\n", ",").split(","):
+        word = part.strip()[:40]
+        if word and word.casefold() not in seen:
+            seen.add(word.casefold())
+            words.append(word)
+    return words[:_MAX_KEYWORDS]
+
+
+@login_required
+@module_required("automation")
+@require_POST
+def starter_test(request):
+    """"Send test to me": the reply the owner is setting up, sent to their own WhatsApp.
+
+    Goes through the normal send path, so WhatsApp's rules apply: a normal message can only be
+    sent to a number that wrote to the business in the last 24 hours. We say so plainly instead
+    of creating a contact or faking consent.
+    """
+    from apps.automation.engagement_starters import STARTERS_BY_KEY
+    from apps.automation.variables import merge_first_name
+    from apps.whatsapp import api as whatsapp_api
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    starter = STARTERS_BY_KEY.get(request.POST.get("starter", ""))
+    if starter is None or not starter.get("reply") or starter.get("menu") or starter.get("team"):
+        messages.error(request, "Test sending is available for the reply automations.")
+        return redirect("automation:list")
+    text = (request.POST.get("reply_text") or "").strip()
+    if not text:
+        messages.error(request, "Write the reply first, then send yourself a test.")
+        return redirect("automation:list")
+    contact = whatsapp_api.find_contact_by_phone(account, request.POST.get("test_phone", ""))
+    if contact is None or not whatsapp_api.free_text_window_is_open(contact):
+        messages.error(
+            request,
+            "To send you a test, WhatsApp needs you to have messaged your business number from that "
+            "phone in the last 24 hours. Send it a quick message from your phone, then try again.",
+        )
+        return redirect("automation:list")
+    first = contact.contact.first_name if contact.contact_id else ""
+    whatsapp_api.send_message(account, contact, merge_first_name(text, first))
+    messages.success(
+        request,
+        "Test sent to your WhatsApp. This is exactly the message Akilent will send when this automation runs.",
+    )
     return redirect("automation:list")
 
 
@@ -446,13 +531,50 @@ def workflow_archive(request, slug: str):
 @login_required
 @module_required("automation")
 @require_POST
+def workflow_pause(request, slug: str):
+    """Pause an automation. Only its on/off state changes: same steps, same version, nothing lost."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    if wf.status == Workflow.Status.PUBLISHED:
+        wf.status = Workflow.Status.ARCHIVED
+        wf.save(update_fields=["status", "updated_at"])
+    messages.success(request, f"{wf.name} is paused. Akilent won't run it until you turn it on again.")
+    return redirect("automation:list")
+
+
+@login_required
+@module_required("automation")
+@require_POST
+def workflow_resume(request, slug: str):
+    """Turn a paused automation back on, exactly as it was (no new version)."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    if wf.status == Workflow.Status.ARCHIVED:
+        blocking = [e for e in validate_definition(wf.definition, account=account)
+                    if e.get("severity", "error") != "warning"]
+        if blocking:
+            messages.error(request, f"{wf.name} can't be turned on yet: {blocking[0]['message']}")
+            return redirect("automation:list")
+        wf.status = Workflow.Status.PUBLISHED
+        wf.save(update_fields=["status", "updated_at"])
+    messages.success(request, f"{wf.name} is on.")
+    return redirect("automation:list")
+
+
+@login_required
+@module_required("automation")
+@require_POST
 def workflow_delete(request, slug: str):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
     wf.delete()
-    messages.success(request, "Workflow deleted.")
+    messages.success(request, f"{wf.name} was removed.")
     return redirect("automation:list")
 
 

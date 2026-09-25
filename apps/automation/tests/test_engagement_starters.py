@@ -104,7 +104,7 @@ def test_the_gallery_explains_itself_when_nothing_is_approved(logged_in):
     client, _ = logged_in
     body = client.get(LIST_URL).content.decode()
     assert "Check in when a customer goes quiet" in body
-    assert "Needs a message WhatsApp has approved" in body
+    assert "message WhatsApp has approved" in body
     # No template picker is offered: the follow-ups that need a template can't be installed.
     assert 'name="template_id"' not in body
 
@@ -119,7 +119,7 @@ def test_the_gallery_shows_a_starter_that_is_already_on(logged_in, approved_temp
         f"var__{approved_template.pk}__2": "your enquiry",
     })
     body = client.get(LIST_URL).content.decode()
-    assert "See what it does" in body
+    assert "What does this do?" in body
 
 
 @pytest.mark.parametrize("key", [k for k, s in STARTERS_BY_KEY.items() if "quiet_days" in s])
@@ -290,7 +290,7 @@ def test_an_installed_keyword_reply_shows_as_on_and_updates_in_place(logged_in):
     for text in ("First answer", "Second answer"):
         client.post(INSTALL_URL, {"starter": "greet-hello", "reply_text": text})
     assert Workflow.objects.filter(account=account, slug="greet-hello").count() == 1
-    assert "See what it does" in client.get(LIST_URL).content.decode()
+    assert "What does this do?" in client.get(LIST_URL).content.decode()
 
 
 @pytest.mark.django_db

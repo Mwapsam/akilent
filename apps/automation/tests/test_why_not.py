@@ -182,14 +182,13 @@ def test_the_list_shows_when_it_last_ran_and_who_it_helped(owner, account):
     WorkflowRun.objects.create(workflow=wf, contact=a, status="completed")
     WorkflowRun.objects.create(workflow=wf, contact=b, status="failed")
     html = owner.get("/automations/").content.decode()
-    assert "Last ran" in html and "2 customers helped" in html and "1 didn't send" in html
+    assert "Last ran" in html and "Helped 2 customers" in html and "1 didn't send" in html
 
 
 @pytest.mark.django_db
 def test_an_automation_that_never_ran_says_so(owner, account):
     keyword_wf(account)
-    assert "Hasn&#x27;t run yet" in owner.get("/automations/").content.decode() or \
-        "Hasn't run yet" in owner.get("/automations/").content.decode()
+    assert "No customer has triggered it yet" in owner.get("/automations/").content.decode()
 
 
 @pytest.mark.django_db
@@ -211,3 +210,210 @@ def test_a_failed_run_emails_the_owners_once_a_day(account, monkeypatch):
         we._alert_failure(run, "reply: the 24-hour window is closed")
     assert len(sent) == 1
     assert "24-hour window" in sent[0]["text"] and sent[0]["to"] == "owners"
+
+
+# ---- pause / resume, the goal gallery, readiness, and "what does this do?" ----
+@pytest.mark.django_db
+def test_pausing_changes_only_the_on_off_state(owner, account):
+    wf = keyword_wf(account)
+    before = (wf.version, wf.definition)
+    owner.post(f"/automations/{wf.slug}/pause/")
+    wf.refresh_from_db()
+    assert wf.status == Workflow.Status.ARCHIVED
+    owner.post(f"/automations/{wf.slug}/resume/")
+    wf.refresh_from_db()
+    assert wf.status == Workflow.Status.PUBLISHED
+    assert (wf.version, wf.definition) == before, "pause and resume must not create a new version"
+
+
+@pytest.mark.django_db
+def test_a_paused_automation_does_not_start_or_keep_sending(owner, account):
+    from apps.automation.workflow_engine import run_due
+
+    wf = keyword_wf(account)
+    contact, _ = say(account, "price?")
+    run = WorkflowRun.objects.create(
+        workflow=wf, contact=contact, status="waiting", current_step="r", next_due_at=NOW - timedelta(minutes=1))
+    owner.post(f"/automations/{wf.slug}/pause/")
+    assert run_due() == 0, "a paused automation must not send what it had waiting"
+    assert enroll_for_trigger(account.id, "conversation.message_received", contact,
+                              context={"message": {"body": "price"}}) == 0
+    run.refresh_from_db()
+    assert run.status == "waiting"
+
+
+@pytest.mark.django_db
+def test_pause_and_resume_are_scoped_to_the_business(owner, account):
+    other = Account.objects.create(company_name="Other")
+    theirs = keyword_wf(other, slug="theirs")
+    assert owner.post(f"/automations/{theirs.slug}/pause/").status_code == 404
+    theirs.refresh_from_db()
+    assert theirs.status == Workflow.Status.PUBLISHED
+
+
+@pytest.mark.django_db
+def test_the_home_is_a_goal_gallery_with_running_now(owner, account):
+    keyword_wf(account)
+    html = owner.get("/automations/").content.decode()
+    for heading in ("What do you want Akilent to help with?", "Answer customer questions",
+                    "Never miss a customer", "Keep your team informed", "Running now"):
+        assert heading in html
+    assert "Answer pricing questions" in html and "Pause" in html and "What does this do?" in html
+
+
+@pytest.mark.django_db
+def test_a_paused_card_says_it_will_not_run(owner, account):
+    wf = keyword_wf(account)
+    owner.post(f"/automations/{wf.slug}/pause/")
+    html = owner.get("/automations/").content.decode()
+    assert "Paused" in html and "won't run this automation until you turn it on again" in html and "Turn on" in html
+
+
+@pytest.mark.django_db
+def test_readiness_separates_blocked_from_never_used(account):
+    from apps.automation import readiness
+    from apps.automation.engagement_starters import STARTERS_BY_KEY
+
+    starter = STARTERS_BY_KEY["quiet-customer-check-in"]  # needs an approved template
+    blocked = readiness.check(account, starter, approved_template_count=0)
+    assert blocked["ready"] is False
+    assert any(i["blocking"] and i["fix"] for i in blocked["items"])
+    reply = readiness.check(account, STARTERS_BY_KEY["answer-pricing-questions"], approved_template_count=0)
+    assert not any("approved" in i["headline"] for i in reply["items"]), "a plain reply needs no template"
+
+
+@pytest.mark.django_db
+def test_hours_are_advice_not_a_blocker(account):
+    from apps.automation import readiness
+    from apps.automation.engagement_starters import STARTERS_BY_KEY
+
+    result = readiness.check(account, STARTERS_BY_KEY["reply-when-closed"], approved_template_count=0)
+    hours = next(i for i in result["items"] if "hours" in i["headline"])
+    assert hours["ok"] is False and hours["blocking"] is False
+
+
+def test_what_does_this_do_reads_the_stored_definition():
+    from apps.automation.explain import explain_definition
+
+    out = explain_definition({
+        "trigger": {"type": "conversation.message_received", "match": {"mode": "contains", "any": ["price"]},
+                    "cooldown_minutes": 60},
+        "steps": [{"id": "r", "type": "reply_text", "text": "Hello there", "next": "t"},
+                  {"id": "t", "type": "add_tag", "tag": "asked-prices", "next": "s"},
+                  {"id": "s", "type": "stop"}],
+    })
+    assert "mentions" in out["when"] and "price" in out["when"]
+    assert out["does"] == ["sends this reply: “Hello there”", "tags them “asked-prices”"]
+    assert any("paused" in w for w in out["wont"]) and any("opted out" in w for w in out["wont"])
+    assert any("24-hour" in w for w in out["wont"])
+
+
+@pytest.mark.django_db
+def test_every_starter_belongs_to_a_goal_and_installs_still_work(owner):
+    from apps.automation.engagement_starters import GOAL_GROUPS, STARTERS_BY_KEY
+
+    assert {k for _, keys in GOAL_GROUPS for k in keys} == set(STARTERS_BY_KEY)
+    owner.post("/automations/starters/install/", {"starter": "greet-hello", "reply_text": "Hi"})
+    assert Workflow.objects.filter(slug="greet-hello", status=Workflow.Status.PUBLISHED).exists()
+
+
+# ---- the recipe screen: own words, then-options, preview and test ----
+@pytest.mark.django_db
+def test_the_owner_can_change_the_words_it_listens_for(owner, account):
+    owner.post("/automations/starters/install/", {
+        "starter": "answer-pricing-questions", "reply_text": "K500", "keywords": "cost,  how much , COST\nrates",
+        "then_present": "1", "add_tag": "on"})
+    definition = Workflow.objects.get(account=account, slug="answer-pricing-questions").definition
+    assert definition["trigger"]["match"]["any"] == ["cost", "how much", "rates"]
+    assert [s["type"] for s in definition["steps"]] == ["reply_text", "add_tag", "stop"]
+
+
+@pytest.mark.django_db
+def test_an_empty_word_list_is_refused(owner, account):
+    owner.post("/automations/starters/install/", {
+        "starter": "answer-pricing-questions", "reply_text": "K500", "keywords": " , "})
+    assert not Workflow.objects.filter(account=account, slug="answer-pricing-questions").exists()
+
+
+@pytest.mark.django_db
+def test_the_then_options_control_the_tag_and_the_team_email(owner, account):
+    owner.post("/automations/starters/install/", {
+        "starter": "answer-pricing-questions", "reply_text": "K500", "then_present": "1", "tell_team": "on"})
+    steps = Workflow.objects.get(account=account, slug="answer-pricing-questions").definition["steps"]
+    assert [s["type"] for s in steps] == ["reply_text", "notify_team", "stop"], "tag unticked, team ticked"
+    assert steps[1]["to"] == "owners"
+    from apps.automation.workflow_engine import validate_definition
+    assert not [e for e in validate_definition({"trigger": {"type": "conversation.message_received",
+                "match": {"mode": "contains", "any": ["x"]}}, "steps": steps}, account=account)
+                if e.get("severity", "error") != "warning"]
+
+
+@pytest.mark.django_db
+def test_an_old_form_without_the_then_options_still_tags(owner, account):
+    owner.post("/automations/starters/install/", {"starter": "answer-pricing-questions", "reply_text": "K500"})
+    types = [s["type"] for s in Workflow.objects.get(account=account, slug="answer-pricing-questions").definition["steps"]]
+    assert types == ["reply_text", "add_tag", "stop"]
+
+
+@pytest.mark.django_db
+def test_the_setup_screen_reads_as_when_do_then_with_a_live_preview(owner):
+    html = owner.get("/automations/").content.decode()
+    for text in ("When", "Do", "Then", "Preview", "To Ada Mwape", "Send test to me", "Email my team when this happens"):
+        assert text in html
+
+
+def _owner_chat(account, *, window_open, phone="+260971234567"):
+    from apps.whatsapp.models import Conversation as WaConversation, WhatsAppContact
+
+    wa = WhatsAppContact.objects.create(account=account, phone_number=phone)
+    WaConversation.objects.create(
+        account=account, contact=wa, is_open=True,
+        window_expires_at=timezone.now() + timedelta(hours=5 if window_open else -5))
+    return wa
+
+
+@pytest.mark.django_db
+def test_send_test_goes_to_the_owners_own_number_with_the_name_filled_in(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+
+    _owner_chat(account, window_open=True)
+    sent = []
+    monkeypatch.setattr(whatsapp_api, "send_message", lambda acct, contact, text, *a, **k: sent.append((contact, text)))
+    response = owner.post("/automations/starters/test/", {
+        "starter": "greet-hello", "reply_text": "Hi {first_name}!", "test_phone": "260 97 1234567"}, follow=True)
+    assert len(sent) == 1 and sent[0][1] == "Hi there!"   # the owner's contact has no name, so the fallback shows
+    assert "Test sent to your WhatsApp" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_send_test_explains_why_it_cannot_send_when_the_window_is_closed(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+
+    _owner_chat(account, window_open=False)
+    sent = []
+    monkeypatch.setattr(whatsapp_api, "send_message", lambda *a, **k: sent.append(1))
+    response = owner.post("/automations/starters/test/", {
+        "starter": "greet-hello", "reply_text": "Hi", "test_phone": "+260971234567"}, follow=True)
+    assert not sent and "in the last 24 hours" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_send_test_never_creates_a_contact_or_messages_a_stranger(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+    from apps.whatsapp.models import WhatsAppContact
+
+    sent = []
+    monkeypatch.setattr(whatsapp_api, "send_message", lambda *a, **k: sent.append(1))
+    owner.post("/automations/starters/test/", {"starter": "greet-hello", "reply_text": "Hi", "test_phone": "+260999999999"})
+    assert not sent and not WhatsAppContact.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
+def test_send_test_will_not_use_another_businesses_contact(owner, account, monkeypatch):
+    from apps.whatsapp import api as whatsapp_api
+
+    _owner_chat(Account.objects.create(company_name="Other"), window_open=True)
+    sent = []
+    monkeypatch.setattr(whatsapp_api, "send_message", lambda *a, **k: sent.append(1))
+    owner.post("/automations/starters/test/", {"starter": "greet-hello", "reply_text": "Hi", "test_phone": "+260971234567"})
+    assert not sent

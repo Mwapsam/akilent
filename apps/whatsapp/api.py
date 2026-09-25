@@ -187,3 +187,22 @@ def count_conversations(account: Account) -> int:
     return Conversation.objects.filter(
         contact__account=account, is_open=True
     ).count()
+
+
+def find_contact_by_phone(account: Account, phone: str) -> Optional[WhatsAppContact]:
+    """The account's WhatsApp contact for ``phone``, ignoring "+", spaces and dashes."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if len(digits) < 7:
+        return None
+    for contact in WhatsAppContact.objects.filter(account=account, phone_number__contains=digits[-7:]):
+        if "".join(ch for ch in contact.phone_number if ch.isdigit()) == digits:
+            return contact
+    return None
+
+
+def free_text_window_is_open(contact: WhatsAppContact) -> bool:
+    """Whether a normal (non-template) message may be sent to ``contact`` right now."""
+    from apps.whatsapp.models import Conversation
+
+    conversation = Conversation.objects.filter(contact=contact).order_by("-last_message_at", "-id").first()
+    return bool(conversation and conversation.window_is_open)

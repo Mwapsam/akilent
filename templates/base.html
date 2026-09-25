@@ -201,7 +201,9 @@
                x-show="open"
                x-cloak
                x-transition.opacity
-               x-trap.noscroll="open"
+               {% comment %}x-trap without .noscroll on purpose — see
+               components/_dropdown.html for why.{% endcomment %}
+               x-trap="open"
                @click.outside="open = false"
                class="absolute right-0 mt-2 w-56 card shadow-pop p-1.5"
                style="z-index: var(--z-dropdown)"

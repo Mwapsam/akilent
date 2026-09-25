@@ -121,3 +121,97 @@ def describe_step(step_type: str, status: str, result: dict, step: dict | None =
         "stop": lambda: "Finished",
     }
     return {"ok": True, "text": texts.get(step_type, lambda: "Done")()}
+
+
+def _duration(seconds: int) -> str:
+    if seconds % 86400 == 0 and seconds >= 86400:
+        n = seconds // 86400
+        return f"{n} day{'s' if n != 1 else ''}"
+    if seconds % 3600 == 0 and seconds >= 3600:
+        n = seconds // 3600
+        return f"{n} hour{'s' if n != 1 else ''}"
+    n = max(seconds // 60, 1)
+    return f"{n} minute{'s' if n != 1 else ''}"
+
+
+def _when(trigger: dict) -> str:
+    from apps.automation.labels import trigger_label
+
+    kind = trigger.get("type", "")
+    match = trigger.get("match") or {}
+    words = _words(match.get("any") or [])
+    if kind == "conversation.message_received":
+        how = {"starts_with": "starts with", "exact": "is exactly"}.get(match.get("mode"), "mentions")
+        return f"a customer's message {how} {words}" if match else "a customer messages you"
+    if kind == "contact.created":
+        return "someone messages you for the first time"
+    return trigger_label(kind, trigger.get("name", "")).lower().removeprefix("when ").strip() or "something happens"
+
+
+def _step_sentence(step: dict) -> str | None:
+    t = step.get("type")
+    snippet = (step.get("text") or "").strip().replace("\n", " ")[:80]
+    if t == "reply_text":
+        return f"sends this reply: “{snippet}”"
+    if t == "send_whatsapp":
+        return "sends your approved WhatsApp message"
+    if t == "send_email":
+        return "sends an email"
+    if t == "send_buttons":
+        titles = ", ".join(b.get("title", "") for b in step.get("buttons") or [])
+        return f"asks “{snippet}” with buttons ({titles})"
+    if t == "send_list":
+        return f"asks “{snippet}” with a list to choose from"
+    if t == "wait_for_reply":
+        return "waits for their tap or answer, then replies to what they chose"
+    if t == "wait":
+        return f"waits {_duration(int(step.get('seconds') or 0))}"
+    if t == "add_tag":
+        return f"tags them “{step.get('tag', '')}”"
+    if t == "remove_tag":
+        return f"removes the tag “{step.get('tag', '')}”"
+    if t == "create_lead":
+        return "marks them as interested"
+    if t == "update_lead_status":
+        return f"marks them as {step.get('status', 'updated')}"
+    if t == "assign_conversation":
+        return "gives the conversation to " + (step["to"] if step.get("to") else "your least busy teammate")
+    if t == "notify_team":
+        to = step.get("to") or "owners"
+        who = {"owners": "your owners and admins", "assignee": "the teammate looking after them"}.get(to, to)
+        return f"emails {who}"
+    if t == "branch":
+        if step.get("field") == "within_business_hours":
+            return "checks whether you're open"
+        return "checks a condition and picks what happens next"
+    if t == "set_attribute":
+        return "saves a detail about the customer"
+    if t == "webhook":
+        return "notifies another system"
+    return None  # stop / exit: nothing worth saying
+
+
+def explain_definition(definition: dict) -> dict:
+    """What an automation will do, in owner words, straight from its stored definition.
+
+    ``{"when": str, "does": [str], "wont": [str]}``: the inverse of "why didn't it reply?".
+    Nothing is written by hand per automation, so it cannot drift from what actually runs.
+    """
+    definition = definition or {}
+    trigger = definition.get("trigger") or {}
+    steps = definition.get("steps") or []
+    does = [s for s in (_step_sentence(step) for step in steps) if s]
+    types = {step.get("type") for step in steps}
+    wont = ["It's paused or turned off."]
+    if trigger.get("match"):
+        wont.append("The customer's message doesn't match the words it listens for.")
+    if trigger.get("cooldown_minutes") or trigger.get("match"):
+        minutes = trigger.get("cooldown_minutes", 60)
+        wont.append(f"It already ran for this customer in the last {_duration(int(minutes) * 60)}.")
+    if types & {"reply_text", "send_buttons", "send_list"}:
+        wont.append("The 24-hour window for replying to this customer has closed.")
+    if types & {"reply_text", "send_buttons", "send_list", "send_whatsapp"}:
+        wont.append("The customer has opted out of messages.")
+    if trigger.get("type") == "contact.created":
+        wont.append("The customer has messaged you before.")
+    return {"when": _when(trigger), "does": does, "wont": wont}

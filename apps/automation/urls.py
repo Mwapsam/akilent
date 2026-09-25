@@ -10,10 +10,13 @@ urlpatterns = [
     # Before the <slug> route, which would otherwise swallow it.
     path("starters/install/", views.starter_install, name="starter-install"),
     path("why-not/", views.why_not, name="why-not"),
+    path("starters/test/", views.starter_test, name="starter-test"),
     path("<slug:slug>/", views.workflow_editor, name="editor"),
     path("<slug:slug>/stats/", views.workflow_stats, name="stats"),
     path("<slug:slug>/save/", views.workflow_save, name="save"),
     path("<slug:slug>/publish/", views.workflow_publish, name="publish"),
     path("<slug:slug>/archive/", views.workflow_archive, name="archive"),
+    path("<slug:slug>/pause/", views.workflow_pause, name="pause"),
+    path("<slug:slug>/resume/", views.workflow_resume, name="resume"),
     path("<slug:slug>/delete/", views.workflow_delete, name="delete"),
 ]

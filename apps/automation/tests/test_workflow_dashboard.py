@@ -50,7 +50,7 @@ def test_list_renders_trigger_without_name_key(client, user_account):
     )
     resp = client.get("/automations/")
     assert resp.status_code == 200
-    assert "When a new customer is added" in resp.content.decode()
+    assert "No name key" in resp.content.decode()
 
 
 @pytest.mark.django_db

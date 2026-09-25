@@ -523,7 +523,9 @@ def _conversation_for_run(run: WorkflowRun, step: dict, *, fallback: bool = Fals
 def _first_name_merge(run: WorkflowRun, text: str) -> str:
     # Plain replace, not str.format: the text is owner-written and must not be able to
     # reach into objects with "{contact.__class__}" style placeholders.
-    return (text or "").replace("{first_name}", (run.contact.first_name or "").strip() or "there")
+    from apps.automation.variables import merge_first_name
+
+    return merge_first_name(text, run.contact.first_name)
 
 
 def _run_interactive(run: WorkflowRun, step: dict) -> dict:
@@ -1210,7 +1212,8 @@ def run_due() -> int:
     with transaction.atomic():
         due = (
             WorkflowRun.objects.select_for_update(**lock_kwargs)
-            .filter(status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now())
+            .filter(status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now(),
+                    workflow__status=Workflow.Status.PUBLISHED)
             .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
         )
         runs = list(due)

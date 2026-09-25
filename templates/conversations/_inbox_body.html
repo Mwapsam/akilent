@@ -1,37 +1,81 @@
-<nav class="flex gap-1.5 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 mb-4" aria-label="Inbox views">
+{% load ui %}
+{% comment %}Inbox tabs and list. Rendered inside #inbox-body by inbox.html and
+re-rendered on its own by the 8-second poll (views.inbox_feed), so everything
+here must work from the same context in both places.
+
+Built phone-first. The row puts one fact in each place: who (name), how long
+(the time, amber when they are waiting on us), what they said (preview), and
+the state (a single badge). The previous row said the wait time twice — once
+as "7 minutes ago", once as "Waiting 7 minutes" — and the long timesince strings
+took the width the contact's name needed.{% endcomment %}
+<nav class="inbox-tabs" aria-label="Inbox views">
   {% with ch=channel|yesno:"&channel=,"|add:channel %}
-  <a href="?view=needs_attention{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'needs_attention' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>Needs attention {% if needs_attention_count %}<span class="ml-1 opacity-75">{{ needs_attention_count }}</span>{% endif %}</a>
-  <a href="?view=missed{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'missed' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'missed' %}aria-current="page"{% endif %} title="Customers who wrote and got no reply for over 24 hours">Missed {% if missed_count %}<span class="ml-1 opacity-75">{{ missed_count }}</span>{% endif %}</a>
-  <a href="?view=assigned{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'assigned' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'assigned' %}aria-current="page"{% endif %}>Assigned to me {% if assigned_count %}<span class="ml-1 opacity-75">{{ assigned_count }}</span>{% endif %}</a>
-  <a href="?view=all{{ ch }}" class="btn btn-sm shrink-0 whitespace-nowrap {% if view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}" {% if view == 'all' %}aria-current="page"{% endif %}>All {% if all_count %}<span class="ml-1 opacity-75">{{ all_count }}</span>{% endif %}</a>
+  <a href="?view=needs_attention{{ ch }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
+    Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
+  </a>
+  <a href="?view=missed{{ ch }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
+     title="Customers who wrote and got no reply for over 24 hours">
+    Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>{% endif %}
+  </a>
+  <a href="?view=assigned{{ ch }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
+    {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
+    third of the screen, and it was the tab that got cut off.{% endcomment %}
+    <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
+  </a>
+  <a href="?view=all{{ ch }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
+    All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
+  </a>
   {% endwith %}
 </nav>
 
 {% if page and page.object_list %}
-<ul class="card divide-y divide-border overflow-hidden">
+<ul class="inbox-list">
   {% for c in page %}
-  {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone %}
+  {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone waiting=c.snapshot.state == WAITING_FOR_AGENT %}
+  {% comment %}While the customer is waiting, the time shown is how long they
+  have been waiting — the inbox's own question — not the last activity.{% endcomment %}
+  {% if c.snapshot.missed or waiting %}{% with t=c.snapshot.last_customer_message_at %}{% endwith %}{% endif %}
   <li>
-    <a href="{% url 'conversations:detail' c.public_id %}" class="flex items-start gap-3 px-4 py-3.5 hover:bg-hover focus-visible:bg-hover transition-colors">
-      <span class="chat-avatar w-10 h-10 text-sm mt-0.5" aria-hidden="true">{{ name|default:"?"|slice:":1"|upper }}</span>
+    <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}">
+      {% comment %}A phone number's first character is "+", which is not an
+      initial; contacts with no name get a person glyph instead.{% endcomment %}
+      <span class="chat-avatar inbox-avatar" aria-hidden="true">
+        {% if c.contact.full_name %}{{ c.contact.full_name|slice:":1"|upper }}
+        {% elif c.contact.email %}{{ c.contact.email|slice:":1"|upper }}
+        {% else %}{% include "components/icon.html" with name="user" class="w-5 h-5" %}{% endif %}
+      </span>
+
       <div class="min-w-0 flex-1">
-        <div class="flex items-baseline justify-between gap-3">
-          <p class="truncate text-sm {% if c.is_unread or c.snapshot.state == WAITING_FOR_AGENT %}font-semibold{% else %}font-medium{% endif %} text-ink">{{ name }}</p>
-          <time class="shrink-0 text-xs text-gray-600 tabular-nums" datetime="{{ c.snapshot.last_activity_at|date:'c' }}">{% if c.snapshot.last_activity_at %}{{ c.snapshot.last_activity_at|timesince:now }} ago{% endif %}</time>
+        <div class="flex items-center gap-2">
+          <p class="inbox-name">{{ name }}</p>
+          {% if c.is_unread %}<span class="inbox-unread" aria-hidden="true"></span><span class="sr-only">Unread.</span>{% endif %}
+          {% if c.snapshot.missed or waiting %}
+            <time class="inbox-time is-urgent" datetime="{{ c.snapshot.last_customer_message_at|date:'c' }}"
+                  title="Waiting since {{ c.snapshot.last_customer_message_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_customer_message_at|ago:now }}</time>
+          {% elif c.snapshot.last_activity_at %}
+            <time class="inbox-time" datetime="{{ c.snapshot.last_activity_at|date:'c' }}"
+                  title="{{ c.snapshot.last_activity_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_activity_at|ago:now }}</time>
+          {% endif %}
         </div>
-        <p class="truncate text-sm {% if c.is_unread %}text-ink{% else %}text-gray-600{% endif %}">
-          {% if c.preview %}{% if c.preview.direction == 'outbound' %}<span class="text-gray-600">You: </span>{% endif %}{{ c.preview.body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
+
+        <p class="inbox-preview">
+          {% if c.preview %}{% if c.preview.direction == 'outbound' %}<span class="text-gray-500">You: </span>{% endif %}{{ c.preview.body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
         </p>
-        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span class="badge badge-neutral">{{ c.get_channel_display }}</span>
+
+        <div class="inbox-meta">
           {% if c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
-          {% elif c.snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting {{ c.snapshot.last_customer_message_at|timesince:now }}</span>
+          {% elif waiting %}<span class="badge badge-warning">Waiting</span>
           {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
           {% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
-          {% if c.assigned_to %}<span class="badge badge-neutral">{{ c.assigned_to }}</span>{% endif %}
+          {% include "components/channel_tag.html" with channel=c.channel compact=True %}
+          {% if c.assigned_to %}
+          <span class="inbox-assignee">
+            {% include "components/icon.html" with name="user" class="w-3.5 h-3.5" %}
+            {% if c.assigned_to_id == user.id %}You{% else %}{{ c.assigned_to.get_short_name|default:c.assigned_to.get_username }}{% endif %}
+          </span>
+          {% endif %}
         </div>
       </div>
-      {% if c.is_unread %}<span class="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" title="Unread" aria-label="Unread"></span>{% endif %}
     </a>
   </li>
   {% endwith %}

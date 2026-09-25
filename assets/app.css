@@ -226,8 +226,19 @@
   --tone-purple-border: color-mix(in srgb, var(--color-purple-500) 26%, var(--color-surface));
   --tone-purple-fg: var(--color-purple-700);
 
-  /* Z-index layers. */
-  --z-dropdown: 1000;
+  /* Z-index layers.
+
+     Dropdown sits ABOVE sticky, not below it. The scale started out copied
+     from Bootstrap, where dropdown (1000) is under sticky (1020) — which only
+     works there because a dropdown is assumed to live inside the sticky bar
+     and ride its stacking context. Ours do not: help tips, {% dropdown %}
+     menus and the conversation composer's saved-reply popover all open from
+     page content, in the root stacking context. At 1000 they opened *behind*
+     the sticky topbar and behind the "Finish setup" widget — the composer
+     popover opens upward into the bottom-right corner, which is exactly where
+     that widget is pinned. 1030 keeps them clear of both and still below a
+     drawer (1040), which should cover a dropdown. */
+  --z-dropdown: 1030;
   --z-sticky: 1020;
   --z-drawer: 1040;
   --z-modal: 1050;
@@ -544,58 +555,18 @@
   }
   .card-hover:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
 
-  /* Chat ---------------------------------------------------------------- */
-  /* Fills the viewport under the 4rem topbar + main padding; only the thread scrolls. */
-  .chat-layout {
-    display: grid;
-    gap: 1rem;
-    height: calc(100dvh - 7.5rem);
-    min-height: 26rem;
-  }
-  @media (min-width: 1024px) {
-    .chat-layout { grid-template-columns: minmax(0, 1fr) 20rem; height: calc(100dvh - 9rem); }
-  }
-  .chat-pane { @apply bg-surface border border-border rounded-2xl shadow-card flex flex-col min-h-0 overflow-hidden; }
-  .chat-header { @apply flex items-center gap-3 px-4 py-3 border-b border-border; }
-  .chat-thread { @apply flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-1 bg-surface-muted/40; overscroll-behavior: contain; }
-  .chat-composer { @apply flex items-end gap-2 p-3 border-t border-border bg-surface; }
-  .chat-input { @apply flex-1 resize-none py-2.5; max-height: 9rem; }
+  /* Chat ----------------------------------------------------------------
+     Only the avatar survives here. The rest of the old .chat-* layout was
+     replaced by the page-local .cv-* rules in conversation_detail.html and
+     had no remaining users — including .chat-side, whose permanent
+     drawer-level z-index would have covered the topbar had anything still
+     used it. */
   .chat-avatar {
     @apply inline-flex items-center justify-center shrink-0 rounded-full
       font-semibold;
     background-color: var(--tone-brand-bg);
     color: var(--tone-brand-fg);
   }
-  .chat-msg { @apply flex flex-col items-start; }
-  .chat-msg--out { @apply items-end; }
-  .chat-bubble {
-    @apply rounded-2xl px-3.5 py-2 text-sm bg-surface text-ink border border-border;
-    max-width: min(85%, 32rem);
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  }
-  .chat-msg--out .chat-bubble { @apply bg-brand-600 text-white border-transparent; }
-  .chat-msg--pending .chat-bubble { opacity: 0.6; }
-  .chat-meta { @apply text-xs text-gray-600 mt-0.5 px-1; }
-  .chat-msg--failed .chat-bubble {
-    background-color: var(--tone-coral-bg);
-    border-color: var(--tone-coral-border);
-    color: var(--tone-coral-fg);
-  }
-  .chat-msg--failed .chat-meta { @apply text-red-700 font-medium; }
-  .chat-day { @apply text-center text-xs font-medium uppercase tracking-wide text-gray-600 py-3; }
-  .chat-window-warning {
-    @apply text-xs border-t px-3 py-2;
-    background-color: var(--tone-amber-bg);
-    border-color: var(--tone-amber-border);
-    color: var(--tone-amber-fg);
-  }
-  .chat-template-picker { @apply px-3 pb-3 text-sm; }
-  .chat-template-picker > summary { @apply text-xs text-accent hover:text-accent-strong cursor-pointer select-none; }
-  .chat-template-form { @apply mt-2 space-y-2 rounded-xl border border-border bg-surface-muted p-3; }
-  .chat-side { @apply space-y-4 overflow-y-auto min-h-0; z-index: var(--z-drawer); }
-  .chat-backdrop { z-index: calc(var(--z-drawer) - 1); }
-  @media (min-width: 1024px) { .chat-side { z-index: auto; } }
 
   /* Badges -------------------------------------------------------------- */
   .badge {

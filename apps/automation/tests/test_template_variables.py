@@ -111,4 +111,5 @@ def test_the_form_offers_the_choices_with_the_safe_default(account, owner):
     html = client.get("/automations/").content.decode()
     assert "Customer&#x27;s first name" in html or "Customer's first name" in html
     assert "Every customer will get exactly this text" in html
-    assert "pick: 'first_name'" in html and "pick: 'business'" in html
+    assert '"first_name"' in html and '"business"' in html   # the safe defaults, handed to the picker
+    assert "To a customer whose name we don" in html and "templatePicker()" in html

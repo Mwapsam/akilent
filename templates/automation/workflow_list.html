@@ -1,60 +1,79 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block title %}Follow-ups — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Automations — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
-    <p class="mt-1 text-sm text-gray-600">Make sure no customer is forgotten — set up messages that go out automatically when something happens.</p>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">What do you want Akilent to help with?</h1>
+    <p class="mt-1 text-sm text-gray-600">Pick what should happen on its own. Each one stops as soon as the customer replies, and you can pause it any time.</p>
   </div>
-  <div class="flex items-center gap-2">
-    <a href="{% url 'automation:why-not' %}" class="btn btn-secondary btn-sm">Why didn't it reply?</a>
-    <a href="{% url 'verticals:templates' %}" class="btn btn-ghost btn-sm">
-      {% include "components/icon.html" with name="sparkles" class="w-4 h-4" %} Starter packs
-    </a>
-    <button class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-workflow')">
-      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} New workflow
-    </button>
-  </div>
+  <a href="{% url 'automation:why-not' %}" class="btn btn-secondary btn-sm">Why didn't it reply?</a>
 </header>
 
 {% comment %}
-  One-click engagement follow-ups. These install published and running, because
-  a starter that drops you into a step editor hasn't saved anyone any work. A
-  card that can't work says so instead of installing and failing at send time.
+  The goal gallery is the home of this page. Every card maps onto an existing starter, so what is
+  installed is a normal automation. A card that can't work yet says why and how to fix it.
 {% endcomment %}
+{% for group in goal_groups %}
 <section class="mb-8">
-  <h2 class="text-lg font-semibold text-ink mb-1">Ready to turn on</h2>
-  <p class="text-sm text-gray-600 mb-3">Pick what should happen on its own. Each one stops as soon as the customer replies.</p>
+  <h2 class="text-lg font-semibold text-ink mb-3">{{ group.title }}</h2>
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {% for starter in engagement_starters %}
+    {% for starter in group.cards %}
     <div class="card card-pad flex flex-col">
       <h3 class="font-semibold text-ink">{{ starter.name }}</h3>
       <p class="mt-1 text-sm text-gray-600">{{ starter.explain }}</p>
-      <p class="mt-2 text-xs text-gray-500">{{ starter.stop_condition }}</p>
       <div class="mt-auto pt-3">
         {% if starter.installed %}
         <p class="text-sm text-success-700 flex items-center gap-1">
           {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
+          <a href="#running-{{ starter.installed.slug }}" class="ml-2 text-xs text-gray-500 underline">Manage</a>
         </p>
-        <a href="{% url 'automation:editor' starter.installed.slug %}" class="text-xs text-gray-500 underline">See what it does</a>
-        {% elif approved_templates or starter.reply or starter.menu or starter.team %}
-        <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">
-          Turn this on
-        </button>
+        {% elif starter.paused %}
+        <p class="text-sm text-gray-600">Paused
+          <a href="#running-{{ starter.paused.slug }}" class="ml-2 text-xs text-gray-500 underline">Turn it on</a>
+        </p>
         {% else %}
-        <p class="text-sm text-gray-500">
-          Needs a message WhatsApp has approved.
-          <a href="/whatsapp/templates/new/" class="text-accent underline">Create one</a> — Akilent has a
-          ready-made "{{ starter.suggested_template }}" message you can start from.
-        </p>
+        {% for i in starter.readiness.items %}{% if i.blocking %}
+        <p class="text-xs text-red-700 mb-2">⚠ {{ i.headline }}. <a href="{{ i.fix.url }}" class="underline">{{ i.fix.label }}</a></p>
+        {% endif %}{% endfor %}
+        <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">Set this up</button>
         {% endif %}
       </div>
     </div>
     {% endfor %}
   </div>
 </section>
+{% endfor %}
+
+{{ template_data|json_script:"tpl-data" }}
+<script>
+  // Live preview of a template follow-up: shows what a named customer and a nameless customer would each receive.
+  function templatePicker() {
+    const data = JSON.parse(document.getElementById('tpl-data').textContent);
+    const picks = {};
+    data.templates.forEach(t => t.blanks.forEach(b => { picks[t.pk + '__' + b.name] = b.default; }));
+    return {
+      tpl: '', picks: picks, lits: {},
+      render(named) {
+        const t = data.templates.find(x => String(x.pk) === this.tpl);
+        if (!t) return '';
+        let out = t.content;
+        t.blanks.forEach(b => {
+          const k = t.pk + '__' + b.name, p = this.picks[k];
+          let v;
+          if (p === 'first_name') v = named ? 'Ada' : 'there';
+          else if (p === 'full_name') v = named ? 'Ada Mwape' : 'there';
+          else if (p === 'phone') v = '+260 97 1234567';
+          else if (p === 'business') v = data.business;
+          else v = this.lits[k] || '…';
+          out = out.split('{' + '{' + b.name + '}' + '}').join(v);
+        });
+        return out;
+      },
+    };
+  }
+</script>
 
 {% for starter in engagement_starters %}
 {% if not starter.installed and starter.team %}
@@ -63,6 +82,7 @@
     {% csrf_token %}
     <input type="hidden" name="starter" value="{{ starter.key }}" />
     <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    {% include "automation/_readiness.html" with r=starter.readiness %}
     <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
       <input type="checkbox" name="assign" checked class="mt-1">
       <span class="text-sm text-ink">Give the conversation to my least busy teammate</span>
@@ -81,7 +101,7 @@
     </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm">Turn it on</button>
+      <button class="btn btn-primary btn-sm" {% if not starter.readiness.ready %}disabled{% endif %}>Turn it on</button>
     </div>
   </form>
 {% endmodal %}
@@ -91,6 +111,7 @@
     {% csrf_token %}
     <input type="hidden" name="starter" value="{{ starter.key }}" />
     <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    {% include "automation/_readiness.html" with r=starter.readiness %}
     <div>
       <label class="label" for="menu-text">What should they be asked?</label>
       <textarea id="menu-text" name="menu_text" class="textarea" rows="2" maxlength="1024" required placeholder="Hi {first_name}, what do you need today?"></textarea>
@@ -107,33 +128,83 @@
     <p class="text-xs text-gray-400">Button labels can be up to 20 characters. Customers who tap a button are tagged with what they chose. Use {first_name} for their name.</p>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm">Turn it on</button>
+      <button class="btn btn-primary btn-sm" {% if not starter.readiness.ready %}disabled{% endif %}>Turn it on</button>
     </div>
   </form>
 {% endmodal %}
 {% elif not starter.installed and starter.reply %}
 {% modal starter.key title=starter.name %}
-  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4"
+        x-data="{ text: '', words: '{{ starter.keywords|join:", "|escapejs }}' }">
     {% csrf_token %}
     <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <input type="hidden" name="then_present" value="1" />
     <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    {% include "automation/_readiness.html" with r=starter.readiness %}
+
     <div>
-      <label class="label" for="reply-{{ starter.key }}">What should the reply say?</label>
-      <textarea id="reply-{{ starter.key }}" name="reply_text" class="textarea" rows="4" maxlength="1000" required placeholder="{{ starter.reply_hint }}"></textarea>
-      <p class="text-xs text-gray-400 mt-1">Use {first_name} to include the customer's name. {% if starter.keywords %}It reacts to these words: {{ starter.keywords|join:", " }}. You can change them later in the editor.{% elif starter.needs_hours %}It uses your <a href="{% url 'settings-hours' %}" class="text-accent underline">opening hours</a>.{% endif %}</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">When</p>
+      {% if starter.keywords %}
+      <label class="label" for="words-{{ starter.key }}">A customer's message {% if starter.mode == "starts_with" %}starts with{% else %}mentions{% endif %}</label>
+      <input id="words-{{ starter.key }}" name="keywords" class="input" x-model="words" maxlength="400" />
+      <p class="text-xs text-gray-400 mt-1">Separate words with commas. It answers the same customer at most once an hour.</p>
+      {% elif starter.needs_hours %}
+      <p class="text-sm text-gray-700">A message arrives while you're closed, using your <a href="{% url 'settings-hours' %}" class="text-accent underline">opening hours</a>.</p>
+      {% endif %}
     </div>
+
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Do</p>
+      <label class="label" for="reply-{{ starter.key }}">Send this reply</label>
+      <textarea id="reply-{{ starter.key }}" name="reply_text" class="textarea" rows="4" maxlength="1000" required
+                x-model="text" placeholder="{{ starter.reply_hint }}"></textarea>
+      <p class="text-xs text-gray-400 mt-1">Write {first_name} where the customer's name should go.</p>
+      <div class="mt-2 space-y-2" aria-live="polite">
+        <p class="text-xs font-medium text-gray-500">Preview</p>
+        <div class="rounded-2xl border border-border px-3 py-2 text-sm">
+          <p class="text-xs text-gray-400">To Ada Mwape</p>
+          <p x-text="text ? text.split('{first_name}').join('Ada') : 'Your reply appears here'"></p>
+        </div>
+        <div class="rounded-2xl border border-border px-3 py-2 text-sm">
+          <p class="text-xs text-gray-400">To a customer whose name we don't know</p>
+          <p x-text="text ? text.split('{first_name}').join('there') : 'Your reply appears here'"></p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Then</p>
+      {% if starter.tag %}
+      <label class="flex items-start gap-3 py-1"><input type="checkbox" name="add_tag" checked class="mt-1">
+        <span class="text-sm text-ink">Tag them &ldquo;{{ starter.tag }}&rdquo; so you can see who asked</span></label>
+      {% endif %}
+      <label class="flex items-start gap-3 py-1"><input type="checkbox" name="tell_team" class="mt-1">
+        <span class="text-sm text-ink">Email my team when this happens</span></label>
+    </div>
+
+    <details class="text-sm">
+      <summary class="cursor-pointer text-gray-600">Send a test to my WhatsApp</summary>
+      <div class="mt-2 space-y-2">
+        <label class="label" for="test-{{ starter.key }}">Your WhatsApp number</label>
+        <input id="test-{{ starter.key }}" name="test_phone" class="input" placeholder="+260 97 1234567" />
+        <p class="text-xs text-gray-400">WhatsApp only lets us send a normal message to a number that messaged your business in the last 24 hours, so send your business number a quick message from that phone first.</p>
+        <button type="submit" class="btn btn-secondary btn-sm" formaction="{% url 'automation:starter-test' %}" formnovalidate>Send test to me</button>
+      </div>
+    </details>
+
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm">Turn it on</button>
+      <button class="btn btn-primary btn-sm" {% if not starter.readiness.ready %}disabled{% endif %}>Turn it on</button>
     </div>
   </form>
 {% endmodal %}
 {% elif not starter.installed and approved_templates %}
 {% modal starter.key title=starter.name %}
-  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4" x-data="{ tpl: '' }">
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4" x-data="templatePicker()">
     {% csrf_token %}
     <input type="hidden" name="starter" value="{{ starter.key }}" />
     <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    {% include "automation/_readiness.html" with r=starter.readiness %}
     <div>
       <label class="label" for="tpl-{{ starter.key }}">Which message should go out?</label>
       <select id="tpl-{{ starter.key }}" name="template_id" class="select" x-model="tpl" required>
@@ -149,21 +220,21 @@
       <div x-show="tpl === '{{ t.pk }}'" x-cloak class="space-y-3">
         <p class="text-xs text-gray-500">Fill in the blanks in: "{{ t.content|truncatechars:120 }}"</p>
         {% for b in t.blanks %}
-        <div class="rounded-xl border border-border p-3 space-y-2" x-data="{ pick: '{{ b.default }}' }">
-          <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">What goes in “{{ b.name }}”?</label>
-          <select id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="pick">
+        <div class="rounded-xl border border-border p-3 space-y-2">
+          <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">What goes in &ldquo;{{ b.name }}&rdquo;?</label>
+          <select id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="picks['{{ t.pk }}__{{ b.name }}']">
             {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
             <option value="literal">The same text for everyone</option>
           </select>
-          <div x-show="pick === 'first_name' || pick === 'full_name'" x-cloak>
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'first_name' || picks['{{ t.pk }}__{{ b.name }}'] === 'full_name'" x-cloak>
             <label class="text-xs block">If we don't know their name, say
               <input name="fb__{{ t.pk }}__{{ b.name }}" class="input mt-0.5" placeholder="there" />
             </label>
             <p class="text-xs text-gray-400 mt-1">Each customer gets their own name, so Ada's message says Ada.</p>
           </div>
-          <div x-show="pick === 'business'" x-cloak><p class="text-xs text-gray-400">Your business name, the same in every message.</p></div>
-          <div x-show="pick === 'literal'" x-cloak>
-            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" />
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'business'" x-cloak><p class="text-xs text-gray-400">Your business name, the same in every message.</p></div>
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'literal'" x-cloak>
+            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" x-model="lits['{{ t.pk }}__{{ b.name }}']" />
             <p class="text-xs text-amber-700 mt-1">Every customer will get exactly this text. Don't type a person's name here.</p>
           </div>
         </div>
@@ -171,58 +242,78 @@
       </div>
       {% endif %}
     {% endfor %}
+    <div x-show="tpl" x-cloak class="space-y-2" aria-live="polite">
+      <p class="text-xs font-medium text-gray-500">Preview</p>
+      <div class="rounded-2xl border border-border px-3 py-2 text-sm">
+        <p class="text-xs text-gray-400">To Ada Mwape</p><p x-text="render(true)"></p>
+      </div>
+      <div class="rounded-2xl border border-border px-3 py-2 text-sm">
+        <p class="text-xs text-gray-400">To a customer whose name we don't know</p><p x-text="render(false)"></p>
+      </div>
+    </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm" :disabled="!tpl">Turn it on</button>
+      <button class="btn btn-primary btn-sm" :disabled="!tpl{% if not starter.readiness.ready %} || true{% endif %}">Turn it on</button>
     </div>
   </form>
 {% endmodal %}
 {% endif %}
 {% endfor %}
 
-{% if workflows %}
-<div class="table-wrap">
-  <table class="table table--cards">
-    <thead>
-      <tr><th>Name</th><th>When</th><th>Status</th><th>Steps</th><th>Activity</th><th>Updated</th></tr>
-    </thead>
-    <tbody>
-      {% for wf in workflows %}
-      <tr>
-        <td data-label="Name"><a href="/automations/{{ wf.slug }}/" class="font-medium text-accent hover:text-accent-strong">{{ wf.name }}</a></td>
-        <td data-label="When">{{ wf.trigger_label }}</td>
-        <td data-label="Status">
-          {% if wf.status == "published" %}<span class="badge badge-success">On (v{{ wf.version }})</span>
-          {% elif wf.status == "archived" %}<span class="badge badge-neutral">Off</span>
-          {% else %}<span class="badge badge-warning">Draft</span>{% endif %}
-        </td>
-        <td data-label="Steps" class="tabular-nums">{{ wf.definition.steps|length }}</td>
-        <td data-label="Activity" class="text-sm">
-          {% if wf.last_ran %}
-            <a href="/automations/{{ wf.slug }}/stats/" class="hover:text-accent-strong hover:underline">Last ran {{ wf.last_ran|timesince }} ago</a>
-            <span class="text-gray-500">· {{ wf.helped }} customer{{ wf.helped|pluralize }} helped</span>
+<section class="mb-8">
+  <h2 class="text-lg font-semibold text-ink mb-3">Running now</h2>
+  {% if workflows %}
+  <div class="space-y-3">
+    {% for wf in workflows %}
+    <div class="card card-pad" id="running-{{ wf.slug }}">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <h3 class="font-semibold text-ink">{{ wf.name }}
+            {% if wf.status == "published" %}<span class="badge badge-success ml-1">On</span>
+            {% elif wf.status == "archived" %}<span class="badge badge-neutral ml-1">Paused</span>
+            {% else %}<span class="badge badge-warning ml-1">Draft</span>{% endif %}
+          </h3>
+          {% if wf.status == "archived" %}<p class="text-sm text-gray-600 mt-1">Akilent won't run this automation until you turn it on again.</p>{% endif %}
+          <p class="text-sm text-gray-600 mt-1">
+            {% if wf.last_ran %}Last ran {{ wf.last_ran|timesince }} ago · Helped {{ wf.helped }} customer{{ wf.helped|pluralize }}
+            {% elif wf.status == "published" %}Ready to run. No customer has triggered it yet.
+            {% else %}Hasn't run yet.{% endif %}
             {% if wf.failed_runs %}<a href="{% url 'automation:why-not' %}" class="badge badge-danger ml-1">{{ wf.failed_runs }} didn't send</a>{% endif %}
-          {% elif wf.status == "published" %}<span class="text-gray-500">Hasn't run yet</span>
-          {% else %}<span class="text-gray-400">—</span>{% endif %}
-        </td>
-        <td data-label="Updated" class="text-gray-500 tabular-nums">{{ wf.updated_at|date:"M j, H:i" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<div class="table-wrap">
-  {% include "components/empty_state.html" with icon="workflow" title="Set up your first follow-up" message="A follow-up sends a message automatically when something happens — like a customer not replying, or a new order — so nobody gets forgotten." %}
-  <div class="text-center pb-8 -mt-6">
-    <button class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-workflow')">
-      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create a follow-up
-    </button>
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="{% url 'automation:stats' wf.slug %}" class="btn btn-ghost btn-sm">View activity</a>
+          <a href="{% url 'automation:why-not' %}" class="btn btn-ghost btn-sm">Why didn't it reply?</a>
+          {% if wf.status == "published" %}
+          <form method="post" action="{% url 'automation:pause' wf.slug %}">{% csrf_token %}<button class="btn btn-secondary btn-sm">Pause</button></form>
+          {% elif wf.status == "archived" %}
+          <form method="post" action="{% url 'automation:resume' wf.slug %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Turn on</button></form>
+          {% endif %}
+        </div>
+      </div>
+      <details class="mt-3 text-sm">
+        <summary class="cursor-pointer text-gray-600">What does this do?</summary>
+        <div class="mt-2 space-y-2 text-gray-700">
+          <p><span class="font-medium">When</span> {{ wf.summary.when }}, Akilent:</p>
+          <ul class="list-disc pl-5">{% for line in wf.summary.does %}<li>{{ line }}</li>{% endfor %}</ul>
+          <p class="text-gray-600">It won't run if:</p>
+          <ul class="list-disc pl-5 text-gray-600">{% for line in wf.summary.wont %}<li>{{ line }}</li>{% endfor %}</ul>
+        </div>
+      </details>
+      <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+        <a href="{% url 'automation:editor' wf.slug %}" class="underline">More options</a>
+        <form method="post" action="{% url 'automation:delete' wf.slug %}" data-confirm="Remove {{ wf.name }}? This can't be undone." onsubmit="return confirm(this.dataset.confirm)">{% csrf_token %}<button class="underline text-red-700">Remove</button></form>
+      </div>
+    </div>
+    {% endfor %}
   </div>
-</div>
-{% endif %}
+  {% else %}
+  <p class="text-sm text-gray-500">Nothing is running yet. Pick something above and it will show up here.</p>
+  {% endif %}
+  <p class="mt-4 text-xs text-gray-500">Need something different? <button type="button" class="underline" @click="$dispatch('modal-open', 'new-workflow')">Build your own</button> or browse <a href="{% url 'verticals:templates' %}" class="underline">starter packs</a>.</p>
+</section>
 
-{% modal "new-workflow" title="New follow-up" %}
+{% modal "new-workflow" title="Build your own automation" %}
   <form method="post" action="/automations/create/" class="space-y-4">
     {% csrf_token %}
     <div>

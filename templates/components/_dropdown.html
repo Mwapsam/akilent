@@ -15,7 +15,14 @@ The slot holds menu rows — typically <a class="nav-link w-full"> or <button>.
        x-show="open"
        x-cloak
        x-transition.opacity
-       x-trap.noscroll="open"
+       {% comment %}x-trap without .noscroll on purpose. `.noscroll` sets
+       overflow:hidden on <body>, which removes the scrollbar on any page tall
+       enough to have one — the content then reflows by the scrollbar's width
+       and the whole UI visibly jumps as the menu opens and closes. Locking the
+       page behind a small menu is modal behaviour anyway; a dropdown should
+       let the page keep scrolling. The drawer still uses .noscroll, because a
+       drawer really is an overlay.{% endcomment %}
+       x-trap="open"
        @click.outside="open = false"
        class="absolute {{ align_class }} mt-2 w-56 card shadow-pop p-1.5"
        style="z-index: var(--z-dropdown)"

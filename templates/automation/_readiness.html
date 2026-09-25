@@ -1,0 +1,11 @@
+{% comment %}Ready-to-run checklist for one starter. `r` is readiness.check(...).{% endcomment %}
+<ul class="space-y-2 text-sm">
+  {% for i in r.items %}
+  <li class="rounded-lg border border-border px-3 py-2">
+    <p class="{% if i.ok %}text-gray-700{% elif i.blocking %}text-red-700{% else %}text-amber-800{% endif %}">{% if i.ok %}✓{% else %}⚠{% endif %} {{ i.headline }}</p>
+    {% if i.detail %}<p class="text-xs text-gray-600 mt-0.5">{{ i.detail }}</p>{% endif %}
+    {% if i.fix %}<a href="{{ i.fix.url }}" class="text-xs underline text-accent">{{ i.fix.label }}</a>{% endif %}
+  </li>
+  {% endfor %}
+  {% if r.ready %}<li class="text-xs text-gray-500">Ready to run. No customer has triggered it yet, and that's fine.</li>{% endif %}
+</ul>

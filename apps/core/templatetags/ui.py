@@ -86,3 +86,35 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
             },
         )
     )
+
+
+@register.filter
+def ago(value, now=None):
+    """A relative time short enough for a list row: "now", "7m", "5h", "2d".
+
+    Django's ``timesince`` says "5 hours, 5 minutes", which is precise and far
+    too long for a phone: in the inbox it ate the width the contact's name
+    needed, so names truncated to "+2609710…" to make room for a timestamp.
+    Past a week the age stops being the useful fact and the date takes over.
+
+    Pair it with the full date in a ``title``/``datetime`` so the precise value
+    is still one hover or one screen-reader announcement away.
+    """
+    from django.utils import timezone
+    from django.utils.formats import date_format
+
+    if not value:
+        return ""
+    now = now or timezone.now()
+    seconds = int((now - value).total_seconds())
+    if seconds < 60:
+        return "now"
+    if seconds < 3600:
+        return "%dm" % (seconds // 60)
+    if seconds < 86400:
+        return "%dh" % (seconds // 3600)
+    if seconds < 7 * 86400:
+        return "%dd" % (seconds // 86400)
+    local = timezone.localtime(value) if timezone.is_aware(value) else value
+    same_year = local.year == timezone.localtime(now).year if timezone.is_aware(now) else local.year == now.year
+    return date_format(local, "j M" if same_year else "j M Y")
