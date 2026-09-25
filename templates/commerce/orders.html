@@ -55,9 +55,10 @@
     {% csrf_token %}
     <div>
       <label class="label" for="order-contact">Customer</label>
-      <input id="order-contact" name="contact" class="input" placeholder="Phone number or email" required />
-      <p class="text-xs text-gray-400 mt-1">Must already be a contact. <a href="/contacts/" class="underline">Find or add one first</a>.</p>
+      <input id="order-contact" name="contact" class="input" placeholder="Phone number or email" />
+      <p class="text-xs text-gray-400 mt-1">Must already be a contact (or pick their conversation below). <a href="/contacts/" class="underline">Find or add one first</a>.</p>
     </div>
+    {% include "conversations/_attribution_picker.html" with pid="order-conversation" %}
     <div>
       <label class="label" for="order-name">What are they buying?</label>
       <input id="order-name" name="name" class="input" placeholder="e.g. Website package" required />

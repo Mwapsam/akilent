@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import Contact
+from apps.conversations import attribution
 from apps.core.actions import ActionError, run_action
 from apps.core.module_gate import module_required
 from apps.crm.models import Deal, Lead, Pipeline
@@ -42,6 +43,7 @@ def sales(request):
         "leads": leads,
         "stages": stages,
         "has_pipeline": pipeline is not None,
+        "recent_conversations": attribution.recent_choices(account),
     })
 
 
@@ -61,7 +63,13 @@ def create_lead_view(request):
         query = (request.POST.get("contact") or "").strip()
         contact = Contact.objects.filter(account=account).filter(
             Q(phone=query) | Q(email__iexact=query)
-        ).first()
+        ).first() if query else None
+        try:
+            conversation, contact = attribution.picked_conversation(
+                account, contact, request.POST.get("conversation", ""))
+        except attribution.PickerError as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url or "crm:sales")
         if contact is None:
             messages.error(
                 request,
@@ -74,6 +82,7 @@ def create_lead_view(request):
             result = run_action(
                 "create_lead", {"account": account}, account=account, contact=contact,
                 source=(request.POST.get("source") or "manual").strip(),
+                conversation_id=conversation.public_id if conversation else "",
             )
         except ActionError as exc:
             messages.error(request, str(exc))

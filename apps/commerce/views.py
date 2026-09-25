@@ -14,6 +14,7 @@ from django.urls import reverse
 from apps.accounts.utils import get_current_account
 from apps.commerce.models import Order
 from apps.contacts.models import Contact
+from apps.conversations import attribution
 from apps.core.actions import ActionError, run_action
 from apps.core.module_gate import module_required
 
@@ -39,6 +40,7 @@ def orders(request):
             account=account, status__in=[Order.Status.PENDING, Order.Status.AWAITING_PAYMENT],
         ).count(),
         "all_count": Order.objects.filter(account=account).count(),
+        "recent_conversations": attribution.recent_choices(account),
     })
 
 
@@ -56,7 +58,13 @@ def create_order_view(request):
         query = (request.POST.get("contact") or "").strip()
         contact = Contact.objects.filter(account=account).filter(
             Q(phone=query) | Q(email__iexact=query)
-        ).first()
+        ).first() if query else None
+        try:
+            conversation, contact = attribution.picked_conversation(
+                account, contact, request.POST.get("conversation", ""))
+        except attribution.PickerError as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url or "commerce:orders")
         if contact is None:
             messages.error(
                 request,
@@ -78,6 +86,7 @@ def create_order_view(request):
                 "create_order", {"account": account}, account=account, contact=contact,
                 items=[{"name": name, "unit_price": unit_price, "quantity": quantity}],
                 currency=(request.POST.get("currency") or "USD").strip().upper(),
+                conversation_id=conversation.public_id if conversation else "",
             )
         except ActionError as exc:
             messages.error(request, str(exc))

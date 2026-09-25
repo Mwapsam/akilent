@@ -10,14 +10,15 @@ class CreateOrderAction(Action):
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
-        return {"required": ["account", "contact", "items"], "optional": ["currency"]}
+        return {"required": ["account", "contact", "items"], "optional": ["currency", "conversation_id"]}
 
-    def execute(self, context: dict, *, account, contact, items: list, currency: str = "USD") -> dict:
+    def execute(self, context: dict, *, account, contact, items: list, currency: str = "USD",
+                conversation_id: str = "") -> dict:
         from apps.commerce.services import create_order
 
         if not items:
             raise ActionError("create_order requires at least one item")
-        order = create_order(account, contact, items, currency=currency)
+        order = create_order(account, contact, items, currency=currency, conversation_id=conversation_id)
         return {"order_id": order.public_id, "total": str(order.total)}
 
 

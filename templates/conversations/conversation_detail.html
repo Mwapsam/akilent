@@ -590,6 +590,7 @@
     <input type="hidden" name="contact" value="{{ contact_identifier }}" />
     <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
     <input type="hidden" name="source" value="conversation" />
+    <input type="hidden" name="conversation" value="{{ conversation.public_id }}" />
     <p class="text-sm text-gray-600">Creates a lead for <span class="font-medium text-ink">{{ display_name }}</span>.</p>
     <div>
       <label class="label" for="chat-lead-value">Estimated value <span class="font-normal text-gray-400">(optional)</span></label>

@@ -1,0 +1,11 @@
+{% comment %}Optional "which conversation led to this?" select. Needs `recent_conversations` and a unique `pid`.{% endcomment %}
+<div>
+  <label class="label" for="{{ pid }}">Which conversation led to this? <span class="font-normal text-gray-400">(optional)</span></label>
+  <select id="{{ pid }}" name="conversation" class="select">
+    <option value="">Choose automatically (their latest chat in the last 30 days)</option>
+    {% for c in recent_conversations %}
+    <option value="{{ c.public_id }}">{{ c.customer }} · {{ c.channel }} · {{ c.last_message_at|date:"j M, H:i" }}{% if not c.is_open %} · closed{% endif %}</option>
+    {% endfor %}
+  </select>
+  <p class="text-xs text-gray-400 mt-1">The sale is credited to the chat you pick. If you leave it, we use their latest chat, and if they haven't written in lately it isn't credited to any conversation.</p>
+</div>

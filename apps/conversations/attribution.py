@@ -72,3 +72,43 @@ def record(obj, conversation, method, *, workflow_run=None, metadata: dict | Non
         obj.conversation = conversation
         obj.save(update_fields=["conversation"])
     return attribution
+
+
+def recent_choices(account, *, limit: int = 30) -> list[dict]:
+    """Conversations to offer in a "which chat led to this?" picker, newest first.
+
+    Only conversations where the customer actually wrote in are offered: crediting a chat the
+    customer never spoke in would be a guess.
+    """
+    rows = (
+        Conversation.objects.filter(account=account, messages__direction=Message.Direction.INBOUND)
+        .select_related("contact").distinct().order_by("-last_message_at", "-id")[:limit]
+    )
+    return [{
+        "public_id": c.public_id,
+        "customer": c.contact.full_name or c.contact.phone or c.contact.email or "Customer",
+        "channel": c.get_channel_display(),
+        "last_message_at": c.last_message_at,
+        "is_open": c.status == Conversation.Status.OPEN,
+    } for c in rows]
+
+
+class PickerError(ValueError):
+    """The chosen conversation cannot be used, worded for the person filling in the form."""
+
+
+def picked_conversation(account, contact, public_id: str):
+    """The conversation a person chose in a form, checked against the customer.
+
+    Returns ``(conversation, contact)``. With no ``contact`` the conversation's own customer is
+    used; naming both requires them to match, so credit can never go to someone else's chat.
+    """
+    public_id = (public_id or "").strip()
+    if not public_id:
+        return None, contact
+    conversation = Conversation.objects.filter(account=account, public_id=public_id).select_related("contact").first()
+    if conversation is None:
+        raise PickerError("That conversation could not be found.")
+    if contact is not None and conversation.contact_id != contact.id:
+        raise PickerError("That conversation belongs to a different customer.")
+    return conversation, conversation.contact

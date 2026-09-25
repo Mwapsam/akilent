@@ -75,9 +75,10 @@
     {% csrf_token %}
     <div>
       <label class="label" for="lead-contact">Customer</label>
-      <input id="lead-contact" name="contact" class="input" placeholder="Phone number or email" required />
-      <p class="text-xs text-gray-400 mt-1">Must already be a contact. <a href="/contacts/" class="underline">Find or add one first</a>.</p>
+      <input id="lead-contact" name="contact" class="input" placeholder="Phone number or email" />
+      <p class="text-xs text-gray-400 mt-1">Must already be a contact (or pick their conversation below). <a href="/contacts/" class="underline">Find or add one first</a>.</p>
     </div>
+    {% include "conversations/_attribution_picker.html" with pid="lead-conversation" %}
     <div>
       <label class="label" for="lead-source">Where they came from (optional)</label>
       <input id="lead-source" name="source" class="input" placeholder="e.g. Referral, Walk-in" />
