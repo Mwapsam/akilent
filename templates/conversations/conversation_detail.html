@@ -42,7 +42,36 @@
   /* Chat pane */
   .cv-pane { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--cv-surface);
              border: 1px solid var(--cv-line); border-radius: 1rem; overflow: hidden; }
-  .cv-header { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-bottom: 1px solid var(--cv-line); background: var(--cv-surface); }
+  /* Header: a grid rather than a flex row. On a phone the name column was
+     left with ~75px between the avatar and three action buttons, and the status
+     pill wrapped into three lines inside itself. Below sm the status gets its
+     own row, running under the actions too, which roughly triples its width.
+     From sm up it sits under the name as before. */
+  .cv-header { display: grid; align-items: center; column-gap: .5rem; row-gap: .125rem;
+               grid-template-columns: auto auto minmax(0, 1fr) auto;
+               grid-template-areas: "back avatar name actions" "back avatar status status";
+               padding: .625rem .75rem; border-bottom: 1px solid var(--cv-line); background: var(--cv-surface); }
+  @media (min-width: 640px) {
+    .cv-header { column-gap: .75rem; padding: .75rem 1rem;
+                 grid-template-areas: "back avatar name actions" "back avatar status actions"; }
+  }
+  .cv-h-back { grid-area: back; }
+  .cv-h-avatar { grid-area: avatar; width: 2.25rem; height: 2.25rem; }
+  @media (min-width: 640px) { .cv-h-avatar { width: 2.5rem; height: 2.5rem; } }
+  .cv-h-name { grid-area: name; min-width: 0; align-self: end; }
+  .cv-h-status { grid-area: status; min-width: 0; align-self: start; display: flex; flex-wrap: wrap;
+                 align-items: center; column-gap: .5rem; row-gap: .25rem; font-size: .75rem; color: var(--cv-ink-muted); }
+  .cv-h-actions { grid-area: actions; }
+  @media (max-width: 639px) {
+    /* Square 36px icon buttons: as padded text buttons with their labels
+       hidden they were ~44px each, and three of them set the name's width. */
+    .cv-h-actions { gap: 0; }
+    .cv-h-actions .btn { width: 2.25rem; padding-inline: 0; justify-content: center; }
+    /* Edge to edge, like the inbox list: the page margins and the pane's side
+       borders cost 34px of a 360px screen, in the header and in every bubble. */
+    .cv { margin-inline: -1rem; }
+    .cv-pane { border-radius: 0; border-left-width: 0; border-right-width: 0; }
+  }
   .cv-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 999px; font-weight: 600;
                color: var(--cv-accent); background: color-mix(in srgb, var(--cv-accent) 12%, var(--cv-surface)); }
 
@@ -173,16 +202,14 @@
   {# ════════ Chat pane ════════ #}
   <section class="cv-pane" aria-label="Conversation with {{ display_name }}">
     <header class="cv-header">
-      <a href="{% url 'conversations:inbox' %}" class="cv-iconbtn -ml-1" aria-label="Back to inbox">
+      <a href="{% url 'conversations:inbox' %}" class="cv-iconbtn cv-h-back -ml-1" aria-label="Back to inbox">
         {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
       </a>
-      <span class="cv-avatar w-10 h-10 text-sm" aria-hidden="true">{{ display_name|default:"?"|slice:":1"|upper }}</span>
-      <div class="min-w-0 flex-1">
-        <h1 class="text-base font-semibold text-ink truncate">{{ display_name }}</h1>
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500" x-html="statusHtml"></div>
-      </div>
+      <span class="cv-avatar cv-h-avatar text-sm" aria-hidden="true">{{ display_name|default:"?"|slice:":1"|upper }}</span>
+      <h1 class="cv-h-name text-base font-semibold text-ink truncate">{{ display_name }}</h1>
+      <div class="cv-h-status" x-html="statusHtml"></div>
 
-      <div class="flex items-center gap-1 shrink-0">
+      <div class="cv-h-actions flex items-center gap-1 shrink-0">
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="action" value="assign" />

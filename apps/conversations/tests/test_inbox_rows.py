@@ -168,3 +168,44 @@ class TestTabs:
         frag = client.get("/inbox/feed/?view=all", HTTP_HX_REQUEST="true").content.decode()
         assert "inbox-row" in frag
         assert "You" in frag[frag.index("inbox-assignee"):frag.index("inbox-assignee") + 400]
+
+
+@pytest.mark.django_db
+class TestConversationHeaderStatus:
+    """The status line under the contact's name in the conversation header.
+
+    On a phone it used to render "Waiting for you · 2 hours, 20 minutes" as one
+    pill that wrapped onto three lines inside itself, in a ~75px column.
+    """
+
+    def _status(self, client, conv):
+        body = client.get("/inbox/%s/" % conv.public_id).content.decode()
+        # The header's status HTML ships in the page's chat config as JSON.
+        import json, re
+        config = json.loads(re.search(
+            r'<script id="chat-config" type="application/json">(.*?)</script>', body, re.S
+        ).group(1))
+        return config["statusHtml"]
+
+    def test_badges_never_wrap_inside_themselves(self, logged_in):
+        client, account, _ = logged_in
+        conv = _conversation(account, first="Sam", waited=timedelta(hours=2, minutes=20))
+        status = self._status(client, conv)
+        badges = [b for b in status.split('class="badge') if b.strip()][1:]
+        assert badges, "no status badge rendered"
+        assert all(b.startswith(" badge-") and "whitespace-nowrap" in b.split(">", 1)[0] for b in badges)
+
+    def test_phones_get_the_short_form_and_desktop_the_sentence(self, logged_in):
+        client, account, _ = logged_in
+        conv = _conversation(account, first="Sam", waited=timedelta(hours=2, minutes=20))
+        status = self._status(client, conv)
+        assert '<span class="sm:hidden">Waiting · 2h</span>' in status
+        assert "Waiting for you · 2" in status and "hidden sm:inline" in status
+
+    def test_the_header_gives_the_status_its_own_row_on_a_phone(self, logged_in):
+        """The layout fix itself: below sm the status spans under the actions."""
+        client, account, _ = logged_in
+        conv = _conversation(account, first="Sam")
+        body = client.get("/inbox/%s/" % conv.public_id).content.decode()
+        assert '"back avatar name actions" "back avatar status status"' in body
+        assert 'class="cv-h-status"' in body and 'class="cv-h-name' in body

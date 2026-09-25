@@ -1,6 +1,16 @@
-<span class="badge badge-neutral">{{ conversation.get_channel_display }}</span>
-{% if snapshot.missed %}<span class="badge badge-danger">Missed — no reply for over 24h</span>
-{% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span>
-{% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied · waiting for the customer</span>
-{% else %}<span class="badge badge-neutral">Closed</span>{% endif %}
-{% if snapshot.first_response_seconds is not None %}<span class="text-xs text-gray-400">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}
+{% load ui %}
+{% comment %}Conversation status line under the contact's name. Rendered into the
+header by x-html, both on page load and on every live refresh
+(views.conversation_detail and views.messages_feed), so it must stand alone.
+
+Badges never wrap inside themselves: a pill broken over three lines ("Waiting
+for you · / 2 hours, / 20 minutes") was what made the phone header look crushed.
+On a phone each badge says the state in a word or two, with the wait as "2h";
+the full sentence comes back from sm up, and the exact time is in the title.
+"First reply in 92s" is a desktop-only detail.{% endcomment %}
+{% include "components/channel_tag.html" with channel=conversation.channel compact=True %}
+{% if snapshot.missed %}<span class="badge badge-danger whitespace-nowrap" title="No reply for over 24 hours">Missed<span class="hidden sm:inline"> — no reply for over 24h</span></span>
+{% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning whitespace-nowrap" title="Waiting since {{ snapshot.last_customer_message_at|date:'j M Y, H:i' }}"><span class="sm:hidden">Waiting · {{ snapshot.last_customer_message_at|ago:now }}</span><span class="hidden sm:inline">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span></span>
+{% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success whitespace-nowrap">Replied<span class="hidden sm:inline"> · waiting for the customer</span></span>
+{% else %}<span class="badge badge-neutral whitespace-nowrap">Closed</span>{% endif %}
+{% if snapshot.first_response_seconds is not None %}<span class="hidden sm:inline text-xs text-gray-400 whitespace-nowrap">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}
