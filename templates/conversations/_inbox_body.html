@@ -102,7 +102,7 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
           all. Plain waiting is already the amber clock.{% endcomment %}
           {% if c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
           {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
-          {% elif c.snapshot.closed_reason %}<span class="badge badge-neutral"
+          {% elif c.snapshot.state != WAITING_FOR_AGENT %}<span class="badge badge-neutral"
             title="{% if c.snapshot.closed_reason == 'inactive_24h' %}Closed automatically: the customer has not written in over 24 hours{% else %}Closed by your team{% endif %}">Closed</span>{% endif %}
           {% comment %}No badge at all for a conversation with no messages yet
           (state INDETERMINATE) — it used to fall through to "Closed".{% endcomment %}
