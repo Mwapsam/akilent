@@ -375,6 +375,79 @@
                 </div>
               </div>
 
+              {# ---- create_lead ---- #}
+              <div class="space-y-2" x-show="step.type === 'create_lead'">
+                <p class="text-xs text-gray-500">Start tracking this customer as interested. If they already are, nothing is duplicated.</p>
+                <label class="text-xs block">Where they came from <span class="text-gray-400">(optional)</span>
+                  <input class="input input-sm w-full mt-0.5" x-model="step.source" maxlength="50" placeholder="automation" />
+                </label>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- update_lead_status ---- #}
+              <div class="space-y-2" x-show="step.type === 'update_lead_status'">
+                <label class="text-xs block">Mark them as
+                  <select class="select select-sm w-full mt-0.5" x-model="step.status" :class="fieldError(step.id, 'status') && 'input-error'">
+                    <option value="">— choose —</option>
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="lost">Lost</option>
+                  </select>
+                  <span class="field-error" x-show="fieldError(step.id, 'status')" x-text="fieldError(step.id, 'status')"></span>
+                </label>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- assign_conversation ---- #}
+              <div class="space-y-2" x-show="step.type === 'assign_conversation'">
+                <label class="text-xs block">Give the conversation to <span class="text-gray-400">(a teammate's email, or leave empty for whoever is least busy)</span>
+                  <input class="input input-sm w-full mt-0.5" x-model="step.to" placeholder="least busy teammate"
+                         :class="fieldError(step.id, 'to') && 'input-error'" />
+                  <span class="field-error" x-show="fieldError(step.id, 'to')" x-text="fieldError(step.id, 'to')"></span>
+                </label>
+                <p class="text-xs text-gray-400">A conversation that already has someone looking after it is left with them.</p>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- notify_team ---- #}
+              <div class="space-y-2" x-show="step.type === 'notify_team'">
+                <label class="text-xs block">Tell
+                  <select class="select select-sm w-full mt-0.5" x-model="step.to">
+                    <option value="owners">Your owners and admins</option>
+                    <option value="assignee">Whoever the conversation is assigned to</option>
+                  </select>
+                </label>
+                <label class="text-xs block">Message
+                  <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.text" maxlength="1000"
+                            placeholder="{contact} is interested. Please reply soon."
+                            :class="fieldError(step.id, 'text') && 'input-error'"></textarea>
+                  <span class="field-error" x-show="fieldError(step.id, 'text')" x-text="fieldError(step.id, 'text')"></span>
+                </label>
+                <p class="text-xs text-gray-400">Sent as an email with a link to the conversation. {contact} becomes the customer's name and {first_name} their first name.</p>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">— choose a step —</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
               {# ---- add_tag / remove_tag ---- #}
               <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'add_tag' || step.type === 'remove_tag'">
                 <label class="text-xs">Tag
@@ -476,6 +549,10 @@ function workflowEditor() {
       "email.clicked": "When a customer clicks a link in an email",
       "whatsapp.received": "When a customer messages you",
       "conversation.message_received": "When a customer messages you",
+      "lead.created": "When someone becomes an interested customer",
+      "lead.status_changed": "When an interested customer's status changes",
+      "lead.qualified": "When an interested customer is marked qualified",
+      "lead.lost": "When an interested customer is marked lost",
     },
     advancedStepTypes: ["webhook", "set_attribute", "action"],
     errors: {{ validation_errors|safe }},
@@ -519,6 +596,10 @@ function workflowEditor() {
         label: "Wait for reply", border: "border-l-brand-500", chip: "tone-brand",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
       },
+      create_lead: { label: "Track as interested", border: "border-l-green-500", chip: "tone-teal", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>' },
+      update_lead_status: { label: "Update interest", border: "border-l-green-500", chip: "tone-teal", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>' },
+      assign_conversation: { label: "Assign to teammate", border: "border-l-blue-500", chip: "tone-info", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>' },
+      notify_team: { label: "Tell your team", border: "border-l-amber-500", chip: "tone-amber", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>' },
       wait: {
         label: "Wait", border: "border-l-brand-500", chip: "tone-brand",
         icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
@@ -589,6 +670,7 @@ function workflowEditor() {
     },
     deriveMode(step) {
       if (step.type === "send_email") step._mode = step.template ? "template" : "write";
+      if (step.type === "notify_team" && !step.to) step.to = "owners";
       if (step.type === "send_buttons" && !Array.isArray(step.buttons)) step.buttons = [{ title: "" }, { title: "" }];
       if (step.type === "send_list") {
         if (!Array.isArray(step.rows)) step.rows = [{ title: "", description: "" }];
@@ -649,7 +731,7 @@ function workflowEditor() {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
-    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag", "buttons", "rows", "routes", "timeout_seconds"],
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag", "buttons", "rows", "routes", "timeout_seconds", "status", "to", "source"],
     hasStepLevelError(stepId) {
       return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },

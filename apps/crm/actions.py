@@ -51,7 +51,8 @@ class CaptureConversationLeadAction(Action):
         if existing is not None:
             return {"lead_id": existing.public_id, "created": False}
 
-        lead = create_lead(account, contact, source="conversation", owner=owner)
+        lead = create_lead(
+            account, contact, source="conversation", owner=owner, conversation_id=conversation_id)
         # Record what the customer said that opened this, on the timeline the
         # customer page already renders: an owner who sees an unexpected lead
         # has to be able to tell why it exists.
@@ -61,6 +62,26 @@ class CaptureConversationLeadAction(Action):
             "signal": signal, "conversation_id": conversation_id, "lead_id": lead.public_id,
         })
         return {"lead_id": lead.public_id, "created": True}
+
+
+class UpdateLeadStatusAction(Action):
+    """Mark a lead new, contacted, qualified or lost (idempotent)."""
+
+    name = "update_lead_status"
+    module = "crm"
+    scope_kwarg = "lead"
+
+    def input_schema(self) -> dict:
+        return {"required": ["lead", "status"]}
+
+    def execute(self, context: dict, *, lead, status: str) -> dict:
+        from apps.crm.services import set_lead_status
+
+        try:
+            changed = set_lead_status(lead, status)
+        except ValueError as exc:
+            raise ActionError(str(exc)) from exc
+        return {"lead_id": lead.public_id, "status": lead.status, "changed": changed}
 
 
 class CreateDealAction(Action):
@@ -97,5 +118,6 @@ class ChangeDealStageAction(Action):
 
 register(CreateLeadAction())
 register(CaptureConversationLeadAction())
+register(UpdateLeadStatusAction())
 register(CreateDealAction())
 register(ChangeDealStageAction())

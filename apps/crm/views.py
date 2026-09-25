@@ -110,7 +110,14 @@ def lead_detail(request, public_id: str):
     if request.method == "POST":
         action = request.POST.get("action")
         try:
-            if action == "convert":
+            if action == "status":
+                result = run_action(
+                    "update_lead_status", {"account": account}, lead=lead,
+                    status=request.POST.get("status", ""),
+                )
+                if result["changed"]:
+                    messages.success(request, f"Marked as {lead.get_status_display().lower()}.")
+            elif action == "convert":
                 result = run_action(
                     "create_deal", {"account": account}, lead=lead,
                     title=request.POST.get("title") or None,
@@ -122,7 +129,12 @@ def lead_detail(request, public_id: str):
             messages.error(request, str(exc))
         return redirect("crm:lead-detail", public_id=public_id)
 
-    return render(request, "crm/lead_detail.html", {"account": account, "lead": lead})
+    from apps.crm.services import SETTABLE_LEAD_STATUSES
+
+    return render(request, "crm/lead_detail.html", {
+        "account": account, "lead": lead,
+        "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
+    })
 
 
 @login_required

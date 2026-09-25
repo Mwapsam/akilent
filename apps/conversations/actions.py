@@ -120,6 +120,54 @@ class AssignConversationAction(Action):
         return {"conversation_id": conversation.id, "assigned_to_id": user.id if user else None}
 
 
+class AutoAssignConversationAction(Action):
+    """Give a conversation to a teammate without anyone choosing: the least busy, or a named one.
+
+    "Least busy" is the member with the fewest open conversations already assigned to them
+    (ties go to whoever joined first), which spreads work fairly without remembering whose
+    turn it was. A conversation that already has an assignee is left alone unless ``force`` is
+    set, so a workflow never takes a customer away from the person already looking after them.
+    """
+
+    name = "auto_assign_conversation"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation"], "optional": ["email", "force"]}
+
+    def execute(self, context: dict, *, conversation, email: str = "", force: bool = False) -> dict:
+        from django.db.models import Count
+
+        from apps.accounts.models import Membership
+        from apps.conversations.models import Conversation
+
+        if conversation.assigned_to_id and not force:
+            return {"conversation_id": conversation.id, "assigned_to_id": conversation.assigned_to_id,
+                    "changed": False}
+
+        members = list(
+            Membership.objects.filter(account_id=conversation.account_id, user__is_active=True)
+            .select_related("user").order_by("id")
+        )
+        email = (email or "").strip()
+        if email:
+            chosen = next((m.user for m in members if (m.user.email or "").lower() == email.lower()), None)
+            if chosen is None:
+                raise ActionError(f"{email} isn't on your team.")
+        else:
+            if not members:
+                raise ActionError("There is nobody on your team to assign this to.")
+            load = dict(
+                Conversation.objects.filter(
+                    account_id=conversation.account_id, status=Conversation.Status.OPEN,
+                    assigned_to__isnull=False,
+                ).values_list("assigned_to").annotate(n=Count("id"))
+            )
+            chosen = min((m.user for m in members), key=lambda u: (load.get(u.id, 0), u.id))
+        conversation.assign(chosen)
+        return {"conversation_id": conversation.id, "assigned_to_id": chosen.id, "changed": True}
+
+
 class AddInternalNoteAction(Action):
     """Attach a staff-only note to a conversation."""
 
@@ -181,6 +229,7 @@ class CompleteFollowUpAction(Action):
 register(SendWhatsAppAction())
 register(ReplyAction())
 register(AssignConversationAction())
+register(AutoAssignConversationAction())
 register(AddInternalNoteAction())
 register(CreateFollowUpAction())
 register(CompleteFollowUpAction())

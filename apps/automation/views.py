@@ -19,9 +19,11 @@ from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
 from apps.core.module_gate import module_required
 
 _STEP_TYPES = ["send_email", "send_whatsapp", "reply_text", "send_buttons", "send_list", "wait_for_reply",
+               "create_lead", "update_lead_status", "assign_conversation", "notify_team",
                "add_tag", "remove_tag", "webhook", "wait", "branch", "set_attribute", "stop"]
 _TRIGGER_TYPES = ["manual", "business_event", "contact.created", "contact.updated",
-                  "email.opened", "email.clicked", "conversation.message_received"]
+                  "email.opened", "email.clicked", "conversation.message_received",
+                  "lead.created", "lead.status_changed", "lead.qualified", "lead.lost"]
 
 
 @login_required
@@ -99,6 +101,8 @@ def starter_install(request):
         messages.error(request, "That follow-up isn't available.")
         return redirect("automation:list")
 
+    if starter.get("team"):
+        return _install_team_starter(request, account, starter)
     if starter.get("menu"):
         return _install_menu_starter(request, account, starter)
     if starter.get("reply"):
@@ -140,6 +144,27 @@ def starter_install(request):
 
 _MAX_REPLY_LENGTH = 1000
 _MENU_OPTIONS = 3
+
+
+def _install_team_starter(request, account, starter):
+    """Install "hand new leads to your team": the owner's message, who to tell, and whether to assign."""
+    from apps.automation.engagement_starters import build_team_definition
+
+    text = (request.POST.get("notify_text") or "").strip()
+    if not text:
+        messages.error(request, "Write what your team should be told.")
+        return redirect("automation:list")
+    if len(text) > 1000:
+        messages.error(request, "Keep the message under 1000 characters.")
+        return redirect("automation:list")
+    notify = "owners" if request.POST.get("notify_to") == "owners" else "assignee"
+    automation_api.upsert_published_workflow(
+        account, slug=starter["key"], name=starter["name"],
+        definition=build_team_definition(
+            starter, text=text, notify=notify, assign=request.POST.get("assign") == "on"),
+    )
+    messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
 
 
 def _install_menu_starter(request, account, starter):

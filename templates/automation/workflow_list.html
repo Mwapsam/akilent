@@ -38,7 +38,7 @@
           {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
         </p>
         <a href="{% url 'automation:editor' starter.installed.slug %}" class="text-xs text-gray-500 underline">See what it does</a>
-        {% elif approved_templates or starter.reply or starter.menu %}
+        {% elif approved_templates or starter.reply or starter.menu or starter.team %}
         <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">
           Turn this on
         </button>
@@ -56,7 +56,35 @@
 </section>
 
 {% for starter in engagement_starters %}
-{% if not starter.installed and starter.menu %}
+{% if not starter.installed and starter.team %}
+{% modal starter.key title=starter.name %}
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+      <input type="checkbox" name="assign" checked class="mt-1">
+      <span class="text-sm text-ink">Give the conversation to my least busy teammate</span>
+    </label>
+    <div>
+      <label class="label" for="notify-to">Email</label>
+      <select id="notify-to" name="notify_to" class="select">
+        <option value="assignee">Whoever it is assigned to (owners if nobody)</option>
+        <option value="owners">My owners and admins</option>
+      </select>
+    </div>
+    <div>
+      <label class="label" for="notify-text">What should the email say?</label>
+      <textarea id="notify-text" name="notify_text" class="textarea" rows="3" maxlength="1000" required>{{ starter.reply_hint }}</textarea>
+      <p class="text-xs text-gray-400 mt-1">{contact} becomes the customer's name. The email links to their conversation.</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Turn it on</button>
+    </div>
+  </form>
+{% endmodal %}
+{% elif not starter.installed and starter.menu %}
 {% modal starter.key title=starter.name %}
   <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
     {% csrf_token %}

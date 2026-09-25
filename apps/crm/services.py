@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _OPEN_LEAD_STATUSES = [Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]
 
 
-def create_lead(account, contact, *, source: str = "", owner=None) -> Lead:
+def create_lead(account, contact, *, source: str = "", owner=None, conversation_id: str = "") -> Lead:
     """Create a Lead for ``contact``, or return its existing open one.
 
     A contact should have at most one open opportunity being tracked at a
@@ -39,8 +39,47 @@ def create_lead(account, contact, *, source: str = "", owner=None) -> Lead:
         payload={"contact_id": contact.public_id, "source": source},
     )
     _dispatch_legacy_lead_created(account, lead)
-    _enroll_workflows(account, "lead.created", contact, {"lead_id": lead.public_id})
+    # A lead opened from a conversation carries it, so a workflow can act in that thread
+    # (assign it, tell the team) rather than guessing which conversation was meant.
+    context = {"lead_id": lead.public_id, **({"conversation_id": conversation_id} if conversation_id else {})}
+    _enroll_workflows(account, "lead.created", contact, context)
     return lead
+
+
+# Statuses a person or automation can put a lead in. "converted" is reached only by turning the
+# lead into a deal (convert_lead_to_deal), which is what creates the deal it points at.
+SETTABLE_LEAD_STATUSES = (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED, Lead.Status.LOST)
+
+
+def set_lead_status(lead: Lead, status: str) -> bool:
+    """Move a lead to ``status``. Returns True if it changed (a repeat is a quiet no-op).
+
+    Emits a durable event and starts workflows on ``lead.status_changed``, plus
+    ``lead.qualified`` / ``lead.lost`` for the two moments owners most often act on.
+    """
+    if status not in SETTABLE_LEAD_STATUSES:
+        raise ValueError("Choose new, contacted, qualified or lost.")
+    if lead.status == Lead.Status.CONVERTED:
+        raise ValueError("This customer is already in your pipeline. Move their deal instead.")
+    if lead.status == status:
+        return False
+
+    previous = lead.status
+    lead.status = status
+    lead.save(update_fields=["status", "updated_at"])
+
+    emit_event(
+        account=lead.account, type="lead.status_changed", occurred_at=timezone.now(),
+        source="crm", subject_type="lead", subject_id=lead.public_id,
+        payload={"contact_id": lead.contact.public_id, "from": previous, "to": status},
+    )
+    context = {"lead_id": lead.public_id, "status": status, "previous_status": previous}
+    _enroll_workflows(lead.account, "lead.status_changed", lead.contact, context)
+    if status == Lead.Status.QUALIFIED:
+        _enroll_workflows(lead.account, "lead.qualified", lead.contact, context)
+    elif status == Lead.Status.LOST:
+        _enroll_workflows(lead.account, "lead.lost", lead.contact, context)
+    return True
 
 
 def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,

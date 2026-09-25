@@ -121,6 +121,19 @@ _REPLY_STARTERS = [
     },
 ]
 _REPLY_STARTERS.append({
+    "key": "route-new-leads",
+    "name": "Hand new interested customers to your team",
+    "goal": "A customer who shows interest is never left sitting until someone notices.",
+    "explain": (
+        "When someone is tracked as interested, give their conversation to your least busy "
+        "teammate and email the team so they follow up straight away."
+    ),
+    "stop_condition": "Nobody who already has a teammate looking after them is reassigned.",
+    "trigger": "lead.created",
+    "team": True,
+    "reply_hint": "{contact} is interested. Please reply to them soon.",
+})
+_REPLY_STARTERS.append({
     "key": "offer-a-menu",
     "name": "Offer a menu when someone says hello",
     "goal": "Customers get to what they need in one tap, without waiting for a person.",
@@ -143,11 +156,8 @@ _REPLY_STARTERS.append({
     "needs_hours": True,
 })
 for _starter in _REPLY_STARTERS:
-    _starter.update({
-        "trigger": "conversation.message_received",
-        "reply": True,
-        "suggested_template": "",
-    })
+    _starter.setdefault("trigger", "conversation.message_received")
+    _starter.update({"reply": True, "suggested_template": ""})
 ENGAGEMENT_STARTERS.extend(_REPLY_STARTERS)
 
 STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
@@ -183,6 +193,16 @@ def build_reply_definition(starter: dict, *, text: str) -> dict:
         },
         "steps": steps,
     }
+
+
+def build_team_definition(starter: dict, *, text: str, notify: str = "assignee", assign: bool = True) -> dict:
+    """New lead -> (give it to the least busy teammate) -> tell the team."""
+    steps = []
+    if assign:
+        steps.append({"id": "assign", "type": "assign_conversation", "next": "tell"})
+    steps.append({"id": "tell", "type": "notify_team", "to": notify, "text": text, "next": "stop"})
+    steps.append({"id": "stop", "type": "stop"})
+    return {"trigger": {"type": starter["trigger"]}, "steps": steps}
 
 
 def build_menu_definition(starter: dict, *, question: str, options: list[dict]) -> dict:

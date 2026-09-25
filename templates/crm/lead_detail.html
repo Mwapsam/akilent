@@ -24,6 +24,15 @@
       {% if lead.converted_to_deal %}<a href="{% url 'crm:deal-detail' lead.converted_to_deal.public_id %}" class="text-accent">See where they stand</a>.{% endif %}
     </p>
     {% else %}
+    <h2 class="text-lg font-semibold text-ink mb-3">Where are they?</h2>
+    <form method="post" class="flex flex-wrap gap-2 mb-6">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="status" />
+      {% for value, label in status_choices %}
+      <button name="status" value="{{ value }}" class="btn btn-sm {% if lead.status == value %}btn-primary{% else %}btn-secondary{% endif %}"
+              {% if lead.status == value %}aria-current="true"{% endif %}>{{ label }}</button>
+      {% endfor %}
+    </form>
     <h2 class="text-lg font-semibold text-ink mb-3">Start tracking their progress</h2>
     <form method="post" class="space-y-3">
       {% csrf_token %}

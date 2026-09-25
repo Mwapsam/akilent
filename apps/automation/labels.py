@@ -15,11 +15,19 @@ TRIGGER_LABELS = {
     "email.clicked": "When a customer clicks a link in an email",
     "whatsapp.received": "When a customer messages you",
     "conversation.message_received": "When a customer messages you",
+    "lead.created": "When someone becomes an interested customer",
+    "lead.status_changed": "When an interested customer's status changes",
+    "lead.qualified": "When an interested customer is marked qualified",
+    "lead.lost": "When an interested customer is marked lost",
 }
 
 STEP_LABELS = {
     "send_email": "Send an email",
     "send_whatsapp": "Send a WhatsApp message",
+    "create_lead": "Track as interested",
+    "update_lead_status": "Update how interested they are",
+    "assign_conversation": "Assign to a teammate",
+    "notify_team": "Tell your team",
     "webhook": "Advanced integration",
     "wait": "Wait",
     "branch": "If / otherwise",

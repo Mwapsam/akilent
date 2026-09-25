@@ -46,6 +46,9 @@ _STEP_TYPES = {
     "add_tag", "remove_tag",
     # WhatsApp reply buttons / lists, and "ask, then wait for the customer's choice".
     "send_buttons", "send_list", "wait_for_reply",
+    # Lifecycle: track the customer, say how interested they are, hand them to a teammate,
+    # and tell the team.
+    "create_lead", "update_lead_status", "assign_conversation", "notify_team",
     # Phase 4: a generic step that calls through the shared Action Registry
     # (apps.core.actions) by name, rather than requiring a hand-written
     # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
@@ -71,6 +74,10 @@ _TRIGGER_TYPES = {
     # Phase 3 minimal Commerce: fired from apps.commerce.services.
     "order.created",
     "order.paid",
+    # Lead status: fired when a person or automation moves a lead (see apps.crm.services).
+    "lead.status_changed",
+    "lead.qualified",
+    "lead.lost",
 }
 
 # Triggers that carry the customer's message, so a keyword ``match`` can be applied to them.
@@ -220,6 +227,27 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     "because it replies in that conversation",
                     step_id=sid, field="type",
                 )
+        if step.get("type") == "create_lead" and len(str(step.get("source") or "")) > 50:
+            _error(f"step {sid!r}: keep the source under 50 characters", step_id=sid, field="source")
+        if step.get("type") == "update_lead_status":
+            from apps.crm.services import SETTABLE_LEAD_STATUSES
+
+            if step.get("status") not in {s.value for s in SETTABLE_LEAD_STATUSES}:
+                _error(f"step {sid!r}: choose new, contacted, qualified or lost", step_id=sid, field="status")
+        if step.get("type") == "assign_conversation":
+            who = step.get("to")
+            if who not in (None, "") and not (isinstance(who, str) and "@" in who):
+                _error(f"step {sid!r}: 'to' is a teammate's email, or empty for the least busy",
+                       step_id=sid, field="to")
+        if step.get("type") == "notify_team":
+            who = step.get("to") or "owners"
+            if who not in ("owners", "assignee") and not (isinstance(who, str) and "@" in who):
+                _error(f"step {sid!r}: tell your owners, the assignee, or a teammate's email",
+                       step_id=sid, field="to")
+            if not (step.get("text") or "").strip():
+                _error(f"step {sid!r}: write what the team should be told", step_id=sid, field="text")
+            elif len(step["text"]) > 1000:
+                _error(f"step {sid!r}: keep the message under 1000 characters", step_id=sid, field="text")
         if step.get("type") in ("send_buttons", "send_list"):
             from apps.whatsapp import interactive as wa_interactive
 
@@ -459,8 +487,13 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     return {"outbound_message_id": msg.id}
 
 
-def _conversation_for_run(run: WorkflowRun, step: dict):
-    """The conversation that started this run, or a clear failure if it has none."""
+def _conversation_for_run(run: WorkflowRun, step: dict, *, fallback: bool = False):
+    """The conversation that started this run, or a clear failure if it has none.
+
+    With ``fallback`` (for steps that act on the *customer's* thread rather than reply in one,
+    like assigning it), a run that did not start from a message uses the customer's most
+    recently active open conversation.
+    """
     from apps.conversations.models import Conversation
 
     public_id = (run.context or {}).get("conversation_id")
@@ -468,6 +501,10 @@ def _conversation_for_run(run: WorkflowRun, step: dict):
         Conversation.objects.filter(account=run.workflow.account, public_id=public_id).first()
         if public_id else None
     )
+    if conversation is None and fallback:
+        conversation = Conversation.objects.filter(
+            account=run.workflow.account, contact=run.contact, status=Conversation.Status.OPEN,
+        ).order_by("-last_message_at", "-id").first()
     if conversation is None:
         raise ValueError(f"{step.get('type')} step {step.get('id')!r}: this run has no conversation to reply in")
     return conversation
@@ -577,6 +614,92 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
         raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
 
 
+def _lead_for_run(run: WorkflowRun, step: dict):
+    """The lead this run is about: the one in its context, else the customer's open lead."""
+    from apps.crm.models import Lead
+
+    account = run.workflow.account
+    lead = None
+    if (run.context or {}).get("lead_id"):
+        lead = Lead.objects.filter(account=account, public_id=run.context["lead_id"]).first()
+    if lead is None:
+        lead = Lead.objects.filter(
+            account=account, contact=run.contact,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        ).order_by("-created_at").first()
+    if lead is None:
+        raise ValueError(f"{step['type']} step {step.get('id')!r}: this customer has no open lead")
+    return lead
+
+
+def _run_create_lead(run: WorkflowRun, step: dict) -> dict:
+    from apps.core.actions import ActionError, run_action
+
+    account = run.workflow.account
+    try:
+        result = run_action(
+            "create_lead", {"account": account}, account=account, contact=run.contact,
+            source=(step.get("source") or "automation")[:50],
+        )
+    except ActionError as exc:
+        raise ValueError(f"create_lead step {step.get('id')!r}: {exc}") from exc
+    # Later steps in this run ("mark qualified") act on this lead.
+    run.context = {**(run.context or {}), "lead_id": result["lead_id"]}
+    run.save(update_fields=["context"])
+    return {"lead_id": result["lead_id"]}
+
+
+def _run_update_lead_status(run: WorkflowRun, step: dict) -> dict:
+    from apps.core.actions import ActionError, run_action
+
+    lead = _lead_for_run(run, step)
+    try:
+        return run_action(
+            "update_lead_status", {"account": run.workflow.account}, lead=lead, status=step.get("status"))
+    except ActionError as exc:
+        raise ValueError(f"update_lead_status step {step.get('id')!r}: {exc}") from exc
+
+
+def _run_assign_conversation(run: WorkflowRun, step: dict) -> dict:
+    from apps.core.actions import ActionError, run_action
+
+    conversation = _conversation_for_run(run, step, fallback=True)
+    try:
+        return run_action(
+            "auto_assign_conversation", {"account": run.workflow.account},
+            conversation=conversation, email=step.get("to") or "",
+        )
+    except ActionError as exc:
+        raise ValueError(f"assign_conversation step {step.get('id')!r}: {exc}") from exc
+
+
+def _run_notify_team(run: WorkflowRun, step: dict) -> dict:
+    from django.urls import reverse
+
+    from apps.accounts import notifications
+
+    try:
+        conversation = _conversation_for_run(run, step, fallback=True)
+    except ValueError:
+        conversation = None  # a notification about a customer needs no conversation
+    contact = run.contact
+    who = (contact.full_name or contact.phone or contact.email or "A customer")
+    text = _first_name_merge(run, step.get("text")).replace("{contact}", who)
+    path = (
+        reverse("conversations:detail", args=[conversation.public_id]) if conversation is not None
+        else reverse("contacts:detail", args=[contact.public_id])
+    )
+    try:
+        sent = notifications.notify_team(
+            run.workflow.account, to=step.get("to") or "owners",
+            subject=(step.get("subject") or f"Akilent: {who}")[:200],
+            text=text, path=path, conversation=conversation,
+        )
+    except notifications.NotifyError as exc:
+        raise ValueError(f"notify_team step {step.get('id')!r}: {exc}") from exc
+    return {"notified": sent}
+
+
 def _run_tag_step(run: WorkflowRun, step: dict) -> dict:
     from apps.contacts import tags as contact_tags
 
@@ -669,10 +792,17 @@ def _resolve_action_param(source, run: WorkflowRun):
     contact_attrs = run.contact.attributes or {}
     context = run.context or {}
     if isinstance(source, str) and source.startswith("contact."):
-        return contact_attrs.get(source[len("contact."):])
+        return _dig(contact_attrs, source[len("contact."):])
     if isinstance(source, str) and source.startswith("context."):
-        return context.get(source[len("context."):])
+        return _dig(context, source[len("context."):])
     return source
+
+
+def _dig(data, path: str):
+    """``a.b.c`` into nested dicts ("reply.title" in a run's context); None if any step is missing."""
+    for part in path.split("."):
+        data = data.get(part) if isinstance(data, dict) else None
+    return data
 
 
 def _resolve_action_object(field_name: str, public_id: str, run: WorkflowRun):
@@ -736,7 +866,10 @@ def _run_action_step(run: WorkflowRun, step: dict) -> dict:
 
 def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
     contact = run.contact
-    contact.attributes = {**(contact.attributes or {}), step["key"]: step.get("value")}
+    # A value like "context.reply.title" is read from the run (what the customer tapped);
+    # anything else is stored as written.
+    value = _resolve_action_param(step.get("value"), run)
+    contact.attributes = {**(contact.attributes or {}), step["key"]: value}
     contact.save(update_fields=["attributes", "updated_at"])
     return {"key": step["key"]}
 
@@ -810,6 +943,14 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_tag_step(run, step)
             elif stype in ("send_buttons", "send_list"):
                 result = _run_interactive(run, step)
+            elif stype == "create_lead":
+                result = _run_create_lead(run, step)
+            elif stype == "update_lead_status":
+                result = _run_update_lead_status(run, step)
+            elif stype == "assign_conversation":
+                result = _run_assign_conversation(run, step)
+            elif stype == "notify_team":
+                result = _run_notify_team(run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}
