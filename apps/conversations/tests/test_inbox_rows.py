@@ -209,3 +209,51 @@ class TestConversationHeaderStatus:
         body = client.get("/inbox/%s/" % conv.public_id).content.decode()
         assert '"back avatar name actions" "back avatar status status"' in body
         assert 'class="cv-h-status"' in body and 'class="cv-h-name' in body
+
+
+@pytest.mark.django_db
+class TestInboxLayout:
+    def _list(self, body):
+        return body[body.index('class="inbox-list"'):]
+
+    def test_the_channel_filter_lives_with_the_tabs_not_the_page_header(self, logged_in):
+        """Controls that act on the list sit with the list. It also has to be
+        inside the polled fragment, or the 8s refresh would not carry it."""
+        client, account, _ = logged_in
+        _conversation(account, first="Chanda")
+        body = _inbox(client)
+        toolbar = body[body.index('class="inbox-toolbar"'):body.index('class="inbox-list"')]
+        assert 'name="channel"' in toolbar and "inbox-tabs" in toolbar
+        header = body[body.index('class="inbox-header"'):body.index("</header>", body.index('class="inbox-header"'))]
+        assert 'name="channel"' not in header
+        frag = client.get("/inbox/feed/?view=all", HTTP_HX_REQUEST="true").content.decode()
+        assert 'name="channel"' in frag
+
+    def test_a_waiting_row_has_no_waiting_badge_but_still_says_so_to_screen_readers(self, logged_in):
+        """The amber clock carries "waiting"; a badge on top of it was the
+        third time the row said the same thing."""
+        client, account, _ = logged_in
+        _conversation(account, first="Chanda", waited=timedelta(minutes=17))
+        row = self._list(_inbox(client, "needs_attention"))
+        assert "badge-warning" not in row
+        assert '<span class="sr-only">Waiting</span>' in row
+
+    def test_a_conversation_with_no_messages_is_not_labelled_closed(self, logged_in):
+        """INDETERMINATE used to fall through the template's final else into
+        "Closed" — a brand-new, empty conversation looked finished."""
+        client, account, _ = logged_in
+        contact = Contact.objects.create(account=account, first_name="Empty", phone="+260970000000")
+        Conversation.objects.create(account=account, contact=contact, channel="whatsapp")
+        row = self._list(_inbox(client))
+        assert "No messages yet" in row
+        assert ">Closed<" not in row
+
+    def test_a_quiet_conversation_explains_why_it_is_closed(self, logged_in):
+        """Closed covers two cases in conversations.state; the badge says which."""
+        client, account, _ = logged_in
+        conv = _conversation(account, first="Joseph", waited=timedelta(days=2))
+        Message.objects.create(account=account, conversation=conv, direction="outbound",
+                               status="delivered", body="See you then",
+                               timestamp=timezone.now() - timedelta(days=1, hours=23))
+        row = self._list(_inbox(client))
+        assert "the customer has not written in over 24 hours" in row
