@@ -77,6 +77,39 @@ def save_hours(account, *, tz: str, schedule: dict | None):
     return hours
 
 
+def availability(account, at: datetime | None = None) -> dict:
+    """"Are we open now, and if not, when?" in words a reply can repeat.
+
+    ``{"hours_set", "open_now", "local_time", "today", "next_open", "timezone"}``. With no hours set
+    the business counts as open (see ``is_open``) and the rest is empty.
+    """
+    hours = get_hours(account)
+    if hours is None or not hours.schedule:
+        return {"hours_set": False, "open_now": True, "local_time": "", "today": "", "next_open": "", "timezone": ""}
+    try:
+        zone = ZoneInfo(hours.timezone)
+    except Exception:
+        zone = ZoneInfo(DEFAULT_TIMEZONE)
+    local = (at or timezone.now()).astimezone(zone)
+    today = hours.schedule.get(DAYS[local.weekday()])
+    open_now = is_open(account, at)
+    next_open = ""
+    if not open_now:
+        for ahead in range(8):
+            day = DAYS[(local.weekday() + ahead) % 7]
+            window = hours.schedule.get(day)
+            if not window or (ahead == 0 and local.time() >= parse_time(window["open"])):
+                continue
+            when = "today" if ahead == 0 else ("tomorrow" if ahead == 1 else DAY_LABELS[day])
+            next_open = f"{when} at {window['open']}"
+            break
+    return {
+        "hours_set": True, "open_now": open_now, "local_time": local.strftime("%A %H:%M"),
+        "today": f"{today['open']}-{today['close']}" if today else "closed",
+        "next_open": next_open, "timezone": hours.timezone,
+    }
+
+
 def is_open(account, at: datetime | None = None) -> bool:
     """Whether the business is open at ``at`` (default now). True when no hours are set."""
     hours = get_hours(account)

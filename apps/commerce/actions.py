@@ -37,5 +37,32 @@ class RequestPaymentAction(Action):
         return {"payment_id": payment.public_id, "checkout_url": payment.checkout_url}
 
 
+class LookupProductsAction(Action):
+    """Read-only: active catalog products whose name matches the words in ``query`` (at most 5)."""
+
+    name = "lookup_products"
+    module = "commerce"
+    scope_kwarg = "account"
+    LIMIT = 5
+
+    def input_schema(self) -> dict:
+        return {"required": ["account", "query"]}
+
+    def execute(self, context: dict, *, account, query: str) -> dict:
+        from django.db.models import Q
+
+        from apps.commerce.models import Product
+
+        words = [w for w in str(query or "").split() if len(w) > 1][:6]
+        if not words:
+            return {"products": []}
+        match = Q()
+        for word in words:
+            match |= Q(name__icontains=word)
+        products = Product.objects.filter(account=account, is_active=True).filter(match)[: self.LIMIT]
+        return {"products": [{"name": p.name, "price": str(p.price), "currency": p.currency} for p in products]}
+
+
 register(CreateOrderAction())
 register(RequestPaymentAction())
+register(LookupProductsAction())

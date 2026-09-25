@@ -1,8 +1,9 @@
 """The prompt, built in layers so it stays small and predictable.
 
-System (product rules) -> Business (owner's notes, hours, approved templates) -> Customer snapshot
-(first name, tags, whether they're tracked as interested) -> Conversation (the last few messages).
-Never the whole history.
+System (product rules) -> Business (owner's notes, hours, approved templates, tags) -> Customer
+snapshot (first name, tags, whether they're tracked as interested, remembered facts) -> Conversation
+(a rolling summary of earlier messages, see ``apps.ai.memory``, then the last few word for word).
+Never the whole history. Anything else the model needs it asks for through ``apps.ai.tools``.
 
 Privacy: only what is needed. Phone numbers and email addresses inside message text are masked,
 internal notes and automated system lines are never included, and nothing from any other
@@ -39,7 +40,14 @@ payload for "send_template": {"template": "<exact approved template name>", "var
 {"<blank>": "<value>"}}. Fill EVERY blank listed for that template. For a name blank use \
 "contact.first_name". For the business name use "account.company_name". Otherwise use short text \
 taken from the facts above. If you can't fill a blank from the facts, propose a handoff instead.
-payload for "handoff": {"note": "<what the teammate should know>"}"""
+payload for "handoff": {"note": "<what the teammate should know>"}
+
+Optionally add "extras": up to 3 small next steps the team can apply with one click. Only when \
+clearly useful:
+- {"kind": "tag", "tag": "<one of the business's tags listed below>"}
+- {"kind": "track_interest"} when the customer shows real buying interest and isn't tracked yet
+- {"kind": "follow_up", "in_days": 1-14, "note": "<what to check back on>"} when something is \
+left open (a quote, a decision, a delivery)"""
 
 
 def mask(text: str) -> str:
@@ -48,12 +56,14 @@ def mask(text: str) -> str:
 
 
 def build(*, business_name: str, business_notes: str, hours_text: str, templates: list[dict],
-          customer: dict, thread: list[dict], window_open: bool) -> tuple[str, list[ChatMessage]]:
+          customer: dict, thread: list[dict], window_open: bool, memory=None, tools_text: str = "",
+          business_tags=()) -> tuple[str, list[ChatMessage]]:
     """``(system, messages)`` ready for ``AIProvider.chat``.
 
     ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
     and outbound entries are used. ``templates`` is the approved templates as ``{"name", "body",
-    "blanks"}``.
+    "blanks"}``. ``memory`` is ``{"summary", "facts"}`` for the part of the thread before ``thread``.
+    ``tools_text`` describes the look-ups the model may ask for.
     """
     lines = [SYSTEM_RULES, "", "## About the business", f"Name: {business_name or 'the business'}"]
     if hours_text:
@@ -65,12 +75,21 @@ def build(*, business_name: str, business_notes: str, hours_text: str, templates
         lines.append("Tags: " + ", ".join(customer["tags"]))
     if customer.get("interested"):
         lines.append("They are being tracked as an interested customer.")
+    if memory and memory.get("facts"):
+        lines += [f"{k}: {v}" for k, v in memory["facts"].items()]
+
+    if memory and memory.get("summary"):
+        lines += ["", "## Earlier in this conversation", memory["summary"]]
 
     lines += ["", f"## Reply window: {'OPEN' if window_open else 'CLOSED'}"]
     if templates:
         lines += ["", "## Approved templates"]
         for t in templates:
             lines.append(f"- {t['name']} (blanks: {', '.join(t['blanks']) or 'none'}): {t['body'][:300]}")
+    if business_tags:
+        lines += ["", "## The business's tags", ", ".join(business_tags)]
+    if tools_text:
+        lines += ["", tools_text]
 
     messages = []
     for entry in thread[-RECENT_MESSAGES:]:

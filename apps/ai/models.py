@@ -67,6 +67,11 @@ class AIProposal(models.Model):
     dismissed_at = models.DateTimeField(null=True, blank=True)
     expired_at = models.DateTimeField(null=True, blank=True)
     edited_before_send = models.BooleanField(null=True, blank=True)
+    # Side suggestions shown as one-click chips (tag, track interest, follow-up). Each item is the
+    # contract's extra plus "applied_at" once a person clicked it. See apps.ai.proposals.
+    extras = models.JSONField(default=list, blank=True)
+    # The look-ups the model asked for while drafting, in order, e.g. ["check_opening_hours"].
+    tools_used = models.JSONField(default=list, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=["account", "status", "created_at"])]
@@ -81,3 +86,26 @@ class AIProposal(models.Model):
 
     def __str__(self):
         return f"AI proposal {self.pk} ({self.action or 'pending'}, {self.status})"
+
+
+class AIConversationMemory(models.Model):
+    """A rolling summary of the earlier part of one conversation, so AI keeps the thread without
+    being sent the whole history.
+
+    The prompt carries the last few messages word for word; everything older is folded into
+    ``summary`` and ``facts`` by a background task. ``covered_until_id`` is the newest message
+    already folded in. Discardable: delete it and the next refresh rebuilds it.
+    """
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="+")
+    conversation = models.OneToOneField(
+        "conversations.Conversation", on_delete=models.CASCADE, related_name="ai_memory")
+    summary = models.TextField(blank=True, default="")
+    # Short facts the customer has told the business, e.g. {"wants": "3 kW system", "town": "Kitwe"}.
+    facts = models.JSONField(default=dict, blank=True)
+    covered_until_id = models.BigIntegerField(default=0)
+    model = models.CharField(max_length=80, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"AI memory for conversation {self.conversation_id}"

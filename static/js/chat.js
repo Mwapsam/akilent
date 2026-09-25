@@ -173,6 +173,19 @@ document.addEventListener('alpine:init', () => {
       this.ai.proposal = Object.assign({}, p, { status: 'dismissed' });
       try { await this.aiPost(this.ai.dismissUrl, { proposal: p.id }); } catch (e) { /* the card is gone either way */ }
     },
+    async aiApply(extra) {
+      const p = this.ai.proposal;
+      if (!p || !extra || extra.applied) return;
+      extra.applied = true;  // optimistic: the chip shows ✓ at once
+      try {
+        const data = await this.aiPost(this.ai.applyUrl, { proposal: p.id, index: extra.index });
+        if (data.proposal) this.ai.proposal = data.proposal;
+        if (window.toast) window.toast('success', data.message);
+      } catch (e) {
+        extra.applied = false;
+        if (window.toast) window.toast('danger', e.message);
+      }
+    },
     aiUseReply() {
       const p = this.ai.proposal;
       if (!p) return;

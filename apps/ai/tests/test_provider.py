@@ -81,7 +81,7 @@ def test_a_reply_proposal_is_parsed_even_inside_a_code_fence():
     text = 'Sure:\n```json\n{"version": 1, "action": "reply", "confidence": 1.7, "reason": "Asked price", "payload": {"text": "From K18,000."}}\n```'
     p = proposals.parse(text, templates=TEMPLATES, window_open=True)
     assert p == {"version": 1, "action": "reply", "confidence": 1.0, "reason": "Asked price",
-                 "payload": {"text": "From K18,000."}}
+                 "payload": {"text": "From K18,000."}, "extras": []}
 
 
 @pytest.mark.parametrize("bad", [

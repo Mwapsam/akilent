@@ -124,7 +124,78 @@ def serialize(proposal, conversation) -> dict | None:
         })
     elif proposal.action == "handoff":
         out["note"] = payload.get("note", "")
+    out["extras"] = [
+        {"index": i, "kind": e.get("kind"), "label": extra_label(e), "applied": bool(e.get("applied_at"))}
+        for i, e in enumerate(proposal.extras or [])
+    ]
+    out["lookups"] = [LOOKUP_LABELS.get(name, name) for name in (proposal.tools_used or [])]
     return out
+
+
+LOOKUP_LABELS = {
+    "check_opening_hours": "opening hours", "search_products": "your products", "get_customer": "customer history",
+}
+
+
+def extra_label(extra: dict) -> str:
+    kind = extra.get("kind")
+    if kind == "tag":
+        return f"Tag “{extra.get('tag', '')}”"
+    if kind == "track_interest":
+        return "Track as interested"
+    if kind == "follow_up":
+        days = int(extra.get("in_days") or 1)
+        when = "tomorrow" if days == 1 else f"in {days} days"
+        return f"Follow up {when}" + (f": {extra['note']}" if extra.get("note") else "")
+    return kind or ""
+
+
+def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, str]:
+    """A person clicked one of a proposal's side suggestions. Runs it through the Action Registry.
+
+    ``(ok, message)``; the message is shown to the person. Applying twice does nothing the second time.
+    """
+    from datetime import timedelta
+
+    from apps.ai.models import AIProposal
+    from apps.core.actions import ActionError, run_action
+
+    try:
+        proposal = AIProposal.objects.select_related("conversation__contact").filter(
+            account=account, conversation=conversation, pk=int(proposal_id)).first()
+        index = int(index)
+    except (TypeError, ValueError):
+        return False, "That suggestion wasn't found."
+    extras = list(proposal.extras or []) if proposal else []
+    if proposal is None or proposal.conversation is None or not 0 <= index < len(extras):
+        return False, "That suggestion wasn't found."
+    if proposal.status not in (AIProposal.Status.READY, AIProposal.Status.USED):
+        return False, "That suggestion is out of date."
+    extra = extras[index]
+    if extra.get("applied_at"):
+        return True, "Already done."
+    conversation, ctx = proposal.conversation, {"account": account}
+    try:
+        if extra["kind"] == "tag":
+            run_action("add_tag", ctx, contact=conversation.contact, tag=extra["tag"])
+            done = f"Tagged “{extra['tag']}”."
+        elif extra["kind"] == "track_interest":
+            run_action("capture_conversation_lead", ctx, account=account, contact=conversation.contact,
+                       conversation_id=conversation.public_id, signal="AI suggestion", owner=user)
+            done = "Tracked as interested."
+        elif extra["kind"] == "follow_up":
+            run_action("create_followup", ctx, conversation=conversation,
+                       due_at=timezone.now() + timedelta(days=int(extra.get("in_days") or 1)),
+                       note=extra.get("note", ""), created_by=user)
+            done = "Follow-up scheduled."
+        else:
+            return False, "That suggestion wasn't found."
+    except ActionError as exc:
+        return False, str(exc)
+    extras[index] = dict(extra, applied_at=timezone.now().isoformat())
+    proposal.extras = extras
+    proposal.save(update_fields=["extras"])
+    return True, done
 
 
 def dismiss(account, proposal_id) -> bool:

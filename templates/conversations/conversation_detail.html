@@ -112,6 +112,11 @@
   .cv-window { display: flex; align-items: flex-start; gap: .625rem; margin-bottom: .625rem; padding: .625rem .75rem; border-radius: .625rem;
                background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border); color: var(--cv-warn-fg); font-size: .8125rem; }
   .cv-composer { display: flex; align-items: flex-end; gap: .5rem; }
+  .cv-ai-chip { display: inline-flex; align-items: center; gap: .25rem; min-height: 2rem; padding: .25rem .625rem; border-radius: 999px;
+                border: 1px solid var(--color-border-strong); background: var(--cv-surface); color: var(--cv-ink); font-size: .75rem; }
+  .cv-ai-chip:hover:not(:disabled) { background: var(--cv-hover); }
+  .cv-ai-chip:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+  .cv-ai-chip:disabled { color: var(--cv-ink-subtle); cursor: default; }
   .cv-inputwrap { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: .125rem; padding: .25rem .375rem; background: var(--cv-surface);
                   border: 1px solid var(--color-border-strong); border-radius: 1.375rem; transition: border-color .15s, box-shadow .15s; }
   .cv-inputwrap:focus-within { border-color: var(--cv-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cv-accent) 16%, transparent); }
@@ -361,6 +366,22 @@
               <p class="text-xs font-semibold text-gray-500">AI thinks a person should answer this</p>
               <p class="mt-1 text-ink" x-text="ai.proposal.note"></p>
               <div class="mt-2 flex gap-2"><button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button></div>
+            </div>
+          </template>
+          <template x-if="ai.proposal && ai.proposal.status === 'ready' && ((ai.proposal.extras || []).length || (ai.proposal.lookups || []).length)">
+            <div class="mt-2 text-xs">
+              <p class="text-gray-400" x-show="(ai.proposal.lookups || []).length">Checked: <span x-text="(ai.proposal.lookups || []).join(', ')"></span></p>
+              <div class="mt-1 flex flex-wrap gap-1.5" x-show="(ai.proposal.extras || []).length">
+                <span class="text-gray-500 self-center">Also suggested:</span>
+                <template x-for="extra in (ai.proposal.extras || [])" :key="extra.index">
+                  <button type="button" class="cv-ai-chip" :disabled="extra.applied" @click="aiApply(extra)"
+                          :aria-label="extra.applied ? extra.label + ' (done)' : extra.label">
+                    <span x-show="extra.applied" aria-hidden="true">✓</span>
+                    <span x-show="!extra.applied" aria-hidden="true">+</span>
+                    <span x-text="extra.label"></span>
+                  </button>
+                </template>
+              </div>
             </div>
           </template>
           <template x-if="ai.proposal && ai.proposal.status === 'error'">

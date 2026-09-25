@@ -153,6 +153,7 @@ def _ai_config(account, conversation) -> dict:
         "enabled": True,
         "suggestUrl": reverse("conversations:ai_suggest", args=[conversation.public_id]),
         "dismissUrl": reverse("conversations:ai_dismiss", args=[conversation.public_id]),
+        "applyUrl": reverse("conversations:ai_apply", args=[conversation.public_id]),
         "proposal": _ai_proposal_json(account, conversation),
     }
 
@@ -208,6 +209,24 @@ def ai_dismiss(request, public_id: str):
     get_object_or_404(Conversation, account=account, public_id=public_id)
     ai_api.dismiss(account, request.POST.get("proposal"))
     return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def ai_apply(request, public_id: str):
+    """A person clicked one of an AI proposal's one-click extras (tag, track interest, follow-up)."""
+    from apps.ai import api as ai_api
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    ok, message = ai_api.apply_extra(
+        account, conversation, request.POST.get("proposal"), request.POST.get("index"), request.user)
+    if not ok:
+        return JsonResponse({"ok": False, "error": message}, status=400)
+    return JsonResponse({"ok": True, "message": message,
+                         "proposal": ai_api.serialize(ai_api.current_proposal(account, conversation), conversation)})
 
 
 def _team_members(account):

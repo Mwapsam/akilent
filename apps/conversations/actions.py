@@ -226,7 +226,42 @@ class CompleteFollowUpAction(Action):
         return {"followup_id": followup.id}
 
 
+class LookupCustomerAction(Action):
+    """Read-only: where this conversation's customer stands. Their own records only.
+
+    Open follow-up, interest (lead) status, and their last few orders. No contact details.
+    """
+
+    name = "lookup_customer"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation"]}
+
+    def execute(self, context: dict, *, conversation) -> dict:
+        from apps.commerce.models import Order
+        from apps.conversations.models import FollowUp
+        from apps.crm.models import Lead
+
+        account, contact = conversation.account, conversation.contact
+        followup = FollowUp.objects.filter(account=account, contact=contact, done_at__isnull=True).order_by("due_at").first()
+        lead = Lead.objects.filter(account=account, contact=contact).order_by("-created_at").first()
+        orders = Order.objects.filter(account=account, contact=contact).order_by("-created_at")[:3]
+        return {
+            "first_name": (contact.first_name or "").strip(),
+            "customer_since": contact.created_at.date().isoformat() if getattr(contact, "created_at", None) else "",
+            "interest": lead.get_status_display() if lead else "not tracked",
+            "open_followup": {"due": followup.due_at.date().isoformat(), "note": followup.note} if followup else None,
+            "recent_orders": [
+                {"date": o.created_at.date().isoformat(), "status": o.get_status_display(),
+                 "total": str(o.total), "currency": o.currency}
+                for o in orders
+            ],
+        }
+
+
 register(SendWhatsAppAction())
+register(LookupCustomerAction())
 register(ReplyAction())
 register(AssignConversationAction())
 register(AutoAssignConversationAction())

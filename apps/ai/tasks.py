@@ -84,6 +84,8 @@ def draft_proposal(self, proposal_id: int) -> str:
         p = out["proposal"]
         proposal.version, proposal.action = p["version"], p["action"]
         proposal.confidence, proposal.reason, proposal.payload = p["confidence"], p["reason"], p["payload"]
+        proposal.extras = [dict(e, applied_at=None) for e in p.get("extras", [])]
+        proposal.tools_used = out.get("tools_used", [])
         proposal.model, proposal.provider, proposal.latency_ms = out["model"][:80], out["provider"][:40], out["latency_ms"]
         proposal.status, proposal.ready_at = AIProposal.Status.READY, timezone.now()
         proposal.save()
@@ -91,6 +93,7 @@ def draft_proposal(self, proposal_id: int) -> str:
         AIProposal.objects.filter(
             conversation=conversation, status=AIProposal.Status.READY,
         ).exclude(pk=proposal.pk).update(status=AIProposal.Status.EXPIRED, expired_at=timezone.now())
+        _maybe_refresh_memory(conversation)
         return "ready"
     except Retry:
         raise
@@ -100,6 +103,59 @@ def draft_proposal(self, proposal_id: int) -> str:
     finally:
         if cache.get(_lock_key(conversation.pk)) == proposal.pk:
             cache.delete(_lock_key(conversation.pk))
+
+
+def _maybe_refresh_memory(conversation) -> None:
+    """Queue a memory refresh once enough older messages have built up. Never fails a draft."""
+    from apps.ai import memory
+
+    try:
+        if memory.needs_refresh(conversation):
+            refresh_memory.apply_async((conversation.pk,), countdown=5, queue="ai")
+    except Exception:  # noqa: BLE001
+        logger.exception("could not queue AI memory refresh for conversation=%s", conversation.pk)
+
+
+def _memory_lock_key(conversation_id) -> str:
+    return f"ai-memory-lock:conversation:{conversation_id}"
+
+
+@shared_task(bind=True, max_retries=_MAX_RETRIES, queue="ai")
+def refresh_memory(self, conversation_id: int) -> str:
+    """Fold a long conversation's older messages into its AI memory, one batch per run."""
+    from apps.ai import api as ai_api
+    from apps.ai import memory
+    from apps.ai.proposals import ProposalError
+    from apps.ai.providers import AIProviderError, get_ai_provider
+    from apps.conversations.api import get_conversation_by_id
+
+    conversation = get_conversation_by_id(conversation_id)
+    if conversation is None or not ai_api.is_available(conversation.account):
+        return "skipped"
+    if not cache.add(_memory_lock_key(conversation_id), 1, _LOCK_SECONDS):
+        return "busy"
+    try:
+        if _over_daily_limit(conversation.account_id):
+            return "limit"
+        try:
+            updated = memory.refresh(conversation, get_ai_provider(conversation.account))
+        except AIProviderError as exc:
+            if self.request.retries < self.max_retries:
+                cache.delete(_memory_lock_key(conversation_id))
+                raise self.retry(countdown=30 * (2 ** self.request.retries), exc=exc)
+            return "error"
+        except ProposalError:
+            return "error"
+        if updated and memory.needs_refresh(conversation):  # a long backlog: keep folding
+            refresh_memory.apply_async((conversation_id,), countdown=2, queue="ai")
+        return "updated" if updated else "nothing"
+    except Retry:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.exception("refresh_memory failed for conversation=%s", conversation_id)
+        return "error"
+    finally:
+        cache.delete(_memory_lock_key(conversation_id))
 
 
 def _finish(proposal, status: str, *, error: str = "") -> str:

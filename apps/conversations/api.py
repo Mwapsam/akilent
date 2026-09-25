@@ -106,9 +106,13 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
         hours_text = "; ".join(
             f"{day.title()} {slot.get('open')}-{slot.get('close')}" for day, slot in hours.schedule.items()
         ) + f" ({hours.timezone})"
+    from apps.contacts.models import Tag
+
     return {
         "business_name": account.company_name or "",
         "hours_text": hours_text,
+        # The business's own tags: AI may suggest one of these, never invent a new one.
+        "business_tags": list(Tag.objects.filter(account=account).order_by("name").values_list("name", flat=True)[:40]),
         "thread": thread,
         "window_open": window_open,
         "templates": templates,
@@ -120,6 +124,26 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
                 status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]).exists(),
         },
     }
+
+
+def get_conversation_by_id(conversation_id):
+    """The conversation with this primary key (account preloaded), or None. For background tasks."""
+    return Conversation.objects.select_related("account", "contact").filter(pk=conversation_id).first()
+
+
+def earlier_messages(conversation, *, keep_recent: int, after_id: int = 0, limit: int = 40) -> list[dict]:
+    """Customer and business messages older than the last ``keep_recent``, oldest first.
+
+    Only those with an id above ``after_id`` (what a summary already covers), at most ``limit``.
+    System lines and internal notes are never included. ``[{"id", "direction", "body"}]``.
+    """
+    talk = conversation.messages.filter(
+        direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND]).exclude(body="")
+    recent_ids = list(talk.order_by("-timestamp", "-id").values_list("id", flat=True)[:keep_recent])
+    return list(
+        talk.exclude(id__in=recent_ids).filter(id__gt=after_id)
+        .order_by("timestamp", "id").values("id", "direction", "body")[:limit]
+    )
 
 
 def newest_message_ids(conversation) -> tuple[int | None, int | None]:
