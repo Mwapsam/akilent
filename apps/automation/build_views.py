@@ -26,6 +26,16 @@ def _ai_on(account) -> bool:
     return ai_api.is_available(account)
 
 
+def _template_page_url() -> str:
+    """The WhatsApp template page, or "" on a site where WhatsApp isn't switched on."""
+    from django.urls import NoReverseMatch
+
+    try:
+        return reverse("whatsapp-template-create")
+    except NoReverseMatch:
+        return ""
+
+
 @login_required
 @module_required("automation")
 def build_home(request):
@@ -49,7 +59,7 @@ def build_home(request):
         "payment_choices": business_profile.PAYMENT_METHODS.items(),
         "rows": bh.form_rows(hours), "timezones": bh.timezone_choices(),
         "current_tz": hours.timezone if hours else "Africa/Lusaka", "can_edit": True,
-        "ai_on": _ai_on(account),
+        "ai_on": _ai_on(account), "template_url": _template_page_url(),
     }
     if step == 2:
         ctx["template_counts"] = whatsapp_api.template_counts(account)

@@ -388,7 +388,8 @@
               <p class="text-xs font-semibold text-gray-500">Suggested change</p>
               <p class="mt-1 whitespace-pre-line">
                 <template x-for="part in (draft && draft.result.diff) || []">
-                  <span :class="part[0] === 'add' ? 'bg-green-100 text-green-900' : (part[0] === 'del' ? 'line-through text-red-700' : '')" x-text="part[1] + ' '"></span>
+                  <span :class="part[0] === 'del' ? 'line-through text-red-700' : ''"
+                        :style="part[0] === 'add' ? 'background: var(--tone-teal-bg); color: var(--tone-teal-fg)' : ''" x-text="part[1] + ' '"></span>
                 </template>
               </p>
               <ul class="mt-1 text-xs text-amber-700" x-show="draft && draft.warnings.length"><template x-for="w in (draft && draft.warnings) || []"><li x-text="w"></li></template></ul>

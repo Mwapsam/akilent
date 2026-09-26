@@ -642,5 +642,7 @@ def why_not(request):
         ctx.update({
             "message": latest, "conversation": conversation, "contact": contact,
             "verdicts": [explain.describe_verdict(v) for v in verdicts], "notes": notes,
+            # Customers ask this often and the team answers by hand: offer to automate it.
+            "automate_offer": automation_api.repeated_question_offer(account, latest.body),
         })
     return render(request, "automation/why_not.html", ctx)

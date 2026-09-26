@@ -144,6 +144,30 @@ def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn
     return workflow
 
 
+def automate_offers(account, message_ids) -> dict:
+    """``{message_id: {"count", "url"}}`` for replies the team keeps sending that aren't automated
+    yet: the inbox offers "You've answered this N times. Turn it into an automation?"."""
+    from django.urls import reverse
+
+    from apps.automation import patterns
+
+    base = reverse("build:review")
+    return {mid: {"count": o["count"], "url": f"{base}?pattern={o['key']}"}
+            for mid, o in patterns.offers_for_messages(account, message_ids).items()}
+
+
+def repeated_question_offer(account, text: str) -> dict | None:
+    """``{"count", "url"}`` when ``text`` matches a question the team keeps answering by hand."""
+    from django.urls import reverse
+
+    from apps.automation import keywords, patterns
+
+    for pattern in patterns.open_patterns(account):
+        if keywords.matches({"mode": "contains", "any": pattern.question_keywords}, text or ""):
+            return {"count": pattern.count, "url": f"{reverse('build:review')}?pattern={pattern.key}"}
+    return None
+
+
 def published_trigger_matches(account) -> list[dict]:
     """``[{"slug", "name", "match"}]`` for live message automations with keyword triggers."""
     from apps.automation.models import Workflow

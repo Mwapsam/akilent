@@ -143,7 +143,8 @@
         <p class="text-xs text-gray-500">AI only picks what you want; Akilent builds it and shows you before anything is saved.</p>
       </div>
     </div>
-    <div class="card card-pad space-y-3" x-data="aiDraft({kind: 'template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '{% url 'whatsapp-template-create' %}?draft=' + d.id } })">
+    {% if template_url %}
+    <div class="card card-pad space-y-3" x-data="aiDraft({kind: 'template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '{{ template_url }}?draft=' + d.id } })">
       <h3 class="font-semibold text-ink">Create a template</h3>
       <div x-data="{ prompt: '' }" class="space-y-2">
         <textarea x-model="prompt" class="textarea" rows="3" aria-label="The message you need"
@@ -155,6 +156,7 @@
         <p class="text-xs text-gray-500">You'll check it on the template page, then submit it to WhatsApp for approval.</p>
       </div>
     </div>
+    {% endif %}
   </div>
   {% endif %}
   <div class="flex justify-between"><a href="?step=2" class="btn btn-ghost btn-sm">Back</a><a href="{% url 'automation:list' %}" class="btn btn-secondary btn-sm">See all automations</a></div>

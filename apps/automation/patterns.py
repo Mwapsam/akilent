@@ -71,7 +71,10 @@ def _question_keywords(group: list[dict]) -> list[str]:
     for pair in group:
         counts.update(set(_words(pair["question"])))
     need = max(2, int(len(group) * KEYWORD_SHARE + 0.999))
-    return [word for word, n in counts.most_common(MAX_KEYWORDS * 2) if n >= need][:MAX_KEYWORDS]
+    # Most common first; among equally common words the longer (more specific) one leads, so the
+    # topic reads "installation", not "long".
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))
+    return [word for word, n in ranked if n >= need][:MAX_KEYWORDS]
 
 
 def find(account, *, now=None) -> list[dict]:

@@ -8,7 +8,10 @@
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">What do you want Akilent to help with?</h1>
     <p class="mt-1 text-sm text-gray-600">Pick what should happen on its own. Each one stops as soon as the customer replies, and you can pause it any time.</p>
   </div>
-  <a href="{% url 'automation:why-not' %}" class="btn btn-secondary btn-sm">Why didn't it reply?</a>
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'build:home' %}" class="btn btn-primary btn-sm">Build with Akilent</a>
+    <a href="{% url 'automation:why-not' %}" class="btn btn-secondary btn-sm">Why didn't it reply?</a>
+  </div>
 </header>
 
 {% comment %}

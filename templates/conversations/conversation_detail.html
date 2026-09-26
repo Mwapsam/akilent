@@ -105,6 +105,9 @@
   .cv-ticks { display: inline-flex; color: var(--cv-stamp); }
   .cv-ticks svg { width: 16px; height: 16px; }
   .cv-ticks.is-read { color: var(--cv-tick-read); }
+  .cv-automate { display: inline-block; margin-top: .25rem; font-size: .75rem; color: var(--cv-accent); text-decoration: underline;
+                 text-underline-offset: 2px; }
+  .cv-automate:hover { text-decoration: none; }
   .cv-fail { display: flex; align-items: center; gap: .25rem; margin-top: .25rem; font-size: .75rem; color: var(--color-coral-600); }
 
   /* Composer */
@@ -298,6 +301,10 @@
                             x-show="open && item.m.body"
                             @click="draft = item.m.body; $nextTick(() => { grow($refs.input); $refs.input.focus(); })">Edit &amp; resend</button>
                   </div>
+                  {# A reply the team keeps sending by hand (apps.automation.patterns). #}
+                  <a x-show="item.m.automate" x-cloak :href="item.m.automate && item.m.automate.url" class="cv-automate">
+                    <span x-text="item.m.automate ? 'You\'ve answered this ' + item.m.automate.count + ' times. Turn it into an automation?' : ''"></span>
+                  </a>
                 </div>
               </template>
             </div>

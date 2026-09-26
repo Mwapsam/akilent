@@ -137,6 +137,32 @@ def _whatsapp_step(account) -> dict:
     }
 
 
+BUILD_URL = "/build/"
+
+
+def _build_step(account, *, whatsapp_ready: bool) -> dict:
+    """"Set up your first automations": the Build area, once WhatsApp works.
+
+    Done once the owner has answered "Tell us about your business" or has an automation on.
+    Optional: Akilent is useful without it, it just saves them work.
+    """
+    from apps.accounts import profile
+    from apps.automation import api as automation_api
+
+    answered = bool(getattr(profile.get_profile(account), "completed_at", None))
+    done = answered or bool(automation_api.published_slugs(account))
+    return {
+        "key": "build", "title": "Set up your first automations",
+        "desc": (
+            "Tell Akilent about your business in a minute and see three things worth automating."
+            if whatsapp_ready else "Once WhatsApp is connected, Akilent helps you choose what to automate."
+        ),
+        "done": done, "url": BUILD_URL if whatsapp_ready else None,
+        "cta": "Start" if whatsapp_ready and not done else None,
+        "icon": "sparkles", "optional": True,
+    }
+
+
 def get_state(account) -> dict:
     from apps.accounts.models import Invitation, Membership
     from apps.email.models import EmailApiKey, EmailDomain
@@ -177,7 +203,9 @@ def get_state(account) -> dict:
     ]
 
     if _wants_whatsapp(account):
-        steps.append(_whatsapp_step(account))
+        whatsapp = _whatsapp_step(account)
+        steps.append(whatsapp)
+        steps.append(_build_step(account, whatsapp_ready=whatsapp["done"]))
 
     if _wants_email(account):
         steps += [

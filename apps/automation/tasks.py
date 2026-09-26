@@ -51,6 +51,22 @@ def evaluate_rules_for_message(account_id: int, trigger_event: str, context: dic
 
 
 @shared_task(queue="celery")
+def find_repeated_replies() -> int:
+    """Daily: for each business, the replies its team keeps sending by hand (``patterns.refresh``).
+    Returns how many businesses have at least one."""
+    from apps.accounts.api import list_active_accounts
+    from apps.automation import patterns
+
+    with_patterns = 0
+    for account in list_active_accounts():
+        try:
+            with_patterns += bool(patterns.refresh(account))
+        except Exception:  # noqa: BLE001 - one business's data must not stop the others
+            logger.exception("find_repeated_replies failed for account=%s", account.pk)
+    return with_patterns
+
+
+@shared_task(queue="celery")
 def run_due_workflows() -> int:
     """Resume lifecycle WorkflowRuns whose wait timers have elapsed."""
     from apps.automation.workflow_engine import run_due

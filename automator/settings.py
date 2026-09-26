@@ -470,6 +470,7 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.alert_on_failure_spike": {"queue": "celery"},
     "apps.email.tasks.snapshot_deliverability": {"queue": "celery"},
     "apps.automation.tasks.run_due_workflows": {"queue": "celery"},
+    "apps.automation.tasks.find_repeated_replies": {"queue": "celery"},
     "apps.logs.tasks.prune_message_events": {"queue": "celery"},
     "apps.logs.tasks.prune_idempotency_records": {"queue": "celery"},
     "apps.logs.tasks.prune_api_requests": {"queue": "celery"},
@@ -526,6 +527,10 @@ CELERY_BEAT_SCHEDULE = {
     "run-due-workflows": {
         "task": "apps.automation.tasks.run_due_workflows",
         "schedule": 60.0,  # workflow wait-timers resolve at minute granularity
+    },
+    "find-repeated-replies": {
+        "task": "apps.automation.tasks.find_repeated_replies",
+        "schedule": 86400.0,  # "You've answered this N times": daily is fresh enough
     },
     "remind-missed-conversations": {
         "task": "apps.conversations.tasks.remind_missed_conversations",

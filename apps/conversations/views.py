@@ -143,6 +143,20 @@ def _window_is_open(conversation) -> bool:
     return bool(wa and wa.window_is_open)
 
 
+def _automate_offers(account, messages) -> dict:
+    """Replies here the team keeps sending by hand: offer to turn them into an automation."""
+    from apps.automation import api as automation_api
+
+    ids = [m.id for m in messages if m.direction == Message.Direction.OUTBOUND]
+    if not ids:
+        return {}
+    try:
+        return automation_api.automate_offers(account, ids)
+    except Exception:  # noqa: BLE001 - an offer must never break the inbox
+        logger.exception("automate offers failed")
+        return {}
+
+
 def _ai_config(account, conversation) -> dict:
     """What the composer needs to show AI proposals. ``enabled`` is False whenever AI is off."""
     from apps.ai import api as ai_api
@@ -334,6 +348,7 @@ def conversation_detail(request, public_id: str):
     thread = list(conversation.messages.all().order_by("timestamp", "id"))
     snapshot = get_conversation_state(conversation)
     now = timezone.now()
+    offers = _automate_offers(account, thread)
     chat_config = {
         "feedUrl": reverse("conversations:messages_feed", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
@@ -346,7 +361,7 @@ def conversation_detail(request, public_id: str):
             {"id": m.id, "direction": m.direction, "body": m.body,
              "ts": m.timestamp.isoformat(), "status": m.status,
              "failureReason": (m.metadata or {}).get("failure_reason") or None,
-             "byAi": (m.metadata or {}).get("sent_by") == "ai"}
+             "byAi": (m.metadata or {}).get("sent_by") == "ai", "automate": offers.get(m.id)}
             for m in thread
         ],
         "statusHtml": render_to_string("conversations/_status_badges.html", {
