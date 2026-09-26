@@ -109,7 +109,8 @@ Answer with ONE JSON object and nothing else:
 Meta's rules you must follow:
 - Utility = about something the customer is already doing (order, booking, payment, delivery).
   No promotional words (discount, offer, sale, free...) in utility.
-- Marketing = promotions and news. Authentication = one-time codes only.
+- Marketing = promotions and news. Authentication = one-time codes only; WhatsApp writes that
+  wording itself, so for authentication leave header, body and footer empty and variables [].
 - Blanks are numbered in order from {{{{1}}}}; one variables entry per blank, in order.
 - Never start or end the body with a blank, and never put two blanks side by side.
 - Use a blank for anything that changes per customer (their name, an order number, an amount).
@@ -154,6 +155,11 @@ def check_template(data: dict) -> tuple[dict, list[str]]:
         "header": str(data.get("header") or "")[:60], "body": str(data.get("body") or "").strip(),
         "footer": str(data.get("footer") or "")[:60],
     }
+    if fields["category"] == "authentication":
+        # WhatsApp writes a one-time code's wording itself, so any text the model wrote is dropped;
+        # the form's One-time code options (security line, expiry, button) are all that's needed.
+        fields.update(header="", body="", footer="", variables=[])
+        return fields, []
     variables = [v for v in data.get("variables") or [] if isinstance(v, dict)]
     labels = [str(v.get("label") or "").strip() for v in variables]
     examples = [str(v.get("example") or "").strip() for v in variables]
@@ -171,6 +177,9 @@ def template_reasons(fields: dict, warnings: list[str]) -> list[str]:
     from apps.automation.variables import looks_like_name
 
     reasons = [CATEGORY_REASONS.get(fields.get("category"), "")]
+    if fields.get("category") == "authentication":
+        return [r for r in reasons if r] + [
+            "WhatsApp writes the wording for codes, so choose the security line, expiry and button below."]
     if fields.get("category") == "utility" and not any("marketing" in w.lower() for w in warnings):
         reasons.append("No promotional wording, so Meta should accept it as Utility.")
     for n, var in enumerate(fields.get("variables") or [], start=1):

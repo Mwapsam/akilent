@@ -115,6 +115,19 @@ def test_a_template_draft_fills_the_real_form_with_reasons(owner, account):
     assert not Account.objects.get(pk=account.pk).whatsapp_numbers.exists(), "nothing submitted to Meta"
 
 
+@_wa_urls
+@pytest.mark.django_db
+def test_a_code_template_draft_opens_the_one_time_code_options_not_an_error(owner, account):
+    Fake.answer = json.dumps({"category": "authentication", "name": "login code", "language": "en",
+                              "body": "Your code is {{1}}.", "variables": [{"label": "Code", "example": "123456"}]})
+    d = draft(account, "template", "Send customers a login code")
+    assert d.status == "ready" and d.result["body"] == "" and d.result["variables"] == []
+    assert d.result["category"] == "authentication" and d.result["name"] == "login_code"
+    assert any("WhatsApp writes the wording" in r for r in d.result["reasons"])
+    html = owner.get(f"/whatsapp/templates/new/?draft={d.pk}").content.decode()
+    assert 'value="authentication" selected' in html and 'name="auth_security" checked' in html
+
+
 @pytest.mark.django_db
 def test_an_unusable_template_draft_is_an_error_not_a_form(account):
     Fake.answer = json.dumps(dict(TEMPLATE, body="Hi {{2}}, thanks.", variables=[]))
