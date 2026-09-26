@@ -180,17 +180,23 @@ def published_trigger_matches(account) -> list[dict]:
     return out
 
 
-def adoption(account) -> dict:
+def adoption(account, *, since=None) -> dict:
     """``{"on", "first_run_at"}``: automations turned on now, and when one first ran for a customer
-    (the pilot's "time to first value"; no publish date is stored, and a run is the stronger signal)."""
+    (the pilot's "time to first value"; no publish date is stored, and a run is the stronger signal).
+
+    ``since`` (e.g. when WhatsApp connected) ignores earlier runs, such as email automations that
+    ran before the business came on WhatsApp.
+    """
     from django.db.models import Min
 
     from apps.automation.models import Workflow, WorkflowRun
 
+    runs = WorkflowRun.objects.filter(workflow__account=account)
+    if since is not None:
+        runs = runs.filter(started_at__gte=since)
     return {
         "on": Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).count(),
-        "first_run_at": WorkflowRun.objects.filter(workflow__account=account)
-        .aggregate(first=Min("started_at"))["first"],
+        "first_run_at": runs.aggregate(first=Min("started_at"))["first"],
     }
 
 

@@ -214,7 +214,7 @@ def pilot_command_center(request):
     businesses = []
     for account, connected_at in whatsapp_api.connected_accounts():
         activity = conversations_api.activity(account, since=week)
-        adoption = automation_api.adoption(account)
+        adoption = automation_api.adoption(account, since=connected_at)
         last_in = activity["last_customer_message_at"]
         businesses.append({
             "account": account,

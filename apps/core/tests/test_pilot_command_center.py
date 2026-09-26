@@ -64,6 +64,50 @@ def test_heartbeats_go_through_every_queue(settings, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_time_to_first_value_counts_from_the_first_number_and_ignores_earlier_runs(staff):
+    from apps.automation.api import adoption
+    from apps.automation.models import Workflow, WorkflowRun
+    from apps.contacts.models import Contact
+    from apps.whatsapp.api import connected_since
+
+    account = Account.objects.create(company_name="Mwamba Kitchen")
+    now = timezone.now()
+    old = WhatsAppBusinessNumber.objects.create(account=account, phone_number_id="OLD", waba_id="W",
+                                                access_token="t", is_active=False)
+    new = WhatsAppBusinessNumber.objects.create(account=account, phone_number_id="NEW", waba_id="W",
+                                                access_token="t", is_active=True)
+    WhatsAppBusinessNumber.objects.filter(pk=old.pk).update(created_at=now - timedelta(days=20))
+    WhatsAppBusinessNumber.objects.filter(pk=new.pk).update(created_at=now - timedelta(days=5))
+    connected = connected_since(account)
+    assert connected == now - timedelta(days=20), "a replaced number doesn't reset the connection date"
+
+    wf = Workflow.objects.create(account=account, name="Welcome", status=Workflow.Status.PUBLISHED)
+    contact = Contact.objects.create(account=account, phone="+260971234567")
+    before = WorkflowRun.objects.create(workflow=wf, contact=contact, subject_key="a")
+    after = WorkflowRun.objects.create(workflow=wf, contact=contact, subject_key="b")
+    WorkflowRun.objects.filter(pk=before.pk).update(started_at=now - timedelta(days=30))
+    WorkflowRun.objects.filter(pk=after.pk).update(started_at=now - timedelta(days=18))
+    assert adoption(account, since=connected)["first_run_at"] == now - timedelta(days=18)
+
+    html = staff.get(URL).content.decode()
+    assert "2 days after connecting" in html
+
+
+@pytest.mark.django_db
+def test_suggestions_count_only_what_the_model_produced():
+    from apps.ai.api import usage_summary
+    from apps.ai.models import AIProposal
+
+    account = Account.objects.create(company_name="Acme")
+    now = timezone.now()
+    base = dict(account=account)
+    for status, ready in [("used", True), ("expired", True), ("expired", False), ("error", False)]:
+        AIProposal.objects.create(**base, status=status, ready_at=now if ready else None)
+    summary = usage_summary(account, since=now - timedelta(days=1))
+    assert summary == {"suggested": 2, "used": 1, "errors": 1}
+
+
+@pytest.mark.django_db
 def test_backups_say_not_configured_without_a_bucket(staff, settings):
     settings.BACKUP_S3_BUCKET = ""
     assert "Not configured" in staff.get(URL).content.decode()

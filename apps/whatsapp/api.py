@@ -279,17 +279,23 @@ def import_templates(account: Account) -> dict:
 
 
 def connected_since(account: Account):
-    """When this business connected WhatsApp: its earliest active number, or None."""
-    number = (WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
-              .order_by("created_at").first())
-    return number.created_at if number else None
+    """When this business first connected WhatsApp, or None if it has no active number now.
+
+    Counted from its first number ever, not the earliest still active: a business that replaced
+    its number connected when it first did, not when it swapped.
+    """
+    numbers = WhatsAppBusinessNumber.objects.filter(account=account)
+    if not numbers.filter(is_active=True).exists():
+        return None
+    return numbers.order_by("created_at").values_list("created_at", flat=True).first()
 
 
 def connected_accounts() -> list[tuple]:
     """``[(account, connected_since)]`` for every business with an active WhatsApp number."""
     from django.db.models import Min
 
-    rows = (WhatsAppBusinessNumber.objects.filter(is_active=True).values("account")
+    active = WhatsAppBusinessNumber.objects.filter(is_active=True).values("account")
+    rows = (WhatsAppBusinessNumber.objects.filter(account__in=active).values("account")
             .annotate(since=Min("created_at")).order_by("since"))
     accounts = Account.objects.in_bulk([r["account"] for r in rows])
     return [(accounts[r["account"]], r["since"]) for r in rows if r["account"] in accounts]
