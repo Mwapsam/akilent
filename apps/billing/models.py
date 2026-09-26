@@ -326,7 +326,72 @@ class UsageSummary(models.Model):
             return 0
 
 
+class PlanFeature(models.Model):
+    """A catalog feature (``apps.billing.features``) included in a plan: one tick in the matrix.
+
+    ``key`` must be a sellable plan feature; ``apps.billing.api`` validates before writing.
+    """
+
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, related_name="features")
+    key = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("plan", "key")
+        ordering = ["plan_id", "key"]
+
+    def __str__(self):
+        return f"{self.plan.slug}:{self.key}"
+
+
+class AccountFeatureOverride(models.Model):
+    """An operator's exception for one business: grant a feature its plan lacks, or remove one
+    its plan includes. A removal always wins. ``note`` says why (e.g. "pilot deal")."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="feature_overrides"
+    )
+    key = models.CharField(max_length=50)
+    grant = models.BooleanField()
+    note = models.CharField(max_length=255, blank=True, default="")
+    set_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("account", "key")
+
+    def __str__(self):
+        return f"{'+' if self.grant else '-'}{self.key} for {self.account_id}"
+
+
+class ComingSoonFeature(models.Model):
+    """Something not built yet, shown on pricing with a "Coming soon" badge. It gates nothing:
+    when the real feature ships it gets a catalog key and this row is deleted."""
+
+    name = models.CharField(max_length=100)
+    pitch = models.CharField(max_length=255, blank=True, default="")
+    plans = models.ManyToManyField(Plan, blank=True, related_name="coming_soon")
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class ModuleSubscription(models.Model):
+    """The owner's own on/off switch for an optional tool (Settings > Optional tools).
+
+    Not commercial access: that is PlanFeature + AccountFeatureOverride. Only the modules in
+    ``apps.billing.features.OWNER_SWITCH_MODULE`` are read; other rows are historical.
+    """
+
     WHATSAPP = "whatsapp"
     EMAIL = "email"
     AUTOMATION = "automation"

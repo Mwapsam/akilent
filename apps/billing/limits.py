@@ -65,10 +65,18 @@ class LimitChecker:
             )
 
     def has_feature(self, name: str) -> bool:
-        """Whether the active plan includes a boolean capability."""
+        """Whether the active plan includes one of the old email capabilities.
+
+        A shim over ``billing_api.entitled``: ``name`` is an old Plan column name
+        (``features.LEGACY_FLAGS``), answered from the feature catalog. Keeps its original rule
+        that the subscription must be active (trialing or paid).
+        """
+        from apps.billing import api as billing_api
+        from apps.billing.features import LEGACY_FLAGS
+
         if not self.subscription or not self.subscription.is_active:
             return False
-        return bool(getattr(self.subscription.plan, name, False))
+        return billing_api.entitled(self.account, LEGACY_FLAGS.get(name, name))
 
     def require_feature(self, name: str, label: str = ""):
         if not self.has_feature(name):

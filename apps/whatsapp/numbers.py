@@ -64,12 +64,9 @@ def numbers_list(request):
     )
     needs_registration = bool(active_number and not active_number.is_ready)
 
-    try:
-        from apps.billing.api import has_feature
+    from apps.billing import api as billing_api
 
-        module_enabled = has_feature(account, "whatsapp")
-    except Exception:  # pragma: no cover - billing optional in some setups
-        module_enabled = False
+    module_enabled = billing_api.entitled(account, "whatsapp")
 
     inbound_seen = MessageLog.objects.filter(
         account=account, direction=MessageLog.Direction.INBOUND

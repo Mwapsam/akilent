@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 # "Templates" page, two channels, same pattern as Campaigns. -------------
 
 @login_required
-@module_required("whatsapp")
 @require_POST
 def templates_sync(request):
     account = get_current_account(request)
@@ -60,7 +59,7 @@ def templates_sync(request):
 # an API key and a filled-in example. ------------------------------------------------------------
 
 @login_required
-@module_required("whatsapp")
+@module_required("verification_codes")
 def codes_setup(request):
     from apps.accounts.api import is_account_admin
     from apps.email.models import EmailApiKey
@@ -83,7 +82,7 @@ def codes_setup(request):
 
 
 @login_required
-@module_required("whatsapp")
+@module_required("verification_codes")
 @require_POST
 def codes_key_create(request):
     from apps.accounts.api import is_account_admin
@@ -165,7 +164,6 @@ _HEADER_MEDIA_LIMITS = {
 
 
 @login_required
-@module_required("whatsapp")
 @require_POST
 def template_media_upload(request):
     """Uploads a header media file (image/video/document) for the template
@@ -209,7 +207,6 @@ def template_media_upload(request):
 
 
 @login_required
-@module_required("whatsapp")
 def template_create(request):
     account = get_current_account(request)
     if account is None:
@@ -323,7 +320,6 @@ def _languages(current: str | None) -> list:
 
 
 @login_required
-@module_required("whatsapp")
 @require_POST
 def template_lint(request):
     """Live "Meta may reject this" warnings for the template form. JSON."""
@@ -342,7 +338,7 @@ def template_lint(request):
 # nowhere else in this app. ------------------------------------------------
 
 @login_required
-@module_required("whatsapp")
+@module_required("whatsapp_campaigns")
 def campaign_new(request):
     account = get_current_account(request)
     if account is None:
@@ -377,7 +373,7 @@ def campaign_new(request):
 
 
 @login_required
-@module_required("whatsapp")
+@module_required("whatsapp_campaigns")
 def campaign_detail(request, pk: int):
     account = get_current_account(request)
     if account is None:

@@ -27,7 +27,7 @@ class OnboardingPageTest(TestCase):
         request.session = {}
         with patch(
             "apps.whatsapp.numbers.get_current_account", return_value=self.account
-        ), patch("apps.billing.api.has_feature", return_value=module):
+        ), patch("apps.billing.api.entitled", return_value=module):
             resp = numbers_views.numbers_list(request)
         return resp.status_code, resp.content.decode()
 

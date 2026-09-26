@@ -339,7 +339,7 @@ def enroll(
         return None  # a suspended business starts nothing new
     from apps.billing import api as billing_api
 
-    if not billing_api.module_enabled(workflow.account, "automation"):
+    if not billing_api.usable(workflow.account, "automations"):
         return None
     first = _first_step_id(workflow)
     if first is None:

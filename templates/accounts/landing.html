@@ -559,7 +559,7 @@
           <p class="mt-2 text-sm muted">Start on a free trial. Upgrade when you outgrow it.</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-          {% for plan in plans %}
+          {% for card in cards %}{% with plan=card.plan %}
             <div class="plan-card {% if plan.slug == 'professional' %}featured lg:-translate-y-2{% endif %} p-8 flex flex-col">
               {% if plan.slug == 'professional' %}
                 <span class="font-mono text-[10px] font-medium uppercase tracking-wider text-[#12766A] mb-3 inline-flex items-center gap-1.5">
@@ -577,7 +577,12 @@
                 {% if WHATSAPP_ENABLED %}<div class="spec-row flex justify-between"><span>WhatsApp</span><span class="text-[#12182B] font-medium">{% if plan.max_whatsapp_numbers == -1 %}Unlimited{% else %}{{ plan.max_whatsapp_numbers }}{% endif %} number{{ plan.max_whatsapp_numbers|pluralize }}</span></div>{% endif %}
                 <div class="spec-row flex justify-between"><span>Conversations</span><span class="text-[#12182B] font-medium">{% if plan.max_conversations_per_month == -1 %}Unlimited{% else %}{{ plan.max_conversations_per_month }}{% endif %}/mo</span></div>
                 <div class="spec-row flex justify-between"><span>Emails</span><span class="text-[#12182B] font-medium">{% if plan.max_emails_per_month == -1 %}Unlimited{% else %}{{ plan.max_emails_per_month }}{% endif %}/mo</span></div>
-                {% if plan.has_priority_support %}<div class="spec-row flex justify-between"><span>Support</span><span class="text-[#12182B] font-medium">Priority</span></div>{% endif %}
+                {% if card.features %}
+                <ul class="mt-4 space-y-1.5 font-sans text-sm text-[#46516B]">
+                  {% for f in card.features %}<li class="flex gap-2"><span aria-hidden="true" class="text-[#1FAF9C]">✓</span>{{ f.name }}</li>{% endfor %}
+                  {% for soon in card.coming_soon %}<li class="flex gap-2 text-[#657089]"><span aria-hidden="true">○</span>{{ soon.name }} <span class="font-mono text-[10px] uppercase">soon</span></li>{% endfor %}
+                </ul>
+                {% endif %}
               </div>
 
               <a href="/signup/?plan={{ plan.slug }}" class="mt-8 block text-center text-sm font-semibold py-3 rounded-[10px] {% if plan.slug == 'professional' %}cta-primary{% else %}cta-outline-light{% endif %}">
@@ -587,7 +592,7 @@
                 {% if plan.slug == 'trial' %}No card required{% else %}Billed monthly · cancel anytime{% endif %}
               </p>
             </div>
-          {% endfor %}
+          {% endwith %}{% endfor %}
         </div>
       </div>
     </section>

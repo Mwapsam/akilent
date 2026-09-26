@@ -27,7 +27,7 @@ class Tool:
     args: str                                   # how to call it, shown to the model
     action: str                                 # the Action Registry action behind it
     kwargs: Callable                            # (conversation, args) -> run_action kwargs
-    module: str | None = None                   # hidden when the business's module is off
+    module: str | None = None                   # catalog feature key; hidden when not usable
 
 
 TOOLS = (
@@ -36,7 +36,7 @@ TOOLS = (
          "{}", "lookup_business_hours", lambda c, a: {"account": c.account}),
     Tool("search_products", "Look up products and their prices in the business's catalogue.",
          '{"query": "<words the customer used>"}', "lookup_products",
-         lambda c, a: {"account": c.account, "query": str(a.get("query") or "")[:100]}, module="commerce"),
+         lambda c, a: {"account": c.account, "query": str(a.get("query") or "")[:100]}, module="orders"),
     Tool("get_customer", "This customer's open follow-up, interest status and last few orders.",
          "{}", "lookup_customer", lambda c, a: {"conversation": c}),
 )
@@ -48,12 +48,8 @@ def available(account) -> list[Tool]:
 
     out = []
     for tool in TOOLS:
-        if tool.module:
-            try:
-                if not billing_api.module_enabled(account, tool.module):
-                    continue
-            except KeyError:
-                continue
+        if tool.module and not billing_api.usable(account, tool.module):
+            continue
         out.append(tool)
     return out
 

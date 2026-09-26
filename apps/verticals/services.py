@@ -36,8 +36,8 @@ def activate_vertical(account, key: str) -> VerticalActivation:
 
     from apps.billing import api as billing_api
 
-    for module in vertical["modules"]:
-        billing_api.enable_module(account, module)
+    for feature in vertical["modules"]:  # optional tools the pack needs: switch them on
+        billing_api.set_owner_switch(account, feature, True)
 
     for wf_spec in vertical["workflows"]:
         automation_api.upsert_published_workflow(

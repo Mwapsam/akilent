@@ -6,7 +6,7 @@ from apps.core.actions import Action, ActionError, register
 
 class CreateLeadAction(Action):
     name = "create_lead"
-    module = "crm"
+    module = "sales"
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
@@ -33,7 +33,7 @@ class CaptureConversationLeadAction(Action):
     """
 
     name = "capture_conversation_lead"
-    module = "crm"
+    module = "sales"
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
@@ -71,7 +71,7 @@ class UpdateLeadStatusAction(Action):
     """Mark a lead new, contacted, qualified or lost (idempotent)."""
 
     name = "update_lead_status"
-    module = "crm"
+    module = "sales"
     scope_kwarg = "lead"
 
     def input_schema(self) -> dict:
@@ -89,7 +89,7 @@ class UpdateLeadStatusAction(Action):
 
 class CreateDealAction(Action):
     name = "create_deal"
-    module = "crm"
+    module = "sales"
     scope_kwarg = "lead"
 
     def input_schema(self) -> dict:
@@ -104,7 +104,7 @@ class CreateDealAction(Action):
 
 class ChangeDealStageAction(Action):
     name = "change_deal_stage"
-    module = "crm"
+    module = "sales"
     scope_kwarg = "deal"
 
     def input_schema(self) -> dict:

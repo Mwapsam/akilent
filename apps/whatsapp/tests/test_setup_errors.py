@@ -48,7 +48,7 @@ class ConnectCallbackErrorTest(TestCase):
         request = RequestFactory().get("/whatsapp/numbers/")
         request.user = self.user
         request.session = self.client.session
-        with patch("apps.billing.api.has_feature", return_value=True):
+        with patch("apps.billing.api.entitled", return_value=True):
             return numbers_views.numbers_list(request).content.decode()
 
     def _arm_state(self):

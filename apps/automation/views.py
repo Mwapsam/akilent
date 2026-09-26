@@ -28,7 +28,7 @@ _TRIGGER_TYPES = ["conversation.message_received", "contact.created", "lead.crea
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def workflow_list(request):
     from apps.automation import explain
     from apps.automation.labels import trigger_label
@@ -118,7 +118,7 @@ def _engagement_starters(account, workflows):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def starter_install(request):
     """Install an engagement follow-up in one click — published and running.
@@ -306,7 +306,7 @@ def _clean_keywords(raw: str) -> list[str]:
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def starter_test(request):
     """"Send test to me": the reply the owner is setting up, sent to their own WhatsApp.
@@ -350,7 +350,7 @@ def starter_test(request):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_create(request):
     account = get_current_account(request)
@@ -380,7 +380,7 @@ def workflow_create(request):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def workflow_editor(request, slug: str):
     account = get_current_account(request)
     if account is None:
@@ -421,7 +421,7 @@ def workflow_editor(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def workflow_stats(request, slug: str):
     account = get_current_account(request)
     if account is None:
@@ -470,7 +470,7 @@ def workflow_stats(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_save(request, slug: str):
     account = get_current_account(request)
@@ -496,7 +496,7 @@ def workflow_save(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_publish(request, slug: str):
     account = get_current_account(request)
@@ -520,7 +520,7 @@ def workflow_publish(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_archive(request, slug: str):
     account = get_current_account(request)
@@ -534,7 +534,7 @@ def workflow_archive(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_pause(request, slug: str):
     """Pause an automation. Only its on/off state changes: same steps, same version, nothing lost."""
@@ -550,7 +550,7 @@ def workflow_pause(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_resume(request, slug: str):
     """Turn a paused automation back on, exactly as it was (no new version)."""
@@ -571,7 +571,7 @@ def workflow_resume(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def workflow_delete(request, slug: str):
     account = get_current_account(request)
@@ -584,7 +584,7 @@ def workflow_delete(request, slug: str):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def why_not(request):
     """"Why didn't it reply?": what each automation did with a customer's latest message, in plain words.
 
@@ -632,8 +632,8 @@ def why_not(request):
                 "however it is set up. This is a platform setting, not a mistake in your automation. "
                 "Ask your Akilent administrator to turn on \"automation events\"."
             )
-        if not billing_api.module_enabled(account, "automation"):
-            notes.append("Automations are switched off for your plan.")
+        if not billing_api.usable(account, "automations"):
+            notes.append("Automations aren't included in your plan.")
         if getattr(contact, "whatsapp_opted_out", False):
             notes.append("This customer has opted out of messages, so no automation will send to them.")
         if timezone.now() - latest.timestamp > timedelta(hours=24):

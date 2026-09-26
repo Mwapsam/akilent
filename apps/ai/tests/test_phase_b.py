@@ -14,7 +14,7 @@ from apps.ai import proposals
 from apps.ai.models import AIConversationMemory, AIProposal, AISettings
 from apps.ai.providers.base import AIProvider, CompletionResult
 from apps.ai.tasks import draft_proposal, refresh_memory
-from apps.billing.models import ModuleSubscription
+from apps.billing import api as billing_api
 from apps.commerce.models import Product
 from apps.contacts.models import Contact, Tag
 from apps.conversations.models import Conversation, FollowUp, Message
@@ -93,7 +93,7 @@ def test_look_ups_only_ever_see_the_callers_own_business(account):
     Product.objects.create(account=account, name="Solar battery", slug="battery", price=4000, currency="ZMW")
     found = run_action("lookup_products", {"account": account}, account=account, query="solar")
     assert found == {"products": [{"name": "Solar battery", "price": "4000.00", "currency": "ZMW"}]}
-    ModuleSubscription.objects.create(account=account, module=ModuleSubscription.COMMERCE, enabled=False)
+    billing_api.set_owner_switch(account, "orders", False)
     with pytest.raises(ActionError, match="module"):
         run_action("lookup_products", {"account": account}, account=account, query="solar")
 
@@ -128,7 +128,7 @@ def test_endless_look_ups_are_cut_off(account):
 
 @pytest.mark.django_db
 def test_products_look_up_is_not_offered_without_the_commerce_module(account):
-    ModuleSubscription.objects.create(account=account, module=ModuleSubscription.COMMERCE, enabled=False)
+    billing_api.set_owner_switch(account, "orders", False)
     ScriptedProvider.script = [reply()]
     draft_for(convo(account))
     system = ScriptedProvider.calls[0]["system"]

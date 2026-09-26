@@ -67,12 +67,11 @@ def test_settings_pages_render(owner_client):
 
 @pytest.mark.django_db
 def test_optional_tools_default_to_enabled(owner_client, owner):
-    """No ModuleSubscription row yet — module_enabled()'s "no row = enabled" rule
-    means both checkboxes must render checked, not unchecked."""
+    """No stored switch yet: "no switch = on" means both checkboxes must render checked."""
     resp = owner_client.get("/settings/tools/")
     body = resp.content.decode()
-    assert body.count('name="crm" checked') == 1
-    assert body.count('name="commerce" checked') == 1
+    assert body.count('name="sales" checked') == 1
+    assert body.count('name="orders" checked') == 1
 
 
 @pytest.mark.django_db
@@ -81,12 +80,12 @@ def test_optional_tools_can_be_turned_off_and_back_on(owner_client, owner):
 
     _, account = owner
     # Unchecking a box means it's simply absent from POST data.
-    owner_client.post("/settings/tools/", {"crm": "on"})  # commerce omitted = off
-    assert billing_api.module_enabled(account, "crm") is True
-    assert billing_api.module_enabled(account, "commerce") is False
+    owner_client.post("/settings/tools/", {"sales": "on"})  # orders omitted = off
+    assert billing_api.usable(account, "sales") is True
+    assert billing_api.usable(account, "orders") is False
 
-    owner_client.post("/settings/tools/", {"crm": "on", "commerce": "on"})
-    assert billing_api.module_enabled(account, "commerce") is True
+    owner_client.post("/settings/tools/", {"sales": "on", "orders": "on"})
+    assert billing_api.usable(account, "orders") is True
 
 
 @pytest.mark.django_db

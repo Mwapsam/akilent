@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static ui %}
-{% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} — Inbox{% endblock %}
+{% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} â€” Inbox{% endblock %}
 
 {% block content %}
 {% with display_name=conversation.contact.full_name|default:conversation.contact.phone|default:conversation.contact.email %}
@@ -8,7 +8,7 @@
 <script src="{% static 'js/chat.js' %}"></script>
 
 <style>
-  /* ── Conversation view. Tune --cv-top to your base layout's header + padding height. ── */
+  /* â”€â”€ Conversation view. Tune --cv-top to your base layout's header + padding height. â”€â”€ */
   /* Chrome reads the app's semantic tokens, so dark mode needs no extra work
      here. The chat surface keeps its own WhatsApp-like palette - a brand-navy
      message thread would not read as a chat - and gets explicit dark values. */
@@ -207,7 +207,7 @@
   <div x-show="infoOpen" x-cloak x-transition.opacity @click="infoOpen = false"
        class="fixed inset-0 bg-gray-900/50 lg:hidden" style="z-index: var(--z-drawer)"></div>
 
-  {# ════════ Chat pane ════════ #}
+  {# â•â•â•â•â•â•â•â• Chat pane â•â•â•â•â•â•â•â• #}
   <section class="cv-pane" aria-label="Conversation with {{ display_name }}">
     <header class="cv-header">
       <a href="{% url 'conversations:inbox' %}" class="cv-iconbtn cv-h-back -ml-1" aria-label="Back to inbox">
@@ -233,7 +233,7 @@
           <input type="hidden" name="action" value="assign" />
           <label class="sr-only" for="assignee">Assign to a teammate</label>
           <select id="assignee" name="assignee" class="select" onchange="this.form.submit()">
-            <option value="" disabled {% if not conversation.assigned_to_id %}selected{% endif %}>Assign to…</option>
+            <option value="" disabled {% if not conversation.assigned_to_id %}selected{% endif %}>Assign toâ€¦</option>
             {% for member in team_members %}
             <option value="{{ member.pk }}" {% if member.pk == conversation.assigned_to_id %}selected{% endif %}>{{ member.get_full_name|default:member.username }}</option>
             {% endfor %}
@@ -272,7 +272,7 @@
               <template x-if="item.type === 'day'">
                 <div class="cv-day"><span x-text="item.label"></span></div>
               </template>
-              {% comment %} Neither party speaking — a commercial fact (payment
+              {% comment %} Neither party speaking â€” a commercial fact (payment
                  received) belonging to this customer's story, shown like a day
                  divider. {% endcomment %}
               <template x-if="item.type === 'msg' && item.m.direction === 'system'">
@@ -283,8 +283,8 @@
                   <div class="cv-bubble">
                     <p class="cv-text" :class="{ 'italic text-gray-500': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>
                     <div class="cv-stamp" x-show="item.showMeta" :title="new Date(item.m.ts).toLocaleString()">
-                      {# Time is visible; the full status label ("Delivered", "Read"…) is kept for screen readers and hover. #}
-                      <span x-show="item.m.byAi" class="font-medium">Sent by AI ·</span>
+                      {# Time is visible; the full status label ("Delivered", "Read"â€¦) is kept for screen readers and hover. #}
+                      <span x-show="item.m.byAi" class="font-medium">Sent by AI Â·</span>
                       <span x-text="time(item.m.ts)"></span>
                       <span class="sr-only" x-text="meta(item.m)"></span>
                       <span class="cv-ticks" x-show="item.m.direction === 'outbound' && item.m.status !== 'failed'" :class="{ 'is-read': item.m.status === 'read' }" :title="meta(item.m)" aria-hidden="true">
@@ -342,14 +342,14 @@
           <template x-if="ai.proposal && ai.proposal.status === 'pending'">
             <p class="text-xs text-gray-500 flex items-center gap-2" role="status">
               <svg class="w-4 h-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
-              Drafting a suggestion…
+              Drafting a suggestionâ€¦
             </p>
           </template>
           <template x-if="ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'reply'">
             <div class="rounded-xl border border-border p-3 text-sm">
               <p class="text-xs font-semibold text-gray-500">Suggested reply</p>
               <p class="mt-1 text-ink whitespace-pre-line" x-text="ai.proposal.text"></p>
-              <p class="mt-1 text-xs text-gray-400"><span x-text="ai.proposal.reason"></span> · Generated just now</p>
+              <p class="mt-1 text-xs text-gray-400"><span x-text="ai.proposal.reason"></span> Â· Generated just now</p>
               <div class="mt-2 flex flex-wrap gap-2">
                 <button type="button" class="btn btn-primary btn-sm" @click="aiUseReply()">Use reply</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button>
@@ -385,7 +385,7 @@
                 <template x-for="extra in (ai.proposal.extras || [])" :key="extra.index">
                   <button type="button" class="cv-ai-chip" :disabled="extra.applied" @click="aiApply(extra)"
                           :aria-label="extra.applied ? extra.label + ' (done)' : extra.label">
-                    <span x-show="extra.applied" aria-hidden="true">✓</span>
+                    <span x-show="extra.applied" aria-hidden="true">âœ“</span>
                     <span x-show="!extra.applied" aria-hidden="true">+</span>
                     <span x-text="extra.label"></span>
                   </button>
@@ -414,7 +414,7 @@
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.25 3.75H6.75A1.5 1.5 0 0 0 5.25 5.25v15l6.75-4.5 6.75 4.5v-15a1.5 1.5 0 0 0-1.5-1.5z"/></svg>
               </button>
               <div class="cv-popover" x-show="srOpen" x-cloak x-transition.opacity>
-                <input type="search" x-ref="srSearch" x-model="q" class="input input-sm w-full" placeholder="Search saved replies…" aria-label="Search saved replies"
+                <input type="search" x-ref="srSearch" x-model="q" class="input input-sm w-full" placeholder="Search saved repliesâ€¦" aria-label="Search saved replies"
                        @keydown.enter.prevent="const b = [...$root.querySelectorAll('.cv-sr-item')].find(el => el.offsetParent); if (b) b.click()" />
                 <ul class="cv-sr-list">
                   {% for r in saved_replies %}
@@ -466,7 +466,7 @@
             </button>
           </form>
           {% endif %}
-          {% if crm_enabled %}
+          {% if "sales" in usable_features %}
             {% if open_lead %}
             <a class="cv-next-done text-accent" href="{% url 'crm:lead-detail' open_lead.public_id %}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
@@ -502,7 +502,7 @@
             <div>
               <label class="label" for="template-select">Template</label>
               <select id="template-select" name="template_id" class="select" required x-model="tpl">
-                <option value="" disabled selected>Choose an approved template…</option>
+                <option value="" disabled selected>Choose an approved templateâ€¦</option>
                 {% for t in approved_templates %}
                 <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
                 {% endfor %}
@@ -535,7 +535,7 @@
     </template>
   </section>
 
-  {# ════════ Details panel (drawer on mobile, column on desktop) ════════ #}
+  {# â•â•â•â•â•â•â•â• Details panel (drawer on mobile, column on desktop) â•â•â•â•â•â•â•â• #}
   <aside id="chat-info" aria-label="Conversation details"
          class="fixed inset-y-0 right-0 w-[22rem] max-w-[90vw] shadow-pop lg:static lg:w-auto lg:max-w-none lg:shadow-none lg:min-h-0"
          style="z-index: var(--z-drawer)"
@@ -559,7 +559,7 @@
           {% with phone=conversation.contact.phone email=conversation.contact.email %}
           <div class="cv-field">
             <span class="cv-field-label">Name</span>
-            <span class="flex-1 truncate">{{ conversation.contact.full_name|default:"—" }}</span>
+            <span class="flex-1 truncate">{{ conversation.contact.full_name|default:"â€”" }}</span>
           </div>
           <div class="cv-field" x-data="{ copied: false }">
             <span class="cv-field-label">Phone</span>
@@ -570,7 +570,7 @@
               <svg x-show="!copied" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
               <svg x-show="copied" x-cloak class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
             </button>
-            {% else %}<span class="flex-1 text-gray-400">—</span>{% endif %}
+            {% else %}<span class="flex-1 text-gray-400">â€”</span>{% endif %}
           </div>
           <div class="cv-field" x-data="{ copied: false }">
             <span class="cv-field-label">Email</span>
@@ -581,7 +581,7 @@
               <svg x-show="!copied" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
               <svg x-show="copied" x-cloak class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
             </button>
-            {% else %}<span class="flex-1 text-gray-400">—</span>{% endif %}
+            {% else %}<span class="flex-1 text-gray-400">â€”</span>{% endif %}
           </div>
           {% endwith %}
         </div>
@@ -593,10 +593,10 @@
         <h2 class="cv-h">What automations did</h2>
         {% for item in automation_activity %}
         <div class="mb-3 text-sm">
-          <p class="font-medium text-ink">{{ item.automation }} <span class="font-normal text-gray-400">· {{ item.when|date:"j M, H:i" }}</span></p>
+          <p class="font-medium text-ink">{{ item.automation }} <span class="font-normal text-gray-400">Â· {{ item.when|date:"j M, H:i" }}</span></p>
           <ul class="mt-0.5 space-y-0.5">
             {% for line in item.lines %}
-            <li class="{% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">{% if line.ok %}✓{% else %}✗{% endif %} {{ line.text }}</li>
+            <li class="{% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">{% if line.ok %}âœ“{% else %}âœ—{% endif %} {{ line.text }}</li>
             {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
           </ul>
         </div>
@@ -625,7 +625,7 @@
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.path }}" />
           <label class="sr-only" for="conversation-add-tag">Add a tag</label>
-          <input id="conversation-add-tag" name="tag" class="input" maxlength="40" placeholder="Add a tag…" />
+          <input id="conversation-add-tag" name="tag" class="input" maxlength="40" placeholder="Add a tagâ€¦" />
           <button class="btn btn-secondary btn-sm">Add</button>
         </form>
       </div>
@@ -636,7 +636,7 @@
         the composer, where the business is already looking. This card only
         answers "are we tracking this customer?".
       {% endcomment %}
-      {% if crm_enabled %}
+      {% if "sales" in usable_features %}
       <div class="cv-section">
         <h2 class="cv-h">Interested customer</h2>
         {% if open_lead %}
@@ -690,12 +690,12 @@
 
       {# Internal notes #}
       <div class="cv-section">
-        <h2 class="cv-h">Internal notes <span class="font-normal text-gray-400">· Only your team sees these</span></h2>
+        <h2 class="cv-h">Internal notes <span class="font-normal text-gray-400">Â· Only your team sees these</span></h2>
         <ul class="space-y-2">
           {% for n in notes %}
           <li class="cv-note">
             <p class="whitespace-pre-wrap break-words">{{ n.body }}</p>
-            <p class="text-xs text-gray-500 mt-1.5" title="{{ n.created_at|date:'Y-m-d H:i' }}">{{ n.author|default:"—" }} · {{ n.created_at|timesince }} ago</p>
+            <p class="text-xs text-gray-500 mt-1.5" title="{{ n.created_at|date:'Y-m-d H:i' }}">{{ n.author|default:"â€”" }} Â· {{ n.created_at|timesince }} ago</p>
           </li>
           {% empty %}
           <li class="text-sm text-gray-500">No notes yet. Add context for whoever picks this up next.</li>
@@ -704,7 +704,7 @@
         <form method="post" class="flex gap-2 mt-3">
           {% csrf_token %}
           <input type="hidden" name="action" value="add_note" />
-          <input type="text" name="body" placeholder="Add a note…" class="input flex-1" aria-label="New internal note" required />
+          <input type="text" name="body" placeholder="Add a noteâ€¦" class="input flex-1" aria-label="New internal note" required />
           <button class="btn btn-secondary btn-sm">Add</button>
         </form>
       </div>
@@ -713,7 +713,7 @@
 </div>
 
 {% with contact_identifier=conversation.contact.phone|default:conversation.contact.email %}
-{% if crm_enabled and not open_lead and not open_deal %}
+{% if "sales" in usable_features and not open_lead and not open_deal %}
 {% modal "chat-new-lead" title="Create lead" %}
   <form method="post" action="{% url 'crm:create-lead' %}" class="space-y-4">
     {% csrf_token %}

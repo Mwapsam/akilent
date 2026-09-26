@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ info.name }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto py-8">
+  <div class="card card-pad space-y-4">
+    <div class="flex items-center gap-3">
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-full tone-neutral-bg">{% include "components/icon.html" with name="lock" class="w-5 h-5" %}</span>
+      <div>
+        <h1 class="text-xl font-semibold text-ink">{{ info.name }}</h1>
+        <p class="text-sm text-gray-500">{{ info.group }}</p>
+      </div>
+    </div>
+    <p class="text-gray-700">{{ info.pitch }}</p>
+
+    {% if info.owner_off and info.entitled %}
+      <p class="text-sm">You switched this off for your business. Turn it back on in Settings whenever you need it.</p>
+      <a href="{% url 'settings-tools' %}" class="btn btn-primary">Open Optional tools</a>
+    {% elif info.source == "removed" %}
+      <p class="text-sm">This feature has been turned off for your business by an account administrator. Contact us if you need access.</p>
+      <a href="/help/" class="btn btn-secondary">Contact us</a>
+    {% elif info.available_in %}
+      <p class="text-sm">Not included in your {% if info.plan_name %}{{ info.plan_name }} plan{% else %}current plan{% endif %}.
+        Available in {{ info.available_in|join:", " }}.</p>
+      <a href="{% url 'billing:plans' %}" class="btn btn-primary">View plans</a>
+    {% else %}
+      <p class="text-sm">This isn't part of your plan. Contact us if you'd like to use it.</p>
+      <a href="/help/" class="btn btn-secondary">Contact us</a>
+    {% endif %}
+
+    <p class="text-xs text-gray-500">{% if kept %}{{ kept }}{% else %}Anything you already made with it is kept.{% endif %}</p>
+  </div>
+</div>
+{% endblock %}

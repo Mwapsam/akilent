@@ -21,7 +21,7 @@ from apps.core.module_gate import module_required
 
 
 @login_required
-@module_required("commerce")
+@module_required("orders")
 def orders(request):
     account = get_current_account(request)
     if account is None:
@@ -46,7 +46,7 @@ def orders(request):
 
 
 @login_required
-@module_required("commerce")
+@module_required("orders")
 def create_order_view(request):
     account = get_current_account(request)
     if account is None:
@@ -106,7 +106,7 @@ def create_order_view(request):
 
 
 @login_required
-@module_required("commerce")
+@module_required("orders")
 def order_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:

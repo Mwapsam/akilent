@@ -11,16 +11,16 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
   <div role="group" aria-label="Work">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Work</p>
     {% include "components/_nav_item.html" with href="/contacts/" label="Customers" icon="users" collapsible=collapsible %}
-    {% if crm_enabled|default:True %}
-    {% include "components/_nav_item.html" with href="/sales/" label="Interested" icon="building" match="sales" collapsible=collapsible %}
+    {% if "sales" not in tools_off %}
+    {% include "components/_nav_item.html" with href="/sales/" label="Interested" icon="building" match="sales" feature="sales" collapsible=collapsible %}
     {% endif %}
-    {% if commerce_enabled|default:True %}
-    {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" collapsible=collapsible %}
+    {% if "orders" not in tools_off %}
+    {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" feature="orders" collapsible=collapsible %}
     {% endif %}
     {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled whatsapp/campaigns" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="clock" match="inbox/followups" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/build/" label="Build" icon="sparkles" match="build" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" feature="automations" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/build/" label="Build" icon="sparkles" match="build" feature="automations" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/email/insights/" label="Insights" icon="bar-chart" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/logs/messages/" label="Message history" icon="list" match="logs" collapsible=collapsible %}
   </div>

@@ -62,11 +62,7 @@ def build(account, *, business_notes: str = "") -> dict:
 
     hours = business_hours.get_hours(account)
     products = []
-    try:
-        commerce_on = billing_api.module_enabled(account, "commerce")
-    except KeyError:
-        commerce_on = False
-    if commerce_on:
+    if billing_api.usable(account, "orders"):
         from apps.core.actions import ActionError, run_action
 
         try:

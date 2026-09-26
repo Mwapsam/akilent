@@ -41,17 +41,13 @@ def overview(account) -> dict:
 
 def billing(account) -> dict:
     from apps.billing import api as billing_api
-    from apps.billing.models import ManualPaymentRequest, ModuleSubscription, Plan, Subscription, UsageSummary
+    from apps.billing.models import ManualPaymentRequest, Plan, Subscription, UsageSummary
 
-    rows = {m.module: m for m in ModuleSubscription.objects.filter(account=account)}
-    modules = [{"key": key, "label": label, "enabled": rows[key].enabled if key in rows else True,
-                "explicit": key in rows, "billing_status": rows[key].get_billing_status_display() if key in rows else ""}
-               for key, label in ModuleSubscription.MODULE_CHOICES]
     return {
         "subscription": billing_api.get_subscription(account),
         "emails_used": UsageSummary.get_current_email_usage(account),
         "conversations_used": UsageSummary.get_current_usage(account),
-        "modules": modules,
+        "features": billing_api.access_report(account),
         "payments": ManualPaymentRequest.objects.filter(account=account).select_related("plan").order_by("-created_at")[:10],
         "plans": Plan.objects.order_by("price_monthly"),
         "statuses": Subscription.STATUS_CHOICES,
@@ -218,15 +214,22 @@ def extend_trial(account, days: int) -> str:
     return f"Trial now ends {timezone.localtime(sub.trial_ends_at):%d %b %Y}"
 
 
-def toggle_module(account, module: str) -> bool:
+def set_feature(account, key: str, change: str, *, note: str, by) -> tuple[dict, str]:
+    """Grant, remove or reset (back to the plan) one feature. Returns (state before, name)."""
     from apps.billing import api as billing_api
-    from apps.billing.models import ModuleSubscription
+    from apps.billing import features as catalog
 
-    if module not in dict(ModuleSubscription.MODULE_CHOICES):
-        raise ConsoleError("Unknown module.")
-    enabled = not billing_api.module_enabled(account, module)
-    billing_api.set_module_enabled(account, module, enabled)
-    return enabled
+    feature = catalog.BY_KEY.get(key)
+    if feature is None or change not in ("grant", "remove", "reset"):
+        raise ConsoleError("Unknown feature or change.")
+    try:
+        if change == "reset":
+            before = billing_api.clear_override(account, key)
+        else:
+            before = billing_api.set_override(account, key, grant=change == "grant", note=note, by=by)
+    except billing_api.FeatureError as exc:
+        raise ConsoleError(str(exc)) from exc
+    return before, feature.name
 
 
 def retry_registration(account, number_pk) -> str:

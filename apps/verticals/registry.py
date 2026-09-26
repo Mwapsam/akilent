@@ -18,7 +18,7 @@ RESTAURANT = {
     "key": "restaurant",
     "name": "Restaurant",
     "tagline": "Take orders and get paid over WhatsApp.",
-    "modules": ["commerce"],
+    "modules": ["orders"],
     "checklist": [
         "Request payment automatically the moment an order comes in",
         "Win back customers who haven't ordered in 2 weeks",
@@ -61,7 +61,7 @@ REAL_ESTATE = {
     "key": "real_estate",
     "name": "Real Estate",
     "tagline": "Turn WhatsApp enquiries into tracked deals.",
-    "modules": ["crm"],
+    "modules": ["sales"],
     "checklist": [
         "Capture every WhatsApp enquiry as a lead automatically",
         "Move unattended leads into your sales pipeline after a day",

@@ -26,10 +26,7 @@ MAX_LOOKUPS = 3
 def _can_track(account, customer: dict) -> bool:
     from apps.billing import api as billing_api
 
-    try:
-        return billing_api.module_enabled(account, "crm") and not customer.get("interested")
-    except KeyError:
-        return False
+    return billing_api.usable(account, "sales") and not customer.get("interested")
 
 
 def run(conversation, *, business_notes: str = "", provider=None) -> dict:

@@ -6,6 +6,7 @@ app_name = "billing"
 
 urlpatterns = [
     path("plans/", views.pricing_page, name="plans"),
+    path("locked/<slug:key>/", views.feature_locked, name="locked"),
     path("checkout/", views.checkout, name="checkout"),
     path("callback/", views.callback, name="callback"),
     path("webhook/", views.webhook, name="webhook"),

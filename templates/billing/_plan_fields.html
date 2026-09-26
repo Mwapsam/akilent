@@ -21,27 +21,8 @@
 </div>
 {% include "components/form_field.html" with name="flutterwave_plan_id" label="Flutterwave plan ID (optional)" value=plan.flutterwave_plan_id %}
 
-<p class="text-xs font-medium text-gray-500 mt-4 mb-2">Included capabilities</p>
-<div class="grid sm:grid-cols-2 gap-2">
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="email_apis" class="rounded border-border-strong" {% if plan.email_apis or not plan %}checked{% endif %}> RESTful email APIs &amp; SMTP relay
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="inbound_email" class="rounded border-border-strong" {% if plan.inbound_email %}checked{% endif %}> Inbound email processing
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="tracking_webhooks" class="rounded border-border-strong" {% if plan.tracking_webhooks %}checked{% endif %}> Tracking, analytics &amp; webhooks
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="detailed_analytics" class="rounded border-border-strong" {% if plan.detailed_analytics %}checked{% endif %}> Detailed analytics &amp; insights
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="bulk_email" class="rounded border-border-strong" {% if plan.bulk_email %}checked{% endif %}> Bulk email campaigns
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="has_priority_support" class="rounded border-border-strong" {% if plan.has_priority_support %}checked{% endif %}> Priority support
-  </label>
-  <label class="flex items-center gap-2 text-sm">
-    <input type="checkbox" name="is_active" class="rounded border-border-strong" {% if plan.is_active or not plan %}checked{% endif %}> Active (visible to customers)
-  </label>
-</div>
+<label class="flex items-center gap-2 text-sm mt-3">
+  <input type="checkbox" name="is_active" class="rounded border-border-strong" {% if plan.is_active or not plan %}checked{% endif %}> Active (visible to customers)
+</label>
+<p class="text-xs text-gray-500 mt-3">What this package includes is set in the
+  <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>.</p>

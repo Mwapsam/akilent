@@ -48,8 +48,8 @@ class Action(abc.ABC):
     name: str
     version: int = 1
     scope_kwarg: str | None = None
-    # Tenant module this action belongs to (a ``billing.api.MODULE_MAP`` key). When the
-    # caller's account has that module disabled, ``run_action`` refuses to run it.
+    # Catalog feature this action belongs to (an ``apps.billing.features`` key). When the
+    # caller's account can't use it, ``run_action`` refuses to run it.
     module: str | None = None
 
     def input_schema(self) -> dict:
@@ -130,9 +130,9 @@ def run_action(name: str, context: dict, **kwargs) -> dict:
     if action.module and account is not None:
         from apps.billing import api as billing_api
 
-        if not billing_api.module_enabled(account, action.module):
+        if not billing_api.usable(account, action.module):
             raise ActionError(
-                f"action {name!r} requires the {action.module!r} module, "
-                "which is not enabled for this account"
+                f"action {name!r} requires the {action.module!r} feature, "
+                "which is not available to this account"
             )
     return action.execute(context, **kwargs)

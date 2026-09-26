@@ -20,7 +20,7 @@ from apps.crm.models import Deal, Lead, Pipeline
 
 
 @login_required
-@module_required("crm")
+@module_required("sales")
 def sales(request):
     account = get_current_account(request)
     if account is None:
@@ -49,7 +49,7 @@ def sales(request):
 
 
 @login_required
-@module_required("crm")
+@module_required("sales")
 def create_lead_view(request):
     account = get_current_account(request)
     if account is None:
@@ -114,7 +114,7 @@ def create_lead_view(request):
 
 
 @login_required
-@module_required("crm")
+@module_required("sales")
 def lead_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:
@@ -152,7 +152,7 @@ def lead_detail(request, public_id: str):
 
 
 @login_required
-@module_required("crm")
+@module_required("sales")
 def deal_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:

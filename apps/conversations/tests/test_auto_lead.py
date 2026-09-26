@@ -108,7 +108,7 @@ def test_disabled_sales_module_opens_no_lead(inbound):
     from apps.billing import api as billing_api
 
     account, contact, receive = inbound
-    billing_api.set_module_enabled(account, "crm", False)
+    billing_api.set_owner_switch(account, "sales", False)
 
     receive("How much for the blue dress?", "wamid.1")
     assert Lead.objects.filter(account=account).count() == 0

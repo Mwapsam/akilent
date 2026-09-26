@@ -37,7 +37,7 @@ def _template_page_url() -> str:
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def build_home(request):
     from apps.accounts import business_hours as bh
     from apps.accounts import profile as business_profile
@@ -74,7 +74,7 @@ def build_home(request):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def build_profile(request):
     """Save step 1: the business profile and opening hours, then start the AI notes from them."""
@@ -104,7 +104,7 @@ def build_profile(request):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def build_import_templates(request):
     from apps.whatsapp import api as whatsapp_api
@@ -125,7 +125,7 @@ def build_import_templates(request):
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 @require_POST
 def build_dismiss(request):
     account = get_current_account(request)
@@ -158,7 +158,7 @@ def _source(account, params) -> tuple[str, dict, dict, object]:
 
 
 @login_required
-@module_required("automation")
+@module_required("automations")
 def build_review(request):
     """Show exactly what an automation will do before it's saved, then save it or turn it on."""
     from apps.ai import api as ai_api

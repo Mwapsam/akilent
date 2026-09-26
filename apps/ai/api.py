@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 def unavailable_reason(account) -> str | None:
     """Why AI is off for this business, in plain words, or None when it is on.
 
-    Three switches, checked in order: the site's provider, the business's plan (the AI module),
-    and the owner's opt-in.
+    Three switches, checked in order: the site's provider, the business's plan (the
+    ``ai_assistant`` feature), and the owner's opt-in.
     """
     from apps.ai.models import AISettings
     from apps.ai.providers import is_configured
@@ -29,12 +29,8 @@ def unavailable_reason(account) -> str | None:
         return "This business is suspended."
     if not is_configured():
         return "AI isn't set up on this Akilent installation yet."
-    try:
-        module_on = billing_api.module_enabled(account, "ai")
-    except KeyError:
-        module_on = False
-    if not module_on:
-        return "The AI module is switched off for this business's plan."
+    if not billing_api.usable(account, "ai_assistant"):
+        return "The AI assistant isn't included in this business's plan."
     if not AISettings.objects.filter(account=account, enabled=True).exists():
         return "AI suggestions aren't turned on below."
     return None

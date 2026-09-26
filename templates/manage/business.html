@@ -72,16 +72,37 @@
     {% endif %}
   </section>
   <section class="card card-pad space-y-3">
-    <h2 class="font-semibold">Modules</h2>
+    <h2 class="font-semibold">Features</h2>
+    <p class="text-xs text-gray-500">What this business can use and why. Change what a plan includes in the <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>; exceptions for this business go here.</p>
     <ul class="text-sm divide-y divide-border">
-      {% for m in d.modules %}
-      <li class="flex items-center justify-between gap-2 py-1.5">
-        <span>{{ m.label }} <span class="badge {% if m.enabled %}badge-success{% else %}badge-neutral{% endif %}">{% if m.enabled %}On{% else %}Off{% endif %}</span>
-          {% if m.billing_status %}<span class="text-xs text-gray-500">· billing {{ m.billing_status|lower }}</span>{% endif %}</span>
-        <form method="post" action="{% url 'core:business-action' business.pk 'module' %}">{% csrf_token %}
-          <input type="hidden" name="module" value="{{ m.key }}">
-          <button class="btn btn-ghost btn-sm">Turn {% if m.enabled %}off{% else %}on{% endif %}</button>
+      {% for f in d.features %}
+      <li class="py-1.5" x-data="{ open: false }">
+        <div class="flex items-center justify-between gap-2">
+          <span class="min-w-0">
+            <span class="{% if f.entitled %}text-green-700{% else %}text-gray-400{% endif %}" aria-hidden="true">{% if f.entitled %}✓{% else %}✕{% endif %}</span>
+            <span class="text-ink">{{ f.name }}</span>
+            <span class="text-xs text-gray-500">·
+              {% if f.source == "core" %}Every plan
+              {% elif f.source == "plan" %}{{ f.plan_name }} plan
+              {% elif f.source == "grant" %}Operator grant
+              {% elif f.source == "removed" %}Operator removal
+              {% elif f.source == "no_plan" %}No plan yet (kept from before plans)
+              {% else %}Not included{% endif %}
+              {% if f.entitled and f.owner_off %}· owner switched it off{% endif %}
+            </span>
+            {% if f.override %}<span class="block text-xs text-gray-500">“{{ f.override.note }}” — {{ f.override.set_by|default:"operator" }}, {{ f.override.created|date:"j M Y" }}</span>{% endif %}
+          </span>
+          {% if f.overridable %}<button type="button" class="btn btn-ghost btn-sm" @click="open = !open" :aria-expanded="open">Change</button>{% endif %}
+        </div>
+        {% if f.overridable %}
+        <form x-show="open" x-cloak method="post" action="{% url 'core:business-action' business.pk 'feature' %}" class="mt-2 flex flex-wrap items-end gap-2">{% csrf_token %}
+          <input type="hidden" name="key" value="{{ f.key }}">
+          <label class="text-xs grow">Why <input name="note" class="input" maxlength="255" placeholder="e.g. pilot deal until March"></label>
+          {% if not f.entitled or f.source == "removed" %}<button name="change" value="grant" class="btn btn-secondary btn-sm">Grant</button>{% endif %}
+          {% if f.entitled %}<button name="change" value="remove" class="btn btn-danger-ghost btn-sm">Remove</button>{% endif %}
+          {% if f.override %}<button name="change" value="reset" class="btn btn-ghost btn-sm">Follow the plan</button>{% endif %}
         </form>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>

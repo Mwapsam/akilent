@@ -8,11 +8,16 @@ def feature_flags(request):
     }
 
 
-def module_flags(request):
-    """Expose which optional modules (Sales/Orders) this account has turned on,
-    so nav links can hide themselves rather than 404 or redirect with an error
-    when a business has opted out (see apps.accounts.settings_views.settings_tools,
-    R1.5a). Defensive like ``onboarding_status`` — never breaks rendering.
+def plan_features(request):
+    """What the nav needs from the business's entitlements:
+
+    - ``locked_features``: catalog keys the business isn't entitled to. Their links stay visible
+      with a lock and open the locked page, which says where to get them.
+    - ``tools_off``: optional tools the owner switched off in Settings; their links are hidden.
+    - ``usable_features``: entitled and not switched off, for in-page offers (e.g. "Track as a
+      sale" only when Sales is usable).
+
+    Defensive like ``onboarding_status``: never breaks rendering.
     """
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
@@ -24,9 +29,11 @@ def module_flags(request):
         account = get_current_account(request)
         if account is None:
             return {}
+        state = billing_api.nav_state(account)
         return {
-            "crm_enabled": billing_api.module_enabled(account, "crm"),
-            "commerce_enabled": billing_api.module_enabled(account, "commerce"),
+            "locked_features": state["locked"],
+            "tools_off": state["tools_off"],
+            "usable_features": state["usable"],
         }
     except Exception:
         return {}

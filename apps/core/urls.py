@@ -28,6 +28,9 @@ urlpatterns = [
     path("plans/<int:pk>/toggle/", billing_views.plan_toggle, name="plan-toggle"),
     path("plans/<int:pk>/delete/", billing_views.plan_delete, name="plan-delete"),
     path("plans/<int:pk>/sync-fw/", billing_views.plan_sync_fw, name="plan-sync-fw"),
+    path("plans/features/", views.plan_features, name="plan-features"),
+    path("plans/coming-soon/", views.coming_soon_save, name="coming-soon-save"),
+    path("plans/coming-soon/<int:pk>/delete/", views.coming_soon_delete, name="coming-soon-delete"),
     path("payment-methods/<int:pk>/toggle/", billing_views.payment_method_toggle, name="payment-method-toggle"),
     path("payment-methods/<int:pk>/edit/", billing_views.payment_method_edit, name="payment-method-edit"),
 

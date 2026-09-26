@@ -83,7 +83,7 @@ TEMPLATES = [
                 "apps.core.context_processors.site_context",
                 "apps.core.context_processors.operator_context",
                 "apps.accounts.context_processors.onboarding_status",
-                "apps.accounts.context_processors.module_flags",
+                "apps.accounts.context_processors.plan_features",
             ],
         },
     },

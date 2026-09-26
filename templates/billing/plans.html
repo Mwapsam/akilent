@@ -93,7 +93,7 @@
 
 {% comment %} Pricing grid {% endcomment %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-  {% for plan in plans %}
+  {% for card in cards %}{% with plan=card.plan %}
     <div class="bg-surface rounded-2xl border
                 {% if plan.slug == 'professional' %}border-blue-500 ring-2 ring-blue-500 relative mt-3{% else %}border-border{% endif %}
                 shadow-sm p-6 flex flex-col">
@@ -120,95 +120,17 @@
         {% endif %}
       </div>
 
-      {% comment %} Features (only modules that are enabled appear) {% endcomment %}
+      {% comment %} Limits and features: billing_api.plan_card, the same source as signup and the landing page {% endcomment %}
       <ul class="space-y-2 text-sm text-gray-600 flex-1 mb-6">
-        {% spaceless %}
-        {% if WHATSAPP_ENABLED %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_whatsapp_numbers == -1 %}Unlimited WhatsApp numbers
-          {% else %}{{ plan.max_whatsapp_numbers }} WhatsApp number{{ plan.max_whatsapp_numbers|pluralize }}{% endif %}
-        </li>
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_conversations_per_month == -1 %}Unlimited conversations
-          {% else %}{{ plan.max_conversations_per_month }} conversations/mo{% endif %}
-        </li>
-        {% endif %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_emails_per_month == -1 %}Unlimited emails
-          {% else %}{{ plan.max_emails_per_month }} emails/mo{% endif %}
-        </li>
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_mailboxes == -1 %}Unlimited mailboxes
-          {% else %}{{ plan.max_mailboxes }} mailbox{{ plan.max_mailboxes|pluralize }} included{% endif %}
-        </li>
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {{ plan.mailbox_storage_gb }} GB storage per mailbox
-        </li>
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_forwarding_rules == -1 %}Unlimited forwarding rules
-          {% else %}{{ plan.max_forwarding_rules }} forwarding rule{{ plan.max_forwarding_rules|pluralize }}{% endif %}
-        </li>
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_aliases == -1 %}Unlimited email aliases
-          {% else %}{{ plan.max_aliases }} email alias{{ plan.max_aliases|pluralize:"es" }}{% endif %}
-        </li>
-        {% if plan.email_apis %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          RESTful email APIs &amp; SMTP relay
-        </li>
-        {% endif %}
-        {% if plan.inbound_email %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Inbound email processing
-        </li>
-        {% endif %}
-        {% if plan.tracking_webhooks %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Tracking, analytics &amp; webhooks
-        </li>
-        {% endif %}
-        {% if plan.detailed_analytics %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Detailed analytics &amp; insights
-        </li>
-        {% endif %}
-        {% if plan.bulk_email %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Bulk email campaigns
-        </li>
-        {% endif %}
-        {% if plan.log_retention_days %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {{ plan.log_retention_days }} day{{ plan.log_retention_days|pluralize }} log retention
-        </li>
-        {% endif %}
-        {% if WHATSAPP_ENABLED %}
-        <li class="flex items-start gap-2">
-          <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          {% if plan.max_automation_rules == -1 %}Unlimited automation rules
-          {% else %}{{ plan.max_automation_rules }} automation rule{{ plan.max_automation_rules|pluralize }}{% endif %}
-        </li>
-        {% endif %}
-        {% if plan.has_priority_support %}
-          <li class="flex items-start gap-2">
-            <svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            Priority support
-          </li>
-        {% endif %}
-        {% endspaceless %}
+        {% for line in card.limits %}
+        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-500 shrink-0 mt-0.5" %}{{ line }}</li>
+        {% endfor %}
+        {% for f in card.features %}
+        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-500 shrink-0 mt-0.5" %}{{ f.name }}</li>
+        {% endfor %}
+        {% for soon in card.coming_soon %}
+        <li class="flex items-start gap-2 text-gray-400"><span class="w-4 shrink-0 text-center" aria-hidden="true">○</span>{{ soon.name }} <span class="badge badge-neutral">Coming soon</span></li>
+        {% endfor %}
       </ul>
 
       {% comment %} CTA {% endcomment %}
@@ -247,10 +169,40 @@
 
 
     </div>
-  {% endfor %}
+  {% endwith %}{% endfor %}
 </div>
 
 </div>
+
+<section class="mt-10 card card-pad" aria-labelledby="h-every-plan">
+  <h2 id="h-every-plan" class="font-semibold text-ink">Included in every plan</h2>
+  <ul class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-sm text-gray-600">
+    {% for f in core_features %}{% if f.key != "whatsapp" or WHATSAPP_ENABLED %}
+    <li><span class="font-medium text-ink">{{ f.name }}</span> — {{ f.pitch }}</li>
+    {% endif %}{% endfor %}
+  </ul>
+</section>
+
+{% if compare_rows %}
+<section class="mt-6" aria-labelledby="h-compare">
+  <h2 id="h-compare" class="font-semibold text-ink mb-3">Compare plans</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Feature</th>{% for card in cards %}<th class="text-center">{{ card.plan.name }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in compare_rows %}
+        <tr>
+          <td><span class="text-ink">{{ row.feature.name }}</span><span class="block text-xs text-gray-500">{{ row.feature.pitch }}</span></td>
+          {% for included in row.cells %}
+          <td class="text-center">{% if included %}{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-600 inline" %}<span class="sr-only">Included</span>{% else %}<span class="text-gray-300" aria-label="Not included">—</span>{% endif %}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <p class="text-center text-xs text-gray-400 mt-10">
   Need WhatsApp + email at higher volume? <a href="/dashboard/" class="text-blue-600">Contact us from your dashboard.</a>

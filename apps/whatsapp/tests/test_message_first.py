@@ -162,7 +162,7 @@ class PageRenderTest(Base):
         request.session = {}
         request._messages = FallbackStorage(request)
         with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account), patch(
-            "apps.billing.api.has_feature", return_value=True
+            "apps.billing.api.entitled", return_value=True
         ), patch(FETCH, return_value=""):
             return html.unescape(numbers_views.numbers_list(request).content.decode())
 

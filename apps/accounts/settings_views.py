@@ -155,14 +155,14 @@ def settings_security(request):
 
 # --- Optional tools -----------------------------------------------------------
 
-# (feature_name for apps.billing.api, checkbox label, one-line explanation of the goal).
-# Framed as opt-OUT: apps.billing.api.module_enabled() already treats "no row" as
-# enabled, so an account with neither row checked here already has both on today —
-# this page must not silently turn anything off on first render (see R1.5a).
+# (catalog feature key, checkbox label, one-line explanation of the goal). These are the owner's
+# own switches (apps.billing.api.set_owner_switch), not what the plan includes: a tool the plan
+# doesn't include isn't listed. Framed as opt-OUT: no stored switch means on, so this page must
+# not silently turn anything off on first render (see R1.5a).
 OPTIONAL_TOOLS = [
-    ("crm", "Track potential sales",
+    ("sales", "Track potential sales",
      "See customers who are considering buying, and where each one stands."),
-    ("commerce", "Create orders and collect payments",
+    ("orders", "Create orders and collect payments",
      "Off unless you turn it on. Adds an Orders section for recording what a "
      "customer bought and sending them a payment link."),
 ]
@@ -176,16 +176,17 @@ def settings_tools(request):
     if account is None:
         return redirect("dashboard")
 
+    offered = [t for t in OPTIONAL_TOOLS if billing_api.entitled(account, t[0])]
     if request.method == "POST":
-        for feature_name, _label, _hint in OPTIONAL_TOOLS:
+        for feature_name, _label, _hint in offered:
             enabled = request.POST.get(feature_name) == "on"
-            billing_api.set_module_enabled(account, feature_name, enabled)
+            billing_api.set_owner_switch(account, feature_name, enabled)
         messages.success(request, "Settings saved.")
         return redirect("settings-tools")
 
     tools = [
-        {"feature": f, "label": label, "hint": hint, "enabled": billing_api.module_enabled(account, f)}
-        for f, label, hint in OPTIONAL_TOOLS
+        {"feature": f, "label": label, "hint": hint, "enabled": billing_api.usable(account, f)}
+        for f, label, hint in offered
     ]
     return render(request, "accounts/settings_tools.html", {
         "account": account, "active_tab": "tools", "tools": tools,

@@ -114,32 +114,13 @@ _ACCOUNT_PROFILE_FIELDS = (
 
 
 def _plan_feature_bullets(plan) -> list:
-    """Short marketing bullets for a plan card in the signup wizard.
+    """Short marketing bullets for a plan card in the signup wizard: the same limits and
+    features the pricing page shows (``billing_api.plan_card``), as plain strings for the
+    wizard's JSON config."""
+    from apps.billing import api as billing_api
 
-    Mirrors the capability rows shown on templates/billing/plans.html, kept in
-    Python so the wizard config is a plain JSON blob.
-    """
-    def _cap(value, unit):
-        return f"Unlimited {unit}" if value == -1 else f"{value} {unit}"
-
-    bullets = []
-    if plan.service_type in ("whatsapp", "both"):
-        bullets.append(_cap(plan.max_whatsapp_numbers, "WhatsApp number(s)"))
-        bullets.append(_cap(plan.max_conversations_per_month, "conversations/mo"))
-    if plan.service_type in ("email", "both"):
-        bullets.append(_cap(plan.max_emails_per_month, "emails/mo"))
-        if plan.email_apis:
-            bullets.append("REST API + SMTP relay")
-        if plan.bulk_email:
-            bullets.append("Bulk / campaign sending")
-        if plan.inbound_email:
-            bullets.append("Inbound email processing")
-        if plan.detailed_analytics:
-            bullets.append("Detailed analytics & insights")
-    bullets.append(_cap(plan.max_automation_rules, "automation rule(s)"))
-    if plan.has_priority_support:
-        bullets.append("Priority support")
-    return bullets
+    card = billing_api.plan_card(plan, whatsapp=plan.service_type in ("whatsapp", "both"))
+    return card["limits"] + card["feature_names"]
 
 
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
@@ -302,15 +283,14 @@ def _set_default_modules(account):
     they have to answer before they can start. They can turn it on any time in
     Settings -> Optional tools.
 
-    Only *new* accounts are touched. An existing account has no
-    ``ModuleSubscription`` row and therefore keeps commerce enabled under
-    ``module_enabled``'s "no row = enabled" rule — nothing is taken away from
+    Only *new* accounts are touched. An existing account has no stored switch
+    and therefore keeps Orders on (no switch = on) — nothing is taken away from
     anyone already using it.
     """
-    from apps.billing.api import set_module_enabled
+    from apps.billing.api import set_owner_switch
 
     try:
-        set_module_enabled(account, "commerce", False)
+        set_owner_switch(account, "orders", False)
     except Exception:
         logger.exception("could not set default modules for account %s", account.pk)
 
@@ -435,10 +415,12 @@ def resend_verification(request):
 
 def landing(request):
     """Public marketing landing page."""
+    from apps.billing import api as billing_api
     from apps.billing.models import Plan
 
     plans = Plan.objects.filter(is_active=True).order_by("price_monthly")
-    return render(request, "accounts/landing.html", {"plans": plans})
+    cards = [billing_api.plan_card(p, whatsapp=bool(settings.WHATSAPP_ENABLED)) for p in plans]
+    return render(request, "accounts/landing.html", {"plans": plans, "cards": cards})
 
 
 @login_required

@@ -1,6 +1,26 @@
 from django.contrib import admin
 
-from .models import ManualPaymentRequest, ModuleSubscription, PaymentMethod, Plan, Subscription, UsageSummary
+from .models import (
+    AccountFeatureOverride, ComingSoonFeature, ManualPaymentRequest, ModuleSubscription, PaymentMethod, Plan,
+    PlanFeature, Subscription, UsageSummary,
+)
+
+
+@admin.register(PlanFeature)
+class PlanFeatureAdmin(admin.ModelAdmin):
+    list_display = ("plan", "key", "created_at")
+    list_filter = ("plan",)
+
+
+@admin.register(AccountFeatureOverride)
+class AccountFeatureOverrideAdmin(admin.ModelAdmin):
+    list_display = ("account", "key", "grant", "note", "set_by", "updated_at")
+    list_filter = ("grant", "key")
+
+
+@admin.register(ComingSoonFeature)
+class ComingSoonFeatureAdmin(admin.ModelAdmin):
+    list_display = ("name", "order", "is_active")
 
 
 @admin.register(Plan)

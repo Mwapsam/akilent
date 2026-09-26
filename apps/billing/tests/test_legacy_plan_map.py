@@ -1,19 +1,20 @@
-"""Phase 0: the legacy Plan fallback must not reference Plan fields that don't exist."""
+"""The old Plan capability columns each map to a real catalog feature, and the LimitChecker shim
+answers from the catalog (PlanFeature), not from the columns."""
 from decimal import Decimal
 
 import pytest
 from django.utils import timezone
 
 from apps.accounts.models import Account
-from apps.billing import api as billing_api
-from apps.billing.models import ModuleSubscription, Plan, Subscription
+from apps.billing import features as catalog
+from apps.billing.limits import LimitChecker
+from apps.billing.models import Plan, PlanFeature, Subscription
 
 
-def test_every_legacy_plan_map_attribute_is_a_real_plan_field():
+def test_every_legacy_flag_is_a_real_plan_field_and_a_catalog_feature():
     plan_fields = {f.name for f in Plan._meta.get_fields()}
-    missing = {feature: attr for feature, attr in billing_api.LEGACY_PLAN_MAP.items()
-               if attr not in plan_fields}
-    assert not missing, f"LEGACY_PLAN_MAP points at Plan fields that do not exist: {missing}"
+    assert set(catalog.LEGACY_FLAGS) <= plan_fields
+    assert set(catalog.LEGACY_FLAGS.values()) <= set(catalog.BY_KEY)
 
 
 @pytest.fixture
@@ -26,13 +27,22 @@ def account(db):
 
 
 @pytest.mark.django_db
-def test_legacy_fallback_still_answers_for_real_plan_fields(account):  # regression
-    assert billing_api.has_feature(account, "email") is True          # Plan.email_apis
-    assert billing_api.has_feature(account, "bulk_email") is False    # Plan.bulk_email default
+def test_a_new_plan_starts_from_its_columns(account):
+    checker = LimitChecker(account)
+    assert checker.has_feature("email_apis") is True       # column on -> email_sending
+    assert checker.has_feature("bulk_email") is False      # column off -> no email_campaigns
 
 
 @pytest.mark.django_db
-def test_module_subscription_takes_precedence_over_legacy_fallback(account):  # regression
-    assert billing_api.has_feature(account, "whatsapp") is False      # no module row, no plan flag
-    ModuleSubscription.objects.create(account=account, module="whatsapp", enabled=True)
-    assert billing_api.has_feature(account, "whatsapp") is True
+def test_the_shim_follows_the_matrix_not_the_columns(account):
+    plan = account.subscription.plan
+    PlanFeature.objects.create(plan=plan, key="email_campaigns")
+    assert LimitChecker(Account.objects.get(pk=account.pk)).has_feature("bulk_email") is True
+    PlanFeature.objects.filter(plan=plan, key="email_sending").delete()
+    assert LimitChecker(Account.objects.get(pk=account.pk)).has_feature("email_apis") is False
+
+
+@pytest.mark.django_db
+def test_the_shim_still_needs_an_active_subscription(account):
+    Subscription.objects.filter(account=account).update(status=Subscription.EXPIRED)
+    assert LimitChecker(Account.objects.get(pk=account.pk)).has_feature("email_apis") is False

@@ -43,7 +43,10 @@ def pricing_page(request):
     if account is None:
         return redirect("/dashboard/")
 
+    from apps.billing import api as billing_api
+
     plans = list(Plan.objects.filter(is_active=True).order_by("price_monthly"))
+    whatsapp = settings.WHATSAPP_ENABLED
     subscription = getattr(account, "subscription", None) if account else None
     current_plan_slug = subscription.plan.slug if subscription else None
     site = SiteSettings.load()
@@ -59,6 +62,9 @@ def pricing_page(request):
 
     return render(request, "billing/plans.html", {
         "plans": plans,
+        "cards": [billing_api.plan_card(p, whatsapp=whatsapp) for p in plans],
+        "compare_rows": billing_api.compare_plans(plans, whatsapp=whatsapp),
+        "core_features": billing_api.core_features(),
         "account": account,
         "subscription": subscription,
         "current_plan_slug": current_plan_slug,
@@ -70,6 +76,33 @@ def pricing_page(request):
         "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
         "period_pricing_json": json.dumps(period_pricing),
     })
+
+
+@login_required
+def feature_locked(request, key):
+    """Why this business can't use a feature, what it does, and where to get it. A product state,
+    not an error: nothing the business made with the feature is deleted."""
+    from django.http import Http404
+
+    from apps.billing import api as billing_api
+    from apps.billing import features as catalog
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("/dashboard/")
+    feature = catalog.BY_KEY.get(key)
+    if feature is None or feature.availability in (catalog.INTERNAL, catalog.DEPRECATED):
+        raise Http404
+    info = billing_api.access(account, key)
+    kept = ""
+    if key == "automations":
+        from apps.automation import api as automation_api
+
+        count = automation_api.count_active_rules(account)
+        if count:
+            kept = (f"Your {count} automation{'s are' if count != 1 else ' is'} kept. "
+                    "They don't run while this is locked, and start again when you have access.")
+    return render(request, "billing/locked.html", {"info": info, "kept": kept, "feature": feature})
 
 
 # --- Admin: package (Plan) management -----------------------------------------
@@ -101,12 +134,7 @@ def _plan_form_fields(post):
         "trial_days": _int("trial_days"),
         "log_retention_days": _int("log_retention_days"),
         "flutterwave_plan_id": (post.get("flutterwave_plan_id") or "").strip() or None,
-        "has_priority_support": "has_priority_support" in post,
-        "email_apis": "email_apis" in post,
-        "inbound_email": "inbound_email" in post,
-        "tracking_webhooks": "tracking_webhooks" in post,
-        "detailed_analytics": "detailed_analytics" in post,
-        "bulk_email": "bulk_email" in post,
+        # What a plan includes is set in the feature matrix (/manage/plans/features/).
         "is_active": "is_active" in post,
     }
 

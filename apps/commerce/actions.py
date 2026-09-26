@@ -6,7 +6,7 @@ from apps.core.actions import Action, ActionError, register
 
 class CreateOrderAction(Action):
     name = "create_order"
-    module = "commerce"
+    module = "orders"
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
@@ -24,7 +24,7 @@ class CreateOrderAction(Action):
 
 class RequestPaymentAction(Action):
     name = "request_payment"
-    module = "commerce"
+    module = "orders"
     scope_kwarg = "order"
 
     def input_schema(self) -> dict:
@@ -45,7 +45,7 @@ class LookupProductsAction(Action):
     """
 
     name = "lookup_products"
-    module = "commerce"
+    module = "orders"
     scope_kwarg = "account"
     LIMIT = 5
     MAX_LIMIT = 50

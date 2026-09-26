@@ -105,20 +105,20 @@ def test_nothing_is_queued_when_an_automation_answered_or_ai_is_off(account, set
 
 @pytest.mark.django_db
 def test_the_plan_can_switch_ai_off(account):
-    from apps.billing.models import ModuleSubscription
+    from apps.billing import api as billing_api
 
-    ModuleSubscription.objects.create(account=account, module=ModuleSubscription.AI, enabled=False)
+    billing_api.set_override(account, "ai_assistant", grant=False, note="test")
     assert ai_api.is_available(account) is False
-    assert "module" in ai_api.unavailable_reason(account)
+    assert "plan" in ai_api.unavailable_reason(account)
 
 
 @pytest.mark.django_db
 def test_settings_page_says_why_ai_is_off(agent, account):
-    from apps.billing.models import ModuleSubscription
+    from apps.billing import api as billing_api
 
     assert "AI is on." in agent.get("/settings/ai/").content.decode()
-    ModuleSubscription.objects.create(account=account, module=ModuleSubscription.AI, enabled=False)
-    assert "AI module is switched off" in agent.get("/settings/ai/").content.decode()
+    billing_api.set_override(account, "ai_assistant", grant=False, note="test")
+    assert "isn't included in this business's plan" in agent.get("/settings/ai/").content.decode().replace("&#x27;", "'")
 
 
 @pytest.mark.django_db

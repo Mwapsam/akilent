@@ -21,27 +21,27 @@ class HasEmailApiFeature(BasePermission):
 
 
 class HasAutomationModule(BasePermission):
-    """The tenant's Automation module must not be explicitly disabled."""
+    """The account's plan must include automations."""
 
-    message = "The automation module is not enabled for this account."
+    message = "Your plan does not include automations."
 
     def has_permission(self, request, view) -> bool:
         from apps.billing import api as billing_api
 
         account = request.user
-        return account is not None and billing_api.module_enabled(account, "automation")
+        return account is not None and billing_api.usable(account, "automations")
 
 
 class HasWhatsAppModule(BasePermission):
-    """The tenant's WhatsApp module must not be explicitly disabled."""
+    """The account's plan must include WhatsApp verification codes (the only WhatsApp API)."""
 
-    message = "The WhatsApp module is not enabled for this account."
+    message = "Your plan does not include verification codes."
 
     def has_permission(self, request, view) -> bool:
         from apps.billing import api as billing_api
 
         account = request.user
-        return account is not None and billing_api.module_enabled(account, "whatsapp")
+        return account is not None and billing_api.usable(account, "verification_codes")
 
 
 class HasBulkEmailFeature(BasePermission):

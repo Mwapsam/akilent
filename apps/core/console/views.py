@@ -119,11 +119,17 @@ def _act_extend_trial(request, account):
     return result + "."
 
 
-def _act_module(request, account):
-    module = request.POST.get("module", "")
-    enabled = business.toggle_module(account, module)
-    audit(request, "module.toggle", account, target=module, enabled=enabled)
-    return f"{module.title()} is {'on' if enabled else 'off'}."
+def _act_feature(request, account):
+    """Grant, remove or reset one feature for this business. The audit row keeps the state
+    before, so "why does this customer have X?" is answered from history."""
+    key = request.POST.get("key", "")
+    change = request.POST.get("change", "")
+    before, name = business.set_feature(account, key, change, note=request.POST.get("note", ""), by=request.user)
+    audit(request, f"business.feature.{change}", account, target=key, key=key,
+          old_entitled=before["entitled"], old_source=before["source"],
+          new_override={"grant": True, "remove": False}.get(change), note=request.POST.get("note", "").strip())
+    return {"grant": f"{name} granted.", "remove": f"{name} removed.",
+            "reset": f"{name} follows the plan again."}[change]
 
 
 def _act_retry_registration(request, account):
@@ -239,7 +245,7 @@ ACTIONS = {
     "suspend": ("overview", _act_suspend),
     "subscription": ("billing", _act_subscription),
     "extend_trial": ("billing", _act_extend_trial),
-    "module": ("billing", _act_module),
+    "feature": ("billing", _act_feature),
     "retry_registration": ("whatsapp", _act_retry_registration),
     "sync_templates": ("whatsapp", _act_sync_templates),
     "retry_send": ("whatsapp", _act_retry_send),
@@ -348,6 +354,104 @@ def plans(request):
         "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
         "payments_enabled": SiteSettings.load().payments_enabled,
     })
+
+
+def _wanted_matrix(post) -> dict:
+    """{plan_id: set(keys)} from the matrix form: one checkbox per cell named ``f:<plan>:<key>``."""
+    from apps.billing import features as catalog
+
+    wanted = {p.pk: set() for p in Plan.objects.all()}
+    keys = {f.key for f in catalog.matrix_features()}
+    for name in post:
+        parts = name.split(":")
+        if len(parts) == 3 and parts[0] == "f" and parts[1].isdigit() and parts[2] in keys:
+            wanted.setdefault(int(parts[1]), set()).add(parts[2])
+    return wanted
+
+
+@admin_required
+def plan_features(request):
+    """The feature matrix: which plans include which features. A save first shows what would
+    change and how many businesses each change reaches; nothing changes until "Apply"."""
+    from apps.billing import api as billing_api
+    from apps.billing import features as catalog
+
+    plans_list = list(Plan.objects.order_by("price_monthly"))
+    matrix = billing_api.plan_feature_matrix()
+    changes = None
+    if request.method == "POST":
+        wanted = _wanted_matrix(request.POST)
+        if request.POST.get("apply") == "1":
+            applied = billing_api.apply_plan_features(wanted)
+            for change in applied:
+                plan = change["plan"]
+                for key in change["added"]:
+                    audit(request, "plan.feature.add", target=f"{plan.slug}:{key}", plan=plan.slug, key=key,
+                          old=False, new=True, businesses=change["businesses"])
+                for key in change["removed"]:
+                    audit(request, "plan.feature.remove", target=f"{plan.slug}:{key}", plan=plan.slug, key=key,
+                          old=True, new=False, businesses=change["businesses"])
+            messages.success(request, "Plan features updated." if applied else "Nothing changed.")
+            return redirect("core:plan-features")
+        changes = billing_api.diff_plan_features(wanted)
+        matrix = wanted  # show the proposed ticks while confirming
+        if not changes:
+            messages.info(request, "Nothing changed.")
+            return redirect("core:plan-features")
+
+    names = {f.key: f.name for f in catalog.FEATURES}
+    rows = [(group, [{"feature": f, "cells": [{"plan": p, "on": f.key in matrix.get(p.pk, set())} for p in plans_list]}
+                     for f in feats])
+            for group, feats in catalog.grouped(catalog.matrix_features())]
+    return render(request, "manage/plan_features.html", {
+        "plans": plans_list,
+        "rows": rows,
+        "changes": [dict(c, added_names=[names[k] for k in c["added"]], removed_names=[names[k] for k in c["removed"]])
+                    for c in changes] if changes else None,
+        "core": billing_api.core_features(),
+        "not_sold": [f for f in catalog.FEATURES if f.availability == catalog.NOT_SOLD],
+        "coming_soon": billing_api.coming_soon_features(),
+    })
+
+
+@admin_required
+@require_POST
+def coming_soon_save(request):
+    from apps.billing.models import ComingSoonFeature
+
+    pk = request.POST.get("pk")
+    item = ComingSoonFeature.objects.filter(pk=pk).first() if pk else ComingSoonFeature()
+    if item is None:
+        messages.error(request, "That entry isn't there any more.")
+        return redirect("core:plan-features")
+    item.name = (request.POST.get("name") or "").strip()[:100]
+    if not item.name:
+        messages.error(request, "Give the coming-soon feature a name.")
+        return redirect("core:plan-features")
+    item.pitch = (request.POST.get("pitch") or "").strip()[:255]
+    item.is_active = "is_active" in request.POST
+    try:
+        item.order = max(0, int(request.POST.get("order") or 0))
+    except ValueError:
+        item.order = 0
+    item.save()
+    item.plans.set(Plan.objects.filter(pk__in=request.POST.getlist("plans")))
+    audit(request, "coming_soon.save", target=item.name, plans=[p.slug for p in item.plans.all()])
+    messages.success(request, f"Saved “{item.name}”.")
+    return redirect("core:plan-features")
+
+
+@admin_required
+@require_POST
+def coming_soon_delete(request, pk):
+    from apps.billing.models import ComingSoonFeature
+
+    item = get_object_or_404(ComingSoonFeature, pk=pk)
+    name = item.name
+    item.delete()
+    audit(request, "coming_soon.delete", target=name)
+    messages.success(request, f"Removed “{name}”.")
+    return redirect("core:plan-features")
 
 
 # --- Platform -----------------------------------------------------------------------------------
