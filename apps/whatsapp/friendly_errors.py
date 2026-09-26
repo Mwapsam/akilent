@@ -17,8 +17,9 @@ raw code is always kept alongside it.
 _GRAPH_ERRORS = {
     "131047": "This customer hasn't messaged in the last 24 hours, so WhatsApp only "
                "allows an approved message template, not a plain reply.",
-    "131037": "This WhatsApp number's display name isn't approved yet — messages "
-               "can't be sent until Meta approves it.",
+    "131037": "Meta isn't letting this WhatsApp number send yet: its display name needs Meta's "
+               "approval. For a number Meta gave you (+1 555…), that usually means your business "
+               "verification must finish first. Check Business Settings and WhatsApp Manager in Meta.",
     "131030": "This phone number can't receive messages from this WhatsApp account "
                "yet (it may need to be added as an allowed recipient, or the "
                "account has restrictions).",
