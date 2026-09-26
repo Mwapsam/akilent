@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
+from django.db.models import Min as models_min
 from django.utils import timezone
 
 from apps.commerce.models import Order
@@ -144,6 +145,65 @@ def earlier_messages(conversation, *, keep_recent: int, after_id: int = 0, limit
         talk.exclude(id__in=recent_ids).filter(id__gt=after_id)
         .order_by("timestamp", "id").values("id", "direction", "body")[:limit]
     )
+
+
+def recent_customer_messages(account, *, since, limit: int = 3000) -> list[dict]:
+    """Customers' messages since ``since``, newest first: ``[{"conversation_id", "body", "timestamp"}]``."""
+    return list(
+        Message.objects.filter(account=account, direction=Message.Direction.INBOUND, timestamp__gte=since)
+        .exclude(body="").order_by("-timestamp").values("conversation_id", "body", "timestamp")[:limit]
+    )
+
+
+def first_reply_waits(account, *, since, now=None) -> list[float | None]:
+    """For each conversation that *started* since ``since``: minutes until the business first
+    replied (by anyone or anything), or None if it still hasn't."""
+    now = now or timezone.now()
+    starts = (
+        Conversation.objects.filter(account=account, messages__direction=Message.Direction.INBOUND)
+        .values("id").annotate(first_in=models_min("messages__timestamp")).filter(first_in__gte=since)
+    )
+    waits = []
+    for row in starts[:1000]:
+        first_out = (
+            Message.objects.filter(conversation_id=row["id"], direction=Message.Direction.OUTBOUND,
+                                   timestamp__gte=row["first_in"])
+            .order_by("timestamp").values_list("timestamp", flat=True).first()
+        )
+        if first_out is None:
+            waits.append(None if now - row["first_in"] > timedelta(minutes=5) else 0.0)
+        else:
+            waits.append((first_out - row["first_in"]).total_seconds() / 60)
+    return waits
+
+
+def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
+    """What customers asked and how a *person* on the team answered, oldest first.
+
+    ``[{"conversation_id", "question", "reply", "reply_id"}]`` where ``question`` is the customer's
+    messages since the business last spoke, and ``reply`` a plain text reply sent by a person (not
+    AI, not an automation, not a template or buttons).
+    """
+    messages = (
+        Message.objects.filter(account=account, timestamp__gte=since,
+                               direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND])
+        .exclude(body="").order_by("conversation_id", "timestamp", "id")
+        .values("id", "conversation_id", "direction", "body", "metadata")[:limit]
+    )
+    pairs, asked, current = [], [], None
+    for m in messages:
+        if m["conversation_id"] != current:
+            current, asked = m["conversation_id"], []
+        if m["direction"] == Message.Direction.INBOUND:
+            asked.append(m["body"])
+            continue
+        meta = m["metadata"] or {}
+        by_person = meta.get("sent_by") not in ("ai", "automation") and meta.get("message_type", "text") == "text"
+        if asked and by_person:
+            pairs.append({"conversation_id": current, "question": " ".join(asked)[:500],
+                          "reply": m["body"], "reply_id": m["id"]})
+        asked = []
+    return pairs
 
 
 def last_team_reply_at(conversation):

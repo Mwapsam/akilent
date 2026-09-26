@@ -1,0 +1,27 @@
+{% comment %}
+  Opening-hours fields, shared by Settings > Opening hours and Build step 1.
+  Needs: timezones, current_tz, rows (apps.accounts.business_hours.form_rows), can_edit.
+  Read back with business_hours.schedule_from_form.
+{% endcomment %}
+<div>
+  <label class="label" for="hours-timezone">Your timezone</label>
+  <select id="hours-timezone" name="timezone" class="select" {% if not can_edit %}disabled{% endif %}>
+    {% for tz in timezones %}<option value="{{ tz }}" {% if tz == current_tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
+  </select>
+</div>
+
+<div class="space-y-2">
+  {% for row in rows %}
+  <div class="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-2">
+    <label class="flex items-center gap-2 w-32">
+      <input type="checkbox" name="{{ row.key }}_open" {% if row.open %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+      <span class="font-medium text-ink">{{ row.label }}</span>
+    </label>
+    <label class="sr-only" for="{{ row.key }}-from">{{ row.label }} opens</label>
+    <input id="{{ row.key }}-from" type="time" name="{{ row.key }}_from" value="{{ row.from }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
+    <span class="text-gray-400">to</span>
+    <label class="sr-only" for="{{ row.key }}-to">{{ row.label }} closes</label>
+    <input id="{{ row.key }}-to" type="time" name="{{ row.key }}_to" value="{{ row.to }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
+  </div>
+  {% endfor %}
+</div>

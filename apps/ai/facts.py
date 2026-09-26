@@ -51,8 +51,12 @@ def times_in(text: str) -> set:
 
 
 def build(account, *, business_notes: str = "") -> dict:
-    """``{"opening_hours", "timezone", "products", "notes"}`` for this business. Products only when
-    Commerce is on."""
+    """``{"opening_hours", "timezone", "products", "business", "notes"}`` for this business.
+
+    ``business`` is the owner's profile answers (location, payment methods, delivery, website).
+    Products only when Commerce is on.
+    """
+    from apps.accounts import api as accounts_api
     from apps.accounts import business_hours
     from apps.billing import api as billing_api
 
@@ -74,14 +78,20 @@ def build(account, *, business_notes: str = "") -> dict:
         "opening_hours": dict(hours.schedule) if hours and hours.schedule else {},
         "timezone": hours.timezone if hours and hours.schedule else "",
         "products": products,
+        "business": accounts_api.business_facts(account),
         "notes": business_notes or "",
     }
+
+
+def written_text(facts: dict) -> str:
+    """Everything the owner wrote themselves (notes and profile answers), for text-level checks."""
+    return "\n".join([facts.get("notes", ""), *[str(v) for v in (facts.get("business") or {}).values()]])
 
 
 def allowed_amounts(facts: dict, extra_text: str = "") -> set:
     """Prices a reply may quote: catalogue prices, amounts in the owner's notes or a look-up."""
     out = {a for p in facts.get("products", []) if (a := amount(str(p.get("price", "")))) is not None}
-    return out | amounts_in(facts.get("notes", "")) | amounts_in(extra_text) | {
+    return out | amounts_in(written_text(facts)) | amounts_in(extra_text) | {
         a for a in (amount(v) for v in re.findall(r'"price":\s*"([\d.]+)"', extra_text or "")) if a is not None}
 
 
@@ -90,4 +100,4 @@ def allowed_times(facts: dict, extra_text: str = "") -> set:
     out = set()
     for window in (facts.get("opening_hours") or {}).values():
         out |= times_in(f"{window.get('open', '')} {window.get('close', '')}")
-    return out | times_in(facts.get("notes", "")) | times_in(extra_text)
+    return out | times_in(written_text(facts)) | times_in(extra_text)

@@ -339,7 +339,9 @@ def starter_test(request):
         )
         return redirect("automation:list")
     first = contact.contact.first_name if contact.contact_id else ""
-    whatsapp_api.send_message(account, contact, merge_first_name(text, first))
+    from apps.automation.variables import merge_business_facts
+
+    whatsapp_api.send_message(account, contact, merge_business_facts(merge_first_name(text, first), account))
     messages.success(
         request,
         "Test sent to your WhatsApp. This is exactly the message Akilent will send when this automation runs.",

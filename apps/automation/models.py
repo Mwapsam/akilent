@@ -222,3 +222,43 @@ class WorkflowWebhookDelivery(models.Model):
 
     def __str__(self):
         return f"{self.run_id}/{self.step_id} -> {self.url} [{self.status}]"
+
+
+class ReplyPattern(models.Model):
+    """A reply the team keeps sending to the same kind of question (see ``apps.automation.patterns``).
+
+    Found by a daily job from real conversations; offered in the inbox as "You've answered this N
+    times. Turn it into an automation?". Recomputed from scratch each day, so it's derived data:
+    deleting every row loses nothing but the offers.
+    """
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="reply_patterns")
+    key = models.CharField(max_length=64)            # stable hash of the typical reply's words
+    reply_text = models.TextField()                  # the most typical of the team's replies
+    count = models.PositiveIntegerField(default=0)   # replies in the cluster
+    message_ids = models.JSONField(default=list)     # the team's outbound Message ids
+    question_keywords = models.JSONField(default=list)
+    topic = models.CharField(max_length=60, blank=True, default="")
+    covered_by = models.CharField(max_length=150, blank=True, default="")  # a live automation's name
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["account", "key"], name="uniq_reply_pattern_key")]
+        ordering = ["-count"]
+
+    def __str__(self):
+        return f"Reply pattern {self.key} x{self.count} ({self.account_id})"
+
+
+class DismissedSuggestion(models.Model):
+    """An owner said "not now" to a Build recommendation or a reply pattern; hidden until ``until``."""
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="+")
+    key = models.CharField(max_length=80)             # "intent:answer_pricing", "pattern:<key>"
+    until = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["account", "key"], name="uniq_dismissed_suggestion")]
+
+    def __str__(self):
+        return f"{self.key} dismissed until {self.until:%Y-%m-%d} ({self.account_id})"

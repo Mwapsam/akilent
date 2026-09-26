@@ -105,6 +105,63 @@ def upsert_published_workflow(account, *, slug: str, name: str, definition: dict
     return workflow
 
 
+class WorkflowNotReady(ValueError):
+    """The workflow has errors that must be fixed before it can be turned on."""
+
+
+def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn_on: bool = False):
+    """Save a drafted workflow (from Build: a recommendation, an AI request, a repeated reply).
+
+    ``turn_on=False`` saves a DRAFT and never touches a live automation: if one with this slug is
+    already on, the draft gets its own slug. ``turn_on=True`` checks it with ``validate_definition``
+    (errors raise ``WorkflowNotReady``) and publishes it, replacing the same automation if it exists.
+    """
+    from apps.automation.models import Workflow
+    from apps.automation.workflow_engine import validate_definition
+
+    existing = Workflow.objects.filter(account=account, slug=slug).first()
+    if not turn_on:
+        if existing is not None and existing.status == Workflow.Status.PUBLISHED:
+            n = 2
+            while Workflow.objects.filter(account=account, slug=f"{slug}-draft-{n}"[:50]).exists():
+                n += 1
+            slug, existing = f"{slug}-draft-{n}"[:50], None
+        if existing is None:
+            return Workflow.objects.create(account=account, slug=slug, name=name, definition=definition,
+                                           status=Workflow.Status.DRAFT)
+        existing.name, existing.definition, existing.status = name, definition, Workflow.Status.DRAFT
+        existing.save(update_fields=["name", "definition", "status", "updated_at"])
+        return existing
+
+    blocking = [e for e in validate_definition(definition, account=account) if e.get("severity", "error") != "warning"]
+    if blocking:
+        raise WorkflowNotReady(blocking[0]["message"])
+    workflow = existing or Workflow(account=account, slug=slug)
+    if workflow.pk and workflow.status != Workflow.Status.PUBLISHED:
+        workflow.version += 1
+    workflow.name, workflow.definition, workflow.status = name, definition, Workflow.Status.PUBLISHED
+    workflow.save()
+    return workflow
+
+
+def published_trigger_matches(account) -> list[dict]:
+    """``[{"slug", "name", "match"}]`` for live message automations with keyword triggers."""
+    from apps.automation.models import Workflow
+
+    out = []
+    for wf in Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED):
+        trigger = (wf.definition or {}).get("trigger") or {}
+        if trigger.get("match"):
+            out.append({"slug": wf.slug, "name": wf.name, "match": trigger["match"]})
+    return out
+
+
+def published_slugs(account) -> set:
+    from apps.automation.models import Workflow
+
+    return set(Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).values_list("slug", flat=True))
+
+
 # Re-export for Phase 2 compatibility (triggers still imports from here internally)
 # This will be removed once triggers.py is fully migrated to use dispatcher
 from apps.automation.triggers import (  # noqa: E402, F401

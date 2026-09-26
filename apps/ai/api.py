@@ -43,6 +43,78 @@ def is_available(account) -> bool:
     return unavailable_reason(account) is None
 
 
+def seed_notes(account, text: str) -> bool:
+    """Start the AI notes from the owner's profile answers, only if they haven't written any yet.
+    Doesn't switch AI on. Returns whether the notes were filled."""
+    from apps.ai.models import AISettings
+
+    text = (text or "").strip()
+    if not text:
+        return False
+    ai_settings, _ = AISettings.objects.get_or_create(account=account)
+    if ai_settings.business_notes.strip():
+        return False
+    ai_settings.business_notes = text[:MAX_NOTES]
+    ai_settings.save(update_fields=["business_notes", "updated_at"])
+    return True
+
+
+DRAFT_KINDS = ("automation", "template", "template_edit")
+
+
+def request_draft(account, user, kind: str, prompt: str, context: dict | None = None):
+    """Queue an AI setup draft. Returns the ``AIDraft``, or None when AI is off for this business."""
+    from apps.ai import drafting
+    from apps.ai.models import AIDraft
+    from apps.ai.tasks import build_draft
+
+    if kind not in DRAFT_KINDS or not is_available(account):
+        return None
+    context = dict(context or {})
+    if context.get("conversation"):
+        context["conversation"] = drafting.clean_prompt(context["conversation"])
+    draft = AIDraft.objects.create(account=account, kind=kind, prompt=drafting.clean_prompt(prompt),
+                                   context=context, created_by=user if getattr(user, "pk", None) else None)
+    transaction.on_commit(lambda: build_draft.apply_async((draft.pk,), queue="ai"))
+    return draft
+
+
+def get_draft(account, draft_id, kind: str | None = None):
+    from apps.ai.models import AIDraft
+
+    try:
+        qs = AIDraft.objects.filter(account=account, pk=int(draft_id))
+    except (TypeError, ValueError):
+        return None
+    return (qs.filter(kind=kind) if kind else qs).first()
+
+
+def draft_json(draft) -> dict | None:
+    from apps.ai import drafting
+
+    return drafting.as_json(draft) if draft else None
+
+
+def mark_draft_used(draft) -> None:
+    from apps.ai.models import AIDraft
+
+    if draft is not None and draft.status == AIDraft.Status.READY:
+        draft.status, draft.used_at = AIDraft.Status.USED, timezone.now()
+        draft.save(update_fields=["status", "used_at"])
+
+
+def unchecked_facts(account, text: str) -> list[str]:
+    """Prices, times, numbers and links in ``text`` that can't be traced to the business's own facts
+    (catalogue, opening hours, profile answers, AI notes). Deterministic: works with AI off too, so
+    automation drafts can warn "K5,000 isn't in your notes"."""
+    from apps.ai import autonomy
+    from apps.ai import facts as business_facts
+    from apps.ai.models import AISettings
+
+    notes = AISettings.objects.filter(account=account).values_list("business_notes", flat=True).first() or ""
+    return autonomy.unsupported_facts(text, business_facts.build(account, business_notes=notes))
+
+
 def _enqueue(proposal) -> None:
     from apps.ai.tasks import draft_proposal
 

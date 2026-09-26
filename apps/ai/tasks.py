@@ -204,6 +204,42 @@ def refresh_memory(self, conversation_id: int) -> str:
         cache.delete(_memory_lock_key(conversation_id))
 
 
+@shared_task(bind=True, max_retries=_MAX_RETRIES, queue="ai")
+def build_draft(self, draft_id: int) -> str:
+    """Fill one setup draft (automation, template, template edit). Never creates the real thing."""
+    from apps.ai import drafting
+    from apps.ai.models import AIDraft
+    from apps.ai.providers import AIProviderError, get_ai_provider
+
+    draft = AIDraft.objects.select_related("account").filter(pk=draft_id).first()
+    if draft is None or draft.status != AIDraft.Status.PENDING:
+        return "skipped"
+
+    def fail(message: str) -> str:
+        draft.status, draft.error = AIDraft.Status.ERROR, message[:300]
+        draft.save(update_fields=["status", "error"])
+        return "error"
+
+    if _over_daily_limit(draft.account_id):
+        return fail("The daily AI limit has been reached. Try again tomorrow.")
+    try:
+        drafting.run(draft, get_ai_provider(draft.account))
+    except AIProviderError as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=5 * (2 ** self.request.retries), exc=exc)
+        return fail(str(exc))
+    except drafting.DraftError as exc:
+        return fail(str(exc))
+    except Retry:
+        raise
+    except Exception:  # noqa: BLE001 - a draft must never crash the worker loop
+        logger.exception("build_draft failed for draft=%s", draft_id)
+        return fail("Something went wrong drafting this. Try again.")
+    draft.status = AIDraft.Status.READY
+    draft.save(update_fields=["status", "result", "warnings", "model"])
+    return "ready"
+
+
 def _finish(proposal, status: str, *, error: str = "") -> str:
     proposal.status = status
     proposal.error = error[:300]

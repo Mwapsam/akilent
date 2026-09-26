@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Build — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if ai_on %}Build with AI{% else %}Build{% endif %}</h1>
+  <p class="mt-1 text-sm text-gray-600">Set Akilent up in a few minutes. Nothing goes live until you've seen exactly what it does.</p>
+</header>
+
+<nav aria-label="Setup steps" class="mb-6">
+  <ol class="flex flex-wrap gap-2 text-sm">
+    {% for n, label in steps %}
+    <li>
+      <a href="?step={{ n }}" class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 {% if n == step %}border-ink text-ink font-medium{% else %}border-border text-gray-600{% endif %}"
+         {% if n == step %}aria-current="step"{% endif %}>
+        <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-surface-muted text-xs">{{ n }}</span>{{ label }}
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+
+{% if step == 1 %}
+<form method="post" action="{% url 'build:profile' %}" class="card card-pad max-w-2xl space-y-5">
+  {% csrf_token %}
+  <div>
+    <h2 class="font-semibold text-ink">Tell us about your business</h2>
+    <p class="text-sm text-gray-600">About a minute. Every answer is optional, and each one is used in your replies and templates, so customers get your own words.</p>
+  </div>
+  <div>
+    <label class="label" for="b-sell">What do you sell?</label>
+    <input id="b-sell" name="what_you_sell" class="input" maxlength="300" value="{{ profile.what_you_sell|default:'' }}" placeholder="e.g. Solar systems for homes and shops">
+  </div>
+  <div>
+    <label class="label" for="b-location">Where are you?</label>
+    <input id="b-location" name="location" class="input" maxlength="300" value="{{ profile.location|default:'' }}" placeholder="e.g. Plot 12, Cairo Road, Lusaka (opposite the post office)">
+    <p class="text-xs text-gray-500 mt-1">Used to answer “where are you?” automatically.</p>
+  </div>
+  <fieldset x-data="{ delivers: '{% if profile.delivers %}yes{% elif profile.delivers is False %}no{% endif %}' }">
+    <legend class="label">Do you deliver?</legend>
+    <div class="flex gap-4 text-sm">
+      <label class="flex items-center gap-2"><input type="radio" name="delivers" value="yes" x-model="delivers"> Yes</label>
+      <label class="flex items-center gap-2"><input type="radio" name="delivers" value="no" x-model="delivers"> No, customers collect</label>
+    </div>
+    <input x-show="delivers === 'yes'" x-cloak name="delivery_notes" class="input mt-2" maxlength="300"
+           value="{{ profile.delivery_notes|default:'' }}" placeholder="Where and how fast, e.g. Lusaka next day, Copperbelt in 3 days">
+  </fieldset>
+  <fieldset>
+    <legend class="label">How do customers pay?</legend>
+    <div class="grid gap-1 sm:grid-cols-3 text-sm">
+      {% for key, label in payment_choices %}
+      <label class="flex items-center gap-2 min-h-[2rem]"><input type="checkbox" name="payment_methods" value="{{ key }}" {% if key in profile.payment_methods %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+    </div>
+    <input name="payment_other" class="input mt-2" maxlength="120" value="{{ profile.payment_other|default:'' }}" placeholder="Anything else, e.g. Zamtel Kwacha">
+  </fieldset>
+  <div>
+    <label class="label" for="b-web">Website <span class="font-normal text-gray-400">· Optional</span></label>
+    <input id="b-web" name="website" class="input" maxlength="300" value="{{ profile.website|default:'' }}" placeholder="example.com">
+  </div>
+  <details class="rounded-xl border border-border p-4" open>
+    <summary class="font-medium text-ink cursor-pointer">Opening hours</summary>
+    <p class="text-xs text-gray-500 mt-1 mb-3">Used to reply when you're closed and to answer “are you open?”.</p>
+    <label class="flex items-center gap-2 text-sm mb-3"><input type="checkbox" name="set_hours" checked> Save these opening hours</label>
+    <div class="space-y-4">{% include "accounts/_hours_fields.html" %}</div>
+  </details>
+  <div class="flex justify-end"><button class="btn btn-primary">Save and continue</button></div>
+</form>
+
+{% elif step == 2 %}
+<section class="card card-pad max-w-2xl space-y-5">
+  <div>
+    <h2 class="font-semibold text-ink">Bring in what you have</h2>
+    <p class="text-sm text-gray-600">Akilent works from your own messages and labels, not generic ones.</p>
+  </div>
+  <div class="rounded-xl border border-border p-4">
+    <p class="font-medium text-ink">Your WhatsApp templates</p>
+    <p class="text-sm text-gray-600 mt-0.5">
+      {% if template_counts.total %}{{ template_counts.total }} in Akilent: {{ template_counts.approved }} approved{% if template_counts.pending %}, {{ template_counts.pending }} waiting for Meta{% endif %}{% if template_counts.rejected %}, {{ template_counts.rejected }} rejected{% endif %}.
+      {% else %}None yet. Bring in the ones you made in Meta, or create one in step 3.{% endif %}
+    </p>
+    <form method="post" action="{% url 'build:import-templates' %}" class="mt-2">{% csrf_token %}<button class="btn btn-secondary btn-sm">Import from WhatsApp</button></form>
+  </div>
+  <div class="rounded-xl border border-border p-4">
+    <p class="font-medium text-ink">Customer labels</p>
+    <p class="text-sm text-gray-600 mt-0.5">WhatsApp doesn't share the labels from the WhatsApp Business app, so Akilent starts with these, based on your answers. Automations add them as customers ask:</p>
+    <p class="mt-2 flex flex-wrap gap-1.5">{% for tag in starter_tags %}<span class="badge badge-neutral">{{ tag }}</span>{% endfor %}</p>
+  </div>
+  <div class="rounded-xl border border-dashed border-border p-4 text-sm text-gray-500">
+    <p class="font-medium text-gray-600">Your WhatsApp catalog</p>
+    <p class="mt-0.5">Coming later: products and prices from your WhatsApp catalog, so AI can answer from them.</p>
+  </div>
+  <div class="flex justify-between"><a href="?step=1" class="btn btn-ghost btn-sm">Back</a><a href="?step=3" class="btn btn-primary">Continue</a></div>
+</section>
+
+{% else %}
+<section class="space-y-6">
+  <div>
+    <h2 class="font-semibold text-ink">Three things to automate</h2>
+    <p class="text-sm text-gray-600">Picked from your own conversations{% if not cards %}, once there are some{% endif %}. Review one to see exactly what it will do.</p>
+  </div>
+  {% if cards %}
+  <div class="grid gap-4 md:grid-cols-3">
+    {% for card in cards %}
+    <div class="card card-pad flex flex-col">
+      <h3 class="font-semibold text-ink">{{ card.title }}</h3>
+      <p class="mt-1 text-sm text-gray-600">{{ card.evidence }}</p>
+      <div class="mt-auto pt-4 flex gap-2">
+        {% if card.key|slice:":8" == "pattern:" %}
+        <a class="btn btn-primary btn-sm" href="{% url 'build:review' %}?pattern={{ card.key|slice:"8:" }}">Review</a>
+        {% else %}
+        <a class="btn btn-primary btn-sm" href="{% url 'build:review' %}?intent={{ card.intent }}">Review</a>
+        {% endif %}
+        <form method="post" action="{% url 'build:dismiss' %}">{% csrf_token %}<input type="hidden" name="key" value="{{ card.key }}"><button class="btn btn-ghost btn-sm">Dismiss</button></form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="card card-pad text-sm text-gray-600">Nothing to suggest right now: what you'd automate is already on, or there aren't enough conversations yet. Check back after a few days of messages, or browse <a class="underline" href="{% url 'automation:list' %}">all automations</a>.</p>
+  {% endif %}
+
+  {% if ai_on %}
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="card card-pad space-y-3" x-data="aiDraft({kind: 'automation', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '{% url 'build:review' %}?draft=' + d.id } })">
+      {% csrf_token %}
+      <h3 class="font-semibold text-ink">Describe something else</h3>
+      <div x-data="{ mode: 'describe', prompt: '', convo: '' }" class="space-y-2">
+        <div class="flex gap-3 text-sm" role="radiogroup" aria-label="How">
+          <label class="flex items-center gap-1.5"><input type="radio" value="describe" x-model="mode"> In my words</label>
+          <label class="flex items-center gap-1.5"><input type="radio" value="paste" x-model="mode"> Paste a conversation</label>
+        </div>
+        <textarea x-show="mode === 'describe'" x-model="prompt" class="textarea" rows="3" aria-label="What should happen"
+                  placeholder="When someone asks about installation, tell them it takes one day and is free in Lusaka."></textarea>
+        <textarea x-show="mode === 'paste'" x-cloak x-model="convo" class="textarea" rows="5" aria-label="A conversation to copy"
+                  placeholder="Customer: Where are you?&#10;Us: We're on Cairo Road, opposite the post office."></textarea>
+        <button type="button" class="btn btn-primary btn-sm" :disabled="busy"
+                @click="start(mode === 'describe' ? {prompt} : {conversation: convo})">
+          <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
+        </button>
+        <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+        <p class="text-xs text-gray-500">AI only picks what you want; Akilent builds it and shows you before anything is saved.</p>
+      </div>
+    </div>
+    <div class="card card-pad space-y-3" x-data="aiDraft({kind: 'template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '{% url 'whatsapp-template-create' %}?draft=' + d.id } })">
+      <h3 class="font-semibold text-ink">Create a template</h3>
+      <div x-data="{ prompt: '' }" class="space-y-2">
+        <textarea x-model="prompt" class="textarea" rows="3" aria-label="The message you need"
+                  placeholder="Thank customers after they buy and remind them to keep their receipt."></textarea>
+        <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !prompt.trim()" @click="start({prompt})">
+          <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
+        </button>
+        <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+        <p class="text-xs text-gray-500">You'll check it on the template page, then submit it to WhatsApp for approval.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="flex justify-between"><a href="?step=2" class="btn btn-ghost btn-sm">Back</a><a href="{% url 'automation:list' %}" class="btn btn-secondary btn-sm">See all automations</a></div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/ai_draft.js' %}"></script>{% endblock %}

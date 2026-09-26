@@ -109,6 +109,46 @@ class AIProposal(models.Model):
         return f"AI proposal {self.pk} ({self.action or 'pending'}, {self.status})"
 
 
+class AIDraft(models.Model):
+    """Something AI drafted for setting Akilent up: an automation request, a template, a template edit.
+
+    Never the real thing. ``result`` is only an intent plus words (automations), or form fields
+    (templates); the owner reviews it and Akilent's own builders make the real workflow or template
+    (see ``apps.ai.drafting``). Drafted in the background, polled by the page.
+    """
+
+    class Kind(models.TextChoices):
+        AUTOMATION = "automation", "Automation"
+        TEMPLATE = "template", "Template"
+        TEMPLATE_EDIT = "template_edit", "Template edit"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        READY = "ready", "Ready"
+        ERROR = "error", "Error"
+        USED = "used", "Used"
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="ai_drafts")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    prompt = models.TextField()                       # the owner's request, contact details masked
+    context = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    result = models.JSONField(default=dict, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+    error = models.CharField(max_length=300, blank=True, default="")
+    model = models.CharField(max_length=80, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"AI draft {self.pk} ({self.kind}, {self.status})"
+
+
 class AIConversationMemory(models.Model):
     """A rolling summary of the earlier part of one conversation, so AI keeps the thread without
     being sent the whole history.

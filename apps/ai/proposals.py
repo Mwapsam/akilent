@@ -38,7 +38,7 @@ MAX_EXTRAS = 3
 # (apps.ai.autonomy); anything unrecognised is "other", which is never answered automatically.
 INTENTS = ("greeting", "hours", "location", "product_info", "price", "delivery", "payment", "other")
 EXTRA_KINDS = ("tag", "track_interest", "follow_up")
-_SOURCES = ("contact.", "account.", "context.")
+_SOURCES = ("contact.", "account.", "context.", "business.")
 
 
 class ProposalError(ValueError):

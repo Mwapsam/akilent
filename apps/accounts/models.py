@@ -218,3 +218,26 @@ class BusinessHours(models.Model):
 
     def __str__(self):
         return f"Hours for {self.account_id} ({self.timezone})"
+
+
+class BusinessProfile(models.Model):
+    """What a business tells Akilent about itself, once, in plain answers (see ``apps.accounts.profile``).
+
+    Business data, not AI data: automations use it in replies and template blanks
+    (``business.location``...), and AI treats it as checked facts. Every field is optional.
+    """
+
+    account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="business_profile")
+    what_you_sell = models.CharField(max_length=300, blank=True, default="")
+    location = models.CharField(max_length=300, blank=True, default="")
+    delivers = models.BooleanField(null=True, blank=True)      # None = not answered
+    delivery_notes = models.CharField(max_length=300, blank=True, default="")
+    # Keys of apps.accounts.profile.PAYMENT_METHODS, plus free text in payment_other.
+    payment_methods = models.JSONField(default=list, blank=True)
+    payment_other = models.CharField(max_length=120, blank=True, default="")
+    website = models.URLField(max_length=300, blank=True, default="")
+    completed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Business profile for {self.account_id}"

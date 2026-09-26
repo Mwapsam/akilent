@@ -523,9 +523,9 @@ def _conversation_for_run(run: WorkflowRun, step: dict, *, fallback: bool = Fals
 def _first_name_merge(run: WorkflowRun, text: str) -> str:
     # Plain replace, not str.format: the text is owner-written and must not be able to
     # reach into objects with "{contact.__class__}" style placeholders.
-    from apps.automation.variables import merge_first_name
+    from apps.automation.variables import merge_business_facts, merge_first_name
 
-    return merge_first_name(text, run.contact.first_name)
+    return merge_business_facts(merge_first_name(text, run.contact.first_name), run.contact.account)
 
 
 def _run_interactive(run: WorkflowRun, step: dict) -> dict:
@@ -621,7 +621,10 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
     conversation = _conversation_for_run(run, step)
     text = _first_name_merge(run, step.get("text"))
     try:
-        return run_action("reply", {"account": run.workflow.account}, conversation=conversation, body=text)
+        # A fixed key per run and step: a retried step returns the first message instead of sending
+        # a second, and the inbox can tell this reply came from an automation, not a person.
+        return run_action("reply", {"account": run.workflow.account}, conversation=conversation, body=text,
+                          idempotency_key=f"wf:{run.pk}:{step.get('id')}")
     except ActionError as exc:
         raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
 

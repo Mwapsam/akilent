@@ -245,8 +245,11 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
         metadata = {"message_type": log.message_type}
         # An automatic AI reply (apps.ai.autonomy) is sent with an "ai-auto:" key, so the inbox
         # can label it "Sent by AI" without WhatsApp knowing anything about AI.
-        if (getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or "").startswith("ai-auto:"):
+        key = getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or ""
+        if key.startswith("ai-auto:"):
             metadata["sent_by"] = "ai"
+        elif key.startswith("wf:"):  # an automation's reply_text step (apps.automation.workflow_engine)
+            metadata["sent_by"] = "automation"
         if log.status == MessageLog.Status.FAILED:
             # OutboundMessage carries the error code; MessageLog doesn't. A
             # human/template/workflow reply that fails to send is the one place

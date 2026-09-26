@@ -178,6 +178,28 @@
     </ol>
   </header>
 
+  {% if ai_on and not form.name %}
+  <section class="card card-pad mb-6 space-y-2"
+           x-data="aiDraft({kind: 'template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '?draft=' + d.id } })">
+    <h2 class="text-base font-semibold text-ink">Describe the message you need</h2>
+    <p class="text-sm text-gray-500">AI fills in the form below for you: category, wording, blanks and examples. You check it, then submit.</p>
+    <div x-data="{ prompt: '' }" class="space-y-2">
+      <textarea x-model="prompt" class="textarea" rows="2" aria-label="The message you need"
+                placeholder="Thank customers after they buy and remind them to keep their receipt."></textarea>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Remind a customer their invoice is still unpaid.'">Unpaid invoice reminder</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Tell a customer their order is ready to collect.'">Order ready</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Thank customers after they buy.'">Thank you after buying</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !prompt.trim()" @click="start({prompt})">
+        <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
+      </button>
+      <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+    </div>
+    {% csrf_token %}
+  </section>
+  {% endif %}
+
   {# ── Step 1: set up (starter picker). Collapses once a starter is applied. ── #}
   <section id="wa-setup" class="mb-6">
     <div class="card">
@@ -214,6 +236,13 @@
   <div class="grid md:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start scroll-mt-4" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
     <form method="post" id="wa-form" class="space-y-5 min-w-0">
       {% csrf_token %}
+      {% if ai_draft %}
+      <section class="rounded-xl border border-border p-4 text-sm" aria-label="Why I built it this way">
+        <p class="font-medium text-ink">Drafted by AI. Why I built it this way:</p>
+        <ul class="mt-1 list-disc pl-5 space-y-0.5 text-gray-700">{% for r in ai_draft.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+        <p class="mt-2 text-xs text-gray-500">Check every word, then submit. WhatsApp reviews it before it can be sent.</p>
+      </section>
+      {% endif %}
 
       {# Template details #}
       <section class="card card-pad space-y-5" aria-labelledby="wa-details-h">
@@ -264,10 +293,9 @@
           <div>
             <label class="label" for="tpl-language">Language</label>
             <select id="tpl-language" name="language" class="select" required>
-              <option value="en" {% if form.language == "en" or not form.language %}selected{% endif %}>English</option>
-              <option value="es" {% if form.language == "es" %}selected{% endif %}>Spanish</option>
-              <option value="fr" {% if form.language == "fr" %}selected{% endif %}>French</option>
-              <option value="pt_PT" {% if form.language == "pt_PT" %}selected{% endif %}>Portuguese</option>
+              {% for code, label in languages %}
+              <option value="{{ code }}" {% if form.language == code or not form.language and code == "en" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
             </select>
           </div>
         </div>
@@ -337,6 +365,40 @@
           </div>
           <p class="text-xs text-gray-400 mt-1.5">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… for anything that changes per customer — a card for each appears under Personalize.</p>
           <p id="wa-variable-warning" class="hidden text-xs text-amber-600 mt-1"></p>
+          {# Likely Meta rejections, checked as you type (apps.whatsapp.template_lint). #}
+          <ul id="wa-lint" class="mt-2 space-y-1 text-xs" aria-live="polite" data-url="{% url 'whatsapp-template-lint' %}"></ul>
+          {% if ai_on %}
+          <div class="mt-2" x-data="aiDraft({kind: 'template_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
+            <div class="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Improve with AI">
+              <span class="text-gray-500">Improve with AI:</span>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('friendlier'))">Friendlier</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('shorter'))">Shorter</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('business_name'))">Add our business name</button>
+              <span x-data="{ lang: 'sw' }" class="inline-flex items-center gap-1">
+                <select x-model="lang" class="select select-sm w-auto" aria-label="Translate to">
+                  <option value="sw">Swahili</option><option value="fr">French</option><option value="pt_PT">Portuguese</option>
+                  <option value="es">Spanish</option><option value="bem">Bemba</option><option value="ny">Nyanja</option>
+                </select>
+                <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('translate:' + lang))">Translate</button>
+              </span>
+              <span x-show="busy" x-cloak class="text-gray-500">Working…</span>
+            </div>
+            <p class="text-xs text-red-700 mt-1" x-show="error" x-text="error" role="alert"></p>
+            <div x-show="draft" x-cloak class="mt-2 rounded-xl border border-border p-3 text-sm">
+              <p class="text-xs font-semibold text-gray-500">Suggested change</p>
+              <p class="mt-1 whitespace-pre-line">
+                <template x-for="part in (draft && draft.result.diff) || []">
+                  <span :class="part[0] === 'add' ? 'bg-green-100 text-green-900' : (part[0] === 'del' ? 'line-through text-red-700' : '')" x-text="part[1] + ' '"></span>
+                </template>
+              </p>
+              <ul class="mt-1 text-xs text-amber-700" x-show="draft && draft.warnings.length"><template x-for="w in (draft && draft.warnings) || []"><li x-text="w"></li></template></ul>
+              <div class="mt-2 flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm" @click="waSetBody(draft.result.after); draft = null">Use this</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
         </div>
 
         <div>
@@ -685,4 +747,43 @@
 })();
 </script>
 {% endverbatim %}
+<script src="{% static 'js/ai_draft.js' %}"></script>
+<script>
+(function () {
+  // "Meta may reject this" warnings, re-checked as the owner types (apps.whatsapp.template_lint).
+  const list = document.getElementById('wa-lint');
+  const form = document.getElementById('wa-form');
+  if (!list || !form) return;
+  const val = (name) => (form.querySelector('[name="' + name + '"]') || {}).value || '';
+  let timer;
+  async function check() {
+    const fd = new FormData();
+    fd.set('csrfmiddlewaretoken', val('csrfmiddlewaretoken'));
+    ['category', 'language', 'body', 'header', 'footer'].forEach((k) => fd.set(k, val(k)));
+    const r = await fetch(list.dataset.url, { method: 'POST', body: fd, credentials: 'same-origin' });
+    const data = await r.json().catch(() => ({ warnings: [] }));
+    list.replaceChildren(...(data.warnings || []).map((w) => {
+      const li = document.createElement('li');
+      li.className = w.level === 'warning' ? 'text-amber-700' : 'text-gray-500';
+      li.textContent = w.text;
+      return li;
+    }));
+  }
+  const soon = () => { clearTimeout(timer); timer = setTimeout(check, 500); };
+  form.addEventListener('input', soon);
+  form.addEventListener('change', soon);
+  document.addEventListener('click', (e) => { if (e.target.closest('.wa-cat-btn')) soon(); });
+  if (val('body')) check();
+
+  // For "Improve with AI": what to send, and how to put the accepted text back.
+  window.waEditFields = (instruction) => ({
+    body: val('body'), instruction: instruction, category: val('category'), language: val('language'),
+  });
+  window.waSetBody = (text) => {
+    const body = document.getElementById('tpl-body');
+    body.value = text;
+    body.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+})();
+</script>
 {% endblock %}

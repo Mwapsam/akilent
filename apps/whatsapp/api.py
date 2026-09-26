@@ -227,3 +227,49 @@ def approved_template_by_name(account: Account, name: str):
     return MessageTemplate.objects.filter(
         account=account, whatsapp_template_name=name, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     ).first()
+
+
+def first_approved_template(account: Account):
+    """The account's first approved template by name (for a sensible default), or None."""
+    from apps.whatsapp.models import MessageTemplate
+
+    return MessageTemplate.objects.filter(
+        account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    ).exclude(whatsapp_template_name__isnull=True).order_by("name").first()
+
+
+def template_counts(account: Account) -> dict:
+    """``{"total", "approved", "pending", "rejected"}`` for the account's WhatsApp templates."""
+    from django.db.models import Count
+
+    from apps.whatsapp.models import MessageTemplate
+
+    rows = dict(MessageTemplate.objects.filter(account=account).values_list("approval_status")
+                .annotate(n=Count("id")).values_list("approval_status", "n"))
+    return {"total": sum(rows.values()), "approved": rows.get("approved", 0),
+            "pending": rows.get("pending", 0), "rejected": rows.get("rejected", 0)}
+
+
+def validate_template_fields(**fields) -> str:
+    """The first problem with a template's fields as ``template_builder`` sees it, or "" if valid."""
+    from apps.whatsapp.template_builder import TemplateBuilderError, validate_fields
+
+    try:
+        validate_fields(**fields)
+    except TemplateBuilderError as exc:
+        return str(exc)
+    return ""
+
+
+def lint_template(**fields) -> list[dict]:
+    """Likely reasons Meta would reject or re-classify a template (see ``template_lint``)."""
+    from apps.whatsapp.template_lint import lint
+
+    return lint(**fields)
+
+
+def import_templates(account: Account) -> dict:
+    """Pull the business's templates from Meta now (the "Sync now" button). ``{"synced", "errors"}``."""
+    from apps.whatsapp.tasks import sync_templates_for_account
+
+    return sync_templates_for_account(account)

@@ -6,6 +6,8 @@ A blank is described in a step's ``variable_mapping`` as one of:
   read from the customer being messaged, so each person gets their own value;
 * ``"contact.<attr>"``: one of the customer's custom fields;
 * ``"account.company_name"``: the business's own name (same for everyone, and correct);
+* ``"business.location"`` / ``"business.website"`` / ``"business.payment_methods"`` /
+  ``"business.delivery"``: the owner's answers from "Tell us about your business";
 * ``"context.<key>"``: something the run recorded (for example what the customer tapped);
 * a step's ``variable_fallbacks`` maps a blank to the text to use when a customer has no value
   for it, since WhatsApp rejects an empty blank;
@@ -20,7 +22,11 @@ CHOICES = (
     ("full_name", "contact.full_name", "Customer's full name", "there"),
     ("phone", "contact.phone", "Customer's phone number", ""),
     ("business", "account.company_name", "Your business name", ""),
+    ("location", "business.location", "Where you are", ""),
+    ("payment", "business.payment_methods", "How customers can pay", ""),
+    ("website", "business.website", "Your website", ""),
 )
+SOURCE_PREFIXES = ("contact.", "account.", "context.", "business.")
 _BY_KEY = {key: (source, label, fallback) for key, source, label, fallback in CHOICES}
 
 _CONTACT_FIELDS = ("first_name", "last_name", "full_name", "phone", "email")
@@ -31,6 +37,28 @@ _BUSINESS_LIKE = ("company", "business", "shop", "store", "brand", "organisation
 def merge_first_name(text: str, first_name: str) -> str:
     """``{first_name}`` becomes the customer's first name, or "there" when we don't have one."""
     return (text or "").replace("{first_name}", (first_name or "").strip() or "there")
+
+
+BUSINESS_PLACEHOLDERS = {
+    "{location}": "location", "{payment_methods}": "payment_methods", "{website}": "website",
+    "{delivery}": "delivery", "{opening_hours}": "opening_hours",
+}
+
+
+def merge_business_facts(text: str, account) -> str:
+    """``{location}`` / ``{payment_methods}`` / ``{website}`` / ``{delivery}`` / ``{opening_hours}``
+    become the owner's answers, so a reply changes when they update their profile or hours. An
+    unanswered one is left as written."""
+    if not text or "{" not in text:
+        return text or ""
+    from apps.accounts import api as accounts_api
+
+    for placeholder, key in BUSINESS_PLACEHOLDERS.items():
+        if placeholder in text:
+            value = accounts_api.business_fact(account, key)
+            if value:
+                text = text.replace(placeholder, value)
+    return text
 
 
 def default_choice(variable: str) -> str:
@@ -65,7 +93,7 @@ def entry_from_choice(choice: str, literal: str = "", fallback: str = ""):
 
 def is_fixed_text(source) -> bool:
     """True when ``source`` sends the same text to everyone."""
-    return not (isinstance(source, str) and source.startswith(("contact.", "account.", "context.")))
+    return not (isinstance(source, str) and source.startswith(SOURCE_PREFIXES))
 
 
 def read_source(source: str, *, contact, account, context: dict):
@@ -85,6 +113,10 @@ def read_source(source: str, *, contact, account, context: dict):
     if source.startswith("context."):
         value = context.get(source[len("context."):])
         return None if value in (None, "") else str(value)
+    if source.startswith("business."):
+        from apps.accounts import api as accounts_api
+
+        return accounts_api.business_fact(account, source[len("business."):])
     return source
 
 

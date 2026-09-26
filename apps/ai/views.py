@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.ai import api as ai_api
@@ -76,6 +78,44 @@ def settings_ai_autopilot(request):
         "account": account, "active_tab": "ai", "report": ai_api.autopilot_report(account, days=days),
         "ai": ai_api.settings_for(account),
     })
+
+
+@login_required
+@require_POST
+def draft_create(request):
+    """Queue an AI setup draft; the page polls ``draft_status``. JSON in and out."""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    kind = request.POST.get("kind", "")
+    prompt = (request.POST.get("prompt") or "").strip()
+    context = {}
+    if kind == "automation":
+        context["conversation"] = request.POST.get("conversation", "")
+        if not prompt and not context["conversation"].strip():
+            return JsonResponse({"ok": False, "error": "Describe what you want, or paste a conversation."}, status=400)
+        prompt = prompt or "Turn this conversation into an automation."
+    elif kind == "template":
+        if not prompt:
+            return JsonResponse({"ok": False, "error": "Describe the message you need."}, status=400)
+    elif kind == "template_edit":
+        context = {k: request.POST.get(k, "") for k in ("body", "instruction", "category", "language")}
+        if not context["body"].strip():
+            return JsonResponse({"ok": False, "error": "Write the message first."}, status=400)
+        prompt = context["instruction"]
+    draft = ai_api.request_draft(account, request.user, kind, prompt, context)
+    if draft is None:
+        return JsonResponse({"ok": False, "error": "AI isn't switched on for your business (Settings, AI)."}, status=400)
+    return JsonResponse({"ok": True, "draft": ai_api.draft_json(draft)})
+
+
+@login_required
+def draft_status(request, pk: int):
+    account = get_current_account(request)
+    draft = ai_api.get_draft(account, pk) if account else None
+    if draft is None:
+        return JsonResponse({"ok": False, "error": "not found"}, status=404)
+    return JsonResponse({"ok": True, "draft": ai_api.draft_json(draft)})
 
 
 def autonomy_site_on() -> bool:

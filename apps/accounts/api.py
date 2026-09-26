@@ -36,6 +36,28 @@ def list_active_accounts():
     return Account.objects.filter(is_active=True).order_by("company_name")
 
 
+def business_fact(account, key: str):
+    """One business-profile answer as text (``location``, ``website``, ``payment_methods``,
+    ``delivery``, ``what_you_sell``), or None if the owner hasn't answered it."""
+    from apps.accounts import profile
+
+    return profile.value(account, key)
+
+
+def business_facts(account) -> dict:
+    """The answered business-profile facts, e.g. ``{"location": "...", "payment_methods": "..."}``."""
+    from apps.accounts import profile
+
+    return profile.as_facts(account)
+
+
+def business_hours_text(account) -> str:
+    """Opening hours in words ("Monday to Friday 08:00-17:00, ..."), or "" when none are set."""
+    from apps.accounts import business_hours
+
+    return business_hours.describe(account)
+
+
 def is_account_admin(user, account) -> bool:
     """Whether ``user`` is an owner or admin of ``account``."""
     from apps.accounts.models import Membership

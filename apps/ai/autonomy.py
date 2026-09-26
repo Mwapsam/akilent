@@ -42,8 +42,10 @@ TOPICS = {
 }
 # Unlocked only once the facts behind them are structured enough to check.
 TOPIC_LOCKS = {
-    "price": "Add your products and prices under Orders first, so every price AI quotes can be checked.",
+    "price": "Needs a product catalogue with prices, so every price AI quotes can be checked (coming with catalog sync).",
     "delivery": "Coming later: delivery rules aren't structured yet, so AI can't check them.",
+    "location": "Tell Akilent where you are first (Build, step 1), so AI answers from your own words.",
+    "payment": "Tell Akilent how customers pay first (Build, step 1), so AI answers from your own words.",
 }
 # Owners see the words; the numbers stay behind the scenes and in the audit record.
 CONFIDENCE_CHOICES = ((0.9, "Very careful"), (0.85, "Careful"), (0.75, "Balanced"))
@@ -73,9 +75,15 @@ def confidence_label(threshold: float) -> str:
 
 def locked_topics(account, facts: dict | None = None) -> dict:
     """``{topic: why}`` for topics this business can't use yet, because their facts can't be checked."""
+    facts = facts if facts is not None else business_facts.build(account)
+    profile = facts.get("business") or {}
     locks = {"delivery": TOPIC_LOCKS["delivery"]}
-    if not (facts if facts is not None else business_facts.build(account))["products"]:
+    if not facts.get("products"):
         locks["price"] = TOPIC_LOCKS["price"]
+    if not profile.get("location"):
+        locks["location"] = TOPIC_LOCKS["location"]
+    if not profile.get("payment_methods"):
+        locks["payment"] = TOPIC_LOCKS["payment"]
     return locks
 
 
@@ -106,7 +114,7 @@ def unsupported_facts(reply: str, facts: dict, extra_text: str = "") -> list[str
         if business_facts.minutes_of(m) not in times:
             problems.append(m.group(0).strip())
     rest = business_facts.TIME.sub(" ", rest)
-    written = "\n".join([facts.get("notes", ""), extra_text or "",
+    written = "\n".join([business_facts.written_text(facts), extra_text or "",
                          " ".join(f"{p.get('name')} {p.get('price')}" for p in facts.get("products", []))])
     known = _plain_numbers(written)
     problems += [n for n in _NUMBER.findall(rest) if not all(p in known for p in _plain_numbers(n))]

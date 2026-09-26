@@ -209,8 +209,11 @@ def template_create(request):
             )
         except TemplateBuilderError as exc:
             messages.error(request, str(exc))
+            from apps.ai import api as ai_api
+
             return render(request, "whatsapp/template_create.html", {
                 "account": account, "categories": MessageTemplate.Category.choices,
+                "languages": _languages(request.POST.get("language")), "ai_on": ai_api.is_available(account),
                 "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
                 "initial_variables_json": json.dumps(list(zip(labels, examples))),
                 "data_fields_json": _data_fields_json(account),
@@ -220,14 +223,52 @@ def template_create(request):
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
 
+    from apps.ai import api as ai_api
+
+    form, variables, ai_draft = {}, [], None
+    draft = ai_api.get_draft(account, request.GET.get("draft"), kind="template") if request.GET.get("draft") else None
+    if draft is not None and draft.status in ("ready", "used"):
+        fields = draft.result or {}
+        form = {k: fields.get(k, "") for k in ("name", "category", "language", "header", "body", "footer")}
+        form["header_format"] = "text" if form["header"] else "none"
+        variables = [[v.get("label", ""), v.get("example", "")] for v in fields.get("variables") or []]
+        ai_draft = {"reasons": fields.get("reasons") or [], "warnings": draft.warnings or []}
+        ai_api.mark_draft_used(draft)
     return render(request, "whatsapp/template_create.html", {
-        "account": account, "categories": MessageTemplate.Category.choices, "form": {},
+        "account": account, "categories": MessageTemplate.Category.choices, "form": form,
         "starters_json": json.dumps(STARTER_CATEGORIES),
-        "initial_variables_json": "[]",
+        "initial_variables_json": json.dumps(variables),
         "data_fields_json": _data_fields_json(account),
         "custom_field_types": CustomAttributeDef.Type.choices,
         "media_upload_url": reverse("whatsapp-template-media-upload"),
+        "languages": _languages(form.get("language")), "ai_on": ai_api.is_available(account), "ai_draft": ai_draft,
     })
+
+
+_LANGUAGES = [("en", "English"), ("es", "Spanish"), ("fr", "French"), ("pt_PT", "Portuguese"), ("sw", "Swahili")]
+
+
+def _languages(current: str | None) -> list:
+    """The language menu, plus the draft's language if it's another one Meta supports."""
+    from apps.whatsapp.template_lint import META_LANGUAGES
+
+    out = list(_LANGUAGES)
+    if current and current not in dict(out) and current in META_LANGUAGES:
+        out.append((current, current))
+    return out
+
+
+@login_required
+@module_required("whatsapp")
+@require_POST
+def template_lint(request):
+    """Live "Meta may reject this" warnings for the template form. JSON."""
+    from apps.whatsapp.template_lint import lint
+
+    warnings = lint(category=request.POST.get("category", ""), language=request.POST.get("language", ""),
+                    body=request.POST.get("body", ""), header=request.POST.get("header", ""),
+                    footer=request.POST.get("footer", ""))
+    return JsonResponse({"ok": True, "warnings": warnings})
 
 
 # --- Campaigns (R1.5c): create + list + detail. Sending logic lives in

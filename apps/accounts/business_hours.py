@@ -55,6 +55,39 @@ def clean_schedule(raw: dict | None) -> dict:
     return clean
 
 
+COMMON_TIMEZONES = [
+    "Africa/Lusaka", "Africa/Harare", "Africa/Johannesburg", "Africa/Nairobi", "Africa/Lagos",
+    "Africa/Accra", "Africa/Cairo", "Europe/London", "UTC",
+]
+
+
+def timezone_choices() -> list[str]:
+    """Common African zones first, then every other zone."""
+    return COMMON_TIMEZONES + sorted(z for z in available_timezones() if z not in COMMON_TIMEZONES)
+
+
+def form_rows(hours) -> list[dict]:
+    """One form row per weekday. A business with no hours yet sees Monday to Friday, 9 to 5,
+    pre-filled so the common case is one click; nothing is stored until they save."""
+    saved = hours.schedule if hours and hours.schedule else None
+    rows = []
+    for day in DAYS:
+        window = (saved or {}).get(day) if saved else (DEFAULT_WINDOW if day not in ("sat", "sun") else None)
+        window = window or DEFAULT_WINDOW
+        is_open = bool((saved or {}).get(day)) if saved else day not in ("sat", "sun")
+        rows.append({"key": day, "label": DAY_LABELS[day], "open": is_open,
+                     "from": window["open"], "to": window["close"]})
+    return rows
+
+
+def schedule_from_form(data) -> dict:
+    """The schedule from the hours form (``<day>_open`` / ``<day>_from`` / ``<day>_to`` fields)."""
+    return {
+        day: {"open": data.get(f"{day}_from", ""), "close": data.get(f"{day}_to", "")}
+        for day in DAYS if data.get(f"{day}_open") == "on"
+    }
+
+
 def get_hours(account):
     from apps.accounts.models import BusinessHours
 
@@ -75,6 +108,29 @@ def save_hours(account, *, tz: str, schedule: dict | None):
         defaults={"timezone": clean_timezone(tz), "schedule": clean_schedule(schedule)},
     )
     return hours
+
+
+def describe(account) -> str:
+    """The week in words, days with the same hours grouped: "Monday to Friday 08:00-17:00,
+    Saturday 09:00-13:00". "" when no hours are set."""
+    hours = get_hours(account)
+    if hours is None or not hours.schedule:
+        return ""
+    runs: list[list] = []  # [first_day, last_day, window]
+    for day in DAYS:
+        window = hours.schedule.get(day)
+        key = f"{window['open']}-{window['close']}" if window else None
+        if runs and runs[-1][2] == key and DAYS.index(runs[-1][1]) == DAYS.index(day) - 1:
+            runs[-1][1] = day
+        else:
+            runs.append([day, day, key])
+    parts = []
+    for first, last, key in runs:
+        if key is None:
+            continue
+        days = DAY_LABELS[first] if first == last else f"{DAY_LABELS[first]} to {DAY_LABELS[last]}"
+        parts.append(f"{days} {key}")
+    return ", ".join(parts)
 
 
 def availability(account, at: datetime | None = None) -> dict:
@@ -112,7 +168,11 @@ def availability(account, at: datetime | None = None) -> dict:
 
 def is_open(account, at: datetime | None = None) -> bool:
     """Whether the business is open at ``at`` (default now). True when no hours are set."""
-    hours = get_hours(account)
+    return open_in(get_hours(account), at)
+
+
+def open_in(hours, at: datetime | None = None) -> bool:
+    """``is_open`` for an already-loaded ``BusinessHours`` (or None): no query, for loops."""
     if hours is None or not hours.schedule:
         return True
     try:
