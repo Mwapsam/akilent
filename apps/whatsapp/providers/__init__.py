@@ -22,11 +22,16 @@ def get_whatsapp_provider(account) -> WhatsAppProvider:
     from apps.whatsapp.models import WhatsAppBusinessNumber
     from apps.core.models import Configurations
 
-    # Get the first active business number for this account
-    number = WhatsAppBusinessNumber.objects.filter(
-        account=account,
-        is_active=True,
-    ).first()
+    # The account's sending number: a fully registered one (see ``is_ready``) before any other,
+    # oldest first. Never an unordered ``.first()``: with two active numbers (say an old test
+    # number and the approved one) PostgreSQL may return either, and the order changes after a
+    # row update, so sends would suddenly come from the wrong number (e.g. Meta error 131037,
+    # "display name not approved", from a number that was never approved).
+    numbers = list(WhatsAppBusinessNumber.objects.filter(account=account, is_active=True).order_by("created_at", "pk"))
+    number = next((n for n in numbers if n.is_ready), numbers[0] if numbers else None)
+    if len(numbers) > 1:
+        logger.info("account %s has %d active WhatsApp numbers; sending from %s",
+                    account.slug, len(numbers), number.phone_number_id)
 
     if not number:
         raise WhatsAppProviderError(
