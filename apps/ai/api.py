@@ -61,7 +61,7 @@ def seed_notes(account, text: str) -> bool:
     return True
 
 
-DRAFT_KINDS = ("automation", "template", "template_edit")
+DRAFT_KINDS = ("automation", "template", "template_edit", "email_template", "email_edit")
 
 
 def request_draft(account, user, kind: str, prompt: str, context: dict | None = None):

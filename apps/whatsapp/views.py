@@ -233,12 +233,14 @@ def template_create(request):
                 button["example"] = request.POST.get("button_code_example", "").strip()
             buttons = [button]
 
-        header_format = request.POST.get("header_format", "text").strip().lower()
+        header = request.POST.get("header", "")
+        header_format = request.POST.get("header_format", "text").strip().lower() or "text"
+        if header_format == "none":  # the form's "None" option: a text header left empty
+            header_format, header = "text", ""
         header_media = None
-        if header_format != "text":
-            header_media = MessageTemplateAsset.objects.filter(
-                account=account, pk=request.POST.get("header_media_asset_id"),
-            ).first()
+        asset_id = request.POST.get("header_media_asset_id", "").strip()
+        if header_format != "text" and asset_id.isdigit():
+            header_media = MessageTemplateAsset.objects.filter(account=account, pk=int(asset_id)).first()
 
         try:
             if request.POST.get("category") == "authentication":
@@ -259,7 +261,7 @@ def template_create(request):
                 category=request.POST.get("category", ""),
                 language=request.POST.get("language", "en"),
                 body=request.POST.get("body", ""),
-                header=request.POST.get("header", ""),
+                header=header,
                 footer=request.POST.get("footer", ""),
                 variable_labels=labels,
                 variable_examples=examples,

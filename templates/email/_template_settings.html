@@ -5,6 +5,7 @@ mode's single POST includes them even though they live outside that <form> in
 the DOM — blocks mode ignores the unmatched attribute and reads .value via JS
 instead (see email-builder.js).
 {% endcomment %}
+{% load static %}
 <div id="template-settings-card" class="card card-pad mb-4">
   <h2 class="font-semibold mb-3">Template settings</h2>
   <div class="grid sm:grid-cols-2 gap-3">
@@ -22,6 +23,30 @@ instead (see email-builder.js).
     <label class="label" for="tpl-subject">Subject</label>
     <input id="tpl-subject" name="subject" form="raw-editor-form" type="text" required
            value="{{ template.subject }}" class="input" data-merge-tags='{{ merge_tag_paths_json }}'>
+    {% if ai_on %}
+    {% comment %}Subject lines only: the body may be a drag-and-drop design, which AI never touches.
+    Picking one fills the input; autosave saves it like typing would.{% endcomment %}
+    <div class="mt-2" x-data="aiDraft({kind: 'email_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
+      {% csrf_token %}
+      {{ template.html_body|json_script:"tpl-saved-html" }}
+      <button type="button" class="btn btn-ghost btn-sm" :disabled="busy"
+              @click="start({instruction: 'subjects', subject: document.getElementById('tpl-subject').value,
+                             text_body: (document.getElementById('tpl-text-body') || {}).value || '',
+                             html_body: (document.getElementById('tpl-html-body') || {}).value || JSON.parse(document.getElementById('tpl-saved-html').textContent)})">
+        <span x-show="!busy">Suggest subject lines</span><span x-show="busy" x-cloak>Thinking…</span>
+      </button>
+      <p class="text-xs text-red-700 mt-1" x-show="error" x-text="error" role="alert"></p>
+      <div x-show="draft" x-cloak class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested subject lines">
+        <template x-for="s in (draft && draft.result.subjects) || []">
+          <button type="button" class="btn btn-secondary btn-sm text-left" x-text="s"
+                  @click="const el = document.getElementById('tpl-subject'); el.value = s;
+                          el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); draft = null"></button>
+        </template>
+        <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
+      </div>
+    </div>
+    <script src="{% static 'js/ai_draft.js' %}"></script>
+    {% endif %}
   </div>
   <div class="mt-3">
     <label class="label" for="tpl-sample-variables">Sample variables <span class="text-gray-400 font-normal">(used to fill merge tags in the preview)</span></label>

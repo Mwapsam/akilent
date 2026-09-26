@@ -800,6 +800,16 @@ def templates_list(request):
         for s in STARTER_TEMPLATES
     ]
 
+    from apps.ai import api as ai_api
+
+    ai_on = templates_enabled and ai_api.is_available(account)
+    ai_draft = None
+    draft = ai_api.get_draft(account, request.GET.get("draft"), kind="email_template") if request.GET.get("draft") else None
+    if templates_enabled and draft is not None and draft.status in ("ready", "used") and draft.result.get("fields"):
+        ai_draft = {"id": draft.pk, "fields": draft.result["fields"], "parts": draft.result.get("parts") or {},
+                    "reasons": draft.result.get("reasons") or [], "warnings": draft.warnings or [],
+                    "sample_variables_json": json.dumps(draft.result["fields"].get("sample_variables") or {})}
+
     whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
     whatsapp_templates = []
     if whatsapp_enabled:
@@ -814,6 +824,8 @@ def templates_list(request):
         "templates": templates,
         "templates_enabled": templates_enabled,
         "starter_templates_json": json.dumps(starters),
+        "ai_on": ai_on,
+        "ai_draft": ai_draft,
         "whatsapp_enabled": whatsapp_enabled,
         "whatsapp_templates": whatsapp_templates,
     })
@@ -847,6 +859,13 @@ def template_create(request):
         slug = f"{base_slug}-{counter}"
         counter += 1
 
+    try:
+        sample_variables = json.loads(request.POST.get("sample_variables") or "{}")
+    except json.JSONDecodeError:
+        sample_variables = {}
+    if not isinstance(sample_variables, dict):
+        sample_variables = {}
+
     EmailTemplate.objects.create(
         account=account,
         name=name,
@@ -854,7 +873,12 @@ def template_create(request):
         subject=request.POST.get("subject") or "",
         text_body=request.POST.get("text_body") or "",
         html_body=request.POST.get("html_body") or "",
+        sample_variables=sample_variables,
     )
+    if request.POST.get("draft"):
+        from apps.ai import api as ai_api
+
+        ai_api.mark_draft_used(ai_api.get_draft(account, request.POST["draft"], kind="email_template"))
     messages.success(request, "Template created.")
     return redirect("email-templates")
 
@@ -867,6 +891,7 @@ def template_edit_form(request, pk):
     if account is None:
         return redirect("dashboard")
 
+    from apps.ai import api as ai_api
     from apps.email.services import flatten_variable_paths
 
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
@@ -899,6 +924,7 @@ def template_edit_form(request, pk):
         "builder_config": builder_config,
         "merge_tag_paths_json": json.dumps(merge_tag_paths),
         "sample_variables_json": json.dumps(template.sample_variables or {}, indent=2),
+        "ai_on": ai_api.is_available(account),
     })
 
 

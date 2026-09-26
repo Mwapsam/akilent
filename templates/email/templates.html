@@ -87,9 +87,87 @@
 </div>
 {% else %}
 
+{% if ai_on and not ai_draft %}
+{% comment %}AI writes the words only; Akilent builds the email (apps.email.ai_layout) and fills the
+form below. Nothing is saved until the owner presses Create template.{% endcomment %}
+<section class="card card-pad mb-6 space-y-2"
+         x-data="aiDraft({kind: 'email_template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '?draft=' + d.id } })">
+  <h2 class="text-base font-semibold text-ink">Describe the email you need</h2>
+  <p class="text-sm text-gray-500">AI writes the words, Akilent builds the email and fills in the form below. You check it, then create it.</p>
+  <div x-data="{ prompt: '' }" class="space-y-2">
+    <textarea x-model="prompt" class="textarea" rows="2" aria-label="The email you need"
+              placeholder="Thank customers after they pay and show their receipt number."></textarea>
+    <div class="flex flex-wrap gap-2 text-xs">
+      <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Thank customers after they pay, with their receipt number and amount.'">Payment receipt</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Welcome a new customer and tell them how to reach us.'">Welcome</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Remind a customer that their invoice is still unpaid, with a button to pay.'">Payment reminder</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="prompt = 'Share our news with customers, with a button to see more.'">Newsletter</button>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !prompt.trim()" @click="start({prompt})">
+      <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
+    </button>
+    <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+  </div>
+  {% csrf_token %}
+</section>
+{% endif %}
+
 {# Create template #}
 <div class="card card-pad mb-6">
   <h2 class="text-lg font-semibold text-ink mb-4">New template</h2>
+
+  {% if ai_draft %}
+  {{ ai_draft.parts|json_script:"email-ai-parts" }}
+  <div class="mb-4 rounded-xl border border-border p-3 text-sm">
+    <p class="text-xs font-semibold text-gray-500">Why I built it this way</p>
+    <ul class="mt-1 list-disc pl-5 space-y-0.5 text-gray-600">
+      {% for reason in ai_draft.reasons %}<li>{{ reason }}</li>{% endfor %}
+    </ul>
+    {% if ai_draft.warnings %}
+    <ul class="mt-2 space-y-0.5 text-xs text-amber-700">{% for w in ai_draft.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if ai_on %}
+    <div class="mt-3" x-data="aiDraft({kind: 'email_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
+      <div class="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Improve with AI">
+        <span class="text-gray-500">Improve with AI:</span>
+        <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('friendlier'))">Friendlier</button>
+        <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('shorter'))">Shorter</button>
+        <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('business_name'))">Add our business name</button>
+        <span x-data="{ lang: 'sw' }" class="inline-flex items-center gap-1">
+          <select x-model="lang" class="select select-sm w-auto" aria-label="Translate to">
+            <option value="sw">Swahili</option><option value="fr">French</option><option value="pt_PT">Portuguese</option>
+            <option value="es">Spanish</option><option value="bem">Bemba</option><option value="ny">Nyanja</option>
+          </select>
+          <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('translate:' + lang))">Translate</button>
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('subjects'))">Suggest subject lines</button>
+        <span x-show="busy" x-cloak class="text-gray-500">Working…</span>
+      </div>
+      <p class="text-xs text-red-700 mt-1" x-show="error" x-text="error" role="alert"></p>
+      <div x-show="draft && draft.result.subjects" x-cloak class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested subject lines">
+        <template x-for="s in (draft && draft.result.subjects) || []">
+          <button type="button" class="btn btn-secondary btn-sm text-left" x-text="s" @click="emailAiSubject(s); draft = null"></button>
+        </template>
+        <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
+      </div>
+      <div x-show="draft && draft.result.diff" x-cloak class="mt-2 rounded-xl border border-border p-3">
+        <p class="text-xs font-semibold text-gray-500">Suggested change</p>
+        <p class="mt-1 whitespace-pre-line">
+          <template x-for="part in (draft && draft.result.diff) || []">
+            <span :class="part[0] === 'del' ? 'line-through text-red-700' : ''"
+                  :style="part[0] === 'add' ? 'background: var(--tone-teal-bg); color: var(--tone-teal-fg)' : ''" x-text="part[1] + ' '"></span>
+          </template>
+        </p>
+        <ul class="mt-1 text-xs text-amber-700" x-show="draft && draft.warnings.length"><template x-for="w in (draft && draft.warnings) || []"><li x-text="w"></li></template></ul>
+        <div class="mt-2 flex gap-2">
+          <button type="button" class="btn btn-primary btn-sm" @click="emailAiUse(draft.result); draft = null">Use this</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <div class="mb-4" id="starter-template-picker" data-starters='{{ starter_templates_json }}'>
     <p class="text-xs font-medium text-gray-500 mb-1.5">Start from a sample</p>
@@ -98,18 +176,23 @@
 
   <form method="post" action="/email/templates/create/" class="grid gap-3">
     {% csrf_token %}
+    {% if ai_draft %}
+    <input type="hidden" name="draft" value="{{ ai_draft.id }}">
+    <input type="hidden" id="id_sample_variables" name="sample_variables" value="{{ ai_draft.sample_variables_json }}">
+    {% endif %}
     <div class="grid sm:grid-cols-2 gap-3">
-      {% include "components/form_field.html" with name="name" label="Name" placeholder="Welcome email" required=True %}
+      {% include "components/form_field.html" with name="name" label="Name" placeholder="Welcome email" required=True value=ai_draft.fields.name %}
       {% include "components/form_field.html" with name="slug" label="Slug (optional)" placeholder="welcome-email" %}
     </div>
-    {% include "components/form_field.html" with name="subject" label="Subject" placeholder="Welcome, &#123;&#123; first_name &#125;&#125;!" required=True %}
+    {% include "components/form_field.html" with name="subject" label="Subject" placeholder="Welcome, &#123;&#123; first_name &#125;&#125;!" required=True value=ai_draft.fields.subject %}
     <div>
       <label class="label" for="id_text_body">Text body</label>
-      <textarea id="id_text_body" name="text_body" rows="4" class="textarea font-mono text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining."></textarea>
+      <textarea id="id_text_body" name="text_body" rows="4" class="textarea font-mono text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.">{{ ai_draft.fields.text_body }}</textarea>
     </div>
     <div>
       <label class="label" for="id_html_body">HTML body</label>
-      <textarea id="id_html_body" name="html_body" rows="6" class="textarea font-mono text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;"></textarea>
+      <textarea id="id_html_body" name="html_body" rows="6" class="textarea font-mono text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;">{{ ai_draft.fields.html_body }}</textarea>
+      {% if ai_draft %}<p class="help">Built by Akilent from the words above. After creating it you can restyle it in Drag-and-drop.</p>{% endif %}
     </div>
     <div>
       <button class="btn btn-primary" type="submit">
@@ -120,6 +203,26 @@
 </div>
 
 <script src="{% static 'js/template-starter-picker.js' %}"></script>
+{% if ai_on %}
+<script src="{% static 'js/ai_draft.js' %}"></script>
+{% if ai_draft %}
+<script>
+  // Rewrites work on the drafted parts; Akilent rebuilds the fields server-side and "Use this" copies them in.
+  (function () {
+    let parts = JSON.parse(document.getElementById('email-ai-parts').textContent);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    window.emailAiEdit = (instruction) => ({ instruction, parts: JSON.stringify(parts) });
+    window.emailAiUse = (result) => {
+      parts = result.parts;
+      const f = result.fields;
+      set('id_subject', f.subject); set('id_text_body', f.text_body); set('id_html_body', f.html_body);
+      set('id_sample_variables', JSON.stringify(f.sample_variables));
+    };
+    window.emailAiSubject = (subject) => { parts = Object.assign({}, parts, { subject }); set('id_subject', subject); };
+  })();
+</script>
+{% endif %}
+{% endif %}
 
 {# Templates list #}
 {% if templates %}

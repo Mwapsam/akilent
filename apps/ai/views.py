@@ -102,10 +102,42 @@ def draft_create(request):
         if not context["body"].strip():
             return JsonResponse({"ok": False, "error": "Write the message first."}, status=400)
         prompt = context["instruction"]
-    draft = ai_api.request_draft(account, request.user, kind, prompt, context)
+    elif kind == "email_template":
+        if not prompt:
+            return JsonResponse({"ok": False, "error": "Describe the email you need."}, status=400)
+    elif kind == "email_edit":
+        context, error = _email_edit_context(request)
+        if error:
+            return JsonResponse({"ok": False, "error": error}, status=400)
+        prompt = context["instruction"]
+    draft =ai_api.request_draft(account, request.user, kind, prompt, context)
     if draft is None:
         return JsonResponse({"ok": False, "error": "AI isn't switched on for your business (Settings, AI)."}, status=400)
     return JsonResponse({"ok": True, "draft": ai_api.draft_json(draft)})
+
+
+def _email_edit_context(request) -> tuple[dict, str]:
+    """The parts to rewrite (checked again: they come from the browser), or a saved email's words
+    for subject lines."""
+    import json
+
+    from apps.ai.drafting import SUBJECTS
+    from apps.email import ai_layout
+
+    instruction = request.POST.get("instruction", "")
+    raw = request.POST.get("parts", "")
+    if raw:
+        try:
+            parts = ai_layout.clean_parts(json.loads(raw))
+        except (ValueError, TypeError):
+            return {}, "Draft the email first."
+        return {"instruction": instruction, "parts": parts}, ""
+    if instruction != SUBJECTS:
+        return {}, "Draft the email first."
+    context = {k: request.POST.get(k, "")[:20000] for k in ("subject", "text_body", "html_body")}
+    if not (context["subject"].strip() or context["text_body"].strip()):
+        return {}, "Write the email first."
+    return {"instruction": instruction, **context}, ""
 
 
 @login_required

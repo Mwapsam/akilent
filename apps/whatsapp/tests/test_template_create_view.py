@@ -46,6 +46,36 @@ def test_create_template_submits_and_redirects(logged_in):
 
 @_wa_urls
 @pytest.mark.django_db
+def test_no_header_submits_instead_of_crashing(logged_in):
+    """The form's "None" header option posts header_format=none and an empty asset id (was a 500)."""
+    client, account = logged_in
+    with patch("apps.whatsapp.template_builder.get_whatsapp_provider") as get_provider:
+        get_provider.return_value.create_template.return_value = {"id": "1", "status": "PENDING"}
+        resp = client.post("/whatsapp/templates/new/", {
+            "name": "order_ready", "category": "utility", "language": "en",
+            "body": "Hi {{1}}, your order is ready to collect.", "header": "left over", "footer": "",
+            "header_format": "none", "header_media_asset_id": "",
+            "variable_label": ["Customer name"], "variable_example": ["Ada"],
+        })
+        sent = get_provider.return_value.create_template.call_args.args[1]
+    assert resp.status_code == 302
+    assert not any(c["type"] == "HEADER" for c in sent["components"])
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_an_image_header_without_an_upload_is_a_message_not_a_crash(logged_in):
+    client, _ = logged_in
+    resp = client.post("/whatsapp/templates/new/", {
+        "name": "promo", "category": "marketing", "language": "en", "body": "Big sale this week!",
+        "header_format": "image", "header_media_asset_id": "",
+    })
+    assert resp.status_code == 200
+    assert MessageTemplate.objects.count() == 0
+
+
+@_wa_urls
+@pytest.mark.django_db
 def test_create_template_invalid_name_reshows_form(logged_in):
     client, _ = logged_in
     resp = client.post("/whatsapp/templates/new/", {

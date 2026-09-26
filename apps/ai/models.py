@@ -121,6 +121,8 @@ class AIDraft(models.Model):
         AUTOMATION = "automation", "Automation"
         TEMPLATE = "template", "Template"
         TEMPLATE_EDIT = "template_edit", "Template edit"
+        EMAIL_TEMPLATE = "email_template", "Email template"
+        EMAIL_EDIT = "email_edit", "Email edit"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

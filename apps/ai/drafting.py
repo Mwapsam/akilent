@@ -11,6 +11,11 @@ Three kinds, each with a fixed output shape the model must fill and a determinis
   form, so Meta approval still applies.
 * ``template_edit``: Friendlier / Shorter / Add our business name / Translate -> a new body with the
   exact same blanks, shown as a before/after diff.
+* ``email_template``: "describe the email you need" -> plain-text parts (subject, heading,
+  paragraphs, a button...). ``apps.email.ai_layout`` checks them and builds the HTML itself, so the
+  model never writes markup or template code. The owner saves it through the normal form.
+* ``email_edit``: the same rewrites on those parts (same blanks, before/after diff), or three
+  subject lines to choose from.
 
 All run in the background (``tasks.build_draft``) and never execute anything.
 """
@@ -46,6 +51,9 @@ EDITS = {
     "shorter": "Make it shorter and clearer, keeping every fact.",
     "business_name": "Mention the business name naturally, once.",
 }
+
+SUBJECTS = "subjects"
+MAX_SUBJECTS = 3
 
 CATEGORY_REASONS = {
     "utility": "Utility, because it's about something the customer is already doing with you (an order, a booking, a payment).",
@@ -118,6 +126,41 @@ Meta's rules you must follow:
 
 About the business:
 {_business_block(account, business_notes)}"""
+
+
+def email_prompt(account, business_notes: str) -> str:
+    return f"""You write emails for a small business: receipts, reminders, welcomes, news and offers. \
+You write only the words; Akilent builds the email's design.
+
+Answer with ONE JSON object and nothing else:
+{{"name": "<short name for the template, e.g. Payment receipt>", "subject": "<max 80 chars>",
+ "preheader": "<one line shown after the subject in the inbox>", "heading": "<short title>",
+ "paragraphs": ["<1 to 4 short paragraphs>"],
+ "button": {{"label": "<max 25 chars>", "url_variable": "<blank name of the link>"}} or null,
+ "sign_off": "<e.g. The {account.company_name or 'business'} team>",
+ "variables": [{{"name": "<snake_case blank name>", "example": "<realistic example>"}}]}}
+
+Rules:
+- Plain text only: no HTML, no markdown, no web addresses.
+- Anything that changes per customer is a blank written {{{{ name }}}}, e.g. {{{{ first_name }}}},
+  {{{{ order_number }}}}. List every blank in variables. {{{{ company_name }}}} is always available.
+- A button's link is always a blank: put its name in url_variable and list it in variables.
+- Short, friendly, plain words. Never invent prices, dates, discounts or promises that aren't below.
+
+About the business:
+{_business_block(account, business_notes)}"""
+
+
+def email_edit_prompt() -> str:
+    return ("You edit the words of an email. Keep every blank like {{ first_name }} exactly as it is. "
+            "Plain text only, no HTML or web addresses. Answer with ONE JSON object with the same keys "
+            'you were given: {"subject", "preheader", "heading", "paragraphs", "button_label", "sign_off"}.')
+
+
+def subjects_prompt() -> str:
+    return (f"You suggest email subject lines. Give {MAX_SUBJECTS} different ones, each under 70 characters, "
+            "plain words, no spam words or ALL CAPS. Only use blanks like {{ first_name }} that the email "
+            'already uses. Answer with ONE JSON object: {"subjects": ["...", "...", "..."]}.')
 
 
 # ---- checks ----------------------------------------------------------------------------------
@@ -215,6 +258,90 @@ def check_edit(before: str, data: dict) -> dict:
     return {"before": before, "after": after, "diff": word_diff(before, after)}
 
 
+def _fact_warnings(account, text: str) -> list[str]:
+    from apps.ai import api as ai_api
+
+    unchecked = ai_api.unchecked_facts(account, text)
+    if not unchecked:
+        return []
+    return ["Check " + ", ".join(unchecked[:3]) + ": it isn't in your notes, hours or answers, "
+            "so make sure it's right before sending."]
+
+
+def check_email_template(account, data: dict) -> tuple[dict, list[str]]:
+    """``({"parts", "fields", "reasons"}, warnings)``; the fields come from Akilent's builder, not the model."""
+    from apps.email import ai_layout
+
+    try:
+        parts = ai_layout.clean_parts(data)
+    except ai_layout.LayoutError as exc:
+        raise DraftError(f"The draft wasn't usable ({exc}). Try describing it again.") from exc
+    warnings = _fact_warnings(account, ai_layout.words(parts))
+    if len(parts["subject"]) > 60:
+        warnings.append("The subject is long: phones cut it off after about 60 characters.")
+    result = {"parts": parts, "fields": ai_layout.build(parts, account), "reasons": email_reasons(parts)}
+    return result, warnings
+
+
+def email_reasons(parts: dict) -> list[str]:
+    """"Why I built it this way", from fixed rules about the parts, never the model's own words."""
+    from apps.email import ai_layout
+
+    reasons = []
+    if "first_name" in ai_layout.tags_in(ai_layout.words(parts)):
+        reasons.append("{{ first_name }} greets each person by name, filled in when it's sent.")
+    if parts.get("button"):
+        reasons.append(f"The button links to {{{{ {parts['button']['url_variable']} }}}}, which you fill in "
+                       "when you send it, so no link is made up.")
+    reasons.append("Akilent built the design from these words, so there's no code from AI in it. "
+                   "You can restyle it in the editor after saving.")
+    reasons.append("When it goes out in a campaign, the unsubscribe link and your business address "
+                   "are added automatically.")
+    return reasons[:4]
+
+
+def check_email_edit(account, before: dict, data: dict) -> tuple[dict, list[str]]:
+    """New parts with exactly the same blanks as ``before`` (already-checked parts)."""
+    from apps.email import ai_layout
+
+    button = before.get("button")
+    candidate = {
+        **before,
+        **{k: data.get(k, before.get(k, "")) for k in ("subject", "preheader", "heading", "sign_off")},
+        "paragraphs": data.get("paragraphs") if isinstance(data.get("paragraphs"), list) else before["paragraphs"],
+        "button": {"label": data.get("button_label") or button["label"],
+                   "url_variable": button["url_variable"]} if button else None,
+    }
+    try:
+        after = ai_layout.clean_parts(candidate)
+    except ai_layout.LayoutError as exc:
+        raise DraftError("The edit changed the blanks ({{ … }}), so it wasn't used. Try again."
+                         if "blank" in str(exc) else f"The edit wasn't usable ({exc}). Try again.") from exc
+    old_words, new_words = ai_layout.words(before), ai_layout.words(after)
+    if ai_layout.tags_in(old_words) != ai_layout.tags_in(new_words) or bool(after["button"]) != bool(button):
+        raise DraftError("The edit changed the blanks ({{ … }}), so it wasn't used. Try again.")
+    result = {"parts": after, "fields": ai_layout.build(after, account),
+              "before": old_words, "after": new_words, "diff": word_diff(old_words, new_words)}
+    return result, _fact_warnings(account, new_words)
+
+
+def check_subjects(allowed: set[str], data: dict) -> dict:
+    """Up to three subject lines that only use blanks the email already has."""
+    from apps.email import ai_layout
+
+    subjects = []
+    for raw in data.get("subjects") or []:
+        try:
+            subject = ai_layout.tags(ai_layout.plain(raw, ai_layout.CAPS["subject"]), allowed | ai_layout.ALWAYS_AVAILABLE)
+        except ai_layout.LayoutError:
+            continue
+        if subject and subject not in subjects:
+            subjects.append(subject)
+    if not subjects:
+        raise DraftError("No usable subject lines came back. Try again.")
+    return {"subjects": subjects[:MAX_SUBJECTS]}
+
+
 # ---- running one draft ------------------------------------------------------------------------
 def run(draft, provider) -> None:
     """Fill ``draft`` (an ``AIDraft``) from the model. Raises ``AIProviderError`` / ``DraftError``."""
@@ -229,6 +356,10 @@ def run(draft, provider) -> None:
             user += "\n\nThe conversation they pasted:\n" + draft.context["conversation"]
     elif draft.kind == "template":
         system, user = template_prompt(account, notes), draft.prompt
+    elif draft.kind == "email_template":
+        system, user = email_prompt(account, notes), draft.prompt
+    elif draft.kind == "email_edit":
+        return _run_email_edit(draft, provider)
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (
@@ -247,6 +378,8 @@ def run(draft, provider) -> None:
     elif draft.kind == "template":
         fields, warnings = check_template(data)
         draft.result, draft.warnings = {**fields, "reasons": template_reasons(fields, warnings)}, warnings
+    elif draft.kind == "email_template":
+        draft.result, draft.warnings = check_email_template(account, data)
     else:
         draft.result = check_edit(draft.context.get("body", ""), data)
         from apps.whatsapp.api import lint_template
@@ -257,6 +390,44 @@ def run(draft, provider) -> None:
             category=draft.context.get("category", "utility"), language=language, body=draft.result["after"])]
         if instruction.startswith("translate:") and language != draft.context.get("language"):
             draft.warnings.append("If you use this, change the template's language to match before submitting.")
+    draft.model = (result.model or "")[:80]
+
+
+def _run_email_edit(draft, provider) -> None:
+    """A rewrite of drafted email parts, or subject lines for any email (parts or a saved template)."""
+    import json
+
+    from apps.email import ai_layout
+
+    account, context = draft.account, draft.context
+    instruction = context.get("instruction", "")
+    parts = context.get("parts")
+    if instruction == SUBJECTS:
+        if parts:
+            subject, text = parts.get("subject", ""), ai_layout.words(parts)
+            allowed = {v["name"] for v in parts.get("variables") or []}
+        else:
+            from django.utils.html import strip_tags
+
+            subject = context.get("subject", "")
+            text = context.get("text_body", "").strip() or strip_tags(context.get("html_body", ""))
+            allowed = ai_layout.tags_in(subject + "\n" + text + "\n" + context.get("html_body", ""))
+        user = f"Business name: {account.company_name}\nCurrent subject: {subject}\n\nThe email:\n{text[:3000]}"
+        result = provider.chat([ChatMessage("user", user)], system=subjects_prompt(), max_tokens=400, temperature=0.7)
+        draft.result, draft.warnings = check_subjects(allowed, extract_json(result.text)), []
+    else:
+        how = EDITS.get(instruction) or (
+            f"Translate it into the language with code {instruction.split(':', 1)[1]}."
+            if instruction.startswith("translate:") else "")
+        if not how or not parts:
+            raise DraftError("Unknown edit.")
+        button = parts.get("button") or {}
+        shown = {"subject": parts["subject"], "preheader": parts.get("preheader", ""),
+                 "heading": parts.get("heading", ""), "paragraphs": parts["paragraphs"],
+                 "button_label": button.get("label", ""), "sign_off": parts.get("sign_off", "")}
+        user = f"{how}\nBusiness name: {account.company_name}\n\nThe email:\n{json.dumps(shown, ensure_ascii=False)}"
+        result = provider.chat([ChatMessage("user", user)], system=email_edit_prompt(), max_tokens=1500, temperature=0.3)
+        draft.result, draft.warnings = check_email_edit(account, parts, extract_json(result.text))
     draft.model = (result.model or "")[:80]
 
 
