@@ -20,7 +20,7 @@ Program, not as a Solution Partner / BSP. What that means for the implementation
 - **Billing = Path 2 ("Tech Provider Only").** The end client's WABA is billed
   by **Meta directly** for conversation charges (they attach their own payment
   method during Embedded Signup). This platform bills **only for the
-  value-added SaaS solution** via `Plan` tiers / `ModuleSubscription`. As a Tech
+  value-added SaaS solution** via `Plan` tiers (the feature catalog, `apps/billing/features.py`). As a Tech
   Provider we **must not** extend a line of credit to businesses or add any
   markup on conversation fees — `apps/billing` has no per-conversation resale
   pricing and none should be added. `Plan.max_conversations_per_month` is a
@@ -71,8 +71,8 @@ Program, not as a Solution Partner / BSP. What that means for the implementation
 3. Onboard a number: dashboard → WhatsApp numbers → Embedded Signup, or register
    `phone_number_id` + system-user token manually. A number needs `waba_id` set
    for template sync to work.
-4. Enable the module per tenant: `ModuleSubscription(account, module="whatsapp",
-   enabled=True)` (billing).
+4. Nothing to enable: WhatsApp (connection, inbox, templates) is a core feature on every
+   plan. Campaigns and verification codes come with the plan, set in /manage/plans/features/.
 
 ## Workers & queues
 

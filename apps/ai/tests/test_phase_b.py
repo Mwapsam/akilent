@@ -94,7 +94,7 @@ def test_look_ups_only_ever_see_the_callers_own_business(account):
     found = run_action("lookup_products", {"account": account}, account=account, query="solar")
     assert found == {"products": [{"name": "Solar battery", "price": "4000.00", "currency": "ZMW"}]}
     billing_api.set_owner_switch(account, "orders", False)
-    with pytest.raises(ActionError, match="module"):
+    with pytest.raises(ActionError, match="orders"):
         run_action("lookup_products", {"account": account}, account=account, query="solar")
 
 

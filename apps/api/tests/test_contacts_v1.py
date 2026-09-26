@@ -110,7 +110,8 @@ def test_campaign_targets_a_segment(client, api_key):
     from apps.email.models import EmailApiKey, EmailDomain
     EmailDomain.objects.create(account=acc, domain="mail.acme.test",
                                status=EmailDomain.Status.VERIFIED)
-    acc.subscription.plan.bulk_email = True
+    from apps.billing.models import PlanFeature
+    PlanFeature.objects.get_or_create(plan=acc.subscription.plan, key="email_campaigns")  # the matrix, not the old column
     acc.subscription.plan.max_bulk_recipients_per_campaign = -1
     acc.subscription.plan.save()
     k = EmailApiKey.objects.get(account=acc)

@@ -7,6 +7,9 @@
     it — turn one on if your business needs it, off if it doesn't. Nothing is
     deleted either way.
   </p>
+  {% if not tools %}
+  <p class="text-sm text-gray-600">Your plan doesn't include any optional tools. <a href="{% url 'billing:plans' %}" class="text-accent underline">See plans</a>.</p>
+  {% else %}
   <form method="post" class="space-y-4">
     {% csrf_token %}
     {% for tool in tools %}
@@ -20,5 +23,6 @@
     {% endfor %}
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
+  {% endif %}
 </div>
 {% endblock %}

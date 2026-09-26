@@ -302,8 +302,8 @@ def test_deliver_webhook_skips_already_succeeded(account, message):
 
 @pytest.mark.django_db
 def test_webhook_create_requires_feature(client, account):
-    account.subscription.plan.outbound_webhooks = False
-    account.subscription.plan.save(update_fields=["outbound_webhooks"])
+    from apps.billing.models import PlanFeature
+    PlanFeature.objects.filter(plan=account.subscription.plan, key="webhooks").delete()
     client.force_login(account.owner)
     resp = client.post(
         "/email/webhooks/create/",
