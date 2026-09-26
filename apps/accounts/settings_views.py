@@ -17,7 +17,12 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.accounts.forms import AcceptInvitationForm, InviteForm, ProfileForm
+from apps.accounts.forms import (
+    AcceptInvitationForm,
+    BusinessAddressForm,
+    InviteForm,
+    ProfileForm,
+)
 from apps.accounts.models import Invitation, Membership
 from apps.accounts.utils import (
     ajax_redirect,
@@ -82,6 +87,41 @@ def settings_profile(request):
         form = ProfileForm(instance=request.user)
     return render(request, "accounts/settings_profile.html", {
         "form": form, "account": account, "active_tab": "profile",
+    })
+
+
+# --- Business -----------------------------------------------------------------
+
+@login_required
+def settings_business(request):
+    """The business name and mailing address shown in campaign email footers."""
+    from apps.email.services.compliance_footer import format_postal_address
+
+    account, membership = _account_and_membership(request)
+    if account is None:
+        return redirect("dashboard")
+    can_edit = _can_manage_team(membership)
+
+    if request.method == "POST":
+        if not can_edit:
+            messages.error(request, "Only an owner or admin can change business details.")
+            return redirect("settings-business")
+        form = BusinessAddressForm(request.POST, instance=account)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Business details saved.")
+            return redirect("settings-business")
+    else:
+        form = BusinessAddressForm(instance=account)
+
+    return render(request, "accounts/settings_business.html", {
+        "form": form,
+        "account": account,
+        "active_tab": "business",
+        "can_edit": can_edit,
+        "has_address": account.has_postal_address,
+        "footer_name": account.legal_name or account.company_name,
+        "footer_address": format_postal_address(account),
     })
 
 

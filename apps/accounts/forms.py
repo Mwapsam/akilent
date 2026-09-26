@@ -163,3 +163,43 @@ class PasswordResetForm(PasswordResetForm):
             )
         except Exception as exc:
             raise forms.ValidationError(f"Failed to send password reset email: {exc}")
+
+
+class BusinessAddressForm(forms.ModelForm):
+    """The business identity printed in every campaign email footer.
+
+    CAN-SPAM requires marketing email to carry the sender's physical postal
+    address, and campaign creation is refused without one (see
+    apps.email.services.bulk). Street, city and country are the minimum,
+    matching Account.has_postal_address.
+    """
+
+    class Meta:
+        model = Account
+        fields = (
+            "legal_name", "address_line1", "address_line2", "city",
+            "state_region", "postal_code", "country",
+        )
+        labels = {
+            "legal_name": "Legal / registered name",
+            "address_line1": "Address line 1",
+            "address_line2": "Address line 2",
+            "state_region": "State / region",
+            "postal_code": "Postal code",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("address_line1", "city", "country"):
+            self.fields[name].required = True
+
+    def clean(self):
+        cleaned = super().clean()
+        # Whitespace-only values would pass `required` but render an empty footer.
+        for name, value in list(cleaned.items()):
+            if isinstance(value, str):
+                cleaned[name] = value.strip()
+        for name in ("address_line1", "city", "country"):
+            if name in cleaned and not cleaned[name]:
+                self.add_error(name, "This field is required.")
+        return cleaned

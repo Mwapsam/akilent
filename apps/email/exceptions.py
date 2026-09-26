@@ -139,5 +139,5 @@ class MissingPostalAddressError(Exception):
     def __init__(self) -> None:
         super().__init__(
             "A physical mailing address is required before sending campaigns. "
-            "Add one in your business profile settings."
+            "Add one under Settings → Business."
         )

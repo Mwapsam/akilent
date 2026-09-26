@@ -19,6 +19,7 @@ urlpatterns = [
 
     # Self-service account settings (profile / security / team).
     path("settings/", settings_views.settings_profile, name="settings-profile"),
+    path("settings/business/", settings_views.settings_business, name="settings-business"),
     path("settings/security/", settings_views.settings_security, name="settings-security"),
     path("settings/team/", settings_views.settings_team, name="settings-team"),
     path("settings/tools/", settings_views.settings_tools, name="settings-tools"),

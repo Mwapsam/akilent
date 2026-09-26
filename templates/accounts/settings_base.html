@@ -4,7 +4,7 @@
 {% block page_header %}
 <div class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
-  <p class="text-sm text-gray-500 mt-1">Manage your profile, security and team.</p>
+  <p class="text-sm text-gray-500 mt-1">Manage your profile, business details, security and team.</p>
 </div>
 {% endblock %}
 
@@ -15,6 +15,10 @@
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
        {% if active_tab == 'profile' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'profile' %}aria-current="page"{% endif %}>Profile</a>
+    <a href="{% url 'settings-business' %}"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
+       {% if active_tab == 'business' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'business' %}aria-current="page"{% endif %}>Business</a>
     <a href="{% url 'settings-security' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
        {% if active_tab == 'security' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
