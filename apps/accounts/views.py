@@ -466,7 +466,10 @@ def onboarding(request):
 def dashboard(request):
     account = get_current_account(request)
     if account is None:
-        # Authenticated user with no tenant (e.g. a staff-only admin user).
+        from apps.core.utils import is_operator
+
+        if is_operator(request.user):
+            return redirect("core:home")  # an operator without a workspace of their own
         return render(request, "accounts/dashboard.html", {"account": None})
 
     from django.utils import timezone

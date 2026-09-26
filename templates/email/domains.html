@@ -22,11 +22,6 @@
 
 {% block content %}
 
-{% if is_admin %}
-<div class="mb-6 rounded-2xl border tone-brand-border tone-brand px-5 py-3 text-sm">
-  Admin view — showing every tenant's domains with full access.
-</div>
-{% endif %}
 
 {# API key (per-tenant; hidden for account-less admins) #}
 {% if account and not email_apis_enabled %}
@@ -73,13 +68,6 @@
   </h2>
   <form method="post" action="/email/domains/create/" class="flex flex-wrap gap-3">
     {% csrf_token %}
-    {% if is_admin %}
-      <label class="sr-only" for="id_account_id">Account</label>
-      <select id="id_account_id" name="account_id" required class="input sm:w-56">
-        <option value="">Account…</option>
-        {% for a in accounts %}<option value="{{ a.pk }}">{{ a.company_name }}</option>{% endfor %}
-      </select>
-    {% endif %}
     <label class="sr-only" for="id_domain">Domain</label>
     <input id="id_domain" name="domain" placeholder="mail.yourcompany.com" required class="input flex-1 min-w-[14rem]">
     <button class="btn btn-primary" type="submit">
@@ -104,7 +92,7 @@
             {% else %}<span class="badge badge-warning">Pending DNS</span>{% endif %}
             {% if not d.is_active %}<span class="badge badge-neutral">Disabled</span>{% endif %}
           </div>
-          {% if is_admin %}<p class="text-xs text-gray-400 mt-0.5">{{ d.account.company_name }}</p>{% endif %}
+          
         </div>
         <span class="text-xs text-gray-400 shrink-0">{{ d.dns_found_count }}/{{ d.dns_total_count }} DNS records</span>
         {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-300 shrink-0" %}

@@ -65,12 +65,12 @@
         {% include "components/brand_mark.html" with class="w-9 h-9" %}
         <span class="font-semibold text-ink hidden lg:inline"
               x-show="!$store.ui.sidebarCollapsed" x-cloak>
-          {{ site.app_name|default:"Automator" }}
+          {% block sidebar_title %}{{ site.app_name|default:"Automator" }}{% endblock %}
         </span>
       </div>
 
       <div class="flex-1 overflow-y-auto py-4">
-        {% include "components/_nav.html" with collapsible=True %}
+        {% block desktop_nav %}{% include "components/_nav.html" with collapsible=True %}{% endblock %}
       </div>
 
       {# Collapse toggle is only meaningful where the full sidebar shows #}
@@ -125,7 +125,7 @@
         </div>
 
         <div class="flex-1 overflow-y-auto py-4" @click="$store.ui.closeDrawer()">
-          {% include "components/_nav.html" %}
+          {% block mobile_nav %}{% include "components/_nav.html" %}{% endblock %}
         </div>
       </aside>
     </div>
@@ -135,6 +135,17 @@
   {# ─── Main column ─────────────────────────────────────────────────────── #}
   {% if user.is_authenticated %}
     <div class="app-shell-pl transition-[padding] duration-200">
+
+      {% if viewing_as %}
+      {# Read-only "View as" (support): every change is blocked by ViewAsReadOnlyMiddleware. #}
+      <div class="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium"
+           style="background: var(--color-danger, #b91c1c); color: #fff;" role="status">
+        <span>Viewing {{ viewing_as.company_name }} as support: read-only. Nothing you do here is saved or sent.</span>
+        <form method="post" action="{% url 'core:view-as-stop' %}">{% csrf_token %}
+          <button class="underline font-semibold">Stop viewing</button>
+        </form>
+      </div>
+      {% endif %}
 
       {# Topbar #}
       <header class="sticky top-0 h-16 bg-surface/90 backdrop-blur border-b border-border
@@ -151,6 +162,7 @@
 
         <div class="flex-1 min-w-0">{% block breadcrumbs %}{% endblock %}</div>
 
+        {% block topbar_tools %}
         {# Mobile search trigger #}
         <button type="button"
                 class="sm:hidden btn btn-ghost btn-icon"
@@ -175,12 +187,14 @@
 
         {# Workspace badge — visible on md and up #}
         <div class="hidden md:flex items-center gap-2 text-sm text-gray-500">
-          {% if is_admin %}
-            <span class="badge badge-brand">Admin · all tenants</span>
-          {% elif account %}
+          {% if account %}
             <span class="truncate max-w-[12rem]">{{ account.company_name }}</span>
           {% endif %}
+          {% if is_operator and not viewing_as %}
+            <a href="{% url 'core:home' %}" class="badge badge-brand">Operator console</a>
+          {% endif %}
         </div>
+        {% endblock %}
 
         {# User menu #}
         <div class="relative" x-data="{ open: false }" @keydown.escape="open = false">
@@ -295,10 +309,12 @@
   {% endif %}
 
   {# ─── Onboarding (skip on the onboarding page itself) ────────────────── #}
-  {% if onboarding and request.path != "/onboarding/" %}
+  {% block onboarding %}
+  {% if onboarding and request.path != "/onboarding/" and not viewing_as %}
     {% include "components/onboarding_widget.html" %}
     {% include "components/welcome_tour.html" %}
   {% endif %}
+  {% endblock %}
 
   {% block extra_js %}{% endblock %}
 

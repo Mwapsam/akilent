@@ -25,6 +25,8 @@ def unavailable_reason(account) -> str | None:
 
     if account is None:
         return "No business selected."
+    if not account.is_active:
+        return "This business is suspended."
     if not is_configured():
         return "AI isn't set up on this Akilent installation yet."
     try:

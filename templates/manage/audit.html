@@ -1,0 +1,38 @@
+{% extends "manage/base.html" %}
+{% block title %}Audit log — Operator{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-ink">Audit log</h1>
+  <p class="mt-1 text-sm text-gray-600">Everything operators changed in this console, and every "View as" session. Newest first.</p>
+</header>
+
+<form method="get" class="mb-4 flex flex-wrap items-center gap-2">
+  <select name="action" class="input sm:w-72" aria-label="Action">
+    <option value="">All actions</option>
+    {% for a in actions %}<option value="{{ a }}" {% if a == action %}selected{% endif %}>{{ a }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-secondary btn-sm">Show</button>
+</form>
+
+{% if rows %}
+<div class="table-wrap">
+  <table class="table table--cards text-sm">
+    <thead><tr><th>When</th><th>Operator</th><th>What</th><th>Business</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td data-label="When">{{ r.row.at|date:"j M Y, H:i" }}</td>
+        <td data-label="Operator">{{ r.row.actor.get_username|default:"—" }}</td>
+        <td data-label="What">{{ r.label }}{% if r.row.target %} · <span class="text-gray-600">{{ r.row.target }}</span>{% endif %}</td>
+        <td data-label="Business">{% if r.row.account %}<a class="text-accent" href="{% url 'core:business' r.row.account.pk %}">{{ r.row.account.company_name }}</a>{% else %}—{% endif %}</td>
+        <td data-label="Details" class="text-xs text-gray-600">{% for k, v in r.row.detail.items %}{{ k }}: {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="card card-pad text-sm text-gray-600">Nothing recorded yet.</p>
+{% endif %}
+{% endblock %}

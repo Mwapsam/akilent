@@ -335,8 +335,8 @@ def enroll(
     "Already active" is per ``subject_key``: with the default empty key that is one run
     per contact; with e.g. ``"order:<id>"`` each subject gets its own concurrent run.
     """
-    if workflow.status != Workflow.Status.PUBLISHED:
-        return None
+    if workflow.status != Workflow.Status.PUBLISHED or not workflow.account.is_active:
+        return None  # a suspended business starts nothing new
     from apps.billing import api as billing_api
 
     if not billing_api.module_enabled(workflow.account, "automation"):
@@ -1216,7 +1216,8 @@ def run_due() -> int:
         due = (
             WorkflowRun.objects.select_for_update(**lock_kwargs)
             .filter(status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now(),
-                    workflow__status=Workflow.Status.PUBLISHED)
+                    workflow__status=Workflow.Status.PUBLISHED,
+                    workflow__account__is_active=True)  # suspended: waits resume on reactivation
             .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
         )
         runs = list(due)

@@ -15,6 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_POST
 
+from apps.core.utils import is_operator
 from apps.accounts.utils import get_current_account, is_ajax
 from apps.whatsapp.models import MessageLog
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
@@ -110,8 +111,8 @@ def numbers_list(request):
             "needs_registration": needs_registration,
             "module_enabled": module_enabled,
             "webhook_url": webhook_url,
-            "show_webhook_setup": request.user.is_staff,
-            "show_config_detail": request.user.is_staff,
+            "show_webhook_setup": is_operator(request.user),
+            "show_config_detail": is_operator(request.user),
         },
     )
 

@@ -17,7 +17,7 @@
   <div class="alert alert-info">
     <strong>AI is off in the inbox.</strong> {{ off_reason }}
     {% if "module" in off_reason %}
-      {% if is_staff %}Turn on the AI module for this business under <a class="underline" href="{% url 'core:customer-detail' account.pk %}">Manage, then Customers</a>.{% else %}Ask Akilent support to include AI in your plan.{% endif %}
+      {% if is_operator %}Turn on the AI module for this business under <a class="underline" href="{% url 'core:business-tab' account.pk 'billing' %}">Operator console, then Billing</a>.{% else %}Ask Akilent support to include AI in your plan.{% endif %}
     {% endif %}
   </div>
   {% else %}

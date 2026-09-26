@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "manage/base.html" %}
 {% block title %}Settings — Admin{% endblock %}
 
 {% block page_header %}
@@ -33,20 +33,21 @@
     </div>
 
     <div class="card card-pad">
-      <h2 class="font-semibold mb-1">Feature flags</h2>
-      <p class="help mb-4">WhatsApp also require their server env flag to be on; these toggles can only further disable them.</p>
+      <h2 class="font-semibold mb-1">Feature switches</h2>
+      <p class="help mb-4">WhatsApp is {% if whatsapp_env %}<strong>on</strong>{% else %}<strong>off</strong>{% endif %} for this server. It's set by the <code>WHATSAPP_ENABLED</code> server setting, not here.</p>
       <div class="space-y-3">
         <label class="flex items-center gap-3 text-sm">
           <input type="checkbox" name="signups_enabled" class="rounded border-border-strong" {% if site.signups_enabled %}checked{% endif %}>
           Allow public sign-ups
         </label>
         <label class="flex items-center gap-3 text-sm">
-          <input type="checkbox" name="whatsapp_enabled" class="rounded border-border-strong" {% if site.whatsapp_enabled %}checked{% endif %}>
-          WhatsApp module
-        </label>
-        <label class="flex items-center gap-3 text-sm">
           <input type="checkbox" name="payments_enabled" class="rounded border-border-strong" {% if site.payments_enabled %}checked{% endif %}>
           Payments (checkout &amp; billing)
+        </label>
+        <label class="flex items-start gap-3 text-sm">
+          <input type="checkbox" name="automation_events_enabled" class="rounded border-border-strong mt-0.5" {% if site.automation_events_enabled %}checked{% endif %}>
+          <span>Start automations and AI from incoming WhatsApp messages
+            <span class="block text-xs text-gray-500">Off means messages still reach the inbox, but no keyword automation or AI suggestion starts from them.</span></span>
         </label>
       </div>
     </div>
@@ -131,6 +132,28 @@
             {% include "components/form_field.html" with name="mx_validation_cache_ttl_seconds" label="MX Lookup Cache TTL (seconds)" type="number" value=mail.mx_validation_cache_ttl_seconds min="0" %}
             {% include "components/form_field.html" with name="soft_bounce_threshold" label="Soft Bounce Threshold (escalate after N)" type="number" value=mail.soft_bounce_threshold min="1" %}
           </div>
+          <label class="flex items-start gap-3 text-sm mt-4">
+            <input type="checkbox" name="require_explicit_consent" class="rounded border-border-strong mt-0.5" {% if mail.require_explicit_consent %}checked{% endif %}>
+            <span>Only send campaigns to contacts with a recorded opt-in
+              <span class="block text-xs text-gray-500">Leave off until imported lists carry consent, or every older contact becomes unmailable.</span></span>
+          </label>
+        </div>
+
+        <div class="border-t border-border pt-4">
+          <h3 class="font-medium text-sm mb-1">Sending halt (per business)</h3>
+          <p class="help mb-3">A business's email is warned or halted when its bounce or complaint rate passes these limits.</p>
+          <div class="grid sm:grid-cols-3 gap-4">
+            <div><label class="label" for="id_rbw">Bounce warning (%)</label>
+              <input id="id_rbw" name="reputation_bounce_warn" type="number" step="0.1" min="0" max="100" class="input" value="{{ percents.bounce_warn }}"></div>
+            <div><label class="label" for="id_rbh">Bounce halt (%)</label>
+              <input id="id_rbh" name="reputation_bounce_halt" type="number" step="0.1" min="0" max="100" class="input" value="{{ percents.bounce_halt }}"></div>
+            <div><label class="label" for="id_rch">Complaint halt (%)</label>
+              <input id="id_rch" name="reputation_complaint_halt" type="number" step="0.01" min="0" max="100" class="input" value="{{ percents.complaint_halt }}"></div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4 mt-4">
+            {% include "components/form_field.html" with name="reputation_min_volume" label="Minimum sends before acting" type="number" value=mail.reputation_min_volume min="1" %}
+            {% include "components/form_field.html" with name="reputation_window_hours" label="Measured over (hours)" type="number" value=mail.reputation_window_hours min="1" %}
+          </div>
         </div>
       </div>
     </div>
@@ -156,8 +179,8 @@
 
   {# Admin users #}
   <div class="card card-pad">
-    <h2 class="font-semibold mb-1">Platform admins</h2>
-    <p class="help mb-4">Admins can access this console and manage every tenant.</p>
+    <h2 class="font-semibold mb-1">Operators</h2>
+    <p class="help mb-4">Operators can open this console and act on every business. Every change they make is in the audit log.</p>
     <div class="space-y-2">
       {% for u in admins %}
         <div class="flex items-center justify-between gap-2 py-2 border-b border-border last:border-0">
@@ -166,11 +189,11 @@
             <p class="text-xs text-gray-400 truncate">{{ u.email|default:"—" }}</p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            {% if u.is_superuser %}<span class="badge badge-brand">Admin</span>{% endif %}
+            {% if u.is_superuser %}<span class="badge badge-brand">Operator</span>{% endif %}
             {% if u != request.user %}
-              <form method="post" action="/manage/settings/users/{{ u.pk }}/toggle-admin/">
+              <form method="post" action="{% url 'core:user-toggle-admin' u.pk %}">
                 {% csrf_token %}
-                <button class="btn btn-ghost btn-sm" type="submit">{% if u.is_superuser %}Revoke{% else %}Make admin{% endif %}</button>
+                <button class="btn btn-ghost btn-sm" type="submit">{% if u.is_superuser %}Remove operator{% else %}Make operator{% endif %}</button>
               </form>
             {% endif %}
           </div>

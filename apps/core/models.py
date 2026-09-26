@@ -194,3 +194,27 @@ class MailProviderSettings(models.Model):
         """Get or create the singleton settings row."""
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class AdminAction(models.Model):
+    """Something a platform operator did in the Operator Console, or a "View as" session.
+
+    Written by ``apps.core.audit.audit`` for every console change, never edited afterwards. The
+    business's own team never sees these; they're for accountability between operators.
+    """
+
+    actor = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, related_name="admin_actions")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="admin_actions")
+    action = models.CharField(max_length=64)
+    target = models.CharField(max_length=200, blank=True, default="")
+    detail = models.JSONField(default=dict, blank=True)
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-at"]
+        indexes = [models.Index(fields=["account", "-at"])]
+
+    def __str__(self):
+        return f"{self.actor} {self.action} {self.target}".strip()

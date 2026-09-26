@@ -61,6 +61,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.SuspendedAccountMiddleware",
+    "apps.core.middleware.ViewAsReadOnlyMiddleware",
 ]
 
 ROOT_URLCONF = "automator.urls"
@@ -79,6 +81,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.core.context_processors.site_context",
+                "apps.core.context_processors.operator_context",
                 "apps.accounts.context_processors.onboarding_status",
                 "apps.accounts.context_processors.module_flags",
             ],
@@ -547,6 +550,10 @@ CELERY_BEAT_SCHEDULE = {
     "capture-benchmarks": {
         "task": "apps.conversations.tasks.capture_benchmarks",
         "schedule": 21600.0,  # starting-week and day-30 numbers; captured once each, 6-hourly is plenty
+    },
+    "delete-closed-accounts": {
+        "task": "apps.core.tasks.delete_closed_accounts",
+        "schedule": 86400.0,  # 30 days after an operator closes an account
     },
     "send-heartbeats": {
         "task": "apps.core.tasks.send_heartbeats",

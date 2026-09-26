@@ -1,0 +1,44 @@
+{% extends "manage/base.html" %}
+{% block title %}Businesses — Operator{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-ink">Businesses</h1>
+  <p class="mt-1 text-sm text-gray-600">Every business on {{ site.app_name|default:"Akilent" }}. Open one to see and fix anything about it.</p>
+</header>
+
+<form method="get" class="mb-4 flex flex-wrap items-center gap-2">
+  <input type="search" name="q" value="{{ q }}" placeholder="Name, short name or member email" class="input sm:w-72" aria-label="Search businesses">
+  <select name="filter" class="input sm:w-56" aria-label="Filter">
+    <option value="">All businesses</option>
+    {% for key, text in filters.items %}<option value="{{ key }}" {% if key == filter_key %}selected{% endif %}>{{ text }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-secondary btn-sm">Show</button>
+</form>
+
+{% if rows %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead><tr><th>Business</th><th>Owner</th><th>Plan</th><th>Members</th><th>Needs attention</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td data-label="Business">
+          <a href="{% url 'core:business' r.account.pk %}" class="font-medium text-ink hover:text-accent">{{ r.account.company_name }}</a>
+          <span class="block text-xs text-gray-500">{{ r.account.slug }} · since {{ r.account.created_at|date:"j M Y" }}</span>
+        </td>
+        <td data-label="Owner">{{ r.owner.email|default:"—" }}</td>
+        <td data-label="Plan">{% if r.subscription %}{{ r.subscription.plan.name }} <span class="text-xs text-gray-500">· {{ r.subscription.get_status_display }}</span>{% else %}<span class="text-gray-500">None</span>{% endif %}</td>
+        <td data-label="Members">{{ r.members }}</td>
+        <td data-label="Needs attention">
+          {% for why in r.reasons %}<span class="badge {% if why == 'Suspended' %}badge-danger{% else %}badge-warning{% endif %} mr-1 mb-1">{{ why }}</span>{% empty %}<span class="text-gray-500">—</span>{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="card card-pad text-sm text-gray-600">No business matches.</p>
+{% endif %}
+{% endblock %}

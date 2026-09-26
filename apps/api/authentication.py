@@ -73,6 +73,8 @@ class EmailApiKeyAuthentication(BaseAuthentication):
         if api_key is None:
             _record_failed_attempt(request)
             raise exceptions.AuthenticationFailed("Invalid or missing API key")
+        if not api_key.account.is_active:
+            raise exceptions.AuthenticationFailed("This account is suspended. Contact support.")
 
         return (api_key.account, api_key)
 

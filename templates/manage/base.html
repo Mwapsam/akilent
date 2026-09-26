@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% comment %}
+The Operator Console layout: the same shell as the client app (so components and styles are
+shared), with its own sidebar and top bar, and none of the client's tools (send menu, command
+palette, onboarding). Pages here act on any business; the client app acts on your own workspace.
+{% endcomment %}
+
+{% block sidebar_title %}Akilent Operator{% endblock %}
+{% block desktop_nav %}{% include "manage/_nav.html" with collapsible=True %}{% endblock %}
+{% block mobile_nav %}{% include "manage/_nav.html" %}{% endblock %}
+
+{% block topbar_tools %}
+<span class="badge badge-brand">Operator console</span>
+<a href="{% url 'dashboard' %}" class="hidden sm:inline-flex btn btn-ghost btn-sm">Back to my workspace</a>
+{% endblock %}
+
+{% block onboarding %}{% endblock %}

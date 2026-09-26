@@ -24,6 +24,14 @@ def heartbeat(queue: str) -> None:
     cache.set(KEY.format(queue), timezone.now().isoformat(), TTL)
 
 
+@shared_task(queue="celery")
+def delete_closed_accounts() -> int:
+    """Delete businesses an operator closed more than 30 days ago (see console.data)."""
+    from apps.core.console.data import delete_due_accounts
+
+    return delete_due_accounts()
+
+
 def last_seen(queue: str):
     from django.utils.dateparse import parse_datetime
 

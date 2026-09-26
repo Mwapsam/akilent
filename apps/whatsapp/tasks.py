@@ -658,6 +658,11 @@ def _authorize_send(msg: OutboundMessage) -> None:
     if payload.get("_consent_ack"):
         return
 
+    if not msg.account.is_active:
+        # Failed rather than held: a message released days later, when the business is
+        # reactivated, would arrive out of context.
+        raise SendNotAuthorized("ACCOUNT_SUSPENDED", "The business's workspace is suspended.")
+
     ptype = payload.get("type", "text")
     code_request = verification_codes.is_verification_code(payload)
 

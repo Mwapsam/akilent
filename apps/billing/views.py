@@ -13,6 +13,8 @@ from django.views.decorators.http import require_POST
 from django.conf import settings
 
 from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
+from apps.core.audit import audit
+from apps.core.utils import admin_required
 from apps.core.models import SiteSettings
 from .models import ManualPaymentRequest, Plan, PaymentMethod, ProcessedWebhookEvent, Subscription, UsageSummary
 from .flutterwave import FlutterwaveError, get_fw_client
@@ -35,14 +37,13 @@ def _amount_covers_plan(amount, plan) -> bool:
 
 @login_required
 def pricing_page(request):
-    is_admin = request.user.is_superuser
+    """The business's own plans page. Operators manage packages, payment methods and bank
+    transfers in the Operator console (/manage/plans/, /manage/payments/), not here."""
     account = get_current_account(request)
-    if account is None and not is_admin:
+    if account is None:
         return redirect("/dashboard/")
 
-    # Admins see every package (incl. inactive) to manage; tenants see only active.
-    plan_qs = Plan.objects.all() if is_admin else Plan.objects.filter(is_active=True)
-    plans = list(plan_qs.order_by("price_monthly"))
+    plans = list(Plan.objects.filter(is_active=True).order_by("price_monthly"))
     subscription = getattr(account, "subscription", None) if account else None
     current_plan_slug = subscription.plan.slug if subscription else None
     site = SiteSettings.load()
@@ -59,7 +60,6 @@ def pricing_page(request):
     return render(request, "billing/plans.html", {
         "plans": plans,
         "account": account,
-        "is_admin": is_admin,
         "subscription": subscription,
         "current_plan_slug": current_plan_slug,
         "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
@@ -67,13 +67,8 @@ def pricing_page(request):
         "emails_used": UsageSummary.get_current_email_usage(account) if account else 0,
         "payments_enabled": site.payments_enabled,
         "payment_methods": enabled_payment_methods() if site.payments_enabled else [],
-        "payment_method_rows": PaymentMethod.objects.all() if is_admin else None,
         "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
         "period_pricing_json": json.dumps(period_pricing),
-        "manual_requests": (
-            ManualPaymentRequest.objects.filter(status=ManualPaymentRequest.PENDING)
-            .select_related("account", "plan") if is_admin else None
-        ),
     })
 
 
@@ -116,72 +111,68 @@ def _plan_form_fields(post):
     }
 
 
-@login_required
+@admin_required
 @require_POST
 def plan_create(request):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     from django.utils.text import slugify
     fields = _plan_form_fields(request.POST)
     slug = slugify(request.POST.get("slug") or fields["name"])
     if not slug or not fields["name"]:
         messages.error(request, "Package name (and slug) are required.")
-        return redirect("billing:plans")
+        return redirect("core:plans")
     if Plan.objects.filter(slug=slug).exists():
         messages.error(request, f"A package with slug '{slug}' already exists.")
-        return redirect("billing:plans")
+        return redirect("core:plans")
     Plan.objects.create(slug=slug, **fields)
+    audit(request, "plan.create", target=slug)
     messages.success(request, f"Package '{fields['name']}' created.")
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
-@login_required
+@admin_required
 @require_POST
 def plan_edit(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     plan = get_object_or_404(Plan, pk=pk)
     fields = _plan_form_fields(request.POST)
     if not fields["name"]:
         messages.error(request, "Package name is required.")
-        return redirect("billing:plans")
+        return redirect("core:plans")
     for k, v in fields.items():
         setattr(plan, k, v)
     plan.save()
+    audit(request, "plan.edit", target=plan.slug)
     messages.success(request, f"Package '{plan.name}' updated.")
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
-@login_required
+@admin_required
 @require_POST
 def plan_toggle(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     plan = get_object_or_404(Plan, pk=pk)
     plan.is_active = not plan.is_active
     plan.save(update_fields=["is_active"])
+    audit(request, "plan.toggle", target=plan.slug, is_active=plan.is_active)
     messages.success(
         request, f"Package '{plan.name}' {'activated' if plan.is_active else 'deactivated'}."
     )
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
-@login_required
+@admin_required
 @require_POST
 def plan_delete(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     plan = get_object_or_404(Plan, pk=pk)
     if plan.subscriptions.exists():
         messages.error(
             request,
             f"Can't delete '{plan.name}' — customers are subscribed. Deactivate it instead.",
         )
-        return redirect("billing:plans")
+        return redirect("core:plans")
     name = plan.name
     plan.delete()
+    audit(request, "plan.delete", target=name)
     messages.success(request, f"Package '{name}' deleted.")
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
 @login_required
@@ -302,7 +293,7 @@ def cancel_subscription(request):
     # Only an owner/admin of the account may cancel its billing.
     from apps.accounts.models import Membership
 
-    is_privileged = request.user.is_superuser or Membership.objects.filter(
+    is_privileged = Membership.objects.filter(
         user=request.user,
         account=account,
         role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
@@ -349,16 +340,14 @@ def _back_to_plans(request):
     return redirect("/billing/plans/")
 
 
-@login_required
+@admin_required
 @require_POST
 def plan_sync_fw(request, pk):
     """Admin: create the Flutterwave recurring payment plan for a package."""
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     plan = get_object_or_404(Plan, pk=pk)
     if plan.price_monthly <= 0:
         messages.error(request, "Free/trial packages don't need a Flutterwave plan.")
-        return redirect("billing:plans")
+        return redirect("core:plans")
     currency = getattr(settings, "FLUTTERWAVE_CURRENCY", "USD")
     try:
         fp = get_fw_client().create_payment_plan(
@@ -366,12 +355,13 @@ def plan_sync_fw(request, pk):
         )
         plan.flutterwave_plan_id = str(fp.get("id") or "")
         plan.save(update_fields=["flutterwave_plan_id"])
+        audit(request, "plan.sync_flutterwave", target=plan.slug)
         messages.success(
             request, f"Recurring plan created on Flutterwave (id {plan.flutterwave_plan_id})."
         )
     except FlutterwaveError as exc:
         messages.error(request, f"Flutterwave error: {exc}")
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
 @csrf_exempt
@@ -815,57 +805,53 @@ def manual_submit(request):
     return redirect("/billing/plans/")
 
 
-@login_required
+@admin_required
 @require_POST
 def manual_approve(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     req = get_object_or_404(ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING)
     activate_subscription(req.account, req.plan, "manual")
     req.status = ManualPaymentRequest.APPROVED
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+    audit(request, "payment.approve", account=req.account, target=req.plan.name, reference=req.reference)
     messages.success(request, f"Approved — {req.account} is now on {req.plan.name}.")
-    return redirect("billing:plans")
+    return redirect("core:payments")
 
 
-@login_required
+@admin_required
 @require_POST
 def manual_reject(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     req = get_object_or_404(ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING)
     req.status = ManualPaymentRequest.REJECTED
     req.note = (request.POST.get("note") or "").strip()
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "note", "reviewed_by", "reviewed_at"])
+    audit(request, "payment.reject", account=req.account, target=req.plan.name, note=req.note)
     messages.success(request, "Payment request rejected.")
-    return redirect("billing:plans")
+    return redirect("core:payments")
 
 
-@login_required
+@admin_required
 @require_POST
 def payment_method_toggle(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     method = get_object_or_404(PaymentMethod, pk=pk)
     method.is_enabled = not method.is_enabled
     method.save(update_fields=["is_enabled"])
+    audit(request, "payment_method.toggle", target=method.code, is_enabled=method.is_enabled)
     messages.success(
         request, f"'{method.name}' {'enabled' if method.is_enabled else 'disabled'}."
     )
-    return redirect("billing:plans")
+    return redirect("core:plans")
 
 
-@login_required
+@admin_required
 @require_POST
 def payment_method_edit(request, pk):
-    if not request.user.is_superuser:
-        return redirect("/billing/plans/")
     method = get_object_or_404(PaymentMethod, pk=pk)
     method.instructions = (request.POST.get("instructions") or "").strip()
     method.save(update_fields=["instructions"])
+    audit(request, "payment_method.edit", target=method.code)
     messages.success(request, f"'{method.name}' instructions updated.")
-    return redirect("billing:plans")
+    return redirect("core:plans")

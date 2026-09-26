@@ -34,7 +34,13 @@ def _resolve_current_account(request):
     if not user or not user.is_authenticated:
         return None
 
-    memberships = Membership.objects.filter(user=user).select_related("account")
+    viewed = viewing_as(request)
+    if viewed is not None:
+        return viewed
+
+    # A suspended business (Account.is_active=False) resolves to no workspace, so its pages,
+    # sends and settings stop working; SuspendedAccountMiddleware tells its members why.
+    memberships = Membership.objects.filter(user=user, account__is_active=True).select_related("account")
 
     pinned = request.session.get(_SESSION_KEY)
     if pinned:
@@ -56,6 +62,56 @@ def set_current_account(request, account: Account) -> None:
     # Keep the memo honest - switching workspace mid-request must be visible to
     # anything that asks for the current account afterwards.
     setattr(request, _CACHE_ATTR, account)
+
+
+# --- Read-only "View as" (support) --------------------------------------------------------------
+# An operator can look at a business's own screens. The session holds which business and since
+# when; apps.core.middleware.ViewAsReadOnlyMiddleware blocks every change while it's on.
+VIEW_AS_KEY = "viewing_as"
+VIEW_AS_MINUTES = 60
+
+
+def viewing_as(request):
+    """The business an operator is viewing as, or None (also None once it has expired)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+    from django.utils.dateparse import parse_datetime
+
+    from apps.core.utils import is_operator
+
+    state = request.session.get(VIEW_AS_KEY) if hasattr(request, "session") else None
+    if not state or not is_operator(getattr(request, "user", None)):
+        return None
+    started = parse_datetime(state.get("started") or "")
+    if started is None or timezone.now() - started > timedelta(minutes=VIEW_AS_MINUTES):
+        request.session.pop(VIEW_AS_KEY, None)
+        return None
+    return Account.objects.filter(pk=state.get("account")).first()
+
+
+def start_view_as(request, account) -> None:
+    from django.utils import timezone
+
+    request.session[VIEW_AS_KEY] = {"account": account.pk, "started": timezone.now().isoformat()}
+    setattr(request, _CACHE_ATTR, account)
+
+
+def stop_view_as(request):
+    """End a View-as session. Returns the account that was being viewed, if any."""
+    state = request.session.pop(VIEW_AS_KEY, None) or {}
+    if hasattr(request, _CACHE_ATTR):
+        delattr(request, _CACHE_ATTR)
+    return Account.objects.filter(pk=state.get("account")).first() if state else None
+
+
+def is_suspended_member(request) -> bool:
+    """A logged-in person whose only workspaces are suspended (and who isn't viewing as someone)."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return False
+    memberships = Membership.objects.filter(user=user)
+    return memberships.exists() and not memberships.filter(account__is_active=True).exists()
 
 
 def user_accounts(user):

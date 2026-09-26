@@ -35,12 +35,6 @@
   </div>
 </header>
 
-{% if is_admin %}
-<div class="alert alert-info mb-6" role="status">
-  {% include "components/icon.html" with name="sparkles" %}
-  <span>Admin view — showing every tenant's templates with full access.</span>
-</div>
-{% endif %}
 
 {% if whatsapp_enabled %}
 <div class="tabs mb-4" role="tablist" aria-label="Channel">

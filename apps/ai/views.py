@@ -55,7 +55,6 @@ def settings_ai(request):
         "account": account, "active_tab": "ai", "can_edit": can_edit,
         "site_configured": is_configured(), "ai": ai,
         "max_notes": ai_api.MAX_NOTES, "off_reason": ai_api.unavailable_reason(account),
-        "is_staff": request.user.is_staff,
         "topics": [{"key": k, "label": v, "on": k in (ai.auto_topics or []) and k not in locked,
                     "locked": locked.get(k, "")} for k, v in autonomy.TOPICS.items()],
         "confidence_choices": autonomy.CONFIDENCE_CHOICES,

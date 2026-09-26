@@ -25,8 +25,13 @@ class Account(models.Model):
     company_name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
 
+    # False = suspended by an operator: members see a "suspended" page, the API refuses its keys,
+    # and nothing is sent (apps.core.middleware.SuspendedAccountMiddleware).
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Set when an operator closes the account; everything is deleted once it passes
+    # (apps.core.console.data.delete_due_accounts). Reactivating clears it.
+    scheduled_deletion_at = models.DateTimeField(null=True, blank=True)
 
     # Which services this tenant signed up for; set by the signup wizard and
     # used to route service-specific onboarding and tailor the checklist.

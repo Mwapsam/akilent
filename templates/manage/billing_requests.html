@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{% extends "manage/base.html" %}
 {% load ui %}
-{% block title %}Payment Requests — Admin{% endblock %}
+{% block title %}Payments — Operator{% endblock %}
 
 {% block page_header %}
 <div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight">Payment Requests</h1>
-  <p class="text-sm text-gray-500 mt-1">Offline payments awaiting approval.</p>
+  <h1 class="text-2xl font-semibold tracking-tight">Payments</h1>
+  <p class="text-sm text-gray-500 mt-1">Bank transfers waiting for approval. Check the reference and proof, then approve to activate the plan.</p>
 </div>
 {% endblock %}
 
@@ -31,12 +31,13 @@
           {% for req in pending %}
           <tr>
             <td data-label="Submitted">{{ req.created_at|date:"M j, Y H:i" }}</td>
-            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Company"><a href="/manage/businesses/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
             <td data-label="Plan">{{ req.plan.name }}</td>
-            <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
+            <td data-label="Reference" class="font-mono text-xs">{{ req.reference|default:"—" }}
+              {% if req.proof %}<a href="{{ req.proof.url }}" target="_blank" rel="noopener" class="block text-accent underline font-sans">View proof</a>{% endif %}</td>
             <td data-label="Actions" class="text-right">
               <div class="flex items-center justify-end gap-2">
-                <form method="post" action="{% url 'billing:manual-approve' req.pk %}" class="inline">
+                <form method="post" action="{% url 'core:payment-approve' req.pk %}" class="inline">
                   {% csrf_token %}
                   <button class="btn btn-success btn-sm">Approve</button>
                 </form>
@@ -46,7 +47,7 @@
               {# Reject Modal #}
               {% with pk_text=req.pk|stringformat:"s" %}
               {% modal "reject-"|add:pk_text title="Reject payment request" size="sm" %}
-                <form method="post" action="{% url 'billing:manual-reject' req.pk %}" class="space-y-3">
+                <form method="post" action="{% url 'core:payment-reject' req.pk %}" class="space-y-3">
                   {% csrf_token %}
                   <div>
                     <label class="label">Rejection reason (optional)</label>
@@ -92,10 +93,10 @@
           {% for req in recent_resolved %}
           <tr>
             <td data-label="Submitted">{{ req.created_at|date:"M j, Y" }}</td>
-            <td data-label="Company"><a href="/manage/customers/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
+            <td data-label="Company"><a href="/manage/businesses/{{ req.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ req.account.company_name }}</a></td>
             <td data-label="Plan">{{ req.plan.name }}</td>
             <td data-label="Reference" class="font-mono text-xs">{{ req.reference }}</td>
-            <td data-label="Resolved">{{ req.reviewed_at|date:"M j, Y" }}</td>
+            <td data-label="Resolved">{{ req.reviewed_at|date:"M j, Y" }}{% if req.reviewed_by %} · {{ req.reviewed_by.get_username }}{% endif %}</td>
             <td data-label="Status">
               {% if req.status == 'approved' %}<span class="badge badge-success">Approved</span>
               {% elif req.status == 'rejected' %}<span class="badge badge-danger">Rejected</span>

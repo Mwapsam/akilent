@@ -1,5 +1,5 @@
 {% comment %}One sending-domain card with guided DNS setup. Rendered in the list
-loop and returned by AJAX create/check/toggle. Needs: d, is_admin.
+loop and returned by AJAX create/check/toggle. Needs: d.
 
 `data-domain-pending="1"` marks unverified cards for the JS auto-poll, which
 re-fires the data-dns-check form's hx-post until the domain verifies itself.
@@ -15,7 +15,7 @@ DNS does not toast every 20 seconds.{% endcomment %}
         {% else %}<span class="badge badge-warning">Pending DNS</span>{% endif %}
         {% if not d.is_active %}<span class="badge badge-neutral">Disabled</span>{% endif %}
       </div>
-      {% if is_admin %}<p class="text-xs text-gray-400 mt-1">{{ d.account.company_name }}</p>{% endif %}
+      
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
       <form data-dns-check method="post" action="/email/domains/{{ d.pk }}/verify/"

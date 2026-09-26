@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "manage/base.html" %}
 {% block title %}Platform Health — Admin{% endblock %}
 
 {% block page_header %}
@@ -29,7 +29,7 @@
         <tbody>
           {% for rep in reputation_issues %}
           <tr>
-            <td data-label="Account"><a href="/manage/customers/{{ rep.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ rep.account.company_name }}</a></td>
+            <td data-label="Account"><a href="/manage/businesses/{{ rep.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ rep.account.company_name }}</a></td>
             <td data-label="Status">
               {% if rep.state == 'warned' %}<span class="badge badge-warning">Warned</span>
               {% elif rep.state == 'halted' %}<span class="badge badge-danger">Halted</span>
@@ -71,7 +71,7 @@
           {% for log in audit_failures %}
           <tr>
             <td data-label="Time">{{ log.timestamp|date:"M j H:i" }}</td>
-            <td data-label="Account"><a href="/manage/customers/{{ log.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ log.account.company_name }}</a></td>
+            <td data-label="Account"><a href="/manage/businesses/{{ log.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ log.account.company_name }}</a></td>
             <td data-label="Action" class="font-mono text-xs">{{ log.action }}</td>
             <td data-label="Resource" class="text-gray-600">{{ log.resource_type }}: {{ log.resource_id }}</td>
             <td data-label="Error" class="text-red-600 text-xs">{{ log.error|truncatewords:10 }}</td>

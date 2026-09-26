@@ -1,0 +1,349 @@
+{% extends "manage/base.html" %}
+{% block title %}{{ business.company_name }} — Operator{% endblock %}
+
+{% block content %}
+<a href="{% url 'core:businesses' %}" class="text-sm text-gray-500 hover:text-ink mb-2 inline-block">← Businesses</a>
+<header class="mb-4 flex flex-wrap items-start justify-between gap-3">
+  <div class="min-w-0">
+    <h1 class="text-2xl font-semibold tracking-tight text-ink">{{ business.company_name }}
+      {% if not business.is_active %}<span class="badge badge-danger align-middle">Suspended</span>{% endif %}</h1>
+    <p class="text-sm text-gray-500">{{ business.slug }} · joined {{ business.created_at|date:"j M Y" }}
+      {% if business.scheduled_deletion_at %} · <span class="text-red-700">closed; deleted on {{ business.scheduled_deletion_at|date:"j M Y" }}</span>{% endif %}</p>
+  </div>
+  <form method="post" action="{% url 'core:view-as-start' business.pk %}">{% csrf_token %}
+    <button class="btn btn-secondary btn-sm" title="Open this business's own screens, read-only">View as this business</button>
+  </form>
+</header>
+
+<nav class="tabs mb-6 overflow-x-auto" aria-label="Business sections">
+  {% for key, text in tabs %}
+  <a href="{% url 'core:business-tab' business.pk key %}" class="tab{% if key == tab %} tab-active{% endif %}" {% if key == tab %}aria-current="page"{% endif %}>{{ text }}</a>
+  {% endfor %}
+</nav>
+
+{% if tab == "overview" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Needs attention</h2>
+    {% if d.reasons %}
+    <ul class="flex flex-wrap gap-1">{% for why in d.reasons %}<li class="badge badge-warning">{{ why }}</li>{% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">Nothing right now.</p>{% endif %}
+    <ul class="text-sm divide-y divide-border">
+      <li class="flex justify-between py-1.5"><span>Owner</span><span>{{ d.owner.email|default:"—" }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Setup</span><span>{{ business.get_onboarding_state_display }}</span></li>
+      <li class="flex justify-between py-1.5"><span>WhatsApp connected</span><span>{% if d.connected_at %}{{ d.connected_at|date:"j M Y" }}{% else %}No{% endif %}</span></li>
+      <li class="flex justify-between py-1.5"><span>Conversations, 7 days</span><span>{{ d.activity.conversations }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Last customer message</span><span>{% if d.activity.last_customer_message_at %}{{ d.activity.last_customer_message_at|timesince }} ago{% else %}—{% endif %}</span></li>
+    </ul>
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">{% if business.is_active %}Suspend{% else %}Reactivate{% endif %}</h2>
+    <p class="text-sm text-gray-600">{% if business.is_active %}Members see a "suspended" page, the API refuses its keys, automations stop and nothing is sent. Data is kept.{% else %}Everything works again for this business{% if business.scheduled_deletion_at %}, and the scheduled deletion is cancelled{% endif %}.{% endif %}</p>
+    <form method="post" action="{% url 'core:business-action' business.pk 'suspend' %}">{% csrf_token %}
+      <button class="btn {% if business.is_active %}btn-danger-ghost{% else %}btn-primary{% endif %} btn-sm">{% if business.is_active %}Suspend business{% else %}Reactivate business{% endif %}</button>
+    </form>
+    {% with starting_point=d.starting_point %}{% include "conversations/_starting_point.html" %}{% endwith %}
+  </section>
+</div>
+
+{% elif tab == "billing" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Plan</h2>
+    {% if d.subscription %}
+    <ul class="text-sm divide-y divide-border">
+      <li class="flex justify-between py-1.5"><span>Plan</span><span>{{ d.subscription.plan.name }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Status</span><span>{{ d.subscription.get_status_display }}</span></li>
+      {% if d.subscription.trial_ends_at %}<li class="flex justify-between py-1.5"><span>Trial ends</span><span>{{ d.subscription.trial_ends_at|date:"j M Y" }}</span></li>{% endif %}
+      <li class="flex justify-between py-1.5"><span>Period ends</span><span>{{ d.subscription.current_period_end|date:"j M Y"|default:"—" }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Usage this month</span><span>{{ d.conversations_used }} conversations · {{ d.emails_used }} emails</span></li>
+    </ul>
+    {% else %}<p class="text-sm text-gray-600">No subscription yet.</p>{% endif %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'subscription' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
+      <label class="text-sm">Plan <select name="plan" class="input">{% for p in d.plans %}<option value="{{ p.pk }}" {% if d.subscription.plan_id == p.pk %}selected{% endif %}>{{ p.name }}{% if not p.is_active %} (hidden){% endif %}</option>{% endfor %}</select></label>
+      <label class="text-sm">Status <select name="status" class="input">{% for v, t in d.statuses %}<option value="{{ v }}" {% if d.subscription.status == v %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+      <button class="btn btn-primary btn-sm">Set plan &amp; status</button>
+    </form>
+    {% if d.subscription %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'extend_trial' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
+      <label class="text-sm">Extend trial by <input type="number" name="days" value="7" min="1" max="90" class="input w-24"> days</label>
+      <button class="btn btn-secondary btn-sm">Extend trial</button>
+    </form>
+    {% endif %}
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Modules</h2>
+    <ul class="text-sm divide-y divide-border">
+      {% for m in d.modules %}
+      <li class="flex items-center justify-between gap-2 py-1.5">
+        <span>{{ m.label }} <span class="badge {% if m.enabled %}badge-success{% else %}badge-neutral{% endif %}">{% if m.enabled %}On{% else %}Off{% endif %}</span>
+          {% if m.billing_status %}<span class="text-xs text-gray-500">· billing {{ m.billing_status|lower }}</span>{% endif %}</span>
+        <form method="post" action="{% url 'core:business-action' business.pk 'module' %}">{% csrf_token %}
+          <input type="hidden" name="module" value="{{ m.key }}">
+          <button class="btn btn-ghost btn-sm">Turn {% if m.enabled %}off{% else %}on{% endif %}</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <h2 class="font-semibold pt-2">Bank transfers</h2>
+    {% if d.payments %}
+    <ul class="text-sm space-y-1">{% for p in d.payments %}<li>{{ p.created_at|date:"j M Y" }} · {{ p.plan.name }} · {{ p.get_status_display }}{% if p.reference %} · <code>{{ p.reference }}</code>{% endif %}</li>{% endfor %}</ul>
+    <a href="{% url 'core:payments' %}" class="text-sm text-accent">Approve or reject in Payments</a>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "whatsapp" %}
+<div class="space-y-4">
+  <section class="card card-pad space-y-3">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="font-semibold">Numbers</h2>
+    </div>
+    {% for n in d.numbers %}
+    <div class="rounded-xl border border-border p-3 text-sm space-y-1">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="font-medium">{{ n.number.display_number|default:n.number.phone_number_id }}
+          {% if not n.number.is_active %}<span class="badge badge-neutral">Inactive</span>{% endif %}</span>
+        <span class="badge {% if n.setup == 'ready' %}badge-success{% elif n.setup == 'failed' or n.setup == 'degraded' %}badge-danger{% else %}badge-warning{% endif %}">{{ n.number.get_setup_status_display|default:n.setup }}</span>
+      </div>
+      <p class="text-xs text-gray-500">Number ID {{ n.number.phone_number_id }} · WABA {{ n.number.waba_id|default:"—" }} · registration {{ n.status|lower }}</p>
+      {% if n.number.registration_error %}<p class="text-xs text-red-700">{{ n.number.registration_error|truncatechars:240 }}</p>{% endif %}
+      {% if n.number.registration_status != "registered" %}
+      <form method="post" action="{% url 'core:business-action' business.pk 'retry_registration' %}">{% csrf_token %}
+        <input type="hidden" name="number" value="{{ n.number.pk }}"><button class="btn btn-secondary btn-sm">Retry registration</button>
+      </form>
+      {% endif %}
+    </div>
+    {% empty %}<p class="text-sm text-gray-600">No WhatsApp number connected.</p>{% endfor %}
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="font-semibold">Templates</h2>
+      <form method="post" action="{% url 'core:business-action' business.pk 'sync_templates' %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Sync from WhatsApp</button></form>
+    </div>
+    {% if d.templates %}
+    <ul class="text-sm divide-y divide-border">{% for t in d.templates %}
+      <li class="flex justify-between gap-2 py-1.5"><span><code>{{ t.whatsapp_template_name|default:t.name }}</code> · {{ t.get_category_display }} · {{ t.language_code }}</span>
+        <span class="badge {% if t.approval_status == 'approved' %}badge-success{% elif t.approval_status == 'rejected' or t.approval_status == 'paused' %}badge-danger{% else %}badge-warning{% endif %}">{{ t.get_approval_status_display }}</span></li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">No templates.</p>{% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Failed sends, last 7 days</h2>
+    {% if d.failed %}
+    <ul class="text-sm divide-y divide-border">{% for f in d.failed %}
+      <li class="flex flex-wrap items-start justify-between gap-2 py-2">
+        <span class="min-w-0">{{ f.message.contact.phone_number }} · {{ f.message.updated_at|date:"j M, H:i" }}
+          <span class="block text-xs text-gray-600">{{ f.reason }}</span></span>
+        {% if f.retryable %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'retry_send' %}">{% csrf_token %}
+          <input type="hidden" name="message" value="{{ f.message.pk }}"><button class="btn btn-ghost btn-sm">Send again</button></form>
+        {% endif %}
+      </li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Webhooks not processed</h2>
+    {% if d.webhooks %}
+    <ul class="text-sm divide-y divide-border">{% for e in d.webhooks %}
+      <li class="flex flex-wrap items-start justify-between gap-2 py-2">
+        <span class="min-w-0">#{{ e.pk }} · {{ e.event_type }} · {{ e.created_at|date:"j M, H:i" }} · {{ e.attempts }} attempt{{ e.attempts|pluralize }}
+          {% if e.error_message %}<span class="block text-xs text-red-700">{{ e.error_message|truncatechars:200 }}</span>{% endif %}</span>
+        <form method="post" action="{% url 'core:business-action' business.pk 'resend_webhook' %}">{% csrf_token %}
+          <input type="hidden" name="event" value="{{ e.pk }}"><button class="btn btn-ghost btn-sm">Process again</button></form>
+      </li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "email" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Sending reputation</h2>
+    {% if d.reputation %}
+    <p class="text-sm">State: <span class="badge {% if d.reputation.state == 'ok' %}badge-success{% else %}badge-danger{% endif %}">{{ d.reputation.state|capfirst }}</span>
+      {% if d.reputation.halted_reason %}<span class="block text-xs text-gray-600 mt-1">{{ d.reputation.halted_reason }}</span>{% endif %}</p>
+    <p class="text-xs text-gray-500">{{ d.reputation.sent }} sent · {{ d.reputation.bounced }} bounced · {{ d.reputation.complained }} complaints this window</p>
+    {% if d.reputation.state != 'ok' %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'reset_reputation' %}">{% csrf_token %}
+      <button class="btn btn-secondary btn-sm">Clear the halt and start a fresh window</button></form>
+    {% endif %}
+    {% else %}<p class="text-sm text-gray-600">No email sent yet.</p>{% endif %}
+    <p class="text-sm">Suppressed addresses: {{ d.suppressed }}</p>
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Sending domains</h2>
+    {% for dom in d.domains %}
+    <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <span>{{ dom.domain }} <span class="badge {% if dom.status == 'verified' %}badge-success{% else %}badge-warning{% endif %}">{{ dom.get_status_display }}</span>
+        {% if not dom.is_active %}<span class="badge badge-neutral">Off</span>{% endif %}</span>
+      <form method="post" action="{% url 'core:business-action' business.pk 'reverify_domain' %}">{% csrf_token %}
+        <input type="hidden" name="domain" value="{{ dom.pk }}"><button class="btn btn-ghost btn-sm">Check DNS now</button></form>
+    </div>
+    {% empty %}<p class="text-sm text-gray-600">None.</p>{% endfor %}
+    <h2 class="font-semibold pt-2">Recent failures</h2>
+    {% if d.failures %}
+    <ul class="text-sm space-y-1">{% for m in d.failures %}<li>{{ m.created_at|date:"j M, H:i" }} · {{ m.status }} · {{ m.to_email|default:"" }}</li>{% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "automations" %}
+<div class="space-y-4">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Automations <span class="text-sm font-normal text-gray-500">· {{ d.adoption.on }} on{% if d.overdue %} · <span class="text-red-700">{{ d.overdue }} wait{{ d.overdue|pluralize }} overdue</span>{% endif %}</span></h2>
+    {% if d.workflows %}
+    <ul class="text-sm divide-y divide-border">{% for w in d.workflows %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
+        <span>{{ w.name }} <span class="text-xs text-gray-500">v{{ w.version }}</span>
+          <span class="badge {% if w.status == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{% if w.status == 'published' %}On{% elif w.status == 'archived' %}Paused{% else %}Draft{% endif %}</span></span>
+        {% if w.status == 'published' %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'pause_workflow' %}">{% csrf_token %}
+          <input type="hidden" name="workflow" value="{{ w.pk }}"><button class="btn btn-ghost btn-sm">Pause</button></form>
+        {% endif %}
+      </li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">No automations.</p>{% endif %}
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Failed runs</h2>
+    {% if d.failed_runs %}
+    <ul class="text-sm divide-y divide-border">{% for f in d.failed_runs %}
+      <li class="py-1.5">{{ f.run.workflow.name }} · {{ f.run.started_at|date:"j M, H:i" }}{% if f.error %}<span class="block text-xs text-red-700">{{ f.error|truncatechars:200 }}</span>{% endif %}</li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "ai" %}
+<section class="card card-pad space-y-3 max-w-2xl">
+  <h2 class="font-semibold">AI</h2>
+  <ul class="text-sm divide-y divide-border">
+    <li class="flex justify-between py-1.5"><span>Status</span><span>{% if d.unavailable %}{{ d.unavailable }}{% else %}On{% endif %}</span></li>
+    <li class="flex justify-between py-1.5"><span>Reply mode</span><span>{% if d.settings.reply_mode == 'auto' %}Autopilot on{% if not d.autonomy_site_on %} (switched off site-wide){% endif %}{% else %}Suggest only{% endif %}</span></li>
+    {% if d.settings.reply_mode == 'auto' %}<li class="flex justify-between py-1.5"><span>Autopilot topics</span><span>{{ d.settings.auto_topics|join:", "|default:"—" }}</span></li>{% endif %}
+    <li class="flex justify-between py-1.5"><span>AI calls today</span><span>{{ d.calls_today }} of {{ d.daily_limit }}</span></li>
+    <li class="flex justify-between py-1.5"><span>Suggestions, 7 days</span><span>{{ d.usage.used }} used of {{ d.usage.suggested }} · {{ d.usage.errors }} error{{ d.usage.errors|pluralize }}</span></li>
+  </ul>
+  <div class="flex flex-wrap gap-2">
+    {% if d.settings.reply_mode == 'auto' %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'autopilot_off' %}">{% csrf_token %}<button class="btn btn-danger-ghost btn-sm">Turn autopilot off</button></form>
+    {% endif %}
+    {% if d.settings.enabled %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'ai_off' %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Turn AI off</button></form>
+    {% endif %}
+  </div>
+  <p class="text-xs text-gray-500">Turning AI back on is the business's own choice, in its AI settings.</p>
+</section>
+
+{% elif tab == "team" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Members</h2>
+    <ul class="text-sm divide-y divide-border">{% for m in d.members %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
+        <span>{{ m.user.email|default:m.user.get_username }} <span class="badge {% if m.role == 'owner' %}badge-brand{% else %}badge-neutral{% endif %}">{{ m.get_role_display }}</span></span>
+        {% if m.role != 'owner' %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'change_owner' %}" onsubmit="return confirm('Make {{ m.user.email|escapejs }} the owner? The current owner becomes an admin.')">{% csrf_token %}
+          <input type="hidden" name="membership" value="{{ m.pk }}"><button class="btn btn-ghost btn-sm">Make owner</button></form>
+        {% endif %}
+      </li>
+    {% endfor %}</ul>
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Pending invitations</h2>
+    {% if d.invitations %}
+    <ul class="text-sm divide-y divide-border">{% for i in d.invitations %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
+        <span>{{ i.email }} · {{ i.get_role_display }} {% if i.is_expired %}<span class="badge badge-warning">Expired</span>{% endif %}</span>
+        <span class="flex gap-1">
+          <form method="post" action="{% url 'core:business-action' business.pk 'resend_invitation' %}">{% csrf_token %}<input type="hidden" name="invitation" value="{{ i.pk }}"><button class="btn btn-ghost btn-sm">Resend</button></form>
+          <form method="post" action="{% url 'core:business-action' business.pk 'revoke_invitation' %}">{% csrf_token %}<input type="hidden" name="invitation" value="{{ i.pk }}"><button class="btn btn-danger-ghost btn-sm">Revoke</button></form>
+        </span>
+      </li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "api" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">API keys</h2>
+    {% if d.keys %}
+    <ul class="text-sm divide-y divide-border">{% for k in d.keys %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
+        <span><code>{{ k.key_prefix }}…{{ k.last4 }}</code> · {{ k.get_mode_display }}
+          {% if k.is_active %}<span class="text-xs text-gray-500">· {% if k.last_used_at %}used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}</span>{% else %}<span class="badge badge-neutral">Revoked</span>{% endif %}</span>
+        {% if k.is_active %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'revoke_key' %}" onsubmit="return confirm('Revoke this key? Anything using it stops working.')">{% csrf_token %}
+          <input type="hidden" name="key" value="{{ k.pk }}"><button class="btn btn-danger-ghost btn-sm">Revoke</button></form>
+        {% endif %}
+      </li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">No keys.</p>{% endif %}
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Scheduled jobs</h2>
+    {% if d.overdue_jobs %}<p class="text-sm font-medium text-red-700">Overdue</p>
+    <ul class="text-sm space-y-1">{% for j in d.overdue_jobs %}<li class="flex justify-between gap-2"><span>{{ j.get_kind_display }} · due {{ j.fire_at|date:"j M, H:i" }}</span>
+      <form method="post" action="{% url 'core:business-action' business.pk 'cancel_job' %}">{% csrf_token %}<input type="hidden" name="job" value="{{ j.pk }}"><button class="btn btn-ghost btn-sm">Cancel</button></form></li>{% endfor %}</ul>{% endif %}
+    {% if d.failed_jobs %}<p class="text-sm font-medium">Failed</p>
+    <ul class="text-sm space-y-1">{% for j in d.failed_jobs %}<li>{{ j.get_kind_display }} · {{ j.fire_at|date:"j M, H:i" }}{% if j.error %}<span class="block text-xs text-red-700">{{ j.error|truncatechars:160 }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+    <p class="text-sm font-medium">Upcoming</p>
+    {% if d.upcoming_jobs %}
+    <ul class="text-sm space-y-1">{% for j in d.upcoming_jobs %}<li class="flex justify-between gap-2"><span>{{ j.get_kind_display }} · {{ j.fire_at|date:"j M, H:i" }}</span>
+      <form method="post" action="{% url 'core:business-action' business.pk 'cancel_job' %}">{% csrf_token %}<input type="hidden" name="job" value="{{ j.pk }}"><button class="btn btn-ghost btn-sm">Cancel</button></form></li>{% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+
+{% elif tab == "data" %}
+<div class="grid gap-4 lg:grid-cols-2">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">What's stored</h2>
+    <p class="text-sm">{{ d.contacts }} contacts · {{ d.conversations }} conversations · {{ d.messages }} messages</p>
+    <form method="post" action="{% url 'core:business-export-contacts' business.pk %}">{% csrf_token %}
+      <button class="btn btn-secondary btn-sm">Download contacts (CSV)</button></form>
+    <p class="text-xs text-gray-500">For the business's own data requests. Every export is recorded in the audit log.</p>
+  </section>
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Delete one customer</h2>
+    <p class="text-sm text-gray-600">For a deletion request from one of this business's customers: removes their contact record, conversations, messages, orders and history. This can't be undone.</p>
+    <form method="post" action="{% url 'core:business-action' business.pk 'delete_customer' %}" class="space-y-2">{% csrf_token %}
+      <input name="who" class="input" placeholder="Their WhatsApp number or email" required aria-label="Customer's phone or email">
+      <input name="confirm" class="input" placeholder="Type {{ business.slug }} to confirm" required aria-label="Confirmation">
+      <button class="btn btn-danger btn-sm">Delete this customer's data</button>
+    </form>
+  </section>
+  <section class="card card-pad space-y-3 lg:col-span-2">
+    <h2 class="font-semibold">Close the account</h2>
+    <p class="text-sm text-gray-600">Suspends the business now and deletes all of its data in 30 days. Reactivating it before then cancels the deletion.</p>
+    {% if business.scheduled_deletion_at %}
+    <p class="text-sm text-red-700">Already closed: everything is deleted on {{ business.scheduled_deletion_at|date:"j M Y" }}.</p>
+    {% else %}
+    <form method="post" action="{% url 'core:business-action' business.pk 'close' %}" class="flex flex-wrap gap-2">{% csrf_token %}
+      <input name="confirm" class="input sm:w-72" placeholder="Type {{ business.slug }} to confirm" required aria-label="Confirmation">
+      <button class="btn btn-danger btn-sm">Close account</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+
+{% elif tab == "activity" %}
+<section class="card card-pad">
+  <h2 class="font-semibold mb-3">What operators did for this business</h2>
+  {% if d.actions %}
+  <ul class="text-sm divide-y divide-border">{% for a in d.actions %}
+    <li class="py-1.5 flex flex-wrap justify-between gap-2"><span>{{ a.label }}{% if a.row.target %} · <span class="text-gray-600">{{ a.row.target }}</span>{% endif %}</span>
+      <span class="text-xs text-gray-500">{{ a.row.actor.get_username|default:"—" }} · {{ a.row.at|date:"j M Y, H:i" }}</span></li>
+  {% endfor %}</ul>
+  {% else %}<p class="text-sm text-gray-600">Nothing yet.</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

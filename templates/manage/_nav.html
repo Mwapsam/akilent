@@ -1,0 +1,22 @@
+{% comment %}Operator Console nav (manage/base.html). Same item component as the client nav.{% endcomment %}
+<nav class="flex-1 space-y-0.5 px-3" aria-label="Operator console">
+  {% include "components/_nav_item.html" with href="/manage/" label="Home" icon="home" exact=True collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/businesses/" label="Businesses" icon="building" match="manage/businesses" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/payments/" label="Payments" icon="credit-card" match="manage/payments" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/plans/" label="Plans" icon="card" match="manage/plans" collapsible=collapsible %}
+
+  <div role="group" aria-label="Platform">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Platform</p>
+    {% include "components/_nav_item.html" with href="/manage/pilot/" label="Pilot Command Center" icon="bar-chart" match="manage/pilot" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/health/" label="Health" icon="heartbeat" match="manage/health" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/audit/" label="Audit log" icon="list" match="manage/audit" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/settings/" label="Settings" icon="sliders" match="manage/settings" collapsible=collapsible %}
+  </div>
+
+  <div role="group" aria-label="Tools">
+    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Tools</p>
+    {% include "components/_nav_item.html" with href="/admin/" label="Raw data (Django admin)" icon="code-bracket" match="admin" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/dashboard/" label="Back to my workspace" icon="log-out" match="dashboard" collapsible=collapsible %}
+  </div>
+</nav>

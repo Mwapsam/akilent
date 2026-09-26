@@ -7,30 +7,8 @@
   <p class="text-sm text-gray-400 mt-1">All paid plans billed monthly · cancel anytime</p>
 </div>
 
-{% if is_admin %}
-<div x-data="{ create: false }" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border tone-brand-border tone-brand-bg px-5 py-3">
-  <p class="text-sm text-accent-strong">Admin — manage packages below. Inactive packages are hidden from customers.</p>
-  <button class="btn btn-primary btn-sm" @click="create = true">
-    {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add package
-  </button>
-
-  <div x-show="create" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
-       style="z-index: var(--z-modal)" @keydown.escape.window="create = false" role="dialog" aria-modal="true">
-    <div class="absolute inset-0 bg-gray-900/40" @click="create = false"></div>
-    <div class="card shadow-modal w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto text-left" x-trap.noscroll="create">
-      <h2 class="font-semibold mb-4">New package</h2>
-      <form method="post" action="{% url 'billing:plan-create' %}" class="space-y-3">
-        {% csrf_token %}
-        {% include "components/form_field.html" with name="slug" label="Slug (unique, lowercase)" required=True %}
-        {% include "billing/_plan_fields.html" %}
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn btn-secondary btn-sm" @click="create = false">Cancel</button>
-          <button class="btn btn-primary btn-sm" type="submit">Create package</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
+{% if is_operator %}
+<p class="mb-6 text-sm text-gray-600">Operators manage packages, payment methods and bank transfers in the <a class="text-accent underline" href="{% url 'core:plans' %}">Operator console</a>.</p>
 {% endif %}
 
 {% comment %} Current plan + usage {% endcomment %}
@@ -93,83 +71,6 @@
   </div>
 {% endif %}
 
-{% if is_admin %}
-{% comment %} Payment methods {% endcomment %}
-<div class="bg-surface border border-border rounded-2xl p-6 mb-8">
-  <h2 class="font-semibold mb-1">Payment methods</h2>
-  <p class="text-xs text-gray-400 mb-4">Enable the methods tenants can pay with. Disabling all methods (or turning payments off in Settings) hides checkout entirely.</p>
-  <div class="divide-y divide-border">
-    {% for method in payment_method_rows %}
-      <div x-data="{ edit: false }" class="py-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-ink">{{ method.name }} <span class="text-xs text-gray-400">({{ method.code }})</span></p>
-          {% if method.code == 'manual' %}
-            <p class="text-xs text-gray-400 truncate">{{ method.instructions|default:"No instructions set yet" }}</p>
-          {% endif %}
-        </div>
-        <div class="flex items-center gap-2 shrink-0">
-          {% if method.code == 'manual' %}
-            <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit instructions</button>
-          {% endif %}
-          <form method="post" action="{% url 'billing:payment-method-toggle' method.pk %}">
-            {% csrf_token %}
-            <button class="btn btn-ghost btn-sm" type="submit">{% if method.is_enabled %}Disable{% else %}Enable{% endif %}</button>
-          </form>
-        </div>
-
-        {% if method.code == 'manual' %}
-        <div x-show="edit" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
-             style="z-index: var(--z-modal)" @keydown.escape.window="edit = false" role="dialog" aria-modal="true">
-          <div class="absolute inset-0 bg-gray-900/40" @click="edit = false"></div>
-          <div class="card shadow-modal w-full max-w-lg p-6 relative text-left" x-trap.noscroll="edit">
-            <h2 class="font-semibold mb-4">Bank transfer instructions</h2>
-            <form method="post" action="{% url 'billing:payment-method-edit' method.pk %}" class="space-y-3">
-              {% csrf_token %}
-              <textarea name="instructions" rows="6" class="input" placeholder="Bank name, account number, routing/SWIFT, reference format...">{{ method.instructions }}</textarea>
-              <div class="flex justify-end gap-2 pt-2">
-                <button type="button" class="btn btn-secondary btn-sm" @click="edit = false">Cancel</button>
-                <button class="btn btn-primary btn-sm" type="submit">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-    {% endfor %}
-  </div>
-</div>
-
-{% if manual_requests %}
-{% comment %} Pending manual payments {% endcomment %}
-<div class="bg-surface border border-border rounded-2xl p-6 mb-8">
-  <h2 class="font-semibold mb-1">Pending bank transfers</h2>
-  <p class="text-xs text-gray-400 mb-4">Review the reference/proof, then approve to activate the plan or reject.</p>
-  <div class="divide-y divide-border">
-    {% for req in manual_requests %}
-      <div class="py-3 flex flex-wrap items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-ink">{{ req.account }} — {{ req.plan.name }}</p>
-          <p class="text-xs text-gray-400 truncate">Ref: {{ req.reference|default:"—" }} · {{ req.created_at|date:"M j, Y H:i" }}
-            {% if req.proof %} · <a href="{{ req.proof.url }}" target="_blank" class="text-blue-600">View proof</a>{% endif %}
-          </p>
-        </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <form method="post" action="{% url 'billing:manual-approve' req.pk %}">
-            {% csrf_token %}
-            <button class="btn btn-primary btn-sm" type="submit">Approve</button>
-          </form>
-          <form method="post" action="{% url 'billing:manual-reject' req.pk %}">
-            {% csrf_token %}
-            <button class="btn btn-danger-ghost btn-sm" type="submit">Reject</button>
-          </form>
-        </div>
-      </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-{% endif %}
-
 <div x-data='{
        period: "monthly",
        pricing: {{ period_pricing_json|safe }},
@@ -193,9 +94,8 @@
 {% comment %} Pricing grid {% endcomment %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
   {% for plan in plans %}
-    <div x-data="{ edit: false }" class="bg-surface rounded-2xl border
+    <div class="bg-surface rounded-2xl border
                 {% if plan.slug == 'professional' %}border-blue-500 ring-2 ring-blue-500 relative mt-3{% else %}border-border{% endif %}
-                {% if is_admin and not plan.is_active %}opacity-60{% endif %}
                 shadow-sm p-6 flex flex-col">
 
       {% if plan.slug == 'professional' %}
@@ -210,7 +110,6 @@
       <div class="mb-5">
         <p class="text-base font-semibold text-ink">
           {{ plan.name }}
-          {% if is_admin and not plan.is_active %}<span class="badge badge-neutral align-middle">Inactive</span>{% endif %}
         </p>
         <div class="mt-1 flex items-end gap-1">
           <span class="text-3xl font-bold text-ink">$<span x-text="priceFor({{ plan.price_monthly|stringformat:'f' }})">{{ plan.price_monthly|floatformat:0 }}</span></span>
@@ -346,55 +245,6 @@
         </div>
       {% endif %}
 
-      {% if is_admin %}
-      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-2">
-        <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit</button>
-        <div class="flex items-center gap-1">
-          <form method="post" action="{% url 'billing:plan-toggle' plan.pk %}">
-            {% csrf_token %}
-            <button class="btn btn-ghost btn-sm" type="submit">{% if plan.is_active %}Deactivate{% else %}Activate{% endif %}</button>
-          </form>
-          <form method="post" action="{% url 'billing:plan-delete' plan.pk %}" hx-confirm="Delete package {{ plan.name|escapejs }}? This cannot be undone." hx-confirm-danger
-                hx-post="{% url 'billing:plan-delete' plan.pk %}" hx-swap="none">
-            {% csrf_token %}
-            <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Delete {{ plan.name }}">
-              {% include "components/icon.html" with name="trash" class="w-4 h-4" %}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {% if plan.price_monthly > 0 %}
-      <div class="mt-2 flex items-center justify-between gap-2 text-xs">
-        {% if plan.flutterwave_plan_id %}
-          <span class="text-gray-400">Recurring billing: Flutterwave <code>{{ plan.flutterwave_plan_id }}</code></span>
-        {% else %}
-          <span class="text-amber-600">No recurring plan yet</span>
-          <form method="post" action="{% url 'billing:plan-sync-fw' plan.pk %}">
-            {% csrf_token %}
-            <button class="btn btn-ghost btn-sm" type="submit">Create recurring plan</button>
-          </form>
-        {% endif %}
-      </div>
-      {% endif %}
-
-      <div x-show="edit" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
-           style="z-index: var(--z-modal)" @keydown.escape.window="edit = false" role="dialog" aria-modal="true">
-        <div class="absolute inset-0 bg-gray-900/40" @click="edit = false"></div>
-        <div class="card shadow-modal w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto text-left" x-trap.noscroll="edit">
-          <h2 class="font-semibold mb-1">Edit {{ plan.name }}</h2>
-          <p class="text-xs text-gray-400 mb-4">Slug <code>{{ plan.slug }}</code> is immutable.</p>
-          <form method="post" action="{% url 'billing:plan-edit' plan.pk %}" class="space-y-3">
-            {% csrf_token %}
-            {% include "billing/_plan_fields.html" %}
-            <div class="flex justify-end gap-2 pt-2">
-              <button type="button" class="btn btn-secondary btn-sm" @click="edit = false">Cancel</button>
-              <button class="btn btn-primary btn-sm" type="submit">Save</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      {% endif %}
 
     </div>
   {% endfor %}

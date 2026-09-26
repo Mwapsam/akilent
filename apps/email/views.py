@@ -12,7 +12,6 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from apps.accounts.models import Account
 from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
 from apps.email import dnscheck
 from apps.email.verification import refresh_domain
@@ -34,15 +33,10 @@ from apps.email.services import DomainService, SmtpCredentialService
 logger = logging.getLogger(__name__)
 
 
-def _is_admin(request) -> bool:
-    return bool(getattr(request.user, "is_superuser", False))
-
-
 def _scoped(manager, request, account):
-    qs = manager.all()
-    if not _is_admin(request):
-        qs = qs.filter(account=account)
-    return qs
+    """This business's rows only. Operators look at other businesses in the Operator console
+    (/manage/), never through these pages."""
+    return manager.filter(account=account)
 
 
 # --- AJAX helpers -------------------------------------------------------------
@@ -61,7 +55,6 @@ def _domain_card(request, record):
     from django.conf import settings
     return render(request, "email/_domain_card.html", {
         "d": record,
-        "is_admin": _is_admin(request),
         "email_apis_enabled": _require_email_apis(request, record.account),
         "smtp_relay_host": settings.SMTP_RELAY_HOST,
         "smtp_relay_port": settings.SMTP_RELAY_PORT,
@@ -75,9 +68,8 @@ _MSG_LEVEL = {"success": messages.SUCCESS, "warning": messages.WARNING, "danger"
 
 @login_required
 def domains_list(request):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     from django.db.models import Prefetch
@@ -102,13 +94,12 @@ def domains_list(request):
     new_smtp_secret = request.session.pop("new_smtp_secret", None) if account else None
     from apps.billing.limits import LimitChecker
 
-    email_apis_enabled = admin or (account and LimitChecker(account).has_feature("email_apis"))
+    email_apis_enabled = LimitChecker(account).has_feature("email_apis")
 
     from django.conf import settings
 
     return render(request, "email/domains.html", {
         "account": account,
-        "is_admin": admin,
         "domains": domains,
         "api_key": api_key,
         "new_api_key_plaintext": new_api_key_plaintext,
@@ -117,7 +108,6 @@ def domains_list(request):
         "email_apis_enabled": email_apis_enabled,
         "smtp_relay_host": settings.SMTP_RELAY_HOST,
         "smtp_relay_port": settings.SMTP_RELAY_PORT,
-        "accounts": Account.objects.order_by("company_name") if admin else None,
     })
 
 
@@ -127,9 +117,8 @@ def domain_detail(request, pk):
     enable/disable, delete, and SMTP relay credentials."""
     from django.conf import settings
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     record = get_object_or_404(
@@ -138,7 +127,6 @@ def domain_detail(request, pk):
     return render(request, "email/domain_detail.html", {
         "d": record,
         "account": account,
-        "is_admin": admin,
         "email_apis_enabled": _require_email_apis(request, record.account),
         "new_smtp_secret": request.session.pop("new_smtp_secret", None),
         "smtp_relay_host": settings.SMTP_RELAY_HOST,
@@ -149,9 +137,8 @@ def domain_detail(request, pk):
 @login_required
 @require_POST
 def domain_create(request):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     ajax = is_ajax(request)
@@ -168,15 +155,6 @@ def domain_create(request):
             return _ajax_error(msg)
         messages.error(request, msg)
         return redirect("email-domains")
-
-    if account is None:
-        account = Account.objects.filter(pk=request.POST.get("account_id")).first()
-        if account is None:
-            msg = "Select an account to attach this domain to."
-            if ajax:
-                return _ajax_error(msg)
-            messages.error(request, msg)
-            return redirect("email-domains")
 
     record = EmailDomain.objects.create(account=account, domain=domain)
     record.ensure_verification_token()
@@ -210,9 +188,8 @@ def domain_create(request):
 @login_required
 @require_POST
 def domain_verify(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     record = get_object_or_404(_scoped(EmailDomain.objects, request, account), pk=pk)
@@ -247,9 +224,8 @@ def domain_verify(request, pk):
 @login_required
 @require_POST
 def domain_toggle(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     record = get_object_or_404(_scoped(EmailDomain.objects, request, account), pk=pk)
@@ -277,9 +253,8 @@ def domain_toggle(request, pk):
 @login_required
 @require_POST
 def domain_delete(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     record = get_object_or_404(_scoped(EmailDomain.objects, request, account), pk=pk)
@@ -315,8 +290,6 @@ def key_create(request):
 # --- SMTP relay credentials (now SES-backed) -----------------------------------
 
 def _require_email_apis(request, account) -> bool:
-    if _is_admin(request):
-        return True
     from apps.billing.limits import LimitChecker
     return LimitChecker(account).has_feature("email_apis")
 
@@ -324,9 +297,8 @@ def _require_email_apis(request, account) -> bool:
 @login_required
 @require_POST
 def smtp_create(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     domain = get_object_or_404(_scoped(EmailDomain.objects, request, account), pk=pk)
@@ -355,9 +327,8 @@ def smtp_create(request, pk):
 @login_required
 @require_POST
 def smtp_rotate(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     credential = get_object_or_404(_scoped(SmtpCredential.objects, request, account), pk=pk)
@@ -378,9 +349,8 @@ def smtp_rotate(request, pk):
 @login_required
 @require_POST
 def smtp_revoke(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     credential = get_object_or_404(_scoped(SmtpCredential.objects, request, account), pk=pk)
@@ -400,9 +370,8 @@ def smtp_revoke(request, pk):
 
 @login_required
 def webhooks_list(request):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     endpoints = _scoped(WebhookEndpoint.objects, request, account)
@@ -411,11 +380,10 @@ def webhooks_list(request):
     ).select_related("endpoint")[:50]
     from apps.billing.limits import LimitChecker
 
-    webhooks_enabled = admin or (account and LimitChecker(account).has_feature("outbound_webhooks"))
+    webhooks_enabled = LimitChecker(account).has_feature("outbound_webhooks")
 
     return render(request, "email/webhooks.html", {
         "account": account,
-        "is_admin": admin,
         "endpoints": endpoints,
         "deliveries": deliveries,
         "webhooks_enabled": webhooks_enabled,
@@ -426,16 +394,14 @@ def webhooks_list(request):
 @login_required
 @require_POST
 def webhook_create(request):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
-    if not admin:
-        from apps.billing.limits import LimitChecker
-        if not LimitChecker(account).has_feature("outbound_webhooks"):
-            messages.error(request, "Your plan does not include outbound webhooks. Upgrade to enable them.")
-            return redirect("email-webhooks")
+    from apps.billing.limits import LimitChecker
+    if not LimitChecker(account).has_feature("outbound_webhooks"):
+        messages.error(request, "Your plan does not include outbound webhooks. Upgrade to enable them.")
+        return redirect("email-webhooks")
 
     url = (request.POST.get("url") or "").strip()
     valid_events = {slug for slug, _ in WebhookEndpoint.EVENT_CHOICES}
@@ -456,9 +422,8 @@ def webhook_create(request):
 @login_required
 @require_POST
 def webhook_delete(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     endpoint = get_object_or_404(_scoped(WebhookEndpoint.objects, request, account), pk=pk)
@@ -470,9 +435,8 @@ def webhook_delete(request, pk):
 @login_required
 @require_POST
 def webhook_reactivate(request, pk):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     endpoint = get_object_or_404(_scoped(WebhookEndpoint.objects, request, account), pk=pk)
@@ -486,9 +450,8 @@ def webhook_reactivate(request, pk):
 def webhook_redeliver(request, pk):
     from apps.email.tasks import deliver_webhook
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     delivery = get_object_or_404(
@@ -563,9 +526,8 @@ def _conversation_insights(account):
 def insights(request):
     from apps.billing.limits import LimitChecker
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     conversation_stats = _conversation_insights(account)
@@ -573,7 +535,7 @@ def insights(request):
 
     starting_point = conversations_api.starting_point(account) if account else None
 
-    has_analytics = admin or (account and LimitChecker(account).has_feature("detailed_analytics"))
+    has_analytics = LimitChecker(account).has_feature("detailed_analytics")
     domains = list(
         _scoped(EmailDomain.objects, request, account).filter(
             status=EmailDomain.Status.VERIFIED
@@ -584,9 +546,7 @@ def insights(request):
 
     logs, stats, error, deliverability = [], [], None, None
     if has_analytics and selected and selected in domain_names:
-        log_qs = EmailMessage.objects.filter(domain__domain=selected)
-        if not admin and account:
-            log_qs = log_qs.filter(account=account)
+        log_qs = EmailMessage.objects.filter(domain__domain=selected, account=account)
         logs = list(log_qs.order_by("-created_at")[:100])
         stats = _build_engagement_stats(selected)
         if account:
@@ -609,7 +569,6 @@ def insights(request):
 
     return render(request, "email/insights.html", {
         "account": account,
-        "is_admin": admin,
         "has_analytics": has_analytics,
         "engagement_days": engagement_days,
         "engagement_series": engagement_series,
@@ -817,9 +776,8 @@ def templates_list(request):
     from apps.email.models import EmailTemplate
     from apps.email.starter_templates import STARTER_TEMPLATES
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     # R1.5c follow-up: Templates is channel-neutral like Campaigns — one page,
@@ -827,7 +785,7 @@ def templates_list(request):
     # read-only here (Meta is the source of truth for approval/content).
     channel = request.GET.get("channel") or "email"
 
-    templates_enabled = admin or (account and LimitChecker(account).has_feature("email_templates"))
+    templates_enabled = LimitChecker(account).has_feature("email_templates")
     templates = list(_scoped(EmailTemplate.objects, request, account).filter(is_active=True))
     for t in templates:
         t.sample_variables_json = json.dumps(t.sample_variables or {})
@@ -844,15 +802,14 @@ def templates_list(request):
 
     whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
     whatsapp_templates = []
-    if whatsapp_enabled and (admin or account):
+    if whatsapp_enabled:
         from apps.whatsapp.models import MessageTemplate
 
-        wa_qs = MessageTemplate.objects if admin else MessageTemplate.objects.filter(account=account)
-        whatsapp_templates = list(wa_qs.order_by("name", "language_code"))
+        whatsapp_templates = list(
+            MessageTemplate.objects.filter(account=account).order_by("name", "language_code"))
 
     return render(request, "email/templates.html", {
         "account": account,
-        "is_admin": admin,
         "channel": channel,
         "templates": templates,
         "templates_enabled": templates_enabled,
@@ -870,12 +827,11 @@ def template_create(request):
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplate
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
-    if not admin and not LimitChecker(account).has_feature("email_templates"):
+    if not LimitChecker(account).has_feature("email_templates"):
         messages.error(request, "Your plan does not include email templates. Upgrade to enable them.")
         return redirect("email-templates")
 
@@ -907,9 +863,8 @@ def template_create(request):
 def template_edit_form(request, pk):
     from apps.email.models import EmailTemplate
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     from apps.email.services import flatten_variable_paths
@@ -939,7 +894,6 @@ def template_edit_form(request, pk):
 
     return render(request, "email/template_edit.html", {
         "account": account,
-        "is_admin": admin,
         "template": template,
         "mode": mode,
         "builder_config": builder_config,
@@ -955,9 +909,8 @@ def template_edit(request, pk):
 
     from apps.email.models import EmailTemplate, EmailTemplateVersion
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
@@ -1016,9 +969,8 @@ def template_edit(request, pk):
 def template_version_restore(request, pk, version_pk):
     from apps.email.models import EmailTemplate, EmailTemplateVersion
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
@@ -1051,12 +1003,11 @@ def template_clone(request, pk):
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplate
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
-    if not admin and not LimitChecker(account).has_feature("email_templates"):
+    if not LimitChecker(account).has_feature("email_templates"):
         messages.error(request, "Your plan does not include email templates. Upgrade to enable them.")
         return redirect("email-templates")
 
@@ -1089,9 +1040,8 @@ def template_clone(request, pk):
 def template_delete(request, pk):
     from apps.email.models import EmailTemplate
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
@@ -1108,9 +1058,8 @@ def template_preview(request, pk):
     from apps.email.models import EmailTemplate
     from apps.email.services import render_template, validate_variables
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return JsonResponse({"error": "Not found"}, status=404)
 
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
@@ -1229,12 +1178,11 @@ def template_asset_upload(request):
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplateAsset
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return JsonResponse({"error": "Not found"}, status=404)
 
-    if not admin and not LimitChecker(account).has_feature("email_templates"):
+    if not LimitChecker(account).has_feature("email_templates"):
         return JsonResponse({"error": "Your plan does not include email templates."}, status=403)
 
     uploaded = (
@@ -1267,9 +1215,8 @@ def asset_library(request):
     """Browse/search uploaded template images."""
     from apps.email.models import EmailTemplateAsset
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     assets = _scoped(EmailTemplateAsset.objects, request, account)
@@ -1279,7 +1226,6 @@ def asset_library(request):
 
     return render(request, "email/assets.html", {
         "account": account,
-        "is_admin": admin,
         "assets": assets,
         "query": query,
     })
@@ -1290,9 +1236,8 @@ def asset_library(request):
 def asset_delete(request, pk):
     from apps.email.models import EmailTemplateAsset
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     asset = get_object_or_404(_scoped(EmailTemplateAsset.objects, request, account), pk=pk)
@@ -1336,7 +1281,7 @@ def _parse_recipients_text(raw: str) -> list[dict]:
     return recipients
 
 
-def _render_composer(request, account, admin, *, form_data=None, errors=None, status=200):
+def _render_composer(request, account, *, form_data=None, errors=None, status=200):
     """Render the standalone message composer (`/email/campaigns/new/`).
 
     Also used by campaign_create when it needs to re-show the form with
@@ -1345,7 +1290,7 @@ def _render_composer(request, account, admin, *, form_data=None, errors=None, st
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplate
 
-    bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
+    bulk_enabled = LimitChecker(account).has_feature("bulk_email")
     templates = list(
         _scoped(EmailTemplate.objects, request, account).filter(is_active=True)
     )
@@ -1373,7 +1318,6 @@ def _render_composer(request, account, admin, *, form_data=None, errors=None, st
 
     return render(request, "email/campaign_compose.html", {
         "account": account,
-        "is_admin": admin,
         "templates": templates,
         "verified_domains": verified_domains,
         "bulk_enabled": bulk_enabled,
@@ -1389,9 +1333,8 @@ def campaigns_list(request):
     from apps.billing.limits import LimitChecker
     from apps.email.models import BulkEmailCampaign
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     # R1.5c: "Campaigns" is one channel-neutral concept with two sending paths
@@ -1399,7 +1342,7 @@ def campaigns_list(request):
     # WhatsApp is a new, deliberately smaller campaign type. One page, one tab.
     channel = request.GET.get("channel") or "email"
 
-    bulk_enabled = admin or (account and LimitChecker(account).has_feature("bulk_email"))
+    bulk_enabled = LimitChecker(account).has_feature("bulk_email")
 
     status = request.GET.get("status") or "all"
     campaigns = _scoped(BulkEmailCampaign.objects, request, account)
@@ -1415,15 +1358,14 @@ def campaigns_list(request):
 
     whatsapp_campaigns = []
     whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
-    if whatsapp_enabled and (admin or account):
+    if whatsapp_enabled:
         from apps.whatsapp.models import WhatsAppCampaign
 
-        wa_qs = WhatsAppCampaign.objects if admin else WhatsAppCampaign.objects.filter(account=account)
-        whatsapp_campaigns = list(wa_qs.select_related("template", "contact_list")[:50])
+        whatsapp_campaigns = list(WhatsAppCampaign.objects.filter(account=account)
+                                  .select_related("template", "contact_list")[:50])
 
     return render(request, "email/campaigns.html", {
         "account": account,
-        "is_admin": admin,
         "channel": channel,
         "campaigns": campaigns,
         "bulk_enabled": bulk_enabled,
@@ -1442,12 +1384,11 @@ def campaigns_list(request):
 
 @login_required
 def campaign_compose(request):
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
-    return _render_composer(request, account, admin)
+    return _render_composer(request, account)
 
 
 @login_required
@@ -1464,9 +1405,8 @@ def campaign_create(request):
     from apps.email.exceptions import MissingPostalAddressError, UnverifiedDomainError
     from apps.scheduler.api import SchedulingError
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     from_email = (request.POST.get("from_email") or "").strip()
@@ -1559,7 +1499,7 @@ def campaign_create(request):
             return redirect("email-campaigns")
 
     return _render_composer(
-        request, account, admin, form_data=form_data, errors=errors, status=400
+        request, account, form_data=form_data, errors=errors, status=400
     )
 
 
@@ -1658,9 +1598,8 @@ def campaign_sample_csv(request):
 def campaign_detail(request, pk):
     from apps.email.models import BulkEmailCampaign, BulkEmailRecipient
 
-    admin = _is_admin(request)
     account = get_current_account(request)
-    if account is None and not admin:
+    if account is None:
         return redirect("dashboard")
 
     campaign = get_object_or_404(_scoped(BulkEmailCampaign.objects, request, account), pk=pk)
@@ -1677,7 +1616,6 @@ def campaign_detail(request, pk):
 
     return render(request, "email/campaign_detail.html", {
         "account": account,
-        "is_admin": admin,
         "campaign": campaign,
         "recipients": recipients,
     })

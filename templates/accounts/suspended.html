@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Workspace suspended — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto card card-pad space-y-3 mt-10">
+  <h1 class="text-xl font-semibold text-ink">This workspace is suspended</h1>
+  <p class="text-sm text-gray-600">
+    Your business's {{ site.app_name|default:"Akilent" }} workspace has been suspended, so its inbox,
+    automations and messages are paused. Your data is kept.
+  </p>
+  <p class="text-sm text-gray-600">
+    To find out why or to restore it, contact
+    {% if site.support_email %}<a class="text-accent underline" href="mailto:{{ site.support_email }}">{{ site.support_email }}</a>{% else %}support{% endif %}.
+  </p>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-secondary btn-sm">Log out</button></form>
+</div>
+{% endblock %}

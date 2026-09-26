@@ -1,0 +1,114 @@
+{% extends "manage/base.html" %}
+{% block title %}Plans — Operator{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-3" x-data="{ create: false }">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight text-ink">Plans</h1>
+    <p class="mt-1 text-sm text-gray-600">Packages businesses can buy, and how they can pay. Hidden packages aren't offered to businesses.</p>
+  </div>
+  <button class="btn btn-primary btn-sm" @click="create = true">{% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add package</button>
+
+  <div x-show="create" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
+       style="z-index: var(--z-modal)" @keydown.escape.window="create = false" role="dialog" aria-modal="true" aria-label="New package">
+    <div class="absolute inset-0 bg-gray-900/40" @click="create = false"></div>
+    <div class="card shadow-modal w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto text-left" x-trap.noscroll="create">
+      <h2 class="font-semibold mb-4">New package</h2>
+      <form method="post" action="{% url 'core:plan-create' %}" class="space-y-3">{% csrf_token %}
+        {% include "components/form_field.html" with name="slug" label="Short name (unique, lowercase)" required=True %}
+        {% include "billing/_plan_fields.html" %}
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn btn-secondary btn-sm" @click="create = false">Cancel</button>
+          <button class="btn btn-primary btn-sm" type="submit">Create package</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</header>
+
+<div class="table-wrap mb-8">
+  <table class="table table--cards">
+    <thead><tr><th>Package</th><th>Price / month</th><th>Service</th><th>Recurring billing</th><th class="text-right">Actions</th></tr></thead>
+    <tbody>
+      {% for plan in plans %}
+      <tr x-data="{ edit: false }">
+        <td data-label="Package"><span class="font-medium text-ink">{{ plan.name }}</span> <code class="text-xs">{{ plan.slug }}</code>
+          {% if not plan.is_active %}<span class="badge badge-neutral">Hidden</span>{% endif %}</td>
+        <td data-label="Price / month">${{ plan.price_monthly|floatformat:2 }}</td>
+        <td data-label="Service">{{ plan.get_service_type_display }}</td>
+        <td data-label="Recurring billing">
+          {% if plan.price_monthly > 0 %}
+            {% if plan.flutterwave_plan_id %}Flutterwave <code class="text-xs">{{ plan.flutterwave_plan_id }}</code>
+            {% else %}
+            <form method="post" action="{% url 'core:plan-sync-fw' plan.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Create on Flutterwave</button></form>
+            {% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td data-label="Actions" class="text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit</button>
+            <form method="post" action="{% url 'core:plan-toggle' plan.pk %}">{% csrf_token %}
+              <button class="btn btn-ghost btn-sm">{% if plan.is_active %}Hide{% else %}Show{% endif %}</button></form>
+            <form method="post" action="{% url 'core:plan-delete' plan.pk %}" onsubmit="return confirm('Delete package {{ plan.name|escapejs }}? This cannot be undone.')">{% csrf_token %}
+              <button class="btn btn-danger-ghost btn-sm" aria-label="Delete {{ plan.name }}">{% include "components/icon.html" with name="trash" class="w-4 h-4" %}</button></form>
+          </div>
+
+          <div x-show="edit" x-cloak class="fixed inset-0 flex items-center justify-center p-4 text-left"
+               style="z-index: var(--z-modal)" @keydown.escape.window="edit = false" role="dialog" aria-modal="true" aria-label="Edit {{ plan.name }}">
+            <div class="absolute inset-0 bg-gray-900/40" @click="edit = false"></div>
+            <div class="card shadow-modal w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto" x-trap.noscroll="edit">
+              <h2 class="font-semibold mb-1">Edit {{ plan.name }}</h2>
+              <p class="text-xs text-gray-400 mb-4">The short name <code>{{ plan.slug }}</code> can't change.</p>
+              <form method="post" action="{% url 'core:plan-edit' plan.pk %}" class="space-y-3">{% csrf_token %}
+                {% include "billing/_plan_fields.html" %}
+                <div class="flex justify-end gap-2 pt-2">
+                  <button type="button" class="btn btn-secondary btn-sm" @click="edit = false">Cancel</button>
+                  <button class="btn btn-primary btn-sm" type="submit">Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<section class="card card-pad" aria-labelledby="h-methods">
+  <h2 id="h-methods" class="font-semibold mb-1">Payment methods</h2>
+  <p class="text-xs text-gray-500 mb-4">Which ways businesses can pay.{% if not payments_enabled %} <strong class="text-red-700">Payments are switched off in Settings, so checkout is hidden.</strong>{% endif %}</p>
+  <div class="divide-y divide-border">
+    {% for method in payment_methods %}
+    <div x-data="{ edit: false }" class="py-3 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-ink">{{ method.name }} <span class="text-xs text-gray-400">({{ method.code }})</span>
+          <span class="badge {% if method.is_enabled %}badge-success{% else %}badge-neutral{% endif %}">{% if method.is_enabled %}On{% else %}Off{% endif %}</span></p>
+        {% if method.code == 'manual' %}<p class="text-xs text-gray-400 truncate">{{ method.instructions|default:"No instructions set yet" }}</p>{% endif %}
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {% if method.code == 'manual' %}<button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit instructions</button>{% endif %}
+        <form method="post" action="{% url 'core:payment-method-toggle' method.pk %}">{% csrf_token %}
+          <button class="btn btn-ghost btn-sm">{% if method.is_enabled %}Turn off{% else %}Turn on{% endif %}</button></form>
+      </div>
+      {% if method.code == 'manual' %}
+      <div x-show="edit" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
+           style="z-index: var(--z-modal)" @keydown.escape.window="edit = false" role="dialog" aria-modal="true" aria-label="Bank transfer instructions">
+        <div class="absolute inset-0 bg-gray-900/40" @click="edit = false"></div>
+        <div class="card shadow-modal w-full max-w-lg p-6 relative text-left" x-trap.noscroll="edit">
+          <h2 class="font-semibold mb-4">Bank transfer instructions</h2>
+          <form method="post" action="{% url 'core:payment-method-edit' method.pk %}" class="space-y-3">{% csrf_token %}
+            <textarea name="instructions" rows="6" class="input" placeholder="Bank name, account number, reference format…">{{ method.instructions }}</textarea>
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" class="btn btn-secondary btn-sm" @click="edit = false">Cancel</button>
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
