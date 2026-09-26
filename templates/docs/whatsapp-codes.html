@@ -1,0 +1,91 @@
+{% extends "docs/_layout.html" %}
+{% block docs_content %}
+<p>
+  Send login, sign-up and payment-confirmation codes to your customers on WhatsApp. Your system
+  makes the code and checks it when the customer types it back. Akilent only delivers it, using
+  your approved <strong>Authentication</strong> template. Meta writes the wording, for example
+  "<em>482913</em> is your verification code", with a <em>Copy code</em> button.
+</p>
+<p>
+  You need a connected WhatsApp number, an approved Authentication template (create one under
+  <a href="/email/templates/?channel=whatsapp">Templates → WhatsApp</a>), and an API key with the
+  <code>messages:send</code> scope, which every key has.
+</p>
+
+<h2>Send a code</h2>
+<div class="code-tabs">
+  <div class="tab-bar">
+    <button type="button" class="active" data-tab="curl">curl</button>
+    <button type="button" data-tab="python">Python</button>
+  </div>
+  <pre data-panel="curl"><code>curl -X POST https://akilent.com/api/v1/whatsapp/verification-codes \
+  -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: login-8841-attempt-1" \
+  -d '{ "to": "+260971234567", "code": "482913" }'</code></pre>
+  <pre data-panel="python" hidden><code>import requests
+
+resp = requests.post(
+    "https://akilent.com/api/v1/whatsapp/verification-codes",
+    headers={
+        "Authorization": "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx",
+        "Idempotency-Key": "login-8841-attempt-1",
+    },
+    json={"to": "+260971234567", "code": "482913"},
+)
+resp.raise_for_status()
+print(resp.json())</code></pre>
+</div>
+
+<table>
+  <tr><th>Field</th><th>Required</th><th>Notes</th></tr>
+  <tr><td><code>to</code></td><td>Yes</td><td>The customer's WhatsApp number with its country code.</td></tr>
+  <tr><td><code>code</code></td><td>Yes</td><td>4 to 15 letters or numbers, no spaces.</td></tr>
+  <tr><td><code>template</code></td><td>No</td><td>The Authentication template's name. Defaults to your newest approved one.</td></tr>
+  <tr><td><code>language</code></td><td>No</td><td>The template's language code, e.g. <code>en</code>. Only needed when the same name exists in several languages.</td></tr>
+</table>
+
+<h3>Response</h3>
+<pre><code>HTTP/1.1 202 Accepted
+
+{
+  "id": "5120",
+  "status": "queued",
+  "to": "+260971234567",
+  "template": "login_code",
+  "language": "en",
+  "created_at": "2026-09-26T09:14:03+00:00",
+  "sent_at": null
+}</code></pre>
+
+<h2>Check delivery</h2>
+<pre><code>GET /api/v1/whatsapp/verification-codes/5120</code></pre>
+<p>
+  <code>status</code> moves from <code>queued</code> to <code>sent</code>, <code>delivered</code>
+  and <code>read</code> as WhatsApp reports back. A <code>failed</code> code also has an
+  <code>error</code> with a <code>code</code> and a plain-language <code>message</code>.
+  If WhatsApp fails, offer the customer another way to get a code, such as SMS or email.
+</p>
+
+<h2>Rules</h2>
+<ul>
+  <li><strong>The code is not kept.</strong> Akilent blanks it out once it has been sent, or has failed for good. Nobody at your business can read it later.</li>
+  <li><strong>Late codes are dropped.</strong> A code that couldn't go out before the template's expiry (10 minutes if the template doesn't say) fails with <code>CODE_EXPIRED</code> instead of arriving late.</li>
+  <li><strong>At most 5 codes per number per hour.</strong> More returns <code>429 too_many_codes</code>, so a leaked key can't be used to flood people.</li>
+  <li><strong>Codes don't appear in the inbox.</strong> They're system messages, not conversations.</li>
+  <li><strong>STOP doesn't block them.</strong> The customer asked for the code, so it's sent even if they once opted out of your messages.</li>
+  <li><strong>Test keys send nothing.</strong> A key starting <code>ak_test_</code> checks the request and returns <code>"status": "test"</code>.</li>
+  <li><strong>Retries are safe.</strong> Send the same <code>Idempotency-Key</code> and you get the first result back instead of a second message.</li>
+</ul>
+
+<h2>Errors</h2>
+<table>
+  <tr><th>Code</th><th>HTTP</th><th>Meaning</th></tr>
+  <tr><td><code>invalid_phone</code></td><td>400</td><td>The number isn't a valid international number.</td></tr>
+  <tr><td><code>invalid_code</code></td><td>400</td><td>The code isn't 4 to 15 letters or numbers.</td></tr>
+  <tr><td><code>template_not_found</code></td><td>404</td><td>No approved Authentication template has that name and language.</td></tr>
+  <tr><td><code>no_authentication_template</code></td><td>409</td><td>You don't have an approved Authentication template yet.</td></tr>
+  <tr><td><code>whatsapp_not_connected</code></td><td>409</td><td>No WhatsApp number is connected.</td></tr>
+  <tr><td><code>too_many_codes</code></td><td>429</td><td>5 codes already went to this number in the last hour.</td></tr>
+</table>
+{% endblock %}

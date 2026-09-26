@@ -55,6 +55,12 @@ PAGES = [
         "API reference",
     ),
     DocPage(
+        "whatsapp-codes",
+        "WhatsApp one-time codes",
+        "Deliver login and confirmation codes on WhatsApp with POST /api/v1/whatsapp/verification-codes.",
+        "API reference",
+    ),
+    DocPage(
         "smtp",
         "SMTP relay",
         "Send directly over SMTP using a per-domain relay credential.",

@@ -11,6 +11,7 @@ from apps.api import (
     event_views,
     views,
     views_scheduler,
+    whatsapp_views,
     workflow_views,
 )
 
@@ -72,6 +73,10 @@ urlpatterns = [
     # Scheduler (Akilent Scheduler)
     path("<str:version>/scheduled-jobs", views_scheduler.ScheduledJobCollectionView.as_view(), name="api-v1-scheduled-jobs"),
     path("<str:version>/scheduled-jobs/<str:public_id>", views_scheduler.ScheduledJobDetailView.as_view(), name="api-v1-scheduled-job-detail"),
+
+    # WhatsApp one-time codes
+    path("<str:version>/whatsapp/verification-codes", whatsapp_views.VerificationCodeCreateView.as_view(), name="api-v1-whatsapp-codes"),
+    path("<str:version>/whatsapp/verification-codes/<str:message_id>", whatsapp_views.VerificationCodeDetailView.as_view(), name="api-v1-whatsapp-code-detail"),
 
     # Business events (Phase 5)
     path("<str:version>/events", event_views.EventCollectionView.as_view(), name="api-v1-events"),

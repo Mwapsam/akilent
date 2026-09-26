@@ -306,6 +306,7 @@
         <div>
           <h2 id="wa-auth-h" class="text-base font-semibold text-ink">One-time code</h2>
           <p class="text-sm text-gray-500">WhatsApp writes this message for you: “<strong>123456</strong> is your verification code.” You choose the options.</p>
+          <p class="text-sm text-gray-500 mt-1">Once Meta approves it, your app or website can send codes with it. See <a class="underline" href="{% url 'whatsapp-codes' %}">One-time codes</a>.</p>
         </div>
         <label class="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" name="auth_security" {% if form.auth_security or not form.name %}checked{% endif %}>

@@ -23,6 +23,7 @@
         {% include "components/icon.html" with name="refresh" class="w-4 h-4" %} Sync from WhatsApp
       </button>
     </form>
+    <a href="{% url 'whatsapp-codes' %}" class="btn btn-ghost btn-sm">One-time codes</a>
     {% else %}
     <a href="/email/templates/assets/" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="image" class="w-4 h-4" %} Media library

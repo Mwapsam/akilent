@@ -37,6 +37,7 @@ _POLICY_ERRORS = {
     "TEMPLATE_NOT_APPROVED": "This message template hasn't been approved by Meta yet.",
     "MARKETING_REQUIRES_OPT_IN": "This customer hasn't opted in to marketing messages.",
     "CONTACT_OPTED_OUT": "This customer has opted out of WhatsApp messages (replied STOP).",
+    "CODE_EXPIRED": "The one-time code expired before WhatsApp could deliver it, so it wasn't sent.",
 }
 
 _DEFAULT = "This message could not be delivered."

@@ -33,8 +33,18 @@ def _button_component(template, values: list[str]) -> dict | None:
     if not buttons:
         return None
     button = buttons[0]
-    if (button.get("type") or "").upper() != "URL":
-        return None  # phone/copy-code buttons carry no send-time parameter
+    kind = (button.get("type") or "").upper()
+    if kind == "OTP" and values:
+        # An authentication template's copy-code button must carry the same code
+        # as the body's {{1}}. Meta names it sub_type "url" even though it copies.
+        return {
+            "type": "button",
+            "sub_type": "url",
+            "index": "0",
+            "parameters": [{"type": "text", "text": values[0]}],
+        }
+    if kind != "URL":
+        return None  # phone and quick-reply buttons carry no send-time parameter
     numbers = _VAR_RE.findall(button.get("url") or "")
     if not numbers:
         return None

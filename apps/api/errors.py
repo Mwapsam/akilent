@@ -82,6 +82,11 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, SchedulingError):
         return _envelope("invalid_schedule", str(exc), status.HTTP_400_BAD_REQUEST, context)
 
+    from apps.whatsapp.api import VerificationCodeError
+
+    if isinstance(exc, VerificationCodeError):
+        return _envelope(exc.code, str(exc), exc.status, context)
+
     from apps.email.services.attachments import AttachmentError
 
     if isinstance(exc, AttachmentError):

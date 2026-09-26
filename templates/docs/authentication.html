@@ -30,7 +30,7 @@ Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
 </p>
 <table>
   <tr><th>Scope</th><th>Required by</th></tr>
-  <tr><td><code>messages:send</code></td><td>Nothing today — <a href="{% url 'docs-page' 'messages' %}">POST /api/v1/messages</a> doesn't check scopes. This is the default scope on every new key.</td></tr>
+  <tr><td><code>messages:send</code></td><td><a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>. <a href="{% url 'docs-page' 'messages' %}">POST /api/v1/messages</a> doesn't check scopes. This is the default scope on every new key.</td></tr>
   <tr><td><code>templates:manage</code></td><td>All of the <a href="{% url 'docs-page' 'templates' %}">templates</a> endpoints.</td></tr>
   <tr><td><code>messages:send:bulk</code></td><td>Both <a href="{% url 'docs-page' 'campaigns' %}">campaigns</a> endpoints.</td></tr>
 </table>

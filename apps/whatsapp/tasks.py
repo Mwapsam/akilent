@@ -26,6 +26,7 @@ from apps.whatsapp.models.tenant import (
     get_account_for_webhook,
     get_number_for_webhook,
 )
+from apps.whatsapp import verification_codes
 from apps.whatsapp.interactive import extract_reply
 from apps.whatsapp.models.contact import normalize_phone
 
@@ -234,6 +235,9 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
     The channel-neutral work lives in ``apps.conversations``; this only adapts.
     """
     from apps.conversations import metrics
+
+    if verification_codes.is_verification_code(log.raw_payload):
+        return  # a one-time code is a system message, not a conversation with the business
 
     try:
         from apps.conversations.models import Conversation as SpineConversation
@@ -655,8 +659,13 @@ def _authorize_send(msg: OutboundMessage) -> None:
         return
 
     ptype = payload.get("type", "text")
+    code_request = verification_codes.is_verification_code(payload)
 
-    if msg.contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT:
+    if code_request and verification_codes.is_expired(payload):
+        raise SendNotAuthorized("CODE_EXPIRED", "The one-time code expired before it could be sent.")
+
+    # A one-time code was asked for by the person themselves, so an earlier STOP doesn't block it.
+    if not code_request and msg.contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT:
         raise SendNotAuthorized(
             "CONTACT_OPTED_OUT",
             "Contact has opted out of WhatsApp messages.",
@@ -826,6 +835,7 @@ def drain_outbound_queue():
             msg.status = OutboundMessage.Status.SENT
             msg.sent_at = timezone.now()
             msg.save(update_fields=["status", "sent_at"])
+            verification_codes.forget_code(msg)
 
             log.conversation.register_outbound(msg.sent_at)
             project_outbound_to_inbox(log)
@@ -837,6 +847,7 @@ def drain_outbound_queue():
                     status=MessageLog.Status.FAILED
                 )
                 project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
+            verification_codes.forget_code(msg)
             _notify_terminal_failure(msg)
             failed += 1
         except Exception as exc:
@@ -851,6 +862,8 @@ def drain_outbound_queue():
                     status=MessageLog.Status.FAILED
                 )
                 project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
+            if msg.status == OutboundMessage.Status.FAILED:
+                verification_codes.forget_code(msg)
             _notify_terminal_failure(msg)
             failed += 1
 

@@ -32,6 +32,18 @@ class HasAutomationModule(BasePermission):
         return account is not None and billing_api.module_enabled(account, "automation")
 
 
+class HasWhatsAppModule(BasePermission):
+    """The tenant's WhatsApp module must not be explicitly disabled."""
+
+    message = "The WhatsApp module is not enabled for this account."
+
+    def has_permission(self, request, view) -> bool:
+        from apps.billing import api as billing_api
+
+        account = request.user
+        return account is not None and billing_api.module_enabled(account, "whatsapp")
+
+
 class HasBulkEmailFeature(BasePermission):
     """Gate on the account's plan including bulk/campaign sending."""
 

@@ -55,6 +55,54 @@ def templates_sync(request):
     return redirect("/email/templates/?channel=whatsapp")
 
 
+# --- One-time codes sent by the business's own app (apps.whatsapp.verification_codes). The page
+# gives a WhatsApp-only business what it needs to connect: an approved Authentication template,
+# an API key and a filled-in example. ------------------------------------------------------------
+
+@login_required
+@module_required("whatsapp")
+def codes_setup(request):
+    from apps.accounts.api import is_account_admin
+    from apps.email.models import EmailApiKey
+    from apps.whatsapp import verification_codes
+    from apps.whatsapp.models import OutboundMessage
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    recent = (OutboundMessage.objects.filter(account=account, payload__kind=verification_codes.KIND)
+              .select_related("contact", "message_log").order_by("-created_at")[:20])
+    return render(request, "whatsapp/codes.html", {
+        "templates": verification_codes.approved_templates(account),
+        "api_key": EmailApiKey.objects.filter(account=account, is_active=True).first(),
+        "new_key": request.session.pop("new_api_key", None),
+        "can_manage_key": is_account_admin(request.user, account),
+        "endpoint": request.build_absolute_uri("/api/v1/whatsapp/verification-codes"),
+        "recent": [verification_codes.status_of(m) for m in recent],
+    })
+
+
+@login_required
+@module_required("whatsapp")
+@require_POST
+def codes_key_create(request):
+    from apps.accounts.api import is_account_admin
+    from apps.email.models import EmailApiKey
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if not is_account_admin(request.user, account):
+        messages.error(request, "Only an owner or admin can create the API key.")
+        return redirect("whatsapp-codes")
+    # One key per business, as on the email Domains page: a new key replaces the old one.
+    EmailApiKey.objects.filter(account=account).update(is_active=False)
+    _, raw_key = EmailApiKey.create_for_account(account, name="default")
+    request.session["new_api_key"] = raw_key
+    messages.success(request, "New API key created. Copy it now: it won't be shown again.")
+    return redirect("whatsapp-codes")
+
+
 # --- Template creation (amendment to R1.5c follow-up, 2026-09-22): Meta's own
 # UI is too complex for a non-technical owner, so Akilent offers a simplified
 # builder in front of it. Akilent validates and submits to Meta; Meta stays
@@ -246,6 +294,8 @@ def template_create(request):
         variables = [[v.get("label", ""), v.get("example", "")] for v in fields.get("variables") or []]
         ai_draft = {"reasons": fields.get("reasons") or [], "warnings": draft.warnings or []}
         ai_api.mark_draft_used(draft)
+    elif request.GET.get("category") in MessageTemplate.Category.values:
+        form = {"category": request.GET["category"]}  # e.g. from the One-time codes page
     return render(request, "whatsapp/template_create.html", {
         "account": account, "categories": MessageTemplate.Category.choices, "form": form,
         "starters_json": json.dumps(STARTER_CATEGORIES),

@@ -28,6 +28,14 @@ class ErrorCode:
     SUPPRESSED_RECIPIENT = "suppressed_recipient"
     REPUTATION_HALT = "reputation_halt"
 
+    # WhatsApp one-time codes
+    WHATSAPP_NOT_CONNECTED = "whatsapp_not_connected"
+    NO_AUTHENTICATION_TEMPLATE = "no_authentication_template"
+    TEMPLATE_NOT_FOUND = "template_not_found"
+    INVALID_CODE = "invalid_code"
+    INVALID_PHONE = "invalid_phone"
+    TOO_MANY_CODES = "too_many_codes"
+
     # plan limits
     PLAN_LIMIT_EXCEEDED = "plan_limit_exceeded"
     FEATURE_NOT_AVAILABLE = "feature_not_available"
@@ -55,6 +63,12 @@ CATALOG: dict[str, dict[str, str]] = {
     ErrorCode.RECIPIENT_CAP_EXCEEDED: {"message": "The campaign exceeds your per-campaign recipient cap.", "http": "403"},
     ErrorCode.SUPPRESSED_RECIPIENT: {"message": "The recipient is on your suppression list.", "http": "403"},
     ErrorCode.REPUTATION_HALT: {"message": "Sending is paused for this account due to a reputation halt.", "http": "403"},
+    ErrorCode.WHATSAPP_NOT_CONNECTED: {"message": "The account has no connected WhatsApp number.", "http": "409"},
+    ErrorCode.NO_AUTHENTICATION_TEMPLATE: {"message": "The account has no approved WhatsApp Authentication template.", "http": "409"},
+    ErrorCode.TEMPLATE_NOT_FOUND: {"message": "No approved Authentication template has that name and language.", "http": "404"},
+    ErrorCode.INVALID_CODE: {"message": "The code must be 4 to 15 letters or numbers.", "http": "400"},
+    ErrorCode.INVALID_PHONE: {"message": "The phone number is not a valid international number.", "http": "400"},
+    ErrorCode.TOO_MANY_CODES: {"message": "Too many codes were sent to this number in the last hour.", "http": "429"},
     ErrorCode.PLAN_LIMIT_EXCEEDED: {"message": "A plan limit was reached.", "http": "403"},
     ErrorCode.FEATURE_NOT_AVAILABLE: {"message": "Your plan does not include this feature.", "http": "403"},
     ErrorCode.IDEMPOTENCY_KEY_REUSE: {"message": "This Idempotency-Key was used with a different request body.", "http": "409"},

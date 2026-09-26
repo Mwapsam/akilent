@@ -273,3 +273,32 @@ def import_templates(account: Account) -> dict:
     from apps.whatsapp.tasks import sync_templates_for_account
 
     return sync_templates_for_account(account)
+
+
+# --- One-time codes (see verification_codes.py) ---
+
+from apps.whatsapp.verification_codes import VerificationCodeError  # noqa: E402  (public re-export)
+
+
+def send_verification_code(account: Account, *, phone: str, code: str, template_name: str = "",
+                           language: str = "", idempotency_key: str = "", dry_run: bool = False) -> dict:
+    """Deliver a one-time code another system made. Raises ``VerificationCodeError``."""
+    from apps.whatsapp import verification_codes
+
+    return verification_codes.send_code(account, phone=phone, code=code, template_name=template_name,
+                                        language=language, idempotency_key=idempotency_key, dry_run=dry_run)
+
+
+def verification_code_status(account: Account, message_id: str) -> Optional[dict]:
+    """Where a code sent by ``send_verification_code`` is (queued, sent, delivered, read, failed), or None."""
+    from apps.whatsapp import verification_codes
+
+    msg = verification_codes.get_message(account, message_id)
+    return verification_codes.status_of(msg) if msg else None
+
+
+def authentication_templates(account: Account) -> list:
+    """The account's approved Authentication templates, newest first."""
+    from apps.whatsapp import verification_codes
+
+    return verification_codes.approved_templates(account)

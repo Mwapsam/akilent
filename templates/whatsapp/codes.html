@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}One-time codes — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">One-time codes</h1>
+  <p class="mt-1 text-sm text-gray-600">Send login and confirmation codes from your own app or website to your customers on WhatsApp.</p>
+</header>
+
+<div class="max-w-3xl space-y-5">
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">1 · An approved Authentication template</h2>
+    {% if templates %}
+    <ul class="text-sm space-y-1">
+      {% for t in templates %}
+      <li><code>{{ t.whatsapp_template_name }}</code> · {{ t.language_code }} <span class="badge badge-success">Approved</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-600">You don't have one yet. Create a template, choose the <strong>Authentication</strong> category, and wait for Meta to approve it (usually minutes).</p>
+    <a href="{% url 'whatsapp-template-create' %}?category=authentication" class="btn btn-secondary btn-sm">Create an Authentication template</a>
+    {% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">2 · An API key</h2>
+    {% if new_key %}
+    <div class="alert alert-warning" role="status">
+      <div class="min-w-0">
+        <p class="text-sm">Copy this key now and keep it secret, on your server only. It won't be shown again.</p>
+        <code class="block mt-2 break-all select-all">{{ new_key }}</code>
+      </div>
+    </div>
+    {% elif api_key %}
+    <p class="text-sm text-gray-600">Your business has a key ending in <code>{{ api_key.last4 }}</code>{% if api_key.mode == "test" %} (a test key: it sends nothing){% endif %}{% if api_key.last_used_at %}, last used {{ api_key.last_used_at|timesince }} ago{% endif %}.</p>
+    {% else %}
+    <p class="text-sm text-gray-600">Your business doesn't have an API key yet.</p>
+    {% endif %}
+    {% if can_manage_key %}
+    <form method="post" action="{% url 'whatsapp-codes-key' %}"
+          {% if api_key %}onsubmit="return confirm('The current key will stop working, for email too. Create a new one?')"{% endif %}>
+      {% csrf_token %}
+      <button class="btn btn-secondary btn-sm">{% if api_key %}Replace the key{% else %}Create an API key{% endif %}</button>
+    </form>
+    {% if api_key %}<p class="text-xs text-gray-500">The same key is used for the email API. Replacing it stops the old key everywhere.</p>{% endif %}
+    {% else %}
+    <p class="text-xs text-gray-500">Ask an owner or admin to create the key.</p>
+    {% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">3 · Send a code from your system</h2>
+    <p class="text-sm text-gray-600">Your system makes the code and checks it when the customer types it back. Akilent only delivers it.</p>
+    <pre class="text-xs bg-surface border border-border rounded-lg p-3 overflow-x-auto">curl -X POST {{ endpoint }} \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "to": "+260971234567", "code": "482913"{% if templates|length > 1 %}, "template": "{{ templates.0.whatsapp_template_name }}"{% endif %} }'</pre>
+    <p class="text-sm"><a class="underline" href="{% url 'docs-page' 'whatsapp-codes' %}">Full guide</a>: checking delivery, errors and limits.</p>
+  </section>
+
+  <section class="card card-pad space-y-3">
+    <h2 class="font-semibold">Recent codes</h2>
+    {% if recent %}
+    <p class="text-xs text-gray-500">Codes themselves aren't kept, only whether they arrived.</p>
+    <ul class="rounded-xl border border-border divide-y divide-border text-sm">
+      {% for r in recent %}
+      <li class="flex flex-wrap justify-between gap-2 p-3">
+        <span>{{ r.to }} · <code>{{ r.template }}</code></span>
+        <span class="{% if r.status == 'failed' %}text-red-700{% else %}text-gray-600{% endif %}">
+          {{ r.status|capfirst }}{% if r.error %}: {{ r.error.message }}{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-500">None yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
