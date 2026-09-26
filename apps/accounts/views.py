@@ -145,7 +145,6 @@ def _plan_feature_bullets(plan) -> list:
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
     from apps.billing.models import Plan
-    from apps.core.models import SiteSettings
 
     plans = [
         {
@@ -160,10 +159,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         for p in Plan.objects.filter(is_active=True).order_by("price_monthly")
     ]
 
-    site = SiteSettings.load()
-    whatsapp_enabled = bool(settings.WHATSAPP_ENABLED) and getattr(
-        site, "whatsapp_enabled", True
-    )
+    whatsapp_enabled = bool(settings.WHATSAPP_ENABLED)  # the server setting, as everywhere else
 
     # Figure out where the wizard should open.
     services = (form_data or {}).get("selected_services", "")

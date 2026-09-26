@@ -22,7 +22,7 @@ class OnboardingPageTest(TestCase):
 
     def _render(self, *, staff=False, module=True):
         request = self.rf.get("/whatsapp/numbers/")
-        self.user.is_staff = staff
+        self.user.is_staff = self.user.is_superuser = staff  # platform operators only
         request.user = self.user
         request.session = {}
         with patch(

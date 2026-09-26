@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.accounts.utils import get_current_account
+from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.models import Conversation, FollowUp, Message, SavedReply
 from apps.conversations.state import (
@@ -344,7 +344,8 @@ def conversation_detail(request, public_id: str):
                 return JsonResponse({"ok": True})
         return redirect("conversations:detail", public_id=public_id)
 
-    conversation.mark_read()
+    if viewing_as(request) is None:  # support looking "as" the business mustn't clear its unread
+        conversation.mark_read()
     thread = list(conversation.messages.all().order_by("timestamp", "id"))
     snapshot = get_conversation_state(conversation)
     now = timezone.now()
@@ -503,7 +504,7 @@ def messages_feed(request, public_id: str):
         after = 0
 
     new = list(conversation.messages.filter(id__gt=after).order_by("id")[:100])
-    if any(m.direction == Message.Direction.INBOUND for m in new):
+    if any(m.direction == Message.Direction.INBOUND for m in new) and viewing_as(request) is None:
         conversation.mark_read()
         conversation.refresh_from_db(fields=["status"])
 

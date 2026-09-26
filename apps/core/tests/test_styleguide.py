@@ -13,9 +13,10 @@ class StyleguideTests(TestCase):
         # anonymous → redirect to login
         self.assertEqual(self.client.get(url).status_code, 302)
 
+        # a signed-in business user gets a plain "not allowed", not a login loop
         User.objects.create_user("plain", "p@x.com", "pw")
         self.client.login(username="plain", password="pw")
-        self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get(url).status_code, 403)
 
     def test_superuser_sees_gallery(self):
         User.objects.create_superuser("boss", "b@x.com", "pw")

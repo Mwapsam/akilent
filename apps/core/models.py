@@ -28,6 +28,8 @@ class SiteSettings(models.Model):
     logo = models.ImageField(upload_to="branding/", blank=True, null=True)
     support_email = models.EmailField(blank=True, default="")
 
+    # Unused: WhatsApp follows the WHATSAPP_ENABLED server setting (URLs and workers are wired from
+    # it at boot, so a database switch could only ever hide parts of screens). Kept for old rows.
     whatsapp_enabled = models.BooleanField(default=True)
     signups_enabled = models.BooleanField(default=True)
     payments_enabled = models.BooleanField(default=True)

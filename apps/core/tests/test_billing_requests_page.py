@@ -14,6 +14,6 @@ def test_pending_requests_render_with_a_reject_dialog(client):
     plan = Plan.objects.create(name="Growth", slug="growth", price_monthly=100)
     req = ManualPaymentRequest.objects.create(account=account, plan=plan, reference="MOMO-123")
 
-    html = client.get("/manage/billing-requests/").content.decode()
+    html = client.get("/manage/payments/").content.decode()
     assert "MOMO-123" in html
     assert f"reject-{req.pk}" in html and "Reject payment request" in html
