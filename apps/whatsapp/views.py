@@ -193,6 +193,18 @@ def template_create(request):
             ).first()
 
         try:
+            if request.POST.get("category") == "authentication":
+                from apps.whatsapp.template_builder import create_and_submit_auth_template
+
+                create_and_submit_auth_template(
+                    account, name=request.POST.get("name", "").strip().lower(),
+                    language=request.POST.get("language", "en"),
+                    security_recommendation=request.POST.get("auth_security") == "on",
+                    expiry_minutes=request.POST.get("auth_expiry", "").strip(),
+                    button_text=request.POST.get("auth_button_text", ""),
+                )
+                messages.success(request, "Template submitted to WhatsApp for approval.")
+                return redirect("/email/templates/?channel=whatsapp")
             create_and_submit_template(
                 account,
                 name=request.POST.get("name", "").strip().lower(),

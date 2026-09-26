@@ -301,8 +301,30 @@
         </div>
       </section>
 
+      {# Authentication: WhatsApp writes the message itself; the owner only picks these options. #}
+      <section id="wa-auth-options" class="card card-pad space-y-4" aria-labelledby="wa-auth-h" hidden>
+        <div>
+          <h2 id="wa-auth-h" class="text-base font-semibold text-ink">One-time code</h2>
+          <p class="text-sm text-gray-500">WhatsApp writes this message for you: “<strong>123456</strong> is your verification code.” You choose the options.</p>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" name="auth_security" {% if form.auth_security or not form.name %}checked{% endif %}>
+          Add “For your security, do not share this code.”
+        </label>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="label" for="wa-auth-expiry">Code expires after (minutes) <span class="font-normal text-gray-400">· Optional</span></label>
+            <input id="wa-auth-expiry" name="auth_expiry" type="number" min="1" max="90" class="input" value="{{ form.auth_expiry|default:'10' }}">
+          </div>
+          <div>
+            <label class="label" for="wa-auth-button">Button text</label>
+            <input id="wa-auth-button" name="auth_button_text" class="input" maxlength="25" value="{{ form.auth_button_text|default:'Copy code' }}">
+          </div>
+        </div>
+      </section>
+
       {# Content #}
-      <section class="card card-pad space-y-5" aria-labelledby="wa-content-h">
+      <section class="card card-pad space-y-5" aria-labelledby="wa-content-h" data-hide-for-auth>
         <div>
           <h2 id="wa-content-h" class="text-base font-semibold text-ink">Content</h2>
           <p class="text-sm text-gray-500">Add a header, body and footer. Meta reviews all of it.</p>
@@ -420,7 +442,7 @@
       </section>
 
       {# Personalize #}
-      <section class="card card-pad space-y-3" aria-labelledby="wa-personalize-h">
+      <section class="card card-pad space-y-3" aria-labelledby="wa-personalize-h" data-hide-for-auth>
         <div class="flex items-start justify-between gap-3">
           <div>
             <h2 id="wa-personalize-h" class="text-base font-semibold text-ink">Personalize</h2>
@@ -439,7 +461,7 @@
       </section>
 
       {# Buttons #}
-      <section class="card card-pad space-y-3" aria-labelledby="wa-buttons-h">
+      <section class="card card-pad space-y-3" aria-labelledby="wa-buttons-h" data-hide-for-auth>
         <div>
           <h2 id="wa-buttons-h" class="text-base font-semibold text-ink">Button <span class="font-normal text-gray-400 text-sm">· Optional</span></h2>
           <p class="text-sm text-gray-500">Let customers act on the message with one tap.</p>
@@ -775,6 +797,21 @@
   form.addEventListener('change', soon);
   document.addEventListener('click', (e) => { if (e.target.closest('.wa-cat-btn')) soon(); });
   if (val('body')) check();
+
+  // Authentication templates: show the one-time-code options, hide what WhatsApp doesn't allow.
+  const category = document.getElementById('tpl-category');
+  const bodyField = document.getElementById('tpl-body');
+  function syncAuth() {
+    const auth = category && category.value === 'authentication';
+    document.getElementById('wa-auth-options').hidden = !auth;
+    form.querySelectorAll('[data-hide-for-auth]').forEach((el) => { el.hidden = auth; });
+    if (bodyField) bodyField.required = !auth;
+  }
+  if (category) {
+    category.addEventListener('change', syncAuth);
+    document.addEventListener('click', (e) => { if (e.target.closest('.wa-cat-btn')) setTimeout(syncAuth, 0); });
+    syncAuth();
+  }
 
   // For "Improve with AI": what to send, and how to put the accepted text back.
   window.waEditFields = (instruction) => ({
