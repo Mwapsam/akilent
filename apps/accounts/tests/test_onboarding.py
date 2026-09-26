@@ -45,7 +45,7 @@ def test_whatsapp_only_account_skips_email_steps(db, settings):
     settings.WHATSAPP_ENABLED = True
     acc = _make_account(Account.Services.WHATSAPP)
     keys = [s["key"] for s in ob.get_state(acc)["steps"]]
-    assert keys == ["account", "verify_email", "whatsapp", "team", "security"]
+    assert keys == ["account", "verify_email", "whatsapp", "build", "team", "security"]
 
 
 @pytest.mark.django_db
@@ -53,7 +53,7 @@ def test_both_account_has_whatsapp_and_email_steps(db, settings):
     settings.WHATSAPP_ENABLED = True
     acc = _make_account(Account.Services.BOTH)
     keys = [s["key"] for s in ob.get_state(acc)["steps"]]
-    assert keys == ["account", "verify_email", "whatsapp", "domain", "verify", "use", "team", "security"]
+    assert keys == ["account", "verify_email", "whatsapp", "build", "domain", "verify", "use", "team", "security"]
 
 
 @pytest.mark.django_db
