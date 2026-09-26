@@ -177,6 +177,65 @@ def first_reply_waits(account, *, since, now=None) -> list[float | None]:
     return waits
 
 
+def window_metrics(account, start, end) -> dict:
+    """One business's numbers for conversations that *started* in ``[start, end)``.
+
+    JSON-safe (stored in ``Benchmark.metrics``): conversations started, median minutes to the first
+    business reply, enquiries with no reply within 24 hours, interested customers (leads from
+    conversations), and paid orders and revenue from conversations per currency.
+    """
+    from statistics import median
+
+    starts = (
+        Conversation.objects.filter(account=account, messages__direction=Message.Direction.INBOUND)
+        .values("id").annotate(first_in=models_min("messages__timestamp"))
+        .filter(first_in__gte=start, first_in__lt=end)
+    )
+    waits, unanswered, count = [], 0, 0
+    for row in starts[:5000]:
+        count += 1
+        first_out = (
+            Message.objects.filter(conversation_id=row["id"], direction=Message.Direction.OUTBOUND,
+                                   timestamp__gte=row["first_in"])
+            .order_by("timestamp").values_list("timestamp", flat=True).first()
+        )
+        if first_out is None or first_out - row["first_in"] > timedelta(hours=24):
+            unanswered += 1
+        if first_out is not None:
+            waits.append((first_out - row["first_in"]).total_seconds() / 60)
+    paid = (
+        Order.objects.filter(account=account, conversation__isnull=False, status=Order.Status.PAID,
+                             paid_at__gte=start, paid_at__lt=end)
+        .values("currency").annotate(orders=Count("id"), total=Sum("total")).order_by("currency")
+    )
+    return {
+        "conversations": count,
+        "median_first_reply_minutes": round(median(waits)) if waits else None,
+        "unanswered": unanswered,
+        "interested": Lead.objects.filter(account=account, conversation__isnull=False,
+                                          created_at__gte=start, created_at__lt=end).count(),
+        "paid_orders": sum(r["orders"] for r in paid),
+        "revenue": [{"currency": r["currency"], "total": str(r["total"] or Decimal("0"))} for r in paid],
+    }
+
+
+def activity(account, *, since) -> dict:
+    """``{"conversations", "last_customer_message_at"}``: is this business still being written to?"""
+    inbound = Message.objects.filter(account=account, direction=Message.Direction.INBOUND)
+    return {
+        "conversations": inbound.filter(timestamp__gte=since).values("conversation").distinct().count(),
+        "last_customer_message_at": inbound.order_by("-timestamp").values_list("timestamp", flat=True).first(),
+    }
+
+
+def starting_point(account, now=None) -> dict | None:
+    """The Starting point card for this business, or None before it connects WhatsApp."""
+    from apps.conversations import benchmarks
+    from apps.whatsapp import api as whatsapp_api
+
+    return benchmarks.card(account, whatsapp_api.connected_since(account), now)
+
+
 def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
     """What customers asked and how a *person* on the team answered, oldest first.
 

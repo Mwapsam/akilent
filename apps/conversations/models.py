@@ -379,3 +379,25 @@ class ConversationAttribution(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError("An attribution is a historical record and cannot be deleted.")
+
+
+class Benchmark(models.Model):
+    """A business's numbers for one fixed week, kept so later weeks can be compared with it.
+
+    ``starting`` is the first 7 days after WhatsApp connected; ``day30`` is days 30-37. Measured
+    once from stored messages after the window closes (see ``benchmarks``), then never changed.
+    """
+
+    class Kind(models.TextChoices):
+        STARTING = "starting", "Starting week"
+        DAY30 = "day30", "Day 30"
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="benchmarks")
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    metrics = models.JSONField(default=dict)
+    captured_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["account", "kind"], name="uniq_benchmark_account_kind")]

@@ -275,6 +275,47 @@ def import_templates(account: Account) -> dict:
     return sync_templates_for_account(account)
 
 
+# --- Operations (the Pilot Command Center and the Starting point) ---
+
+
+def connected_since(account: Account):
+    """When this business connected WhatsApp: its earliest active number, or None."""
+    number = (WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
+              .order_by("created_at").first())
+    return number.created_at if number else None
+
+
+def connected_accounts() -> list[tuple]:
+    """``[(account, connected_since)]`` for every business with an active WhatsApp number."""
+    from django.db.models import Min
+
+    rows = (WhatsAppBusinessNumber.objects.filter(is_active=True).values("account")
+            .annotate(since=Min("created_at")).order_by("since"))
+    accounts = Account.objects.in_bulk([r["account"] for r in rows])
+    return [(accounts[r["account"]], r["since"]) for r in rows if r["account"] in accounts]
+
+
+def ops_status() -> dict:
+    """Platform-wide WhatsApp health for staff: webhooks arriving, sends draining, sends failing."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    now = timezone.now()
+    events = WebhookEventLog.objects.filter(source=WebhookEventLog.Source.WHATSAPP)
+    last = events.order_by("-created_at").values_list("created_at", flat=True).first()
+    oldest = (OutboundMessage.objects.filter(status=OutboundMessage.Status.QUEUED)
+              .order_by("created_at").values_list("created_at", flat=True).first())
+    return {
+        "last_webhook_at": last,
+        "unprocessed_webhooks": events.filter(processed=False).count(),
+        "queued": OutboundMessage.objects.filter(status=OutboundMessage.Status.QUEUED).count(),
+        "oldest_queued_minutes": int((now - oldest).total_seconds() // 60) if oldest else None,
+        "failed_24h": OutboundMessage.objects.filter(
+            status=OutboundMessage.Status.FAILED, updated_at__gte=now - timedelta(hours=24)).count(),
+    }
+
+
 # --- One-time codes (see verification_codes.py) ---
 
 from apps.whatsapp.verification_codes import VerificationCodeError  # noqa: E402  (public re-export)

@@ -14,6 +14,7 @@ urlpatterns = [
     path("settings/", views.settings_page, name="settings"),
     path("billing-requests/", views.billing_requests, name="billing-requests"),
     path("health/", views.platform_health, name="platform-health"),
+    path("pilot/", views.pilot_command_center, name="pilot"),
     path("settings/mail/", views.mail_settings_save, name="mail-settings"),
     path("settings/users/<int:pk>/toggle-admin/", views.user_toggle_admin, name="user-toggle-admin"),
     path("settings/configurations/", views.configurations_list, name="configurations-list"),

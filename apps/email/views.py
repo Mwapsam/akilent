@@ -569,6 +569,9 @@ def insights(request):
         return redirect("dashboard")
 
     conversation_stats = _conversation_insights(account)
+    from apps.conversations import api as conversations_api
+
+    starting_point = conversations_api.starting_point(account) if account else None
 
     has_analytics = admin or (account and LimitChecker(account).has_feature("detailed_analytics"))
     domains = list(
@@ -611,6 +614,7 @@ def insights(request):
         "engagement_days": engagement_days,
         "engagement_series": engagement_series,
         "conversation_stats": conversation_stats,
+        "starting_point": starting_point,
         "domains": domains,
         "selected": selected,
         "logs": logs,

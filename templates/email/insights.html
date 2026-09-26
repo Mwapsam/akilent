@@ -8,6 +8,8 @@
   <p class="mt-1 text-sm text-gray-600">What's happening with your customers.</p>
 </header>
 
+{% if starting_point %}<div class="mb-8">{% include "conversations/_starting_point.html" %}</div>{% endif %}
+
 {% if conversation_stats %}
 <section class="mb-8">
   <h2 class="text-lg font-semibold text-ink mb-3">Conversations</h2>

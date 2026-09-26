@@ -1,0 +1,75 @@
+{% extends "legal/_layout.html" %}
+{% block legal_body %}
+<p>
+  These terms are an agreement between <strong>[COMPANY NAME]</strong> ("we") and the business that
+  creates an {{ site.app_name|default:"Akilent" }} account ("you"). By creating an account or using
+  the service you accept them.
+</p>
+
+<h2>The service</h2>
+<p>
+  {{ site.app_name|default:"Akilent" }} helps businesses manage customer conversations on WhatsApp:
+  a shared inbox, automations, templates, reporting and optional AI assistance. Some features depend
+  on Meta's WhatsApp Business Platform, which is outside our control. If Meta restricts, pauses or
+  changes access to it, those features may stop working.
+</p>
+
+<h2>Your account</h2>
+<ul>
+  <li>Give accurate information and keep your password safe. You're responsible for what happens under your account and for your team members' use of it.</li>
+  <li>Keep API keys secret. Anything sent with your key is treated as sent by you.</li>
+</ul>
+
+<h2>Your responsibilities</h2>
+<ul>
+  <li>Follow the <a href="https://business.whatsapp.com/policy" rel="noopener">WhatsApp Business Messaging Policy</a> and Meta's terms, including getting customers' permission before messaging them and honouring requests to stop.</li>
+  <li>Follow the law that applies to you, including Zambia's Data Protection Act, 2021, for your customers' data. You are the controller of that data; we process it for you as described in our <a href="{% url 'privacy' %}">privacy policy</a>.</li>
+  <li>Don't use the service for spam, fraud, harassment, illegal content, or to break or overload it.</li>
+</ul>
+
+<h2>AI features</h2>
+<p>
+  AI features are optional. AI suggestions can be wrong. You are responsible for what your business
+  sends, including anything you choose to let AI send automatically.
+</p>
+
+<h2>Plans and payment</h2>
+<ul>
+  <li>Paid plans are billed in advance for each period. Prices are shown before you pay.</li>
+  <li>If a payment fails, we may limit the account until it is paid.</li>
+  <li>Meta may charge separately for WhatsApp conversations, according to its own pricing.</li>
+</ul>
+
+<h2>Your data</h2>
+<p>
+  You own your data. You give us permission to process it only to provide the service. You can ask
+  for a copy of your data or close your account at any time; see <a href="{% url 'data-deletion' %}">Data deletion</a>.
+</p>
+
+<h2>Availability and changes</h2>
+<p>
+  We work to keep the service available and your data backed up, but we can't promise it will
+  never be interrupted. We may change or improve features. If we remove something important you
+  pay for, we'll tell you in advance.
+</p>
+
+<h2>Suspension and ending</h2>
+<p>
+  You can stop using the service at any time. We may suspend or close an account that breaks these
+  terms or Meta's policies, or puts the service or other people at risk. Where we can, we'll warn
+  you first.
+</p>
+
+<h2>Liability</h2>
+<p>
+  To the extent the law allows, we aren't liable for indirect losses such as lost profits, and our
+  total liability is limited to the fees you paid us in the 12 months before the claim.
+  [LAWYER TO REVIEW]
+</p>
+
+<h2>Governing law</h2>
+<p>These terms are governed by the laws of the Republic of Zambia.</p>
+
+<h2>Contact</h2>
+<p>[COMPANY NAME], [REGISTERED ADDRESS]. Email <strong>[CONTACT EMAIL]</strong>.</p>
+{% endblock %}

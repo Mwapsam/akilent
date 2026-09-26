@@ -1,0 +1,84 @@
+{% extends "legal/_layout.html" %}
+{% block legal_body %}
+<p>
+  This policy explains what personal data {{ site.app_name|default:"Akilent" }} ("we") handles, why,
+  and the choices you have. It applies to the businesses that use Akilent, their team members, and
+  the customers who message those businesses. {{ site.app_name|default:"Akilent" }} is operated by
+  <strong>[COMPANY NAME]</strong>, [REGISTERED ADDRESS], Zambia.
+</p>
+
+<h2>Who is responsible for what</h2>
+<ul>
+  <li><strong>Your account data</strong> (your name, email, business details, billing): we decide how it's used, so we are the <em>controller</em>.</li>
+  <li><strong>Your customers' data</strong> (their WhatsApp messages, phone numbers, names, orders): the business decides how it's used and we process it on the business's behalf, so the business is the controller and we are the <em>processor</em>. If you are a customer of a business that uses Akilent, contact that business first about your data. You can also contact us.</li>
+</ul>
+
+<h2>What we collect</h2>
+<ul>
+  <li><strong>Account information:</strong> names, email addresses, phone numbers, business name and profile (what you sell, location, opening hours, payment methods), and team roles.</li>
+  <li><strong>Conversations:</strong> WhatsApp messages sent to and from the business, with media, delivery status, and the customer's phone number and WhatsApp profile name.</li>
+  <li><strong>Business records:</strong> contacts, tags, leads, deals, orders and payments the business records in Akilent.</li>
+  <li><strong>Usage and technical data:</strong> log-in times, IP addresses, browser type, and error reports, used to keep the service secure and working.</li>
+  <li><strong>Billing:</strong> plan and payment status. Card and mobile-money details are handled by our payment providers; we don't store full card numbers.</li>
+</ul>
+
+<h2>How we use it</h2>
+<ul>
+  <li>To run the service: deliver messages, show conversations in the inbox, run the automations a business turns on, and produce its reports.</li>
+  <li>To support you, keep accounts secure, prevent abuse, and fix problems.</li>
+  <li>To bill for the service and meet legal obligations.</li>
+</ul>
+<p>We don't sell personal data, and we don't use a business's customer data for our own marketing.</p>
+
+<h2>AI features</h2>
+<p>
+  AI features are <strong>off unless a business turns them on</strong>. When a business opts in,
+  parts of a conversation (recent messages and the business's own notes) are sent to an AI provider
+  to suggest replies or help set up automations. Before sending, we replace phone numbers and email
+  addresses in the text with placeholders. The AI provider returns a suggestion; a person at the
+  business decides what is sent unless the business has chosen automatic replies for specific
+  topics. [CONFIRM WITH EACH AI PROVIDER'S TERMS: whether API data may be used for model training,
+  and state it here.]
+</p>
+
+<h2>Who we share data with</h2>
+<p>We use these service providers (sub-processors) to run Akilent, each only for its purpose:</p>
+<ul>
+  <li><strong>Meta Platforms</strong> (WhatsApp Business Platform): sending and receiving WhatsApp messages. Meta's own terms and privacy policy also apply to WhatsApp.</li>
+  <li><strong>Amazon Web Services</strong>: file storage, email delivery and backups.</li>
+  <li><strong>[HOSTING PROVIDER]</strong>: the servers that run Akilent, located in [HOSTING LOCATION].</li>
+  <li><strong>Flutterwave</strong> and <strong>Stripe</strong>: payments.</li>
+  <li><strong>Sentry</strong>: error reports (configured not to include personal data where possible).</li>
+  <li><strong>AI providers</strong> (only for businesses that turn AI on): [AI PROVIDERS IN USE, e.g. Ollama, Anthropic, OpenAI].</li>
+</ul>
+<p>Some of these providers process data outside Zambia. Where they do, we rely on their contractual safeguards.</p>
+<p>We also disclose data when the law requires it.</p>
+
+<h2>How long we keep it</h2>
+<ul>
+  <li>Conversation and business records: for as long as the business keeps its account, or until the business deletes them.</li>
+  <li>After a business closes its account, we delete its data within [90] days, except what we must keep for legal or accounting reasons.</li>
+  <li>Backups are kept for 30 days and then deleted.</li>
+  <li>One-time codes sent for another system are deleted from our records as soon as they have been sent.</li>
+</ul>
+
+<h2>Security</h2>
+<p>
+  Data is sent over encrypted connections. WhatsApp access tokens are stored encrypted. Backups are
+  encrypted and private. Team access is limited by role.
+</p>
+
+<h2>Your rights</h2>
+<p>
+  Under Zambia's Data Protection Act, 2021, you can ask to access, correct or delete your personal
+  data, object to or restrict how it's used, and ask for a copy of it. See
+  <a href="{% url 'data-deletion' %}">Data deletion</a> for how to ask us to delete data. You can also
+  complain to Zambia's Office of the Data Protection Commissioner.
+</p>
+
+<h2>Changes</h2>
+<p>If we change this policy in a way that matters, we'll tell account owners by email before the change takes effect.</p>
+
+<h2>Contact</h2>
+<p>[COMPANY NAME], [REGISTERED ADDRESS]. Email <strong>[CONTACT EMAIL]</strong>.</p>
+{% endblock %}

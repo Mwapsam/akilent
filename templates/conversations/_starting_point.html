@@ -1,0 +1,42 @@
+{% comment %}
+The Starting point card (apps.conversations.benchmarks). Needs `starting_point` from
+conversations.api.starting_point; renders nothing before WhatsApp is connected.
+{% endcomment %}
+{% if starting_point %}
+<section class="card card-pad space-y-3" aria-labelledby="sp-h">
+  {% if starting_point.state == "measuring" %}
+  <h2 id="sp-h" class="font-semibold text-ink">Your starting point</h2>
+  <p class="text-sm text-gray-600">We're measuring your first week on WhatsApp: day {{ starting_point.day }} of 7. On {{ starting_point.ready_on|date:"j M" }} you'll see where you started, and in 30 days what changed.</p>
+
+  {% elif starting_point.state == "starting" %}
+  <h2 id="sp-h" class="font-semibold text-ink">Your starting point</h2>
+  <p class="text-sm text-gray-600">Your first week on WhatsApp. We'll compare with a week a month later, on {{ starting_point.compare_on|date:"j M" }}.</p>
+  {% with s=starting_point.start %}
+  <ul class="rounded-xl border border-border divide-y divide-border text-sm">
+    <li class="flex justify-between gap-3 p-3"><span>Conversations started</span><strong>{{ s.conversations }}</strong></li>
+    <li class="flex justify-between gap-3 p-3"><span>Enquiries with no reply within 24 hours</span><strong>{{ s.unanswered }}</strong></li>
+    <li class="flex justify-between gap-3 p-3"><span>Median time to first reply</span><strong>{% if s.median_first_reply_minutes is not None %}{{ s.median_first_reply_minutes }} min{% else %}—{% endif %}</strong></li>
+    <li class="flex justify-between gap-3 p-3"><span>Interested customers</span><strong>{{ s.interested }}</strong></li>
+    <li class="flex justify-between gap-3 p-3"><span>Paid orders from conversations</span><strong>{{ s.paid_orders }}{% for r in s.revenue %} · {{ r.currency }} {{ r.total }}{% endfor %}</strong></li>
+  </ul>
+  {% endwith %}
+
+  {% else %}
+  <h2 id="sp-h" class="font-semibold text-ink">Since your first week</h2>
+  {% if starting_point.fewer_unanswered %}
+  <p class="text-sm text-ink"><strong>{{ starting_point.fewer_unanswered }} fewer enquir{{ starting_point.fewer_unanswered|pluralize:"y,ies" }} went unanswered</strong> than in your first week.</p>
+  {% endif %}
+  <div class="table-wrap">
+    <table class="table text-sm">
+      <thead><tr><th></th><th>First week</th><th>A month later</th></tr></thead>
+      <tbody>
+        {% for row in starting_point.rows %}
+        <tr><td>{{ row.label }}</td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500">Both weeks are measured the same way, from your WhatsApp conversations.</p>
+  {% endif %}
+</section>
+{% endif %}

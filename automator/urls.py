@@ -8,6 +8,7 @@ from apps.accounts.views import LoginView, LogoutView, PasswordResetView
 from apps.core import views as core_views
 
 urlpatterns = [
+    path("healthz", core_views.healthz, name="healthz"),
     path("admin/", admin.site.urls),
     path(
         "auth/login/",
@@ -45,6 +46,9 @@ urlpatterns = [
     ),
     path("help/", core_views.help_index, name="help"),
     path("help/<slug:slug>/", core_views.help_article, name="help-article"),
+    path("privacy/", core_views.legal_page, {"slug": "privacy"}, name="privacy"),
+    path("terms/", core_views.legal_page, {"slug": "terms"}, name="terms"),
+    path("data-deletion/", core_views.legal_page, {"slug": "data-deletion"}, name="data-deletion"),
     path("docs/", core_views.docs_page, name="docs"),
     path("docs/<slug:slug>/", core_views.docs_page, name="docs-page"),
     path("", include("apps.accounts.urls")),

@@ -1,0 +1,34 @@
+{% extends "legal/_layout.html" %}
+{% block legal_body %}
+<p>
+  How to have your data deleted from {{ site.app_name|default:"Akilent" }}. This page is also our
+  data deletion instructions for Meta's WhatsApp platform.
+</p>
+
+<h2>If you messaged a business that uses Akilent</h2>
+<ol>
+  <li>Ask the business to delete your conversation and contact details. The business controls this data and can ask us to delete it.</li>
+  <li>Or email <strong>[CONTACT EMAIL]</strong> with the subject "Delete my data". Include the WhatsApp number you messaged from and the name of the business. We'll confirm the request with the business and delete your data within 30 days.</li>
+</ol>
+<p>
+  Replying <strong>STOP</strong> to a business stops its messages to you, but doesn't delete past
+  messages. Deleting data in Akilent doesn't remove messages from your own phone or from WhatsApp's
+  systems; see WhatsApp's privacy policy for those.
+</p>
+
+<h2>If you have an Akilent account</h2>
+<ol>
+  <li>To delete one customer's contact details and conversations, the account owner emails <strong>[CONTACT EMAIL]</strong> with the customer's WhatsApp number.</li>
+  <li>To close the account and delete all of its data, the account owner emails <strong>[CONTACT EMAIL]</strong> from the account's owner email address.</li>
+  <li>We delete the account's data within [90] days, except records we must keep by law (such as invoices). Backups containing it expire within 30 days after that.</li>
+</ol>
+
+<h2>Disconnecting WhatsApp</h2>
+<p>
+  If you remove Akilent's access in Meta Business Settings, we stop receiving and sending your
+  WhatsApp messages. Data already in Akilent stays until you delete it as described above.
+</p>
+
+<h2>Questions</h2>
+<p>Email <strong>[CONTACT EMAIL]</strong>. See also our <a href="{% url 'privacy' %}">privacy policy</a>.</p>
+{% endblock %}

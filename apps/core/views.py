@@ -187,6 +187,85 @@ def platform_health(request):
     })
 
 
+HEARTBEAT_LATE = timedelta(minutes=5)
+QUIET_AFTER = timedelta(days=3)
+
+
+@admin_required
+def pilot_command_center(request):
+    """One page to check every morning during the pilot: is the platform healthy, and is each
+    pilot business actually using Akilent? Read-only; every number comes from an app's api.py."""
+    from django.conf import settings
+
+    from apps.ai import api as ai_api
+    from apps.automation import api as automation_api
+    from apps.conversations import api as conversations_api
+    from apps.core import backups
+    from apps.core.tasks import last_seen
+    from apps.whatsapp import api as whatsapp_api
+
+    now = timezone.now()
+    week = now - timedelta(days=7)
+    queues = []
+    for queue in settings.WORKER_QUEUES:
+        seen = last_seen(queue)
+        queues.append({"name": queue, "seen": seen, "late": seen is None or now - seen > HEARTBEAT_LATE})
+
+    businesses = []
+    for account, connected_at in whatsapp_api.connected_accounts():
+        activity = conversations_api.activity(account, since=week)
+        adoption = automation_api.adoption(account)
+        last_in = activity["last_customer_message_at"]
+        businesses.append({
+            "account": account,
+            "connected_at": connected_at,
+            "first_value": adoption["first_run_at"] - connected_at if adoption["first_run_at"] else None,
+            "automations_on": adoption["on"],
+            "conversations_7d": activity["conversations"],
+            "last_customer_message_at": last_in,
+            "quiet": last_in is None or now - last_in > QUIET_AFTER,
+            "ai": ai_api.usage_summary(account, since=week),
+            "starting_point": conversations_api.starting_point(account, now),
+        })
+
+    return render(request, "core/pilot.html", {
+        "now": now,
+        "queues": queues,
+        "whatsapp": whatsapp_api.ops_status(),
+        "backup": backups.status(),
+        "failed_runs": automation_api.recent_failed_runs(),
+        "ai_errors_24h": ai_api.usage_summary(since=now - timedelta(hours=24))["errors"],
+        "businesses": businesses,
+    })
+
+
+def healthz(request):
+    """Liveness for the container health check, the deploy verification and uptime monitors.
+
+    Public and cheap. The database decides the answer (503 without it); the cache is reported but
+    doesn't fail it, since the site still works without Redis. Celery isn't checked here: a
+    stopped worker must not make Docker restart a healthy web container (the Pilot Command Center
+    shows workers).
+    """
+    from django.core.cache import cache
+    from django.db import connection
+    from django.http import JsonResponse
+
+    status = {"ok": True, "db": True, "cache": True}
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except Exception:
+        logger.exception("healthz: database check failed")
+        status["ok"] = status["db"] = False
+    try:
+        cache.set("healthz", "1", 10)
+        status["cache"] = cache.get("healthz") == "1"
+    except Exception:
+        status["cache"] = False
+    return JsonResponse(status, status=200 if status["ok"] else 503)
+
+
 # --- Settings -----------------------------------------------------------------
 
 @admin_required
@@ -273,6 +352,21 @@ def help_article(request, slug):
         "article": article,
         "related": help_kb.related_to(article),
     })
+
+
+# --- Legal pages (public) ------------------------------------------------------
+
+_LEGAL_PAGES = {
+    "privacy": ("legal/privacy.html", "Privacy policy"),
+    "terms": ("legal/terms.html", "Terms of service"),
+    "data-deletion": ("legal/data_deletion.html", "Data deletion"),
+}
+_LEGAL_UPDATED = "26 September 2026"  # change with the text
+
+
+def legal_page(request, slug):
+    template, title = _LEGAL_PAGES[slug]
+    return render(request, template, {"page_title": title, "updated": _LEGAL_UPDATED})
 
 
 # --- Developer docs (public) ---------------------------------------------------

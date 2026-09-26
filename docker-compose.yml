@@ -1,18 +1,30 @@
 
+# Published ports are bound to 127.0.0.1: reachable from this machine (local development, the
+# health check, an SSH tunnel) but never from the internet. nginx reaches `web` over the Docker
+# network. The Celery queue lists must cover every queue in CELERY_TASK_ROUTES
+# (apps/core/tests/test_worker_queues.py checks this).
+
 services:
   web:
     build: .
+    restart: unless-stopped
     volumes:
       - .:/app
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: sh /app/docker/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; host = os.environ.get('ALLOWED_HOSTS', 'localhost').split(',')[0].strip(); urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/healthz', headers={'Host': host}), timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       - db
-  
-  
+
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -23,13 +35,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -38,8 +50,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     ports:
-      - "5672:5672"
-      - "15672:15672"   # management UI
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"   # management UI: open it through an SSH tunnel
 
 
   nginx:
@@ -57,7 +69,21 @@ services:
 
   celery_worker:
     build: .
-    command: celery -A automator worker -l info -Q celery,email,outbound,campaigns,webhooks,whatsapp,ai
+    command: celery -A automator worker -l info -Q celery,email,outbound,campaigns,webhooks,whatsapp,automation,scheduler
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+
+  # AI calls can take many seconds; a worker of their own means they never delay WhatsApp sends.
+  celery_ai:
+    build: .
+    command: celery -A automator worker -l info -Q ai --concurrency 2 -n ai@%h
     restart: unless-stopped
     volumes:
       - .:/app
@@ -80,6 +106,24 @@ services:
       - db
       - redis
       - rabbitmq
+
+  # Nightly pg_dump to a private S3 bucket and a weekly restore test (docs/ops/backups.md).
+  # Idles, logging why, until BACKUP_S3_BUCKET is set.
+  backup:
+    build: ./docker/backup
+    restart: unless-stopped
+    profiles: ["prod"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    depends_on:
+      - db
 
 volumes:
   postgres_data:

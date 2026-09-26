@@ -15,3 +15,18 @@ def remind_missed_conversations() -> int:
     if n:
         logger.info("remind_missed_conversations: created %d follow-up(s)", n)
     return n
+
+
+@shared_task(queue="celery")
+def capture_benchmarks() -> int:
+    """Measure each business's starting week and day-30 week once they've closed (``benchmarks``)."""
+    from apps.conversations import benchmarks
+    from apps.whatsapp import api as whatsapp_api
+
+    made = 0
+    for account, connected_at in whatsapp_api.connected_accounts():
+        try:
+            made += len(benchmarks.capture(account, connected_at))
+        except Exception:
+            logger.exception("capture_benchmarks: failed for account %s", account.pk)
+    return made

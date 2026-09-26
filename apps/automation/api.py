@@ -180,6 +180,40 @@ def published_trigger_matches(account) -> list[dict]:
     return out
 
 
+def adoption(account) -> dict:
+    """``{"on", "first_run_at"}``: automations turned on now, and when one first ran for a customer
+    (the pilot's "time to first value"; no publish date is stored, and a run is the stronger signal)."""
+    from django.db.models import Min
+
+    from apps.automation.models import Workflow, WorkflowRun
+
+    return {
+        "on": Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).count(),
+        "first_run_at": WorkflowRun.objects.filter(workflow__account=account)
+        .aggregate(first=Min("started_at"))["first"],
+    }
+
+
+def recent_failed_runs(limit: int = 5) -> list[dict]:
+    """The latest failed automation runs across all businesses, for staff."""
+    from apps.automation.models import WorkflowRun
+
+    runs = (WorkflowRun.objects.filter(status=WorkflowRun.Status.FAILED)
+            .select_related("workflow__account").prefetch_related("step_runs")
+            .order_by("-completed_at", "-started_at")[:limit])
+    out = []
+    for run in runs:
+        failed = [s for s in run.step_runs.all() if s.status != "ok"]
+        step = failed[-1] if failed else None
+        out.append({
+            "account": run.workflow.account, "workflow": run.workflow.name,
+            "at": run.completed_at or run.started_at,
+            "step": step.step_type if step else "",
+            "error": str((step.result or {}).get("error", "")) if step else "",
+        })
+    return out
+
+
 def published_slugs(account) -> set:
     from apps.automation.models import Workflow
 

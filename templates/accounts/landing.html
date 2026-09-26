@@ -630,6 +630,11 @@
           <a href="#pricing" class="hover:text-white">Pricing</a>
           <a href="{% url 'docs' %}" class="hover:text-white">Documentation</a>
         </span>
+        <span class="flex items-center gap-4">
+          <a href="{% url 'privacy' %}" class="hover:text-white">Privacy</a>
+          <a href="{% url 'terms' %}" class="hover:text-white">Terms</a>
+          <a href="{% url 'data-deletion' %}" class="hover:text-white">Data deletion</a>
+        </span>
         <span>© {{ site.app_name|default:"Automator" }} · Communications infrastructure for business</span>
       </div>
     </div>

@@ -78,6 +78,14 @@ jobs:
           AI_TIMEOUT_SECONDS: ${{ secrets.AI_TIMEOUT_SECONDS }}
           AI_DAILY_CALL_LIMIT: ${{ secrets.AI_DAILY_CALL_LIMIT }}
           OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          AI_MODEL_FAST: ${{ secrets.AI_MODEL_FAST }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          AI_AUTONOMY_ENABLED: ${{ secrets.AI_AUTONOMY_ENABLED }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          BACKUP_AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -101,10 +109,13 @@ jobs:
             TASKCENTRO_DEBUG_TOKEN,INTERNAL_DEBUG_ENABLED,
             AWS_S3_REGION_NAME,AWS_CLOUDFRONT_DOMAIN,CLOUDFRONT_ID,AWS_STORAGE_BUCKET_NAME,
             STRIPE_SECRET_KEY,STRIPE_PUBLISHABLE_KEY,STRIPE_WEBHOOK_SECRET,STRIPE_CURRENCY,
-            OLLAMA_API_KEY,AI_PROVIDER_BACKEND,AI_MODEL,AI_TIMEOUT_SECONDS,AI_DAILY_CALL_LIMIT,OLLAMA_BASE_URL
+            OLLAMA_API_KEY,AI_PROVIDER_BACKEND,AI_MODEL,AI_TIMEOUT_SECONDS,AI_DAILY_CALL_LIMIT,OLLAMA_BASE_URL,
+            AI_MODEL_FAST,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENAI_BASE_URL,AI_AUTONOMY_ENABLED,
+            BACKUP_S3_BUCKET,BACKUP_AWS_ACCESS_KEY_ID,BACKUP_AWS_SECRET_ACCESS_KEY
           script: |
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
+            PREV=$(git rev-parse HEAD)
             git fetch origin main
             git reset --hard origin/main
 
@@ -173,14 +184,55 @@ jobs:
             AI_TIMEOUT_SECONDS=$AI_TIMEOUT_SECONDS
             AI_DAILY_CALL_LIMIT=$AI_DAILY_CALL_LIMIT
             OLLAMA_BASE_URL=$OLLAMA_BASE_URL
-        
+            AI_MODEL_FAST=$AI_MODEL_FAST
+            ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+            OPENAI_API_KEY=$OPENAI_API_KEY
+            OPENAI_BASE_URL=$OPENAI_BASE_URL
+            AI_AUTONOMY_ENABLED=$AI_AUTONOMY_ENABLED
+            BACKUP_S3_BUCKET=$BACKUP_S3_BUCKET
+            BACKUP_AWS_ACCESS_KEY_ID=$BACKUP_AWS_ACCESS_KEY_ID
+            BACKUP_AWS_SECRET_ACCESS_KEY=$BACKUP_AWS_SECRET_ACCESS_KEY
+            DJANGO_ENV=production
+
             ENVEOF
 
             chmod 600 .env
 
-            docker compose --profile prod build web celery_worker celery_beat
-            docker compose --profile prod run --rm web python manage.py migrate --noinput
-            docker compose --profile prod up -d
+            # Builds every service the checked-out docker-compose.yml defines, not a fixed list, so a
+            # rollback to a commit with different services still builds.
+            release() {
+              docker compose --profile prod build
+              docker compose --profile prod run --rm web python manage.py migrate --noinput
+              docker compose --profile prod run --rm web python manage.py collectstatic --noinput
+              docker compose --profile prod up -d --remove-orphans
+            }
+
+            # Healthy once /healthz answers through gunicorn (up to 90s).
+            healthy() {
+              HOST=$(echo "$ALLOWED_HOSTS" | cut -d, -f1)
+              for i in $(seq 1 18); do
+                if curl -fsS -H "Host: $HOST" http://127.0.0.1:8000/healthz >/dev/null; then
+                  return 0
+                fi
+                sleep 5
+              done
+              return 1
+            }
+
+            release
+            if ! healthy; then
+              # Roll the code back to the last release. Migrations are not reversed, which is
+              # safe only while they stay additive (new tables/nullable columns).
+              echo "Health check failed; rolling back to $PREV"
+              git reset --hard "$PREV"
+              # `if` keeps set -e from ending the script mid-rollback; the job fails either way.
+              if release && healthy; then
+                echo "Rolled back to $PREV"
+              else
+                echo "Rollback failed or is unhealthy too - check 'docker compose logs web'"
+              fi
+              exit 1
+            fi
             docker image prune -f
 
       - name: Invalidate CloudFront

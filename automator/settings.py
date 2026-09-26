@@ -544,7 +544,24 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.scheduler.tasks.prune_scheduled_jobs",
         "schedule": 86400.0,
     },
+    "capture-benchmarks": {
+        "task": "apps.conversations.tasks.capture_benchmarks",
+        "schedule": 21600.0,  # starting-week and day-30 numbers; captured once each, 6-hourly is plenty
+    },
+    "send-heartbeats": {
+        "task": "apps.core.tasks.send_heartbeats",
+        "schedule": 60.0,  # the Pilot Command Center shows each queue's last heartbeat
+    },
 }
+
+# Every queue a production worker consumes (docker-compose.yml). The Pilot Command Center sends a
+# heartbeat through each one, so a queue without a worker shows up as late.
+WORKER_QUEUES = [
+    "celery", "email", "outbound", "campaigns", "webhooks", "whatsapp", "automation", "scheduler", "ai",
+]
+
+# Private bucket for nightly database dumps (docs/ops/backups.md); read by the Pilot Command Center.
+BACKUP_S3_BUCKET = os.getenv("BACKUP_S3_BUCKET", "")
 
 # Scheduler kill-switch for dark-launch / backout. When False, new schedule
 # requests are rejected with a 4xx (apps.scheduler.api.should_schedule) instead

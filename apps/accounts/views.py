@@ -547,12 +547,15 @@ def dashboard_panels(request):
     subscription = getattr(account, "subscription", None)
     stats = _email_stats(account, subscription)
 
+    from apps.conversations import api as conversations_api
+
     return render(
         request,
         "accounts/_dashboard_panels.html",
         {
             "account": account,
             "subscription": subscription,
+            "starting_point": conversations_api.starting_point(account),
             "attention_items": _attention_items(
                 account, stats, numbers, email_domains, subscription
             ),

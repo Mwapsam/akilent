@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Pilot Command Center — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Pilot Command Center</h1>
+  <p class="mt-1 text-sm text-gray-600">Check every morning: is the platform healthy, and is each pilot business using Akilent? Staff only.</p>
+</header>
+
+<div class="grid gap-4 lg:grid-cols-2 mb-8">
+  <section class="card card-pad space-y-3" aria-labelledby="pc-workers">
+    <h2 id="pc-workers" class="font-semibold">Workers</h2>
+    <ul class="text-sm divide-y divide-border">
+      {% for q in queues %}
+      <li class="flex justify-between gap-3 py-1.5">
+        <code>{{ q.name }}</code>
+        {% if q.seen %}
+        <span class="{% if q.late %}text-red-700 font-medium{% else %}text-gray-600{% endif %}">{% if q.late %}Late · {% endif %}{{ q.seen|timesince }} ago</span>
+        {% else %}
+        <span class="text-red-700 font-medium">Never seen</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="text-xs text-gray-500">Each queue gets a heartbeat every minute. "Late" means no worker has picked it up for 5 minutes.</p>
+  </section>
+
+  <section class="card card-pad space-y-3" aria-labelledby="pc-wa">
+    <h2 id="pc-wa" class="font-semibold">WhatsApp</h2>
+    <ul class="text-sm divide-y divide-border">
+      <li class="flex justify-between gap-3 py-1.5"><span>Last webhook from Meta</span>
+        <span>{% if whatsapp.last_webhook_at %}{{ whatsapp.last_webhook_at|timesince }} ago{% else %}None yet{% endif %}</span></li>
+      <li class="flex justify-between gap-3 py-1.5"><span>Webhooks not processed</span>
+        <span class="{% if whatsapp.unprocessed_webhooks %}text-red-700 font-medium{% endif %}">{{ whatsapp.unprocessed_webhooks }}</span></li>
+      <li class="flex justify-between gap-3 py-1.5"><span>Messages waiting to send</span>
+        <span class="{% if whatsapp.oldest_queued_minutes and whatsapp.oldest_queued_minutes > 5 %}text-red-700 font-medium{% endif %}">
+          {{ whatsapp.queued }}{% if whatsapp.oldest_queued_minutes is not None %} · oldest {{ whatsapp.oldest_queued_minutes }} min{% endif %}</span></li>
+      <li class="flex justify-between gap-3 py-1.5"><span>Failed sends, last 24 hours</span>
+        <span class="{% if whatsapp.failed_24h %}text-red-700 font-medium{% endif %}">{{ whatsapp.failed_24h }}</span></li>
+    </ul>
+  </section>
+
+  <section class="card card-pad space-y-3" aria-labelledby="pc-backup">
+    <h2 id="pc-backup" class="font-semibold">Backups</h2>
+    {% if not backup.configured %}
+    <p class="text-sm text-red-700 font-medium">Not configured. Set BACKUP_S3_BUCKET (docs/ops/backups.md).</p>
+    {% elif backup.error %}
+    <p class="text-sm text-red-700">{{ backup.error }}</p>
+    {% else %}
+    <ul class="text-sm divide-y divide-border">
+      <li class="flex justify-between gap-3 py-1.5"><span>Newest dump</span>
+        <span>{% if backup.latest %}{{ backup.latest }} · {{ backup.size_mb }} MB · {{ backup.latest_at|timesince }} ago{% else %}<span class="text-red-700 font-medium">None yet</span>{% endif %}</span></li>
+      <li class="flex justify-between gap-3 py-1.5"><span>Last restore test</span>
+        <span>{% if backup.restore %}<span class="{% if backup.restore.result != 'passed' %}text-red-700 font-medium{% endif %}">{{ backup.restore.result|capfirst }}</span> · {{ backup.restore.dump }}{% else %}Not run yet{% endif %}</span></li>
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3" aria-labelledby="pc-fail">
+    <h2 id="pc-fail" class="font-semibold">Problems</h2>
+    <p class="text-sm">AI errors, last 24 hours: <strong class="{% if ai_errors_24h %}text-red-700{% endif %}">{{ ai_errors_24h }}</strong></p>
+    {% if failed_runs %}
+    <ul class="text-sm space-y-1">
+      {% for r in failed_runs %}
+      <li><span class="font-medium">{{ r.account }}</span> · {{ r.workflow }}{% if r.step %} · {{ r.step }}{% endif %} · {{ r.at|timesince }} ago
+        {% if r.error %}<span class="block text-xs text-gray-600">{{ r.error|truncatechars:140 }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-600">No failed automation runs.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section aria-labelledby="pc-biz">
+  <h2 id="pc-biz" class="text-lg font-semibold text-ink mb-3">Pilot businesses <span class="text-gray-500 font-normal">· {{ businesses|length }}</span></h2>
+  {% if businesses %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr>
+        <th>Business</th><th>Connected</th><th>First automation ran</th><th>Automations on</th>
+        <th>Conversations, 7 days</th><th>AI suggestions used, 7 days</th><th>Starting point</th>
+      </tr></thead>
+      <tbody>
+        {% for b in businesses %}
+        <tr>
+          <td data-label="Business" class="font-medium text-ink">{{ b.account }}
+            {% if b.quiet %}<span class="badge badge-warning ml-1">Quiet</span>{% endif %}</td>
+          <td data-label="Connected">{{ b.connected_at|date:"j M Y" }}</td>
+          <td data-label="First automation ran">{% if b.first_value is not None %}{{ b.first_value.days }} day{{ b.first_value.days|pluralize }} after connecting{% else %}<span class="text-gray-500">Not yet</span>{% endif %}</td>
+          <td data-label="Automations on">{{ b.automations_on }}</td>
+          <td data-label="Conversations, 7 days">{{ b.conversations_7d }}{% if b.last_customer_message_at %} <span class="text-xs text-gray-500">· last {{ b.last_customer_message_at|timesince }} ago</span>{% endif %}</td>
+          <td data-label="AI suggestions used, 7 days">{% if b.ai.suggested %}{{ b.ai.used }} of {{ b.ai.suggested }}{% else %}<span class="text-gray-500">None</span>{% endif %}</td>
+          <td data-label="Starting point">
+            {% with sp=b.starting_point %}
+            {% if not sp %}—
+            {% elif sp.state == "measuring" %}Measuring, day {{ sp.day }} of 7
+            {% elif sp.state == "starting" %}{{ sp.start.unanswered }} unanswered of {{ sp.start.conversations }} · compare {{ sp.compare_on|date:"j M" }}
+            {% else %}Unanswered {{ sp.start.unanswered }} → {{ sp.now.unanswered }}{% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-2 text-xs text-gray-500">"Quiet" means no customer message for 3 days: call them before they drift away.</p>
+  {% else %}
+  <p class="text-sm text-gray-600">No business has connected WhatsApp yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

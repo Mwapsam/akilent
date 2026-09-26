@@ -173,6 +173,10 @@
         <button type="button" class="btn btn-primary" x-show="step < 3" :disabled="!canAdvance" @click="next()">Continue</button>
         <button type="submit" class="btn btn-primary" x-show="step === 3">Create account</button>
       </div>
+      <p class="text-xs text-gray-500 mt-3 text-right" x-show="step === 3">
+        By creating an account you agree to the <a href="{% url 'terms' %}" target="_blank" class="text-accent underline">Terms of service</a>
+        and <a href="{% url 'privacy' %}" target="_blank" class="text-accent underline">Privacy policy</a>.
+      </p>
     </form>
 
     <p class="text-center text-xs text-gray-400 mt-6">

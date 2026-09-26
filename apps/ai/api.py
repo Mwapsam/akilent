@@ -411,6 +411,27 @@ def recent_auto_replies(account, limit: int = 20) -> list[dict]:
     } for p in rows]
 
 
+def usage_summary(account=None, *, since) -> dict:
+    """``{"suggested", "used", "errors"}`` since ``since``: does the team trust the suggestions?
+
+    ``account=None`` covers every business (the staff view). "Suggested" counts proposals the model
+    actually produced (``ready_at`` set), whatever happened next. An EXPIRED status alone isn't
+    enough: a proposal overtaken while still waiting on the model is expired too, never shown.
+    "Used" is the team sending one.
+    """
+    from apps.ai.models import AIProposal
+
+    rows = AIProposal.objects.filter(created_at__gte=since)
+    if account is not None:
+        rows = rows.filter(account=account)
+    status = AIProposal.Status
+    return {
+        "suggested": rows.filter(ready_at__isnull=False).count(),
+        "used": rows.filter(status=status.USED).count(),
+        "errors": rows.filter(status=status.ERROR).count(),
+    }
+
+
 def test_connection() -> dict:
     """``{"ok", "model", "latency_ms", "error"}`` for one tiny round trip. Sends no customer data."""
     import time
