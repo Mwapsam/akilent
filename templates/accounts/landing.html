@@ -3,303 +3,352 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ site.app_name|default:"Automator" }} — Communications infrastructure for business</title>
-  <meta name="description" content="{% if WHATSAPP_ENABLED %}{{ site.app_name|default:"Automator" }} connects WhatsApp Business messaging, transactional email, and automated workflows into a unified communications platform.{% else %}{{ site.app_name|default:"Automator" }} connects transactional email and automated workflows into a unified communications platform.{% endif %}">
+  {% with app=site.app_name|default:"Akilent" %}
+  <title>{% if WHATSAPP_ENABLED %}{{ app }} — Answer every customer on WhatsApp{% else %}{{ app }} — Email your customers from your own business address{% endif %}</title>
+  <meta name="description" content="{% if WHATSAPP_ENABLED %}{{ app }} gives small businesses one shared WhatsApp inbox, automatic replies when you're busy or closed, follow-up reminders and payment links.{% else %}{{ app }} helps small businesses email customers from their own domain, keep customer records, follow up and send payment links.{% endif %}">
+  {% endwith %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <style>
+    {% comment %}
+      The marketing page keeps its own palette (it is exempt from the app's dark-mode token
+      tests). Colours live here as tokens; markup uses the classes below, not raw hex.
+    {% endcomment %}
     :root{
-      /* Channel accents (page-specific) */
-      --signal:#1FAF9C;   /* whatsapp — Transmit Teal */
-      --signal-ink:#12182B;
-      --signal-glow:rgba(31,175,156,.35);
-      --mail:#FFB020;     /* email — Signal Amber */
-      --mail-glow:rgba(255,176,32,.28);
-      --rules:#5E8BD9;    /* automation — info blue */
-      --rules-glow:rgba(94,139,217,.28);
-      /* Geometry (page-specific) */
-      --radius-lg:16px;
-      --radius-md:12px;
+      /* Every value comes from docs/brand-colors.md. Roles (70/20/10):
+         navy neutrals build the page; teal marks identity, success and icons;
+         amber is reserved for actions (buttons) and the one reminder in the example. */
+      --ink:#0E1526;          /* gray-950 Night Ops Navy */
+      --ink-2:#161F35;        /* gray-900 */
+      --line:#26314A;         /* gray-800 */
+      --fg:#FAFBFC;           /* gray-50 */
+      --fg-mid:#DCE1E8;       /* gray-300 */
+      --fg-lo:#A8B2C4;        /* gray-400 (8.4:1 on navy) */
+      --band:#F3F5F7;         /* gray-100 Paper */
+      --card:#FFFFFF;
+      --card-soft:#FAFBFC;    /* gray-50 */
+      --card-line:#E8EDF3;    /* gray-200 */
+      --card-line-strong:#DCE1E8; /* gray-300 */
+      --band-fg:#12182B;      /* Ink */
+      --band-muted:#46516B;   /* gray-700 secondary text (8.1:1 on white) */
+      --band-soft:#657089;    /* gray-600 AA floor */
+      --tint:#F0F4FA;         /* brand-50 */
+      --signal:#1FAF9C;       /* teal-500: fills, icons on dark */
+      --signal-strong:#12766A;/* teal-700: teal text on light */
+      --signal-tint:#EDFAF7;  /* teal-50 */
+      --signal-soft:#D3F3EC;  /* teal-100 */
+      --signal-light:#74D4C4; /* teal-300: teal text on navy */
+      --cta:#FFB020;          /* amber-400 */
+      --cta-hover:#F5A312;    /* amber-500 */
+      --cta-fg:#12182B;       /* Ink, never white on amber */
+      --amber-soft:#FEEEC7;   /* amber-100 */
+      --amber-ink:#8C5508;    /* amber-800 */
+      --amber-light:#FFCA4D;  /* amber-300 */
+      --amber-deep:#452605;   /* amber-950 */
+      --amber-pale:#FDDE8A;   /* amber-200 */
+      --radius-lg:16px; --radius-md:12px;
       --ease:cubic-bezier(.16,1,.3,1);
     }
     *{ box-sizing:border-box; }
-    html{ scroll-behavior:smooth; scroll-padding-top:4.5rem; }
-    body{
-      background:#0E1526;
-      color:#FAFBFC;
-      font-family:var(--font-sans);
-      -webkit-font-smoothing:antialiased;
-      text-rendering:optimizeLegibility;
-    }
-    /* One self-hosted family (Inter Variable) — no CDN fonts. Display headings
-       lean on the tighter tracking + heavier weight rather than a second face. */
-    .font-display{ font-family:var(--font-sans); letter-spacing:-0.02em; font-weight:600; }
-    .font-mono{ font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.01em; }
-    .text-mid{ color:#A8B2C4; }
-    .text-lo{ color:#838EA3; }
-    .bg-ink{ background:#0E1526; }
-    .bg-ink-2{ background:#161F35; }
-    .border-hairline{ border-color:#26314A; }
-    .text-signal{ color:var(--signal); }
-    .text-mail{ color:var(--mail); }
-    .text-rules{ color:var(--rules); }
-
-    a, button, label, input{ transition:color .15s ease, background-color .15s ease, border-color .2s ease, transform .2s var(--ease), box-shadow .25s ease, opacity .2s ease; }
-    a:focus-visible, button:focus-visible, label:focus-visible, input:focus-visible{
-      outline:2px solid var(--signal);
-      outline-offset:3px;
-      border-radius:6px;
-    }
+    html{ scroll-behavior:smooth; scroll-padding-top:5rem; }
+    body{ margin:0; background:var(--ink); color:var(--fg); font-family:var(--font-sans);
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
     .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    nav[aria-label="Primary"] a.active{ color:#FAFBFC; }
+    /* Own class, not Tailwind's focus:not-sr-only: this unlayered .sr-only would outrank the layered utility. */
+    .skip-link{ position:fixed; top:.75rem; left:.75rem; z-index:50; padding:.625rem 1rem; border-radius:10px;
+      background:var(--cta); color:var(--cta-fg); font-size:.9375rem; font-weight:600; text-decoration:none;
+      transform:translateY(-200%); }
+    .skip-link:focus{ transform:none; }
 
-    /* Buttons */
-    .cta-primary{
-      background:var(--mail);
-      color:#12182B;
-      font-weight:600;
-      border-radius:10px;
-    }
-    .cta-primary:hover{ background:#F5A312; transform:translateY(-1px); }
-    .cta-outline{
-      color:#FAFBFC;
-      border:1px solid #26314A;
-      border-radius:10px;
-    }
-    .cta-outline:hover{ border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.03); }
-    .cta-outline-light{
-      color:#12182B;
-      border:1px solid #DCE1E8;
-      border-radius:10px;
-    }
-    .cta-outline-light:hover{ border-color:#A8B2C4; background:#FAFBFC; }
+    .wrap{ max-width:72rem; margin:0 auto; padding-left:1.25rem; padding-right:1.25rem; }
+    @media (min-width:640px){ .wrap{ padding-left:1.5rem; padding-right:1.5rem; } }
+    .section{ padding-top:5rem; padding-bottom:5rem; }
+    @media (min-width:640px){ .section{ padding-top:7rem; padding-bottom:7rem; } }
 
-    /* Ambient glows (hero only, decorative) */
-    .ambient{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
-    .ambient span{ position:absolute; border-radius:999px; filter:blur(90px); opacity:.2; }
-    .ambient .g1{ width:520px; height:520px; top:-180px; left:-140px; background:var(--signal); animation:drift1 26s ease-in-out infinite; }
-    .ambient .g2{ width:420px; height:420px; top:-60px; right:-160px; background:var(--mail); opacity:.14; animation:drift2 30s ease-in-out infinite; }
-    @keyframes drift1{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(28px,22px); } }
-    @keyframes drift2{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(-22px,18px); } }
-    .pulse-ring{ animation:pulse 2.4s ease-in-out infinite; }
-    @keyframes pulse{
-      0%, 100%{ box-shadow:0 0 0 0 rgba(31,175,156,.5); }
-      50%{ box-shadow:0 0 0 6px rgba(31,175,156,0); }
+    /* Surfaces */
+    .dark{ background:var(--ink); color:var(--fg); }
+    .light{ background:var(--card); color:var(--band-fg); }
+    .band{ background:var(--band); color:var(--band-fg); }
+    .fg-mid{ color:var(--fg-mid); }
+    .fg-lo{ color:var(--fg-lo); }
+    .muted{ color:var(--band-muted); }
+    .accent{ color:var(--signal-strong); }
+    .dark .accent{ color:var(--signal-light); }
+
+    /* Type */
+    .eyebrow{ font-size:.875rem; font-weight:600; letter-spacing:.01em; color:var(--signal-strong); }
+    .dark .eyebrow{ color:var(--signal-light); }
+    .h1{ font-size:2.25rem; line-height:1.1; font-weight:700; letter-spacing:-0.025em; }
+    @media (min-width:640px){ .h1{ font-size:3rem; } }
+    @media (min-width:1024px){ .h1{ font-size:3.75rem; } }
+    .h2{ font-size:1.875rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; }
+    @media (min-width:640px){ .h2{ font-size:2.25rem; } }
+    .h3{ font-size:1.125rem; line-height:1.35; font-weight:600; letter-spacing:-0.01em; }
+    .lead{ font-size:1.125rem; line-height:1.65; }
+    @media (min-width:1024px){ .lead{ font-size:1.25rem; } }
+    .body{ font-size:1rem; line-height:1.65; }
+    .small{ font-size:.875rem; line-height:1.55; }
+    .section-head{ max-width:42rem; }
+    .section-head.center{ margin-left:auto; margin-right:auto; text-align:center; }
+    .section-head .h2{ margin-top:.75rem; }
+    .section-head p.body{ margin-top:1rem; }
+
+    /* Interaction */
+    a, button, summary{ transition:color .15s ease, background-color .15s ease, border-color .2s ease, transform .2s var(--ease), box-shadow .25s ease; }
+    a:focus-visible, button:focus-visible, summary:focus-visible, label:focus-visible{
+      outline:2px solid var(--signal); outline-offset:3px; border-radius:8px;
+    }
+    .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+      min-height:44px; padding:.75rem 1.5rem; border-radius:10px; font-size:1rem; font-weight:600;
+      text-decoration:none; cursor:pointer; white-space:nowrap; }
+    .btn-sm{ min-height:40px; padding:.5rem 1rem; font-size:.9375rem; }
+    .btn-primary{ background:var(--cta); color:var(--cta-fg); box-shadow:0 14px 32px -20px rgba(255,176,32,.55); }
+    .btn-primary:hover{ background:var(--cta-hover); transform:translateY(-1px); }
+    .btn-ghost{ color:var(--fg); border:1px solid var(--line); }
+    .btn-ghost:hover{ background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.22); }
+    .btn-outline{ color:var(--band-fg); border:1px solid var(--card-line-strong); background:var(--card); }
+    .btn-outline:hover{ border-color:var(--band-muted); }
+    .link{ color:inherit; text-decoration:underline; text-underline-offset:4px; text-decoration-color:currentColor; text-decoration-thickness:1px; }
+    .link:hover{ color:var(--signal-strong); }
+    .dark .link:hover{ color:var(--signal-light); }
+
+    .ico{ width:1.5rem; height:1.5rem; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
+    .ico-sm{ width:1.125rem; height:1.125rem; }
+    .ico-tile{ display:inline-flex; flex-shrink:0; align-items:center; justify-content:center; width:2.75rem; height:2.75rem;
+      border-radius:var(--radius-md); background:var(--signal-tint); color:var(--signal-strong); }
+
+    /* Header */
+    /* Transparent over the hero so its glow runs behind the bar; solid once the page scrolls. */
+    .site-header{ position:sticky; top:0; z-index:30; background:transparent; border-bottom:1px solid transparent;
+      transition:background-color .25s ease, border-color .25s ease; }
+    .site-header.solid, .site-header.menu-open{ background:rgba(14,21,38,.94);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border-bottom-color:var(--line); }
+    .header-row{ height:4rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
+    .brand{ display:flex; align-items:center; gap:.625rem; min-height:44px; font-weight:700; font-size:1.125rem; color:var(--fg); text-decoration:none; }
+    .nav-main{ display:none; align-items:center; gap:2rem; font-size:.9375rem; font-weight:500; }
+    .nav-main a, .nav-mobile a.nav-link{ color:var(--fg-lo); text-decoration:none; }
+    .nav-main a{ position:relative; padding:.5rem 0; }
+    .nav-main a::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
+      background:var(--signal-light); transform:scaleX(0); transition:transform .2s var(--ease); }
+    .nav-main a:hover, .nav-main a.active, .nav-mobile a.nav-link:hover{ color:var(--fg); }
+    .nav-main a.active::after{ transform:scaleX(1); }
+    .nav-actions{ display:none; align-items:center; gap:1.25rem; }
+    .nav-actions .signin{ color:var(--fg-lo); font-weight:500; font-size:.9375rem; text-decoration:none; }
+    /* Quiet while the hero's amber button is on screen, so there is one primary action at a time. */
+    .btn-nav{ color:var(--fg); border:1px solid var(--line); background:rgba(250,251,252,.04);
+      transition:background-color .25s ease, color .25s ease, border-color .25s ease; }
+    .btn-nav:hover{ border-color:var(--fg-lo); }
+    .site-header.cta-live .btn-nav{ background:var(--cta); color:var(--cta-fg); border-color:var(--cta); }
+    .site-header.cta-live .btn-nav:hover{ background:var(--cta-hover); border-color:var(--cta-hover); }
+    .nav-actions .signin:hover{ color:var(--fg); }
+    .burger{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+      width:44px; height:44px; margin-right:-.5rem; padding:0; border:0; background:transparent; cursor:pointer; border-radius:8px; }
+    .burger span{ display:block; width:20px; height:1.5px; background:var(--fg); transition:transform .25s var(--ease), opacity .2s ease; }
+    .burger[aria-expanded="true"] .l1{ transform:translateY(6.5px) rotate(45deg); }
+    .burger[aria-expanded="true"] .l2{ opacity:0; }
+    .burger[aria-expanded="true"] .l3{ transform:translateY(-6.5px) rotate(-45deg); }
+    /* Closed: collapsed and hidden from keyboard and screen readers, not just clipped. */
+    .nav-mobile{ display:grid; grid-template-rows:0fr; visibility:hidden;
+      transition:grid-template-rows .3s var(--ease), visibility 0s linear .3s; }
+    .nav-mobile > div{ overflow:hidden; }
+    .site-header.instant .nav-mobile{ transition:none; }
+    .site-header.menu-open .nav-mobile{ grid-template-rows:1fr; visibility:visible; border-top:1px solid var(--line);
+      transition:grid-template-rows .3s var(--ease), visibility 0s; }
+    .nav-mobile .inner{ display:flex; flex-direction:column; padding:1rem 1.25rem 1.5rem; }
+    .nav-mobile a.nav-link{ display:flex; align-items:center; min-height:44px; font-size:1rem; }
+    @media (min-width:900px){
+      .nav-main, .nav-actions{ display:flex; }
+      .burger, .nav-mobile{ display:none; }
     }
 
-    /* Product interface preview frame */
-    .console{
-      position:relative;
-      background:linear-gradient(180deg, #161F35 0%, #1C2640 100%);
-      border:1px solid #26314A;
-      border-radius:var(--radius-lg);
-      box-shadow:0 40px 100px -40px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.02) inset;
-    }
-    .console::before{
-      content:"";
-      position:absolute; inset:0;
-      border-radius:inherit;
-      padding:1px;
-      background:linear-gradient(160deg, rgba(31,175,156,.35), transparent 30%, transparent 70%, rgba(255,176,32,.2));
-      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite:xor;
-      mask-composite:exclude;
-      pointer-events:none;
-    }
-    .console-dot{ width:7px; height:7px; border-radius:999px; }
+    /* Hero */
+    .hero{ position:relative; overflow:hidden; margin-top:-4rem; padding-top:4rem; }
+    .hero-glow{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+    .hero-glow span{ position:absolute; width:560px; height:560px; top:-260px; left:50%; margin-left:-280px;
+      border-radius:999px; background:var(--signal); opacity:.16; filter:blur(110px); }
+    .hero-copy{ position:relative; text-align:center; max-width:52rem; margin:0 auto; padding-top:4.5rem; padding-bottom:3rem; }
+    @media (min-width:640px){ .hero-copy{ padding-top:6rem; } }
+    .hero-copy .lead{ margin:1.5rem auto 0; max-width:40rem; }
+    .hero-ctas{ margin-top:2.25rem; display:flex; flex-wrap:wrap; justify-content:center; gap:.75rem; }
+    .hero-note{ margin-top:1.25rem; font-size:.9375rem; color:var(--fg-lo); }
 
-    /* Dashboard mockup internals (light UI inside dark frame) */
-    .mock-shell{
-      background:#F3F5F7;
-      border-radius:12px;
-      overflow:hidden;
-      color:#12182B;
-      display:grid;
-      grid-template-columns:11.5rem 1fr;
-      min-height:20rem;
-    }
-    @media (max-width:640px){ .mock-shell{ grid-template-columns:1fr; } .mock-side{ display:none; } }
-    .mock-side{
-      background:#FFFFFF;
-      border-right:1px solid #E8EDF3;
-      padding:.9rem .6rem;
-    }
-    .mock-nav-item{
-      display:flex; align-items:center; gap:.5rem;
-      font-size:.72rem; font-weight:500; color:#46516B;
-      padding:.42rem .6rem; border-radius:8px;
-    }
-    .mock-nav-item.active{ background:#F0F4FA; color:#263E63; font-weight:600; }
-    .mock-nav-item .dot{ width:5px; height:5px; border-radius:999px; background:#A8B2C4; }
-    .mock-nav-item.active .dot{ background:var(--signal); }
-    .mock-card{
-      background:#FFFFFF;
-      border:1px solid #E8EDF3;
-      border-radius:10px;
-      padding:.85rem .95rem;
-    }
+    /* Example inbox mock */
+    .mock-frame{ position:relative; max-width:60rem; margin:0 auto; padding:.75rem;
+      background:var(--ink-2); border:1px solid var(--line);
+      border-radius:var(--radius-lg); box-shadow:0 40px 100px -40px rgba(0,0,0,.75); }
+    .mock-label{ display:flex; align-items:center; justify-content:space-between; padding:.25rem .5rem .75rem;
+      font-size:.8125rem; color:var(--fg-lo); }
+    .mock-pill{ display:inline-flex; align-items:center; gap:.375rem; padding:.25rem .625rem; border-radius:999px;
+      border:1px solid var(--line); color:var(--fg-mid); font-weight:500; }
+    .mock{ display:grid; grid-template-columns:1fr; background:var(--band); color:var(--band-fg);
+      border-radius:12px; overflow:hidden; min-height:22rem; text-align:left; }
+    @media (min-width:768px){ .mock{ grid-template-columns:10.5rem 15rem 1fr; } }
+    .mock-rail, .mock-list{ display:none; }
+    @media (min-width:768px){ .mock-rail, .mock-list{ display:block; } }
+    .mock-rail{ background:var(--card); border-right:1px solid var(--card-line); padding:1rem .625rem; }
+    .mock-rail div{ display:flex; align-items:center; gap:.5rem; padding:.5rem .625rem; border-radius:8px;
+      font-size:.8125rem; font-weight:500; color:var(--band-muted); }
+    .mock-rail div.on{ background:var(--signal-tint); color:var(--signal-strong); font-weight:600; }
+    .mock-list{ background:var(--card); border-right:1px solid var(--card-line); }
+    .mock-list div{ padding:.75rem 1rem; border-bottom:1px solid var(--card-line); font-size:.8125rem; }
+    .mock-list div.on{ background:var(--card-soft); box-shadow:inset 3px 0 0 var(--signal); }
+    .mock-list strong{ display:block; font-weight:600; color:var(--band-fg); }
+    .mock-list span{ display:block; margin-top:.125rem; color:var(--band-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mock-chat{ display:flex; flex-direction:column; }
+    .mock-chat-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.875rem 1.125rem;
+      background:var(--card); border-bottom:1px solid var(--card-line); font-size:.875rem; }
+    .mock-chat-head strong{ font-weight:600; }
+    .mock-tag{ display:inline-flex; align-items:center; gap:.375rem; padding:.25rem .625rem; border-radius:999px;
+      font-size:.75rem; font-weight:600; background:var(--tint); color:var(--band-muted); }
+    .mock-thread{ flex:1; display:flex; flex-direction:column; gap:.75rem; padding:1.25rem 1.125rem; }
+    .bubble{ max-width:80%; padding:.625rem .875rem; border-radius:14px; font-size:.9375rem; line-height:1.45; }
+    .bubble.in{ align-self:flex-start; background:var(--card); border:1px solid var(--card-line); border-bottom-left-radius:4px; }
+    .bubble.out{ align-self:flex-end; background:var(--signal-soft); border-bottom-right-radius:4px; }
+    .bubble small{ display:block; margin-top:.25rem; font-size:.75rem; color:var(--band-muted); }
+    .mock-chip{ align-self:center; display:inline-flex; align-items:center; gap:.5rem; margin-top:.25rem;
+      padding:.5rem .875rem; border-radius:999px; background:var(--amber-soft); color:var(--amber-ink); font-size:.8125rem; font-weight:600; }
 
-    /* Channel product cards (light band) */
-    .product-card{
-      background:#FFFFFF;
-      border:1px solid #E8EDF3;
-      border-radius:var(--radius-lg);
-      transition:border-color .25s ease, transform .3s var(--ease), box-shadow .3s ease;
-    }
-    .product-card:hover{ transform:translateY(-3px); border-color:#DCE1E8; box-shadow:0 20px 45px -28px rgba(14,21,38,.35); }
-    .product-card .rail{ height:3px; border-radius:3px 3px 0 0; }
-    .spec-item{
-      display:flex; align-items:center; gap:.55rem;
-      font-size:.83rem; color:#46516B;
-      padding:.45rem 0;
-      border-top:1px solid #E8EDF3;
-    }
-    .spec-item:first-child{ border-top:none; }
+    /* Cards and grids */
+    .grid-4{ display:grid; gap:1.25rem; grid-template-columns:1fr; }
+    @media (min-width:640px){ .grid-4{ grid-template-columns:repeat(2,1fr); } }
+    @media (min-width:1024px){ .grid-4{ grid-template-columns:repeat(4,1fr); } }
+    .grid-3{ display:grid; gap:1.25rem; grid-template-columns:1fr; }
+    @media (min-width:768px){ .grid-3{ grid-template-columns:repeat(3,1fr); } }
+    .card{ background:var(--card); border:1px solid var(--card-line); border-radius:var(--radius-lg); padding:1.75rem; }
+    @media (min-width:640px){ .card{ padding:2rem; } }
+    .card .h3{ margin-top:1.25rem; }
+    .card p.small, .card p.body{ margin-top:.5rem; }
+    .who{ display:flex; gap:1rem; align-items:flex-start; padding:1.5rem; }
+    .who .h3{ margin-top:0; }
+    .step-num{ display:inline-flex; align-items:center; justify-content:center; width:2.5rem; height:2.5rem;
+      border-radius:999px; background:var(--signal-strong); color:var(--fg); font-weight:700; font-size:1rem; }
+    .card.step{ background:var(--band); border-color:transparent; }
+    .mt-section{ margin-top:3.5rem; }
 
-    /* Workflow diagram */
-    .flow-node{
-      background:#161F35;
-      border:1px solid #26314A;
-      border-radius:12px;
-      padding:.8rem 1.4rem;
-      text-align:center;
-    }
-    .flow-node.core{
-      border-color:rgba(31,175,156,.45);
-      box-shadow:0 0 40px -12px var(--signal-glow);
-    }
-    .flow-line{ width:1px; height:2rem; background:linear-gradient(180deg, var(--signal), rgba(31,175,156,.15)); margin:0 auto; }
-    .flow-chip{
-      background:#161F35;
-      border:1px solid #26314A;
-      border-radius:10px;
-      padding:.6rem .9rem;
-      font-size:.8rem;
-      display:flex; align-items:center; gap:.5rem;
-      justify-content:center;
-    }
-    .flow-chip .mark{ width:6px; height:6px; border-radius:999px; }
+    /* Developers */
+    .dev-grid{ display:grid; gap:3rem; align-items:center; }
+    @media (min-width:1024px){ .dev-grid{ grid-template-columns:1fr 1fr; gap:4rem; } }
+    .dev-list{ margin-top:1.75rem; display:grid; gap:1rem; list-style:none; padding:0; }
+    .dev-list li{ display:flex; gap:.75rem; align-items:flex-start; }
+    .dev-list .ico{ color:var(--signal-light); margin-top:.125rem; }
+    .dev-list strong{ color:var(--fg); font-weight:600; }
+    .code{ background:var(--ink); border:1px solid var(--line); border-radius:var(--radius-lg); overflow:hidden; }
+    .code-head{ display:flex; justify-content:space-between; gap:1rem; padding:.75rem 1.125rem; border-bottom:1px solid var(--line);
+      font-size:.8125rem; color:var(--fg-lo); }
+    .code pre{ margin:0; padding:1.25rem 1.25rem; overflow-x:auto; font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.8125rem; line-height:1.75; color:var(--fg); }
+    .tk{ color:var(--fg-lo); } .ts{ color:var(--signal-light); } .tm{ color:var(--amber-light); }
 
-    /* Code panel */
-    .code-panel{
-      background:#0B111F;
-      border:1px solid #26314A;
-      border-radius:var(--radius-lg);
-      overflow:hidden;
-    }
-    .code-panel pre{ margin:0; padding:1.25rem 1.4rem; overflow-x:auto; font-size:.82rem; line-height:1.7; }
-    .tok-k{ color:#838EA3; }
-    .tok-s{ color:var(--signal); }
-    .tok-a{ color:var(--mail); }
-    .tok-m{ color:var(--rules); }
+    /* Trust */
+    .trust{ display:flex; gap:1rem; align-items:flex-start; }
+    .trust .h3{ font-size:1rem; }
 
-    /* Light bands */
-    .band-light{ background:#F3F5F7; color:#12182B; }
-    .band-light .muted{ color:#46516B; }
+    /* Pricing */
+    .plans{ display:grid; gap:1.25rem; grid-template-columns:1fr; align-items:stretch; }
+    @media (min-width:640px){ .plans{ grid-template-columns:repeat(2,1fr); } }
+    @media (min-width:1100px){ .plans.n4{ grid-template-columns:repeat(4,1fr); } .plans.n3{ grid-template-columns:repeat(3,1fr); } }
+    .plan{ display:flex; flex-direction:column; background:var(--card); border:1px solid var(--card-line);
+      border-radius:var(--radius-lg); padding:1.75rem; }
+    .plan.featured{ border:2px solid var(--signal); box-shadow:0 30px 70px -40px rgba(14,21,38,.35); }
+    .plan-badge{ align-self:flex-start; margin-bottom:.75rem; padding:.25rem .625rem; border-radius:999px;
+      background:var(--signal-tint); color:var(--signal-strong); font-size:.8125rem; font-weight:600; }
+    .price{ margin-top:.75rem; display:flex; align-items:baseline; gap:.375rem; }
+    .price b{ font-size:2.5rem; line-height:1; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+    .plan-limits{ margin-top:1.5rem; padding:0; list-style:none; border-top:1px solid var(--card-line); }
+    .plan-limits li{ padding:.625rem 0; border-bottom:1px solid var(--card-line); font-size:.9375rem; color:var(--band-fg); }
+    .plan-feats{ margin-top:1.25rem; padding:0; list-style:none; display:grid; gap:.625rem; }
+    .plan-feats li{ display:flex; gap:.5rem; align-items:flex-start; font-size:.9375rem; color:var(--band-fg); }
+    .plan-feats .ico{ color:var(--signal-strong); margin-top:.125rem; }
+    .plan-feats li.soon{ color:var(--band-muted); }
+    .soon-tag{ margin-left:.25rem; padding:.0625rem .5rem; border-radius:999px; background:var(--tint); color:var(--band-muted); font-size:.75rem; font-weight:600; }
+    .plan .btn{ margin-top:1.75rem; width:100%; }
+    .plan-foot{ margin-top:.75rem; text-align:center; font-size:.875rem; color:var(--band-muted); }
 
-    /* Pricing (light) */
-    .plan-card{
-      background:#FFFFFF;
-      border:1px solid #E8EDF3;
-      border-radius:var(--radius-lg);
-      transition:transform .3s var(--ease), border-color .25s ease, box-shadow .3s ease;
-    }
-    .plan-card:hover{ transform:translateY(-3px); border-color:#DCE1E8; }
-    .plan-card.featured{
-      border-color:transparent;
-      background:
-        linear-gradient(#FFFFFF, #FFFFFF) padding-box,
-        linear-gradient(160deg, var(--signal), var(--mail)) border-box;
-      border:1px solid transparent;
-      box-shadow:0 30px 70px -35px rgba(14,21,38,.35);
-    }
-    .spec-row{ border-top:1px solid #E8EDF3; padding-top:.7rem; padding-bottom:.7rem; }
-    .spec-row:first-child{ border-top:none; padding-top:0; }
+    /* FAQ */
+    .faq{ max-width:48rem; margin:3rem auto 0; border-top:1px solid var(--card-line); }
+    .faq details{ border-bottom:1px solid var(--card-line); }
+    .faq summary{ list-style:none; display:flex; align-items:center; justify-content:space-between; gap:1rem;
+      min-height:44px; padding:1.25rem 0; cursor:pointer; font-size:1.0625rem; font-weight:600; }
+    .faq summary::-webkit-details-marker{ display:none; }
+    .faq summary .ico{ transition:transform .2s var(--ease); color:var(--band-soft); }
+    .faq details[open] summary .ico{ transform:rotate(180deg); }
+    .faq details p{ margin:0; padding:0 0 1.25rem; max-width:42rem; }
 
-    /* Mobile menu accordion (no JS) */
-    #mobile-panel{
-      display:grid;
-      grid-template-rows:0fr;
-      transition:grid-template-rows .32s var(--ease);
-    }
-    #mobile-toggle:checked ~ #mobile-panel{ grid-template-rows:1fr; }
-    #mobile-panel > div{ overflow:hidden; }
-    #mobile-toggle:focus-visible ~ label .burger-box{ outline:2px solid var(--signal); outline-offset:3px; border-radius:8px; }
-    .burger-line{ transition:transform .25s var(--ease), opacity .2s ease; }
-    #mobile-toggle:checked ~ label .l1{ transform:translateY(5.5px) rotate(45deg); }
-    #mobile-toggle:checked ~ label .l2{ opacity:0; }
-    #mobile-toggle:checked ~ label .l3{ transform:translateY(-5.5px) rotate(-45deg); }
+    /* Final CTA + footer */
+    .final{ text-align:center; }
+    .final .lead{ margin:1rem auto 0; max-width:36rem; }
+    .site-footer{ border-top:1px solid var(--line); font-size:.9375rem; }
+    .footer-grid{ display:grid; gap:2rem; padding-top:3rem; padding-bottom:3rem; }
+    @media (min-width:768px){ .footer-grid{ grid-template-columns:1.2fr 1fr 1fr; } }
+    .footer-grid h2{ font-size:.875rem; font-weight:600; color:var(--fg); margin:0 0 .75rem; }
+    .footer-grid ul{ list-style:none; margin:0; padding:0; display:grid; gap:0; }
+    .footer-grid a{ display:inline-flex; align-items:center; min-height:44px; color:var(--fg-mid); text-decoration:none; }
+    .footer-grid a:hover{ color:var(--fg); }
+    .footer-base{ border-top:1px solid var(--line); padding-top:1.5rem; padding-bottom:2rem; font-size:.875rem; color:var(--fg-lo); }
+
+    .messages{ max-width:72rem; margin:0 auto; padding:1rem 1.25rem 0; }
+    .messages div{ border-radius:12px; border:1px solid var(--amber-ink); background:var(--amber-deep); color:var(--amber-pale); padding:.75rem 1rem; font-size:.9375rem; }
 
     @media (prefers-reduced-motion: reduce){
       html{ scroll-behavior:auto; }
-      .pulse-ring, .ambient span{ animation:none !important; opacity:1 !important; }
-      .product-card:hover, .plan-card:hover, .cta-primary:hover{ transform:none; }
+      *, *::before, *::after{ transition:none !important; animation:none !important; }
+      .btn-primary:hover{ transform:none; }
     }
   </style>
 </head>
-<body class="bg-ink">
+<body>
+{% with app=site.app_name|default:"Akilent" %}
 
-  <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:top-3 focus:left-3 focus:bg-[#FFB020] focus:text-[#12182B] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold">Skip to content</a>
+  <a href="#main" class="skip-link">Skip to content</a>
 
   {% if messages %}
-    <div class="relative z-40 max-w-6xl mx-auto px-6 pt-4">
-      {% for message in messages %}
-        <div class="rounded-xl border border-amber-400/40 bg-[#2A2010] text-[#FFD98A] text-sm px-4 py-3">
-          {{ message }}
-        </div>
-      {% endfor %}
+    <div class="messages" role="status">
+      {% for message in messages %}<div>{{ message }}</div>{% endfor %}
     </div>
   {% endif %}
 
-  {% comment %} 1 · Product navigation header {% endcomment %}
-  <header class="border-b border-hairline sticky top-0 z-30 bg-ink/90 backdrop-blur-md">
-    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
-      <a href="/" class="font-display font-semibold text-lg flex items-center gap-2.5 shrink-0">
-        <img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" class="w-6 h-6">
-        {{ site.app_name|default:"Automator" }}
+  {% comment %} Header {% endcomment %}
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a href="/" class="brand">
+        <img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="28" height="28">
+        {{ app }}
       </a>
 
-      <nav class="hidden md:flex items-center gap-7 text-[13px] font-medium" aria-label="Primary">
-        <a href="#platform" class="text-mid hover:text-white">Platform</a>
-        <a href="#channels" class="text-mid hover:text-white">Channels</a>
-        <a href="#automations" class="text-mid hover:text-white">Automations</a>
-        <a href="#developers" class="text-mid hover:text-white">Developers</a>
-        <a href="#pricing" class="text-mid hover:text-white">Pricing</a>
-        <a href="{% url 'docs' %}" class="text-mid hover:text-white">Documentation</a>
+      <nav class="nav-main" aria-label="Primary">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="{% url 'help' %}">Help</a>
       </nav>
 
-      <div class="hidden md:flex items-center gap-3 text-sm shrink-0">
+      <div class="nav-actions">
         {% if user.is_authenticated %}
-          <a href="/dashboard/" class="cta-primary px-4 py-2 text-sm">Open console</a>
+          <a href="/dashboard/" class="btn btn-nav btn-sm">Open dashboard</a>
         {% else %}
-          <a href="/auth/login/" class="text-mid hover:text-white font-medium">Sign in</a>
-          <a href="/signup/" class="cta-primary px-4 py-2 text-sm">Create account</a>
+          <a href="/auth/login/" class="signin">Sign in</a>
+          <a href="/signup/" class="btn btn-nav btn-sm">Start free trial</a>
         {% endif %}
       </div>
 
-      <input type="checkbox" id="mobile-toggle" class="sr-only" onchange="this.nextElementSibling.setAttribute('aria-expanded', this.checked)">
-      <label for="mobile-toggle" class="md:hidden burger-box relative w-11 h-11 -mr-1 flex flex-col items-center justify-center gap-[5px] cursor-pointer rounded-lg" aria-label="Toggle menu" aria-controls="mobile-panel" aria-expanded="false">
-        <span class="burger-line l1 block w-5 h-[1.5px] bg-white"></span>
-        <span class="burger-line l2 block w-5 h-[1.5px] bg-white"></span>
-        <span class="burger-line l3 block w-5 h-[1.5px] bg-white"></span>
-      </label>
+      <button type="button" class="burger" id="menu-button" aria-label="Menu" aria-expanded="false" aria-controls="mobile-nav">
+        <span class="l1"></span><span class="l2"></span><span class="l3"></span>
+      </button>
     </div>
 
-    <nav id="mobile-panel" class="md:hidden border-t border-hairline" aria-label="Mobile">
+    <nav id="mobile-nav" class="nav-mobile" aria-label="Mobile">
       <div>
-        <div class="flex flex-col gap-1 px-6 py-5 text-sm">
-          <a href="#platform" class="text-mid hover:text-white py-2">Platform</a>
-          <a href="#channels" class="text-mid hover:text-white py-2">Channels</a>
-          <a href="#automations" class="text-mid hover:text-white py-2">Automations</a>
-          <a href="#developers" class="text-mid hover:text-white py-2">Developers</a>
-          <a href="#pricing" class="text-mid hover:text-white py-2">Pricing</a>
-          <a href="{% url 'docs' %}" class="text-mid hover:text-white py-2">Documentation</a>
+        <div class="inner">
+          <a href="#how-it-works" class="nav-link">How it works</a>
+          <a href="#features" class="nav-link">Features</a>
+          <a href="#pricing" class="nav-link">Pricing</a>
+          <a href="{% url 'help' %}" class="nav-link">Help</a>
           {% if user.is_authenticated %}
-            <a href="/dashboard/" class="cta-primary px-4 py-3 text-center mt-2">Open console</a>
+            <a href="/dashboard/" class="btn btn-primary" style="margin-top:.75rem;">Open dashboard</a>
           {% else %}
-            <a href="/auth/login/" class="text-mid hover:text-white py-2">Sign in</a>
-            <a href="/signup/" class="cta-primary px-4 py-3 text-center mt-2">Create account</a>
+            <a href="/auth/login/" class="nav-link">Sign in</a>
+            <a href="/signup/" class="btn btn-primary" style="margin-top:.75rem;">Start free trial</a>
           {% endif %}
         </div>
       </div>
@@ -307,354 +356,417 @@
   </header>
 
   <main id="main">
-    {% comment %} 2 · Hero {% endcomment %}
-    <section class="relative overflow-hidden">
-      <div class="ambient" aria-hidden="true"><span class="g1"></span><span class="g2"></span></div>
 
-      <div class="relative z-10 max-w-6xl mx-auto px-6 pt-20 sm:pt-28 pb-16 sm:pb-20 text-center">
-        <span class="font-mono text-xs uppercase tracking-wider text-signal border border-hairline rounded-full px-3 py-2 inline-block">
-          Communications infrastructure
-        </span>
-        <h1 class="font-display mt-6 text-3xl sm:text-4xl font-semibold leading-[1.06] tracking-tight max-w-3xl mx-auto">
-          Communicate with customers through one intelligent infrastructure layer.
-        </h1>
-        <p class="mt-5 text-lg text-mid max-w-2xl mx-auto leading-relaxed">
-          {% if WHATSAPP_ENABLED %}{{ site.app_name|default:"Automator" }} connects WhatsApp Business messaging, transactional email, and automated workflows into a unified communications platform.{% else %}{{ site.app_name|default:"Automator" }} connects transactional email and automated workflows into a unified communications platform.{% endif %}
-        </p>
-
-        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <a href="/signup/" class="cta-primary text-sm px-6 py-3 shadow-[0_20px_50px_-20px_rgba(255,176,32,.45)]">
-            Start building
-          </a>
-          <a href="#platform" class="cta-outline text-sm font-medium px-6 py-3">
-            View platform
-          </a>
-        </div>
-        <p class="mt-4 font-mono text-xs text-lo">14-day trial · no card required · cancel anytime</p>
-      </div>
-
-      {% comment %} 3 · Product interface preview {% endcomment %}
-      <div id="platform" class="relative z-10 max-w-5xl mx-auto px-6 pb-20 sm:pb-24">
-        <div class="console p-3 sm:p-4">
-          <div class="flex items-center gap-1.5 px-1 pb-3">
-            <span class="console-dot bg-[#FFB020]"></span>
-            <span class="console-dot bg-[#1FAF9C]"></span>
-            <span class="console-dot bg-[#5E8BD9]"></span>
-            <span class="font-mono text-[11px] text-lo ml-2">console.akilent — communication overview</span>
+    {% comment %} Hero {% endcomment %}
+    <section class="hero dark">
+      <div class="hero-glow" aria-hidden="true"><span></span></div>
+      <div class="wrap" style="position:relative;">
+        <div class="hero-copy">
+          {% if WHATSAPP_ENABLED %}
+            <h1 class="h1">Answer every customer on WhatsApp — and never lose a sale to a missed message.</h1>
+            <p class="lead fg-mid">Give your team one shared inbox, automatic replies when you're busy or closed, reminders to follow up, and payment links — all in one place.</p>
+          {% else %}
+            <h1 class="h1">Email your customers from your own business address — and never forget to follow up.</h1>
+            <p class="lead fg-mid">Send emails and campaigns from your own domain, keep every customer's details together, set follow-up reminders and send payment links — all in one place.</p>
+          {% endif %}
+          <div class="hero-ctas" id="hero-ctas">
+            <a href="/signup/" class="btn btn-primary">Start free trial</a>
+            <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
           </div>
+          {% if trial_days %}<p class="hero-note">{{ trial_days }}-day free trial · No card required</p>{% endif %}
+        </div>
 
-          <div class="mock-shell">
-            <aside class="mock-side" aria-hidden="true">
-              <p class="font-mono text-[10px] uppercase tracking-wider text-[#838EA3] px-2 mb-2">Workspace</p>
-              <div class="mock-nav-item active"><span class="dot"></span>Overview</div>
-              <div class="mock-nav-item"><span class="dot"></span>Messages</div>
-              <div class="mock-nav-item"><span class="dot"></span>Email</div>
-              {% if WHATSAPP_ENABLED %}<div class="mock-nav-item"><span class="dot"></span>WhatsApp</div>{% endif %}
-              <div class="mock-nav-item"><span class="dot"></span>Automations</div>
-              <div class="mock-nav-item"><span class="dot"></span>Templates</div>
-              <div class="mock-nav-item"><span class="dot"></span>Developers</div>
-              <div class="mock-nav-item"><span class="dot"></span>Analytics</div>
-            </aside>
-
-            <div class="p-4 sm:p-5">
-              <div class="flex items-center justify-between mb-4">
-                <p class="font-display font-semibold text-sm text-[#12182B]">Communication overview</p>
-                <span class="cta-primary px-3 py-1.5 text-[11px]">New message</span>
+        {% if WHATSAPP_ENABLED %}
+        <figure style="margin:0; padding-bottom:5rem;">
+          <figcaption class="sr-only">Example: a customer asks on WhatsApp whether an item is in stock, a teammate replies, and a reminder is set to follow up tomorrow.</figcaption>
+          <div class="mock-frame" aria-hidden="true">
+            <div class="mock-label">
+              <span class="mock-pill">Example inbox</span>
+              <span>Illustration — not real data</span>
+            </div>
+            <div class="mock">
+              <div class="mock-rail">
+                <div class="on"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Inbox</div>
+                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Customers</div>
+                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Follow-ups</div>
+                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Automations</div>
               </div>
-
-              <div class="grid grid-cols-2 gap-3">
-                <div class="mock-card">
-                  <p class="font-mono text-[10px] uppercase tracking-wider text-[#657089]">Messages sent</p>
-                  <p class="font-display text-2xl font-semibold mt-1 text-[#12182B]">12,450</p>
-                  <p class="font-mono text-[10px] text-[#178F80] mt-1">▲ 8.2% this week</p>
+              <div class="mock-list">
+                <div class="on"><strong>Chanda M.</strong><span>Do you have this in stock?</span></div>
+                <div><strong>Grace K.</strong><span>Thank you, see you Saturday</span></div>
+                <div><strong>Joseph B.</strong><span>What time do you close?</span></div>
+              </div>
+              <div class="mock-chat">
+                <div class="mock-chat-head">
+                  <strong>Chanda M.</strong>
+                  <span class="mock-tag">Assigned to Mwila</span>
                 </div>
-                <div class="mock-card">
-                  <p class="font-mono text-[10px] uppercase tracking-wider text-[#657089]">Delivery rate</p>
-                  <p class="font-display text-2xl font-semibold mt-1 text-[#12182B]">98.4%</p>
-                  <div class="h-1 rounded-full bg-[#E8EDF3] mt-2 overflow-hidden"><span class="block h-full w-[98%] bg-[#1FAF9C] rounded-full"></span></div>
-                </div>
-                <div class="mock-card">
-                  <p class="font-mono text-[10px] uppercase tracking-wider text-[#657089]">Active channels</p>
-                  <div class="mt-2 space-y-1.5 text-[13px] font-medium text-[#12182B]">
-                    {% if WHATSAPP_ENABLED %}<p class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C]"></span>WhatsApp <span class="font-mono text-[10px] text-[#178F80] ml-auto">✓ connected</span></p>{% endif %}
-                    <p class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C]"></span>Email <span class="font-mono text-[10px] text-[#178F80] ml-auto">✓ connected</span></p>
-                  </div>
-                </div>
-                <div class="mock-card">
-                  <p class="font-mono text-[10px] uppercase tracking-wider text-[#657089]">Automation rules</p>
-                  <p class="font-display text-2xl font-semibold mt-1 text-[#12182B]">24 <span class="text-sm font-medium text-[#657089]">active</span></p>
-                  <p class="font-mono text-[10px] text-[#657089] mt-1">last triggered 2 min ago</p>
+                <div class="mock-thread">
+                  <div class="bubble in">Hi, do you have this in stock?<small>10:42</small></div>
+                  <div class="bubble out">Yes, we have it — we're open until 6 PM today.<small>Mwila · 10:44</small></div>
+                  <span class="mock-chip"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Follow up tomorrow</span>
                 </div>
               </div>
             </div>
+          </div>
+        </figure>
+        {% else %}
+        <div style="padding-bottom:4rem;"></div>
+        {% endif %}
+      </div>
+    </section>
+
+    {% comment %} Who it's for {% endcomment %}
+    <section class="band section" aria-labelledby="who-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">Who it's for</p>
+          <h2 id="who-title" class="h2">Built for small businesses that talk to customers every day</h2>
+          <p class="body muted">If customers message you to ask, book or buy, {{ app }} helps you keep up.</p>
+        </div>
+        <div class="grid-4 mt-section">
+          <div class="card who">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" x2="21" y1="6" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+            <div><h3 class="h3">Shops</h3><p class="small muted">Answer stock and price questions, then send a payment link.</p></div>
+          </div>
+          <div class="card who">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" x2="8.12" y1="4" y2="15.88"/><line x1="14.47" x2="20" y1="14.48" y2="20"/><line x1="8.12" x2="12" y1="8.12" y2="12"/></svg></span>
+            <div><h3 class="h3">Salons</h3><p class="small muted">Reply to booking enquiries and set reminders to confirm them.</p></div>
+          </div>
+          <div class="card who">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
+            <div><h3 class="h3">Clinics</h3><p class="small muted">Reply to patients quickly, even outside opening hours.</p></div>
+          </div>
+          <div class="card who">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+            <div><h3 class="h3">Service businesses</h3><p class="small muted">Share enquiries across your team so none go unanswered.</p></div>
           </div>
         </div>
       </div>
     </section>
 
-    {% comment %} 4 · Channel platform {% endcomment %}
-    <section id="channels" class="band-light border-y border-[#E8EDF3]">
-      <div class="max-w-6xl mx-auto px-6 py-20">
-        <div class="max-w-xl mb-10">
-          <p class="font-mono text-xs uppercase tracking-wider text-[#657089]">Channels</p>
-          <h2 class="font-display mt-3 text-2xl sm:text-3xl font-semibold tracking-tight">A communication operating system</h2>
-          <p class="mt-3 text-sm muted leading-relaxed">Every channel your customers use, behind one integration and one delivery log.</p>
+    {% comment %} How it works {% endcomment %}
+    <section id="how-it-works" class="light section" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title" class="h2">Up and running in three steps</h2>
         </div>
+        <ol class="grid-3 mt-section" style="list-style:none; padding:0; margin-left:0; margin-right:0;">
+          <li class="card step">
+            <span class="step-num" aria-hidden="true">1</span>
+            {% if WHATSAPP_ENABLED %}
+              <h3 class="h3">Connect your WhatsApp number</h3>
+              <p class="body muted">Link your business number through Meta's guided setup, then invite your team.</p>
+            {% else %}
+              <h3 class="h3">Connect your email domain</h3>
+              <p class="body muted">Add your business domain with our step-by-step guide so emails come from your own address.</p>
+            {% endif %}
+          </li>
+          <li class="card step">
+            <span class="step-num" aria-hidden="true">2</span>
+            <h3 class="h3">Turn on ready-made automations</h3>
+            <p class="body muted">{% if WHATSAPP_ENABLED %}Pick starters like a welcome message, a reply when you're closed, or a menu of common questions, and switch them on.{% else %}Pick ready-made starters for follow-ups and reminders, and switch them on.{% endif %}</p>
+          </li>
+          <li class="card step">
+            <span class="step-num" aria-hidden="true">3</span>
+            <h3 class="h3">Reply, follow up and get paid</h3>
+            <p class="body muted">{% if WHATSAPP_ENABLED %}Your team answers from one inbox, sets reminders to get back to customers, and sends a payment link when they're ready to buy.{% else %}Keep track of every customer, set reminders to get back to them, and send a payment link when they're ready to buy.{% endif %}</p>
+          </li>
+        </ol>
+      </div>
+    </section>
 
-        <div class="grid {% if WHATSAPP_ENABLED %}sm:grid-cols-3{% else %}sm:grid-cols-2{% endif %} gap-6">
+    {% comment %} Features. Every card maps to a key in apps/billing/features.py. {% endcomment %}
+    <section id="features" class="band section" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">Features</p>
+          <h2 id="features-title" class="h2">Everything you need to keep customers happy</h2>
+        </div>
+        <div class="grid-4 mt-section">
           {% if WHATSAPP_ENABLED %}
-          <div class="product-card overflow-hidden">
-            <div class="rail bg-[#1FAF9C]"></div>
-            <div class="p-7">
-              <p class="font-mono text-[11px] uppercase tracking-wider text-[#12766A]">WhatsApp</p>
-              <h3 class="font-display mt-2 text-lg font-semibold">WhatsApp Business API</h3>
-              <div class="mt-4">
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#1FAF9C]"></span>Customer messaging</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#1FAF9C]"></span>Notifications</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#1FAF9C]"></span>Delivery tracking</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#1FAF9C]"></span>Templates</div>
-              </div>
-            </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+            <h3 class="h3">Shared inbox</h3>
+            <p class="small muted">Every WhatsApp conversation in one place. Your team sees who needs an answer and who's handling it.</p>
+          </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+            <h3 class="h3">Automatic replies</h3>
+            <p class="small muted">Greet new customers, reply after hours, and answer common questions by keyword.</p>
           </div>
           {% endif %}
-
-          <div class="product-card overflow-hidden">
-            <div class="rail bg-[#FFB020]"></div>
-            <div class="p-7">
-              <p class="font-mono text-[11px] uppercase tracking-wider text-[#B26F06]">Email</p>
-              <h3 class="font-display mt-2 text-lg font-semibold">Transactional Email</h3>
-              <div class="mt-4">
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#FFB020]"></span>Email delivery</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#FFB020]"></span>Templates</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#FFB020]"></span>Transaction notifications</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#FFB020]"></span>Analytics</div>
-              </div>
-            </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <h3 class="h3">Follow-ups</h3>
+            <p class="small muted">Set reminders to get back to customers{% if WHATSAPP_ENABLED %}, and get a nudge when a conversation has gone unanswered{% endif %}.</p>
           </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <h3 class="h3">Customer records</h3>
+            <p class="small muted">Each customer's details, tags and message history, kept together.</p>
+          </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
+            <h3 class="h3">Campaigns</h3>
+            <p class="small muted">{% if WHATSAPP_ENABLED %}Send an approved WhatsApp message or an email to a list of customers at once.{% else %}Send an email to a list of customers at once, from your own domain.{% endif %}</p>
+          </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></span>
+            <h3 class="h3">Orders &amp; payment links</h3>
+            <p class="small muted">Record what a customer bought and send them a link to pay online.</p>
+          </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/><path d="M19 17v4"/><path d="M21 19h-4"/></svg></span>
+            <h3 class="h3">AI reply suggestions</h3>
+            <p class="small muted">{% if WHATSAPP_ENABLED %}Optional and off by default. AI drafts replies from your business information, and you decide how much it can do on its own.{% else %}Optional. AI helps you write email templates and subject lines.{% endif %}</p>
+          </div>
+          <div class="card">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span>
+            <h3 class="h3">Insights</h3>
+            <p class="small muted">See how your messages and campaigns are performing.</p>
+          </div>
+        </div>
+        <p class="small muted" style="text-align:center; margin-top:2rem;">Some features depend on your plan — <a href="#pricing" class="link">see pricing</a>.</p>
+      </div>
+    </section>
 
-          <div class="product-card overflow-hidden">
-            <div class="rail bg-[#5E8BD9]"></div>
-            <div class="p-7">
-              <p class="font-mono text-[11px] uppercase tracking-wider text-[#2F58AB]">Automation</p>
-              <h3 class="font-display mt-2 text-lg font-semibold">Automation Engine</h3>
-              <div class="mt-4">
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#5E8BD9]"></span>Workflow rules</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#5E8BD9]"></span>Triggers</div>
-                <div class="spec-item"><span class="w-1 h-1 rounded-full bg-[#5E8BD9]"></span>Integrations</div>
-              </div>
-            </div>
+    {% comment %} Trust: verifiable statements only. {% endcomment %}
+    <section class="light section" aria-labelledby="trust-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">You stay in control</p>
+          <h2 id="trust-title" class="h2">Your business, your customers, your rules</h2>
+        </div>
+        <div class="grid-3 mt-section">
+          {% if WHATSAPP_ENABLED %}
+          <div class="trust">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+            <div><h3 class="h3">Your own WhatsApp number</h3><p class="small muted" style="margin-top:.25rem;">Customers message your business number, not ours.</p></div>
+          </div>
+          {% endif %}
+          <div class="trust">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <div><h3 class="h3">Your own email domain</h3><p class="small muted" style="margin-top:.25rem;">Emails are sent from your business address.</p></div>
+          </div>
+          <div class="trust">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg></span>
+            <div><h3 class="h3">AI only when you want it</h3><p class="small muted" style="margin-top:.25rem;">AI is off until you switch it on.{% if WHATSAPP_ENABLED %} You decide how much it can do, and every reply it sends is marked and logged.{% endif %}</p></div>
+          </div>
+          <div class="trust">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <div><h3 class="h3">Team roles</h3><p class="small muted" style="margin-top:.25rem;">Invite teammates as Owner, Admin or Member.</p></div>
+          </div>
+          <div class="trust">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+            <div><h3 class="h3">Your data, on request</h3><p class="small muted" style="margin-top:.25rem;">Ask us to delete your data at any time. <a href="{% url 'data-deletion' %}" class="link">How it works</a></p></div>
           </div>
         </div>
       </div>
     </section>
 
-    {% comment %} 5 · Workflow visualization {% endcomment %}
-    <section id="automations" class="bg-ink">
-      <div class="max-w-6xl mx-auto px-6 py-20 sm:py-24">
-        <div class="mb-12 text-center">
-          <p class="font-mono text-xs uppercase tracking-wider text-lo">Automations</p>
-          <h2 class="font-display mt-3 text-2xl sm:text-3xl font-semibold tracking-tight">Communications infrastructure, end to end</h2>
-          <p class="mt-3 text-sm text-mid leading-relaxed">Events enter the platform, rules decide, channels deliver. One pipeline for every message.</p>
+    {% comment %}
+      Pricing. Cards come from billing_api.plan_card, so what's shown is what each plan gives. Each
+      card links to /signup/?plan=, where only the plan's own trial_days applies
+      (accounts.views._apply_selected_plan), so trial wording here reads plan.trial_days.
+    {% endcomment %}
+    <section id="pricing" class="band section" aria-labelledby="pricing-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">Pricing</p>
+          <h2 id="pricing-title" class="h2">Simple monthly plans</h2>
+          <p class="body muted">Start with a free trial. Choose a plan when you're ready.</p>
         </div>
-
-        <div class="max-w-lg mx-auto" role="img" aria-label="Workflow: customer event flows into the {{ site.app_name|default:"Automator" }} platform, through the routing engine, and out to {% if WHATSAPP_ENABLED %}WhatsApp, {% endif %}email, webhooks, and applications">
-          <div class="flow-node">
-            <p class="font-mono text-[11px] uppercase tracking-wider text-mail">Event</p>
-            <p class="text-sm font-medium mt-1">Customer Event</p>
-            <p class="font-mono text-[11px] text-lo mt-1">order.shipped · payment.received · message.inbound</p>
-          </div>
-          <div class="flow-line"></div>
-          <div class="flow-node core">
-            <p class="font-mono text-[11px] uppercase tracking-wider text-signal">Platform</p>
-            <p class="text-sm font-medium mt-1">{{ site.app_name|default:"Automator" }} Platform</p>
-          </div>
-          <div class="flow-line"></div>
-          <div class="flow-node">
-            <p class="font-mono text-[11px] uppercase tracking-wider text-rules">Rules</p>
-            <p class="text-sm font-medium mt-1">Routing Engine</p>
-            <p class="font-mono text-[11px] text-lo mt-1">24 active rules · triggers · schedules</p>
-          </div>
-          <div class="flow-line"></div>
-          <div class="grid {% if WHATSAPP_ENABLED %}grid-cols-2 sm:grid-cols-4{% else %}grid-cols-2 sm:grid-cols-3{% endif %} gap-3">
-            {% if WHATSAPP_ENABLED %}<div class="flow-chip"><span class="mark bg-[#1FAF9C]"></span>WhatsApp</div>{% endif %}
-            <div class="flow-chip"><span class="mark bg-[#FFB020]"></span>Email</div>
-            <div class="flow-chip"><span class="mark bg-[#5E8BD9]"></span>Webhooks</div>
-            <div class="flow-chip"><span class="mark bg-[#838EA3]"></span>Applications</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    {% comment %} 6 · Developer platform {% endcomment %}
-    <section id="developers" class="bg-ink border-t border-hairline">
-      <div class="max-w-6xl mx-auto px-6 py-20 sm:py-24 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        <div>
-          <p class="font-mono text-xs uppercase tracking-wider text-lo">Developers</p>
-          <h2 class="font-display mt-3 text-2xl sm:text-3xl font-semibold tracking-tight">Built for teams that automate communication.</h2>
-          <p class="mt-4 text-sm text-mid leading-relaxed max-w-md">
-            Send through a single REST API, receive delivery and status events over webhooks,
-            and integrate in minutes.
-          </p>
-          <ul class="mt-6 space-y-3 text-sm">
-            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C] shrink-0"></span><span class="text-mid"><span class="text-white font-medium">API access</span> — a versioned REST endpoint for transactional email</span></li>
-            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C] shrink-0"></span><span class="text-mid"><span class="text-white font-medium">SMTP relay</span> — per-domain credentials to send directly over SMTP</span></li>
-            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C] shrink-0"></span><span class="text-mid"><span class="text-white font-medium">Webhooks</span> — signed delivery, open, and click callbacks in real time</span></li>
-            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-[#1FAF9C] shrink-0"></span><span class="text-mid"><a href="{% url 'docs' %}" class="text-white font-medium underline decoration-[#26314A] underline-offset-4 hover:decoration-[#1FAF9C]">Documentation</a> — guides and code samples for rapid integration</span></li>
-          </ul>
-        </div>
-
-        <div class="code-panel">
-          <div class="flex items-center justify-between px-4 py-2.5 border-b border-hairline">
-            <span class="font-mono text-[11px] text-lo">send-message.sh</span>
-            <span class="font-mono text-[10px] uppercase tracking-wider text-signal">POST /messages</span>
-          </div>
-          <pre class="font-mono" aria-label="Example API request"><code><span class="tok-m">POST</span> <span class="text-white">/api/v1/messages</span>
-<span class="tok-k">Authorization:</span> Bearer ak_live_•••
-
-{
-  <span class="tok-k">"from"</span>:    <span class="tok-s">"billing@yourdomain.com"</span>,
-  <span class="tok-k">"to"</span>:      <span class="tok-s">"customer@example.com"</span>,
-  <span class="tok-k">"subject"</span>: <span class="tok-a">"Payment received"</span>
-}
-
-<span class="tok-k">→ 202 Accepted</span>  <span class="tok-s">"status": "queued"</span></code></pre>
-        </div>
-      </div>
-    </section>
-
-    {% comment %} 7 · Trust / capabilities {% endcomment %}
-    <section class="band-light border-y border-[#E8EDF3]">
-      <div class="max-w-6xl mx-auto px-6 py-14">
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-10 text-center">
-          <div>
-            <p class="font-display text-xl font-semibold">99.9%</p>
-            <p class="mt-1 text-xs muted">delivery infrastructure</p>
-          </div>
-          <div>
-            <p class="font-display text-xl font-semibold">Real-time</p>
-            <p class="mt-1 text-xs muted">message tracking</p>
-          </div>
-          <div>
-            <p class="font-display text-xl font-semibold">Secure</p>
-            <p class="mt-1 text-xs muted">API integrations</p>
-          </div>
-          <div>
-            <p class="font-display text-xl font-semibold">Enterprise</p>
-            <p class="mt-1 text-xs muted">permissions &amp; roles</p>
-          </div>
-          <div class="col-span-2 md:col-span-3 lg:col-span-1 mx-auto md:max-w-none">
-            <p class="font-display text-xl font-semibold">Analytics</p>
-            <p class="mt-1 text-xs muted">and reporting</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    {% comment %} 8 · Pricing {% endcomment %}
-    <section id="pricing" class="band-light">
-      <div class="max-w-6xl mx-auto px-6 py-20 sm:py-24">
-        <div class="text-center mb-10">
-          <p class="font-mono text-xs uppercase tracking-wider text-[#657089]">Pricing</p>
-          <h2 class="font-display mt-3 text-2xl sm:text-3xl font-semibold tracking-tight">Usage-based, no surprises</h2>
-          <p class="mt-2 text-sm muted">Start on a free trial. Upgrade when you outgrow it.</p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+        <div class="plans {% if cards|length >= 4 %}n4{% else %}n3{% endif %} mt-section">
           {% for card in cards %}{% with plan=card.plan %}
-            <div class="plan-card {% if plan.slug == 'professional' %}featured lg:-translate-y-2{% endif %} p-8 flex flex-col">
-              {% if plan.slug == 'professional' %}
-                <span class="font-mono text-[10px] font-medium uppercase tracking-wider text-[#12766A] mb-3 inline-flex items-center gap-1.5">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="#1FAF9C"><path d="M5 0l1.3 3.2L10 4l-3.2 1.3L5 10 3.7 6.7 0 5.4l3.7-1.3z"/></svg>
-                  Most popular
-                </span>
-              {% endif %}
-              <p class="font-display font-semibold text-lg">{{ plan.name }}</p>
-              <div class="mt-2 flex items-end gap-1">
-                <span class="font-display text-4xl font-semibold tracking-tight">${{ plan.price_monthly|floatformat:0 }}</span>
-                {% if plan.price_monthly > 0 %}<span class="text-sm text-[#657089] mb-1">/mo</span>{% endif %}
-              </div>
-
-              <div class="mt-6 flex-1 font-mono text-[13px] text-[#46516B]">
-                {% for line in card.limits %}<div class="spec-row">{{ line }}</div>{% endfor %}
-                {% if card.features %}
-                <ul class="mt-4 space-y-1.5 font-sans text-sm text-[#46516B]">
-                  {% for f in card.features %}<li class="flex gap-2"><span aria-hidden="true" class="text-[#1FAF9C]">✓</span>{{ f.name }}</li>{% endfor %}
-                  {% for soon in card.coming_soon %}<li class="flex gap-2 text-[#657089]"><span aria-hidden="true">○</span>{{ soon.name }} <span class="font-mono text-[10px] uppercase">soon</span></li>{% endfor %}
-                </ul>
+            <div class="plan{% if plan.slug == 'professional' %} featured{% endif %}">
+              {% if plan.slug == 'professional' %}<span class="plan-badge">Most popular</span>{% endif %}
+              <h3 class="h3" style="font-size:1.25rem;">{{ plan.name }}</h3>
+              <p class="price">
+                {% if plan.price_monthly > 0 %}
+                  <b>${{ plan.price_monthly|floatformat:0 }}</b><span class="muted">per month</span>
+                {% else %}
+                  <b>Free</b>{% if plan.trial_days %}<span class="muted">for {{ plan.trial_days }} days</span>{% endif %}
                 {% endif %}
-              </div>
-
-              <a href="/signup/?plan={{ plan.slug }}" class="mt-8 block text-center text-sm font-semibold py-3 rounded-[10px] {% if plan.slug == 'professional' %}cta-primary{% else %}cta-outline-light{% endif %}">
-                {% if plan.slug == 'trial' %}Start free{% else %}Choose {{ plan.name }}{% endif %}
-              </a>
-              <p class="mt-3 text-center font-mono text-[11px] text-[#657089]">
-                {% if plan.slug == 'trial' %}No card required{% else %}Billed monthly · cancel anytime{% endif %}
               </p>
+              <ul class="plan-limits">
+                {% for line in card.limits %}<li>{{ line }}</li>{% endfor %}
+              </ul>
+              {% if card.features or card.coming_soon %}
+              <ul class="plan-feats">
+                {% for f in card.features %}
+                  <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ f.name }}</li>
+                {% endfor %}
+                {% for soon in card.coming_soon %}
+                  <li class="soon"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><span>{{ soon.name }} <span class="soon-tag">Coming soon</span></span></li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+              <div style="flex:1;"></div>
+              <a href="/signup/?plan={{ plan.slug }}" class="btn {% if plan.slug == 'professional' %}btn-primary{% else %}btn-outline{% endif %}">
+                {% if plan.price_monthly > 0 %}Choose {{ plan.name }}{% elif plan.trial_days %}Start free trial{% else %}Get started free{% endif %}
+              </a>
+              <p class="plan-foot">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>
             </div>
           {% endwith %}{% endfor %}
         </div>
       </div>
     </section>
 
-    {% comment %} 9 · Product CTA {% endcomment %}
-    <section class="bg-ink border-t border-hairline relative overflow-hidden">
-      <div class="ambient" aria-hidden="true" style="opacity:.5;"><span class="g1" style="width:360px;height:360px;top:-140px;left:15%;"></span></div>
-      <div class="relative z-10 max-w-6xl mx-auto px-6 py-16 sm:py-20 text-center">
-        <h2 class="font-display text-2xl sm:text-3xl font-semibold tracking-tight">Start powering your customer communications.</h2>
-        <p class="mt-3 text-mid text-sm max-w-md mx-auto">Create your workspace, connect a channel, and send your first message in minutes.</p>
-        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <a href="/signup/" class="cta-primary text-sm px-6 py-3 shadow-[0_20px_50px_-20px_rgba(255,176,32,.45)]">
-            Create account
-          </a>
-          <a href="{% url 'docs' %}" class="cta-outline text-sm font-medium px-6 py-3">
-            Explore documentation
-          </a>
+    {% comment %} FAQ. Each answer must match what the product does today. {% endcomment %}
+    <section id="faq" class="light section" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">Questions</p>
+          <h2 id="faq-title" class="h2">Frequently asked questions</h2>
         </div>
+        <div class="faq">
+          {% if WHATSAPP_ENABLED %}
+          <details>
+            <summary>Do I need to sign up for the WhatsApp Business API myself?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">No. During setup you connect your business number through Meta's guided sign-in, and {{ app }} handles the rest. The number you connect is used through {{ app }} rather than the WhatsApp Business app.</p>
+          </details>
+          <details>
+            <summary>Can my team share one number?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">Yes. Everyone works from the same inbox, and you can assign each conversation to a teammate so customers aren't answered twice or missed.</p>
+          </details>
+          <details>
+            <summary>Does AI send messages automatically?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own — every reply it sends is marked and logged.</p>
+          </details>
+          {% endif %}
+          <details>
+            <summary>Can I cancel anytime?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">Yes. Plans are billed monthly, and an owner or admin can cancel from the Billing page at any time.</p>
+          </details>
+          <details>
+            <summary>What happens after the trial?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">Nothing is deleted. Your customers, conversations and settings stay in your account. Choose a plan to keep sending messages and using your plan's features.</p>
+          </details>
+        </div>
+        <p class="body muted" style="text-align:center; margin-top:2rem;">More questions? Visit the <a href="{% url 'help' %}" class="link">help centre</a>{% if site.support_email %} or email <a href="mailto:{{ site.support_email }}" class="link">{{ site.support_email }}</a>{% endif %}.</p>
+      </div>
+    </section>
+
+    {% comment %} For developers: compact, after the business content. {% endcomment %}
+    <section id="developers" class="dark section" aria-labelledby="dev-title" style="border-top:1px solid var(--line);">
+      <div class="wrap dev-grid">
+        <div>
+          <p class="eyebrow">For developers</p>
+          <h2 id="dev-title" class="h2" style="margin-top:.75rem;">Connect {{ app }} to your own systems</h2>
+          <p class="body fg-mid" style="margin-top:1rem; max-width:32rem;">Have a website or app? Send messages from your own code and get updates back when they're delivered.</p>
+          <ul class="dev-list body fg-mid">
+            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong> — send email from your system</span></li>
+            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong> — plug into software that already sends email</span></li>
+            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong> — delivery, open and click events</span></li>
+            {% if WHATSAPP_ENABLED %}<li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong> — one-time login codes from your app</span></li>{% endif %}
+          </ul>
+          <a href="{% url 'docs' %}" class="btn btn-ghost" style="margin-top:2rem;">Read the documentation</a>
+        </div>
+        <div class="code">
+          <div class="code-head"><span>Send an email from your system</span><span>REST API</span></div>
+          <pre aria-label="Example API request"><code><span class="tm">POST</span> /api/v1/messages
+<span class="tk">Authorization:</span> Bearer ak_live_•••
+<span class="tk">Content-Type:</span> application/json
+
+{
+  <span class="tk">"from_email"</span>: <span class="ts">"orders@yourshop.com"</span>,
+  <span class="tk">"to_email"</span>:   <span class="ts">"customer@example.com"</span>,
+  <span class="tk">"subject"</span>:    <span class="ts">"Your order is ready"</span>,
+  <span class="tk">"text"</span>:       <span class="ts">"Your order is ready for collection."</span>
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    {% comment %} Final CTA {% endcomment %}
+    <section class="dark section final" aria-labelledby="final-title" style="border-top:1px solid var(--line);">
+      <div class="wrap">
+        <h2 id="final-title" class="h2">{% if WHATSAPP_ENABLED %}Ready to stop losing customers to missed messages?{% else %}Ready to keep every customer in the loop?{% endif %}</h2>
+        <p class="lead fg-mid">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days — no card required{% endif %}.</p>
+        <div class="hero-ctas"><a href="/signup/" class="btn btn-primary">Start free trial</a></div>
       </div>
     </section>
   </main>
 
-  <footer class="border-t border-hairline">
-    <div class="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-2 gap-8 font-mono text-xs text-lo">
+  <footer class="site-footer dark">
+    <div class="wrap footer-grid">
       <div>
-        <p class="text-white font-medium mb-2">Contact us</p>
-        <p class="not-italic leading-relaxed">
-          Mr Samuel Chimfwembe<br>
-          Block 3 Flat 12 Kajema Flats<br>
-          Chilenje, Lusaka
-        </p>
-        <p class="mt-2">
-          <a href="tel:+260963447432" class="hover:text-white">+260 96 344 7432</a><br>
-          <a href="tel:+260971903744" class="hover:text-white">+260 97 190 3744</a>
+        <a href="/" class="brand"><img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">{{ app }}</a>
+        <p class="fg-mid" style="margin-top:.75rem; max-width:22rem;">Customer conversations, follow-ups and payments for small businesses.</p>
+        <p class="fg-lo" style="margin-top:1rem;">
+          {% if site.support_email %}<a href="mailto:{{ site.support_email }}" style="color:var(--fg-mid); display:inline-flex; align-items:center; min-height:44px;">{{ site.support_email }}</a><br>{% endif %}
+          Lusaka, Zambia
         </p>
       </div>
-      <div class="flex flex-col sm:items-end justify-between gap-3">
-        <span class="flex items-center gap-4">
-          <a href="#platform" class="hover:text-white">Platform</a>
-          <a href="#pricing" class="hover:text-white">Pricing</a>
-          <a href="{% url 'docs' %}" class="hover:text-white">Documentation</a>
-        </span>
-        <span class="flex items-center gap-4">
-          <a href="{% url 'privacy' %}" class="hover:text-white">Privacy</a>
-          <a href="{% url 'terms' %}" class="hover:text-white">Terms</a>
-          <a href="{% url 'data-deletion' %}" class="hover:text-white">Data deletion</a>
-        </span>
-        <span>© {{ site.app_name|default:"Automator" }} · Communications infrastructure for business</span>
-      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="{% url 'help' %}">Help</a></li>
+          <li><a href="{% url 'docs' %}">Documentation</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Legal">
+        <h2>Legal</h2>
+        <ul>
+          <li><a href="{% url 'privacy' %}">Privacy</a></li>
+          <li><a href="{% url 'terms' %}">Terms</a></li>
+          <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
+        </ul>
+      </nav>
     </div>
+    <div class="wrap footer-base">© {% now "Y" %} {{ app }}</div>
   </footer>
 
+{% endwith %}
   <script>
     (function(){
+      // Mobile menu: a real button with aria-expanded; closes on link choice or Escape.
+      var header = document.querySelector('.site-header');
+      var menuButton = document.getElementById('menu-button');
+      function setMenu(open){
+        header.classList.toggle('menu-open', open);
+        menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      menuButton.addEventListener('click', function(){ setMenu(menuButton.getAttribute('aria-expanded') !== 'true'); });
+      // Collapse instantly on a link choice: a panel still animating shut would shift the page
+      // under the smooth scroll and land it past the section.
+      document.querySelectorAll('#mobile-nav a').forEach(function(a){
+        a.addEventListener('click', function(){
+          header.classList.add('instant'); setMenu(false);
+          void header.offsetHeight; header.classList.remove('instant');
+        });
+      });
+      document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape' && header.classList.contains('menu-open')){ setMenu(false); menuButton.focus(); }
+      });
+      // Solid header once scrolled; nav button turns amber once the hero's button is off screen.
+      function onScroll(){ header.classList.toggle('solid', window.scrollY > 8); }
+      onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
+      var heroCtas = document.getElementById('hero-ctas');
+      if(heroCtas && 'IntersectionObserver' in window){
+        new IntersectionObserver(function(entries){
+          header.classList.toggle('cta-live', !entries[0].isIntersecting);
+        }, { rootMargin: '-64px 0px 0px 0px' }).observe(heroCtas);
+      } else { header.classList.add('cta-live'); }
+      // Highlight the section in view in the primary nav.
       var links = document.querySelectorAll('nav[aria-label="Primary"] a[href^="#"]');
-      var sections = Array.prototype.map.call(links, function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
-      if(!sections.length) return;
+      if(!('IntersectionObserver' in window) || !links.length) return;
       var observer = new IntersectionObserver(function(entries){
         entries.forEach(function(entry){
           if(!entry.isIntersecting) return;
-          links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + entry.target.id); });
+          links.forEach(function(a){
+            var on = a.getAttribute('href') === '#' + entry.target.id;
+            a.classList.toggle('active', on);
+            if(on){ a.setAttribute('aria-current', 'true'); } else { a.removeAttribute('aria-current'); }
+          });
         });
       }, { rootMargin: '-45% 0px -50% 0px' });
-      sections.forEach(function(s){ observer.observe(s); });
+      links.forEach(function(a){ var s = document.querySelector(a.getAttribute('href')); if(s) observer.observe(s); });
     })();
   </script>
 </body>

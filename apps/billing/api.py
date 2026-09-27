@@ -418,6 +418,22 @@ def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
     }
 
 
+def default_signup_trial() -> tuple[Optional[Plan], int]:
+    """The plan and trial length a plain signup (no ``?plan=``) starts on.
+
+    The auto_create_trial signal uses this, and the landing page advertises its number, so what
+    the page promises is what signup gives: the site's default plan, else the trial plan, with
+    that plan's trial_days falling back to the site default. ``(None, 0)`` when there's no plan.
+    """
+    from apps.core.models import SiteSettings
+
+    site = SiteSettings.load()
+    plan = site.default_plan or Plan.objects.filter(slug=Plan.TRIAL).first()
+    if plan is None:
+        return None, 0
+    return plan, plan.trial_days or site.default_trial_days
+
+
 def core_features() -> list:
     """What every plan includes (for "Included in every plan" on pricing)."""
     return [f for f in catalog.FEATURES if f.access_mode == catalog.CORE and f.availability != catalog.DEPRECATED]

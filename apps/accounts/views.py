@@ -420,7 +420,11 @@ def landing(request):
 
     plans = Plan.objects.filter(is_active=True).order_by("price_monthly")
     cards = [billing_api.plan_card(p, whatsapp=bool(settings.WHATSAPP_ENABLED)) for p in plans]
-    return render(request, "accounts/landing.html", {"plans": plans, "cards": cards})
+    # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
+    _, trial_days = billing_api.default_signup_trial()
+    return render(request, "accounts/landing.html", {
+        "plans": plans, "cards": cards, "trial_days": trial_days,
+    })
 
 
 @login_required
