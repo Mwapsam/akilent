@@ -15,6 +15,10 @@ class OutboundMessage(models.Model):
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
+        # Not attempted: the plan's message limit was reached. Not a failure.
+        HELD = "held", "Held (plan limit)"
+        # The request may have reached Meta but no answer came back. Never resent automatically.
+        UNCONFIRMED = "unconfirmed", "May not have been sent"
 
     MAX_ATTEMPTS = 5
 

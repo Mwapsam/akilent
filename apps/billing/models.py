@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django.db import models, transaction
@@ -383,6 +384,116 @@ class ComingSoonFeature(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class PlanLimit(models.Model):
+    """How much of a catalog limit (``apps.billing.limit_catalog``) a plan allows. -1 = unlimited."""
+
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, related_name="limits")
+    key = models.CharField(max_length=50)
+    value = models.IntegerField()
+
+    class Meta:
+        unique_together = ("plan", "key")
+
+    def __str__(self):
+        return f"{self.plan.slug}:{self.key}={self.value}"
+
+
+class AccountLimitOverride(models.Model):
+    """An operator's exception for one business ("10,000 messages this month for this pilot").
+    Wins over the plan until ``expires_at`` (if set)."""
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="limit_overrides")
+    key = models.CharField(max_length=50)
+    value = models.IntegerField()
+    note = models.CharField(max_length=255, blank=True, default="")
+    set_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("account", "key")
+
+    def __str__(self):
+        return f"{self.key}={self.value} for {self.account_id}"
+
+
+class UsageCounter(models.Model):
+    """Units used of one metered limit in one period (a calendar month or day, UTC)."""
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="usage_counters")
+    key = models.CharField(max_length=50)
+    period_start = models.DateField()
+    used = models.PositiveIntegerField(default=0)
+    warned_80 = models.BooleanField(default=False)
+    warned_100 = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("account", "key", "period_start")
+
+    def __str__(self):
+        return f"{self.account_id}:{self.key}@{self.period_start}={self.used}"
+
+
+class UsageReservation(models.Model):
+    """One logical operation's claim on a metered limit.
+
+    ``operation_id`` is stable for the operation (e.g. ``wa-msg:<outbound pk>``), so reserving
+    again (a retry, a replayed task) returns this row instead of counting twice. Settlement is a
+    guarded state change: only a RESERVED row can be committed or released, so a worker can never
+    release another's units and a double release does nothing.
+    """
+
+    RESERVED, COMMITTED, RELEASED = "reserved", "committed", "released"
+    STATUS_CHOICES = [(RESERVED, "Reserved"), (COMMITTED, "Committed"), (RELEASED, "Released")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="usage_reservations")
+    key = models.CharField(max_length=50)
+    units = models.PositiveIntegerField(default=1)
+    operation_id = models.CharField(max_length=120)
+    period_start = models.DateField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=RESERVED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["account", "key", "operation_id"],
+                                               name="unique_usage_operation")]
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self):
+        return f"{self.operation_id} {self.key} x{self.units} [{self.status}]"
+
+
+class UnitCost(models.Model):
+    """What Akilent pays per unit of a cost driver (``apps.billing.costs.DRIVERS``), in USD.
+    Only things Akilent pays for per unit: email and AI. WhatsApp is billed by Meta to each
+    business directly, so it's never here."""
+
+    driver = models.CharField(max_length=30, unique=True)
+    cost_per_unit = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    note = models.CharField(max_length=255, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.driver}: ${self.cost_per_unit}"
+
+
+class CostSettings(models.Model):
+    """Singleton: the fixed monthly cost of serving one business (hosting, support, the WhatsApp
+    number's share of infrastructure) and the margin a paid plan should keep."""
+
+    fixed_monthly_cost_per_business = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    target_margin_pct = models.PositiveSmallIntegerField(default=50)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def load(cls) -> "CostSettings":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class ModuleSubscription(models.Model):

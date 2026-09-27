@@ -58,6 +58,14 @@ def business_hours_text(account) -> str:
     return business_hours.describe(account)
 
 
+def count_members(account) -> int:
+    """People on the team, counting pending invitations (a seat is taken once invited)."""
+    from apps.accounts.models import Invitation, Membership
+
+    return (Membership.objects.filter(account=account).count()
+            + Invitation.objects.filter(account=account, accepted_at__isnull=True).count())
+
+
 def is_account_admin(user, account) -> bool:
     """Whether ``user`` is an owner or admin of ``account``."""
     from apps.accounts.models import Membership

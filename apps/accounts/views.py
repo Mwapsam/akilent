@@ -528,6 +528,7 @@ def dashboard_panels(request):
     subscription = getattr(account, "subscription", None)
     stats = _email_stats(account, subscription)
 
+    from apps.billing import api as billing_api
     from apps.conversations import api as conversations_api
 
     return render(
@@ -536,6 +537,7 @@ def dashboard_panels(request):
         {
             "account": account,
             "subscription": subscription,
+            "usage_warnings": billing_api.usage_warnings(account),
             "starting_point": conversations_api.starting_point(account),
             "attention_items": _attention_items(
                 account, stats, numbers, email_domains, subscription
@@ -709,8 +711,10 @@ def _email_stats(account, subscription):
         verified=Count("id", filter=Q(status=EmailDomain.Status.VERIFIED)),
     )
 
+    from apps.billing import api as billing_api
+
     emails_used = month["sent"] + month["failed"] + month["queued"]
-    email_quota = getattr(getattr(subscription, "plan", None), "max_emails_per_month", None)
+    email_quota = billing_api.limit(account, "emails_month") if subscription else None
     usage_pct = None
     if email_quota and email_quota > 0:
         usage_pct = min(round(emails_used / email_quota * 100), 100)

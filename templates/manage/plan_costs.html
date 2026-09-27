@@ -1,0 +1,79 @@
+{% extends "manage/base.html" %}
+{% block title %}Plan costs — Operator{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <a href="{% url 'core:plans' %}" class="text-sm text-accent">← Plans</a>
+  <h1 class="mt-1 text-2xl font-semibold tracking-tight text-ink">Costs &amp; margin</h1>
+  <p class="mt-1 text-sm text-gray-600">What Akilent pays per unit, what each plan can cost at most, and what each business actually cost this month. Prices and costs in USD.</p>
+</header>
+
+<p class="mb-6 text-sm text-gray-600">Only email and AI are Akilent's per-unit costs. WhatsApp messages are billed by Meta to each business directly (Akilent must not resell them), so they never appear here; WhatsApp limits in <a class="text-accent underline" href="{% url 'core:plan-limits' %}">plan limits</a> set tiers and guard against abuse.</p>
+
+<section class="card card-pad mb-6" aria-labelledby="h-unit">
+  <h2 id="h-unit" class="font-semibold mb-3">Unit costs</h2>
+  <form method="post" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end">{% csrf_token %}
+    {% for dc in driver_costs %}
+    <label class="text-sm">Cost per {{ dc.driver.unit }} ($)
+      <input name="cost:{{ dc.driver.key }}" type="number" step="0.000001" min="0" class="input" value="{{ dc.cost }}"></label>
+    {% endfor %}
+    <label class="text-sm">Fixed cost per business / month ($)
+      <input name="fixed" type="number" step="0.01" min="0" class="input" value="{{ settings.fixed_monthly_cost_per_business }}"></label>
+    <label class="text-sm">Target margin (%)
+      <input name="target" type="number" min="0" max="100" class="input" value="{{ settings.target_margin_pct }}"></label>
+    <div><button class="btn btn-primary btn-sm">Save costs</button></div>
+  </form>
+  <p class="mt-2 text-xs text-gray-500">Fixed cost covers hosting, support and anything else that doesn't grow with use.</p>
+</section>
+
+<section class="mb-6" aria-labelledby="h-plans">
+  <h2 id="h-plans" class="font-semibold mb-3">Worst case per plan</h2>
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Plan</th><th>Price</th>{% for d in drivers %}<th>{{ d.name }}s at most</th>{% endfor %}<th>Worst-case cost</th><th>Margin</th></tr></thead>
+      <tbody>
+        {% for e in plans %}
+        <tr>
+          <td data-label="Plan"><span class="font-medium text-ink">{{ e.plan.name }}</span>{% if not e.plan.is_active %} <span class="badge badge-neutral">Hidden</span>{% endif %}</td>
+          <td data-label="Price">${{ e.price|floatformat:2 }}</td>
+          {% for line in e.lines %}
+          <td data-label="{{ line.driver.name }}s">{% if line.units is None %}<span class="badge badge-warning">Unlimited</span>{% else %}{{ line.units }} · ${{ line.cost|floatformat:2 }}{% endif %}</td>
+          {% endfor %}
+          <td data-label="Worst-case cost">${{ e.worst_cost|floatformat:2 }}{% if e.uncapped %} + uncapped{% endif %}</td>
+          <td data-label="Margin">
+            {% if e.price > 0 %}
+            <span class="{% if e.can_lose_money %}text-red-700 font-medium{% elif e.below_target %}text-amber-700{% else %}text-green-700{% endif %}">${{ e.margin|floatformat:2 }}{% if e.margin_pct is not None %} ({{ e.margin_pct }}%){% endif %}</span>
+            {% for r in e.reasons %}<span class="block text-xs text-red-700">{{ r }}</span>{% endfor %}
+            {% else %}<span class="text-gray-500">Free plan</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="h-actual">
+  <h2 id="h-actual" class="font-semibold mb-1">Actual cost this month</h2>
+  <p class="text-xs text-gray-500 mb-3">Least profitable first, so a business costing more than it pays is at the top.</p>
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Business</th><th>Plan</th>{% for d in drivers %}<th>{{ d.name }}s</th>{% endfor %}<th>Cost</th><th>Pays</th><th>Margin</th></tr></thead>
+      <tbody>
+        {% for b in businesses %}
+        <tr>
+          <td data-label="Business"><a class="text-accent" href="{% url 'core:business-tab' b.account.pk 'billing' %}">{{ b.account.company_name }}</a></td>
+          <td data-label="Plan">{{ b.plan.name|default:"—" }}</td>
+          {% for line in b.lines %}<td data-label="{{ line.driver.name }}s">{{ line.units }} · ${{ line.cost|floatformat:2 }}</td>{% endfor %}
+          <td data-label="Cost">${{ b.total|floatformat:2 }}</td>
+          <td data-label="Pays">${{ b.price|floatformat:2 }}</td>
+          <td data-label="Margin" class="{% if b.margin < 0 %}text-red-700 font-medium{% endif %}">${{ b.margin|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-sm text-gray-600">No businesses with a plan yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

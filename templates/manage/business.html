@@ -56,7 +56,6 @@
       <li class="flex justify-between py-1.5"><span>Status</span><span>{{ d.subscription.get_status_display }}</span></li>
       {% if d.subscription.trial_ends_at %}<li class="flex justify-between py-1.5"><span>Trial ends</span><span>{{ d.subscription.trial_ends_at|date:"j M Y" }}</span></li>{% endif %}
       <li class="flex justify-between py-1.5"><span>Period ends</span><span>{{ d.subscription.current_period_end|date:"j M Y"|default:"—" }}</span></li>
-      <li class="flex justify-between py-1.5"><span>Usage this month</span><span>{{ d.conversations_used }} conversations · {{ d.emails_used }} emails</span></li>
     </ul>
     {% else %}<p class="text-sm text-gray-600">No subscription yet.</p>{% endif %}
     <form method="post" action="{% url 'core:business-action' business.pk 'subscription' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
@@ -64,6 +63,34 @@
       <label class="text-sm">Status <select name="status" class="input">{% for v, t in d.statuses %}<option value="{{ v }}" {% if d.subscription.status == v %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
       <button class="btn btn-primary btn-sm">Set plan &amp; status</button>
     </form>
+    <p class="text-sm">Cost to Akilent this month: <strong>${{ d.cost.total|floatformat:2 }}</strong>
+      ({% for line in d.cost.lines %}{{ line.units }} {{ line.driver.unit }}{{ line.units|pluralize }} ${{ line.cost|floatformat:2 }}, {% endfor %}fixed ${{ d.cost.fixed|floatformat:2 }})
+      · pays ${{ d.cost.price|floatformat:2 }} ·
+      <span class="{% if d.cost.margin < 0 %}text-red-700 font-medium{% endif %}">margin ${{ d.cost.margin|floatformat:2 }}</span>
+      · <a class="text-accent" href="{% url 'core:plan-costs' %}">costs</a></p>
+    <h2 class="font-semibold pt-2">Usage &amp; limits</h2>
+    <ul class="text-sm divide-y divide-border">
+      {% for u in d.usage %}
+      <li class="py-1.5" x-data="{ open: false }">
+        <div class="flex items-center justify-between gap-2">
+          <span class="min-w-0"><span class="text-ink">{{ u.name }}</span>
+            <span class="text-xs text-gray-500">·
+              {% if u.period != "per_use" %}{{ u.used }} used{% if u.period == "month" %} this month{% elif u.period == "day" %} today{% endif %} ·{% endif %}
+              {% if u.limit < 0 %}unlimited{% else %}limit {{ u.limit }}{% endif %}
+              ({% if u.source == "override" %}this business{% elif u.source == "plan" %}plan{% else %}default{% endif %}){% if u.cost_bearing %} · costs Akilent{% endif %}</span></span>
+          <button type="button" class="btn btn-ghost btn-sm" @click="open = !open" :aria-expanded="open">Change</button>
+        </div>
+        <form x-show="open" x-cloak method="post" action="{% url 'core:business-action' business.pk 'limit' %}" class="mt-2 flex flex-wrap items-end gap-2">{% csrf_token %}
+          <input type="hidden" name="key" value="{{ u.key }}">
+          <label class="text-xs">Limit <input type="number" name="value" min="-1" value="{{ u.limit }}" class="input w-28"></label>
+          <label class="text-xs">For days <input type="number" name="days" min="1" placeholder="always" class="input w-24"></label>
+          <label class="text-xs grow">Why <input name="note" class="input" maxlength="255" placeholder="e.g. launch week for this pilot"></label>
+          <button name="change" value="set" class="btn btn-secondary btn-sm">Set for this business</button>
+          {% if u.source == "override" %}<button name="change" value="reset" class="btn btn-ghost btn-sm">Follow the plan</button>{% endif %}
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
     {% if d.subscription %}
     <form method="post" action="{% url 'core:business-action' business.pk 'extend_trial' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
       <label class="text-sm">Extend trial by <input type="number" name="days" value="7" min="1" max="90" class="input w-24"> days</label>

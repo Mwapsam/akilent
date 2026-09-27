@@ -139,6 +139,17 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
                 status=429,
             )
 
+    from apps.billing import api as billing_api
+
+    allowed = billing_api.limit(account, "verification_codes_month")
+    if allowed >= 0 and billing_api.used(account, "verification_codes_month") >= allowed:
+        # Said up front, so the caller's system can react now instead of polling a held code.
+        raise VerificationCodeError(
+            "plan_limit",
+            f"This month's {allowed:,} verification codes on your plan are used up. Upgrade to send more.",
+            status=429,
+        )
+
     if dry_run:
         return {"id": None, "status": "test", "to": phone, "template": template.whatsapp_template_name,
                 "language": template.language_code, "expires_in_minutes": minutes, "test": True}
@@ -206,7 +217,7 @@ def status_of(msg) -> dict:
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
     }
-    if msg.status == OutboundMessage.Status.FAILED:
+    if msg.status in (OutboundMessage.Status.FAILED, OutboundMessage.Status.HELD, OutboundMessage.Status.UNCONFIRMED):
         body["error"] = {"code": msg.error_code or (msg.last_error or "").split(":")[0],
                          "message": friendly_send_error(msg.error_code or (msg.last_error or "").split(":")[0])}
     return body

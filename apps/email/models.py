@@ -802,6 +802,8 @@ class BulkEmailRecipient(models.Model):
         QUEUED = "queued", "Queued"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
+        # Deliberately not attempted because the plan's email limit was reached: not a failure.
+        HELD = "held", "Held (plan limit)"
 
     campaign = models.ForeignKey(
         BulkEmailCampaign, on_delete=models.CASCADE, related_name="recipients"

@@ -31,6 +31,10 @@ class SendResult:
     metadata: dict = None
     """Extra data from the provider (e.g., timestamp, cost, etc.)."""
 
+    ambiguous: bool = False
+    """The request may have reached Meta (e.g. a read timeout): it might have been sent, so it
+    must not be sent again automatically."""
+
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}

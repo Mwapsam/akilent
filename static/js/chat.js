@@ -2,7 +2,7 @@
  * ones, and sends replies without a page reload. Config comes from a
  * json_script block: { messages, lastId, feedUrl, open }. */
 document.addEventListener('alpine:init', () => {
-  const STATUS_LABELS = { queued: 'Sending…', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed' };
+  const STATUS_LABELS = { queued: 'Sending…', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed', held: 'Held (plan limit)', unconfirmed: 'Not confirmed' };
   const BASE_INTERVAL = 3000;
   const MAX_INTERVAL = 30000;
 
@@ -43,7 +43,7 @@ document.addEventListener('alpine:init', () => {
           out.push({ key: 'day-' + key, type: 'day', label: this.dayLabel(d) });
           lastDay = key;
         }
-        out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true, showFailure: m.status === 'failed' });
+        out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true, showFailure: m.status === 'failed' || m.status === 'held' || m.status === 'unconfirmed' });
       }
       // Only the last message of a same-direction, same-minute run shows its meta line.
       for (let i = 0; i < out.length - 1; i++) {

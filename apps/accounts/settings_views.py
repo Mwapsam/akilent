@@ -286,6 +286,13 @@ def invite_create(request):
         invite.invited_by = request.user
         invite.save(update_fields=["role", "invited_by"])
     else:
+        from apps.billing import api as billing_api
+
+        try:
+            billing_api.require_room(account, "team_members")
+        except billing_api.LimitReached as exc:
+            messages.error(request, str(exc))
+            return redirect("settings-team")
         invite = Invitation.objects.create(
             account=account, email=email, role=role, invited_by=request.user
         )

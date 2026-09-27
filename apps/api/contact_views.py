@@ -71,6 +71,13 @@ class ContactCollectionView(BaseApiView):
         if not email:
             return Response({"error": {"code": "validation_error", "message": "email is required"}},
                             status=status.HTTP_400_BAD_REQUEST)
+        from apps.contacts.services import ContactLimitReached, ensure_room_for_contact
+
+        try:
+            ensure_room_for_contact(request.user, email=email)
+        except ContactLimitReached as exc:
+            return Response({"error": {"code": "plan_limit", "message": str(exc)}},
+                            status=status.HTTP_403_FORBIDDEN)
         contact, created = upsert_contact(
             request.user, email,
             attributes=d.get("attributes") or {},

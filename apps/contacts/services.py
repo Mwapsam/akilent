@@ -5,6 +5,7 @@ import csv
 import io
 import logging
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.contacts.models import Contact, ContactEvent, ContactImport
@@ -35,6 +36,31 @@ def _normalize_phone_soft(raw: str) -> str:
     except Exception:
         logger.warning("import_csv: could not normalize phone %r; storing as-is", raw)
         return raw
+
+
+class ContactLimitReached(ValueError):
+    """Adding another customer by hand, import or API would pass the plan's limit."""
+
+
+def ensure_room_for_contact(account, *, email: str | None = None, phone: str | None = None) -> None:
+    """Raise ContactLimitReached if this would add a NEW customer past the plan's limit.
+
+    Only for deliberate adds (the form, CSV import, the API). A customer who messages the
+    business is always added: a commercial limit never loses a conversation.
+    """
+    from apps.billing import api as billing_api
+
+    exists = Q()
+    if email:
+        exists |= Q(email__iexact=email.strip())
+    if phone:
+        exists |= Q(phone=phone)
+    if exists and Contact.objects.filter(exists, account=account).exists():
+        return
+    try:
+        billing_api.require_room(account, "contacts")
+    except billing_api.LimitReached as exc:
+        raise ContactLimitReached(str(exc)) from exc
 
 
 def upsert_contact(account, email: str, *, attributes: dict | None = None, **fields) -> tuple[Contact, bool]:
@@ -194,6 +220,11 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
                 fields["phone"] = _normalize_phone_soft(val)
             elif dst in {"first_name", "last_name", "locale"}:
                 fields[dst] = val
+        try:
+            ensure_room_for_contact(account, email=email)
+        except ContactLimitReached:
+            skipped += 1  # the plan's customer limit: the rest of the file is still read
+            continue
         try:
             _, was_created = upsert_contact(account, email, attributes=attributes, **fields)
             created += was_created

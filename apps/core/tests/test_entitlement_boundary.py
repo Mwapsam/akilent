@@ -12,10 +12,13 @@ from pathlib import Path
 
 APPS = Path(__file__).resolve().parents[2]
 
-# Old Plan capability columns (apps.billing.features.LEGACY_FLAGS plus the unenforced one).
+# Old Plan capability columns (apps.billing.features.LEGACY_FLAGS plus the unenforced one), and
+# the old limit columns: limits come from billing_api.limit(account, key), never a Plan column.
 PLAN_FLAGS = {
     "email_apis", "email_templates", "bulk_email", "tracking_webhooks", "outbound_webhooks",
     "detailed_analytics", "has_priority_support", "inbound_email",
+    "max_conversations_per_month", "max_emails_per_month", "max_automation_rules",
+    "max_whatsapp_numbers", "max_bulk_recipients_per_campaign",
 }
 REMOVED_API = {"module_enabled", "has_feature", "set_module_enabled", "enable_module"}
 

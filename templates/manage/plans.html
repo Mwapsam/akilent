@@ -9,6 +9,8 @@
   </div>
   <div class="flex gap-2">
     <a href="{% url 'core:plan-features' %}" class="btn btn-secondary btn-sm">Features in each plan</a>
+    <a href="{% url 'core:plan-limits' %}" class="btn btn-secondary btn-sm">Plan limits</a>
+    <a href="{% url 'core:plan-costs' %}" class="btn btn-secondary btn-sm">Costs &amp; margin</a>
     <button class="btn btn-primary btn-sm" @click="create = true">{% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add package</button>
   </div>
 

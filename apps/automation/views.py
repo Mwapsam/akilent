@@ -73,6 +73,17 @@ def workflow_list(request):
     })
 
 
+def _no_room_redirect(request, account, slug):
+    """A redirect with the reason when turning this automation on would pass the plan's limit,
+    else None."""
+    try:
+        automation_api.ensure_room_to_turn_on(account, Workflow.objects.filter(account=account, slug=slug).first())
+    except automation_api.AutomationLimitReached as exc:
+        messages.error(request, str(exc))
+        return redirect("automation:list")
+    return None
+
+
 def wa_variables_choices():
     from apps.automation.variables import CHOICES
 
@@ -176,6 +187,8 @@ def starter_install(request):
         messages.error(request, "Fill in what should go in every blank of the message.")
         return redirect("automation:list")
 
+    if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
+        return stop
     automation_api.upsert_published_workflow(
         account,
         slug=starter["key"],
@@ -205,6 +218,8 @@ def _install_team_starter(request, account, starter):
         messages.error(request, "Keep the message under 1000 characters.")
         return redirect("automation:list")
     notify = "owners" if request.POST.get("notify_to") == "owners" else "assignee"
+    if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
+        return stop
     automation_api.upsert_published_workflow(
         account, slug=starter["key"], name=starter["name"],
         definition=build_team_definition(
@@ -242,6 +257,8 @@ def _install_menu_starter(request, account, starter):
     except wa_interactive.InteractiveError as exc:
         messages.error(request, str(exc))
         return redirect("automation:list")
+    if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
+        return stop
     automation_api.upsert_published_workflow(
         account, slug=starter["key"], name=starter["name"],
         definition=build_menu_definition(starter, question=question, options=options),
@@ -279,6 +296,8 @@ def _install_reply_starter(request, account, starter):
             return redirect("automation:list")
     # The "then" checkboxes: an old form without them keeps the starter's default (tag on).
     from_recipe = request.POST.get("then_present") == "1"
+    if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
+        return stop
     automation_api.upsert_published_workflow(
         account, slug=starter["key"], name=starter["name"],
         definition=build_reply_definition(
@@ -511,6 +530,11 @@ def workflow_publish(request, slug: str):
             "Fix the workflow before publishing: " + "; ".join(e["message"] for e in blocking[:3]),
         )
         return redirect("automation:editor", slug=wf.slug)
+    try:
+        automation_api.ensure_room_to_turn_on(account, wf)
+    except automation_api.AutomationLimitReached as exc:
+        messages.error(request, str(exc))
+        return redirect("automation:editor", slug=wf.slug)
     if wf.status != Workflow.Status.PUBLISHED:
         wf.version += 1
     wf.status = Workflow.Status.PUBLISHED
@@ -563,6 +587,11 @@ def workflow_resume(request, slug: str):
                     if e.get("severity", "error") != "warning"]
         if blocking:
             messages.error(request, f"{wf.name} can't be turned on yet: {blocking[0]['message']}")
+            return redirect("automation:list")
+        try:
+            automation_api.ensure_room_to_turn_on(account, wf)
+        except automation_api.AutomationLimitReached as exc:
+            messages.error(request, str(exc))
             return redirect("automation:list")
         wf.status = Workflow.Status.PUBLISHED
         wf.save(update_fields=["status", "updated_at"])

@@ -1,0 +1,16 @@
+{% comment %}Limits at 80% or more this period (billing_api.usage_warnings). Shared by the dashboard
+and the billing page. Pass usage_warnings.{% endcomment %}
+{% for w in usage_warnings %}
+<div class="alert {% if w.percent >= 100 %}alert-danger{% else %}alert-warning{% endif %}" role="status">
+  {% include "components/icon.html" with name="alert" %}
+  <div>
+    {% if w.percent >= 100 %}
+    <p class="font-medium">You've used all {{ w.limit }} {{ w.unit }} your plan includes ({{ w.name|lower }}).</p>
+    <p class="mt-0.5">Anything more is held, not sent and not lost, until it resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> to send more.</p>
+    {% else %}
+    <p class="font-medium">You've used {{ w.percent }}% of your {{ w.name|lower }} ({{ w.used }} of {{ w.limit }}).</p>
+    <p class="mt-0.5">It resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">See your usage</a>.</p>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}

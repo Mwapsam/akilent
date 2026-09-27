@@ -133,6 +133,29 @@ def _send_sandbox_message(msg: EmailMessage, text_body: str, html_body: str) -> 
         record_message_event(msg, event_type, source="sandbox")
 
 
+def _quota_operation(msg: EmailMessage) -> str:
+    """The usage-reservation operation id this message's quota was reserved under: per
+    campaign recipient for a campaign (stable across a re-dispatched chunk), per message for an
+    API send."""
+    if msg.campaign_id:
+        recipient_id = BulkEmailRecipient.objects.filter(message=msg).values_list("pk", flat=True).first()
+        if recipient_id:
+            return f"email-recipient:{recipient_id}"
+    return f"email:{msg.public_id}"
+
+
+def _settle_quota(msg: EmailMessage, *, ok: bool) -> None:
+    """Commit the message's reserved quota (sent) or give it back (never delivered)."""
+    if getattr(msg, "key_mode", "live") == "test":
+        return
+    try:
+        from apps.billing.limits import LimitChecker
+
+        LimitChecker(msg.account).settle_email(_quota_operation(msg), ok=ok)
+    except Exception:
+        logger.exception("_settle_quota: couldn't settle quota for EmailMessage %s", msg.pk)
+
+
 def _drop_message(msg: EmailMessage, reason: str) -> None:
     """Permanently fail a message without retrying, releasing its quota.
 
@@ -147,12 +170,7 @@ def _drop_message(msg: EmailMessage, reason: str) -> None:
             status=BulkEmailRecipient.Status.FAILED, error=reason[:5000]
         )
         _maybe_complete_campaign(msg.campaign)
-    try:
-        from apps.billing.limits import LimitChecker
-
-        LimitChecker(msg.account).release_email()
-    except Exception:
-        logger.exception("_drop_message: quota release failed for %s", msg.pk)
+    _settle_quota(msg, ok=False)
 
 
 def _send_email_message(
@@ -181,6 +199,7 @@ def _send_email_message(
     if is_suppressed(msg.account, msg.to_email):
         logger.info("Refusing to send: %s is suppressed", msg.to_email)
         msg.mark_failed("Recipient is suppressed (bounce, complaint, or unsubscribe)")
+        _settle_quota(msg, ok=False)
         return
 
     # Reputation circuit breaker — a halted account's marketing/transactional
@@ -252,6 +271,7 @@ def _send_email_message(
             attachments=att_objs,
         ))
         msg.mark_sent(result.provider_message_id)
+        _settle_quota(msg, ok=True)
         record_send(msg.account)
         if msg.campaign_id:
             msg.campaign.increment_counts(sent=1)
@@ -266,15 +286,7 @@ def _send_email_message(
         if is_last:
             # Quota was reserved at accept time (LimitChecker.check_email); a
             # message that never gets delivered shouldn't permanently burn it.
-            try:
-                from apps.billing.limits import LimitChecker
-
-                LimitChecker(msg.account).release_email()
-            except Exception:
-                logger.exception(
-                    "_send_email_message: failed to release quota for EmailMessage %s",
-                    msg.pk,
-                )
+            _settle_quota(msg, ok=False)
             if msg.campaign_id:
                 msg.campaign.increment_counts(failed=1)
                 BulkEmailRecipient.objects.filter(message=msg).update(
@@ -411,13 +423,11 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     then re-enqueues itself if more remain. Keeps each task run bounded and
     restart-safe if a worker dies mid-campaign.
 
-    Quota is reserved per chunk (LimitChecker.reserve_bulk) with partial-send
-    semantics: recipients beyond the account's remaining monthly quota are
-    marked FAILED with a quota-exceeded error, but the rest of the chunk (and
-    campaign) still proceeds.
+    Quota is reserved per recipient (emails this month and today) with partial-send
+    semantics: recipients beyond the account's remaining quota are marked HELD
+    (not attempted, not failed), and the rest of the chunk (and campaign) still
+    proceeds.
     """
-    from apps.billing.limits import LimitChecker
-
     try:
         campaign = BulkEmailCampaign.objects.select_related("account", "domain", "template").get(
             pk=campaign_id
@@ -510,17 +520,23 @@ def dispatch_campaign(self, campaign_id: int) -> None:
         )
         campaign.increment_counts(failed=len(failed_recipients))
 
-    granted = LimitChecker(campaign.account).reserve_bulk(len(to_process))
-    to_send, to_fail = to_process[:granted], to_process[granted:]
+    # One reservation per recipient, under a stable id, so a chunk re-dispatched after a crash
+    # doesn't count anyone twice. Recipients past the limit are held (not attempted, not failed).
+    from apps.billing import api as billing_api
+    from apps.billing.limits import EMAIL_LIMITS
 
-    if to_fail:
+    to_send, to_hold = [], []
+    for r in to_process:
+        taken = billing_api.reserve_all(campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}")
+        (to_send if taken is not None else to_hold).append(r)
+
+    if to_hold:
         BulkEmailRecipient.objects.filter(
-            pk__in=[r.pk for r in to_fail]
+            pk__in=[r.pk for r in to_hold]
         ).update(
-            status=BulkEmailRecipient.Status.FAILED,
-            error="Monthly email limit reached.",
+            status=BulkEmailRecipient.Status.HELD,
+            error="Held: your plan's email limit was reached. Not sent; nothing was lost.",
         )
-        campaign.increment_counts(failed=len(to_fail))
 
     if to_send:
         messages = [

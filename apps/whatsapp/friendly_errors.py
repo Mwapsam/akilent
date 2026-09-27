@@ -31,6 +31,10 @@ _GRAPH_ERRORS = {
 
 # Our own policy codes, raised before a send is even attempted (SendNotAuthorized.code).
 _POLICY_ERRORS = {
+    "PLAN_LIMIT": "Held, not sent: your plan's WhatsApp message limit for this month is used up. "
+                  "Nothing was lost. It resets on the 1st, or upgrade to send more.",
+    "UNCONFIRMED": "WhatsApp didn't confirm this message, so it may or may not have arrived. "
+                   "It won't be resent automatically, so it can't arrive twice.",
     "OUTSIDE_WINDOW_NO_TEMPLATE": "This customer hasn't messaged in the last 24 hours, so "
                                    "WhatsApp only allows an approved message template, not "
                                    "a plain reply.",

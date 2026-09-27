@@ -132,6 +132,19 @@ def _act_feature(request, account):
             "reset": f"{name} follows the plan again."}[change]
 
 
+def _act_limit(request, account):
+    """Set or clear this business's own limit. The audit row keeps the value before."""
+    key, change = request.POST.get("key", ""), request.POST.get("change", "")
+    before, name = business.set_limit(account, key, change, value=request.POST.get("value", ""),
+                                      note=request.POST.get("note", ""), days=request.POST.get("days", ""),
+                                      by=request.user)
+    audit(request, "business.limit.override" if change == "set" else "business.limit.reset", account, target=key,
+          key=key, old_value=before["value"], old_source=before["source"],
+          new_value=request.POST.get("value") if change == "set" else None,
+          note=request.POST.get("note", "").strip(), days=request.POST.get("days", ""))
+    return f"{name}: now {request.POST.get('value')} for this business." if change == "set" else f"{name} follows the plan again."
+
+
 def _act_retry_registration(request, account):
     number = business.retry_registration(account, request.POST.get("number"))
     audit(request, "whatsapp.retry_registration", account, target=number)
@@ -246,6 +259,7 @@ ACTIONS = {
     "subscription": ("billing", _act_subscription),
     "extend_trial": ("billing", _act_extend_trial),
     "feature": ("billing", _act_feature),
+    "limit": ("billing", _act_limit),
     "retry_registration": ("whatsapp", _act_retry_registration),
     "sync_templates": ("whatsapp", _act_sync_templates),
     "retry_send": ("whatsapp", _act_retry_send),
@@ -411,6 +425,93 @@ def plan_features(request):
         "core": billing_api.core_features(),
         "not_sold": [f for f in catalog.FEATURES if f.availability == catalog.NOT_SOLD],
         "coming_soon": billing_api.coming_soon_features(),
+    })
+
+
+@admin_required
+def plan_limits(request):
+    """How much each plan allows. Same flow as the feature matrix: a save shows the changes and
+    how many businesses each reaches; nothing changes until "Apply"."""
+    from apps.billing import api as billing_api
+    from apps.billing import limit_catalog
+
+    plans_list = list(Plan.objects.order_by("price_monthly"))
+    matrix = billing_api.plan_limit_matrix()
+    changes, risks = None, []
+    if request.method == "POST":
+        wanted: dict = {}
+        for name, raw in request.POST.items():
+            parts = name.split(":")
+            if len(parts) == 3 and parts[0] == "l" and parts[1].isdigit() and parts[2] in limit_catalog.BY_KEY:
+                try:
+                    wanted.setdefault(int(parts[1]), {})[parts[2]] = max(-1, int(raw))
+                except ValueError:
+                    continue
+        changes = billing_api.diff_plan_limits(wanted)
+        # Only plans this save changes are checked: an existing plan isn't re-litigated on every save.
+        risks = [{"plan": c["plan"], "reasons": billing_api.loss_reasons(c["plan"], limit_overrides=wanted[c["plan"].pk])}
+                 for c in changes]
+        risks = [r for r in risks if r["reasons"]]
+        if request.POST.get("apply") == "1" and risks and request.POST.get("accept_loss") != "on":
+            messages.error(request, "These limits let a paid plan lose money. Tick \"I accept\" to apply them anyway.")
+        elif request.POST.get("apply") == "1":
+            for r in risks:
+                audit(request, "plan.loss_acknowledged", target=r["plan"].slug, reasons=r["reasons"])
+            applied = billing_api.apply_plan_limits(wanted)
+            for change in applied:
+                for row in change["limits"]:
+                    audit(request, "plan.limit.change", target=f"{change['plan'].slug}:{row['key']}",
+                          plan=change["plan"].slug, key=row["key"], old=row["old"], new=row["new"],
+                          businesses=change["businesses"])
+            messages.success(request, "Plan limits updated." if applied else "Nothing changed.")
+            return redirect("core:plan-limits")
+        if not changes:
+            messages.info(request, "Nothing changed.")
+            return redirect("core:plan-limits")
+        for plan_id, values in wanted.items():
+            matrix.setdefault(plan_id, {}).update(values)
+
+    rows = [{"limit": lim, "cells": [{"plan": p, "value": matrix.get(p.pk, {}).get(lim.key, lim.default)}
+                                     for p in plans_list]}
+            for lim in limit_catalog.LIMITS]
+    return render(request, "manage/plan_limits.html", {"plans": plans_list, "rows": rows, "changes": changes,
+                                                       "risks": risks})
+
+
+@admin_required
+def plan_costs(request):
+    """Unit economics: what Akilent pays per email and AI action, each plan's worst-case cost and
+    margin, and what each business actually cost this month (loss-making first). WhatsApp is never
+    a cost here: Meta bills each business directly."""
+    from decimal import Decimal, InvalidOperation
+
+    from apps.billing import api as billing_api
+
+    if request.method == "POST":
+        try:
+            costs = {d.key: Decimal(request.POST.get(f"cost:{d.key}") or "0") for d in billing_api.COST_DRIVERS}
+            fixed = Decimal(request.POST.get("fixed") or "0")
+            target = int(request.POST.get("target") or 50)
+            if any(v < 0 for v in costs.values()) or fixed < 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            messages.error(request, "Enter costs as numbers of 0 or more, e.g. 0.0001.")
+            return redirect("core:plan-costs")
+        before = {"costs": {k: str(v) for k, v in billing_api.unit_costs().items()},
+                  "fixed": str(billing_api.cost_settings().fixed_monthly_cost_per_business)}
+        billing_api.save_cost_settings(unit_costs_by_driver=costs, fixed=fixed, target_margin_pct=target)
+        audit(request, "costs.save", old=before, new={"costs": {k: str(v) for k, v in costs.items()},
+                                                       "fixed": str(fixed), "target": target})
+        messages.success(request, "Costs saved.")
+        return redirect("core:plan-costs")
+
+    return render(request, "manage/plan_costs.html", {
+        "drivers": billing_api.COST_DRIVERS,
+        "driver_costs": [{"driver": d, "cost": cost} for d, cost in
+                         zip(billing_api.COST_DRIVERS, billing_api.unit_costs().values())],
+        "settings": billing_api.cost_settings(),
+        "plans": [billing_api.plan_economics(p) for p in Plan.objects.order_by("price_monthly")],
+        "businesses": billing_api.businesses_by_margin(),
     })
 
 

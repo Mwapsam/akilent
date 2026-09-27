@@ -23,6 +23,16 @@ from django.db import transaction
 
 from apps.accounts.models import Account
 from apps.billing import features as catalog
+from apps.billing import limit_catalog
+# Unit economics live in costs.py; re-exported for the Operator Console.
+from apps.billing.costs import (  # noqa: F401
+    DRIVERS as COST_DRIVERS, actual_cost, businesses_by_margin, loss_reasons, plan_economics, unit_costs,
+)
+# Limits and usage live in metering.py; re-exported here because other apps only import billing.api.
+from apps.billing.metering import (  # noqa: F401
+    LimitReached, check_rule, commit, count, limit, limit_source, release, require_room, reserve,
+    reserve_all, settle_operation, usage_report, used, warnings as usage_warnings,
+)
 from apps.billing.models import (
     AccountFeatureOverride, ComingSoonFeature, ModuleSubscription, Plan, PlanFeature, Subscription,
     UsageSummary,
@@ -255,23 +265,144 @@ def apply_plan_features(wanted: dict) -> list[dict]:
     return changes
 
 
+# ---- limits and usage (see apps.billing.metering for the reservation contract) ------------------
+
+def whatsapp_limit_for(category: str, *, verification_code: bool = False) -> str:
+    """Which monthly limit a WhatsApp template send of ``category`` uses."""
+    if verification_code:
+        return "verification_codes_month"
+    return limit_catalog.TEMPLATE_CATEGORY_LIMIT.get((category or "").lower(), "whatsapp_utility_msgs")
+
+
+def count_conversation(account: Account) -> None:
+    """A customer opened a new 24h conversation window. Counted, never blocked (SOFT)."""
+    count(account, "conversations_month")
+
+
+def plan_limit_matrix() -> dict:
+    """{plan_id: {key: value}} for every plan, for the Operator Console limits page."""
+    from apps.billing.models import PlanLimit
+
+    matrix: dict = {p.pk: {} for p in Plan.objects.all()}
+    for plan_id, key, value in PlanLimit.objects.values_list("plan_id", "key", "value"):
+        matrix.setdefault(plan_id, {})[key] = value
+    return matrix
+
+
+def diff_plan_limits(wanted: dict) -> list[dict]:
+    """What applying ``wanted`` ({plan_id: {key: value}}) would change, per plan, with how many
+    businesses are on it. Nothing is written."""
+    current = plan_limit_matrix()
+    plans = {p.pk: p for p in Plan.objects.all()}
+    changes = []
+    for plan_id, values in wanted.items():
+        if plan_id not in plans:
+            continue
+        rows = []
+        for key, value in values.items():
+            if key not in limit_catalog.BY_KEY:
+                continue
+            old = current.get(plan_id, {}).get(key, limit_catalog.get(key).default)
+            if old != value:
+                rows.append({"key": key, "name": limit_catalog.get(key).name, "old": old, "new": value})
+        if rows:
+            changes.append({"plan": plans[plan_id], "limits": rows,
+                            "businesses": Subscription.objects.filter(plan_id=plan_id).count()})
+    return changes
+
+
+@transaction.atomic
+def apply_plan_limits(wanted: dict) -> list[dict]:
+    from apps.billing.models import PlanLimit
+
+    changes = diff_plan_limits(wanted)
+    for change in changes:
+        for row in change["limits"]:
+            PlanLimit.objects.update_or_create(plan=change["plan"], key=row["key"], defaults={"value": row["new"]})
+    return changes
+
+
+def save_cost_settings(*, unit_costs_by_driver: dict, fixed, target_margin_pct: int) -> None:
+    """Set what Akilent pays per unit (email, AI action), the fixed cost per business and the
+    target margin."""
+    from apps.billing.models import CostSettings, UnitCost
+
+    for driver, value in unit_costs_by_driver.items():
+        if driver in {d.key for d in COST_DRIVERS}:
+            UnitCost.objects.update_or_create(driver=driver, defaults={"cost_per_unit": value})
+    settings = CostSettings.load()
+    settings.fixed_monthly_cost_per_business = fixed
+    settings.target_margin_pct = max(0, min(100, int(target_margin_pct)))
+    settings.save()
+
+
+def cost_settings():
+    from apps.billing.models import CostSettings
+
+    return CostSettings.load()
+
+
+def set_limit_override(account: Account, key: str, *, value: int, note: str, by=None, expires_at=None) -> dict:
+    """Give one business a different limit than its plan. Returns the state before (for audit)."""
+    from apps.billing.models import AccountLimitOverride
+
+    limit_catalog.get(key)
+    note = (note or "").strip()
+    if not note:
+        raise FeatureError("Add a note saying why.")
+    if value < -1:
+        raise FeatureError("Use -1 for unlimited, or 0 or more.")
+    old, source = limit_source(account, key)
+    AccountLimitOverride.objects.update_or_create(account=account, key=key, defaults={
+        "value": value, "note": note[:255], "set_by": by, "expires_at": expires_at})
+    return {"value": old, "source": source}
+
+
+def clear_limit_override(account: Account, key: str) -> dict:
+    from apps.billing.models import AccountLimitOverride
+
+    old, source = limit_source(account, key)
+    AccountLimitOverride.objects.filter(account=account, key=key).delete()
+    return {"value": old, "source": source}
+
+
 # ---- pricing ------------------------------------------------------------------------------------
 
 def _limit_line(value: int, unit: str) -> str:
     return f"Unlimited {unit}" if value == -1 else f"{value:,} {unit}"
 
 
+# (limit key, pricing label, WhatsApp only, shown even when unlimited). Others show only if capped.
+_PRICING_LIMITS = (
+    ("whatsapp_numbers", "WhatsApp numbers", True, True),
+    ("conversations_month", "conversations/mo", True, True),
+    ("whatsapp_marketing_msgs", "WhatsApp marketing messages/mo", True, False),
+    ("whatsapp_utility_msgs", "WhatsApp utility messages/mo", True, False),
+    ("verification_codes_month", "verification codes/mo", True, False),
+    ("emails_month", "emails/mo", False, True),
+    ("emails_day", "emails/day", False, False),
+    ("ai_actions_day", "AI actions/day", False, False),
+    ("automation_rules", "active automations", False, False),
+    ("contacts", "customers", False, False),
+    ("team_members", "team members", False, False),
+)
+
+
 def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
     """What a pricing card says about ``plan``: its limits, the features it includes in catalog
     order, and coming-soon teasers. The pricing page, signup wizard and landing page all use it,
     so what's advertised is what the plan gives."""
+    from apps.billing.models import PlanLimit
+
     keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
+    values = dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
     limits = []
-    if whatsapp:
-        limits.append(_limit_line(plan.max_whatsapp_numbers, "WhatsApp number" + ("" if plan.max_whatsapp_numbers == 1 else "s")))
-        limits.append(_limit_line(plan.max_conversations_per_month, "conversations/mo"))
-    limits.append(_limit_line(plan.max_emails_per_month, "emails/mo"))
-    limits.append(_limit_line(plan.max_automation_rules, "automation rules"))
+    for key, label, whatsapp_only, always in _PRICING_LIMITS:
+        if whatsapp_only and not whatsapp:
+            continue
+        value = values.get(key, limit_catalog.get(key).default)
+        if always or value != limit_catalog.UNLIMITED:
+            limits.append(_limit_line(value, label))
     if plan.log_retention_days:
         limits.append(f"{plan.log_retention_days} days of message history")
     included = [f for f in catalog.matrix_features()

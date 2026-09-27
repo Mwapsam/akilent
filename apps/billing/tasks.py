@@ -37,6 +37,43 @@ def reset_monthly_usage():
 
 
 @shared_task
+def commit_stale_reservations() -> int:
+    """Usage reservations a worker never settled are assumed used (cost-safe)."""
+    from apps.billing.metering import commit_stale
+
+    return commit_stale()
+
+
+@shared_task
+def send_limit_warning(account_id: int, key: str, percent: int) -> None:
+    """Tell the owner a limit is at 80% or reached, once per limit per period."""
+    from apps.accounts.models import Account
+    from apps.billing import limit_catalog
+    from apps.billing.metering import limit, period_end, used
+    from apps.email.services.send import send_system_email
+
+    account = Account.objects.filter(pk=account_id).first()
+    owner = account.owner if account else None
+    if owner is None or not owner.email:
+        return
+    lim = limit_catalog.get(key)
+    allowed, n, resets = limit(account, key), used(account, key), period_end(key)
+    if percent >= 100:
+        subject = f"You've reached your {lim.name.lower()} limit"
+        what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
+                "Anything more is held (not sent and not lost) until it resets or you upgrade.")
+    else:
+        subject = f"You've used {percent}% of your {lim.name.lower()}"
+        what = f"{account.company_name} has used {n:,} of {allowed:,} {lim.unit}."
+    body = (f"{what}\n\nIt resets on {resets:%d %B %Y}.\n\n"
+            f"See your usage or upgrade: {_absolute_url('/billing/plans/')}\n")
+    try:
+        send_system_email(owner.email, subject, text_body=body)
+    except Exception:
+        logger.exception("send_limit_warning: couldn't email the owner of account %s", account_id)
+
+
+@shared_task
 def notify_admins_of_manual_payment(request_id: int) -> None:
     """Alert admins (email + Slack) that a bank-transfer payment needs review.
 

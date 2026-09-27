@@ -11,11 +11,6 @@
 <div class="grid sm:grid-cols-2 gap-3">
   {% include "components/form_field.html" with name="name" label="Name" value=plan.name required=True %}
   {% include "components/form_field.html" with name="price_monthly" label="Price /mo (USD)" type="number" value=plan.price_monthly|default:0 %}
-  {% include "components/form_field.html" with name="max_emails_per_month" label="Max emails/mo (-1 = ∞)" type="number" value=plan.max_emails_per_month|default:0 %}
-  {% include "components/form_field.html" with name="max_bulk_recipients_per_campaign" label="Max recipients/campaign (-1 = ∞)" type="number" value=plan.max_bulk_recipients_per_campaign|default:500 %}
-  {% include "components/form_field.html" with name="max_conversations_per_month" label="Max conversations/mo" type="number" value=plan.max_conversations_per_month|default:0 %}
-  {% include "components/form_field.html" with name="max_whatsapp_numbers" label="Max WhatsApp numbers" type="number" value=plan.max_whatsapp_numbers|default:0 %}
-  {% include "components/form_field.html" with name="max_automation_rules" label="Max automation rules" type="number" value=plan.max_automation_rules|default:0 %}
   {% include "components/form_field.html" with name="trial_days" label="Trial days" type="number" value=plan.trial_days|default:0 %}
   {% include "components/form_field.html" with name="log_retention_days" label="Log retention (days)" type="number" value=plan.log_retention_days|default:0 %}
 </div>
@@ -24,5 +19,10 @@
 <label class="flex items-center gap-2 text-sm mt-3">
   <input type="checkbox" name="is_active" class="rounded border-border-strong" {% if plan.is_active or not plan %}checked{% endif %}> Active (visible to customers)
 </label>
+<label class="flex items-center gap-2 text-sm mt-2">
+  <input type="checkbox" name="accept_loss" class="rounded border-border-strong"> I accept this plan can lose money
+  <span class="text-xs text-gray-500">(only needed when its limits let a paid plan cost more than it earns; see <a class="text-accent underline" href="{% url 'core:plan-costs' %}">costs</a>)</span>
+</label>
 <p class="text-xs text-gray-500 mt-3">What this package includes is set in the
-  <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>.</p>
+  <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>, and how much it allows in
+  <a class="text-accent underline" href="{% url 'core:plan-limits' %}">plan limits</a>.</p>

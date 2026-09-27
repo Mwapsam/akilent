@@ -28,8 +28,23 @@ def _daily_key(account_id) -> str:
     return f"ai-calls:{account_id}:{timezone.now().date().isoformat()}"
 
 
-def _over_daily_limit(account_id) -> bool:
+def _over_daily_limit(account_id, operation_id: str) -> bool:
+    """Whether this AI call must not run. Two brakes:
+
+    - the plan's ``ai_actions_day`` limit, reserved under ``operation_id`` so a retried task is
+      counted once. The model call costs money whether or not the result is used, so the unit
+      is committed straight away;
+    - the site-wide AI_DAILY_CALL_LIMIT per business, a safety ceiling above every plan.
+    """
     from django.conf import settings
+
+    from apps.accounts.api import get_account
+    from apps.billing import api as billing_api
+
+    reservation = billing_api.reserve(get_account(account_id), "ai_actions_day", operation_id=operation_id)
+    if reservation is None:
+        return True
+    billing_api.commit(reservation)
 
     limit = int(getattr(settings, "AI_DAILY_CALL_LIMIT", 500) or 0)
     if limit <= 0:
@@ -68,7 +83,7 @@ def draft_proposal(self, proposal_id: int) -> str:
     if not cache.add(_lock_key(conversation.pk), proposal.pk, _LOCK_SECONDS):
         raise self.retry(countdown=5)
     try:
-        if _over_daily_limit(proposal.account_id):
+        if _over_daily_limit(proposal.account_id, f"ai-proposal:{proposal.pk}"):
             return _finish(proposal, AIProposal.Status.ERROR, error="The daily AI limit has been reached.")
         ai_settings = AISettings.objects.filter(account_id=proposal.account_id).first()
         try:
@@ -181,7 +196,7 @@ def refresh_memory(self, conversation_id: int) -> str:
     if not cache.add(_memory_lock_key(conversation_id), 1, _LOCK_SECONDS):
         return "busy"
     try:
-        if _over_daily_limit(conversation.account_id):
+        if _over_daily_limit(conversation.account_id, f"ai-memory:{self.request.id or conversation_id}"):
             return "limit"
         try:
             updated = memory.refresh(conversation, get_ai_provider(conversation.account, tier="fast"))
@@ -220,7 +235,7 @@ def build_draft(self, draft_id: int) -> str:
         draft.save(update_fields=["status", "error"])
         return "error"
 
-    if _over_daily_limit(draft.account_id):
+    if _over_daily_limit(draft.account_id, f"ai-draft:{draft.pk}"):
         return fail("The daily AI limit has been reached. Try again tomorrow.")
     try:
         drafting.run(draft, get_ai_provider(draft.account))

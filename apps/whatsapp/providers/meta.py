@@ -113,6 +113,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             err = WhatsAppProviderError(f"Failed to post message: {e}")
             err.code = ""
             err.retryable = True
+            # Only a failure to connect proves Meta never got the request; after that (a read
+            # timeout, a dropped connection) the message may have been sent.
+            err.ambiguous = not isinstance(e, requests.ConnectTimeout)
             raise err from e
 
         if response.status_code >= 400:
@@ -135,6 +138,7 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             error=str(e),
             error_code=getattr(e, "code", None) or None,
             retryable=getattr(e, "retryable", True),
+            ambiguous=getattr(e, "ambiguous", False),
         )
 
     def send_text(self, to: str, body: str) -> SendResult:

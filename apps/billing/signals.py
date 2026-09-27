@@ -23,6 +23,17 @@ def seed_new_plan_features(sender, instance, created, raw=False, **kwargs):
     PlanFeature.objects.bulk_create([PlanFeature(plan=instance, key=k) for k in sorted(keys)],
                                     ignore_conflicts=True)
 
+    # Limits, the same way migration 0022 set up existing plans: the old max_* column where one
+    # was enforced, otherwise unlimited.
+    from apps.billing.limit_catalog import LIMITS, UNLIMITED
+    from apps.billing.models import PlanLimit
+
+    PlanLimit.objects.bulk_create(
+        [PlanLimit(plan=instance, key=lim.key,
+                   value=getattr(instance, lim.legacy_column) if lim.legacy_column else UNLIMITED)
+         for lim in LIMITS],
+        ignore_conflicts=True)
+
 
 @receiver(post_save, sender="accounts.Account")
 def auto_create_trial(sender, instance, created, **kwargs):

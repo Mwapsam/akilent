@@ -60,6 +60,14 @@ def create_and_queue_campaign(
     recipient_count = contact_list.contacts.filter(account=account).count()
     if recipient_count == 0:
         raise CampaignError("This customer list is empty.")
+    from apps.billing import api as billing_api
+
+    if not billing_api.check_rule(account, "whatsapp_campaign_recipients", recipient_count):
+        cap = billing_api.limit(account, "whatsapp_campaign_recipients")
+        raise CampaignError(
+            f"This list has {recipient_count:,} customers, but your plan sends a WhatsApp campaign to "
+            f"at most {cap:,}. Choose a smaller list or upgrade your plan."
+        )
 
     campaign = WhatsAppCampaign.objects.create(
         account=account, name=name.strip() or template.name, contact_list=contact_list,

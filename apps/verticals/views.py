@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
 from apps.accounts.utils import get_current_account
+from apps.automation import api as automation_api
 from apps.verticals.registry import list_verticals
 from apps.verticals.services import VerticalNotFound, VerticalTemplateInvalid, activate_vertical, activated_vertical_keys
 
@@ -41,6 +42,8 @@ def activate(request, key: str):
     except VerticalNotFound:
         messages.error(request, "That starter pack doesn't exist.")
     except VerticalTemplateInvalid as exc:
+        messages.error(request, str(exc))
+    except automation_api.AutomationLimitReached as exc:
         messages.error(request, str(exc))
 
     return redirect("verticals:templates")

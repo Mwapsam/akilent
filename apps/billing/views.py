@@ -69,8 +69,9 @@ def pricing_page(request):
         "subscription": subscription,
         "current_plan_slug": current_plan_slug,
         "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
-        "conversations_used": UsageSummary.get_current_usage(account) if account else 0,
-        "emails_used": UsageSummary.get_current_email_usage(account) if account else 0,
+        "usage": [u for u in billing_api.usage_report(account)
+                  if u["period"] != "per_use" and (whatsapp or not u["key"].startswith(("whatsapp", "verification", "conversations")))],
+        "usage_warnings": billing_api.usage_warnings(account),
         "payments_enabled": site.payments_enabled,
         "payment_methods": enabled_payment_methods() if site.payments_enabled else [],
         "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
@@ -126,11 +127,7 @@ def _plan_form_fields(post):
         "name": (post.get("name") or "").strip(),
         "service_type": service_type,
         "price_monthly": price,
-        "max_conversations_per_month": _int("max_conversations_per_month"),
-        "max_emails_per_month": _int("max_emails_per_month"),
-        "max_automation_rules": _int("max_automation_rules"),
-        "max_whatsapp_numbers": _int("max_whatsapp_numbers"),
-        "max_bulk_recipients_per_campaign": _int("max_bulk_recipients_per_campaign", 500),
+        # Limits are set in /manage/plans/limits/ (PlanLimit), features in /manage/plans/features/.
         "trial_days": _int("trial_days"),
         "log_retention_days": _int("log_retention_days"),
         "flutterwave_plan_id": (post.get("flutterwave_plan_id") or "").strip() or None,
@@ -151,10 +148,29 @@ def plan_create(request):
     if Plan.objects.filter(slug=slug).exists():
         messages.error(request, f"A package with slug '{slug}' already exists.")
         return redirect("core:plans")
-    Plan.objects.create(slug=slug, **fields)
+    plan = Plan.objects.create(slug=slug, **fields)
     audit(request, "plan.create", target=slug)
+    reasons = _loss_check(request, plan)
+    if reasons:
+        plan.is_active = False
+        plan.save(update_fields=["is_active"])
+        messages.warning(request, f"Package '{plan.name}' created but hidden: {' '.join(reasons)} "
+                                  "Set its limits, or edit it and tick \"I accept\".")
+        return redirect("core:plans")
     messages.success(request, f"Package '{fields['name']}' created.")
     return redirect("core:plans")
+
+
+def _loss_check(request, plan, **changes) -> list:
+    """Reasons a paid, listed plan could lose money (billing_api.loss_reasons), unless the operator
+    ticked "I accept this plan can lose money" - then it's recorded and allowed."""
+    from apps.billing import api as billing_api
+
+    reasons = billing_api.loss_reasons(plan, **changes)
+    if reasons and request.POST.get("accept_loss") == "on":
+        audit(request, "plan.loss_acknowledged", target=plan.slug, reasons=reasons)
+        return []
+    return reasons
 
 
 @admin_required
@@ -164,6 +180,10 @@ def plan_edit(request, pk):
     fields = _plan_form_fields(request.POST)
     if not fields["name"]:
         messages.error(request, "Package name is required.")
+        return redirect("core:plans")
+    reasons = _loss_check(request, plan, price=fields["price_monthly"], is_active=fields["is_active"])
+    if reasons:
+        messages.error(request, f"Not saved: {' '.join(reasons)} Tick \"I accept this plan can lose money\" to save it anyway.")
         return redirect("core:plans")
     for k, v in fields.items():
         setattr(plan, k, v)
@@ -177,6 +197,12 @@ def plan_edit(request, pk):
 @require_POST
 def plan_toggle(request, pk):
     plan = get_object_or_404(Plan, pk=pk)
+    if not plan.is_active:
+        reasons = _loss_check(request, plan, is_active=True)
+        if reasons:
+            messages.error(request, f"'{plan.name}' stays hidden: {' '.join(reasons)} "
+                                    "Edit it and tick \"I accept\" to show it anyway.")
+            return redirect("core:plans")
     plan.is_active = not plan.is_active
     plan.save(update_fields=["is_active"])
     audit(request, "plan.toggle", target=plan.slug, is_active=plan.is_active)

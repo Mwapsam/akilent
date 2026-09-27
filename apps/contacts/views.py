@@ -16,7 +16,9 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import Contact, CustomAttributeDef, Tag
-from apps.contacts.services import upsert_contact, upsert_contact_by_phone
+from apps.contacts.services import (
+    ContactLimitReached, ensure_room_for_contact, upsert_contact, upsert_contact_by_phone,
+)
 from apps.email.models import EmailMessage
 
 _PAGE_SIZE = 50
@@ -183,6 +185,11 @@ def contact_create(request):
         "first_name": (request.POST.get("first_name") or "").strip(),
         "last_name": (request.POST.get("last_name") or "").strip(),
     }
+    try:
+        ensure_room_for_contact(account, email=email, phone=phone)
+    except ContactLimitReached as exc:
+        messages.error(request, str(exc))
+        return redirect("contacts:list")
     # Phone is the identity for a WhatsApp-first business; email only leads when
     # that's all we were given.
     if phone:

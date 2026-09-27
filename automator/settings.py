@@ -229,6 +229,12 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
 AI_AUTONOMY_ENABLED = os.getenv("AI_AUTONOMY_ENABLED", "true").lower() in ("1", "true", "yes")
 AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "45"))
 AI_DAILY_CALL_LIMIT = int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
+
+# Site-wide emergency brakes on WhatsApp sends across every business (a buggy loop, a compromised
+# account, a runaway automation). Not plan limits and never shown to businesses: sends over the
+# brake wait and go out once it lifts. 0 turns a window off.
+WHATSAPP_PLATFORM_MAX_PER_MINUTE = int(os.getenv("WHATSAPP_PLATFORM_MAX_PER_MINUTE", "1200"))
+WHATSAPP_PLATFORM_MAX_PER_HOUR = int(os.getenv("WHATSAPP_PLATFORM_MAX_PER_HOUR", "30000"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
@@ -485,6 +491,10 @@ CELERY_TASK_ROUTES = {
 CELERY_BEAT_SCHEDULE = {
     "expire-trials": {
         "task": "apps.billing.tasks.expire_trials",
+        "schedule": 3600.0,
+    },
+    "commit-stale-usage-reservations": {
+        "task": "apps.billing.tasks.commit_stale_reservations",
         "schedule": 3600.0,
     },
     "prune-email-logs": {

@@ -10,7 +10,7 @@ from django.utils.text import slugify
 
 from apps.billing.limits import LimitChecker
 from apps.email.exceptions import UnverifiedDomainError
-from apps.email.models import BulkEmailCampaign, EmailDomain, EmailMessage, EmailTemplate
+from apps.email.models import BulkEmailCampaign, EmailDomain, EmailMessage, EmailTemplate, _message_public_id
 from apps.email.services import render_template, validate_variables
 from apps.email.services.bulk import create_campaign
 from apps.email.tasks import send_email
@@ -133,8 +133,6 @@ def create_and_queue_message(
     lc = LimitChecker(account)
     lc.require_feature("email_apis", "the email API & SMTP relay")
     if not is_test:
-        lc.check_email()
-
         from apps.email.services.suppression import is_suppressed, record_event
         from apps.email.services.validation import validate_recipient
 
@@ -172,7 +170,14 @@ def create_and_queue_message(
 
     parsed_attachments = parse_attachments(attachments)  # raises AttachmentError
 
+    # Quota is reserved last, after every check that could still refuse the message, under the
+    # message's own id: the send task commits it when sent and releases it if never delivered.
+    public_id = _message_public_id()
+    if not is_test:
+        lc.check_email(f"email:{public_id}")
+
     msg = EmailMessage.objects.create(
+        public_id=public_id,
         account=account,
         domain=domain,
         template=template,
@@ -348,10 +353,10 @@ def create_and_queue_campaign(
             f"sending is paused for this account — sender reputation halt ({reason})"
         )
 
-    # require_feature already confirmed an active subscription exists.
-    cap = lc.subscription.plan.max_bulk_recipients_per_campaign
-    if cap != -1 and len(recipients) > cap:
-        raise RecipientCapExceededError(cap, len(recipients))
+    from apps.billing import api as billing_api
+
+    if not billing_api.check_rule(account, "email_campaign_recipients", len(recipients)):
+        raise RecipientCapExceededError(billing_api.limit(account, "email_campaign_recipients"), len(recipients))
 
     template = None
     if template_id is not None:

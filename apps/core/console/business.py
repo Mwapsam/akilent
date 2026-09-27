@@ -41,12 +41,12 @@ def overview(account) -> dict:
 
 def billing(account) -> dict:
     from apps.billing import api as billing_api
-    from apps.billing.models import ManualPaymentRequest, Plan, Subscription, UsageSummary
+    from apps.billing.models import ManualPaymentRequest, Plan, Subscription
 
     return {
         "subscription": billing_api.get_subscription(account),
-        "emails_used": UsageSummary.get_current_email_usage(account),
-        "conversations_used": UsageSummary.get_current_usage(account),
+        "usage": billing_api.usage_report(account),
+        "cost": billing_api.actual_cost(account),
         "features": billing_api.access_report(account),
         "payments": ManualPaymentRequest.objects.filter(account=account).select_related("plan").order_by("-created_at")[:10],
         "plans": Plan.objects.order_by("price_monthly"),
@@ -230,6 +230,28 @@ def set_feature(account, key: str, change: str, *, note: str, by) -> tuple[dict,
     except billing_api.FeatureError as exc:
         raise ConsoleError(str(exc)) from exc
     return before, feature.name
+
+
+def set_limit(account, key: str, change: str, *, value: str, note: str, days: str, by) -> tuple[dict, str]:
+    """Give this business its own limit (optionally for N days), or go back to the plan's.
+    Returns (limit before, limit name)."""
+    from apps.billing import api as billing_api
+    from apps.billing import limit_catalog
+
+    lim = limit_catalog.BY_KEY.get(key)
+    if lim is None or change not in ("set", "reset"):
+        raise ConsoleError("Unknown limit or change.")
+    if change == "reset":
+        return billing_api.clear_limit_override(account, key), lim.name
+    try:
+        number = int(value)
+        expires = timezone.now() + timedelta(days=int(days)) if (days or "").strip() else None
+    except ValueError:
+        raise ConsoleError("Enter whole numbers (-1 for unlimited).")
+    try:
+        return billing_api.set_limit_override(account, key, value=number, note=note, by=by, expires_at=expires), lim.name
+    except billing_api.FeatureError as exc:
+        raise ConsoleError(str(exc)) from exc
 
 
 def retry_registration(account, number_pk) -> str:

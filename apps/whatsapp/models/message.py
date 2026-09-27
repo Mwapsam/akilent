@@ -28,12 +28,16 @@ class MessageLog(models.Model):
         DELIVERED = "delivered", "Delivered"
         READ = "read", "Read"
         FAILED = "failed", "Failed"
+        HELD = "held", "Held (plan limit)"
+        UNCONFIRMED = "unconfirmed", "May not have been sent"
 
     _STATUS_RANK = {
         Status.QUEUED: 0,
+        Status.UNCONFIRMED: 0,  # a later delivery update, if any, still wins
         Status.SENT: 1,
         Status.DELIVERED: 2,
         Status.READ: 3,
+        Status.HELD: 98,
         Status.FAILED: 99,
     }
 

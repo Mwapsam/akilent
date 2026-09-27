@@ -254,7 +254,7 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
             metadata["sent_by"] = "ai"
         elif key.startswith("wf:"):  # an automation's reply_text step (apps.automation.workflow_engine)
             metadata["sent_by"] = "automation"
-        if log.status == MessageLog.Status.FAILED:
+        if log.status in (MessageLog.Status.FAILED, MessageLog.Status.HELD, MessageLog.Status.UNCONFIRMED):
             # OutboundMessage carries the error code; MessageLog doesn't. A
             # human/template/workflow reply that fails to send is the one place
             # an agent needs a *reason*, not just "Failed" — so it's translated
@@ -315,19 +315,9 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
     phone_number_id = value["metadata"]["phone_number_id"]
 
     account = get_account_for_webhook(phone_number_id)
-
-    try:
-        from apps.billing.limits import LimitChecker, PlanLimitExceeded
-        LimitChecker(account).check_conversation()
-    except Exception as exc:
-        from apps.billing.limits import PlanLimitExceeded
-        if isinstance(exc, PlanLimitExceeded):
-            logger.warning(
-                "_handle_inbound_message: conversation limit exceeded for account %s: %s",
-                account.pk, exc,
-            )
-            return
-        logger.debug("_handle_inbound_message: limit check skipped: %s", exc)
+    # Invariant: a commercial limit never drops what a *customer* sent. The message is always
+    # stored; the conversation limit is only counted (below) and warned about. Limits may hold
+    # what the business sends, never what it receives.
 
     wa_id = message["from"]
     profile_name = (value.get("contacts") or [{}])[0].get("profile", {}).get("name")
@@ -350,13 +340,18 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
 
     msg_ts = datetime.fromtimestamp(int(message["timestamp"]), tz=dt_timezone.utc)
     conversation = Conversation.get_or_open(contact)
+    # A conversation is counted once per 24h customer-service window, not once per message. A
+    # replayed webhook finds the window already open, so it isn't counted twice.
+    opens_window = conversation.window_expires_at is None or conversation.window_expires_at <= msg_ts
     conversation.register_inbound(msg_ts)
 
-    try:
-        from apps.billing.models import UsageSummary
-        UsageSummary.increment_conversations(account)
-    except Exception as exc:
-        logger.debug("_handle_inbound_message: usage increment skipped: %s", exc)
+    if opens_window:
+        try:
+            from apps.billing import api as billing_api
+
+            billing_api.count_conversation(account)
+        except Exception as exc:
+            logger.warning("_handle_inbound_message: conversation not counted for account %s: %s", account.pk, exc)
 
     msg_type = message.get("type", "unknown")
     content = ""
@@ -605,6 +600,7 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
             err = WhatsAppProviderError(f"Send failed: {result.error}")
             err.code = result.error_code or ""
             err.retryable = result.retryable
+            err.ambiguous = getattr(result, "ambiguous", False)
             raise err
 
         return {"success": True, "message_id": result.message_id}
@@ -775,7 +771,7 @@ def _notify_terminal_failure(msg) -> None:
     downstream consumer's failure break the outbound queue) so apps.whatsapp
     doesn't need to know who's listening.
     """
-    if msg.status != OutboundMessage.Status.FAILED:
+    if msg.status not in (OutboundMessage.Status.FAILED, OutboundMessage.Status.HELD):
         return
     try:
         from apps.automation.integrations.whatsapp import mark_outbound_message_failed
@@ -785,18 +781,92 @@ def _notify_terminal_failure(msg) -> None:
         logger.exception("_notify_terminal_failure: reconciliation hook failed for message %s", msg.id)
 
 
+def _usage_limit_for(msg: OutboundMessage) -> str | None:
+    """The plan limit a send uses: template messages only (Meta's paid categories). Free-form
+    replies inside the 24h window aren't metered."""
+    payload = msg.payload or {}
+    if payload.get("type") != "template":
+        return None
+    from apps.billing import api as billing_api
+
+    category = (msg.template.category if msg.template_id and msg.template else "") or payload.get("category", "")
+    return billing_api.whatsapp_limit_for(category, verification_code=verification_codes.is_verification_code(payload))
+
+
+def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_code: str = "", error: str = "") -> None:
+    """Put a message (and its log mirror, and the inbox) into a final non-sent state."""
+    msg.status = status
+    msg.error_code = error_code[:32]
+    msg.last_error = error or None
+    msg.next_attempt_at = None
+    msg.save(update_fields=["status", "error_code", "last_error", "next_attempt_at"])
+    log = _ensure_outbound_log(msg)
+    log.status = log_status
+    log.save(update_fields=["status"])
+    project_outbound_to_inbox(log)
+
+
+def _hold(msg: OutboundMessage) -> None:
+    """The plan's limit is reached: don't attempt the send. Held, not failed; nothing lost."""
+    _settle_status(msg, OutboundMessage.Status.HELD, MessageLog.Status.HELD, error_code="PLAN_LIMIT",
+                   error="Held: the plan's WhatsApp message limit was reached.")
+    verification_codes.forget_code(msg)
+    _notify_terminal_failure(msg)
+
+
+def _unconfirmed(msg: OutboundMessage, reservation) -> None:
+    """The request may have reached Meta but no answer came back. Counted (it may have been
+    sent) and never resent automatically: resending could deliver it twice."""
+    from apps.billing import api as billing_api
+
+    billing_api.commit(reservation)
+    _settle_status(msg, OutboundMessage.Status.UNCONFIRMED, MessageLog.Status.UNCONFIRMED,
+                   error_code="UNCONFIRMED", error="No answer from WhatsApp; it may have been sent.")
+    verification_codes.forget_code(msg)
+
+
+_PLATFORM_WINDOWS = (("minute", 60, "%Y%m%d%H%M"), ("hour", 3600, "%Y%m%d%H"))
+
+
+def _platform_ceiling_reached(now) -> bool:
+    """Site-wide emergency brake on WhatsApp sends (buggy loops, a compromised account, a runaway
+    automation). Not a plan limit and never shown to businesses. 0 turns a window off."""
+    for name, ttl, fmt in _PLATFORM_WINDOWS:
+        ceiling = int(getattr(settings, f"WHATSAPP_PLATFORM_MAX_PER_{name.upper()}", 0) or 0)
+        if not ceiling:
+            continue
+        key = f"wa-platform-sends:{name}:{now.strftime(fmt)}"
+        cache.add(key, 0, ttl + 60)
+        try:
+            if cache.incr(key) > ceiling:
+                cache.decr(key)
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 @shared_task(acks_late=True, reject_on_worker_lost=True)
 def drain_outbound_queue():
     now = timezone.now()
 
-    # Recover messages left mid-flight by a crashed/killed worker.
-    recovered = OutboundMessage.objects.filter(
+    # Recover messages left mid-flight by a crashed/killed worker. A metered template may already
+    # have reached Meta, so it's marked unconfirmed instead of being sent a second time.
+    stale = list(OutboundMessage.objects.filter(
         status=OutboundMessage.Status.SENDING,
         updated_at__lt=now - _SENDING_STALE,
-    ).update(status=OutboundMessage.Status.QUEUED)
-    if recovered:
+    ).select_related("account", "contact", "template"))
+    for msg in stale:
+        if _usage_limit_for(msg):
+            from apps.billing import api as billing_api
+
+            billing_api.settle_operation(msg.account, f"wa-msg:{msg.pk}", ok=True)
+            _unconfirmed(msg, None)
+        else:
+            OutboundMessage.objects.filter(pk=msg.pk).update(status=OutboundMessage.Status.QUEUED)
+    if stale:
         logger.warning(
-            "drain_outbound_queue: recovered %s stale SENDING messages", recovered
+            "drain_outbound_queue: recovered %s stale SENDING messages", len(stale)
         )
 
     due = (
@@ -808,10 +878,14 @@ def drain_outbound_queue():
         .select_related("account", "contact")[:_OUTBOUND_BATCH]
     )
 
-    sent = failed = 0
+    from apps.billing import api as billing_api
+
+    sent = failed = held = 0
     providers: dict = {}
     numbers: dict = {}
     for msg in due:
+        reservation = None
+        limit_key = None
         try:
             provider = providers.get(msg.account_id)
             if provider is None:
@@ -824,13 +898,35 @@ def drain_outbound_queue():
 
             _authorize_send(msg)
 
+            if _platform_ceiling_reached(timezone.now()):
+                # Deferred, not failed or held: it goes out once the site-wide brake lifts.
+                OutboundMessage.objects.filter(pk=msg.pk).update(
+                    next_attempt_at=timezone.now() + timedelta(minutes=1))
+                logger.warning("drain_outbound_queue: platform send ceiling reached; deferring the rest")
+                break
+
+            # The plan's limit is reserved before the request, under the message's own id, so a
+            # retry of the same message is never counted twice.
+            limit_key = _usage_limit_for(msg)
+            if limit_key:
+                reservation = billing_api.reserve(msg.account, limit_key, operation_id=f"wa-msg:{msg.pk}",
+                                                  renew_released=True)
+                if reservation is None:
+                    _hold(msg)
+                    held += 1
+                    continue
+                if reservation.status == "committed":  # an earlier attempt may already have sent it
+                    _unconfirmed(msg, reservation)
+                    continue
+
             log = _ensure_outbound_log(msg)
 
             msg.status = OutboundMessage.Status.SENDING
-            msg.save(update_fields=["status"])
+            msg.save(update_fields=["status", "updated_at"])
 
             _throttle_for_account(msg.account, numbers)
             result = _send_outbound(provider, msg.contact, msg.payload)
+            billing_api.commit(reservation)
 
             message_id = result.get("message_id") or ""
             log.message_id = message_id or None
@@ -856,9 +952,15 @@ def drain_outbound_queue():
             _notify_terminal_failure(msg)
             failed += 1
         except Exception as exc:
+            if limit_key and reservation is not None and getattr(exc, "ambiguous", False):
+                _unconfirmed(msg, reservation)
+                failed += 1
+                continue
             code = getattr(exc, "code", "") or ""
             retryable = getattr(exc, "retryable", True)
             msg.mark_failed(str(exc), terminal=not retryable, error_code=code)
+            if msg.status == OutboundMessage.Status.FAILED:
+                billing_api.release(reservation)  # Meta refused it: the unit comes back
             if (
                 msg.message_log_id
                 and msg.status == OutboundMessage.Status.FAILED
@@ -872,8 +974,8 @@ def drain_outbound_queue():
             _notify_terminal_failure(msg)
             failed += 1
 
-    if sent or failed:
-        logger.info("drain_outbound_queue: sent=%s failed=%s", sent, failed)
+    if sent or failed or held:
+        logger.info("drain_outbound_queue: sent=%s failed=%s held=%s", sent, failed, held)
 
 
 @shared_task

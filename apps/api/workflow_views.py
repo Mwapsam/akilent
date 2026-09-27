@@ -137,6 +137,13 @@ class WorkflowPublishView(BaseApiView):
                                        "message": "workflow definition is invalid",
                                        "details": errors}},
                             status=status.HTTP_400_BAD_REQUEST)
+        from apps.automation import api as automation_api
+
+        try:
+            automation_api.ensure_room_to_turn_on(w.account, w)
+        except automation_api.AutomationLimitReached as exc:
+            return Response({"error": {"code": "plan_limit", "message": str(exc)}},
+                            status=status.HTTP_403_FORBIDDEN)
         if w.status != Workflow.Status.PUBLISHED:
             w.version += 1
         w.status = Workflow.Status.PUBLISHED

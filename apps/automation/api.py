@@ -34,22 +34,33 @@ def get_matching_rules(account: Account, trigger_event: str):
 
 
 def count_active_rules(account: Account) -> int:
-    """Count all active automation rules for an account.
+    """Automations that are on: published workflows, plus any active legacy rules.
 
-    Used by billing to enforce plan limits.
-
-    Args:
-        account: The account to query rules for
-
-    Returns:
-        Count of active rules
+    Used by billing for the plan's ``automation_rules`` limit.
     """
-    from apps.automation.models import AutomationRule
+    from apps.automation.models import AutomationRule, Workflow
 
-    return AutomationRule.objects.filter(
-        account=account,
-        is_active=True,
-    ).count()
+    return (Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).count()
+            + AutomationRule.objects.filter(account=account, is_active=True).count())
+
+
+class AutomationLimitReached(ValueError):
+    """Turning one more automation on would pass the plan's limit. The message is for the owner."""
+
+
+def ensure_room_to_turn_on(account, workflow=None) -> None:
+    """Raise AutomationLimitReached if turning ``workflow`` (or a new one) on would pass the
+    plan's active-automations limit. An automation that's already on is always fine."""
+    from apps.automation.models import Workflow
+    from apps.billing import api as billing_api
+
+    if workflow is not None and workflow.pk and workflow.status == Workflow.Status.PUBLISHED:
+        return
+    try:
+        billing_api.require_room(account, "automation_rules")
+    except billing_api.LimitReached as exc:
+        raise AutomationLimitReached(
+            f"{exc} Turn another automation off first, or upgrade your plan.") from exc
 
 
 def evaluate_conditions(rule, context: dict) -> bool:
@@ -98,6 +109,7 @@ def upsert_published_workflow(account, *, slug: str, name: str, definition: dict
     """
     from apps.automation.models import Workflow
 
+    ensure_room_to_turn_on(account, Workflow.objects.filter(account=account, slug=slug).first())
     workflow, _ = Workflow.objects.update_or_create(
         account=account, slug=slug,
         defaults={"name": name, "definition": definition, "status": Workflow.Status.PUBLISHED},
@@ -137,6 +149,10 @@ def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn
     if blocking:
         raise WorkflowNotReady(blocking[0]["message"])
     workflow = existing or Workflow(account=account, slug=slug)
+    try:
+        ensure_room_to_turn_on(account, workflow)
+    except AutomationLimitReached as exc:
+        raise WorkflowNotReady(str(exc)) from exc
     if workflow.pk and workflow.status != Workflow.Status.PUBLISHED:
         workflow.version += 1
     workflow.name, workflow.definition, workflow.status = name, definition, Workflow.Status.PUBLISHED
