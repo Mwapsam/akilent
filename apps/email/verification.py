@@ -74,10 +74,7 @@ def _refresh_zone(record: EmailDomain) -> list[str]:
 def _service(record: EmailDomain, provider):
     from apps.email.services.domain import DomainService
 
-    svc = DomainService(record.account)
-    if provider is not None:
-        svc._provider = provider
-    return svc
+    return DomainService(record.account, provider=provider)
 
 
 def _ensure_spec(record: EmailDomain, provider) -> None:

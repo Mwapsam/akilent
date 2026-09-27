@@ -119,10 +119,10 @@ def diff_dns_records(existing: dict, desired: list[DesiredRecord]) -> dict:
 class DomainService:
     """Orchestrates domain provisioning between Django and the mail provider."""
 
-    def __init__(self, account, *, actor: "AbstractBaseUser | None" = None) -> None:
+    def __init__(self, account, *, actor: "AbstractBaseUser | None" = None, provider=None) -> None:
         self.account = account
         self.actor = actor
-        self._provider = get_mail_provider()
+        self._provider = provider if provider is not None else get_mail_provider()
 
     # ── Public API ────────────────────────────────────────────────────────
 

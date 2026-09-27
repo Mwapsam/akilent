@@ -140,8 +140,7 @@ class Command(BaseCommand):
         self._print_ses_state("Current SES MAIL FROM", current)
 
         # 2. Desired DNS records diff.
-        svc = DomainService(record.account)
-        svc._provider = provider
+        svc = DomainService(record.account, provider=provider)
         try:
             diff = svc.planned_dns_records(record)
         except Exception as exc:
