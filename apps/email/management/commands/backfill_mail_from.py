@@ -139,10 +139,14 @@ class Command(BaseCommand):
 
         self._print_ses_state("Current SES MAIL FROM", current)
 
-        # 2. Desired DNS records diff.
+        # 2. Desired DNS records diff (pass the intended mail_from_domain so the
+        #    diff is meaningful even before configure_mail_from has been called).
+        requested_domain = f"{subdomain}.{domain}"
         svc = DomainService(record.account, provider=provider)
         try:
-            _desired, diff = svc.planned_dns_records(record)
+            _desired, diff = svc.planned_dns_records(
+                record, mail_from_domain=requested_domain
+            )
         except Exception as exc:
             self.stdout.write(f"  Could not compute DNS diff: {exc}")
             diff = None
@@ -154,7 +158,6 @@ class Command(BaseCommand):
             return
 
         # 3. Real run: configure MAIL FROM and sync.
-        requested_domain = f"{subdomain}.{domain}"
 
         try:
             configure_mail_from(domain, subdomain=subdomain)
