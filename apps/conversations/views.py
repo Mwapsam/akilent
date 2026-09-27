@@ -28,6 +28,7 @@ from apps.conversations.state import (
     snapshot_of,
     with_activity,
 )
+from apps.core.htmx import is_background
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ def inbox_feed(request):
         "conversations/_inbox_body.html", _inbox_context(request, account), request=request
     )
 
-    if request.headers.get("HX-Request"):
+    if is_background(request):
         digest = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]
         if request.GET.get("h") == digest:
             return HttpResponse(status=204)

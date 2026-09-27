@@ -20,6 +20,7 @@ from apps.contacts.services import (
     ContactLimitReached, ensure_room_for_contact, upsert_contact, upsert_contact_by_phone,
 )
 from apps.email.models import EmailMessage
+from apps.core.htmx import is_background
 
 _PAGE_SIZE = 50
 
@@ -61,7 +62,7 @@ def contact_list(request):
     }
     # HTMX asks for the results on its own; a full navigation gets the page.
     # Same view, same context - only the wrapper differs.
-    if request.headers.get("HX-Request"):
+    if is_background(request):
         return render(request, "contacts/_list_results.html", context)
     return render(request, "contacts/list.html", context)
 

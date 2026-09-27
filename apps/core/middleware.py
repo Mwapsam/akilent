@@ -26,7 +26,7 @@ def _open(path: str) -> bool:
 def _wants_json(request) -> bool:
     return (
         request.headers.get("x-requested-with") == "XMLHttpRequest"
-        or request.headers.get("hx-request") == "true"
+        or (request.headers.get("hx-request") == "true" and request.headers.get("hx-boosted") != "true")
         or "application/json" in request.headers.get("accept", "")
     )
 

@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from apps.accounts.utils import get_current_account
 from apps.email.models import EmailMessage, WebhookDelivery
 from apps.logs.models import ApiRequest, MessageEvent
+from apps.core.htmx import is_background
 
 _PAGE_SIZE = 50
 _STATUS_CHOICES = EmailMessage.Status.choices
@@ -43,7 +44,7 @@ def message_list(request):
     }
     # HTMX asks for the results region on its own; a normal navigation gets
     # the whole page. Same view, same context.
-    if request.headers.get("HX-Request"):
+    if is_background(request):
         return render(request, "logs/_messages_results.html", context)
     return render(request, "logs/messages.html", context)
 
@@ -102,7 +103,7 @@ def request_list(request):
         "status_code": status_code,
         "path": path_q,
     }
-    if request.headers.get("HX-Request"):
+    if is_background(request):
         return render(request, "logs/_requests_results.html", context)
     return render(request, "logs/requests.html", context)
 

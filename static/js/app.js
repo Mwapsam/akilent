@@ -220,6 +220,169 @@
     if (silentRequests.has(el)) setTimeout(function () { silentRequests.delete(el); }, 0);
   });
 
+  // --- In-place navigation (shell swaps) ---------------------------------
+  // <body hx-boost> makes links and forms inside the signed-in shell load the next page into
+  // <main> instead of reloading everything. The server half is apps/core/htmx.py: it answers
+  // with just the page, or tells HTMX to do a real page load whenever a swap won't do.
+  const akilent = (window.akilent = window.akilent || {});
+  const mainEl = () => document.getElementById("main");
+  const shellName = () => {
+    const m = document.head && document.head.querySelector('meta[name="akilent-shell"]');
+    return m ? m.content : "";
+  };
+
+  // Page lifecycle for scripts that live inside <main>. onPage(fn) runs fn now and after every
+  // in-place navigation; whatever fn returns runs just before the page is swapped away.
+  const pageHooks = [];
+  let pageCleanups = [];
+  function runPageHooks() {
+    pageHooks.forEach(function (fn) {
+      try { const c = fn(mainEl()); if (typeof c === "function") pageCleanups.push(c); }
+      catch (err) { console.error(err); }
+    });
+  }
+  akilent.onPage = function (fn) {
+    pageHooks.push(fn);
+    if (document.readyState !== "loading") {
+      try { const c = fn(mainEl()); if (typeof c === "function") pageCleanups.push(c); }
+      catch (err) { console.error(err); }
+    }
+  };
+  // Alpine.data that works whether Alpine has started yet or not (a swapped-in page loads
+  // its script long after alpine:init has fired).
+  akilent.alpineData = function (name, factory) {
+    if (window.Alpine && window.Alpine.version) window.Alpine.data(name, factory);
+    else document.addEventListener("alpine:init", function () { window.Alpine.data(name, factory); });
+  };
+
+  // Navigate in place from script (command palette, toasts). Falls back to a page load.
+  akilent.navigate = function (url) {
+    const main = mainEl();
+    if (!window.htmx || !main || !document.body.hasAttribute("hx-boost")) {
+      window.location.href = url;
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = url;
+    a.hidden = true;
+    main.appendChild(a);
+    window.htmx.process(a);
+    a.click();
+  };
+
+  // A page loaded in full because its scripts expect a fresh page keeps its own links and
+  // forms as ordinary ones, so a form error never costs the user what they typed.
+  function markUnsafeMain() {
+    const main = mainEl();
+    if (!main || !document.body.hasAttribute("hx-boost")) return;
+    const unsafe = Array.prototype.some.call(main.querySelectorAll("script"), function (s) {
+      return s.type !== "application/json" && !s.hasAttribute("data-swap-safe");
+    });
+    if (unsafe) main.setAttribute("hx-boost", "false");
+  }
+
+  // Back/forward restore only <main>, so re-mark the active nav link the way
+  // apps/core/templatetags/nav.py does (path prefix, or exact).
+  function syncNav() {
+    const path = window.location.pathname;
+    document.querySelectorAll("a[data-nav-match]").forEach(function (a) {
+      const on = a.getAttribute("data-nav-match").split(" ").some(function (t) {
+        if (!t) return false;
+        if (a.hasAttribute("data-nav-exact")) return path === t;
+        return path === t || (t !== "/" && path.indexOf(t) === 0);
+      });
+      a.classList.toggle("nav-link-active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  // Say where we are after a swap: move focus to the page heading (or <main>) and announce
+  // the new title, which is what a screen reader hears on a real page load.
+  let liveRegion = null;
+  function announce(text) {
+    if (!liveRegion) {
+      liveRegion = document.createElement("div");
+      liveRegion.className = "sr-only";
+      liveRegion.setAttribute("aria-live", "polite");
+      liveRegion.setAttribute("aria-atomic", "true");
+      document.body.appendChild(liveRegion);
+    }
+    liveRegion.textContent = "";
+    setTimeout(function () { liveRegion.textContent = text; }, 50);
+  }
+  function focusPage() {
+    const main = mainEl();
+    if (!main) return;
+    const invalid = main.querySelector('[aria-invalid="true"], .errorlist');
+    const target = invalid && invalid.matches("input, select, textarea") ? invalid : main.querySelector("h1") || main;
+    if (target !== main && !target.hasAttribute("tabindex") && !target.matches("input, select, textarea")) {
+      target.setAttribute("tabindex", "-1");
+    }
+    target.focus({ preventScroll: true });
+    announce(document.title);
+  }
+
+  const isBoosted = (detail) => !!(detail && detail.requestConfig && detail.requestConfig.boosted);
+
+  document.addEventListener("htmx:configRequest", function (e) {
+    if (isBoosted(e.detail) || (e.detail.elt && e.detail.elt.closest && e.detail.elt.closest("[hx-boost]"))) {
+      e.detail.headers["X-Akilent-Shell"] = shellName();
+    }
+  });
+
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    if (!isBoosted(e.detail)) return;
+    const main = mainEl();
+    if (!main) return;
+    const status = e.detail.xhr.status;
+    // A form that failed validation comes back 400/422 with the page to show.
+    if (status === 400 || status === 422) { e.detail.shouldSwap = true; e.detail.isError = false; }
+    if (!e.detail.shouldSwap) return;
+    e.detail.target = main;
+    e.detail.swapOverride = "innerHTML show:window:top";
+    pageCleanups.forEach(function (c) { try { c(); } catch (err) { console.error(err); } });
+    pageCleanups = [];
+  });
+
+  document.addEventListener("htmx:afterSettle", function (e) {
+    if (!isBoosted(e.detail) || e.detail.target !== mainEl()) return;
+    syncNav();
+    focusPage();
+    runPageHooks();
+    if (window.Alpine && Alpine.store("ui")) Alpine.store("ui").closeDrawer();
+  });
+
+  document.addEventListener("htmx:historyRestore", function () {
+    syncNav();
+    focusPage();
+    runPageHooks();
+  });
+
+  // Never strand a navigation: if the in-place request can't complete, load the page.
+  document.addEventListener("htmx:sendError", function (e) {
+    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") {
+      window.location.href = e.detail.requestConfig.path;
+    }
+  });
+  document.addEventListener("htmx:timeout", function (e) {
+    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") {
+      window.location.href = e.detail.requestConfig.path;
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.htmx) {
+      // Back/forward always re-fetch from the server: an Alpine page restored from a DOM
+      // snapshot can come back half-initialised.
+      window.htmx.config.historyCacheSize = 0;
+      window.htmx.config.refreshOnHistoryMiss = false;
+      window.htmx.config.timeout = 20000;
+    }
+    markUnsafeMain();
+    runPageHooks();
+  });
+
   // --- DNS auto-poll -----------------------------------------------------
   // Re-check pending domains so they flip to verified on their own once DNS
   // propagates. One global timer; polls only visible, pending, idle check

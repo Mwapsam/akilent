@@ -54,6 +54,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
                    :id="'cmdk-option-' + i"
                    :aria-selected="active === i ? 'true' : 'false'"
                    @mouseenter="active = i"
+                   @click="if (!($event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey)) { $event.preventDefault(); go(item.href); }"
                    :class="active === i ? 'tone-brand' : 'text-ink'"
                    class="flex items-center gap-3 px-3 py-2 text-sm">
                   <span class="text-gray-400" x-text="item.group"></span>
@@ -72,7 +73,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
   </template>
 </div>
 
-<script>
+<script data-swap-safe>
   function commandPalette() {
     return {
       open: false,
@@ -130,7 +131,14 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       },
       run() {
         const it = this.filtered[this.active];
-        if (it) window.location.href = it.href;
+        if (it) this.go(it.href);
+      },
+      // In place when the shell can (static/js/app.js), a normal page load otherwise.
+      go(href) {
+        this.open = false;
+        this.trigger = null;
+        if (window.akilent && window.akilent.navigate) window.akilent.navigate(href);
+        else window.location.href = href;
       },
     };
   }

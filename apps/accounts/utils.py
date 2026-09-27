@@ -127,10 +127,10 @@ def is_ajax(request) -> bool:
     by HTMX on every request it makes; ``X-Requested-With`` is what
     ``handleAjaxForm`` in static/js/app.js sends.
     """
-    return (
-        request.headers.get("x-requested-with") == "XMLHttpRequest"
-        or request.headers.get("hx-request") == "true"
-    )
+    from apps.core.htmx import is_background
+
+    # A boosted link or form (HX-Boosted) is a navigation, not a background request.
+    return request.headers.get("x-requested-with") == "XMLHttpRequest" or is_background(request)
 
 
 def ajax_redirect(url: str):

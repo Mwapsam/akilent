@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   {% with app=site.app_name|default:"Akilent" %}
-  <title>{% if WHATSAPP_ENABLED %}{{ app }} — Answer every customer on WhatsApp{% else %}{{ app }} — Email your customers from your own business address{% endif %}</title>
-  <meta name="description" content="{% if WHATSAPP_ENABLED %}{{ app }} gives small businesses one shared WhatsApp inbox, automatic replies when you're busy or closed, follow-up reminders and payment links.{% else %}{{ app }} helps small businesses email customers from their own domain, keep customer records, follow up and send payment links.{% endif %}">
+  <title>{{ app }} — Turn customer conversations into opportunities you don't miss</title>
+  <meta name="description" content="{% if WHATSAPP_ENABLED %}{{ app }} gives small businesses one shared inbox for WhatsApp conversations, email from their own address, automatic replies, follow-up reminders, customer records and payment links.{% else %}{{ app }} helps small businesses email customers from their own address and keep follow-up reminders, customer records and payment links in one place.{% endif %}">
   {% endwith %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -79,10 +79,10 @@
     /* Type */
     .eyebrow{ font-size:.875rem; font-weight:600; letter-spacing:.01em; color:var(--signal-strong); }
     .dark .eyebrow{ color:var(--signal-light); }
-    .h1{ font-size:2.25rem; line-height:1.1; font-weight:700; letter-spacing:-0.025em; }
+    .h1{ font-size:2.25rem; line-height:1.1; font-weight:700; letter-spacing:-0.025em; text-wrap:balance; }
     @media (min-width:640px){ .h1{ font-size:3rem; } }
     @media (min-width:1024px){ .h1{ font-size:3.75rem; } }
-    .h2{ font-size:1.875rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; }
+    .h2{ font-size:1.875rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; text-wrap:balance; }
     @media (min-width:640px){ .h2{ font-size:2.25rem; } }
     .h3{ font-size:1.125rem; line-height:1.35; font-weight:600; letter-spacing:-0.01em; }
     .lead{ font-size:1.125rem; line-height:1.65; }
@@ -362,18 +362,22 @@
       <div class="hero-glow" aria-hidden="true"><span></span></div>
       <div class="wrap" style="position:relative;">
         <div class="hero-copy">
+          {% comment %}
+            Pattern: outcome, then explanation, then concrete capabilities (docs/marketing/messaging.md).
+            The headline is channel-independent; the sentence under it names only the channels that
+            really work. Only WhatsApp messages arrive in the inbox today; email is for sending.
+          {% endcomment %}
+          <h1 class="h1" data-claim="outcome">Turn customer conversations into opportunities you don't miss.</h1>
           {% if WHATSAPP_ENABLED %}
-            <h1 class="h1">Answer every customer on WhatsApp — and never lose a sale to a missed message.</h1>
-            <p class="lead fg-mid">Give your team one shared inbox, automatic replies when you're busy or closed, reminders to follow up, and payment links — all in one place.</p>
+            <p class="lead fg-mid" data-claim="inbox email-sending auto-replies follow-ups customers payments">Manage your WhatsApp conversations from one shared inbox and email customers from your own address — with automatic replies, follow-up reminders, customer records, and payment links, all in one place.</p>
           {% else %}
-            <h1 class="h1">Email your customers from your own business address — and never forget to follow up.</h1>
-            <p class="lead fg-mid">Send emails and campaigns from your own domain, keep every customer's details together, set follow-up reminders and send payment links — all in one place.</p>
+            <p class="lead fg-mid" data-claim="email-sending follow-ups customers payments">Email your customers from your own address, and keep follow-up reminders, customer records, and payment links all in one place.</p>
           {% endif %}
           <div class="hero-ctas" id="hero-ctas">
             <a href="/signup/" class="btn btn-primary">Start free trial</a>
             <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
           </div>
-          {% if trial_days %}<p class="hero-note">{{ trial_days }}-day free trial · No card required</p>{% endif %}
+          {% if trial_days %}<p class="hero-note" data-claim="trial">{{ trial_days }}-day free trial · No card required</p>{% endif %}
         </div>
 
         {% if WHATSAPP_ENABLED %}
@@ -416,6 +420,22 @@
       </div>
     </section>
 
+    {% comment %} Problem. Pattern: problem, recognisable situation, Akilent's role. {% endcomment %}
+    <section class="light section" aria-labelledby="problem-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">The problem</p>
+          <h2 id="problem-title" class="h2">Customer conversations shouldn't fall through the cracks</h2>
+          <p class="body muted">Customers message you at all hours. Your team gets busy. Someone forgets to reply or follow up, and a promising enquiry gets buried under newer messages.</p>
+          {% if WHATSAPP_ENABLED %}
+            <p class="body" data-claim="inbox follow-ups">{{ app }} puts your WhatsApp conversations in one place your whole team can see, and helps you stay on top of what needs a reply, a follow-up, or an action.</p>
+          {% else %}
+            <p class="body" data-claim="follow-ups customers">{{ app }} keeps every customer's details and follow-ups in one place, so your team knows who needs a reply, a follow-up, or an action.</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
     {% comment %} Who it's for {% endcomment %}
     <section class="band section" aria-labelledby="who-title">
       <div class="wrap">
@@ -427,19 +447,19 @@
         <div class="grid-4 mt-section">
           <div class="card who">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" x2="21" y1="6" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-            <div><h3 class="h3">Shops</h3><p class="small muted">Answer stock and price questions, then send a payment link.</p></div>
+            <div><h3 class="h3">Shops</h3><p class="small muted" data-claim="payments">Answer stock and price questions, then send a payment link.</p></div>
           </div>
           <div class="card who">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" x2="8.12" y1="4" y2="15.88"/><line x1="14.47" x2="20" y1="14.48" y2="20"/><line x1="8.12" x2="12" y1="8.12" y2="12"/></svg></span>
-            <div><h3 class="h3">Salons</h3><p class="small muted">Reply to booking enquiries and set reminders to confirm them.</p></div>
+            <div><h3 class="h3">Salons</h3><p class="small muted" data-claim="follow-ups">Reply to booking enquiries and set reminders to confirm them.</p></div>
           </div>
           <div class="card who">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
-            <div><h3 class="h3">Clinics</h3><p class="small muted">Reply to patients quickly, even outside opening hours.</p></div>
+            <div><h3 class="h3">Clinics</h3><p class="small muted" data-claim="auto-replies business-hours">Let patients know when you'll reply, even outside opening hours.</p></div>
           </div>
           <div class="card who">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
-            <div><h3 class="h3">Service businesses</h3><p class="small muted">Share enquiries across your team so none go unanswered.</p></div>
+            <div><h3 class="h3">Service businesses</h3><p class="small muted" data-claim="inbox assign">Share enquiries across your team and see who's handling each one.</p></div>
           </div>
         </div>
       </div>
@@ -450,28 +470,31 @@
       <div class="wrap">
         <div class="section-head center">
           <p class="eyebrow">How it works</p>
-          <h2 id="how-title" class="h2">Up and running in three steps</h2>
+          <h2 id="how-title" class="h2">From message to action, without the gaps</h2>
         </div>
         <ol class="grid-3 mt-section" style="list-style:none; padding:0; margin-left:0; margin-right:0;">
           <li class="card step">
             <span class="step-num" aria-hidden="true">1</span>
+            <h3 class="h3">Bring conversations together</h3>
             {% if WHATSAPP_ENABLED %}
-              <h3 class="h3">Connect your WhatsApp number</h3>
-              <p class="body muted">Link your business number through Meta's guided setup, then invite your team.</p>
+              <p class="body muted" data-claim="own-number inbox roles">Connect your WhatsApp business number through Meta's guided setup and invite your team. Customer chats arrive in one shared inbox.</p>
             {% else %}
-              <h3 class="h3">Connect your email domain</h3>
-              <p class="body muted">Add your business domain with our step-by-step guide so emails come from your own address.</p>
+              <p class="body muted" data-claim="email-sending roles">Connect your business email domain with a step-by-step guide and invite your team, so emails come from your own address.</p>
             {% endif %}
           </li>
           <li class="card step">
             <span class="step-num" aria-hidden="true">2</span>
-            <h3 class="h3">Turn on ready-made automations</h3>
-            <p class="body muted">{% if WHATSAPP_ENABLED %}Pick starters like a welcome message, a reply when you're closed, or a menu of common questions, and switch them on.{% else %}Pick ready-made starters for follow-ups and reminders, and switch them on.{% endif %}</p>
+            <h3 class="h3">Respond and stay organised</h3>
+            {% if WHATSAPP_ENABLED %}
+              <p class="body muted" data-claim="inbox auto-replies customers">Reply from the shared inbox, switch on automatic replies for when you're closed or busy, and keep each customer's details beside the conversation.</p>
+            {% else %}
+              <p class="body muted" data-claim="email-sending customers">Send emails and campaigns from your own address, and keep each customer's details and history together.</p>
+            {% endif %}
           </li>
           <li class="card step">
             <span class="step-num" aria-hidden="true">3</span>
-            <h3 class="h3">Reply, follow up and get paid</h3>
-            <p class="body muted">{% if WHATSAPP_ENABLED %}Your team answers from one inbox, sets reminders to get back to customers, and sends a payment link when they're ready to buy.{% else %}Keep track of every customer, set reminders to get back to them, and send a payment link when they're ready to buy.{% endif %}</p>
+            <h3 class="h3">Follow up and move things forward</h3>
+            <p class="body muted" data-claim="follow-ups interested payments">Get reminded when a customer needs a follow-up, keep track of who's interested in buying, and send a payment link when they're ready.</p>
           </li>
         </ol>
       </div>
@@ -482,58 +505,58 @@
       <div class="wrap">
         <div class="section-head center">
           <p class="eyebrow">Features</p>
-          <h2 id="features-title" class="h2">Everything you need to keep customers happy</h2>
+          <h2 id="features-title" class="h2">Everything your team needs to keep customers moving forward</h2>
         </div>
         <div class="grid-4 mt-section">
           {% if WHATSAPP_ENABLED %}
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
-            <h3 class="h3">Shared inbox</h3>
-            <p class="small muted">Every WhatsApp conversation in one place. Your team sees who needs an answer and who's handling it.</p>
+            <h3 class="h3">One shared inbox</h3>
+            <p class="small muted" data-claim="inbox assign">See every WhatsApp conversation in one place and assign it to a teammate, so everyone knows what needs attention.</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
             <h3 class="h3">Automatic replies</h3>
-            <p class="small muted">Greet new customers, reply after hours, and answer common questions by keyword.</p>
+            <p class="small muted" data-claim="auto-replies keywords business-hours">Greet new customers, reply when you're closed, and answer common questions by keyword, so customers aren't left waiting.</p>
           </div>
           {% endif %}
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            <h3 class="h3">Follow-ups</h3>
-            <p class="small muted">Set reminders to get back to customers{% if WHATSAPP_ENABLED %}, and get a nudge when a conversation has gone unanswered{% endif %}.</p>
+            <h3 class="h3">Follow-up reminders</h3>
+            <p class="small muted" data-claim="follow-ups{% if WHATSAPP_ENABLED %} missed{% endif %}">Set reminders to get back to customers{% if WHATSAPP_ENABLED %}, and get a nudge when a conversation has gone unanswered{% endif %}, so follow-ups don't depend on memory.</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
             <h3 class="h3">Customer records</h3>
-            <p class="small muted">Each customer's details, tags and message history, kept together.</p>
+            <p class="small muted" data-claim="customers">Each customer's details, tags and message history kept together, so whoever replies has the context.</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
             <h3 class="h3">Campaigns</h3>
-            <p class="small muted">{% if WHATSAPP_ENABLED %}Send an approved WhatsApp message or an email to a list of customers at once.{% else %}Send an email to a list of customers at once, from your own domain.{% endif %}</p>
+            <p class="small muted" data-claim="campaigns email-sending">{% if WHATSAPP_ENABLED %}Send an approved WhatsApp message or an email to a list of customers at once, to bring them back when it matters.{% else %}Send an email to a list of customers at once, from your own address.{% endif %}</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></span>
             <h3 class="h3">Orders &amp; payment links</h3>
-            <p class="small muted">Record what a customer bought and send them a link to pay online.</p>
+            <p class="small muted" data-claim="payments">Record what a customer bought and send a link to pay online, so a conversation can end in a sale.</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/><path d="M19 17v4"/><path d="M21 19h-4"/></svg></span>
-            <h3 class="h3">AI reply suggestions</h3>
-            <p class="small muted">{% if WHATSAPP_ENABLED %}Optional and off by default. AI drafts replies from your business information, and you decide how much it can do on its own.{% else %}Optional. AI helps you write email templates and subject lines.{% endif %}</p>
+            <h3 class="h3">AI assistance</h3>
+            <p class="small muted" data-claim="ai">{% if WHATSAPP_ENABLED %}Off until you switch it on. AI suggests replies from your business information, or answers simple questions on its own if you choose to allow it.{% else %}Off until you switch it on. AI helps you write email templates and subject lines.{% endif %}</p>
           </div>
           <div class="card">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span>
             <h3 class="h3">Insights</h3>
-            <p class="small muted">See how your messages and campaigns are performing.</p>
+            <p class="small muted" data-claim="insights">See how your messages and campaigns are performing, so you know what's working.</p>
           </div>
         </div>
-        <p class="small muted" style="text-align:center; margin-top:2rem;">Some features depend on your plan — <a href="#pricing" class="link">see pricing</a>.</p>
+        <p class="small muted" style="text-align:center; margin-top:2rem;" data-claim-exempt>Some features depend on your plan — <a href="#pricing" class="link">see pricing</a>.</p>
       </div>
     </section>
 
     {% comment %} Trust: verifiable statements only. {% endcomment %}
-    <section class="light section" aria-labelledby="trust-title">
+    <section id="trust" class="light section" aria-labelledby="trust-title">
       <div class="wrap">
         <div class="section-head center">
           <p class="eyebrow">You stay in control</p>
@@ -543,24 +566,24 @@
           {% if WHATSAPP_ENABLED %}
           <div class="trust">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
-            <div><h3 class="h3">Your own WhatsApp number</h3><p class="small muted" style="margin-top:.25rem;">Customers message your business number, not ours.</p></div>
+            <div><h3 class="h3">Your own WhatsApp number</h3><p class="small muted" style="margin-top:.25rem;" data-claim="own-number">Customers message your business number, not ours.</p></div>
           </div>
           {% endif %}
           <div class="trust">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
-            <div><h3 class="h3">Your own email domain</h3><p class="small muted" style="margin-top:.25rem;">Emails are sent from your business address.</p></div>
+            <div><h3 class="h3">Your own email domain</h3><p class="small muted" style="margin-top:.25rem;" data-claim="email-sending">Emails are sent from your business address.</p></div>
           </div>
           <div class="trust">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg></span>
-            <div><h3 class="h3">AI only when you want it</h3><p class="small muted" style="margin-top:.25rem;">AI is off until you switch it on.{% if WHATSAPP_ENABLED %} You decide how much it can do, and every reply it sends is marked and logged.{% endif %}</p></div>
+            <div><h3 class="h3">AI only when you want it</h3><p class="small muted" style="margin-top:.25rem;" data-claim="ai">AI is off until you switch it on.{% if WHATSAPP_ENABLED %} You decide how much it can do, and every reply it sends is marked and logged.{% endif %}</p></div>
           </div>
           <div class="trust">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-            <div><h3 class="h3">Team roles</h3><p class="small muted" style="margin-top:.25rem;">Invite teammates as Owner, Admin or Member.</p></div>
+            <div><h3 class="h3">Team roles</h3><p class="small muted" style="margin-top:.25rem;" data-claim="roles">Invite teammates as Owner, Admin or Member.</p></div>
           </div>
           <div class="trust">
             <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
-            <div><h3 class="h3">Your data, on request</h3><p class="small muted" style="margin-top:.25rem;">Ask us to delete your data at any time. <a href="{% url 'data-deletion' %}" class="link">How it works</a></p></div>
+            <div><h3 class="h3">Your data, on request</h3><p class="small muted" style="margin-top:.25rem;" data-claim="data-deletion">Ask us to delete your data at any time. <a href="{% url 'data-deletion' %}" class="link">How it works</a></p></div>
           </div>
         </div>
       </div>
@@ -607,7 +630,7 @@
               <a href="/signup/?plan={{ plan.slug }}" class="btn {% if plan.slug == 'professional' %}btn-primary{% else %}btn-outline{% endif %}">
                 {% if plan.price_monthly > 0 %}Choose {{ plan.name }}{% elif plan.trial_days %}Start free trial{% else %}Get started free{% endif %}
               </a>
-              <p class="plan-foot">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>
+              <p class="plan-foot" data-claim="{% if plan.price_monthly > 0 %}cancel{% else %}trial{% endif %}">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>
             </div>
           {% endwith %}{% endfor %}
         </div>
@@ -623,29 +646,29 @@
         </div>
         <div class="faq">
           {% if WHATSAPP_ENABLED %}
-          <details>
+          <details data-claim="own-number">
             <summary>Do I need to sign up for the WhatsApp Business API myself?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">No. During setup you connect your business number through Meta's guided sign-in, and {{ app }} handles the rest. The number you connect is used through {{ app }} rather than the WhatsApp Business app.</p>
           </details>
-          <details>
+          <details data-claim="inbox assign roles">
             <summary>Can my team share one number?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">Yes. Everyone works from the same inbox, and you can assign each conversation to a teammate so customers aren't answered twice or missed.</p>
           </details>
-          <details>
+          <details data-claim="ai">
             <summary>Does AI send messages automatically?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own — every reply it sends is marked and logged.</p>
           </details>
           {% endif %}
-          <details>
+          <details data-claim="cancel">
             <summary>Can I cancel anytime?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">Yes. Plans are billed monthly, and an owner or admin can cancel from the Billing page at any time.</p>
           </details>
-          <details>
+          <details data-claim="trial-end">
             <summary>What happens after the trial?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">Nothing is deleted. Your customers, conversations and settings stay in your account. Choose a plan to keep sending messages and using your plan's features.</p>
           </details>
         </div>
-        <p class="body muted" style="text-align:center; margin-top:2rem;">More questions? Visit the <a href="{% url 'help' %}" class="link">help centre</a>{% if site.support_email %} or email <a href="mailto:{{ site.support_email }}" class="link">{{ site.support_email }}</a>{% endif %}.</p>
+        <p class="body muted" style="text-align:center; margin-top:2rem;" data-claim-exempt>More questions? Visit the <a href="{% url 'help' %}" class="link">help centre</a>{% if site.support_email %} or email <a href="mailto:{{ site.support_email }}" class="link">{{ site.support_email }}</a>{% endif %}.</p>
       </div>
     </section>
 
@@ -655,12 +678,12 @@
         <div>
           <p class="eyebrow">For developers</p>
           <h2 id="dev-title" class="h2" style="margin-top:.75rem;">Connect {{ app }} to your own systems</h2>
-          <p class="body fg-mid" style="margin-top:1rem; max-width:32rem;">Have a website or app? Send messages from your own code and get updates back when they're delivered.</p>
+          <p class="body fg-mid" style="margin-top:1rem; max-width:32rem;" data-claim="api webhooks">Have a website or app? Send messages from your own code and get updates back when they're delivered.</p>
           <ul class="dev-list body fg-mid">
-            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong> — send email from your system</span></li>
-            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong> — plug into software that already sends email</span></li>
-            <li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong> — delivery, open and click events</span></li>
-            {% if WHATSAPP_ENABLED %}<li><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong> — one-time login codes from your app</span></li>{% endif %}
+            <li data-claim="api"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong> — send email from your system</span></li>
+            <li data-claim="smtp"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong> — plug into software that already sends email</span></li>
+            <li data-claim="webhooks"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong> — delivery, open and click events</span></li>
+            {% if WHATSAPP_ENABLED %}<li data-claim="verification-codes"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong> — one-time login codes from your app</span></li>{% endif %}
           </ul>
           <a href="{% url 'docs' %}" class="btn btn-ghost" style="margin-top:2rem;">Read the documentation</a>
         </div>
@@ -683,8 +706,8 @@
     {% comment %} Final CTA {% endcomment %}
     <section class="dark section final" aria-labelledby="final-title" style="border-top:1px solid var(--line);">
       <div class="wrap">
-        <h2 id="final-title" class="h2">{% if WHATSAPP_ENABLED %}Ready to stop losing customers to missed messages?{% else %}Ready to keep every customer in the loop?{% endif %}</h2>
-        <p class="lead fg-mid">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days — no card required{% endif %}.</p>
+        <h2 id="final-title" class="h2" data-claim="outcome">Ready to turn more conversations into opportunities?</h2>
+        <p class="lead fg-mid" data-claim="trial">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days — no card required{% endif %}.</p>
         <div class="hero-ctas"><a href="/signup/" class="btn btn-primary">Start free trial</a></div>
       </div>
     </section>

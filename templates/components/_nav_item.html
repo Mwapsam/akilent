@@ -12,7 +12,7 @@
 {% if feature and feature in locked_features %}
 <a href="{% url 'billing:locked' feature %}" title="{{ label }} (not in your plan)"
    class="nav-link {% if on %}nav-link-active{% endif %}"
-   data-nav-link data-locked>
+   data-nav-link data-locked data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0 opacity-60" %}
   {% if collapsible %}
     <span class="hidden lg:inline-flex items-center gap-1 opacity-70" x-show="!$store.ui.sidebarCollapsed" x-cloak>{{ label }} {% include "components/icon.html" with name="lock" class="w-3.5 h-3.5" %}</span>
@@ -24,7 +24,7 @@
 {% else %}
 <a href="{{ href }}" title="{{ label }}"
    class="nav-link {% if on %}nav-link-active{% endif %}"
-   data-nav-link
+   data-nav-link data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}
    {% if on %}aria-current="page"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0" %}
   {% if collapsible %}

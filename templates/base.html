@@ -1,11 +1,20 @@
-{% load static %}
+{% load static %}{% comment %}
+  Two render modes. A normal request gets the whole document. A boosted navigation from inside
+  the signed-in shell (request.shell_swap, see apps/core/htmx.py) gets only what changes: the
+  <title>, the shell marker, out-of-band updates for nav and breadcrumbs, and the page itself,
+  which HTMX swaps into <main id="main">. Each block still appears once; only the shell markup
+  around it is conditional.
+{% endcomment %}{% if not request.shell_swap %}
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
+{% endif %}
   <title>{% block title %}{{ site.app_name|default:"Automator" }}{% endblock %}</title>
+  <meta name="akilent-shell" content="{% block shell_name %}{% if user.is_authenticated %}app{% else %}public{% endif %}{% endblock %}">
+{% if not request.shell_swap %}
   {# Apply the saved theme before first paint — avoids a light/dark flash. #}
   <script>
     (function () {
@@ -41,15 +50,18 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data
-      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      {% if user.is_authenticated %}hx-boost="true"{% endif %}>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
             focus:bg-surface focus:px-4 focus:py-2 focus:rounded-xl focus:shadow-pop focus:text-sm focus:text-ink">
     Skip to content
   </a>
+{% endif %}
 
   {% if user.is_authenticated %}
+  {% if not request.shell_swap %}
 
     {# ─── Desktop sidebar — full, collapsible to an icon rail ──────────────── #}
     {% comment %}
@@ -69,9 +81,11 @@
         </span>
       </div>
 
-      <div class="flex-1 overflow-y-auto py-4">
+      {% endif %}
+      <div id="shell-nav-desktop" {% if request.shell_swap %}hx-swap-oob="innerHTML"{% else %}class="flex-1 overflow-y-auto py-4"{% endif %}>
         {% block desktop_nav %}{% include "components/_nav.html" with collapsible=True %}{% endblock %}
       </div>
+      {% if not request.shell_swap %}
 
       {# Collapse toggle is only meaningful where the full sidebar shows #}
       <button type="button"
@@ -124,16 +138,20 @@
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto py-4" @click="$store.ui.closeDrawer()">
+        {% endif %}
+        <div id="shell-nav-mobile" {% if request.shell_swap %}hx-swap-oob="innerHTML"{% else %}class="flex-1 overflow-y-auto py-4" @click="$store.ui.closeDrawer()"{% endif %}>
           {% block mobile_nav %}{% include "components/_nav.html" %}{% endblock %}
         </div>
+        {% if not request.shell_swap %}
       </aside>
     </div>
+    {% endif %}
 
   {% endif %}
 
   {# ─── Main column ─────────────────────────────────────────────────────── #}
   {% if user.is_authenticated %}
+    {% if not request.shell_swap %}
     <div class="app-shell-pl transition-[padding] duration-200">
 
       {% if viewing_as %}
@@ -160,7 +178,9 @@
           {% include "components/icon.html" with name="menu" class="w-5 h-5" %}
         </button>
 
-        <div class="flex-1 min-w-0">{% block breadcrumbs %}{% endblock %}</div>
+        {% endif %}
+        <div id="shell-crumbs" {% if request.shell_swap %}hx-swap-oob="innerHTML"{% else %}class="flex-1 min-w-0"{% endif %}>{% block breadcrumbs %}{% endblock %}</div>
+        {% if not request.shell_swap %}
 
         {% block topbar_tools %}
         {# Mobile search trigger #}
@@ -268,15 +288,20 @@
           </div>
         </div>
       </header>
+    {% endif %}
   {% endif %}
 
-      {# Page content #}
-      <main id="main" class="{% if user.is_authenticated %}px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl mx-auto{% else %}min-h-full{% endif %}">
+      {# Page content. hx-history-elt: back/forward re-fetch the page and restore only this. #}
+      {% if not request.shell_swap %}
+      <main id="main" tabindex="-1" hx-history-elt class="{% if user.is_authenticated %}px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl mx-auto{% else %}min-h-full{% endif %}">
+      {% endif %}
         {% block page_header %}{% endblock %}
         {% block content %}{% endblock %}
+      {% if not request.shell_swap %}
       </main>
+      {% endif %}
 
-  {% if user.is_authenticated %}
+  {% if user.is_authenticated and not request.shell_swap %}
     </div>{# /main column #}
   {% endif %}
 
@@ -301,6 +326,7 @@
     "></div>
   {% endif %}
 
+  {% if not request.shell_swap %}
   {# ─── Global overlays ─────────────────────────────────────────────────── #}
   {% include "components/toast.html" %}
   {% include "components/confirm.html" %}
@@ -315,8 +341,10 @@
     {% include "components/welcome_tour.html" %}
   {% endif %}
   {% endblock %}
+  {% endif %}
 
   {% block extra_js %}{% endblock %}
-
+{% if not request.shell_swap %}
 </body>
 </html>
+{% endif %}

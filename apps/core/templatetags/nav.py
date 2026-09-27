@@ -58,3 +58,26 @@ def nav_active(context, *targets, exact=False, css="nav-link-active"):
 def is_nav_active(context, *targets, exact=False):
     """Boolean form of :func:`nav_active` — handy for ``aria-current``."""
     return bool(nav_active(context, *targets, exact=exact))
+
+
+@register.simple_tag
+def nav_targets(*targets):
+    """The paths a nav link counts as its own, for ``data-nav-match``.
+
+    Back/forward restores only ``<main>``, so static/js/app.js re-marks the active link in the
+    browser with the same prefix rule as :func:`nav_active`.
+    """
+    if len(targets) == 1 and isinstance(targets[0], str) and " " in targets[0]:
+        targets = tuple(targets[0].split())
+    paths = []
+    for target in targets:
+        candidate = target
+        if "/" not in target:
+            try:
+                candidate = reverse(target)
+            except NoReverseMatch:
+                candidate = target
+        if candidate != "/":
+            candidate = "/" + candidate.strip("/") + "/"
+        paths.append(candidate)
+    return " ".join(paths)

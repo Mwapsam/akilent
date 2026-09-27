@@ -63,6 +63,8 @@ MIDDLEWARE = [
     "apps.core.middleware.RequestIdMiddleware",
     "apps.core.middleware.SuspendedAccountMiddleware",
     "apps.core.middleware.ViewAsReadOnlyMiddleware",
+    # In-place navigation: falls back to a full page load whenever a fragment won't do.
+    "apps.core.htmx.ShellMiddleware",
 ]
 
 ROOT_URLCONF = "automator.urls"
