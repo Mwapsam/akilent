@@ -63,7 +63,13 @@
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data
       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-      {% if user.is_authenticated %}hx-boost="true"{% endif %}>
+      {% comment %}
+        hx-disabled-elt resolves "find [type=submit]" against whichever element triggers a given
+        request, not against <body> itself: a no-op for a boosted <a> (nothing to find), and for a
+        boosted <form> it disables that form's own submit button for the request's duration, so a
+        slow save can't be double-clicked. A page can override it with its own hx-disabled-elt.
+      {% endcomment %}
+      {% if user.is_authenticated %}hx-boost="true" hx-disabled-elt="find [type=submit]"{% endif %}>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3

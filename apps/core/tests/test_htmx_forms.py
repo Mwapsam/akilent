@@ -11,6 +11,7 @@ import pytest
 
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
 FORM_TAG = re.compile(r"<form\b[^>]*>", re.S)
+ANCHOR_TAG = re.compile(r"<a\b[^>]*>", re.S)
 
 
 def _templates():
@@ -63,6 +64,22 @@ def test_hx_post_targets_the_same_url_the_plain_form_posts_to():
                     % (p.relative_to(TEMPLATES), action.group(1), hx.group(1))
                 )
     assert not offenders, "hx-post disagrees with action: %s" % offenders
+
+
+def test_download_links_opt_out_of_boosting():
+    """<body hx-boost> only skips an <a> by its ``target`` (htmx's own rule); a plain
+    ``download`` link would otherwise be fetched over XHR and swapped as if it were a page,
+    instead of triggering the browser's save-file dialogue. Belt-and-braces: this only catches
+    a link missing its own hx-boost="false", not one relying solely on an ancestor's."""
+    # The download *attribute* only: bare `download` or `download="..."`, bounded by whitespace
+    # before it and `=`/`>`/whitespace after — not the substring inside e.g. href="/x/download".
+    DOWNLOAD_ATTR = re.compile(r"(?<=\s)download(?=[\s=>])")
+    offenders = []
+    for p in _templates():
+        for tag in ANCHOR_TAG.findall(p.read_text(encoding="utf-8")):
+            if DOWNLOAD_ATTR.search(tag) and 'hx-boost="false"' not in tag:
+                offenders.append("%s: %s" % (p.relative_to(TEMPLATES), tag[:90]))
+    assert not offenders, "download links that could be boosted instead of downloaded: %s" % offenders
 
 
 @pytest.mark.parametrize(
