@@ -205,15 +205,6 @@
     if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-Toast")) return; // already toasted above
     window.toast("danger", "Something went wrong.");
   });
-
-  // apps/accounts/utils.py::hx_toast sets this for in-place mutations (an hx-post that swaps a
-  // fragment) that have no full page load to carry a Django flash message. htmx fires it on the
-  // element that made the request, but the event bubbles, so one document-level listener covers
-  // every hx-post in the app.
-  document.addEventListener("toast", function (e) {
-    const t = e.detail || {};
-    if (t.message) window.toast(t.type || "info", t.message);
-  });
   document.addEventListener("htmx:sendError", function (e) {
     if (isSilent(e.detail.elt)) return;
     window.toast("danger", "Network error — please try again.");

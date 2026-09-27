@@ -144,6 +144,14 @@ def test_successful_boosted_get_is_privately_cacheable_briefly():
     assert resp["Cache-Control"] == "private, max-age=5"
 
 
+def test_the_briefly_cacheable_response_varies_on_cookie():
+    """Without this, the browser's own HTTP cache — not just Django's — would key a cached
+    boosted response on URL alone: on a shared browser, user B's click within the 5s window
+    could be served user A's cached fragment from before A signed out."""
+    resp = _run(_fragment())
+    assert "Cookie" in resp["Vary"]
+
+
 def test_a_views_own_cache_control_is_not_overridden():
     response = _fragment()
     response["Cache-Control"] = "no-store"

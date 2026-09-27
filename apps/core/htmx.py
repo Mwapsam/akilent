@@ -141,4 +141,9 @@ class ShellMiddleware:
 def _vary(response):
     from django.utils.cache import patch_vary_headers
 
-    patch_vary_headers(response, ("HX-Request", "HX-Boosted"))
+    # Cookie matters here beyond the usual "don't cache someone else's session" reason: a boosted
+    # GET's Cache-Control (below) makes the browser's own HTTP cache — not just Django's — willing
+    # to reuse the response. Without Vary: Cookie, that cache is keyed on URL alone, so on a shared
+    # browser (a kiosk, a shared machine) user B's click could be served user A's cached fragment
+    # from before A signed out, entirely client-side, with nothing hitting the server to notice.
+    patch_vary_headers(response, ("HX-Request", "HX-Boosted", "Cookie"))

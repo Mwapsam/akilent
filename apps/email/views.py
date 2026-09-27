@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.core.htmx import full_page_load
-from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
+from apps.accounts.utils import ajax_redirect, get_current_account, hx_toast, is_ajax
 from apps.email import dnscheck
 from apps.email.verification import refresh_domain
 from apps.email.models import (
@@ -42,10 +42,7 @@ def _scoped(manager, request, account):
 
 # --- AJAX helpers -------------------------------------------------------------
 
-def _toast(response, kind: str, message: str):
-    from urllib.parse import quote
-    response["X-Toast"] = f"{kind}|{quote(message)}"
-    return response
+_toast = hx_toast
 
 
 def _ajax_error(message: str, status: int = 400):
