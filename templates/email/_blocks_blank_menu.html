@@ -1,0 +1,13 @@
+{% comment %}"Insert blank": puts {{ name }} at the cursor in the field last used (block editor).{% endcomment %}
+<div class="relative" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
+  <button type="button" class="eb-link" @mousedown.prevent @click="open = !open" :aria-expanded="open" aria-haspopup="menu">+ Blank</button>
+  <div class="eb-menu eb-menu-right" x-show="open" x-cloak role="menu">
+    <p class="eb-menu-note">Filled in for each person when it's sent.</p>
+    <template x-for="key in blankNames()" :key="key">
+      <button type="button" role="menuitem" class="eb-menu-item font-mono text-xs" @mousedown.prevent
+              @click="insertBlank(key, $el); open = false" x-text="key"></button>
+    </template>
+    <div class="eb-menu-sep" role="separator"></div>
+    <button type="button" role="menuitem" class="eb-menu-item" @mousedown.prevent @click="newBlank($el); open = false">New blank…</button>
+  </div>
+</div>

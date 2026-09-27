@@ -1,0 +1,178 @@
+{% comment %}Settings for the selected section (the block editor, template_blocks.html). `selected` is
+the section object itself, so x-model edits the email directly and the canvas updates as you type.{% endcomment %}
+
+{# Heading #}
+<template x-if="selected.type === 'heading'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <div class="eb-label-row"><label class="label" for="eb-f-heading">Heading</label>{% include "email/_blocks_blank_menu.html" %}</div>
+      <input id="eb-f-heading" class="input" x-model="selected.text" maxlength="200" data-blanks>
+    </div>
+    <div class="eb-field">
+      <span class="label">Size</span>
+      <div class="eb-seg" role="group" aria-label="Heading size">
+        <template x-for="s in [['small','Small'],['medium','Medium'],['large','Large']]">
+          <button type="button" class="eb-seg-btn" :class="selected.size === s[0] && 'is-on'" @click="selected.size = s[0]" :aria-pressed="selected.size === s[0]" x-text="s[1]"></button>
+        </template>
+      </div>
+    </div>
+    {% include "email/_blocks_align.html" %}
+  </div>
+</template>
+
+{# Text #}
+<template x-if="selected.type === 'text'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <div class="eb-label-row"><label class="label" for="eb-f-text">Text</label>{% include "email/_blocks_blank_menu.html" %}</div>
+      <textarea id="eb-f-text" class="textarea eb-grow" rows="7" x-model="selected.text" maxlength="5000" data-blanks></textarea>
+      <p class="help">Leave an empty line to start a new paragraph. Put <code>**two stars**</code> around words to make them bold.</p>
+    </div>
+    {% include "email/_blocks_align.html" %}
+  </div>
+</template>
+
+{# Image #}
+<template x-if="selected.type === 'image'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <span class="label">Image</span>
+      <div class="eb-image-pick">
+        <template x-if="selected.src"><img :src="selected.src" :alt="selected.alt" class="eb-thumb"></template>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn btn-secondary btn-sm" @click="pickImage(selected)" x-text="selected.src ? 'Change image' : 'Choose image'"></button>
+          <button type="button" class="btn btn-ghost btn-sm" x-show="selected.src" @click="selected.src = ''">Remove</button>
+        </div>
+      </div>
+      <details class="eb-more">
+        <summary>Use an image address instead</summary>
+        <input class="input mt-2" x-model.lazy="selected.src" placeholder="https://…" inputmode="url" aria-label="Image address">
+      </details>
+    </div>
+    <div class="eb-field">
+      <label class="label" for="eb-f-alt">Description</label>
+      <input id="eb-f-alt" class="input" x-model="selected.alt" maxlength="200" placeholder="What the image shows">
+      <p class="help">Shown when images are turned off, and read out by screen readers.</p>
+    </div>
+    <div class="eb-field">
+      <div class="eb-label-row"><label class="label" for="eb-f-img-href">Link (optional)</label>{% include "email/_blocks_blank_menu.html" %}</div>
+      <input id="eb-f-img-href" class="input" x-model="selected.href" placeholder="https://… or a blank" inputmode="url" data-blanks>
+    </div>
+    <div class="eb-field">
+      <label class="label" for="eb-f-width">Width <span class="text-gray-400 font-normal" x-text="selected.width + '%'"></span></label>
+      <input id="eb-f-width" type="range" min="20" max="100" step="5" class="eb-range" x-model.number="selected.width">
+    </div>
+    {% include "email/_blocks_align.html" %}
+  </div>
+</template>
+
+{# Button #}
+<template x-if="selected.type === 'button'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <label class="label" for="eb-f-label">Button text</label>
+      <input id="eb-f-label" class="input" x-model="selected.label" maxlength="60">
+    </div>
+    <div class="eb-field">
+      <div class="eb-label-row"><label class="label" for="eb-f-href">Link</label>{% include "email/_blocks_blank_menu.html" %}</div>
+      <input id="eb-f-href" class="input" x-model="selected.href" placeholder="https://… or a blank like &#123;&#123; payment_link &#125;&#125;" inputmode="url" data-blanks>
+      <p class="help" x-show="linkProblem(selected.href)" x-text="linkProblem(selected.href)" style="color: var(--tone-coral-fg)"></p>
+    </div>
+    {% include "email/_blocks_align.html" %}
+    <label class="eb-check"><input type="checkbox" x-model="selected.full_width"> Full width</label>
+    <div class="eb-field">
+      <span class="label">Colours</span>
+      <div class="eb-colours">
+        {% include "email/_blocks_colour.html" with model="selected.color" fallback="doc.style.accent" text="Button" %}
+        {% include "email/_blocks_colour.html" with model="selected.text_color" fallback="doc.style.button_text" text="Text" %}
+      </div>
+      <p class="help">Empty uses the email's button colours (Email settings).</p>
+    </div>
+  </div>
+</template>
+
+{# Divider #}
+<template x-if="selected.type === 'divider'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <span class="label">Colour</span>
+      <div class="eb-colours">{% include "email/_blocks_colour.html" with model="selected.color" fallback="'#E8EDF3'" text="Line" %}</div>
+    </div>
+  </div>
+</template>
+
+{# Spacer #}
+<template x-if="selected.type === 'spacer'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <label class="label" for="eb-f-height">Height <span class="text-gray-400 font-normal" x-text="selected.height + 'px'"></span></label>
+      <input id="eb-f-height" type="range" min="8" max="120" step="4" class="eb-range" x-model.number="selected.height">
+    </div>
+  </div>
+</template>
+
+{# Two columns #}
+<template x-if="selected.type === 'columns'">
+  <div class="eb-fields" x-data="{ col: 0 }">
+    <div class="eb-seg eb-seg-full" role="tablist" aria-label="Column">
+      <button type="button" role="tab" class="eb-seg-btn" :class="col === 0 && 'is-on'" :aria-selected="col === 0" @click="col = 0">Left column</button>
+      <button type="button" role="tab" class="eb-seg-btn" :class="col === 1 && 'is-on'" :aria-selected="col === 1" @click="col = 1">Right column</button>
+    </div>
+    <template x-for="(c, ci) in selected.columns" :key="ci">
+      <div class="eb-fields" x-show="col === ci">
+        <div class="eb-field">
+          <span class="label">Image</span>
+          <div class="eb-image-pick">
+            <template x-if="c.image.src"><img :src="c.image.src" :alt="c.image.alt" class="eb-thumb"></template>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="btn btn-secondary btn-sm" @click="pickImage(c.image)" x-text="c.image.src ? 'Change image' : 'Choose image'"></button>
+              <button type="button" class="btn btn-ghost btn-sm" x-show="c.image.src" @click="c.image.src = ''">Remove</button>
+            </div>
+          </div>
+          <input class="input mt-2" x-show="c.image.src" x-model="c.image.alt" maxlength="200" placeholder="What the image shows" aria-label="Image description">
+        </div>
+        <div class="eb-field">
+          <div class="eb-label-row"><label class="label" :for="'eb-c-h' + ci">Heading</label>{% include "email/_blocks_blank_menu.html" %}</div>
+          <input :id="'eb-c-h' + ci" class="input" x-model="c.heading" maxlength="200" data-blanks>
+        </div>
+        <div class="eb-field">
+          <div class="eb-label-row"><label class="label" :for="'eb-c-t' + ci">Text</label>{% include "email/_blocks_blank_menu.html" %}</div>
+          <textarea :id="'eb-c-t' + ci" class="textarea" rows="4" x-model="c.text" maxlength="2000" data-blanks></textarea>
+        </div>
+        <div class="eb-field">
+          <label class="label" :for="'eb-c-b' + ci">Button text (optional)</label>
+          <input :id="'eb-c-b' + ci" class="input" x-model="c.button.label" maxlength="60">
+        </div>
+        <div class="eb-field" x-show="c.button.label">
+          <div class="eb-label-row"><label class="label" :for="'eb-c-l' + ci">Button link</label>{% include "email/_blocks_blank_menu.html" %}</div>
+          <input :id="'eb-c-l' + ci" class="input" x-model="c.button.href" placeholder="https://… or a blank" inputmode="url" data-blanks>
+          <p class="help" x-show="linkProblem(c.button.href)" x-text="linkProblem(c.button.href)" style="color: var(--tone-coral-fg)"></p>
+        </div>
+      </div>
+    </template>
+    <p class="help">On a phone the two columns sit one above the other.</p>
+  </div>
+</template>
+
+{# Footer #}
+<template x-if="selected.type === 'footer'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <div class="eb-label-row"><label class="label" for="eb-f-footer">Footer text</label>{% include "email/_blocks_blank_menu.html" %}</div>
+      <textarea id="eb-f-footer" class="textarea" rows="4" x-model="selected.text" maxlength="1000" data-blanks></textarea>
+      <p class="help">Small print at the bottom: your business name, why they're getting this, how to reach you.</p>
+    </div>
+    {% include "email/_blocks_align.html" %}
+  </div>
+</template>
+
+{# HTML #}
+<template x-if="selected.type === 'html'">
+  <div class="eb-fields">
+    <div class="eb-field">
+      <label class="label" for="eb-f-html">HTML</label>
+      <textarea id="eb-f-html" class="textarea font-mono text-xs eb-code" rows="14" x-model.debounce.500ms="selected.html" spellcheck="false"></textarea>
+      <p class="help">Used exactly as written. Most email apps ignore scripts, forms and many styles, so keep it simple.</p>
+    </div>
+  </div>
+</template>

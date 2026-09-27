@@ -17,8 +17,7 @@
     <button id="editor-redo" type="button" class="btn btn-secondary btn-sm" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>Redo</button>
     <button id="template-send-test" type="button" class="btn btn-secondary btn-sm">Send Test</button>
     <span id="email-builder-status" class="text-xs text-gray-400 min-w-[5.5rem]" role="status" aria-live="polite"></span>
-    <a href="?mode=raw" class="btn btn-sm {% if mode == 'raw' %}btn-primary{% else %}btn-secondary{% endif %}">Raw HTML</a>
-    <a href="?mode=blocks" class="btn btn-sm {% if mode == 'blocks' %}btn-primary{% else %}btn-secondary{% endif %}">Drag-and-drop</a>
+    <a href="?mode=blocks" class="btn btn-secondary btn-sm" title="Build it from sections instead of HTML">Drag-and-drop editor</a>
     <a href="/email/templates/assets/" class="btn btn-secondary btn-sm">Media library</a>
     <button id="email-builder-save" type="submit" form="raw-editor-form" class="btn btn-primary btn-sm">
       {% include "components/icon.html" with name="check" class="w-4 h-4" %} Save changes
@@ -46,21 +45,9 @@ tall. At lg and up nothing changes: both panes show side by side.{% endcomment %
             @click="pane = 'preview'" :aria-pressed="pane === 'preview'">Preview</button>
   </div>
 
-{% if mode == 'blocks' %}
-  {% comment %}The block builder is drag-and-drop, which has no touch story at
-  all. Say so rather than letting someone discover it by failing to drag.{% endcomment %}
-  <p class="lg:hidden alert alert-info mb-3">
-    The drag-and-drop builder needs a mouse. On a phone you can preview this
-    template and edit its details, but arranging blocks needs a larger screen.
-  </p>
-{% endif %}
-
 <div id="editor-split" class="grid grid-cols-1 lg:grid-cols-[1fr_10px_1fr] gap-4 lg:gap-0 items-stretch mb-6">
   <div id="editor-pane" class="card card-pad flex flex-col min-h-[65vh]"
        :class="pane === 'editor' ? '' : 'hidden lg:flex'">
-    {% if mode == 'blocks' %}
-    <div id="email-builder" class="flex-1" data-config='{{ builder_config }}'></div>
-    {% else %}
     <form id="raw-editor-form" method="post" action="/email/templates/{{ template.pk }}/edit/"
           class="flex flex-col gap-3 flex-1" data-config='{{ builder_config }}'>
       {% csrf_token %}
@@ -76,7 +63,6 @@ tall. At lg and up nothing changes: both panes show side by side.{% endcomment %
                   data-merge-tags='{{ merge_tag_paths_json }}'>{{ template.html_body }}</textarea>
       </div>
     </form>
-    {% endif %}
   </div>
 
   <div id="split-gutter" class="split-gutter" role="separator" aria-orientation="vertical"
@@ -120,14 +106,7 @@ tall. At lg and up nothing changes: both panes show side by side.{% endcomment %
 <script src="{% static 'js/merge-tag-autocomplete.js' %}"></script>
 <script src="{% static 'js/sample-variables-editor.js' %}"></script>
 <script src="{% static 'js/template-preview.js' %}"></script>
-{% if mode == 'blocks' %}
-<link rel="stylesheet" href="{% static 'js/vendor/grapesjs/grapes.min.css' %}">
-<script src="{% static 'js/vendor/grapesjs/grapes.min.js' %}"></script>
-<script src="{% static 'js/vendor/grapesjs/grapesjs-preset-newsletter.min.js' %}"></script>
-<script src="{% static 'js/email-builder.js' %}"></script>
-{% else %}
 <script src="{% static 'js/raw-editor.js' %}"></script>
-{% endif %}
 <script src="{% static 'js/draft-autosave.js' %}"></script>
 <script src="{% static 'js/send-test.js' %}"></script>
 

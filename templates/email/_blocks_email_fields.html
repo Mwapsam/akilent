@@ -1,0 +1,89 @@
+{% comment %}Whole-email settings in the block editor: subject, preview text, look, sample data, history.{% endcomment %}
+<div class="eb-field">
+  <div class="eb-label-row"><label class="label" for="eb-subject">Subject</label>{% include "email/_blocks_blank_menu.html" %}</div>
+  <input id="eb-subject" class="input" x-model="subject" maxlength="200" data-blanks>
+  <p class="help" x-show="subject.length > 60">Phones cut subjects off after about 60 characters.</p>
+  {% if ai_on %}
+  <div class="mt-2" x-data="aiDraft({kind: 'email_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
+    {% csrf_token %}
+    <button type="button" class="eb-link" :disabled="busy"
+            @click="start({instruction: 'subjects', subject: subject, text_body: plainText(), html_body: ''})">
+      <span x-show="!busy">Suggest subject lines</span><span x-show="busy" x-cloak>Thinking…</span>
+    </button>
+    <p class="text-xs mt-1" style="color: var(--tone-coral-fg)" x-show="error" x-text="error" role="alert"></p>
+    <div x-show="draft" x-cloak class="mt-2 flex flex-col gap-1.5" role="group" aria-label="Suggested subject lines">
+      <template x-for="s in (draft && draft.result.subjects) || []">
+        <button type="button" class="eb-suggestion" x-text="s" @click="subject = s; draft = null"></button>
+      </template>
+      <button type="button" class="eb-link self-start" @click="draft = null">Discard</button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="eb-field">
+  <label class="label" for="eb-preheader">Preview text</label>
+  <input id="eb-preheader" class="input" x-model="doc.preheader" maxlength="200" placeholder="A line shown after the subject in the inbox">
+</div>
+
+<div class="eb-group">
+  <p class="eb-kicker">Look</p>
+  <div class="eb-colours">
+    {% include "email/_blocks_colour.html" with model="doc.style.background" fallback="'#F3F5F7'" text="Page" noreset=1 %}
+    {% include "email/_blocks_colour.html" with model="doc.style.content_background" fallback="'#FFFFFF'" text="Email" noreset=1 %}
+    {% include "email/_blocks_colour.html" with model="doc.style.text_color" fallback="'#12182B'" text="Text" noreset=1 %}
+    {% include "email/_blocks_colour.html" with model="doc.style.accent" fallback="'#FFB020'" text="Buttons" noreset=1 %}
+    {% include "email/_blocks_colour.html" with model="doc.style.button_text" fallback="'#12182B'" text="Button text" noreset=1 %}
+  </div>
+  <div class="eb-field">
+    <label class="label" for="eb-font">Font</label>
+    <select id="eb-font" class="input" x-model="doc.style.font">
+      <option value="sans">Clean (Arial)</option>
+      <option value="serif">Classic (Georgia)</option>
+      <option value="rounded">Friendly (Trebuchet)</option>
+      <option value="mono">Typewriter (Courier)</option>
+    </select>
+    <p class="help">Fonts every email app has, so it looks the same everywhere.</p>
+  </div>
+  <label class="eb-check"><input type="checkbox" x-model="doc.style.rounded"> Rounded corners</label>
+</div>
+
+<div class="eb-group">
+  <p class="eb-kicker">Sample data</p>
+  <p class="help mb-2">Stands in for each person's details in the preview and test emails. Real values are filled in when it's sent.</p>
+  <div class="eb-samples">
+    <template x-for="(row, ri) in samples" :key="ri">
+      <div class="eb-sample">
+        <input class="input font-mono text-xs" x-model="row.key" placeholder="blank" aria-label="Blank name">
+        <input class="input text-sm" x-model="row.value" placeholder="Example" aria-label="Example value">
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="samples.splice(ri, 1)" aria-label="Remove">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </template>
+  </div>
+  <button type="button" class="eb-link mt-2" @click="samples.push({key: '', value: ''})">+ Add sample</button>
+</div>
+
+<div class="eb-group" id="eb-versions">
+  <p class="eb-kicker">Version history</p>
+  {% if template.versions.all %}
+  <p class="help mb-2">A version is kept each time you press Save.</p>
+  <ul class="eb-versions">
+    {% for v in template.versions.all|slice:":10" %}
+    <li>
+      <span class="truncate">{{ v.created_at|date:"M j, H:i" }} · {{ v.subject|default:"(no subject)" }}</span>
+      <form method="post" action="/email/templates/{{ template.pk }}/versions/{{ v.pk }}/restore/"
+            hx-boost="false"
+            @submit="confirm('Restore this version? What you have now is kept as a version first.') ? (leaving = true) : $event.preventDefault()">
+        {% csrf_token %}
+        <input type="hidden" name="mode" value="blocks">
+        <button class="eb-link" type="submit">Restore</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="help">Each time you press Save, the previous version is kept here.</p>
+  {% endif %}
+</div>

@@ -3,7 +3,7 @@ the onboarding_status context processor) while setup is incomplete. Collapses to
 a small launcher so it stays available without getting in the way.{% endcomment %}
 <div x-data="{ open: localStorage.getItem('obWidget') === 'open',
                set(v){ this.open = v; localStorage.setItem('obWidget', v ? 'open' : 'closed'); } }"
-     class="fixed bottom-4 right-4 print:hidden" style="z-index: var(--z-sticky)">
+     class="ob-widget fixed bottom-4 right-4 print:hidden" style="z-index: var(--z-sticky)">
 
   {# Collapsed launcher #}
   <button type="button" x-show="!open" @click="set(true)"

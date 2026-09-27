@@ -1,0 +1,79 @@
+{% comment %}Block editor dialogs: the real preview (built by the server, with sample data) and the image picker.{% endcomment %}
+
+{% comment %}Preview. Teleported to <body>: inside the page, the app shell's stacking would draw its top
+bar and sidebar over the dialog whatever its z-index.{% endcomment %}
+<template x-teleport="body">
+<div class="eb-modal" x-show="previewOpen" x-cloak role="dialog" aria-modal="true" aria-labelledby="eb-preview-title"
+     x-trap.noscroll="previewOpen" @keydown.escape="previewOpen = false">
+  <div class="eb-modal-box eb-modal-wide">
+    <div class="eb-modal-head">
+      <div class="min-w-0">
+        <p id="eb-preview-title" class="eb-panel-title">Preview</p>
+        <p class="text-xs text-gray-500 truncate">With your sample data. This is exactly what gets sent.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="eb-seg" role="group" aria-label="Preview width">
+          <button type="button" class="eb-seg-btn" :class="previewDevice === 'desktop' && 'is-on'" @click="previewDevice = 'desktop'" :aria-pressed="previewDevice === 'desktop'">Desktop</button>
+          <button type="button" class="eb-seg-btn" :class="previewDevice === 'mobile' && 'is-on'" @click="previewDevice = 'mobile'" :aria-pressed="previewDevice === 'mobile'">Phone</button>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm hidden sm:inline-flex" @click="sendTest()" :disabled="testing"
+                x-text="testing ? 'Sending…' : 'Send me a test'"></button>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="previewOpen = false" aria-label="Close preview">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="eb-preview-meta">
+      <p><span class="text-gray-500">Subject:</span> <strong x-text="previewData.subject || '(no subject)'"></strong></p>
+      <p class="text-xs" style="color: var(--tone-amber-fg)" x-show="previewData.missing && previewData.missing.length"
+         x-text="'No sample value for: ' + (previewData.missing || []).join(', ') + '. Add them under Email settings → Sample data.'"></p>
+      <p class="text-xs" style="color: var(--tone-coral-fg)" x-show="previewData.error" x-text="previewData.error"></p>
+    </div>
+    <div class="eb-preview-stage">
+      <div class="eb-preview-frame" :class="previewDevice === 'mobile' && 'is-mobile'">
+        <p class="eb-loading" x-show="previewLoading">Building the preview…</p>
+        <iframe title="Email preview" sandbox="allow-same-origin allow-popups" :srcdoc="previewData.html || ''"
+                x-show="!previewLoading"></iframe>
+      </div>
+    </div>
+    <div class="sm:hidden p-3 border-t" style="border-color: var(--color-border)">
+      <button type="button" class="btn btn-secondary btn-sm w-full" @click="sendTest()" :disabled="testing"
+              x-text="testing ? 'Sending…' : 'Send me a test'"></button>
+    </div>
+  </div>
+</div>
+
+</template>
+
+{# Image picker #}
+<template x-teleport="body">
+<div class="eb-modal" x-show="picker.open" x-cloak role="dialog" aria-modal="true" aria-labelledby="eb-picker-title"
+     x-trap.noscroll="picker.open" @keydown.escape="picker.open = false">
+  <div class="eb-modal-box">
+    <div class="eb-modal-head">
+      <p id="eb-picker-title" class="eb-panel-title">Choose an image</p>
+      <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="picker.open = false" aria-label="Close">
+        <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="p-4 space-y-3">
+      <label class="eb-upload" :class="picker.uploading && 'is-busy'">
+        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only" @change="upload($event)" :disabled="picker.uploading">
+        <svg viewBox="0 0 24 24" class="w-5 h-5" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+        <span x-text="picker.uploading ? 'Uploading…' : 'Upload an image'"></span>
+        <span class="text-xs text-gray-500">PNG, JPG, GIF or WebP</span>
+      </label>
+      <p class="text-xs" style="color: var(--tone-coral-fg)" x-show="picker.error" x-text="picker.error" role="alert"></p>
+      <p class="eb-loading" x-show="picker.loading">Loading your images…</p>
+      <p class="help" x-show="!picker.loading && !picker.assets.length">No images yet. Upload one above.</p>
+      <div class="eb-assets" x-show="picker.assets.length">
+        <template x-for="a in picker.assets" :key="a.url">
+          <button type="button" class="eb-asset" @click="chooseImage(a.url)" :aria-label="'Use ' + a.name">
+            <img :src="a.url" :alt="a.name" loading="lazy">
+          </button>
+        </template>
+      </div>
+    </div>
+  </div>
+</div>
+</template>

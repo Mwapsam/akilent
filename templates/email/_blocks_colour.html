@@ -1,0 +1,9 @@
+{% comment %}A colour swatch + hex field bound to {{ model }}; empty means "use {{ fallback }}" (block editor).{% endcomment %}
+<label class="eb-colour">
+  <input type="color" class="eb-swatch" :value="{{ model }} || {{ fallback }}" @input="{{ model }} = $event.target.value.toUpperCase()" aria-label="{{ text }} colour">
+  <span class="eb-colour-text">
+    <span class="eb-colour-name">{{ text }}</span>
+    <span class="eb-colour-hex" x-text="{{ model }} || 'Default'"></span>
+  </span>
+  {% if not noreset %}<button type="button" class="eb-link" x-show="{{ model }}" @click.prevent="{{ model }} = ''">Reset</button>{% endif %}
+</label>

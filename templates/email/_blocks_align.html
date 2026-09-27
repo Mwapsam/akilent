@@ -1,0 +1,10 @@
+{% comment %}Left / centre / right for the selected section (block editor).{% endcomment %}
+<div class="eb-field">
+  <span class="label">Alignment</span>
+  <div class="eb-seg" role="group" aria-label="Alignment">
+    <template x-for="a in [['left','Left'],['center','Centre'],['right','Right']]">
+      <button type="button" class="eb-seg-btn" :class="selected.align === a[0] && 'is-on'" @click="selected.align = a[0]"
+              :aria-pressed="selected.align === a[0]" x-text="a[1]"></button>
+    </template>
+  </div>
+</div>

@@ -898,6 +898,9 @@ def template_edit_form(request, pk):
     if mode not in (EmailTemplate.BuilderMode.RAW, EmailTemplate.BuilderMode.BLOCKS):
         mode = EmailTemplate.BuilderMode.RAW
 
+    if mode == EmailTemplate.BuilderMode.BLOCKS:
+        return _block_editor(request, account, template, ai_api)
+
     merge_tag_paths = flatten_variable_paths(template.sample_variables) if template.sample_variables else []
 
     builder_config = json.dumps({
@@ -927,6 +930,46 @@ def template_edit_form(request, pk):
     })
 
 
+def _block_editor(request, account, template, ai_api):
+    """The block editor: Akilent's own sections, rendered to email-safe HTML on the server."""
+    from apps.email import blocks
+
+    doc = blocks.document_for(template, base_url=request.build_absolute_uri("/"))
+    samples = blocks.sample_values(doc, template.sample_variables, account.company_name)
+    config = {
+        "doc": doc,
+        "name": template.name,
+        "subject": template.subject,
+        "sampleVariables": samples,
+        "saveUrl": f"/email/templates/{template.pk}/edit/",
+        "previewUrl": f"/email/templates/{template.pk}/preview/",
+        "sendTestUrl": f"/email/templates/{template.pk}/send-test/",
+        "uploadUrl": "/email/templates/assets/upload/",
+        "assetsUrl": "/email/templates/assets/?format=json",
+        "rawUrl": f"/email/templates/{template.pk}/?mode=raw",
+        "backUrl": "/email/templates/",
+        "companyName": account.company_name or "",
+        "csrfToken": get_token(request),
+    }
+    return render(request, "email/template_blocks.html", {
+        "account": account,
+        "template": template,
+        "mode": "blocks",
+        "editor_config": config,
+        "imported": doc.get("imported", ""),
+        "ai_on": ai_api.is_available(account),
+    })
+
+
+def _render_blocks(request, raw):
+    """``(html_body, text_body, doc)`` from a block document the browser sent; BlocksError if unusable."""
+    from apps.email import blocks
+
+    doc = blocks.clean(raw)
+    html_body, text_body = blocks.render(doc, base_url=request.build_absolute_uri("/"))
+    return html_body, text_body, doc
+
+
 @login_required
 @require_POST
 def template_edit(request, pk):
@@ -941,8 +984,24 @@ def template_edit(request, pk):
     template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
 
     autosave = request.POST.get("autosave") == "1" or is_ajax(request)
+    # The block editor saves in the background either way; its Save button asks for a version.
+    snapshot = request.POST.get("autosave") != "1" and (not is_ajax(request) or request.POST.get("snapshot") == "1")
 
-    if not autosave:
+    blocks_html = None
+    if request.POST.get("builder_mode") == EmailTemplate.BuilderMode.BLOCKS and request.POST.get("content_blocks"):
+        from apps.email import blocks
+
+        try:
+            raw_doc = json_module.loads(request.POST["content_blocks"])
+        except json_module.JSONDecodeError:
+            raw_doc = None
+        if blocks.is_document(raw_doc):
+            try:
+                blocks_html = _render_blocks(request, raw_doc)
+            except blocks.BlocksError as exc:
+                return JsonResponse({"saved": False, "error": str(exc)}, status=400)
+
+    if snapshot:
         from apps.email.services.versions import snapshot_version
 
         snapshot_version(
@@ -954,11 +1013,16 @@ def template_edit(request, pk):
     template.subject = request.POST.get("subject") or ""
     template.text_body = request.POST.get("text_body") or ""
     template.html_body = request.POST.get("html_body") or ""
+    if blocks_html is not None:  # built here from the sections, never taken from the browser
+        template.html_body, template.text_body, clean_doc = blocks_html
 
     update_fields = ["name", "subject", "text_body", "html_body", "updated_at"]
 
     content_blocks_raw = request.POST.get("content_blocks")
-    if content_blocks_raw is not None:
+    if blocks_html is not None:
+        template.content_blocks = clean_doc
+        update_fields.append("content_blocks")
+    elif content_blocks_raw is not None:
         try:
             template.content_blocks = json_module.loads(content_blocks_raw)
         except json_module.JSONDecodeError:
@@ -1101,6 +1165,13 @@ def template_preview(request, pk):
             text_body=payload.get("text_body", template.text_body),
             html_body=payload.get("html_body", template.html_body),
         )
+        if payload.get("blocks") is not None:  # the block editor sends sections, not HTML
+            from apps.email.blocks import BlocksError
+
+            try:
+                draft.html_body, draft.text_body, _ = _render_blocks(request, payload["blocks"])
+            except BlocksError as exc:
+                return JsonResponse({"error": str(exc)}, status=400)
         variables = payload.get("variables") or template.sample_variables
         subject, text_body, html_body = render_template(draft, variables)
         missing_variables = validate_variables(draft, variables)
@@ -1164,6 +1235,13 @@ def template_send_test(request, pk):
         text_body=payload.get("text_body", template.text_body),
         html_body=payload.get("html_body", template.html_body),
     )
+    if payload.get("blocks") is not None:
+        from apps.email.blocks import BlocksError
+
+        try:
+            draft.html_body, draft.text_body, _ = _render_blocks(request, payload["blocks"])
+        except BlocksError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
     variables = payload.get("variables") or template.sample_variables
     subject, text_body, html_body = render_template(draft, variables)
 
@@ -1248,6 +1326,11 @@ def asset_library(request):
     query = (request.GET.get("q") or "").strip()
     if query:
         assets = assets.filter(file__icontains=query)
+
+    if request.GET.get("format") == "json":  # the block editor's image picker
+        return JsonResponse({"assets": [
+            {"url": a.file.url, "name": a.file.name.rsplit("/", 1)[-1]} for a in assets[:200]
+        ]})
 
     return render(request, "email/assets.html", {
         "account": account,

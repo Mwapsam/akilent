@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Edit {{ template.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block main_class %}eb-main{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/email-blocks.css' %}">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+The block editor (apps.email.blocks + static/js/email-blocks.js). The email is a list of sections;
+the browser only edits that list, and the server builds the email's HTML from it on every save,
+preview and test. Desktop: add sections on the left, the email in the middle, the selected
+section's settings on the right. Below lg: the email fills the screen, and adding a section or
+changing one happens in a sheet from the bottom, so it works with a thumb.
+{% endcomment %}
+{{ editor_config|json_script:"email-blocks-config" }}
+
+<div class="eb" x-data="emailBlocks(JSON.parse(document.getElementById('email-blocks-config').textContent))"
+     @keydown.window="onKey($event)" @beforeunload.window="onLeave($event)">
+
+  {# ─── Toolbar ─────────────────────────────────────────────────────────── #}
+  <div class="eb-bar">
+    <a :href="config.backUrl" class="btn btn-ghost btn-icon btn-sm" aria-label="Back to templates" title="Back to templates">
+      {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %}
+    </a>
+    <label class="sr-only" for="eb-name">Template name</label>
+    <input id="eb-name" class="eb-name" x-model="name" maxlength="200" autocomplete="off" spellcheck="false">
+    <span class="eb-status" :class="'is-' + statusTone()" :title="saveFailed" role="status" aria-live="polite" x-text="statusText()"></span>
+
+    <div class="eb-bar-tools">
+      <div class="eb-seg hidden sm:inline-flex" role="group" aria-label="Undo and redo">
+        <button type="button" class="eb-seg-btn" @click="undo()" :disabled="!past.length" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button type="button" class="eb-seg-btn" @click="redo()" :disabled="!future.length" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+      </div>
+      <div class="eb-seg hidden lg:inline-flex" role="group" aria-label="Canvas width">
+        <button type="button" class="eb-seg-btn" :class="device === 'desktop' && 'is-on'" @click="device = 'desktop'" :aria-pressed="device === 'desktop'">Desktop</button>
+        <button type="button" class="eb-seg-btn" :class="device === 'mobile' && 'is-on'" @click="device = 'mobile'" :aria-pressed="device === 'mobile'">Mobile</button>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm hidden sm:inline-flex" @click="openPreview()">Preview</button>
+      <button type="button" class="btn btn-primary btn-sm" @click="save(true)" :disabled="saving">
+        <span x-text="saving ? 'Saving…' : 'Save'"></span>
+      </button>
+      <div class="relative" x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false">
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="open = !open" :aria-expanded="open" aria-haspopup="menu" aria-label="More actions">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        </button>
+        <div class="eb-menu" x-show="open" x-cloak role="menu" x-transition.opacity>
+          <button type="button" role="menuitem" class="eb-menu-item sm:hidden" @click="open = false; openPreview()">Preview</button>
+          <button type="button" role="menuitem" class="eb-menu-item" @click="open = false; sendTest()">Send me a test</button>
+          <button type="button" role="menuitem" class="eb-menu-item" @click="open = false; select(null); showEmailPanel()">Email settings</button>
+          <a role="menuitem" class="eb-menu-item" href="/email/templates/assets/" target="_blank" rel="noopener">Media library</a>
+          <a role="menuitem" class="eb-menu-item" href="#eb-versions" @click="open = false; select(null); showEmailPanel(); $nextTick(() => document.getElementById('eb-versions')?.scrollIntoView())">Version history</a>
+          <div class="eb-menu-sep" role="separator"></div>
+          <a role="menuitem" class="eb-menu-item" :href="config.rawUrl" @click="leaving = true">Edit as HTML</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="eb-alert" x-show="error" x-cloak role="alert">
+    <span x-text="error"></span>
+    <button type="button" class="eb-link" @click="error = ''">Dismiss</button>
+  </div>
+
+  {% if imported %}
+  <div class="eb-note" x-data="{ shown: true }" x-show="shown">
+    <p>
+      {% if imported == "classic" %}This design was made in the old drag-and-drop editor. It's kept exactly as it was, as one
+      <strong>HTML</strong> section. Add new sections around it, or rebuild it here and remove the old one.
+      {% else %}This email was last edited as HTML, so that HTML is kept as one <strong>HTML</strong> section. Nothing
+      changes until you save.{% endif %}
+    </p>
+    <button type="button" class="eb-link" @click="shown = false">Got it</button>
+  </div>
+  {% endif %}
+
+  <div class="eb-work">
+    {# ─── Add sections (desktop) ─────────────────────────────────────────── #}
+    <aside class="eb-palette" aria-label="Add a section">
+      <p class="eb-kicker">Add a section</p>
+      <p class="eb-hint">Click to add below the selected section, or drag into the email.</p>
+      <div class="eb-palette-list">
+        <template x-for="t in types" :key="t.type">
+          <button type="button" class="eb-type" draggable="true"
+                  @click="add(t.type)" @dragstart="dragNew($event, t.type)" @dragend="dragEnd()">
+            <span class="eb-type-icon" x-html="t.icon" aria-hidden="true"></span>
+            <span class="eb-type-text"><span class="eb-type-name" x-text="t.name"></span><span class="eb-type-desc" x-text="t.desc"></span></span>
+          </button>
+        </template>
+      </div>
+    </aside>
+
+    {# ─── The email ─────────────────────────────────────────────────────── #}
+    <section class="eb-canvas" x-ref="canvas" aria-label="Email" @click.self="select(null)"
+             @dragover.prevent="dragOverCanvas($event)" @drop.prevent="drop($event)">
+      <div class="eb-inbox" @click="select(null); showEmailPanel()" role="button" tabindex="0"
+           @keydown.enter="select(null); showEmailPanel()" aria-label="Edit subject and preview text">
+        <span class="eb-inbox-from" x-text="config.companyName || 'Your business'"></span>
+        <span class="eb-inbox-subject" x-text="subject || 'Add a subject'"></span>
+        <span class="eb-inbox-pre" x-text="doc.preheader || 'Add preview text…'"></span>
+      </div>
+
+      <div class="eb-page" :style="pageStyle()">
+        <div class="eb-email" :class="device === 'mobile' ? 'is-mobile' : ''" :style="emailStyle()">
+          <template x-for="(b, i) in doc.blocks" :key="b.id">
+            <div>
+              <div class="eb-drop" x-show="dropAt === i" aria-hidden="true"></div>
+              <div class="eb-block" :class="{ 'is-selected': selectedId === b.id, 'is-dragging': dragId === b.id }"
+                   :data-index="i" tabindex="0" role="button"
+                   :aria-label="label(b) + (selectedId === b.id ? ' (selected)' : '') + '. Press Enter to edit.'"
+                   @click.stop="select(b.id)" @keydown.enter.self="select(b.id)"
+                   @dragover.prevent.stop="dragOverBlock($event, i)" @drop.prevent.stop="drop($event)">
+                <div class="eb-block-body" x-html="preview(b)"></div>
+                <template x-if="b.type === 'html'">
+                  <iframe class="eb-html-frame" sandbox="allow-same-origin" :srcdoc="b.html" title="HTML section"
+                          @load="fitFrame($event.target)"></iframe>
+                </template>
+                <div class="eb-block-tools" x-show="selectedId === b.id" x-cloak @click.stop>
+                  <span class="eb-block-name" x-text="typeName(b.type)"></span>
+                  <span class="eb-tool hidden lg:inline-flex" draggable="true" title="Drag to move" aria-hidden="true"
+                        @dragstart="dragExisting($event, b.id)" @dragend="dragEnd()">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div class="eb-drop" x-show="dropAt === doc.blocks.length" aria-hidden="true"></div>
+
+          <div class="eb-empty" x-show="!doc.blocks.length">
+            <p>This email is empty.</p>
+            <button type="button" class="btn btn-secondary btn-sm" @click="sheet = 'add'">Add a section</button>
+          </div>
+        </div>
+      </div>
+      <p class="eb-foot-note">Campaign emails also get an unsubscribe link and your business address at the bottom.</p>
+    </section>
+
+    {# ─── Settings: the selected section, or the whole email ──────────────── #}
+    <aside class="eb-panel" :class="sheet === 'edit' && 'is-open'" aria-label="Settings" @focusin="rememberField($event)">
+      <div class="eb-sheet-head">
+        <p class="eb-panel-title" x-text="selected ? typeName(selected.type) : 'Email settings'"></p>
+        <div class="eb-panel-actions hidden lg:flex" x-show="selected" role="group" aria-label="Section actions">
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="move(selected.id, -1)" :disabled="selectedIndex() === 0" title="Move up (Alt+↑)" aria-label="Move up">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+          </button>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="move(selected.id, 1)" :disabled="selectedIndex() === doc.blocks.length - 1" title="Move down (Alt+↓)" aria-label="Move down">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="duplicate(selected.id)" title="Duplicate" aria-label="Duplicate">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          </button>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm hover:text-red-600" @click="remove(selected.id)" title="Delete (Del)" aria-label="Delete">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
+          </button>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm lg:hidden" @click="sheet = ''">Done</button>
+      </div>
+
+      {# Section settings #}
+      <template x-if="selected">
+        <div class="eb-fields">
+          {% include "email/_blocks_fields.html" %}
+          <div class="eb-actions lg:hidden">
+            <button type="button" class="btn btn-secondary btn-sm" @click="move(selected.id, -1)" :disabled="selectedIndex() === 0">Move up</button>
+            <button type="button" class="btn btn-secondary btn-sm" @click="move(selected.id, 1)" :disabled="selectedIndex() === doc.blocks.length - 1">Move down</button>
+            <button type="button" class="btn btn-secondary btn-sm" @click="duplicate(selected.id)">Duplicate</button>
+            <button type="button" class="btn btn-ghost btn-sm text-red-700" @click="remove(selected.id); sheet = ''">Delete</button>
+          </div>
+        </div>
+      </template>
+
+      {# Email settings #}
+      <template x-if="!selected">
+        <div class="eb-fields">
+          {% include "email/_blocks_email_fields.html" %}
+        </div>
+      </template>
+    </aside>
+  </div>
+
+  {# ─── Phone: bottom bar and the "Add" sheet ────────────────────────────── #}
+  <nav class="eb-mobile-bar" aria-label="Editor">
+    <button type="button" class="eb-mobile-btn" @click="sheet = 'add'">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span>
+    </button>
+    <button type="button" class="eb-mobile-btn" @click="select(null); showEmailPanel()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Email</span>
+    </button>
+    <button type="button" class="eb-mobile-btn" @click="openPreview()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Preview</span>
+    </button>
+  </nav>
+
+  <div class="eb-scrim" x-show="sheet" x-cloak @click="sheet = ''" x-transition.opacity aria-hidden="true"></div>
+  <div class="eb-sheet" x-show="sheet === 'add'" x-cloak x-transition role="dialog" aria-modal="true" aria-label="Add a section"
+       @keydown.escape="sheet = ''">
+    <div class="eb-sheet-head">
+      <p class="eb-panel-title">Add a section</p>
+      <button type="button" class="btn btn-ghost btn-sm" @click="sheet = ''">Close</button>
+    </div>
+    <div class="eb-sheet-grid">
+      <template x-for="t in types" :key="t.type">
+        <button type="button" class="eb-type" @click="add(t.type); sheet = 'edit'">
+          <span class="eb-type-icon" x-html="t.icon" aria-hidden="true"></span>
+          <span class="eb-type-text"><span class="eb-type-name" x-text="t.name"></span><span class="eb-type-desc" x-text="t.desc"></span></span>
+        </button>
+      </template>
+    </div>
+  </div>
+
+  {% include "email/_blocks_modals.html" %}
+</div>
+
+<script src="{% static 'js/email-blocks.js' %}"></script>
+{% endblock %}
