@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
+from apps.core.htmx import full_page_load
 from apps.accounts.utils import get_current_account
 from apps.automation import api as automation_api
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
@@ -400,6 +401,7 @@ def workflow_create(request):
 
 @login_required
 @module_required("automations")
+@full_page_load  # rich editor: its scripts expect a fresh page
 def workflow_editor(request, slug: str):
     account = get_current_account(request)
     if account is None:

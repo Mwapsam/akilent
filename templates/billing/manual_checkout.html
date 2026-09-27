@@ -19,7 +19,7 @@
 
   <div class="card card-pad">
     <h2 class="font-semibold mb-4">Submit your payment reference</h2>
-    <form method="post" action="{% url 'billing:manual-submit' %}" enctype="multipart/form-data" class="space-y-4">
+    <form method="post" action="{% url 'billing:manual-submit' %}" enctype="multipart/form-data" hx-boost="false" class="space-y-4">
       {% csrf_token %}
       <input type="hidden" name="plan" value="{{ plan.slug }}">
       {% include "components/form_field.html" with name="reference" label="Transaction reference / sender name" required=True %}

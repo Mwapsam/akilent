@@ -12,7 +12,7 @@
 <div class="grid lg:grid-cols-3 gap-6">
 
   {# Branding + config #}
-  <form method="post" action="/manage/settings/" enctype="multipart/form-data" class="lg:col-span-2 space-y-6">
+  <form method="post" action="/manage/settings/" enctype="multipart/form-data" hx-boost="false" class="lg:col-span-2 space-y-6">
     {% csrf_token %}
 
     <div class="card card-pad">

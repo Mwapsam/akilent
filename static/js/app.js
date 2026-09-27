@@ -276,7 +276,7 @@
     const main = mainEl();
     if (!main || !document.body.hasAttribute("hx-boost")) return;
     const unsafe = Array.prototype.some.call(main.querySelectorAll("script"), function (s) {
-      return s.type !== "application/json" && !s.hasAttribute("data-swap-safe");
+      return s.type !== "application/json" && !s.hasAttribute("data-shell-safe");
     });
     if (unsafe) main.setAttribute("hx-boost", "false");
   }
@@ -345,15 +345,27 @@
     pageCleanups = [];
   });
 
+  // afterSettle only fires once content has actually been swapped in, so isBoosted alone is
+  // enough here: a normal 2xx nav and a forced 400/422 re-render (beforeSwap, above) both reach
+  // this point, and any other error status never swapped at all. A status check on top of that
+  // would (and did) skip focusPage() for exactly the validation-error case it exists for.
   document.addEventListener("htmx:afterSettle", function (e) {
-    if (!isBoosted(e.detail) || e.detail.target !== mainEl()) return;
+    if (!isBoosted(e.detail)) return;
     syncNav();
     focusPage();
     runPageHooks();
     if (window.Alpine && Alpine.store("ui")) Alpine.store("ui").closeDrawer();
   });
 
-  document.addEventListener("htmx:historyRestore", function () {
+  document.addEventListener("htmx:historyRestore", function (e) {
+    // The restore response is a whole page; make sure its <title> wins.
+    const html = e.detail && e.detail.serverResponse;
+    const m = typeof html === "string" && html.match(/<title>([\s\S]*?)<\/title>/i);
+    if (m) {
+      const t = document.createElement("textarea");
+      t.innerHTML = m[1].trim();
+      document.title = t.value;
+    }
     syncNav();
     focusPage();
     runPageHooks();

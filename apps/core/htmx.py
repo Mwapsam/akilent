@@ -29,7 +29,7 @@ _MARKER = re.compile(rb'<meta name="akilent-shell" content="([a-z-]+)"')
 # A page script is fragment-safe only when it says so. Everything else (DOMContentLoaded
 # initialisers, global listeners) would silently not run, or run twice, after a swap.
 _SCRIPT_TAG = re.compile(rb"<script\b[^>]*>", re.IGNORECASE)
-_SAFE_SCRIPT = re.compile(rb'type="application/json"|data-swap-safe', re.IGNORECASE)
+_SAFE_SCRIPT = re.compile(rb'type="application/json"|data-shell-safe', re.IGNORECASE)
 
 
 def is_boosted(request) -> bool:

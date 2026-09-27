@@ -55,7 +55,7 @@
   <p class="field-error mb-4">{{ errors.form }}</p>
   {% endif %}
 
-  <form method="post" action="/email/campaigns/create/" enctype="multipart/form-data" @submit="onSubmit($event)" class="grid gap-4">
+  <form method="post" action="/email/campaigns/create/" enctype="multipart/form-data" hx-boost="false" @submit="onSubmit($event)" class="grid gap-4">
     {% csrf_token %}
     <input type="hidden" name="mode" :value="mode">
     <input type="hidden" name="from_email" :value="fromEmail">

@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from apps.core.htmx import full_page_load
 from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
 from apps.email import dnscheck
 from apps.email.verification import refresh_domain
@@ -884,6 +885,7 @@ def template_create(request):
 
 
 @login_required
+@full_page_load  # rich editor: its scripts expect a fresh page
 def template_edit_form(request, pk):
     from apps.email.models import EmailTemplate
 
@@ -1409,6 +1411,7 @@ def campaigns_list(request):
 
 
 @login_required
+@full_page_load  # rich editor: its scripts expect a fresh page
 def campaign_compose(request):
     account = get_current_account(request)
     if account is None:

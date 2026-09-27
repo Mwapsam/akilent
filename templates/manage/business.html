@@ -10,7 +10,7 @@
     <p class="text-sm text-gray-500">{{ business.slug }} · joined {{ business.created_at|date:"j M Y" }}
       {% if business.scheduled_deletion_at %} · <span class="text-red-700">closed; deleted on {{ business.scheduled_deletion_at|date:"j M Y" }}</span>{% endif %}</p>
   </div>
-  <form method="post" action="{% url 'core:view-as-start' business.pk %}">{% csrf_token %}
+  <form method="post" action="{% url 'core:view-as-start' business.pk %}" hx-boost="false">{% csrf_token %}
     <button class="btn btn-secondary btn-sm" title="Open this business's own screens, read-only">View as this business</button>
   </form>
 </header>
@@ -356,7 +356,7 @@
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">What's stored</h2>
     <p class="text-sm">{{ d.contacts }} contacts · {{ d.conversations }} conversations · {{ d.messages }} messages</p>
-    <form method="post" action="{% url 'core:business-export-contacts' business.pk %}">{% csrf_token %}
+    <form method="post" action="{% url 'core:business-export-contacts' business.pk %}" hx-boost="false">{% csrf_token %}
       <button class="btn btn-secondary btn-sm">Download contacts (CSV)</button></form>
     <p class="text-xs text-gray-500">For the business's own data requests. Every export is recorded in the audit log.</p>
   </section>

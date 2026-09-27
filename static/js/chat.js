@@ -1,7 +1,12 @@
 /* Live conversation thread: renders messages from a JSON feed, polls for new
  * ones, and sends replies without a page reload. Config comes from a
- * json_script block: { messages, lastId, feedUrl, open }. */
-document.addEventListener('alpine:init', () => {
+ * json_script block: { messages, lastId, feedUrl, open }.
+ *
+ * Loaded with the app shell (base.html), not by the page: a page swapped in place
+ * would otherwise render x-data="chat(...)" before its own script had loaded. The
+ * component stops polling in destroy(), which Alpine calls when the page is swapped away. */
+(function () {
+function registerChat() {
   const STATUS_LABELS = { queued: 'Sending…', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed', held: 'Held (plan limit)', unconfirmed: 'Not confirmed' };
   const BASE_INTERVAL = 3000;
   const MAX_INTERVAL = 30000;
@@ -26,10 +31,17 @@ document.addEventListener('alpine:init', () => {
 
     init() {
       this.$nextTick(() => this.scrollBottom(true));
-      document.addEventListener('visibilitychange', () => {
+      this._onVisible = () => {
         if (!document.hidden) { this.interval = BASE_INTERVAL; this.schedule(0); }
-      });
+      };
+      document.addEventListener('visibilitychange', this._onVisible);
       this.schedule();
+    },
+
+    destroy() {
+      this._destroyed = true;
+      clearTimeout(this.timer);
+      document.removeEventListener('visibilitychange', this._onVisible);
     },
 
     // ── rendering ────────────────────────────────────────────────
@@ -90,6 +102,7 @@ document.addEventListener('alpine:init', () => {
     // ── polling ──────────────────────────────────────────────────
     schedule(delay) {
       clearTimeout(this.timer);
+      if (this._destroyed) return;
       this.timer = setTimeout(() => this.poll(), delay === undefined ? this.interval : delay);
     },
     async poll() {
@@ -246,4 +259,8 @@ document.addEventListener('alpine:init', () => {
       }
     },
   }));
-});
+}
+
+if (window.Alpine && window.Alpine.version) registerChat();
+else document.addEventListener('alpine:init', registerChat);
+})();

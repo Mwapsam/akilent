@@ -5,7 +5,7 @@
 {% block content %}
 {% with display_name=conversation.contact.full_name|default:conversation.contact.phone|default:conversation.contact.email %}
 {{ chat_config|json_script:"chat-config" }}
-<script src="{% static 'js/chat.js' %}"></script>
+
 
 <style>
   /* â”€â”€ Conversation view. Tune --cv-top to your base layout's header + padding height. â”€â”€ */

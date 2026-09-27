@@ -4,8 +4,7 @@
   <title>, the shell marker, out-of-band updates for nav and breadcrumbs, and the page itself,
   which HTMX swaps into <main id="main">. Each block still appears once; only the shell markup
   around it is conditional.
-{% endcomment %}{% if not request.shell_swap %}
-<!DOCTYPE html>
+{% endcomment %}{% if not request.shell_swap %}<!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
@@ -46,6 +45,19 @@
   {% comment %}Before Alpine, like app.js: it defines the chartHover() factory
   that charts reference in x-data.{% endcomment %}
   <script defer src="{% static 'js/chart-hover.js' %}"></script>
+  {% comment %}
+    Alpine components pages use, loaded with the shell so a page swapped in place finds them
+    already defined (see apps/core/htmx.py) instead of forcing a full page load just to run one
+    script tag. ai_draft.js used to load only on pages guarded by an account-level "ai_on" check;
+    it's unconditional now, at the cost of every signed-in page downloading and parsing it
+    (roughly 2KB) whether or not that account has AI. It defines one factory and does nothing
+    until a page's own x-data="aiDraft(...)" calls it, so an account without AI pays that small,
+    fixed cost but nothing per request. Gating it again would mean computing whether AI is
+    available for the account on every page just to skip a file this small; not worth it unless
+    the file grows.
+  {% endcomment %}
+  <script defer src="{% static 'js/chat.js' %}"></script>
+  <script defer src="{% static 'js/ai_draft.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   {% block extra_head %}{% endblock %}
 </head>
@@ -159,7 +171,7 @@
       <div class="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium"
            style="background: var(--color-danger, #b91c1c); color: #fff;" role="status">
         <span>Viewing {{ viewing_as.company_name }} as support: read-only. Nothing you do here is saved or sent.</span>
-        <form method="post" action="{% url 'core:view-as-stop' %}">{% csrf_token %}
+        <form method="post" action="{% url 'core:view-as-stop' %}" hx-boost="false">{% csrf_token %}
           <button class="underline font-semibold">Stop viewing</button>
         </form>
       </div>
@@ -278,7 +290,7 @@
 
             <div class="my-1 border-t border-border"></div>
 
-            <form method="post" action="/auth/logout/">
+            <form method="post" action="/auth/logout/" hx-boost="false">
               {% csrf_token %}
               <button class="nav-link w-full text-left">
                 {% include "components/icon.html" with name="log-out" class="w-4 h-4 shrink-0" %}

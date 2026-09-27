@@ -130,7 +130,9 @@
 
   {% if embedded_enabled %}
     <div class="mt-4">
-      <a href="/whatsapp/connect/redirect/" class="btn btn-primary">
+      {% comment %}hx-boost="false": this leaves the app for Meta's Embedded Signup. ShellMiddleware
+      would catch the cross-origin redirect anyway, but skipping the round trip is one click faster.{% endcomment %}
+      <a href="/whatsapp/connect/redirect/" hx-boost="false" class="btn btn-primary">
         {% include "components/icon.html" with name="chat" class="w-4 h-4" %}
         Connect with WhatsApp
       </a>
