@@ -469,4 +469,17 @@
       window.htmx.trigger(form, "submit");
     });
   }, 20000);
+
+  // A verified domain isn't polled, so a card whose last check is old
+  // (data-dns-stale) quietly re-checks itself once when the page opens -- DNS
+  // records can be edited or deleted long after setup. The swapped-in card has
+  // a fresh check time, so this never repeats.
+  akilent.onPage(function (root) {
+    if (!window.htmx || !root) return;
+    root.querySelectorAll('[data-dns-stale="1"] form[data-dns-check]').forEach(function (form) {
+      if (form.classList.contains("htmx-request")) return;
+      silentRequests.add(form);
+      window.htmx.trigger(form, "submit");
+    });
+  });
 })();

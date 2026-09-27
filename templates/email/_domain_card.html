@@ -4,8 +4,12 @@ loop and returned by AJAX create/check/toggle. Needs: d.
 `data-domain-pending="1"` marks unverified cards for the JS auto-poll, which
 re-fires the data-dns-check form's hx-post until the domain verifies itself.
 That poll is silent unless the news is good, so a card that is still waiting on
-DNS does not toast every 20 seconds.{% endcomment %}
-<div id="domain-card-{{ d.pk }}" class="card card-pad"{% if not d.is_verified %} data-domain-pending="1"{% endif %}>
+DNS does not toast every 20 seconds. `data-dns-stale="1"` marks a verified
+card whose last check is old; it silently re-checks once on page load.
+
+Rendering never performs DNS: each record's diagnosis comes from
+d.dns_diagnostics, persisted by the last check.{% endcomment %}
+<div id="domain-card-{{ d.pk }}" class="card card-pad"{% if not d.is_verified %} data-domain-pending="1"{% elif d.dns_is_stale %} data-dns-stale="1"{% endif %}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
@@ -86,36 +90,59 @@ DNS does not toast every 20 seconds.{% endcomment %}
   </div>
   {% endif %}
 
-  {# Guidance banner #}
+  {% comment %}Guidance banners{% endcomment %}
   {% if d.is_verified %}
     <div class="mt-3 flex items-center gap-2 text-sm text-green-700">
       {% include "components/icon.html" with name="check-circle" class="w-4 h-4 shrink-0" %}
       <span>Domain verified{% if d.dns_found_count < d.dns_total_count %} — {{ d.dns_found_count }} of {{ d.dns_total_count }} records live. Add the rest for the best deliverability.{% else %} — all records are live.{% endif %}</span>
     </div>
+    {% if d.dns_drift_count %}
+    <div class="mt-2 rounded-xl border tone-amber-border tone-amber px-3 py-2 text-sm" role="status">
+      {{ d.dns_drift_count }} required record{{ d.dns_drift_count|pluralize }} {{ d.dns_drift_count|pluralize:"is,are" }} no longer found in your DNS. Mail from this domain may be rejected until {{ d.dns_drift_count|pluralize:"it's,they're" }} restored — see below.
+    </div>
+    {% endif %}
   {% else %}
     <div class="mt-3 rounded-xl border tone-amber-border tone-amber px-3 py-2 text-sm">
-      Add the records below at your DNS provider. We re-check automatically every few seconds — <strong>{{ d.dns_found_count }} of {{ d.dns_total_count }}</strong> found so far.
+      Add the records below at your DNS host. We re-check automatically every few seconds — <strong>{{ d.dns_found_count }} of {{ d.dns_total_count }}</strong> found so far.
     </div>
   {% endif %}
 
-  {# Records #}
+  {% if d.mail_from_domain %}
+  <p class="mt-2 text-xs text-gray-500" data-mail-from-status="{{ d.mail_from_status|default:'none' }}">
+    Bounce domain <code>{{ d.mail_from_domain }}</code> —
+    {% if d.mail_from_status == "SUCCESS" %}<span class="text-green-700">active at Amazon SES</span>.
+    {% elif d.mail_from_status == "FAILED" %}Amazon couldn't confirm it yet. Once the two bounce-domain records below are found, we'll ask Amazon to check again.
+    {% else %}waiting for the two bounce-domain records below. Mail still sends in the meantime.{% endif %}
+  </p>
+  {% endif %}
+
+  {% if d.root_spf_advice %}
+  <div class="mt-2 rounded-xl border tone-amber-border tone-amber px-3 py-2 text-sm" role="status">
+    <p>{{ d.root_spf_advice.message }}</p>
+    <ul class="mt-1 text-xs space-y-0.5">{% for v in d.root_spf_advice.found %}<li><code class="break-all">{{ v }}</code></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% comment %}Records{% endcomment %}
   <div class="mt-4">
     <div class="flex items-center justify-between gap-2 mb-2">
-      <p class="text-xs font-medium text-gray-500">DNS records — add each one at your DNS provider</p>
+      <p class="text-xs font-medium text-gray-500">DNS records — add each one at your DNS host</p>
       {% include "components/help_link.html" with slug="dns-setup" text="Full guide" %}
     </div>
 
     <div class="grid gap-3">
       {% for rec in d.dns_records %}
-      <div class="rounded-xl border p-3 {% if rec.ok %}tone-teal-border tone-teal-bg{% else %}border-border tone-neutral-bg{% endif %}">
-        <div class="flex items-center gap-2 mb-1.5">
+      {% with code=rec.diag.code %}
+      <div class="rounded-xl border p-3 {% if rec.ok %}tone-teal-border tone-teal-bg{% elif code and code != 'missing' and code != 'timeout' %}tone-amber-border{% else %}border-border tone-neutral-bg{% endif %}">
+        <div class="flex flex-wrap items-center gap-2 mb-1.5">
           {% if rec.ok %}
             <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
               {% include "components/icon.html" with name="check-circle" class="w-4 h-4" %} Found
             </span>
           {% else %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-400">
-              {% include "components/icon.html" with name="alert" class="w-4 h-4" %} Not found yet
+            <span class="inline-flex items-center gap-1 text-xs font-medium {% if code and code != 'missing' and code != 'timeout' %}text-amber-700{% else %}text-gray-500{% endif %}">
+              {% include "components/icon.html" with name="alert" class="w-4 h-4" %}
+              {% if not code %}Not checked yet{% elif code == "missing" %}Not added yet{% elif code == "doubled" or code == "wrong_name" %}Wrong name{% elif code == "wrong_value" or code == "mx_mismatch" %}Wrong value{% elif code == "multiple_spf" %}Two SPF records{% elif code == "proxied" %}Proxied{% elif code == "wrong_type" %}Wrong type{% elif code == "cname_conflict" %}Conflicting record{% elif code == "timeout" %}DNS host didn't answer{% else %}Not found{% endif %}
             </span>
           {% endif %}
           <span class="badge badge-neutral">{{ rec.type }}</span>
@@ -124,58 +151,76 @@ DNS does not toast every 20 seconds.{% endcomment %}
           {% else %}<span class="text-[11px] text-gray-400">recommended</span>{% endif %}
         </div>
         <p class="text-xs text-gray-500 mb-2">{{ rec.desc }}</p>
+
+        {% if not rec.ok and code and code != "missing" %}
+        <div class="mb-2 rounded-lg tone-amber px-2.5 py-2 text-xs" data-dns-diag="{{ code }}">
+          <p>{{ rec.diag.message }}</p>
+          {% if rec.diag.found %}
+          <p class="mt-1 text-gray-600">We found:</p>
+          <ul class="mt-0.5 space-y-0.5">{% for v in rec.diag.found %}<li><code class="break-all">{{ v }}</code></li>{% endfor %}</ul>
+          {% endif %}
+          {% if rec.diag.suggestion %}
+          <p class="mt-1.5 text-gray-600">Use this single record instead:</p>
+          <div class="mt-1">{% include "components/copy_field.html" with value=rec.diag.suggestion label="Copy" %}</div>
+          {% endif %}
+        </div>
+        {% endif %}
+
         <dl class="grid gap-2 text-xs">
-          <div class="grid grid-cols-[4rem,1fr] items-center gap-2">
-            <dt class="text-gray-500">Name</dt>
-            <dd class="min-w-0">{% include "components/copy_field.html" with value=rec.name label="Copy" %}</dd>
+          <div class="grid items-start gap-2" style="grid-template-columns:5.5rem 1fr">
+            <dt class="text-gray-500 pt-1">Host</dt>
+            <dd class="min-w-0">
+              {% include "components/copy_field.html" with value=rec.host label="Copy" %}
+              <p class="help mt-1">What to type in the Name / Host field. Most DNS hosts add <code>{{ rec.zone }}</code> for you.</p>
+            </dd>
           </div>
-          <div class="grid grid-cols-[4rem,1fr] items-center gap-2">
-            <dt class="text-gray-500">Value</dt>
+          <div class="grid items-start gap-2" style="grid-template-columns:5.5rem 1fr">
+            <dt class="text-gray-500 pt-1">Full name</dt>
+            <dd class="min-w-0">
+              {% include "components/copy_field.html" with value=rec.name label="Copy" %}
+              <p class="help mt-1">Only if your DNS host asks for the complete name.</p>
+            </dd>
+          </div>
+          {% if rec.type == "MX" %}
+          <div class="grid items-center gap-2" style="grid-template-columns:5.5rem 1fr">
+            <dt class="text-gray-500">Priority</dt>
+            <dd class="min-w-0">{% include "components/copy_field.html" with value=rec.priority|default:10 label="Copy" %}</dd>
+          </div>
+          {% endif %}
+          <div class="grid items-center gap-2" style="grid-template-columns:5.5rem 1fr">
+            <dt class="text-gray-500">{% if rec.type == "CNAME" %}Points to{% elif rec.type == "MX" %}Mail server{% else %}Value{% endif %}</dt>
             <dd class="min-w-0">{% include "components/copy_field.html" with value=rec.value|default:"(pending provisioning)" label="Copy" %}</dd>
           </div>
         </dl>
       </div>
+      {% endwith %}
       {% endfor %}
     </div>
 
-    {# Per-provider instructions (collapsed by default) #}
-    <div x-data="{ open: false, tab: 'cloudflare' }" class="mt-3">
+    {% comment %}How to add them. The detected DNS host only decides which tab opens
+    first; every host's steps stay available, and an unknown host gets the
+    general steps rather than any particular provider's.{% endcomment %}
+    <div x-data="{ open: {% if d.is_verified %}false{% else %}true{% endif %}, tab: '{{ d.dns_host|default:'other' }}' }" class="mt-3" data-dns-host="{{ d.dns_host|default:'other' }}">
       <button type="button" class="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent-strong"
               @click="open = !open" :aria-expanded="open">
         <span class="inline-flex transition-transform" :class="open ? 'rotate-180' : ''">
           {% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}
         </span>
-        How do I add these at my provider?
+        How do I add these at my DNS host?
       </button>
 
       <div x-show="open" x-cloak x-transition class="mt-3 rounded-xl border border-border bg-surface p-3">
+        <p class="text-xs text-gray-500 mb-2">
+          {% if d.dns_host and d.dns_host != "other" %}Your domain's DNS is hosted at {{ d.dns_host_display }}, so those steps are shown first.
+          {% else %}We couldn't tell who hosts your DNS. These general steps work with any DNS host.{% endif %}
+        </p>
         <div class="flex flex-wrap gap-1 mb-3 text-xs">
-          <button type="button" @click="tab='cloudflare'" :class="tab==='cloudflare' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Cloudflare</button>
-          <button type="button" @click="tab='godaddy'" :class="tab==='godaddy' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">GoDaddy</button>
-          <button type="button" @click="tab='namecheap'" :class="tab==='namecheap' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Namecheap</button>
-          <button type="button" @click="tab='other'" :class="tab==='other' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium">Other</button>
+          {% for slug, name in d.dns_host_tabs %}
+          <button type="button" @click="tab='{{ slug }}'" :class="tab==='{{ slug }}' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium" data-dns-tab="{{ slug }}">{{ name }}</button>
+          {% endfor %}
         </div>
-
-        <ol x-show="tab==='cloudflare'" class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
-          <li>Open your domain → <strong>DNS</strong> → <strong>Records</strong> → <strong>Add record</strong>.</li>
-          <li>Set Type to <strong>TXT</strong>, then paste the <strong>Name</strong> and <strong>Value</strong> (Cloudflare calls Value “Content”).</li>
-          <li>Leave Proxy status as <strong>DNS only</strong> and Save. Repeat for each record above.</li>
-        </ol>
-        <ol x-show="tab==='godaddy'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
-          <li>My Products → your domain → <strong>DNS</strong> → <strong>Add</strong>.</li>
-          <li>Choose <strong>TXT</strong>. For a root record GoDaddy uses <code>@</code>; if it auto-appends your domain, paste only the host part of the Name.</li>
-          <li>Paste the Value and Save. Repeat for each record.</li>
-        </ol>
-        <ol x-show="tab==='namecheap'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
-          <li>Domain List → <strong>Manage</strong> → <strong>Advanced DNS</strong> → <strong>Add New Record</strong>.</li>
-          <li>Pick <strong>TXT Record</strong>; the <em>Host</em> field is the Name, <em>Value</em> is the Value.</li>
-          <li>Save (the green tick). Repeat for each record.</li>
-        </ol>
-        <ol x-show="tab==='other'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
-          <li>Find the DNS / Zone editor in your registrar or DNS host.</li>
-          <li>Add each record above as a <strong>TXT</strong> record using the Name and Value shown.</li>
-          <li>Leave TTL at default. See the <a href="{% url 'help-article' 'dns-setup' %}" class="text-accent">DNS setup guide</a> for more.</li>
-        </ol>
+        {% include "email/_dns_host_steps.html" %}
+        <p class="mt-2 text-xs text-gray-500">More detail in the <a href="{% url 'help-article' 'dns-setup' %}" class="text-accent">DNS setup guide</a>.</p>
       </div>
     </div>
   </div>

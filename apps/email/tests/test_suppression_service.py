@@ -139,6 +139,70 @@ class TestIsSuppressedGlobally:
         assert not is_suppressed_globally("soft@example.com")
 
 
+class TestSystemMailSuppressionBoundary:
+    """A tenant's unsubscribe is not a platform suppression.
+
+    Regression: on 27 Sep an unsubscribe from Akilent's own test campaign
+    silently stopped password resets to that address, because system mail
+    honoured any tenant's UNSUBSCRIBE entry.
+    """
+
+    @pytest.mark.parametrize("reason", [
+        SuppressionListEntry.Reason.UNSUBSCRIBE,
+        SuppressionListEntry.Reason.MANUAL,
+        SuppressionListEntry.Reason.INVALID,
+    ])
+    def test_tenant_consent_choices_do_not_block_system_mail(self, account, reason):
+        SuppressionListEntry.objects.create(
+            account=account, email="person@example.com", reason=reason
+        )
+        # Still blocked for that tenant's own mail...
+        assert is_suppressed(account, "person@example.com")
+        # ...but Akilent's account-critical mail goes through.
+        assert not is_suppressed_globally("person@example.com")
+
+    @pytest.mark.parametrize("reason", [
+        SuppressionListEntry.Reason.BOUNCE,
+        SuppressionListEntry.Reason.COMPLAINT,
+    ])
+    def test_tenant_hard_failures_do_block_system_mail(self, account, reason):
+        SuppressionListEntry.objects.create(
+            account=account, email="dead@example.com", reason=reason
+        )
+        assert is_suppressed_globally("dead@example.com")
+
+    def test_global_suppression_blocks_system_mail(self, db):
+        from apps.email.models import GlobalSuppression
+
+        GlobalSuppression.objects.create(email="ghost@example.com", reason="bounce")
+        assert is_suppressed_globally("ghost@example.com")
+
+    def test_password_reset_reaches_a_tenant_unsubscriber(self, account, monkeypatch):
+        """End to end through send_system_email, the path password resets use."""
+        from apps.email.services.send import send_system_email
+        from apps.email.types import SendResult
+
+        SuppressionListEntry.objects.create(
+            account=account, email="sam@example.com",
+            reason=SuppressionListEntry.Reason.UNSUBSCRIBE,
+        )
+        sent = []
+
+        class _Provider:
+            def send(self, outbound):
+                sent.append(outbound.to_email)
+                return SendResult(success=True, provider_message_id="m-1")
+
+        monkeypatch.setattr(
+            "apps.email.providers.get_send_provider", lambda *a, **k: _Provider()
+        )
+        monkeypatch.setattr(
+            "apps.email.services.validation.validate_recipient", lambda e: True
+        )
+        send_system_email("sam@example.com", "Reset your password", text_body="link")
+        assert sent == ["sam@example.com"]
+
+
 class TestGetSuppressedEmails:
     """Test bulk suppression lookup."""
 

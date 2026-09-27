@@ -1,63 +1,58 @@
-{% comment %}Body for the "Set up your DNS records" guide.{% endcomment %}
-<p>DNS records tell the world that mail from your domain is genuinely yours. After provisioning a domain, the domain card on the <a href="/email/domains/">Domains</a> page lists every record you need — just copy each one into your DNS provider.</p>
+{% comment %}Body for the "Set up your DNS records" guide. Keep it host-neutral:
+no step here may assume a particular DNS host. The domain card shows the exact
+records for each domain and says what's wrong with any that fail.{% endcomment %}
+<p>DNS records tell the world that mail from your domain is genuinely yours. After you add a domain, its card on the <a href="/email/domains/">Domains</a> page lists every record it needs. Copy each one into your DNS host, then click <strong>Check DNS</strong>.</p>
 
 <h2>The records you'll add</h2>
 <table>
   <thead><tr><th>Record</th><th>Type</th><th>What it does</th></tr></thead>
   <tbody>
-    <tr><td><strong>Verification</strong></td><td>TXT</td><td>Proves you own the domain so we can switch it on.</td></tr>
-    <tr><td><strong>DKIM</strong></td><td>TXT <em>or</em> CNAME</td><td>Cryptographically signs your mail so receivers can trust it wasn't tampered with.</td></tr>
-    <tr><td><strong>SPF</strong></td><td>TXT</td><td>Lists the servers allowed to send for your domain.</td></tr>
-    <tr><td><strong>DMARC</strong></td><td>TXT</td><td>Tells receivers what to do with mail that fails the checks above.</td></tr>
+    <tr><td><strong>Verification</strong></td><td>TXT</td><td>Proves you own the domain so we can switch it on. Required.</td></tr>
+    <tr><td><strong>DKIM</strong></td><td>CNAME (three of them) <em>or</em> TXT</td><td>Signs your mail so receivers can trust it wasn't tampered with. Required.</td></tr>
+    <tr><td><strong>Bounce domain (MX)</strong></td><td>MX</td><td>Routes bounce reports back through your own domain (for example <code>bounce.yourcompany.com</code>), so it lines up with your From address. Recommended.</td></tr>
+    <tr><td><strong>Bounce domain SPF</strong></td><td>TXT</td><td>Authorises our sending service for that bounce domain, so SPF passes for <em>your</em> domain. Recommended.</td></tr>
+    <tr><td><strong>DMARC</strong></td><td>TXT</td><td>Tells receivers what to do with mail that fails the checks. Recommended.</td></tr>
   </tbody>
 </table>
-<div class="note">Each record has a <strong>Name</strong> (sometimes called Host) and a <strong>Value</strong> (sometimes Content or Data). Use the copy buttons on the domain card so nothing gets mistyped — the card always shows the exact <strong>Type</strong> for every record.</div>
+<div class="note">Add exactly what the card shows, with the <strong>Type</strong> it shows — TXT, CNAME or MX. If the card lists three DKIM CNAMEs, add all three: verification only passes once every DKIM record is live.</div>
+<div class="note">The two bounce-domain records are recommended, not required. Your mail sends without them; adding them improves how receivers judge it.</div>
 
-<div class="note"><strong>DKIM comes in two shapes.</strong> Depending on how your account sends mail, the domain card shows DKIM either as a single <strong>TXT</strong> record or as <strong>three CNAME</strong> records ending in <code>.dkim.amazonses.com</code>. Add exactly what the card shows — all three CNAMEs if there are three. Verification only passes once every DKIM record is live.</div>
+<h2>Host or full name?</h2>
+<p>Each record shows two forms of its name:</p>
+<ul>
+  <li><strong>Host</strong> — for example <code>bounce</code> or <code>_dmarc</code>. This is what you type in the Name / Host field at almost every DNS host, because they add your domain to the end automatically. <code>@</code> means the domain itself.</li>
+  <li><strong>Full name</strong> — for example <code>bounce.yourcompany.com</code>. Use it only if your DNS host explicitly asks for the complete name.</li>
+</ul>
+<div class="note">Typing the full name into a host that adds the domain for you creates a doubled name like <code>bounce.yourcompany.com.yourcompany.com</code>. If that happens, the card tells you exactly that and shows the Host value to use instead.</div>
 
 <h2>General steps</h2>
 <ol>
-  <li>Sign in to wherever your domain's DNS is managed (your registrar or DNS host).</li>
-  <li>Find the DNS / DNS records / Zone editor section.</li>
-  <li>For each record on the domain card, add a new record with the <strong>Type</strong> shown (TXT or CNAME), paste the <strong>Name</strong> and <strong>Value</strong>, and save.</li>
-  <li>Leave TTL at the default (or "Automatic").</li>
+  <li>Sign in wherever your domain's DNS is managed (your registrar or DNS host) and open the DNS / zone editor.</li>
+  <li>For each record on the card, add a new record with the <strong>Type</strong> shown, the <strong>Host</strong> value as its name, and the value shown.</li>
+  <li>For MX records, set the priority to <strong>10</strong> in the priority field — not as part of the mail server value.</li>
+  <li>CNAME records must resolve as plain CNAMEs. If your DNS host offers proxying or "CNAME flattening" (Cloudflare's orange cloud is one example), turn it off for these records.</li>
+  <li>Leave TTL at the default.</li>
 </ol>
+<p>The card's <strong>How do I add these at my DNS host?</strong> section has steps for common DNS hosts, and shows the one we detect for your domain first. If we can't tell who hosts your DNS, it shows general steps that work anywhere.</p>
 
-<div class="note">For CNAME DKIM records, make sure your DNS host isn't "proxying" them (on Cloudflare, set the record to <em>DNS only</em> / grey cloud) — a proxied CNAME won't resolve to the value we check for.</div>
+<h2>Already have an SPF record?</h2>
+<p>A name may have only <strong>one</strong> SPF record (a TXT starting <code>v=spf1</code>). Two SPF records at the same name is an error, and SPF then fails for everything sent from it. If you ever need to add to an existing SPF record, edit it rather than adding a second one — the card shows a combined record you can copy when it finds two.</p>
 
-<h2>Provider-specific notes</h2>
-
-<h3>Cloudflare</h3>
+<h2>What the card tells you</h2>
+<p>After each check, every record says exactly where it stands:</p>
 <ul>
-  <li>Go to your domain → <strong>DNS</strong> → <strong>Records</strong> → <strong>Add record</strong>.</li>
-  <li>Type <code>TXT</code>, paste Name and Value (Cloudflare calls Value "Content").</li>
-  <li>Set <strong>Proxy status</strong> to <em>DNS only</em> (grey cloud) — TXT records aren't proxied anyway.</li>
+  <li><strong>Found</strong> — it's live and correct.</li>
+  <li><strong>Not added yet</strong> — we can't see it at all.</li>
+  <li><strong>Wrong name</strong> — we found it, but under a different name (for example a doubled one). The card shows where, and what to type instead.</li>
+  <li><strong>Wrong value</strong> — it's there, but the value differs. The card shows what we found next to what it should be.</li>
+  <li><strong>Two SPF records</strong>, <strong>Wrong type</strong>, <strong>Proxied</strong>, <strong>Conflicting record</strong> — explained on the record itself, with the fix.</li>
+  <li><strong>DNS host didn't answer</strong> — we couldn't reach your DNS host this time, so we don't know yet. This never means you need to add anything; we'll check again automatically.</li>
 </ul>
-
-<h3>GoDaddy</h3>
-<ul>
-  <li>My Products → your domain → <strong>DNS</strong> → <strong>Add</strong>.</li>
-  <li>For the Name, if the record is for the root domain GoDaddy uses <code>@</code>. Paste only the host part shown (drop the trailing domain) if GoDaddy appends it automatically.</li>
-</ul>
-
-<h3>Namecheap</h3>
-<ul>
-  <li>Domain List → <strong>Manage</strong> → <strong>Advanced DNS</strong> → <strong>Add New Record</strong>.</li>
-  <li>Choose <strong>TXT Record</strong>; the <em>Host</em> field is the Name and <em>Value</em> is the Value.</li>
-</ul>
-
-<h3>Google Domains / Squarespace, Route 53, others</h3>
-<ul>
-  <li>Look for "DNS", "Custom records" or "Zone file", then add each <strong>TXT</strong> record with the Name and Value as shown.</li>
-</ul>
-
-<h2>Host name tips</h2>
-<p>Some providers automatically add your domain to the end of the Name. If a record's Name is <code>selector._domainkey.mail.yourcompany.com</code> and your provider already appends <code>mail.yourcompany.com</code>, enter just <code>selector._domainkey</code>. If you're unsure, entering the full name usually still works.</p>
 
 <h2>After you add them</h2>
 <ol>
-  <li>DNS changes take time to spread — usually minutes, occasionally a few hours.</li>
-  <li>Return to <a href="/email/domains/">Domains</a> and click <strong>Check DNS</strong> — each record shows whether it's been found.</li>
-  <li>If it's still pending, just leave the page open; it re-checks automatically every few seconds.</li>
+  <li>Click <strong>Check DNS</strong>. We ask your domain's own nameservers, so a record you've just added usually shows up straight away.</li>
+  <li>While the domain is pending, the card keeps re-checking by itself every few seconds.</li>
+  <li>Once verified, we keep checking your records daily and tell you if one stops being found.</li>
 </ol>
-<p>Records not showing up? See the <a href="{% url 'help-article' 'troubleshooting' %}">troubleshooting guide</a>.</p>
+<p>Still stuck? See the <a href="{% url 'help-article' 'troubleshooting' %}">troubleshooting guide</a>.</p>

@@ -1,6 +1,7 @@
 import hashlib
 import re
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -12,16 +13,26 @@ from django.utils import timezone
 _DNS_LABELS = {
     "verify": "Domain verification",
     "dkim": "DKIM",
+    "mfmx": "Bounce domain (MX)",
+    "mfspf": "Bounce domain SPF",
     "spf": "SPF",
     "dmarc": "DMARC",
 }
 _DNS_DESCS = {
     "verify": "Proves you own this domain so we can switch it on.",
     "dkim": "Signs your mail so providers trust it wasn't tampered with.",
+    "mfmx": (
+        "Routes bounce reports for your mail back through your own domain, so "
+        "it lines up with your From address (fixes \"MAIL FROM not aligned\")."
+    ),
+    "mfspf": (
+        "Authorises Amazon SES to send on behalf of your bounce domain, so SPF "
+        "passes for your domain rather than Amazon's."
+    ),
     "spf": "Lists the servers allowed to send for your domain.",
     "dmarc": "Tells receivers what to do with mail that fails the checks.",
 }
-_DNS_KEY_ORDER = {"verify": 0, "dkim": 1, "spf": 2, "dmarc": 3}
+_DNS_KEY_ORDER = {"verify": 0, "dkim": 1, "mfmx": 2, "mfspf": 3, "spf": 4, "dmarc": 5}
 
 
 class ProvisioningJob(models.Model):
@@ -177,6 +188,28 @@ class EmailDomain(models.Model):
     dkim_ok = models.BooleanField(default=False)
     dmarc_ok = models.BooleanField(default=False)
 
+    # Custom MAIL FROM (return-path) domain, e.g. bounce.acme.com. Configured in
+    # SES automatically at provisioning so SPF aligns with the From domain.
+    # Recommended, never required: SES falls back to its own MAIL FROM (with
+    # BehaviorOnMxFailure=USE_DEFAULT_VALUE) while the records are missing, so
+    # this never decides whether the domain is usable.
+    mail_from_domain = models.CharField(max_length=255, blank=True, default="")
+    # Mirror of SES MailFromDomainStatus: PENDING / SUCCESS / FAILED /
+    # TEMPORARY_FAILURE ("" = not configured yet).
+    mail_from_status = models.CharField(max_length=20, blank=True, default="")
+    mail_from_attempted_at = models.DateTimeField(blank=True, null=True)
+    mail_from_ok = models.BooleanField(default=False)  # both MAIL FROM records found
+
+    # Where this domain's DNS lives. Used only to tailor the display (the Host
+    # form of each record name, which instructions to show first) -- the
+    # diagnosis itself never depends on the DNS host.
+    dns_zone = models.CharField(max_length=255, blank=True, default="")
+    dns_host = models.CharField(max_length=40, blank=True, default="")
+    dns_zone_checked_at = models.DateTimeField(blank=True, null=True)
+    # Per-record diagnosis from the last check, keyed "{key}|{name}" ->
+    # {"code", "message", "found"}. Persisted so rendering never does DNS.
+    dns_diagnostics = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     verified_at = models.DateTimeField(blank=True, null=True)
     last_checked_at = models.DateTimeField(blank=True, null=True)
@@ -224,9 +257,10 @@ class EmailDomain(models.Model):
             mail_settings = MailProviderSettings.load()
             # For SES, use Amazon's SES mail server (region-specific)
             if mail_settings.infra_backend == "ses" or mail_settings.send_backend == "ses":
-                region = mail_settings.aws_region or "us-east-1"
-                # SES mail server endpoint for SPF (sendmail.region.amazonses.com)
-                return f"v=spf1 include:amazonses.com ~all"
+                # For SES this belongs on the MAIL FROM subdomain
+                # (bounce.<domain>), not the root: SPF is evaluated against the
+                # return-path domain.
+                return "v=spf1 include:amazonses.com ~all"
             # For Stalwart or other backends, use the configured SMTP host
             host = settings.EMAIL_HOST or "YOUR_MAIL_HOST"
             return f"v=spf1 include:{host} ~all"
@@ -251,46 +285,111 @@ class EmailDomain(models.Model):
         rows = list(self.dns_record_rows.all()) if self.pk else []
         if rows:
             rows.sort(key=lambda r: (_DNS_KEY_ORDER.get(r.key, 9), r.name))
-            return [
+            specs = [
                 {
                     "key": r.key,
                     "label": _DNS_LABELS.get(r.key, r.key.upper()),
                     "type": r.record_type,
                     "name": r.name,
                     "value": r.value,
+                    "priority": r.priority,
                     "desc": _DNS_DESCS.get(r.key, ""),
+                    # MAIL FROM is recommended, never required: SES falls back
+                    # to its own return path while it's missing.
                     "required": r.key in ("verify", "dkim"),
                     "ok": r.is_ok,
                 }
                 for r in rows
             ]
-        return [
-            {
-                "key": "verify", "label": "Domain verification", "type": "TXT",
-                "name": self.verify_record_name or self.domain,
-                "value": self.verify_record_value,
-                "desc": "Proves you own this domain so we can switch it on.",
-                "required": True, "ok": self.is_verified,
-            },
-            {
-                "key": "dkim", "label": "DKIM", "type": "TXT",
-                "name": self.dkim_record_name, "value": self.dkim_txt_value,
-                "desc": "Signs your mail so providers trust it wasn't tampered with.",
-                "required": True, "ok": self.dkim_ok,
-            },
-            {
-                "key": "spf", "label": "SPF", "type": "TXT",
-                "name": self.domain, "value": self.spf_value,
-                "desc": "Lists the servers allowed to send for your domain.",
-                "required": False, "ok": self.spf_ok,
-            },
-            {
-                "key": "dmarc", "label": "DMARC", "type": "TXT",
-                "name": self.dmarc_record_name, "value": self.dmarc_value,
-                "desc": "Tells receivers what to do with mail that fails the checks.",
-                "required": False, "ok": self.dmarc_ok,
-            },
-        ]
+        else:
+            specs = [
+                {
+                    "key": "verify", "label": "Domain verification", "type": "TXT",
+                    "name": self.verify_record_name or self.domain,
+                    "value": self.verify_record_value, "priority": None,
+                    "desc": "Proves you own this domain so we can switch it on.",
+                    "required": True, "ok": self.is_verified,
+                },
+                {
+                    "key": "dkim", "label": "DKIM", "type": "TXT",
+                    "name": self.dkim_record_name, "value": self.dkim_txt_value,
+                    "priority": None,
+                    "desc": "Signs your mail so providers trust it wasn't tampered with.",
+                    "required": True, "ok": self.dkim_ok,
+                },
+                {
+                    "key": "spf", "label": "SPF", "type": "TXT",
+                    "name": self.domain, "value": self.spf_value, "priority": None,
+                    "desc": "Lists the servers allowed to send for your domain.",
+                    "required": False, "ok": self.spf_ok,
+                },
+                {
+                    "key": "dmarc", "label": "DMARC", "type": "TXT",
+                    "name": self.dmarc_record_name, "value": self.dmarc_value,
+                    "priority": None,
+                    "desc": "Tells receivers what to do with mail that fails the checks.",
+                    "required": False, "ok": self.dmarc_ok,
+                },
+            ]
+        return [self._present(spec) for spec in specs]
+
+    def _present(self, spec: dict) -> dict:
+        """Add the display-only fields: Host form of the name and last diagnosis.
+
+        Reads persisted state only — rendering a card never performs DNS.
+        """
+        from apps.email.dnshost import relative_host
+
+        zone = self.effective_zone
+        diag = (self.dns_diagnostics or {}).get(f"{spec['key']}|{spec['name']}")
+        return {
+            **spec,
+            "zone": zone,
+            "host": relative_host(spec["name"], zone),
+            "diag": diag,
+        }
+
+    @property
+    def effective_zone(self) -> str:
+        """The zone apex: the detected one, else a best guess from the name."""
+        from apps.email.dnshost import guess_zone
+
+        return self.dns_zone or guess_zone(self.domain)
+
+    @property
+    def dns_host_display(self) -> str:
+        from apps.email.dnshost import display_name
+
+        return display_name(self.dns_host)
+
+    @property
+    def dns_host_tabs(self) -> list[tuple[str, str]]:
+        from apps.email.dnshost import ordered_tabs
+
+        return ordered_tabs(self.dns_host)
+
+    @property
+    def root_spf_advice(self):
+        """Advice about the root domain's SPF records (e.g. two of them), or None."""
+        return (self.dns_diagnostics or {}).get("_advice|root_spf")
+
+    @property
+    def dns_is_stale(self) -> bool:
+        """Whether the card should quietly re-check itself when viewed."""
+        if self.last_checked_at is None:
+            return True
+        return timezone.now() - self.last_checked_at > timedelta(hours=6)
+
+    @property
+    def dns_drift_count(self) -> int:
+        """Required records no longer found on an already-verified domain.
+
+        A recommended record that was never added isn't drift; a verification
+        or DKIM record that has disappeared since verification is.
+        """
+        if not self.is_verified:
+            return 0
+        return sum(1 for r in self.dns_records() if r["required"] and not r["ok"])
 
     @property
     def dns_found_count(self) -> int:
@@ -339,12 +438,17 @@ class EmailDnsRecord(models.Model):
     class Key(models.TextChoices):
         VERIFY = "verify", "Domain verification"
         DKIM = "dkim", "DKIM"
+        # Custom MAIL FROM (bounce.<domain>): both rows share one name, which
+        # the (domain, key, name) constraint allows because the keys differ.
+        MAIL_FROM_MX = "mfmx", "Bounce domain (MX)"
+        MAIL_FROM_SPF = "mfspf", "Bounce domain SPF"
         SPF = "spf", "SPF"
         DMARC = "dmarc", "DMARC"
 
     class RecordType(models.TextChoices):
         TXT = "TXT", "TXT"
         CNAME = "CNAME", "CNAME"
+        MX = "MX", "MX"
 
     domain = models.ForeignKey(
         EmailDomain, on_delete=models.CASCADE, related_name="dns_record_rows"
@@ -355,6 +459,7 @@ class EmailDnsRecord(models.Model):
     )
     name = models.CharField(max_length=255)
     value = models.TextField()
+    priority = models.PositiveSmallIntegerField(blank=True, null=True)  # MX only
     is_ok = models.BooleanField(default=False)
     checked_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -2,13 +2,13 @@
 <p>Most setup snags come down to DNS or plan limits. Here are the issues we see most often and how to fix them.</p>
 
 <h2>My domain won't verify</h2>
-<p>This almost always means the DNS records aren't visible yet. Check:</p>
+<p>Start with the domain card: after each check, every record says exactly what we found — <em>Not added yet</em>, <em>Wrong name</em>, <em>Wrong value</em>, <em>Two SPF records</em> and so on — and shows the fix. Then check:</p>
 <ul>
-  <li><strong>Give it time.</strong> DNS can take minutes to a few hours to propagate. The card re-checks automatically, or click <strong>Check DNS</strong> to re-run it now. Each record shows <em>Found</em> / <em>Not found yet</em> so you can see what's missing.</li>
-  <li><strong>Record type is TXT.</strong> All four records (verification, DKIM, SPF, DMARC) are TXT records.</li>
-  <li><strong>Name and Value match exactly.</strong> Use the copy buttons on the domain card — a stray space or missing character will fail.</li>
-  <li><strong>Host name format.</strong> Some providers append your domain automatically; if so, enter only the host part. See <a href="{% url 'help-article' 'dns-setup' %}">DNS setup</a>.</li>
-  <li><strong>Right domain.</strong> Make sure you added the records to the same domain you provisioned.</li>
+  <li><strong>Use the Type shown.</strong> Records are TXT, CNAME or MX — each card shows which. DKIM for most accounts is three CNAME records.</li>
+  <li><strong>Type the Host value, not the full name.</strong> Most DNS hosts add your domain automatically; typing the full name doubles it. The card tells you if that happened. See <a href="{% url 'help-article' 'dns-setup' %}">DNS setup</a>.</li>
+  <li><strong>Copy values exactly.</strong> Use the copy buttons — a stray space or missing character will fail.</li>
+  <li><strong>Right domain.</strong> Make sure you added the records to the same domain you set up here.</li>
+  <li><strong>"DNS host didn't answer"</strong> means we couldn't reach your DNS host on that check — not that anything is missing. It re-checks automatically.</li>
 </ul>
 
 <h2>My emails aren't sending (API)</h2>

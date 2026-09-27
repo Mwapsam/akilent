@@ -47,3 +47,6 @@ OPENAI_API_KEY = ""
 OPENAI_BASE_URL = "http://openai.invalid"
 ANTHROPIC_BASE_URL = "http://anthropic.invalid"
 AI_AUTONOMY_ENABLED = True
+
+# Never query real nameservers from tests.
+DNSCHECK_AUTHORITATIVE = False

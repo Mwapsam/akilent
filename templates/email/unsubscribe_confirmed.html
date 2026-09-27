@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unsubscribe Confirmation</title>
+    <title>Unsubscribe</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -49,25 +49,35 @@
 </head>
 <body>
     <div class="container">
-        {% if success %}
+        {% if state == "done" %}
             <div class="checkmark">✓</div>
-            <h1>Unsubscribed</h1>
+            <h1>You've been unsubscribed</h1>
+            {% if email %}<p class="email">{{ email }}</p>{% endif %}
             <p class="message">
-                You have been successfully unsubscribed from our mailing list.
+                You won't receive marketing emails from this sender any more.
             </p>
-            {% if email %}
-                <p class="email">{{ email }}</p>
-            {% endif %}
+        {% elif state == "already" %}
+            <div class="checkmark">✓</div>
+            <h1>You're already unsubscribed</h1>
+            {% if email %}<p class="email">{{ email }}</p>{% endif %}
             <p class="message">
-                You will no longer receive emails from us.
+                There's nothing more to do. You won't receive marketing emails
+                from this sender.
             </p>
-        {% else %}
-            <h1>Unsubscribe Link Invalid</h1>
+        {% elif state == "error" %}
+            <h1>We couldn't process that</h1>
             <div class="error">
-                This unsubscribe link is invalid or has already been used.
+                Something went wrong on our side. Please open the link again in a
+                moment.
+            </div>
+        {% else %}
+            <h1>This unsubscribe link isn't valid</h1>
+            <div class="error">
+                We don't recognise this link. It may have been copied incompletely.
             </div>
             <p class="message">
-                If you need assistance, please contact support.
+                To stop these emails, use the unsubscribe link at the bottom of
+                the most recent one you received.
             </p>
         {% endif %}
     </div>

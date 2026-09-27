@@ -323,3 +323,45 @@ def test_reusing_a_spent_token_is_a_no_op(client, account):
     assert ContactEvent.objects.filter(
         contact=contact, type="email.unsubscribed"
     ).count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_second_click_says_already_unsubscribed(client, account, method):
+    """People and mail clients click twice; that must not look like an error."""
+    token = create_unsubscribe_token(account, "twice@x.com")
+    url = f"/email/t/unsub/{token}/"
+
+    first = getattr(client, method)(url)
+    assert b"been unsubscribed" in first.content
+
+    second = getattr(client, method)(url)
+    assert second.status_code == 200
+    assert b"already unsubscribed" in second.content
+    assert b"twice@x.com" in second.content
+    assert b"isn't valid" not in second.content
+
+
+@pytest.mark.django_db
+def test_unknown_token_says_the_link_is_not_valid(client, account):
+    resp = client.get("/email/t/unsub/unsub_doesnotexist/")
+    assert resp.status_code == 200
+    assert b"isn't valid" in resp.content
+    assert b"unknown" not in resp.content
+
+
+@pytest.mark.django_db
+def test_a_failure_is_never_reported_as_success(client, account, monkeypatch):
+    """If recording the unsubscribe fails, the page must not claim it worked."""
+    token = create_unsubscribe_token(account, "fail@x.com")
+
+    def _boom(**kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("apps.email.services.unsubscribe.apply_unsubscribe", _boom)
+    resp = client.get(f"/email/t/unsub/{token}/")
+
+    assert b"couldn't process" in resp.content
+    assert b"been unsubscribed" not in resp.content
+    # Rolled back: the token can still be used once things recover.
+    assert UnsubscribeToken.objects.get(token=token).is_used is False

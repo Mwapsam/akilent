@@ -17,6 +17,7 @@ from apps.email.exceptions import EmailProviderError
 from apps.email.types import (
     DkimRecord,
     DomainInfo,
+    MailFromInfo,
     OperationResult,
 )
 
@@ -144,6 +145,24 @@ class EmailProvider(ABC):
         schedule old-key deletion after confirming the new record is live in DNS.
         """
         raise EmailProviderError("rotate_dkim is not supported by this provider")
+
+    # ── Custom MAIL FROM (optional capability) ────────────────────────────
+    # Unlike the operations above, these don't raise when unsupported: a custom
+    # return-path is a deliverability enhancement, never a requirement, so a
+    # backend without it simply returns None and callers carry on.
+
+    def configure_mail_from(
+        self, domain: str, *, subdomain: str = "bounce"
+    ) -> MailFromInfo | None:
+        """Point the domain's return-path at ``{subdomain}.{domain}``.
+
+        Returns the requested configuration, or None if unsupported.
+        """
+        return None
+
+    def get_mail_from(self, domain: str) -> MailFromInfo | None:
+        """The provider's current MAIL FROM state, or None if unsupported/unset."""
+        return None
 
     # ── Legacy compatibility helpers ──────────────────────────────────────
     # Concrete implementations of the old 8-method interface so existing

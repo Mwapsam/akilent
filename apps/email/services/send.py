@@ -96,7 +96,9 @@ def send_system_email(
     from apps.email.services.suppression import is_suppressed_globally
     from apps.email.services.validation import validate_recipient
 
-    # Check if recipient is suppressed (global check, not account-specific)
+    # Platform-wide check: only hard bounces and complaints block system mail.
+    # A tenant's unsubscribe must never stop account-critical mail like
+    # password resets -- see is_suppressed_globally for the full rule.
     if is_suppressed_globally(to_email):
         logger.warning("Suppressing system email to %s (suppression list)", to_email)
         return

@@ -1,0 +1,53 @@
+{% comment %}Step-by-step instructions for adding the records at each DNS host.
+Rendered inside the domain card's Alpine scope (tab). Every set of steps uses
+the Type shown on each record and the Host value, so none of them assumes TXT
+or a particular provider; the detected host only decides which tab opens first.{% endcomment %}
+<ol x-show="tab==='cloudflare'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>Open your domain → <strong>DNS</strong> → <strong>Records</strong> → <strong>Add record</strong>.</li>
+  <li>Set <strong>Type</strong> to the type shown on each record (TXT, CNAME or MX), and <strong>Name</strong> to its <strong>Host</strong> value.</li>
+  <li>Paste the value into <strong>Content</strong> (TXT/CNAME) or <strong>Mail server</strong> (MX, with <strong>Priority</strong> 10).</li>
+  <li>For CNAME records, set <strong>Proxy status</strong> to <strong>DNS only</strong> (grey cloud). Save, and repeat for each record.</li>
+</ol>
+<ol x-show="tab==='godaddy'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>My Products → your domain → <strong>DNS</strong> → <strong>Add New Record</strong>.</li>
+  <li>Choose the type shown on each record, and type its <strong>Host</strong> value in <strong>Name</strong> (<code>@</code> means the domain itself).</li>
+  <li>Paste the value. For MX, use <strong>Priority</strong> 10. Save, and repeat for each record.</li>
+</ol>
+<ol x-show="tab==='namecheap'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>Domain List → <strong>Manage</strong> → <strong>Advanced DNS</strong>.</li>
+  <li>TXT and CNAME: <strong>Add New Record</strong>, pick the type shown, put the <strong>Host</strong> value in <em>Host</em> and the value in <em>Value</em>.</li>
+  <li>MX: under <strong>Mail Settings</strong> choose <strong>Custom MX</strong>, then add the record with Priority 10.</li>
+  <li>Save each one with the green tick.</li>
+</ol>
+<ol x-show="tab==='route53'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>Route 53 → <strong>Hosted zones</strong> → your zone → <strong>Create record</strong>.</li>
+  <li>Type the <strong>Host</strong> value in <strong>Record name</strong> and pick the type shown.</li>
+  <li>For MX, the value is one line: <code>10 feedback-smtp…</code> (priority, a space, then the mail server). TXT values go in quotes.</li>
+</ol>
+<ol x-show="tab==='google'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>Open your domain's <strong>DNS</strong> settings → <strong>Custom records</strong> → <strong>Add record</strong>.</li>
+  <li>Type the <strong>Host</strong> value in <strong>Host name</strong> and pick the type shown.</li>
+  <li>Paste the value. For MX, use priority 10. Save, and repeat for each record.</li>
+</ol>
+<ol x-show="tab==='digitalocean'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li><strong>Networking</strong> → <strong>Domains</strong> → your domain.</li>
+  <li>Pick the tab for the type shown, type the <strong>Host</strong> value in <strong>Hostname</strong>, and paste the value.</li>
+  <li>For MX, use priority 10. Create the record, and repeat for each one.</li>
+</ol>
+<ol x-show="tab==='azure'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li><strong>DNS zones</strong> → your zone → <strong>+ Record set</strong>.</li>
+  <li>Type the <strong>Host</strong> value in <strong>Name</strong> and pick the type shown.</li>
+  <li>Paste the value. For MX, use preference 10. Save, and repeat for each record.</li>
+</ol>
+<ol x-show="tab==='hostinger'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li><strong>Domains</strong> → your domain → <strong>DNS / Nameservers</strong> → <strong>Manage DNS records</strong>.</li>
+  <li>Pick the type shown, type the <strong>Host</strong> value in <strong>Name</strong>, and paste the value.</li>
+  <li>For MX, use priority 10. Add the record, and repeat for each one.</li>
+</ol>
+<ol x-show="tab==='other'" x-cloak class="list-decimal pl-4 space-y-1 text-xs text-gray-600">
+  <li>Open the DNS or zone editor at the company that hosts your domain's DNS.</li>
+  <li>Add each record above with the <strong>Type</strong> shown (TXT, CNAME or MX).</li>
+  <li>In the name field, type the <strong>Host</strong> value. Only if your DNS host asks for the complete name, use the <strong>Full name</strong> instead.</li>
+  <li>For MX, set priority 10. CNAME records must not be proxied or "flattened". Leave TTL at the default.</li>
+  <li>Click <strong>Check DNS</strong> — if anything is off, the record will say exactly what we found.</li>
+</ol>

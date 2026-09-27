@@ -43,24 +43,46 @@ def is_suppressed(account, email: str) -> bool:
 
 
 def is_suppressed_globally(email: str) -> bool:
-    """Check if email is suppressed across any account (global check).
+    """Whether Akilent's own *system* mail may go to this address.
 
-    Used for system emails (password resets, etc.) that have no account context.
-    Only counts "blocking" reasons.
+    Used only by ``send_system_email`` (password resets, email verification,
+    team invitations, billing receipts) -- mail that has no tenant context and
+    that the recipient needs in order to use their Akilent account.
+
+    Only signals that the address itself is bad or abusive block it:
+
+    ==================================  ===========
+    Suppression                         System mail
+    ==================================  ===========
+    GlobalSuppression (any reason)      Block
+    Tenant BOUNCE                       Block
+    Tenant COMPLAINT                    Block
+    Tenant UNSUBSCRIBE                  **Allow**
+    Tenant MANUAL                       **Allow**
+    Tenant INVALID                      **Allow**
+    ==================================  ===========
+
+    Do NOT widen this back to "any blocking reason from any account". An
+    unsubscribe is one recipient's withdrawal of consent from *one business's*
+    communications; it says nothing about Akilent's account-critical mail.
+    Counting it here meant unsubscribing from any tenant's newsletter silently
+    stopped that person's Akilent password resets. MANUAL and INVALID are
+    likewise one tenant's own decisions about its own list.
+
+    Hard bounces and complaints are different: they are facts about the
+    address (it doesn't exist / the person reports our mail as spam) and they
+    count against our whole SES account, so they block everything.
     """
-    blocking_reasons = [
-        SuppressionListEntry.Reason.BOUNCE,
-        SuppressionListEntry.Reason.COMPLAINT,
-        SuppressionListEntry.Reason.UNSUBSCRIBE,
-        SuppressionListEntry.Reason.MANUAL,
-        SuppressionListEntry.Reason.INVALID,
-    ]
-    if SuppressionListEntry.objects.filter(
-        email=email,
-        reason__in=blocking_reasons,
-    ).exists():
+    if GlobalSuppression.objects.filter(email=email).exists():
         return True
-    return GlobalSuppression.objects.filter(email=email).exists()
+    # Legacy per-account rows written before GlobalSuppression existed.
+    return SuppressionListEntry.objects.filter(
+        email=email,
+        reason__in=[
+            SuppressionListEntry.Reason.BOUNCE,
+            SuppressionListEntry.Reason.COMPLAINT,
+        ],
+    ).exists()
 
 
 def get_suppressed_emails(account, emails: list[str]) -> set[str]:

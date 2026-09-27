@@ -119,6 +119,27 @@ class OperationResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+# SPF value published at the custom MAIL FROM subdomain for SES.
+SES_MAIL_FROM_SPF = "v=spf1 include:amazonses.com ~all"
+
+
+@dataclass(frozen=True)
+class MailFromInfo:
+    """Provider-side custom MAIL FROM (return-path) configuration for a domain.
+
+    ``status`` mirrors SES MailFromDomainStatus: PENDING / SUCCESS / FAILED /
+    TEMPORARY_FAILURE. ``mx_value``/``spf_value`` are the records the tenant
+    must publish at ``mail_from_domain``.
+    """
+
+    mail_from_domain: str
+    status: str = ""
+    behavior_on_mx_failure: str = ""
+    mx_value: str = ""
+    mx_priority: int = 10
+    spf_value: str = SES_MAIL_FROM_SPF
+
+
 @dataclass(frozen=True)
 class Attachment:
     """One file attached to an outbound message. ``content`` is the raw bytes."""

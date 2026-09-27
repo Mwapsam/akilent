@@ -331,6 +331,11 @@ AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_S3_REGION_NAME", "us-east-1"
 SES_CONFIGURATION_SET = os.getenv("SES_CONFIGURATION_SET", "")
 SES_SNS_TOPIC_ARN = os.getenv("SES_SNS_TOPIC_ARN", "")
 
+# Domain DNS checks ask each zone's own nameservers first, so records a
+# tenant has just added are seen immediately rather than hidden by a
+# cached "doesn't exist". Set to "0" to use only the system resolver.
+DNSCHECK_AUTHORITATIVE = os.getenv("DNSCHECK_AUTHORITATIVE", "1") != "0"
+
 _USING_SES = "ses" in (MAIL_PROVIDER_BACKEND, EMAIL_SEND_PROVIDER_BACKEND)
 
 # Public domain used to build absolute tracking URLs in outgoing emails.
@@ -479,6 +484,7 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.prune_tracking_tokens": {"queue": "celery"},
     "apps.email.tasks.prune_provisioning_jobs": {"queue": "celery"},
     "apps.email.tasks.reverify_pending_domains": {"queue": "celery"},
+    "apps.email.tasks.recheck_verified_domains": {"queue": "celery"},
     "apps.email.tasks.alert_on_failure_spike": {"queue": "celery"},
     "apps.email.tasks.snapshot_deliverability": {"queue": "celery"},
     "apps.automation.tasks.run_due_workflows": {"queue": "celery"},
@@ -519,6 +525,12 @@ CELERY_BEAT_SCHEDULE = {
     "reverify-pending-domains": {
         "task": "apps.email.tasks.reverify_pending_domains",
         "schedule": 900.0,  # every 15 min — pick up customer DNS changes
+    },
+    "recheck-verified-domains": {
+        "task": "apps.email.tasks.recheck_verified_domains",
+        # Hourly, but each domain is only re-checked once it's 20h stale, in
+        # batches of 200 -- so every verified domain is seen about daily.
+        "schedule": 3600.0,
     },
     "alert-on-failure-spike": {
         "task": "apps.email.tasks.alert_on_failure_spike",

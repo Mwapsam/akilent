@@ -181,7 +181,7 @@ def _send_email_message(
     ``task`` is the bound Celery task instance (for retry/request.retries).
     """
     from apps.email.services.suppression import is_suppressed
-    from apps.email.services.reputation import check_can_send, record_send
+    from apps.email.services.reputation import check_can_send
 
     att_objs = ()
     if attachments:
@@ -270,15 +270,6 @@ def _send_email_message(
             headers=headers,
             attachments=att_objs,
         ))
-        msg.mark_sent(result.provider_message_id)
-        _settle_quota(msg, ok=True)
-        record_send(msg.account)
-        if msg.campaign_id:
-            msg.campaign.increment_counts(sent=1)
-            BulkEmailRecipient.objects.filter(message=msg).update(
-                status=BulkEmailRecipient.Status.SENT
-            )
-            _maybe_complete_campaign(msg.campaign)
     except Exception as exc:
         msg.mark_failed(str(exc))
         logger.exception("_send_email_message: failed for EmailMessage %s", msg.pk)
@@ -306,6 +297,90 @@ def _send_email_message(
                 logger.exception("retry-exhaustion Slack alert failed for %s", msg.pk)
         delay = _exponential_backoff_delay(task.request.retries)
         raise task.retry(exc=exc, countdown=delay)
+
+    # The provider accepted the message. That is the irreversible boundary:
+    # nothing from here on may raise into the retry path above, or the
+    # recipient gets the email twice.
+    _after_send(msg, result)
+
+
+# Statuses that can only exist once the provider has accepted the message.
+# FAILED is deliberately absent: it is also the between-retries state for a
+# message the provider never accepted.
+_ACCEPTED_STATUSES = frozenset({
+    EmailMessage.Status.SENT,
+    EmailMessage.Status.DELIVERED,
+    EmailMessage.Status.BOUNCED,
+    EmailMessage.Status.COMPLAINED,
+    EmailMessage.Status.OPENED,
+    EmailMessage.Status.CLICKED,
+})
+
+
+def _already_accepted(msg: EmailMessage) -> bool:
+    """Whether the provider has already taken this message.
+
+    Checked before every send so a redelivered or re-run task can never send
+    twice. ``status == SENT`` alone isn't enough: SNS moves a message on to
+    DELIVERED/OPENED/BOUNCED within seconds, and a stale task would then pass.
+    """
+    return bool(msg.provider_message_id) or msg.status in _ACCEPTED_STATUSES
+
+
+def _after_send(msg: EmailMessage, result) -> None:
+    """Record a successful send. Never raises, never retries.
+
+    Each step is isolated so one failure can't skip the rest; failures are
+    logged for an operator rather than retried, because retrying here would
+    re-send a message the provider already accepted.
+    """
+    provider_message_id = result.provider_message_id
+    try:
+        msg.mark_sent(provider_message_id)
+    except Exception:
+        # mark_sent saves first and records the event second, so the row may
+        # already be SENT. Either way, make sure the provider id is stored:
+        # it is what SNS delivery/bounce/complaint events are matched on, and
+        # what _already_accepted uses to refuse a duplicate send.
+        logger.critical(
+            "_after_send: mark_sent failed for EmailMessage %s (provider id %s)",
+            msg.pk, provider_message_id, exc_info=True,
+        )
+        try:
+            EmailMessage.objects.filter(pk=msg.pk).update(
+                status=EmailMessage.Status.SENT,
+                provider_message_id=provider_message_id or None,
+                sent_at=timezone.now(),
+            )
+        except Exception:
+            logger.exception("_after_send: fallback SENT update failed for %s", msg.pk)
+
+    _settle_quota(msg, ok=True)  # swallows its own errors
+
+    try:
+        from apps.email.services.reputation import record_send
+
+        record_send(msg.account)
+    except Exception:
+        logger.exception("_after_send: record_send failed for %s", msg.pk)
+
+    if msg.campaign_id:
+        try:
+            # Count the send only when this call is what moved the recipient to
+            # SENT, so a re-entered task can never count it twice.
+            changed = (
+                BulkEmailRecipient.objects.filter(message=msg)
+                .exclude(status=BulkEmailRecipient.Status.SENT)
+                .update(status=BulkEmailRecipient.Status.SENT)
+            )
+            if changed:
+                msg.campaign.increment_counts(sent=1)
+        except Exception:
+            logger.exception("_after_send: campaign counters failed for %s", msg.pk)
+        try:
+            _maybe_complete_campaign(msg.campaign)
+        except Exception:
+            logger.exception("_after_send: campaign completion check failed for %s", msg.pk)
 
 
 def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
@@ -343,7 +418,7 @@ def send_email(
         logger.error("send_email: EmailMessage %s not found", email_message_id)
         return
 
-    if msg.status == EmailMessage.Status.SENT:
+    if _already_accepted(msg):
         return
 
     _send_email_message(self, msg, text_body, html_body, attachments=attachments)
@@ -372,7 +447,7 @@ def send_bulk_recipient_email(self, email_message_id: int) -> None:
         )
         return
 
-    if msg.status == EmailMessage.Status.SENT:
+    if _already_accepted(msg):
         return
 
     recipient = BulkEmailRecipient.objects.filter(message=msg).first()
@@ -804,6 +879,44 @@ def reverify_pending_domains() -> int:
         verified,
     )
     return verified
+
+
+_RECHECK_AFTER_HOURS = 20
+_RECHECK_BATCH = 200
+
+
+@shared_task(queue="celery")
+def recheck_verified_domains() -> int:
+    """Re-check verified domains' DNS once a day so drift gets noticed.
+
+    Records get deleted or edited after setup (a DNS migration, a tidy-up), and
+    the MAIL FROM records are recommended rather than required, so a verified
+    domain would otherwise keep showing "Found" long after it stopped being
+    true. Processes the stalest first, in bounded batches; never downgrades a
+    domain's verified status (refresh_domain doesn't).
+    """
+    from datetime import timedelta
+
+    from django.db.models import Q
+
+    from apps.email.models import EmailDomain
+    from apps.email.verification import refresh_domain
+
+    cutoff = timezone.now() - timedelta(hours=_RECHECK_AFTER_HOURS)
+    stale = (
+        EmailDomain.objects.filter(status=EmailDomain.Status.VERIFIED)
+        .filter(Q(last_checked_at__isnull=True) | Q(last_checked_at__lt=cutoff))
+        .order_by("last_checked_at")[:_RECHECK_BATCH]
+    )
+    checked = 0
+    for domain in stale:
+        try:
+            refresh_domain(domain)
+            checked += 1
+        except Exception:
+            logger.exception("recheck_verified_domains: failed for %s", domain.domain)
+    logger.info("recheck_verified_domains: re-checked %d verified domain(s)", checked)
+    return checked
 
 
 @shared_task(queue="celery")

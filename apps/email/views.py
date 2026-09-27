@@ -206,10 +206,19 @@ def domain_verify(request, pk):
         else:
             kind, message = "success", f"{record.domain}: all records look good."
     elif not results["verify"]:
-        kind, message = "warning", (
-            "We couldn't find your verification record yet. DNS changes can take "
-            "a while to propagate — we'll keep checking automatically."
+        # Say *why* when we know (e.g. added under a doubled name), not just
+        # "couldn't find it" -- the same diagnosis the card shows.
+        diag = next(
+            (r["diag"] for r in record.dns_records() if r["key"] == "verify" and r["diag"]),
+            None,
         )
+        if diag and diag.get("code") not in (None, "missing"):
+            kind, message = "warning", f"Verification record: {diag['message']}"
+        else:
+            kind, message = "warning", (
+                "We couldn't find your verification record yet. Add it using the "
+                "Host and Value shown — we'll keep checking automatically."
+            )
     else:
         kind, message = "success", "DNS status updated."
 
@@ -657,43 +666,59 @@ def tracking_click(request, token: str):
 def unsubscribe(request, token: str):
     """Process an unsubscribe request from a token link.
 
-    Marks the token as used and adds the recipient to the suppression list.
-    Returns a confirmation page.
+    Serves both the body-footer link (GET) and the RFC 8058 one-click POST.
+    Three outcomes, each with its own page:
+
+    * first use -> suppress + mark the Contact, "You've been unsubscribed";
+    * a token that was already used -> "You're already unsubscribed" (people,
+      and mail clients, click twice; this must never look like an error);
+    * an unknown token -> "This unsubscribe link isn't valid".
+
+    Success is only reported once the work has committed.
     """
     from apps.email.services.unsubscribe import apply_unsubscribe
 
     email = None
+    state = "invalid"
     try:
         with transaction.atomic():
-            unsub_token = UnsubscribeToken.objects.select_related(
-                "account", "campaign"
-            ).get(token=token, is_used=False)
-            email = unsub_token.email
-            account = unsub_token.account
-
-            # Mark token as used
-            unsub_token.is_used = True
-            unsub_token.used_at = timezone.now()
-            unsub_token.save(update_fields=["is_used", "used_at"])
-
-            # Suppress, and mirror the opt-out onto the Contact so the UI,
-            # segments and exports stop showing them as subscribed.
-            apply_unsubscribe(
-                account=account,
-                email=email,
-                campaign=unsub_token.campaign,
-                source="post" if request.method == "POST" else "get",
+            # of=("self",): Postgres refuses FOR UPDATE on the nullable side of
+            # the outer join select_related adds for `campaign`.
+            unsub_token = (
+                UnsubscribeToken.objects.select_for_update(of=("self",))
+                .select_related("account", "campaign")
+                .get(token=token)
             )
+            email = unsub_token.email
+            if unsub_token.is_used:
+                # Don't re-apply: that could override a later resubscribe.
+                state = "already"
+            else:
+                unsub_token.is_used = True
+                unsub_token.used_at = timezone.now()
+                unsub_token.save(update_fields=["is_used", "used_at"])
+
+                # Suppress, and mirror the opt-out onto the Contact so the UI,
+                # segments and exports stop showing them as subscribed.
+                apply_unsubscribe(
+                    account=unsub_token.account,
+                    email=email,
+                    campaign=unsub_token.campaign,
+                    source="post" if request.method == "POST" else "get",
+                )
+                state = "done"
+        if state == "done":
             logger.info("Unsubscribed %s via token %s", email, token[:8])
     except UnsubscribeToken.DoesNotExist:
-        logger.warning("Unsubscribe token not found or already used: %s", token[:8])
+        logger.warning("Unsubscribe token not found: %s", token[:8])
     except Exception:
         logger.exception("Error processing unsubscribe token: %s", token[:8])
+        state = "error"
 
     return render(
         request,
         "email/unsubscribe_confirmed.html",
-        {"email": email or "unknown", "success": email is not None},
+        {"email": email, "state": state},
     )
 
 

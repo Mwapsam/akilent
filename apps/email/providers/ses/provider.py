@@ -17,8 +17,10 @@ from botocore.exceptions import ClientError
 
 from apps.email.exceptions import EmailProviderError
 from apps.email.types import (
+    SES_MAIL_FROM_SPF,
     DkimRecord,
     DomainInfo,
+    MailFromInfo,
     DomainStatus,
     OperationResult,
 )
@@ -46,6 +48,8 @@ class SesProvider(EmailProvider):
             logger.debug("Failed to load MailProviderSettings; falling back to env/defaults")
             region = os.getenv("AWS_REGION", "us-east-1")
 
+        # Kept for the MAIL FROM MX target, which is region-specific.
+        self.region = region
         self.client: SESv2Client = boto3.client("sesv2", region_name=region)
 
     # ── Domain management ──────────────────────────────────────────────────────
@@ -92,6 +96,68 @@ class SesProvider(EmailProvider):
             status=DomainStatus.PENDING,
             dkim=None,
             description=description,
+        )
+
+    # ── Custom MAIL FROM ───────────────────────────────────────────────────────
+
+    def _mail_from_mx(self) -> str:
+        return f"feedback-smtp.{self.region}.amazonses.com"
+
+    def configure_mail_from(
+        self, domain: str, *, subdomain: str = "bounce"
+    ) -> MailFromInfo:
+        """Set ``{subdomain}.{domain}`` as the identity's custom MAIL FROM.
+
+        BehaviorOnMxFailure=USE_DEFAULT_VALUE: if the tenant's MX record is ever
+        missing or wrong, SES quietly falls back to its own return path instead
+        of rejecting their mail. MAIL FROM improves alignment; it must never be
+        able to stop a domain from sending.
+        """
+        mail_from = f"{subdomain}.{domain}"
+        try:
+            self.client.put_email_identity_mail_from_attributes(
+                EmailIdentity=domain,
+                MailFromDomain=mail_from,
+                BehaviorOnMxFailure="USE_DEFAULT_VALUE",
+            )
+            logger.info("SES MAIL FROM set: %s -> %s", domain, mail_from)
+        except ClientError as exc:
+            logger.exception("Failed to set SES MAIL FROM for %s", domain)
+            raise EmailProviderError(f"Failed to set MAIL FROM domain: {exc}") from exc
+        except Exception as exc:
+            logger.exception("Unexpected error setting SES MAIL FROM for %s", domain)
+            raise EmailProviderError(str(exc)) from exc
+
+        return MailFromInfo(
+            mail_from_domain=mail_from,
+            status="PENDING",
+            behavior_on_mx_failure="USE_DEFAULT_VALUE",
+            mx_value=self._mail_from_mx(),
+            spf_value=SES_MAIL_FROM_SPF,
+        )
+
+    def get_mail_from(self, domain: str) -> MailFromInfo | None:
+        """Read the identity's MAIL FROM state back from SES.
+
+        None when the identity doesn't exist or has no custom MAIL FROM.
+        """
+        try:
+            response = self.client.get_email_identity(EmailIdentity=domain)
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "NotFoundException":
+                return None
+            raise EmailProviderError(f"Failed to read MAIL FROM: {exc}") from exc
+
+        attrs = response.get("MailFromAttributes") or {}
+        mail_from = attrs.get("MailFromDomain") or ""
+        if not mail_from:
+            return None
+        return MailFromInfo(
+            mail_from_domain=mail_from,
+            status=attrs.get("MailFromDomainStatus") or "",
+            behavior_on_mx_failure=attrs.get("BehaviorOnMxFailure") or "",
+            mx_value=self._mail_from_mx(),
+            spf_value=SES_MAIL_FROM_SPF,
         )
 
     def verify_domain(self, domain: str) -> OperationResult:

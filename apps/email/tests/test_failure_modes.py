@@ -247,3 +247,173 @@ def test_every_send_path_refuses_a_suppressed_address(account, monkeypatch):
     )
     send_mod.send_system_email("blocked@x.com", "S", "body")
     assert provider_calls == []
+
+
+# --- Provider acceptance is the irreversible boundary (B2) -------------------
+#
+# Once the provider has accepted a message, nothing afterwards may send it
+# again: not a bookkeeping error, and not a redelivered task arriving after
+# SNS has already moved the message on to DELIVERED/OPENED/BOUNCED.
+
+class _Accepting:
+    """A provider that accepts every message and counts the calls."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def send(self, outbound):
+        from apps.email.types import SendResult
+
+        self.calls += 1
+        return SendResult(success=True, provider_message_id=f"ses-{self.calls}")
+
+
+class _NoRetryTask:
+    class request:
+        retries = 0
+
+    def retry(self, exc=None, countdown=None):  # pragma: no cover - must not happen
+        raise AssertionError(f"retry after the provider accepted the message: {exc!r}")
+
+
+@pytest.fixture
+def campaign_message(account):
+    from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
+
+    domain = EmailDomain.objects.create(
+        account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
+    )
+    campaign = BulkEmailCampaign.objects.create(
+        account=account, domain=domain, from_email="news@acme.com",
+        subject_override="Hi", recipient_count=1,
+        status=BulkEmailCampaign.Status.SENDING,
+    )
+    msg = EmailMessage.objects.create(
+        account=account, domain=domain, campaign=campaign,
+        from_email="news@acme.com", to_email="r@x.com", subject="Hi",
+    )
+    BulkEmailRecipient.objects.create(
+        campaign=campaign, to_email="r@x.com", message=msg,
+        status=BulkEmailRecipient.Status.QUEUED,
+    )
+    return msg
+
+
+@pytest.fixture
+def accepting(monkeypatch):
+    provider = _Accepting()
+    monkeypatch.setattr("apps.email.tasks.get_send_provider", lambda: provider)
+    monkeypatch.setattr(
+        "apps.email.services.suppression.is_suppressed", lambda a, e: False
+    )
+    return provider
+
+
+@pytest.mark.django_db
+def test_bookkeeping_failure_after_acceptance_never_retries(
+    campaign_message, accepting, monkeypatch
+):
+    """record_send blowing up must not re-send, and must not skip later steps."""
+    from apps.email.tasks import _send_email_message
+
+    def _boom(account):
+        raise RuntimeError("reputation store down")
+
+    monkeypatch.setattr("apps.email.services.reputation.record_send", _boom)
+
+    _send_email_message(_NoRetryTask(), campaign_message, "t", "")
+
+    assert accepting.calls == 1
+    campaign_message.refresh_from_db()
+    assert campaign_message.status == EmailMessage.Status.SENT
+    assert campaign_message.provider_message_id == "ses-1"
+    # The campaign step ran even though record_send (the step before) failed.
+    campaign_message.campaign.refresh_from_db()
+    assert campaign_message.campaign.sent_count == 1
+
+
+@pytest.mark.django_db
+def test_mark_sent_failing_after_its_save_still_records_the_provider_id(
+    campaign_message, accepting, monkeypatch
+):
+    """mark_sent saves, then fans out the event; the fan-out raising must not retry."""
+    from apps.email.tasks import _send_email_message
+
+    def _explode(self, *a, **k):
+        raise RuntimeError("webhook fan-out failed")
+
+    monkeypatch.setattr(EmailMessage, "_record_event", _explode)
+
+    _send_email_message(_NoRetryTask(), campaign_message, "t", "")
+
+    assert accepting.calls == 1
+    row = EmailMessage.objects.get(pk=campaign_message.pk)
+    assert row.status == EmailMessage.Status.SENT
+    # Stored, so SNS events can be matched and a re-run is refused.
+    assert row.provider_message_id == "ses-1"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("status", [
+    EmailMessage.Status.SENT,
+    EmailMessage.Status.DELIVERED,
+    EmailMessage.Status.OPENED,
+    EmailMessage.Status.BOUNCED,
+])
+def test_redelivered_task_never_calls_the_provider(
+    campaign_message, accepting, status
+):
+    """A stale task arriving after SNS moved the message on must not resend it."""
+    from apps.email.tasks import send_bulk_recipient_email, send_email
+
+    EmailMessage.objects.filter(pk=campaign_message.pk).update(
+        status=status, provider_message_id="ses-original"
+    )
+    campaign = campaign_message.campaign
+    campaign.refresh_from_db()
+    before = campaign.sent_count
+
+    send_email(campaign_message.pk, "t", "")
+    send_bulk_recipient_email(campaign_message.pk)
+
+    assert accepting.calls == 0
+    campaign.refresh_from_db()
+    assert campaign.sent_count == before
+
+
+@pytest.mark.django_db
+def test_a_provider_id_alone_blocks_a_resend(campaign_message, accepting):
+    """Even with a status that doesn't say so, a stored provider id means accepted."""
+    from apps.email.tasks import send_email
+
+    EmailMessage.objects.filter(pk=campaign_message.pk).update(
+        status=EmailMessage.Status.QUEUED, provider_message_id="ses-original"
+    )
+    send_email(campaign_message.pk, "t", "")
+    assert accepting.calls == 0
+
+
+@pytest.mark.django_db
+def test_failed_message_never_accepted_is_still_sent(campaign_message, accepting):
+    """FAILED is also the between-retries state; the guard must let it through."""
+    from apps.email.tasks import send_email
+
+    EmailMessage.objects.filter(pk=campaign_message.pk).update(
+        status=EmailMessage.Status.FAILED, provider_message_id=None
+    )
+    send_email(campaign_message.pk, "t", "")
+    assert accepting.calls == 1
+
+
+@pytest.mark.django_db
+def test_campaign_is_counted_once_when_after_send_runs_twice(campaign_message):
+    """Bookkeeping is idempotent even if it is somehow reached a second time."""
+    from apps.email.tasks import _after_send
+    from apps.email.types import SendResult
+
+    result = SendResult(success=True, provider_message_id="ses-1")
+    _after_send(campaign_message, result)
+    _after_send(campaign_message, result)
+
+    campaign_message.campaign.refresh_from_db()
+    assert campaign_message.campaign.sent_count == 1
