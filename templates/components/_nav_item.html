@@ -25,6 +25,7 @@
 <a href="{{ href }}" title="{{ label }}"
    class="nav-link {% if on %}nav-link-active{% endif %}"
    data-nav-link data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}
+   preload="mouseover"
    {% if on %}aria-current="page"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0" %}
   {% if collapsible %}

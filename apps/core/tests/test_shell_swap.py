@@ -137,6 +137,19 @@ def test_page_scripts_force_a_full_load_unless_marked_safe():
     assert ok.status_code == 200 and ok["HX-Push-Url"] == "/somewhere/"
 
 
+def test_successful_boosted_get_is_privately_cacheable_briefly():
+    """Lets htmx-ext-preload's hover request and the click that follows share one network
+    round trip via the browser's HTTP cache (see apps/core/htmx.py's comment)."""
+    resp = _run(_fragment())
+    assert resp["Cache-Control"] == "private, max-age=5"
+
+
+def test_a_views_own_cache_control_is_not_overridden():
+    response = _fragment()
+    response["Cache-Control"] = "no-store"
+    assert _run(response)["Cache-Control"] == "no-store"
+
+
 def test_a_post_that_needs_a_full_page_refreshes_instead_of_repeating():
     resp = _run(HttpResponse("<!DOCTYPE html><html></html>"), method="post")
     assert resp["HX-Refresh"] == "true"

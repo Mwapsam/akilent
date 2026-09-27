@@ -147,3 +147,26 @@ def ajax_redirect(url: str):
     response = JsonResponse({"redirect": url})
     response["HX-Redirect"] = url
     return response
+
+
+def hx_toast(response, type: str, message: str):
+    """Attach a toast to a boosted HTMX response via ``HX-Trigger``.
+
+    For an in-place mutation (an ``hx-post`` that swaps a fragment, an
+    out-of-band row update) there's no full page load to carry a Django
+    flash message, so the confirmation has to ride the response itself.
+    ``static/js/app.js`` listens for the ``toast`` event this fires and
+    calls ``window.toast`` with it — the same store a full-page flash
+    message renders into.
+
+    Merges into any ``HX-Trigger`` the response already carries (as JSON),
+    rather than overwriting it, since a view may also need to fire its own
+    event on the same response.
+    """
+    import json
+
+    existing = response.get("HX-Trigger")
+    payload = json.loads(existing) if existing else {}
+    payload["toast"] = {"type": type, "message": message}
+    response["HX-Trigger"] = json.dumps(payload)
+    return response

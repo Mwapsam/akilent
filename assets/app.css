@@ -802,6 +802,46 @@
   .skeleton-stat::before { @apply h-3 w-24; }
   .skeleton-stat::after { @apply h-8 w-16 mt-3; }
 
+  /* In-place navigation feel -------------------------------------------- */
+  /* Shown by static/js/app.js only once a boosted request has been in flight for
+     >120ms, so a fast swap never flashes it. Fixed to the viewport, not #main,
+     since the bar is about the request, not the page it will replace. */
+  #nav-progress {
+    @apply fixed top-0 left-0 h-0.5 pointer-events-none;
+    z-index: var(--z-toast);
+    background: var(--color-teal-500);
+    width: 0%;
+    opacity: 0;
+    transition: width 8s cubic-bezier(0.1, 0.7, 0.5, 1), opacity 0.2s linear;
+  }
+  #nav-progress.is-active { opacity: 1; width: 80%; }
+  #nav-progress.is-done { width: 100%; opacity: 0; transition: width 0.2s ease-out, opacity 0.3s linear 0.1s; }
+
+  /* #main dims slightly once a boosted navigation has been pending a beat, so a
+     slow page reads as "loading" rather than "unresponsive" without a skeleton
+     of its own. aria-busy is the semantic half; the opacity is the visual one. */
+  #main[aria-busy="true"] { opacity: 0.6; transition: opacity 0.15s linear; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #nav-progress { transition: none; }
+    #main[aria-busy="true"] { transition: none; }
+  }
+
+  /* htmx's globalViewTransitions (static/js/app.js) wraps every boosted swap in
+     document.startViewTransition(). Unnamed, that captures and cross-fades the *whole*
+     document — sidebar and topbar included — which flashes shell chrome that never changed.
+     Naming #main gives it its own transition pair; disabling the root pair leaves the shell
+     untouched and only #main cross-fades. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  #main { view-transition-name: main-content; }
+  ::view-transition-old(main-content) { animation: 150ms ease-out both akilent-fade-out; }
+  ::view-transition-new(main-content) { animation: 150ms ease-in both akilent-fade-in; }
+  @keyframes akilent-fade-out { to { opacity: 0; } }
+  @keyframes akilent-fade-in { from { opacity: 0; } }
+
   /* App shell nav ------------------------------------------------------- */
   .nav-link {
     @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors;

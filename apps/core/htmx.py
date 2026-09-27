@@ -115,6 +115,15 @@ class ShellMiddleware:
 
         if request.method == "GET" and response.status_code == 200:
             response["HX-Push-Url"] = request.get_full_path()
+            # htmx-ext-preload (base.html) warms a sidebar link's target on hover, then the
+            # real navigation re-requests the same URL moments later. Without a Cache-Control
+            # that allows reuse, the browser refetches from the network both times and the
+            # hover request was pure waste. `private` keeps it out of any shared/CDN cache;
+            # 5s is long enough to cover hover-then-click but short enough that a page cached
+            # just before a sign-out or permission change is stale for only a few seconds.
+            # A view that has its own opinion (e.g. an explicit no-store) keeps it.
+            if not response.has_header("Cache-Control"):
+                response["Cache-Control"] = "private, max-age=5"
         return response
 
     @staticmethod

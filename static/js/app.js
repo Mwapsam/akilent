@@ -205,6 +205,15 @@
     if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-Toast")) return; // already toasted above
     window.toast("danger", "Something went wrong.");
   });
+
+  // apps/accounts/utils.py::hx_toast sets this for in-place mutations (an hx-post that swaps a
+  // fragment) that have no full page load to carry a Django flash message. htmx fires it on the
+  // element that made the request, but the event bubbles, so one document-level listener covers
+  // every hx-post in the app.
+  document.addEventListener("toast", function (e) {
+    const t = e.detail || {};
+    if (t.message) window.toast(t.type || "info", t.message);
+  });
   document.addEventListener("htmx:sendError", function (e) {
     if (isSilent(e.detail.elt)) return;
     window.toast("danger", "Network error — please try again.");
@@ -324,6 +333,14 @@
   }
 
   const isBoosted = (detail) => !!(detail && detail.requestConfig && detail.requestConfig.boosted);
+  // htmx-ext-preload (vendor/htmx-ext-preload.js) warms a sidebar link's target on hover by
+  // replaying the same boosted request early, marked with this header. It intercepts its own
+  // htmx:beforeRequest to send the XHR itself and never lets htmx's normal completion path run —
+  // so htmx:afterRequest never fires for it. Progress-bar/aria-busy bookkeping below counts
+  // beforeRequest against afterRequest 1:1; treating a preload as boosted there would increment
+  // on hover and never decrement, permanently stranding the bar and #main's dimmed state.
+  const isPreloaded = (detail) =>
+    !!(detail && detail.requestConfig && detail.requestConfig.headers && detail.requestConfig.headers["HX-Preloaded"] === "true");
 
   document.addEventListener("htmx:configRequest", function (e) {
     if (isBoosted(e.detail) || (e.detail.elt && e.detail.elt.closest && e.detail.elt.closest("[hx-boost]"))) {
@@ -371,6 +388,48 @@
     runPageHooks();
   });
 
+  // A boosted request under ~120ms should feel instant, with nothing shown; past that it needs
+  // to read as "loading" rather than "stuck". #main dims (aria-busy) and a thin bar creeps across
+  // the top — both driven by CSS in assets/app.css, this just toggles the classes/attribute at
+  // the right moments. navBusyCount covers the rare case of two boosted requests overlapping
+  // (a background poll landing mid-navigation does not count — it is never boosted).
+  let navBusyCount = 0;
+  let navProgressTimer = null;
+  let navProgressEl = null;
+  function navProgressBar() {
+    if (!navProgressEl) {
+      navProgressEl = document.createElement("div");
+      navProgressEl.id = "nav-progress";
+      navProgressEl.setAttribute("aria-hidden", "true");
+      document.body.appendChild(navProgressEl);
+    }
+    return navProgressEl;
+  }
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
+    navBusyCount++;
+    navProgressTimer = setTimeout(function () {
+      const bar = navProgressBar();
+      bar.classList.remove("is-done");
+      bar.classList.add("is-active");
+      const main = mainEl();
+      if (main) main.setAttribute("aria-busy", "true");
+    }, 120);
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
+    navBusyCount = Math.max(0, navBusyCount - 1);
+    if (navBusyCount > 0) return;
+    clearTimeout(navProgressTimer);
+    const main = mainEl();
+    if (main) main.removeAttribute("aria-busy");
+    if (navProgressEl && navProgressEl.classList.contains("is-active")) {
+      navProgressEl.classList.remove("is-active");
+      navProgressEl.classList.add("is-done");
+      setTimeout(function () { navProgressEl.classList.remove("is-done"); }, 300);
+    }
+  });
+
   // Never strand a navigation: if the in-place request can't complete, load the page.
   document.addEventListener("htmx:sendError", function (e) {
     if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") {
@@ -390,6 +449,11 @@
       window.htmx.config.historyCacheSize = 0;
       window.htmx.config.refreshOnHistoryMiss = false;
       window.htmx.config.timeout = 20000;
+      // The View Transitions API itself checks prefers-reduced-motion for its default
+      // cross-fade, but ours is a custom keyframe (assets/app.css) that bypasses that default,
+      // so it needs its own check — otherwise a reduced-motion user still gets the animation.
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.htmx.config.globalViewTransitions = !reduceMotion;
     }
     markUnsafeMain();
     runPageHooks();
