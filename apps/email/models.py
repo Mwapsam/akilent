@@ -775,6 +775,11 @@ class BulkEmailCampaign(models.Model):
             self.error = reason[:5000]
         self.save(update_fields=["status", "error"])
 
+    @property
+    def held_count(self) -> int:
+        """Recipients not sent because the plan's email limit was reached (not failures)."""
+        return self.recipients.filter(status=BulkEmailRecipient.Status.HELD).count()
+
     def increment_counts(self, *, queued=0, sent=0, failed=0) -> None:
         updates = []
         if queued:

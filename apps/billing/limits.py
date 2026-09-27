@@ -78,11 +78,13 @@ class LimitChecker:
         from apps.billing import api as billing_api
 
         self._require_active_plan()
-        if billing_api.reserve_all(self.account, EMAIL_LIMITS, operation_id=operation_id) is None:
-            month, day = billing_api.limit(self.account, "emails_month"), billing_api.limit(self.account, "emails_day")
-            which = (f"Daily email limit of {day}" if day >= 0 and billing_api.used(self.account, "emails_day") >= day
-                     else f"Monthly email limit of {month}")
-            raise PlanLimitExceeded(f"{which} reached. Please upgrade your plan.", "emails")
+        taken, blocked = billing_api.reserve_all_verbose(self.account, EMAIL_LIMITS, operation_id=operation_id)
+        if taken is None:
+            # Named from the reservation attempt itself, not a re-query after the fact: usage can
+            # move between the failed reserve and a later check, and would then name the wrong limit.
+            which = ("Daily email limit" if blocked == "emails_day" else "Monthly email limit")
+            limit_value = billing_api.limit(self.account, blocked)
+            raise PlanLimitExceeded(f"{which} of {limit_value} reached. Please upgrade your plan.", "emails")
 
     def settle_email(self, operation_id: str, *, ok: bool) -> None:
         """Commit (sent) or release (never delivered) an email's reservation."""

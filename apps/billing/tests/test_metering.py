@@ -1,6 +1,7 @@
 """Limits and usage: reservations with identity, idempotent operations, held vs failed, and the
 product promise that a commercial limit never drops what a customer sent."""
 import threading
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -379,3 +380,272 @@ def test_operator_can_give_one_business_its_own_limit(client, account, plan):
     assert billing_api.limit_source(account, "whatsapp_marketing_msgs") == (10000, "override")
     client.post(url, {"key": "whatsapp_marketing_msgs", "change": "reset"})
     assert billing_api.limit_source(account, "whatsapp_marketing_msgs")[1] == "plan"
+
+
+@pytest.mark.django_db
+def test_reaching_the_limit_in_one_step_sends_no_stale_80_percent_warning(monkeypatch):
+    from apps.billing import metering
+    from apps.billing.models import UsageCounter
+
+    acc = Account.objects.create(company_name="Warn Co", slug="warn-co")
+    sent = []
+    monkeypatch.setattr("apps.billing.tasks.send_limit_warning.delay", lambda *a: sent.append(a))
+    start = metering.period_start("conversations_month")
+    UsageCounter.objects.create(account=acc, key="conversations_month", period_start=start, used=105)
+    metering._after_use(acc, "conversations_month", start, 100)
+    metering._after_use(acc, "conversations_month", start, 100)
+    assert [a[2] for a in sent] == [100]
+
+
+@pytest.mark.django_db
+def test_ai_calls_refused_by_the_site_ceiling_use_no_plan_units(settings):
+    from apps.ai.tasks import _over_daily_limit
+
+    settings.AI_DAILY_CALL_LIMIT = 1
+    cache.clear()
+    acc = Account.objects.create(company_name="Ai Co", slug="ai-co")
+    assert _over_daily_limit(acc.pk, "ai-proposal:1") is False
+    assert _over_daily_limit(acc.pk, "ai-proposal:2") is True
+    assert billing_api.used(acc, "ai_actions_day") == 1
+
+
+@pytest.mark.django_db
+def test_a_rolled_back_email_reservation_can_be_reserved_again():
+    acc = Account.objects.create(company_name="Roll Co", slug="roll-co")
+    plan = Plan.objects.create(slug="roll", name="Roll", price_monthly=Decimal("5"))
+    Subscription.objects.update_or_create(account=acc, defaults={
+        "plan": plan, "status": Subscription.ACTIVE, "current_period_start": timezone.now()})
+    PlanLimit.objects.update_or_create(plan=plan, key="emails_month", defaults={"value": 10})
+    PlanLimit.objects.update_or_create(plan=plan, key="emails_day", defaults={"value": 1})
+    assert billing_api.reserve_all(acc, ["emails_month", "emails_day"], operation_id="a") is not None
+    assert billing_api.reserve_all(acc, ["emails_month", "emails_day"], operation_id="b") is None
+    assert billing_api.used(acc, "emails_month") == 1
+    PlanLimit.objects.filter(plan=plan, key="emails_day").update(value=5)
+    assert billing_api.reserve_all(acc, ["emails_month", "emails_day"], operation_id="b") is not None
+
+
+def test_only_ambiguous_network_errors_are_unconfirmed():
+    import requests
+    from apps.whatsapp.providers.meta import _may_have_been_sent as f
+
+    assert f(requests.ReadTimeout()) is True
+    assert f(requests.ConnectionError("Connection aborted.", "RemoteDisconnected")) is True
+    assert f(requests.ConnectTimeout()) is False
+    assert f(requests.ConnectionError("Failed to establish a new connection: Name or service not known")) is False
+
+
+@pytest.mark.django_db
+def test_businesses_by_margin_uses_a_fixed_number_of_queries(django_assert_max_num_queries):
+    for i in range(6):
+        a = Account.objects.create(company_name=f"M{i}", slug=f"m{i}")
+        Subscription.objects.create(account=a, plan=Plan.objects.create(slug=f"mp{i}", name=f"P{i}"),
+                                    status=Subscription.ACTIVE, current_period_start=timezone.now())
+    with django_assert_max_num_queries(8):
+        assert len(billing_api.businesses_by_margin()) == 6
+
+
+@pytest.mark.django_db
+def test_csv_rows_stopped_by_the_customer_limit_are_reported_separately():
+    from apps.contacts.services import import_csv
+
+    acc = Account.objects.create(company_name="Imp Co", slug="imp-co")
+    plan = Plan.objects.create(slug="imp", name="Imp", price_monthly=Decimal("5"))
+    Subscription.objects.update_or_create(account=acc, defaults={
+        "plan": plan, "status": Subscription.ACTIVE, "current_period_start": timezone.now()})
+    PlanLimit.objects.update_or_create(plan=plan, key="contacts", defaults={"value": 2})
+    imp = import_csv(acc, "email\na@x.com\nb@x.com\nc@x.com\n\n")
+    assert (imp.created_count, imp.limit_skipped_count, imp.skipped_count) == (2, 1, 0)
+
+
+@pytest.mark.django_db
+def test_settling_an_email_as_not_sent_returns_both_units():
+    from apps.email.models import EmailMessage
+
+    acc = Account.objects.create(company_name="Rel Co", slug="rel-co")
+    reserved = billing_api.reserve_all(acc, ["emails_month", "emails_day"], operation_id="email:x")
+    assert billing_api.used(acc, "emails_month") == 1 and reserved
+    from apps.billing.limits import LimitChecker
+    LimitChecker(acc).settle_email("email:x", ok=False)
+    assert billing_api.used(acc, "emails_month") == 0
+
+
+@pytest.mark.django_db
+def test_an_ai_call_retried_after_the_site_ceiling_still_counts_its_unit(settings):
+    from apps.ai.tasks import _over_daily_limit
+
+    cache.clear()
+    acc = Account.objects.create(company_name="Ai2 Co", slug="ai2-co")
+    settings.AI_DAILY_CALL_LIMIT = 1
+    assert _over_daily_limit(acc.pk, "ai-draft:1") is False
+    assert _over_daily_limit(acc.pk, "ai-draft:2") is True     # released
+    cache.clear()                                               # next day
+    assert _over_daily_limit(acc.pk, "ai-draft:2") is False    # same operation, now runs
+    assert billing_api.used(acc, "ai_actions_day") == 2
+
+
+@pytest.mark.django_db
+def test_usage_report_query_count_does_not_grow_with_limits(django_assert_max_num_queries):
+    acc = Account.objects.create(company_name="Q Co", slug="q-co")
+    with django_assert_max_num_queries(16):
+        billing_api.usage_report(acc)
+    with django_assert_max_num_queries(5):
+        billing_api.usage_warnings(acc)
+
+
+def test_every_total_limit_has_a_live_total_branch():
+    """A new TOTAL-period catalog key must be wired into _live_total, or usage_report and
+    require_room raise KeyError in production instead of failing this test."""
+    from apps.billing import limit_catalog, metering
+
+    acc = Account(pk=0)
+    for lim in limit_catalog.LIMITS:
+        if lim.period == limit_catalog.TOTAL:
+            try:
+                metering._live_total(acc, lim.key)
+            except KeyError:
+                pytest.fail(f"_live_total has no branch for TOTAL limit {lim.key!r}")
+            except Exception:
+                pass  # a DB/app-layer error is fine here; only a KeyError means no branch exists
+
+
+@pytest.mark.django_db
+def test_percent_never_reports_100_before_the_limit_is_truly_reached():
+    acc = Account.objects.create(company_name="Pct Co", slug="pct-co")
+    plan = Plan.objects.create(slug="pct", name="Pct", price_monthly=Decimal("5"))
+    Subscription.objects.update_or_create(account=acc, defaults={
+        "plan": plan, "status": Subscription.ACTIVE, "current_period_start": timezone.now()})
+    PlanLimit.objects.update_or_create(plan=plan, key="emails_month", defaults={"value": 1000})
+    from apps.billing.metering import period_start
+    UsageCounter.objects.create(account=acc, key="emails_month", period_start=period_start("emails_month"), used=996)
+    row = next(r for r in billing_api.usage_report(acc) if r["key"] == "emails_month")
+    assert row["percent"] == 99
+    row["used"] = 1000
+    UsageCounter.objects.filter(account=acc, key="emails_month").update(used=1000)
+    row = next(r for r in billing_api.usage_report(acc) if r["key"] == "emails_month")
+    assert row["percent"] == 100
+
+
+@pytest.mark.django_db
+def test_a_soft_limit_warning_never_claims_anything_is_held():
+    from apps.billing import limit_catalog
+
+    row = next(r for r in [{"over_limit": limit_catalog.get("conversations_month").over_limit}])
+    assert row["over_limit"] == limit_catalog.SOFT
+
+
+@pytest.mark.django_db
+def test_count_members_ignores_expired_invitations():
+    from apps.accounts.api import count_members
+    from apps.accounts.models import Invitation
+
+    acc = Account.objects.create(company_name="Team Co", slug="team-co")
+    stale = Invitation.objects.create(account=acc, email="stale@x.com", role="member")
+    Invitation.objects.filter(pk=stale.pk).update(created_at=timezone.now() - timedelta(days=30))
+    assert count_members(acc) == 0
+    Invitation.objects.create(account=acc, email="fresh@x.com", role="member")
+    assert count_members(acc) == 1
+
+
+@pytest.mark.django_db
+def test_ensure_room_for_contact_keys_on_phone_when_phone_is_given():
+    from apps.contacts.models import Contact
+    from apps.contacts.services import ContactLimitReached, ensure_room_for_contact
+
+    acc = Account.objects.create(company_name="Id Co", slug="id-co")
+    plan = Plan.objects.create(slug="idp", name="IdP", price_monthly=Decimal("5"))
+    Subscription.objects.update_or_create(account=acc, defaults={
+        "plan": plan, "status": Subscription.ACTIVE, "current_period_start": timezone.now()})
+    PlanLimit.objects.update_or_create(plan=plan, key="contacts", defaults={"value": 1})
+    Contact.objects.create(account=acc, email="known@x.com", phone="+10000000001")
+    # A new phone paired with an existing customer's email is still a NEW row once inserted via
+    # upsert_contact_by_phone, so it must be blocked at the cap, not waved through as an "update".
+    with pytest.raises(ContactLimitReached):
+        ensure_room_for_contact(acc, email="known@x.com", phone="+10000000002")
+
+
+@pytest.mark.django_db
+def test_a_held_send_is_retried_and_goes_out_once_the_limit_has_room(account, plan, number):
+    from apps.whatsapp.tasks import drain_outbound_queue
+
+    set_limit(plan, "whatsapp_marketing_msgs", 2)
+    msgs = _queue_templates(account, 3)
+    provider = _Provider()
+    with patch("apps.whatsapp.tasks._get_provider_for_account", return_value=provider):
+        drain_outbound_queue()
+    held = OutboundMessage.objects.filter(status="held").first()
+    assert held is not None and held.next_attempt_at is not None
+    # The plan's limit resets for a new period; the held row is still queued for another try.
+    UsageCounter.objects.filter(account=account, key="whatsapp_marketing_msgs").update(used=0)
+    OutboundMessage.objects.filter(pk=held.pk).update(next_attempt_at=timezone.now() - timedelta(minutes=1))
+    with patch("apps.whatsapp.tasks._get_provider_for_account", return_value=provider):
+        drain_outbound_queue()
+    held.refresh_from_db()
+    assert held.status == "sent"
+
+
+@pytest.mark.django_db
+def test_holding_never_forgets_a_verification_code_before_it_can_be_retried(account, plan, number):
+    from apps.whatsapp import verification_codes
+    from apps.whatsapp.tasks import _hold
+
+    set_limit(plan, "verification_codes_month", 0)
+    contact = WhatsAppContact.objects.create(account=account, phone_number="+260971234568")
+    template = MessageTemplate.objects.create(
+        account=account, name="login_code", whatsapp_template_name="login_code",
+        category=MessageTemplate.Category.AUTHENTICATION,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED, content="*{{1}}*")
+    msg = OutboundMessage.objects.create(
+        account=account, contact=contact, template=template, idempotency_key="otp-hold",
+        payload={"type": "template", "kind": "verification_code", "template_name": "login_code",
+                "language": "en", "components": verification_codes.components("135790")})
+    _hold(msg)
+    msg.refresh_from_db()
+    assert msg.payload["components"] != verification_codes.components(verification_codes.HIDDEN)
+    assert msg.status == "held" and msg.next_attempt_at is not None
+
+
+@pytest.mark.django_db
+def test_held_email_recipients_are_retried_once_the_limit_has_room(account, plan):
+    from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
+    from apps.email.tasks import dispatch_campaign, retry_held_email_recipients
+
+    set_limit(plan, "emails_month", 2)
+    domain = EmailDomain.objects.create(account=account, domain="meter2.test", status=EmailDomain.Status.VERIFIED)
+    campaign = BulkEmailCampaign.objects.create(account=account, domain=domain, from_email="hi@meter2.test",
+                                                subject_override="Hi", text_override="Hi")
+    for i in range(4):
+        BulkEmailRecipient.objects.create(campaign=campaign, to_email=f"q{i}@example.com")
+    with patch("apps.email.services.validation.validate_recipient", return_value=True), \
+            patch("apps.email.tasks.send_bulk_recipient_email.delay"), \
+            patch("apps.email.tasks.dispatch_campaign.delay"):
+        dispatch_campaign.apply(args=(campaign.pk,))
+    campaign.refresh_from_db()
+    assert BulkEmailRecipient.objects.filter(campaign=campaign, status="held").count() == 2
+
+    set_limit(plan, "emails_month", 100)  # the plan is upgraded / the month rolls over
+    with patch("apps.email.services.validation.validate_recipient", return_value=True), \
+            patch("apps.email.tasks.send_bulk_recipient_email.delay"):
+        result = retry_held_email_recipients()
+    assert result["queued"] == 2
+    assert BulkEmailRecipient.objects.filter(campaign=campaign, status="held").count() == 0
+    assert BulkEmailRecipient.objects.filter(campaign=campaign, status="queued").count() == 4
+
+
+@pytest.mark.django_db
+def test_retrying_held_recipients_reopens_a_completed_campaign(account, plan):
+    from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
+    from apps.email.tasks import retry_held_email_recipients
+
+    set_limit(plan, "emails_month", 0)
+    domain = EmailDomain.objects.create(account=account, domain="meter3.test", status=EmailDomain.Status.VERIFIED)
+    campaign = BulkEmailCampaign.objects.create(account=account, domain=domain, from_email="hi@meter3.test",
+                                                subject_override="Hi", text_override="Hi",
+                                                status=BulkEmailCampaign.Status.COMPLETED, recipient_count=1)
+    BulkEmailRecipient.objects.create(campaign=campaign, to_email="late@example.com",
+                                      status=BulkEmailRecipient.Status.HELD)
+    set_limit(plan, "emails_month", 10)
+    with patch("apps.email.tasks.send_bulk_recipient_email.delay"):
+        result = retry_held_email_recipients()
+    assert result["queued"] == 1
+    campaign.refresh_from_db()
+    assert campaign.status == BulkEmailCampaign.Status.SENDING

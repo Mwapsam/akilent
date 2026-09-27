@@ -273,6 +273,8 @@ class ContactImport(models.Model):
     created_count = models.PositiveIntegerField(default=0)
     updated_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
+    limit_skipped_count = models.PositiveIntegerField(
+        default=0, help_text="New customers not added because the plan's customer limit was reached.")
     mapping = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

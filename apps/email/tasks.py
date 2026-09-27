@@ -539,30 +539,7 @@ def dispatch_campaign(self, campaign_id: int) -> None:
         )
 
     if to_send:
-        messages = [
-            EmailMessage(
-                account=campaign.account,
-                domain=campaign.domain,
-                template=campaign.template,
-                campaign=campaign,
-                from_email=campaign.from_email,
-                to_email=r.to_email,
-                subject=campaign.template.subject if campaign.template else campaign.subject_override,
-            )
-            for r in to_send
-        ]
-        created = EmailMessage.objects.bulk_create(messages)
-
-        for recipient, msg in zip(to_send, created):
-            recipient.message = msg
-            recipient.status = BulkEmailRecipient.Status.QUEUED
-        BulkEmailRecipient.objects.bulk_update(to_send, ["message", "status"])
-        campaign.increment_counts(queued=len(to_send))
-
-        message_ids = [m.pk for m in created]
-        transaction.on_commit(
-            lambda ids=message_ids: [send_bulk_recipient_email.delay(mid) for mid in ids]
-        )
+        _queue_recipients(campaign, to_send)
 
     still_pending = BulkEmailRecipient.objects.filter(
         campaign=campaign, status=BulkEmailRecipient.Status.PENDING
@@ -573,6 +550,73 @@ def dispatch_campaign(self, campaign_id: int) -> None:
         # Remaining QUEUED rows complete asynchronously via
         # _maybe_complete_campaign, called from each recipient's send task.
         _maybe_complete_campaign(campaign)
+
+
+def _queue_recipients(campaign, recipients: list) -> None:
+    """Create each recipient's EmailMessage, mark them QUEUED and schedule their sends.
+
+    Shared by dispatch_campaign (a fresh chunk) and retry_held_email_recipients (a recipient
+    that was HELD and now has room), so a held recipient is queued exactly the way a first-try
+    one is."""
+    messages = [
+        EmailMessage(
+            account=campaign.account,
+            domain=campaign.domain,
+            template=campaign.template,
+            campaign=campaign,
+            from_email=campaign.from_email,
+            to_email=r.to_email,
+            subject=campaign.template.subject if campaign.template else campaign.subject_override,
+        )
+        for r in recipients
+    ]
+    created = EmailMessage.objects.bulk_create(messages)
+
+    for recipient, msg in zip(recipients, created):
+        recipient.message = msg
+        recipient.status = BulkEmailRecipient.Status.QUEUED
+    BulkEmailRecipient.objects.bulk_update(recipients, ["message", "status"])
+    campaign.increment_counts(queued=len(recipients))
+
+    message_ids = [m.pk for m in created]
+    transaction.on_commit(
+        lambda ids=message_ids: [send_bulk_recipient_email.delay(mid) for mid in ids]
+    )
+
+
+_HELD_RECIPIENT_RETRY_BATCH = 500
+
+
+@shared_task(queue="outbound")
+def retry_held_email_recipients() -> dict:
+    """Held recipients (the plan's email limit was reached) get another chance once the limit
+    has room, matching what the owner is told: "held, not sent and not lost". Without this,
+    a HELD row — and a campaign already marked COMPLETED around it — would stay stuck forever."""
+    from apps.billing import api as billing_api
+    from apps.billing.limits import EMAIL_LIMITS
+
+    held = list(BulkEmailRecipient.objects.filter(status=BulkEmailRecipient.Status.HELD)
+                .select_related("campaign", "campaign__account", "campaign__template")
+                .order_by("pk")[:_HELD_RECIPIENT_RETRY_BATCH])
+    queued = still_held = 0
+    by_campaign: dict = {}
+    for r in held:
+        taken = billing_api.reserve_all(r.campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}")
+        if taken is None:
+            still_held += 1
+            continue
+        by_campaign.setdefault(r.campaign_id, (r.campaign, []))[1].append(r)
+        queued += 1
+    for campaign, recipients in by_campaign.values():
+        _queue_recipients(campaign, recipients)
+        if campaign.status == BulkEmailCampaign.Status.COMPLETED:
+            # Reopen briefly so the newly-queued rows' sends can close it out again, the same
+            # way an in-progress campaign's last chunk does.
+            BulkEmailCampaign.objects.filter(pk=campaign.pk).update(
+                status=BulkEmailCampaign.Status.SENDING)
+    if held:
+        logger.info("retry_held_email_recipients: queued=%s still_held=%s", queued, still_held)
+    return {"queued": queued, "still_held": still_held}
 
 
 # â”€â”€ Webhook delivery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

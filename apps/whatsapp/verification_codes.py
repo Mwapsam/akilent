@@ -139,6 +139,19 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
                 status=429,
             )
 
+    if dry_run:
+        return {"id": None, "status": "test", "to": phone, "template": template.whatsapp_template_name,
+                "language": template.language_code, "expires_in_minutes": minutes, "test": True}
+
+    key = KEY_PREFIX + (idempotency_key.strip()[:200] if idempotency_key else uuid.uuid4().hex)
+    if idempotency_key:
+        # A retry of an already-sent code must return that code's status, never a fresh plan-limit
+        # refusal: the unit was already spent (or never needed) the first time.
+        existing = OutboundMessage.objects.filter(account=account, idempotency_key=key) \
+            .select_related("contact", "message_log").first()
+        if existing is not None:
+            return status_of(existing)
+
     from apps.billing import api as billing_api
 
     allowed = billing_api.limit(account, "verification_codes_month")
@@ -150,13 +163,8 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
             status=429,
         )
 
-    if dry_run:
-        return {"id": None, "status": "test", "to": phone, "template": template.whatsapp_template_name,
-                "language": template.language_code, "expires_in_minutes": minutes, "test": True}
-
     if contact is None:
         contact, _ = WhatsAppContact.objects.get_or_create(account=account, phone_number=phone)
-    key = KEY_PREFIX + (idempotency_key.strip()[:200] if idempotency_key else uuid.uuid4().hex)
     msg, created = OutboundMessage.objects.get_or_create(
         account=account,
         idempotency_key=key,

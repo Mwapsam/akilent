@@ -247,3 +247,28 @@ def test_sub_hour_recurrence_rejected(account, verified_domain, future):
             account=account, scheduled_at=future(hours=1), tz="UTC",
             recurrence="FREQ=MINUTELY;INTERVAL=10", **_msg_payload()
         )
+
+
+@pytest.mark.django_db
+def test_fire_whatsapp_resolves_unconfirmed_and_keeps_polling_held():
+    """UNCONFIRMED is a stop-polling resolution (never auto-resent); HELD keeps the shadow job
+    RUNNING, since drain_outbound_queue now retries a held send once the plan limit has room."""
+    from apps.accounts.models import Account
+    from apps.scheduler.drainer import _fire_whatsapp
+    from apps.whatsapp.models import OutboundMessage, WhatsAppContact
+
+    acc = Account.objects.create(company_name="Sched WA", slug="sched-wa")
+    contact = WhatsAppContact.objects.create(account=acc, phone_number="+260971234567")
+    job = ScheduledJob(account=acc, kind=ScheduledJob.Kind.WHATSAPP, fire_at=timezone.now())
+
+    for status, expected_running in [
+        (OutboundMessage.Status.SENT, False),
+        (OutboundMessage.Status.UNCONFIRMED, False),
+        (OutboundMessage.Status.HELD, True),
+        (OutboundMessage.Status.QUEUED, True),
+    ]:
+        ob = OutboundMessage.objects.create(account=acc, contact=contact, status=status, payload={})
+        job.target_outbound = ob
+        result, running = _fire_whatsapp(job)
+        assert running is expected_running, status
+        assert result["outbound_status"] == status

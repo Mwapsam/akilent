@@ -176,26 +176,32 @@ def create_and_queue_message(
     if not is_test:
         lc.check_email(f"email:{public_id}")
 
-    msg = EmailMessage.objects.create(
-        public_id=public_id,
-        account=account,
-        domain=domain,
-        template=template,
-        from_email=from_email,
-        to_email=to_email,
-        subject=subject,
-        key_mode="test" if is_test else "live",
-        rendered_subject=subject,
-        rendered_text=text_body,
-        rendered_html=html_body,
-        attachments=attachments_metadata(parsed_attachments),
-    )
+    try:
+        msg = EmailMessage.objects.create(
+            public_id=public_id,
+            account=account,
+            domain=domain,
+            template=template,
+            from_email=from_email,
+            to_email=to_email,
+            subject=subject,
+            key_mode="test" if is_test else "live",
+            rendered_subject=subject,
+            rendered_text=text_body,
+            rendered_html=html_body,
+            attachments=attachments_metadata(parsed_attachments),
+        )
 
-    from apps.logs.services import record_message_event
+        from apps.logs.services import record_message_event
 
-    record_message_event(msg, "queued", source="api")
+        record_message_event(msg, "queued", source="api")
 
-    task_attachments = encode_for_task(parsed_attachments)
+        task_attachments = encode_for_task(parsed_attachments)
+    except Exception:
+        # No send task will ever settle this reservation, so give the units back now.
+        if not is_test:
+            lc.settle_email(f"email:{public_id}", ok=False)
+        raise
     transaction.on_commit(
         lambda: send_email.delay(
             msg.id, text_body=text_body, html_body=html_body,

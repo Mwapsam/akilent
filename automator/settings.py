@@ -466,6 +466,7 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.send_email": {"queue": "outbound"},
     "apps.email.tasks.send_bulk_recipient_email": {"queue": "outbound"},
     "apps.email.tasks.dispatch_campaign": {"queue": "campaigns"},
+    "apps.email.tasks.retry_held_email_recipients": {"queue": "outbound"},
     "apps.email.tasks.rotate_dkim_async": {"queue": "email"},
     "apps.email.tasks.provision_domain_async": {"queue": "email"},
     "apps.email.tasks.deliver_webhook": {"queue": "webhooks"},
@@ -496,6 +497,10 @@ CELERY_BEAT_SCHEDULE = {
     "commit-stale-usage-reservations": {
         "task": "apps.billing.tasks.commit_stale_reservations",
         "schedule": 3600.0,
+    },
+    "retry-held-email-recipients": {
+        "task": "apps.email.tasks.retry_held_email_recipients",
+        "schedule": 900.0,  # every 15 min — a held recipient isn't lost, just waiting for room
     },
     "prune-email-logs": {
         "task": "apps.email.tasks.prune_email_logs",

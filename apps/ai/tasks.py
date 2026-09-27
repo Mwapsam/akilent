@@ -8,6 +8,7 @@ any other failure is recorded on the proposal and never raised further.
 from __future__ import annotations
 
 import logging
+import uuid
 
 from celery import shared_task
 from celery.exceptions import Retry
@@ -41,20 +42,24 @@ def _over_daily_limit(account_id, operation_id: str) -> bool:
     from apps.accounts.api import get_account
     from apps.billing import api as billing_api
 
-    reservation = billing_api.reserve(get_account(account_id), "ai_actions_day", operation_id=operation_id)
+    reservation = billing_api.reserve(get_account(account_id), "ai_actions_day", operation_id=operation_id,
+                                     renew_released=True)
     if reservation is None:
         return True
-    billing_api.commit(reservation)
 
     limit = int(getattr(settings, "AI_DAILY_CALL_LIMIT", 500) or 0)
-    if limit <= 0:
-        return False
-    key = _daily_key(account_id)
-    cache.add(key, 0, 26 * 3600)
-    try:
-        return cache.incr(key) > limit
-    except ValueError:
-        return False
+    if limit > 0:
+        key = _daily_key(account_id)
+        cache.add(key, 0, 26 * 3600)
+        try:
+            over = cache.incr(key) > limit
+        except ValueError:
+            over = False
+        if over:
+            billing_api.release(reservation)  # no model call will run, so no plan unit is used
+            return True
+    billing_api.commit(reservation)
+    return False
 
 
 @shared_task(bind=True, max_retries=_MAX_RETRIES, queue="ai")
@@ -196,7 +201,7 @@ def refresh_memory(self, conversation_id: int) -> str:
     if not cache.add(_memory_lock_key(conversation_id), 1, _LOCK_SECONDS):
         return "busy"
     try:
-        if _over_daily_limit(conversation.account_id, f"ai-memory:{self.request.id or conversation_id}"):
+        if _over_daily_limit(conversation.account_id, f"ai-memory:{self.request.id or uuid.uuid4().hex}"):
             return "limit"
         try:
             updated = memory.refresh(conversation, get_ai_provider(conversation.account, tier="fast"))

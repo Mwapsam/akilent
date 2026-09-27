@@ -1638,6 +1638,7 @@ def campaign_detail(request, pk):
             "queued_count": campaign.queued_count,
             "sent_count": campaign.sent_count,
             "failed_count": campaign.failed_count,
+            "held_count": campaign.held_count,
         })
 
     return render(request, "email/campaign_detail.html", {

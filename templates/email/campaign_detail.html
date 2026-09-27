@@ -57,6 +57,7 @@
     <span><span class="font-semibold text-teal-700" data-field="sent_count">{{ campaign.sent_count }}</span> delivered</span>
     <span><span class="font-semibold text-red-600" data-field="failed_count">{{ campaign.failed_count }}</span> failed</span>
     <span><span class="font-semibold text-ink" data-field="queued_count">{{ campaign.queued_count }}</span> waiting</span>
+    {% if campaign.held_count %}<span><span class="font-semibold text-amber-600" data-field="held_count">{{ campaign.held_count }}</span> held: plan email limit reached (not sent, nothing lost)</span>{% endif %}
   </div>
 </div>
 
@@ -110,7 +111,7 @@
     });
 
     var total = Number(data.recipient_count) || 0;
-    var done = (Number(data.sent_count) || 0) + (Number(data.failed_count) || 0);
+    var done = (Number(data.sent_count) || 0) + (Number(data.failed_count) || 0) + (Number(data.held_count) || 0);
     var pct = total ? Math.round((done / total) * 100) : (terminal.indexOf(data.status) !== -1 ? 100 : 0);
 
     var bar = el.querySelector('[data-field="progress-bar"]');
@@ -121,6 +122,9 @@
     var label = LABELS[data.status] || data.status;
     if (data.status === "completed" && Number(data.failed_count) > 0) {
       label = "Finished — " + data.failed_count + " couldn't be delivered";
+    }
+    if (data.status === "completed" && Number(data.held_count) > 0) {
+      label = "Finished — " + data.held_count + " held: plan email limit reached";
     }
     var labelEl = el.querySelector('[data-field="status-label"]');
     if (labelEl) labelEl.textContent = label;

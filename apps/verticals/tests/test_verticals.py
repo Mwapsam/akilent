@@ -105,3 +105,27 @@ def test_create_lead_creates_new_after_previous_converted(account):
 
     second = create_lead(account, contact)
     assert second.pk != first.pk
+
+
+@pytest.mark.django_db
+def test_activate_vertical_rolls_back_entirely_when_the_automation_limit_is_hit(account):
+    from decimal import Decimal
+
+    from apps.automation.api import AutomationLimitReached
+    from apps.billing.models import Plan, PlanLimit, Subscription
+
+    plan = Plan.objects.create(slug="vert-plan", name="Vert Plan", price_monthly=Decimal("5"))
+    PlanLimit.objects.update_or_create(plan=plan, key="automation_rules", defaults={"value": 1})
+    from django.utils import timezone
+
+    Subscription.objects.create(account=account, plan=plan, status=Subscription.ACTIVE,
+                                current_period_start=timezone.now())
+
+    with pytest.raises(AutomationLimitReached):
+        activate_vertical(account, "restaurant")
+
+    # Nothing from the half-installed pack survives: no workflow, no switched-on module, no
+    # VerticalActivation record — the operator's next "Activate" click starts clean.
+    assert not Workflow.objects.filter(account=account, slug__startswith="restaurant-").exists()
+    assert not ModuleSubscription.objects.filter(account=account, module="commerce", enabled=True).exists()
+    assert not VerticalActivation.objects.filter(account=account, key="restaurant").exists()

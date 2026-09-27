@@ -185,3 +185,32 @@ def test_the_page_lets_an_owner_create_a_key_and_shows_the_template(client, acco
     client.post("/whatsapp/codes/key/")
     html = client.get("/whatsapp/codes/").content.decode()
     assert "ak_live_" in html and EmailApiKey.objects.filter(account=account, is_active=True).count() == 1
+
+
+@pytest.mark.django_db
+def test_retrying_the_same_idempotency_key_works_even_after_the_plan_limit_is_reached(account, template):
+    from apps.billing import api as billing_api
+    from apps.billing.models import Plan, PlanLimit, Subscription
+
+    plan = Plan.objects.create(slug="otp-plan", name="OTP Plan", price_monthly=0)
+    PlanLimit.objects.update_or_create(plan=plan, key="verification_codes_month", defaults={"value": 1})
+    Subscription.objects.update_or_create(account=account, defaults={
+        "plan": plan, "status": Subscription.ACTIVE, "current_period_start": timezone.now()})
+
+    first = verification_codes.send_code(account, phone=PHONE, code="111111", idempotency_key="otp-1")
+    assert first["status"] != "test"
+
+    from apps.billing.metering import period_start
+    from apps.billing.models import UsageCounter
+    UsageCounter.objects.update_or_create(account=account, key="verification_codes_month",
+                                          period_start=period_start("verification_codes_month"),
+                                          defaults={"used": 1})
+
+    # A brand-new request would now be refused ...
+    with pytest.raises(verification_codes.VerificationCodeError) as exc:
+        verification_codes.send_code(account, phone=PHONE, code="222222", idempotency_key="otp-2")
+    assert exc.value.code == "plan_limit"
+
+    # ... but retrying the same key that already succeeded must not be.
+    again = verification_codes.send_code(account, phone=PHONE, code="111111", idempotency_key="otp-1")
+    assert again["id"] == first["id"]

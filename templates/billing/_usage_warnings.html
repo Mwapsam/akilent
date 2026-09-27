@@ -6,7 +6,11 @@ and the billing page. Pass usage_warnings.{% endcomment %}
   <div>
     {% if w.percent >= 100 %}
     <p class="font-medium">You've used all {{ w.limit }} {{ w.unit }} your plan includes ({{ w.name|lower }}).</p>
+    {% if w.over_limit == "hold" %}
     <p class="mt-0.5">Anything more is held, not sent and not lost, until it resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> to send more.</p>
+    {% else %}
+    <p class="mt-0.5">Nothing is blocked — this is a heads-up, not a limit on your customers. It resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> if you'd like more.</p>
+    {% endif %}
     {% else %}
     <p class="font-medium">You've used {{ w.percent }}% of your {{ w.name|lower }} ({{ w.used }} of {{ w.limit }}).</p>
     <p class="mt-0.5">It resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">See your usage</a>.</p>

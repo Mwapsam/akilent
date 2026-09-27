@@ -5,7 +5,6 @@ import csv
 import io
 import logging
 
-from django.db.models import Q
 from django.utils import timezone
 
 from apps.contacts.models import Contact, ContactEvent, ContactImport
@@ -47,15 +46,21 @@ def ensure_room_for_contact(account, *, email: str | None = None, phone: str | N
 
     Only for deliberate adds (the form, CSV import, the API). A customer who messages the
     business is always added: a commercial limit never loses a conversation.
+
+    Matches the same identity the upsert itself will key on (phone first, else email; see
+    ``contact_create``): an OR-match on both would treat a brand-new phone as "existing" just
+    because its email happens to belong to a different, already-stored contact, and
+    ``upsert_contact_by_phone`` would then insert a genuinely new row without ever being counted.
     """
     from apps.billing import api as billing_api
 
-    exists = Q()
-    if email:
-        exists |= Q(email__iexact=email.strip())
     if phone:
-        exists |= Q(phone=phone)
-    if exists and Contact.objects.filter(exists, account=account).exists():
+        exists = Contact.objects.filter(account=account, phone=phone).exists()
+    elif email:
+        exists = Contact.objects.filter(account=account, email__iexact=email.strip()).exists()
+    else:
+        exists = False
+    if exists:
         return
     try:
         billing_api.require_room(account, "contacts")
@@ -200,7 +205,17 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
         raise ValueError("CSV import needs a column mapped to 'email'")
 
     imp = ContactImport.objects.create(account=account, filename=filename, mapping=mapping)
-    created = updated = skipped = rows = 0
+    created = updated = skipped = limit_skipped = rows = 0
+
+    # Read once, then tracked locally, so the plan's customer limit costs no query per row.
+    from apps.billing import api as billing_api
+    from apps.contacts.api import count_contacts
+
+    allowed = billing_api.limit(account, "contacts")
+    total = count_contacts(account)
+    known: set = set()
+    if allowed >= 0:  # only a capped plan needs to tell new customers from existing ones
+        known = {e.lower() for e in Contact.objects.filter(account=account).values_list("email", flat=True) if e}
 
     for row in reader:
         rows += 1
@@ -220,13 +235,15 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
                 fields["phone"] = _normalize_phone_soft(val)
             elif dst in {"first_name", "last_name", "locale"}:
                 fields[dst] = val
-        try:
-            ensure_room_for_contact(account, email=email)
-        except ContactLimitReached:
-            skipped += 1  # the plan's customer limit: the rest of the file is still read
+        is_new = email.lower() not in known
+        if is_new and 0 <= allowed <= total:
+            limit_skipped += 1  # the plan's customer limit: the rest of the file is still read
             continue
         try:
             _, was_created = upsert_contact(account, email, attributes=attributes, **fields)
+            if was_created:
+                total += 1
+            known.add(email.lower())
             created += was_created
             updated += (not was_created)
         except Exception:
@@ -237,5 +254,7 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
     imp.created_count = created
     imp.updated_count = updated
     imp.skipped_count = skipped
-    imp.save(update_fields=["row_count", "created_count", "updated_count", "skipped_count"])
+    imp.limit_skipped_count = limit_skipped
+    imp.save(update_fields=["row_count", "created_count", "updated_count", "skipped_count",
+                            "limit_skipped_count"])
     return imp

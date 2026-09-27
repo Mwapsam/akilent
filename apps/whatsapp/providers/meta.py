@@ -69,6 +69,20 @@ def _classify_meta_error(status_code: int, body: dict) -> tuple[str, str, bool]:
     return code, message, retryable
 
 
+_DROPPED_MARKERS = ("connection aborted", "remotedisconnected", "connection reset", "broken pipe")
+
+
+def _may_have_been_sent(exc: Exception) -> bool:
+    if isinstance(exc, requests.ConnectTimeout):
+        return False
+    if isinstance(exc, (requests.ReadTimeout, requests.exceptions.ChunkedEncodingError)):
+        return True
+    if isinstance(exc, requests.ConnectionError):
+        text = str(exc).lower()
+        return any(m in text for m in _DROPPED_MARKERS)
+    return False
+
+
 class MetaCloudAPIProvider(WhatsAppProvider):
     """Meta Cloud API implementation of WhatsAppProvider.
 
@@ -113,9 +127,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             err = WhatsAppProviderError(f"Failed to post message: {e}")
             err.code = ""
             err.retryable = True
-            # Only a failure to connect proves Meta never got the request; after that (a read
-            # timeout, a dropped connection) the message may have been sent.
-            err.ambiguous = not isinstance(e, requests.ConnectTimeout)
+            # Refused, unreachable or DNS failures prove Meta never got the request. Only a read
+            # timeout or a connection dropped after sending may mean it did.
+            err.ambiguous = _may_have_been_sent(e)
             raise err from e
 
         if response.status_code >= 400:

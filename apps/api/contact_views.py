@@ -169,6 +169,7 @@ class ContactImportView(BaseApiView):
         return Response({
             "id": imp.pk, "rows": imp.row_count, "created": imp.created_count,
             "updated": imp.updated_count, "skipped": imp.skipped_count,
+            "not_added_plan_limit": imp.limit_skipped_count,
         }, status=status.HTTP_202_ACCEPTED)
 
 

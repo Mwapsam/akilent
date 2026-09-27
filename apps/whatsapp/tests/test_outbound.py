@@ -231,6 +231,9 @@ class OutboundSendTest(TestCase):
         self.assertIsNotNone(msg.next_attempt_at)
 
     def test_stale_sending_message_is_recovered(self):
+        # A worker could have crashed after Meta already accepted the request, so a stale
+        # SENDING message (metered or not) is marked unconfirmed rather than silently
+        # requeued: resending it could deliver it to the customer twice.
         msg = whatsapp_api.send_message(self.account, self.contact, "hi")
         OutboundMessage.objects.filter(pk=msg.pk).update(
             status=OutboundMessage.Status.SENDING,
@@ -240,5 +243,5 @@ class OutboundSendTest(TestCase):
         self._drain_with(provider)
 
         msg.refresh_from_db()
-        self.assertEqual(msg.status, OutboundMessage.Status.SENT)
-        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(msg.status, OutboundMessage.Status.UNCONFIRMED)
+        self.assertEqual(len(provider.calls), 0)

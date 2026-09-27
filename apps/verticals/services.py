@@ -5,6 +5,8 @@ after a template's definition changes in a later release.
 """
 from __future__ import annotations
 
+from django.db import transaction
+
 from apps.automation import api as automation_api
 from apps.automation.workflow_engine import validate_definition
 from apps.verticals.models import VerticalActivation
@@ -36,15 +38,19 @@ def activate_vertical(account, key: str) -> VerticalActivation:
 
     from apps.billing import api as billing_api
 
-    for feature in vertical["modules"]:  # optional tools the pack needs: switch them on
-        billing_api.set_owner_switch(account, feature, True)
+    # All or nothing: a pack that hits the automation-rules limit partway through must not leave
+    # earlier workflows published and optional tools switched on, with no VerticalActivation
+    # to show for it — that's a half-installed pack no "Activate" button can recover from.
+    with transaction.atomic():
+        for feature in vertical["modules"]:  # optional tools the pack needs: switch them on
+            billing_api.set_owner_switch(account, feature, True)
 
-    for wf_spec in vertical["workflows"]:
-        automation_api.upsert_published_workflow(
-            account, slug=wf_spec["slug"], name=wf_spec["name"], definition=wf_spec["definition"],
-        )
+        for wf_spec in vertical["workflows"]:
+            automation_api.upsert_published_workflow(
+                account, slug=wf_spec["slug"], name=wf_spec["name"], definition=wf_spec["definition"],
+            )
 
-    activation, _ = VerticalActivation.objects.get_or_create(account=account, key=key)
+        activation, _ = VerticalActivation.objects.get_or_create(account=account, key=key)
     return activation
 
 

@@ -148,12 +148,16 @@ def plan_create(request):
     if Plan.objects.filter(slug=slug).exists():
         messages.error(request, f"A package with slug '{slug}' already exists.")
         return redirect("core:plans")
-    plan = Plan.objects.create(slug=slug, **fields)
-    audit(request, "plan.create", target=slug)
-    reasons = _loss_check(request, plan)
+    # One transaction: a concurrent reader never sees the plan active before the loss check runs,
+    # since an uncommitted row isn't visible outside this transaction.
+    with transaction.atomic():
+        plan = Plan.objects.create(slug=slug, **fields)
+        audit(request, "plan.create", target=slug)
+        reasons = _loss_check(request, plan)
+        if reasons:
+            plan.is_active = False
+            plan.save(update_fields=["is_active"])
     if reasons:
-        plan.is_active = False
-        plan.save(update_fields=["is_active"])
         messages.warning(request, f"Package '{plan.name}' created but hidden: {' '.join(reasons)} "
                                   "Set its limits, or edit it and tick \"I accept\".")
         return redirect("core:plans")

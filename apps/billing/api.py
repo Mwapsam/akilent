@@ -31,11 +31,11 @@ from apps.billing.costs import (  # noqa: F401
 # Limits and usage live in metering.py; re-exported here because other apps only import billing.api.
 from apps.billing.metering import (  # noqa: F401
     LimitReached, check_rule, commit, count, limit, limit_source, release, require_room, reserve,
-    reserve_all, settle_operation, usage_report, used, warnings as usage_warnings,
+    reserve_all, reserve_all_verbose, settle_operation, usage_report, used, warnings as usage_warnings,
 )
 from apps.billing.models import (
     AccountFeatureOverride, ComingSoonFeature, ModuleSubscription, Plan, PlanFeature, Subscription,
-    UsageSummary,
+    UsageReservation, UsageSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -369,6 +369,8 @@ def clear_limit_override(account: Account, key: str) -> dict:
 # ---- pricing ------------------------------------------------------------------------------------
 
 def _limit_line(value: int, unit: str) -> str:
+    if value == 1 and unit.endswith("s"):
+        unit = unit[:-1]
     return f"Unlimited {unit}" if value == -1 else f"{value:,} {unit}"
 
 

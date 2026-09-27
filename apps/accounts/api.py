@@ -59,11 +59,22 @@ def business_hours_text(account) -> str:
 
 
 def count_members(account) -> int:
-    """People on the team, counting pending invitations (a seat is taken once invited)."""
+    """People on the team, counting pending invitations (a seat is taken once invited).
+
+    An invitation past its EXPIRY_DAYS was never accepted and can no longer be, so it isn't a
+    seat: otherwise an ignored invite would permanently block the owner from inviting anyone
+    else until they noticed and revoked it by hand.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
     from apps.accounts.models import Invitation, Membership
 
+    cutoff = timezone.now() - timedelta(days=Invitation.EXPIRY_DAYS)
     return (Membership.objects.filter(account=account).count()
-            + Invitation.objects.filter(account=account, accepted_at__isnull=True).count())
+            + Invitation.objects.filter(account=account, accepted_at__isnull=True,
+                                        created_at__gte=cutoff).count())
 
 
 def is_account_admin(user, account) -> bool:

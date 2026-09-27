@@ -120,12 +120,16 @@ def _fire_whatsapp(job: ScheduledJob) -> tuple[dict, bool]:
     ob = job.target_outbound
     if ob is None:
         raise _PermanentFireError("scheduled WhatsApp message no longer exists")
-    if ob.status == OutboundMessage.Status.SENT:
+    if ob.status in (OutboundMessage.Status.SENT, OutboundMessage.Status.UNCONFIRMED):
+        # UNCONFIRMED is resolved as far as this job is concerned: apps.whatsapp deliberately
+        # never resends it (that could deliver it twice), so it will never become anything
+        # else on its own — waiting for it to change would keep this job RUNNING forever.
         return {"outbound_status": ob.status}, False
     if ob.status in (OutboundMessage.Status.FAILED, OutboundMessage.Status.CANCELLED):
         raise _PermanentFireError(f"WhatsApp message is {ob.status}")
-    # Still QUEUED/SENDING — drain_outbound_queue owns the actual send; keep the
-    # shadow RUNNING until a later tick sees it terminal.
+    # Still QUEUED/SENDING/HELD — drain_outbound_queue owns the actual send (and, for HELD,
+    # retries it once the plan limit has room again); keep the shadow RUNNING until a later
+    # tick sees it terminal.
     return {"outbound_status": ob.status}, True
 
 

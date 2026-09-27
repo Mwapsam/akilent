@@ -65,20 +65,26 @@ def period_end(key: str, now=None) -> Optional[date]:
 
 # ---- how much is allowed ----------------------------------------------------------------------
 
+def _resolve(default: int, *, plan_value=None, has_plan: bool = False,
+             override=None) -> tuple[int, str]:
+    """The one precedence rule, shared by ``limit_source`` (one key) and ``usage_report`` (all of
+    them, prefetched): an unexpired operator override, else the plan, else the catalog default."""
+    if override is not None and (override.expires_at is None or override.expires_at > timezone.now()):
+        return override.value, "override"
+    if has_plan:
+        return plan_value, "plan"
+    return default, "default"
+
+
 def limit_source(account, key: str) -> tuple[int, str]:
     """(effective limit, where it came from): an unexpired operator override, else the plan,
     else the catalog default. -1 means unlimited."""
     lim = limits_catalog.get(key)
-    now = timezone.now()
     override = AccountLimitOverride.objects.filter(account=account, key=key).first()
-    if override is not None and (override.expires_at is None or override.expires_at > now):
-        return override.value, "override"
     sub = Subscription.objects.filter(account=account).only("plan_id").first()
-    if sub is not None:
-        row = PlanLimit.objects.filter(plan_id=sub.plan_id, key=key).first()
-        if row is not None:
-            return row.value, "plan"
-    return lim.default, "default"
+    row = PlanLimit.objects.filter(plan_id=sub.plan_id, key=key).first() if sub is not None else None
+    return _resolve(lim.default, plan_value=row.value if row else None, has_plan=row is not None,
+                    override=override)
 
 
 def limit(account, key: str) -> int:
@@ -88,7 +94,11 @@ def limit(account, key: str) -> int:
 # ---- how much is used -------------------------------------------------------------------------
 
 def _live_total(account, key: str) -> int:
-    """TOTAL limits are counted from what exists now, through each app's api."""
+    """TOTAL limits are counted from what exists now, through each app's api.
+
+    Every catalog key with ``period == TOTAL`` needs a branch here; a missing one is a
+    maintenance mistake, caught by ``test_every_total_limit_has_a_live_total_branch``
+    (not a 500 an operator hits in production)."""
     if key == "whatsapp_numbers":
         from apps.whatsapp import api as whatsapp_api
 
@@ -118,28 +128,51 @@ def used(account, key: str) -> int:
     return row.used if row else 0
 
 
-def usage_report(account) -> list[dict]:
-    """Every limit with its effective value, source, use this period and percentage."""
+def usage_report(account, *, metered_only: bool = False) -> list[dict]:
+    """Every limit with its effective value, source, use this period and percentage.
+
+    Overrides, plan limits and counters are read in three queries, not per limit.
+    ``metered_only`` skips the live counts of TOTAL limits (the banners don't need them)."""
+    overrides = {o.key: o for o in AccountLimitOverride.objects.filter(account=account)}
+    sub = Subscription.objects.filter(account=account).only("plan_id").first()
+    plan_rows = {r.key: r.value for r in PlanLimit.objects.filter(plan_id=sub.plan_id)} if sub else {}
+    starts = {lim.key: period_start(lim.key) for lim in limits_catalog.LIMITS
+              if lim.period in (limits_catalog.MONTH, limits_catalog.DAY)}
+    counters = {(c.key, c.period_start): c.used for c in UsageCounter.objects.filter(
+        account=account, key__in=list(starts), period_start__in=set(starts.values()))}
     rows = []
     for lim in limits_catalog.LIMITS:
-        value, source = limit_source(account, lim.key)
+        if metered_only and lim.period not in (limits_catalog.MONTH, limits_catalog.DAY):
+            continue
+        # Same precedence rule as limit_source(), from the dicts prefetched above.
+        value, source = _resolve(lim.default, plan_value=plan_rows.get(lim.key),
+                                 has_plan=lim.key in plan_rows, override=overrides.get(lim.key))
         try:
-            n = used(account, lim.key)
+            if lim.key in starts:
+                n = counters.get((lim.key, starts[lim.key]), 0)
+            else:
+                n = used(account, lim.key)
         except Exception:  # an app without the counter we need must not break the page
             logger.exception("usage_report: couldn't count %s", lim.key)
             n = 0
-        pct = None if value < 0 or lim.period == limits_catalog.PER_USE else (100 if value == 0 else min(100, round(n * 100 / value)))
+        if value < 0 or lim.period == limits_catalog.PER_USE:
+            pct = None
+        elif value == 0 or n >= value:
+            pct = 100  # truly used up, not just close: rounding must never claim 100% early
+        else:
+            pct = min(99, (n * 100) // value)  # floored, so "used up" only ever means used up
         rows.append({
             "key": lim.key, "name": lim.name, "unit": lim.unit, "period": lim.period,
             "limit": value, "source": source, "used": n, "percent": pct,
             "resets": period_end(lim.key), "cost_bearing": lim.cost_bearing,
+            "over_limit": lim.over_limit,
         })
     return rows
 
 
 def warnings(account) -> list[dict]:
     """Limits at 80% or more this period (for the dashboard and billing banners)."""
-    return [r for r in usage_report(account) if r["percent"] is not None and r["percent"] >= 80
+    return [r for r in usage_report(account, metered_only=True) if r["percent"] is not None and r["percent"] >= 80
             and r["period"] in (limits_catalog.MONTH, limits_catalog.DAY)]
 
 
@@ -181,7 +214,9 @@ def _after_use(account, key: str, start: date, allowed: int) -> None:
         return
     for threshold, field in ((1.0, "warned_100"), (WARN_AT, "warned_80")):
         if row.used >= allowed * threshold and not getattr(row, field):
-            claimed = UsageCounter.objects.filter(pk=row.pk, **{field: False}).update(**{field: True})
+            # Reaching the limit covers the 80% notice too, so it is never sent afterwards.
+            flags = {"warned_100": True, "warned_80": True} if threshold == 1.0 else {field: True}
+            claimed = UsageCounter.objects.filter(pk=row.pk, **{field: False}).update(**flags)
             if claimed:
                 try:
                     from apps.billing.tasks import send_limit_warning
@@ -238,15 +273,26 @@ def reserve(account, key: str, *, operation_id: str, units: int = 1,
 def reserve_all(account, keys: list[str], *, operation_id: str, units: int = 1) -> Optional[list]:
     """Reserve several limits for one operation (an email uses emails_month AND emails_day), all
     or none: if any is reached, the ones already taken are released."""
+    return reserve_all_verbose(account, keys, operation_id=operation_id, units=units)[0]
+
+
+def reserve_all_verbose(account, keys: list[str], *, operation_id: str,
+                        units: int = 1) -> tuple[Optional[list], Optional[str]]:
+    """Same as ``reserve_all``, plus which key actually blocked it (or None on success), so a
+    caller can report the real cause without re-querying usage after the fact — a re-query would
+    race a concurrent change and could name the wrong limit."""
     taken = []
     for key in keys:
         r = reserve(account, key, operation_id=operation_id, units=units)
         if r is None or r.status == UsageReservation.RELEASED:
             for t in taken:
-                release(t)
-            return None
+                if release(t):
+                    # A rolled-back reservation is not a refused send: forget it so the operation
+                    # can reserve again once the other limit has room.
+                    UsageReservation.objects.filter(pk=t.pk, status=UsageReservation.RELEASED).delete()
+            return None, key
         taken.append(r)
-    return taken
+    return taken, None
 
 
 def _settle(reservation: UsageReservation, status: str) -> bool:

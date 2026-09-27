@@ -60,8 +60,12 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
     allowed, n, resets = limit(account, key), used(account, key), period_end(key)
     if percent >= 100:
         subject = f"You've reached your {lim.name.lower()} limit"
-        what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
-                "Anything more is held (not sent and not lost) until it resets or you upgrade.")
+        if lim.over_limit == limit_catalog.HOLD:
+            what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
+                    "Anything more is held (not sent and not lost) until it resets or you upgrade.")
+        else:
+            what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
+                    "This is a heads-up only — nothing is blocked or held; customers are never affected.")
     else:
         subject = f"You've used {percent}% of your {lim.name.lower()}"
         what = f"{account.company_name} has used {n:,} of {allowed:,} {lim.unit}."

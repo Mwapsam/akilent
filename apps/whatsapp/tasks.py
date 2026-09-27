@@ -771,8 +771,8 @@ def _notify_terminal_failure(msg) -> None:
     downstream consumer's failure break the outbound queue) so apps.whatsapp
     doesn't need to know who's listening.
     """
-    if msg.status not in (OutboundMessage.Status.FAILED, OutboundMessage.Status.HELD):
-        return
+    if msg.status != OutboundMessage.Status.FAILED:
+        return  # HELD is retried automatically (see _hold): it isn't a failure yet
     try:
         from apps.automation.integrations.whatsapp import mark_outbound_message_failed
 
@@ -793,12 +793,16 @@ def _usage_limit_for(msg: OutboundMessage) -> str | None:
     return billing_api.whatsapp_limit_for(category, verification_code=verification_codes.is_verification_code(payload))
 
 
-def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_code: str = "", error: str = "") -> None:
-    """Put a message (and its log mirror, and the inbox) into a final non-sent state."""
+def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_code: str = "",
+                   error: str = "", next_attempt_at=None) -> None:
+    """Put a message (and its log mirror, and the inbox) into a non-sent state.
+
+    ``next_attempt_at`` lets a caller keep it eligible for another attempt (HELD); left at the
+    default None, this is a final state and drain_outbound_queue never looks at it again."""
     msg.status = status
     msg.error_code = error_code[:32]
     msg.last_error = error or None
-    msg.next_attempt_at = None
+    msg.next_attempt_at = next_attempt_at
     msg.save(update_fields=["status", "error_code", "last_error", "next_attempt_at"])
     log = _ensure_outbound_log(msg)
     log.status = log_status
@@ -806,12 +810,19 @@ def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_
     project_outbound_to_inbox(log)
 
 
+_HELD_RETRY_MINUTES = 5  # a fixed backoff, deliberately not OutboundMessage.attempts (mark_failed's
+                        # retry budget): a message held many times over a slow month must not
+                        # arrive at MAX_ATTEMPTS and lose its normal retry budget on a later, real failure.
+
+
 def _hold(msg: OutboundMessage) -> None:
-    """The plan's limit is reached: don't attempt the send. Held, not failed; nothing lost."""
+    """The plan's limit is reached: don't attempt the send now. Held, not failed; nothing lost,
+    and drain_outbound_queue retries it (see the HELD branch there) once the limit has room
+    again, exactly as the owner is told. The code (if any) is kept, not forgotten: forgetting it
+    here would make a later successful retry send blanked-out dots instead of the real code."""
     _settle_status(msg, OutboundMessage.Status.HELD, MessageLog.Status.HELD, error_code="PLAN_LIMIT",
-                   error="Held: the plan's WhatsApp message limit was reached.")
-    verification_codes.forget_code(msg)
-    _notify_terminal_failure(msg)
+                   error="Held: the plan's WhatsApp message limit was reached.",
+                   next_attempt_at=timezone.now() + timedelta(minutes=_HELD_RETRY_MINUTES))
 
 
 def _unconfirmed(msg: OutboundMessage, reservation) -> None:
@@ -831,6 +842,7 @@ _PLATFORM_WINDOWS = (("minute", 60, "%Y%m%d%H%M"), ("hour", 3600, "%Y%m%d%H"))
 def _platform_ceiling_reached(now) -> bool:
     """Site-wide emergency brake on WhatsApp sends (buggy loops, a compromised account, a runaway
     automation). Not a plan limit and never shown to businesses. 0 turns a window off."""
+    taken: list[str] = []
     for name, ttl, fmt in _PLATFORM_WINDOWS:
         ceiling = int(getattr(settings, f"WHATSAPP_PLATFORM_MAX_PER_{name.upper()}", 0) or 0)
         if not ceiling:
@@ -838,11 +850,17 @@ def _platform_ceiling_reached(now) -> bool:
         key = f"wa-platform-sends:{name}:{now.strftime(fmt)}"
         cache.add(key, 0, ttl + 60)
         try:
-            if cache.incr(key) > ceiling:
-                cache.decr(key)
-                return True
+            used = cache.incr(key)
         except ValueError:
             continue
+        taken.append(key)
+        if used > ceiling:
+            for k in taken:  # a refused send takes no slot in any window
+                try:
+                    cache.decr(k)
+                except ValueError:
+                    pass
+            return True
     return False
 
 
@@ -850,8 +868,9 @@ def _platform_ceiling_reached(now) -> bool:
 def drain_outbound_queue():
     now = timezone.now()
 
-    # Recover messages left mid-flight by a crashed/killed worker. A metered template may already
-    # have reached Meta, so it's marked unconfirmed instead of being sent a second time.
+    # Recover messages left mid-flight by a crashed/killed worker. The request may already have
+    # reached Meta before the crash, whether or not the message is metered, so it's marked
+    # unconfirmed rather than silently requeued and possibly delivered to the customer twice.
     stale = list(OutboundMessage.objects.filter(
         status=OutboundMessage.Status.SENDING,
         updated_at__lt=now - _SENDING_STALE,
@@ -861,9 +880,7 @@ def drain_outbound_queue():
             from apps.billing import api as billing_api
 
             billing_api.settle_operation(msg.account, f"wa-msg:{msg.pk}", ok=True)
-            _unconfirmed(msg, None)
-        else:
-            OutboundMessage.objects.filter(pk=msg.pk).update(status=OutboundMessage.Status.QUEUED)
+        _unconfirmed(msg, None)
     if stale:
         logger.warning(
             "drain_outbound_queue: recovered %s stale SENDING messages", len(stale)
@@ -871,9 +888,10 @@ def drain_outbound_queue():
 
     due = (
         OutboundMessage.objects.filter(
-            status=OutboundMessage.Status.QUEUED,
+            status__in=[OutboundMessage.Status.QUEUED, OutboundMessage.Status.HELD],
             scheduled_at__lte=now,
         )
+        # A held message's next_attempt_at is its backoff (see _hold); a queued one is due now.
         .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
         .select_related("account", "contact")[:_OUTBOUND_BATCH]
     )
@@ -898,13 +916,6 @@ def drain_outbound_queue():
 
             _authorize_send(msg)
 
-            if _platform_ceiling_reached(timezone.now()):
-                # Deferred, not failed or held: it goes out once the site-wide brake lifts.
-                OutboundMessage.objects.filter(pk=msg.pk).update(
-                    next_attempt_at=timezone.now() + timedelta(minutes=1))
-                logger.warning("drain_outbound_queue: platform send ceiling reached; deferring the rest")
-                break
-
             # The plan's limit is reserved before the request, under the message's own id, so a
             # retry of the same message is never counted twice.
             limit_key = _usage_limit_for(msg)
@@ -915,9 +926,18 @@ def drain_outbound_queue():
                     _hold(msg)
                     held += 1
                     continue
-                if reservation.status == "committed":  # an earlier attempt may already have sent it
+                if reservation.status == billing_api.UsageReservation.COMMITTED:  # an earlier attempt may already have sent it
                     _unconfirmed(msg, reservation)
                     continue
+
+            # Only a message that will really be sent takes a platform slot (held ones don't).
+            if _platform_ceiling_reached(timezone.now()):
+                # Deferred, not failed or held: it goes out once the site-wide brake lifts.
+                billing_api.release(reservation)
+                OutboundMessage.objects.filter(pk=msg.pk).update(
+                    next_attempt_at=timezone.now() + timedelta(minutes=1))
+                logger.warning("drain_outbound_queue: platform send ceiling reached; deferring the rest")
+                break
 
             log = _ensure_outbound_log(msg)
 
