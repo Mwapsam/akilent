@@ -142,7 +142,7 @@ class Command(BaseCommand):
         # 2. Desired DNS records diff.
         svc = DomainService(record.account, provider=provider)
         try:
-            diff = svc.planned_dns_records(record)
+            _desired, diff = svc.planned_dns_records(record)
         except Exception as exc:
             self.stdout.write(f"  Could not compute DNS diff: {exc}")
             diff = None
