@@ -344,8 +344,9 @@ SES_SNS_TOPIC_ARN = os.getenv("SES_SNS_TOPIC_ARN", "")
 
 # Domain DNS checks ask each zone's own nameservers first, so records a
 # tenant has just added are seen immediately rather than hidden by a
-# cached "doesn't exist". Set to "0" to use only the system resolver.
-DNSCHECK_AUTHORITATIVE = os.getenv("DNSCHECK_AUTHORITATIVE", "1") != "0"
+# cached "doesn't exist". Set to "1" to enable; defaults off to avoid
+# cold-cache SOA-walk latency on every domain after a fresh deploy.
+DNSCHECK_AUTHORITATIVE = os.getenv("DNSCHECK_AUTHORITATIVE", "0") == "1"
 
 _USING_SES = "ses" in (MAIL_PROVIDER_BACKEND, EMAIL_SEND_PROVIDER_BACKEND)
 

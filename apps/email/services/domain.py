@@ -345,9 +345,7 @@ class DomainService:
         if mx_for is not None:
             mx_value = mx_for()
         else:
-            from apps.core.models import MailProviderSettings
-
-            region = MailProviderSettings.load().aws_region or "us-east-1"
+            region = getattr(self._provider, "region", None) or "us-east-1"
             mx_value = f"feedback-smtp.{region}.amazonses.com"
         return MailFromInfo(
             mail_from_domain=name,

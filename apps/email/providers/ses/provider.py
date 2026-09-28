@@ -37,23 +37,36 @@ logger = logging.getLogger(__name__)
 class SesProvider(EmailProvider):
     """Mail provider using AWS SES email identity and Easy DKIM."""
 
-    def __init__(self) -> None:
-        """Initialize SES client with credentials from environment/IAM role."""
-        from apps.core.models import MailProviderSettings
+    def __init__(self, region: str | None = None) -> None:
+        """Initialize SES client with credentials from environment/IAM role.
 
-        region = "us-east-1"
-        try:
-            settings = MailProviderSettings.load()
-            region = settings.aws_region or os.getenv("AWS_REGION", "us-east-1")
-        except Exception:
-            logger.debug(
-                "Failed to load MailProviderSettings; falling back to env/defaults"
-            )
-            region = os.getenv("AWS_REGION", "us-east-1")
+        ``region`` may be passed by the factory to avoid a second DB round-trip
+        when MailProviderSettings was already loaded to resolve the backend.
+        """
+        if region is None:
+            from apps.core.models import MailProviderSettings
+
+            try:
+                settings = MailProviderSettings.load()
+                region = settings.aws_region or os.getenv("AWS_REGION", "us-east-1")
+            except Exception:
+                logger.debug(
+                    "Failed to load MailProviderSettings; falling back to env/defaults"
+                )
+                region = os.getenv("AWS_REGION", "us-east-1")
 
         # Kept for the MAIL FROM MX target, which is region-specific.
-        self.region = region
+        self.region: str = region
         self.client: SESv2Client = boto3.client("sesv2", region_name=region)
+        self._identity_cache: dict[str, dict] = {}
+
+    def _get_email_identity(self, domain: str) -> dict:
+        """Fetch and cache the SES identity response for the current task scope."""
+        if domain not in self._identity_cache:
+            self._identity_cache[domain] = self.client.get_email_identity(
+                EmailIdentity=domain
+            )
+        return self._identity_cache[domain]
 
     # ── Domain management ──────────────────────────────────────────────────────
 
@@ -147,7 +160,7 @@ class SesProvider(EmailProvider):
         None when the identity doesn't exist or has no custom MAIL FROM.
         """
         try:
-            response = self.client.get_email_identity(EmailIdentity=domain)
+            response = self._get_email_identity(domain)
         except ClientError as exc:
             if exc.response["Error"]["Code"] == "NotFoundException":
                 return None
@@ -168,7 +181,7 @@ class SesProvider(EmailProvider):
     def verify_domain(self, domain: str) -> OperationResult:
         """Return success when SES reports VerificationStatus == SUCCESS."""
         try:
-            response = self.client.get_email_identity(EmailIdentity=domain)
+            response = self._get_email_identity(domain)
             # SESv2: VerificationStatus is top-level (not under Attributes).
             status = response.get("VerificationStatus")
 
@@ -189,7 +202,7 @@ class SesProvider(EmailProvider):
 
     def get_dkim_records(self, domain: str) -> list[DkimRecord]:
         try:
-            response = self.client.get_email_identity(EmailIdentity=domain)
+            response = self._get_email_identity(domain)
         except ClientError as exc:
             if exc.response["Error"]["Code"] == "NotFoundException":
                 logger.info("SES identity not found for domain=%s", domain)

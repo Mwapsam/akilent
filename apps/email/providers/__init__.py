@@ -67,11 +67,13 @@ def get_mail_provider() -> EmailProvider:
     EmailProvider can be plugged in without touching this file or any call site.
     """
     backend: str | None = None
+    aws_region: str | None = None
     try:
         from apps.core.models import MailProviderSettings
 
         settings_obj = MailProviderSettings.load()
         backend = settings_obj.infra_backend
+        aws_region = settings_obj.aws_region or None
         logger.debug(f"Using mail provider backend from DB: {backend}")
     except Exception as e:
         # Fall back to env var if DB read fails (e.g., migrations not yet run)
@@ -92,6 +94,12 @@ def get_mail_provider() -> EmailProvider:
         cls: type[EmailProvider] = getattr(module, class_name)
     except (ImportError, AttributeError) as exc:
         raise ValueError(f"Cannot load mail provider {dotted!r}: {exc}") from exc
+
+    # Pass region to SesProvider to avoid a second MailProviderSettings DB query.
+    if backend == "ses" and aws_region is not None:
+        from apps.email.providers.ses import SesProvider
+
+        return SesProvider(region=aws_region)
     return cls()
 
 
