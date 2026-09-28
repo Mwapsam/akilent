@@ -35,18 +35,27 @@ def open_conversation(logged_in):
     _, account, _ = logged_in
     contact = Contact.objects.create(account=account, phone="+260971234567")
     wa_contact = WhatsAppContact.objects.create(
-        account=account, phone_number="+260971234567", contact=contact,
+        account=account,
+        phone_number="+260971234567",
+        contact=contact,
     )
     wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
     log = MessageLog.objects.create(
-        account=account, conversation=wa_conversation, contact=wa_contact,
-        message_id="wamid.HTMXTEST", direction=MessageLog.Direction.INBOUND,
-        message_type=MessageLog.MessageType.TEXT, content="Do you have the blue dress?",
-        status=MessageLog.Status.DELIVERED, timestamp=timezone.now(),
+        account=account,
+        conversation=wa_conversation,
+        contact=wa_contact,
+        message_id="wamid.HTMXTEST",
+        direction=MessageLog.Direction.INBOUND,
+        message_type=MessageLog.MessageType.TEXT,
+        content="Do you have the blue dress?",
+        status=MessageLog.Status.DELIVERED,
+        timestamp=timezone.now(),
     )
     return record_inbound_whatsapp_message(
-        contact=contact, wa_contact=wa_contact,
-        whatsapp_conversation=wa_conversation, message_log=log,
+        contact=contact,
+        wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation,
+        message_log=log,
     )
 
 

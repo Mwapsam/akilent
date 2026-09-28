@@ -6,7 +6,9 @@ from apps.email.services.render import render_string, render_template
 
 
 def test_builtin_button_renders_with_kwargs():
-    out = render_string('{% component "AkilentButton" href="https://acme.com/pay" label="Pay now" %}')
+    out = render_string(
+        '{% component "AkilentButton" href="https://acme.com/pay" label="Pay now" %}'
+    )
     assert 'href="https://acme.com/pay"' in out
     assert "Pay now" in out
 
@@ -20,7 +22,7 @@ def test_builtin_component_escapes_values():
 def test_component_works_alongside_conditionals_and_vars():
     src = (
         "Hi {{ name }}."
-        "{% if overdue %}{% component \"AkilentButton\" href=url label=\"Pay overdue\" %}"
+        '{% if overdue %}{% component "AkilentButton" href=url label="Pay overdue" %}'
         "{% else %}Thanks!{% endif %}"
     )
     out = render_string(src, {"name": "Ada", "overdue": True, "url": "https://x/y"})
@@ -36,11 +38,14 @@ def test_unknown_component_raises():
 def test_account_custom_component_available_in_render_template():
     acc = Account.objects.create(company_name="Acme")
     TemplateComponent.objects.create(
-        account=acc, name="Signoff", html='<p>— {{ who }}, {{ team }}</p>'
+        account=acc, name="Signoff", html="<p>— {{ who }}, {{ team }}</p>"
     )
     tpl = EmailTemplate.objects.create(
-        account=acc, name="T", slug="t",
-        subject="Hi", text_body="",
+        account=acc,
+        name="T",
+        slug="t",
+        subject="Hi",
+        text_body="",
         html_body='{% component "Signoff" who="Sam" team="Acme" %}',
     )
     _, _, html = render_template(tpl, {})

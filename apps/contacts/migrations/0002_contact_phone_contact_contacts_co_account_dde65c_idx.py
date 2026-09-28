@@ -4,20 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('contacts', '0001_initial'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("contacts", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='contact',
-            name='phone',
+            model_name="contact",
+            name="phone",
             field=models.CharField(blank=True, default=None, max_length=20, null=True),
         ),
         migrations.AddIndex(
-            model_name='contact',
-            index=models.Index(fields=['account', 'phone'], name='contacts_co_account_dde65c_idx'),
+            model_name="contact",
+            index=models.Index(
+                fields=["account", "phone"], name="contacts_co_account_dde65c_idx"
+            ),
         ),
     ]

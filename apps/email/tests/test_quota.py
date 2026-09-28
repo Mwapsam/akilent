@@ -34,7 +34,9 @@ def test_reserve_email_unlimited_never_blocks(account):
 @pytest.mark.django_db
 def test_reserve_email_never_overshoots_cap_under_concurrent_calls(account):
     period_start = timezone.now().date().replace(day=1)
-    UsageSummary.objects.create(account=account, period_start=period_start, emails_used=0)
+    UsageSummary.objects.create(
+        account=account, period_start=period_start, emails_used=0
+    )
 
     cap = 3
     results = [UsageSummary.reserve_email(account, cap=cap) for _ in range(10)]
@@ -57,7 +59,9 @@ def test_release_email_refunds_the_count(account):
 @pytest.mark.django_db
 def test_release_email_does_not_go_negative(account):
     UsageSummary.objects.create(
-        account=account, period_start=timezone.now().date().replace(day=1), emails_used=0
+        account=account,
+        period_start=timezone.now().date().replace(day=1),
+        emails_used=0,
     )
     UsageSummary.release_email(account)
     assert UsageSummary.get_current_email_usage(account) == 0

@@ -3,8 +3,8 @@
 import pytest
 from django.core.cache import cache
 
-from apps.email.services import validation
 from apps.core.models import MailProviderSettings
+from apps.email.services import validation
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +37,7 @@ class TestHasMxRecord:
 
     def test_domain_with_mx_record(self, monkeypatch, db):
         """Domain that has MX records should return True."""
+
         def fake_resolver(domain):
             if domain == "example.com":
                 return ["mx1.example.com", "mx2.example.com"]
@@ -47,6 +48,7 @@ class TestHasMxRecord:
 
     def test_domain_without_mx_record(self, monkeypatch, db):
         """Domain with no MX records should return False."""
+
         def fake_resolver(domain):
             return []
 
@@ -95,7 +97,7 @@ class TestHasMxRecord:
         assert call_count[0] == 1
 
         # Manually check that cache entry was set with correct TTL
-        cache_key = f"mx_check:ttl-test.example.com"
+        cache_key = "mx_check:ttl-test.example.com"
         cached_value = cache.get(cache_key)
         assert cached_value is True
 
@@ -105,6 +107,7 @@ class TestValidateRecipient:
 
     def test_valid_recipient(self, monkeypatch, db):
         """Valid syntax + existing MX should return True."""
+
         def fake_resolver(domain):
             if domain == "example.com":
                 return ["mx.example.com"]
@@ -116,6 +119,7 @@ class TestValidateRecipient:
 
     def test_invalid_syntax(self, monkeypatch, db):
         """Invalid syntax should return False without DNS lookup."""
+
         def fake_resolver(domain):
             raise AssertionError("Should not be called for invalid syntax")
 
@@ -125,6 +129,7 @@ class TestValidateRecipient:
 
     def test_no_mx_record(self, monkeypatch, db):
         """Valid syntax but no MX should return False."""
+
         def fake_resolver(domain):
             return []
 

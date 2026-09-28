@@ -19,6 +19,7 @@ When reached:
 - REFUSE: the action is refused with a message (e.g. "can't connect another number");
 - SOFT: counted and warned about only. Used where blocking would lose a customer's message.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,32 +42,100 @@ class Limit:
 
 
 LIMITS: tuple[Limit, ...] = (
-    Limit("conversations_month", "Customer conversations", "conversations", MONTH, False, SOFT,
-          legacy_column="max_conversations_per_month"),
-    Limit("whatsapp_numbers", "WhatsApp numbers", "numbers", TOTAL, False, REFUSE, default=1,
-          legacy_column="max_whatsapp_numbers"),
-    Limit("whatsapp_marketing_msgs", "WhatsApp marketing messages", "messages", MONTH, False, HOLD),
-    Limit("whatsapp_utility_msgs", "WhatsApp utility messages", "messages", MONTH, False, HOLD),
-    Limit("verification_codes_month", "Verification codes", "codes", MONTH, False, HOLD),
-    Limit("whatsapp_campaign_recipients", "Recipients per WhatsApp campaign", "recipients", PER_USE,
-          False, REFUSE),
-    Limit("emails_month", "Emails", "emails", MONTH, True, HOLD, legacy_column="max_emails_per_month"),
+    Limit(
+        "conversations_month",
+        "Customer conversations",
+        "conversations",
+        MONTH,
+        False,
+        SOFT,
+        legacy_column="max_conversations_per_month",
+    ),
+    Limit(
+        "whatsapp_numbers",
+        "WhatsApp numbers",
+        "numbers",
+        TOTAL,
+        False,
+        REFUSE,
+        default=1,
+        legacy_column="max_whatsapp_numbers",
+    ),
+    Limit(
+        "whatsapp_marketing_msgs",
+        "WhatsApp marketing messages",
+        "messages",
+        MONTH,
+        False,
+        HOLD,
+    ),
+    Limit(
+        "whatsapp_utility_msgs",
+        "WhatsApp utility messages",
+        "messages",
+        MONTH,
+        False,
+        HOLD,
+    ),
+    Limit(
+        "verification_codes_month", "Verification codes", "codes", MONTH, False, HOLD
+    ),
+    Limit(
+        "whatsapp_campaign_recipients",
+        "Recipients per WhatsApp campaign",
+        "recipients",
+        PER_USE,
+        False,
+        REFUSE,
+    ),
+    Limit(
+        "emails_month",
+        "Emails",
+        "emails",
+        MONTH,
+        True,
+        HOLD,
+        legacy_column="max_emails_per_month",
+    ),
     Limit("emails_day", "Emails per day", "emails", DAY, True, HOLD),
-    Limit("email_campaign_recipients", "Recipients per email campaign", "recipients", PER_USE, False,
-          REFUSE, legacy_column="max_bulk_recipients_per_campaign"),
-    Limit("ai_actions_day", "AI actions per day", "actions", DAY, True, HOLD, default=500),
-    Limit("automation_rules", "Active automations", "automations", TOTAL, False, REFUSE),
+    Limit(
+        "email_campaign_recipients",
+        "Recipients per email campaign",
+        "recipients",
+        PER_USE,
+        False,
+        REFUSE,
+        legacy_column="max_bulk_recipients_per_campaign",
+    ),
+    Limit(
+        "ai_actions_day", "AI actions per day", "actions", DAY, True, HOLD, default=500
+    ),
+    Limit(
+        "automation_rules", "Active automations", "automations", TOTAL, False, REFUSE
+    ),
     Limit("contacts", "Customers stored", "customers", TOTAL, False, REFUSE),
     Limit("team_members", "Team members", "people", TOTAL, False, REFUSE),
 )
 
 BY_KEY: dict[str, Limit] = {lim.key: lim for lim in LIMITS}
 
-ISSUED_KEYS = frozenset({
-    "conversations_month", "whatsapp_numbers", "whatsapp_marketing_msgs", "whatsapp_utility_msgs",
-    "verification_codes_month", "whatsapp_campaign_recipients", "emails_month", "emails_day",
-    "email_campaign_recipients", "ai_actions_day", "automation_rules", "contacts", "team_members",
-})
+ISSUED_KEYS = frozenset(
+    {
+        "conversations_month",
+        "whatsapp_numbers",
+        "whatsapp_marketing_msgs",
+        "whatsapp_utility_msgs",
+        "verification_codes_month",
+        "whatsapp_campaign_recipients",
+        "emails_month",
+        "emails_day",
+        "email_campaign_recipients",
+        "ai_actions_day",
+        "automation_rules",
+        "contacts",
+        "team_members",
+    }
+)
 
 # WhatsApp template category -> the monthly limit a send of that category uses.
 TEMPLATE_CATEGORY_LIMIT = {

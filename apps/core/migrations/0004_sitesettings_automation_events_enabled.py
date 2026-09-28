@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0003_add_mail_provider_settings'),
+        ("core", "0003_add_mail_provider_settings"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='sitesettings',
-            name='automation_events_enabled',
-            field=models.BooleanField(default=False, help_text='Enable domain event publishing for automation rules and AI (Phase 1 beta)'),
+            model_name="sitesettings",
+            name="automation_events_enabled",
+            field=models.BooleanField(
+                default=False,
+                help_text="Enable domain event publishing for automation rules and AI (Phase 1 beta)",
+            ),
         ),
     ]

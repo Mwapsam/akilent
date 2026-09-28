@@ -3,8 +3,13 @@
 A proposal is data, never an action. The envelope is versioned so a new provider or a new kind of
 proposal can't silently break parsing::
 
-    {"version": 1, "action": "reply", "confidence": 0.94,
-     "reason": "Customer asked a pricing question.", "payload": {"text": "..."}}
+    {
+        "version": 1,
+        "action": "reply",
+        "confidence": 0.94,
+        "reason": "Customer asked a pricing question.",
+        "payload": {"text": "..."},
+    }
 
 Actions in version 1:
 
@@ -24,6 +29,7 @@ proposal. A person's click applies one; AI never does:
 
 An extra that fails its checks is dropped; it never sinks the main proposal.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +42,16 @@ MAX_VALUE = 200
 MAX_EXTRAS = 3
 # What the customer's message is about. Owners choose which of these AI may answer on its own
 # (apps.ai.autonomy); anything unrecognised is "other", which is never answered automatically.
-INTENTS = ("greeting", "hours", "location", "product_info", "price", "delivery", "payment", "other")
+INTENTS = (
+    "greeting",
+    "hours",
+    "location",
+    "product_info",
+    "price",
+    "delivery",
+    "payment",
+    "other",
+)
 EXTRA_KINDS = ("tag", "track_interest", "follow_up")
 _SOURCES = ("contact.", "account.", "context.", "business.")
 
@@ -55,7 +70,7 @@ def extract_json(text: str) -> dict:
     if start == -1 or end <= start:
         raise ProposalError("The AI didn't answer in the expected format.")
     try:
-        data = json.loads(text[start:end + 1])
+        data = json.loads(text[start : end + 1])
     except ValueError as exc:
         raise ProposalError("The AI didn't answer in the expected format.") from exc
     if not isinstance(data, dict):
@@ -67,7 +82,9 @@ def tool_request(data: dict):
     """``(name, args)`` when the model is asking for a look-up rather than proposing, else None."""
     name = data.get("tool")
     if isinstance(name, str) and name.strip() and "action" not in data:
-        return name.strip(), data.get("args") if isinstance(data.get("args"), dict) else {}
+        return name.strip(), data.get("args") if isinstance(
+            data.get("args"), dict
+        ) else {}
     return None
 
 
@@ -95,7 +112,11 @@ def clean_extras(raw, *, tags=(), can_track: bool = False) -> list[dict]:
                 continue
             if not 1 <= days <= 14:
                 continue
-            extra = {"kind": "follow_up", "in_days": days, "note": str(item.get("note") or "").strip()[:200]}
+            extra = {
+                "kind": "follow_up",
+                "in_days": days,
+                "note": str(item.get("note") or "").strip()[:200],
+            }
         key = (kind, extra.get("tag"))
         if key in seen:
             continue
@@ -106,7 +127,9 @@ def clean_extras(raw, *, tags=(), can_track: bool = False) -> list[dict]:
     return out
 
 
-def validate(data: dict, *, templates: dict, window_open: bool, tags=(), can_track: bool = False) -> dict:
+def validate(
+    data: dict, *, templates: dict, window_open: bool, tags=(), can_track: bool = False
+) -> dict:
     """A clean, checked proposal, or ``ProposalError``.
 
     ``templates`` maps each **approved** template name to its list of blanks. ``window_open`` is
@@ -124,7 +147,9 @@ def validate(data: dict, *, templates: dict, window_open: bool, tags=(), can_tra
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
     confidence = data.get("confidence")
     try:
-        confidence = None if confidence is None else max(0.0, min(1.0, float(confidence)))
+        confidence = (
+            None if confidence is None else max(0.0, min(1.0, float(confidence)))
+        )
     except (TypeError, ValueError):
         confidence = None
     reason = str(data.get("reason") or "").strip()[:300]
@@ -136,13 +161,20 @@ def validate(data: dict, *, templates: dict, window_open: bool, tags=(), can_tra
         if not window_open:
             raise ProposalError(
                 "The AI proposed a normal reply, but the 24-hour window has closed. Only an approved "
-                "template can be sent now.")
+                "template can be sent now."
+            )
         clean = {"text": text[:MAX_REPLY]}
     elif action == "send_template":
         name = str(payload.get("template") or "").strip()
         if name not in templates:
-            raise ProposalError(f"The AI proposed a template that isn't approved ({name!r}).")
-        raw = payload.get("variables") if isinstance(payload.get("variables"), dict) else {}
+            raise ProposalError(
+                f"The AI proposed a template that isn't approved ({name!r})."
+            )
+        raw = (
+            payload.get("variables")
+            if isinstance(payload.get("variables"), dict)
+            else {}
+        )
         variables = {}
         for blank in templates[name]:
             value = str(raw.get(blank) or "").strip().strip("{} ").strip()
@@ -156,14 +188,31 @@ def validate(data: dict, *, templates: dict, window_open: bool, tags=(), can_tra
             variables[blank] = value if is_source else value[:MAX_VALUE]
         clean = {"template": name, "variables": variables}
     else:  # handoff
-        clean = {"note": str(payload.get("note") or reason or "A teammate should reply to this.").strip()[:300]}
+        clean = {
+            "note": str(
+                payload.get("note") or reason or "A teammate should reply to this."
+            ).strip()[:300]
+        }
 
     intent = str(data.get("intent") or "").strip().lower()
-    return {"version": VERSION, "action": action, "confidence": confidence, "reason": reason, "payload": clean,
-            "intent": intent if intent in INTENTS else "other",
-            "extras": clean_extras(data.get("extras"), tags=tags, can_track=can_track)}
+    return {
+        "version": VERSION,
+        "action": action,
+        "confidence": confidence,
+        "reason": reason,
+        "payload": clean,
+        "intent": intent if intent in INTENTS else "other",
+        "extras": clean_extras(data.get("extras"), tags=tags, can_track=can_track),
+    }
 
 
-def parse(text: str, *, templates: dict, window_open: bool, tags=(), can_track: bool = False) -> dict:
-    return validate(extract_json(text), templates=templates, window_open=window_open, tags=tags,
-                    can_track=can_track)
+def parse(
+    text: str, *, templates: dict, window_open: bool, tags=(), can_track: bool = False
+) -> dict:
+    return validate(
+        extract_json(text),
+        templates=templates,
+        window_open=window_open,
+        tags=tags,
+        can_track=can_track,
+    )

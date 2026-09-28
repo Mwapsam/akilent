@@ -5,26 +5,50 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0007_businessprofile'),
-        ('conversations', '0004_conversation_attribution'),
+        ("accounts", "0007_businessprofile"),
+        ("conversations", "0004_conversation_attribution"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Benchmark',
+            name="Benchmark",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('kind', models.CharField(choices=[('starting', 'Starting week'), ('day30', 'Day 30')], max_length=12)),
-                ('window_start', models.DateTimeField()),
-                ('window_end', models.DateTimeField()),
-                ('metrics', models.JSONField(default=dict)),
-                ('captured_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='benchmarks', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "kind",
+                    models.CharField(
+                        choices=[("starting", "Starting week"), ("day30", "Day 30")],
+                        max_length=12,
+                    ),
+                ),
+                ("window_start", models.DateTimeField()),
+                ("window_end", models.DateTimeField()),
+                ("metrics", models.JSONField(default=dict)),
+                ("captured_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="benchmarks",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('account', 'kind'), name='uniq_benchmark_account_kind')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("account", "kind"), name="uniq_benchmark_account_kind"
+                    )
+                ],
             },
         ),
     ]

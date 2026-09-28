@@ -1,4 +1,5 @@
 """backfill_inbox recreates both directions, so answered customers are not left "waiting"."""
+
 from datetime import timedelta
 
 from django.core.management import call_command
@@ -15,7 +16,9 @@ from apps.whatsapp.models import Conversation, MessageLog, WhatsAppContact
 class BackfillOutboundTest(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
-        self.wa = WhatsAppContact.objects.create(account=self.account, phone_number="+260971903744")
+        self.wa = WhatsAppContact.objects.create(
+            account=self.account, phone_number="+260971903744"
+        )
         self.conversation = Conversation.get_or_open(self.wa)
         now = timezone.now()
         for direction, offset, status, mid in (
@@ -23,8 +26,13 @@ class BackfillOutboundTest(TestCase):
             (MessageLog.Direction.OUTBOUND, 30, MessageLog.Status.SENT, "wamid.out"),
         ):
             MessageLog.objects.create(
-                account=self.account, conversation=self.conversation, contact=self.wa,
-                direction=direction, message_id=mid, content="x", status=status,
+                account=self.account,
+                conversation=self.conversation,
+                contact=self.wa,
+                direction=direction,
+                message_id=mid,
+                content="x",
+                status=status,
                 timestamp=now - timedelta(minutes=offset),
             )
 

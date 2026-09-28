@@ -11,6 +11,7 @@
 
 Terminal failures must not consume the retry budget.
 """
+
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -119,7 +120,9 @@ class SendGatingTest(TestCase):
 
         msg.refresh_from_db()
         self.assertEqual(msg.status, OutboundMessage.Status.SENT)
-        self.assertEqual(self.provider.calls, [("template", "+260971234567", "order_update")])
+        self.assertEqual(
+            self.provider.calls, [("template", "+260971234567", "order_update")]
+        )
 
     def test_unapproved_template_rejected(self):
         template = MessageTemplate.objects.create(

@@ -4,25 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0007_plan_api_rate_per_min_plan_outbound_webhooks'),
+        ("billing", "0007_plan_api_rate_per_min_plan_outbound_webhooks"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='bulk_email',
+            model_name="plan",
+            name="bulk_email",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='email_templates',
+            model_name="plan",
+            name="email_templates",
             field=models.BooleanField(default=True),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='max_bulk_recipients_per_campaign',
+            model_name="plan",
+            name="max_bulk_recipients_per_campaign",
             field=models.IntegerField(default=500),
         ),
     ]

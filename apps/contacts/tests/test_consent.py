@@ -5,6 +5,7 @@ know we may mail someone. They're deliberately separate -- a contact can be
 SUBSCRIBED with UNKNOWN consent, which is exactly the pre-consent backlog we
 need to be able to see.
 """
+
 import pytest
 
 from apps.accounts.models import Account
@@ -92,29 +93,40 @@ def test_long_values_are_truncated_to_the_column(account):
 
 # --- Enforcement at campaign dispatch ----------------------------------------
 
+
 @pytest.fixture
 def campaign(account, db):
-    from apps.billing.models import Plan, Subscription
     from decimal import Decimal
+
     from django.utils import timezone
 
+    from apps.billing.models import Plan, Subscription
     from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
 
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        max_emails_per_month=1000, email_apis=True, bulk_email=True,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=1000,
+        email_apis=True,
+        bulk_email=True,
         max_bulk_recipients_per_campaign=500,
     )
     Subscription.objects.create(
-        account=account, plan=plan, status=Subscription.ACTIVE,
+        account=account,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     domain = EmailDomain.objects.create(
         account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
     )
     camp = BulkEmailCampaign.objects.create(
-        account=account, domain=domain,
-        from_email="news@acme.com", subject_override="Hi", text_override="Hello",
+        account=account,
+        domain=domain,
+        from_email="news@acme.com",
+        subject_override="Hi",
+        text_override="Hello",
         recipient_count=2,
     )
     for email in ("yes@x.com", "no@x.com"):
@@ -154,7 +166,9 @@ def test_opted_out_contacts_are_refused(account, campaign, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_unknown_consent_passes_unless_explicitly_required(account, campaign, monkeypatch):
+def test_unknown_consent_passes_unless_explicitly_required(
+    account, campaign, monkeypatch
+):
     """Default-off, so the pre-consent backlog doesn't become unmailable overnight."""
     from apps.email.models import BulkEmailRecipient
 
@@ -169,7 +183,9 @@ def test_unknown_consent_passes_unless_explicitly_required(account, campaign, mo
 
 
 @pytest.mark.django_db
-def test_require_explicit_consent_refuses_unproven_contacts(account, campaign, monkeypatch):
+def test_require_explicit_consent_refuses_unproven_contacts(
+    account, campaign, monkeypatch
+):
     from apps.core.models import MailProviderSettings
     from apps.email.models import BulkEmailRecipient
 

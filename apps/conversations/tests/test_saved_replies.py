@@ -18,7 +18,9 @@ def logged_in(client, db):
 @pytest.mark.django_db
 def test_create_saved_reply(logged_in):
     client, account, _ = logged_in
-    resp = client.post("/inbox/saved-replies/", {"title": "Store hours", "body": "Open 9-6 Mon-Sat."})
+    resp = client.post(
+        "/inbox/saved-replies/", {"title": "Store hours", "body": "Open 9-6 Mon-Sat."}
+    )
     assert resp.status_code == 302
     assert SavedReply.objects.filter(account=account, title="Store hours").exists()
 
@@ -48,7 +50,9 @@ def test_saved_replies_scoped_to_account(logged_in):
 @pytest.mark.django_db
 def test_delete_saved_reply(logged_in):
     client, account, _ = logged_in
-    reply = SavedReply.objects.create(account=account, title="Store hours", body="Open 9-6.")
+    reply = SavedReply.objects.create(
+        account=account, title="Store hours", body="Open 9-6."
+    )
     resp = client.post(f"/inbox/saved-replies/{reply.pk}/delete/")
     assert resp.status_code == 302
     assert not SavedReply.objects.filter(pk=reply.pk).exists()
@@ -58,7 +62,9 @@ def test_delete_saved_reply(logged_in):
 def test_composer_shows_saved_reply_picker(logged_in):
     client, account, _ = logged_in
     contact = Contact.objects.create(account=account, phone="+260971234567")
-    conversation = Conversation.objects.create(account=account, contact=contact, channel=Conversation.Channel.WHATSAPP)
+    conversation = Conversation.objects.create(
+        account=account, contact=contact, channel=Conversation.Channel.WHATSAPP
+    )
     SavedReply.objects.create(account=account, title="Store hours", body="Open 9-6.")
 
     resp = client.get(f"/inbox/{conversation.public_id}/")

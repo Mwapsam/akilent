@@ -43,8 +43,11 @@ def test_every_referenced_icon_is_defined():
         for name, files in _referenced_names().items()
         if name not in defined
     }
-    assert not missing, "Icon names used but not defined in components/icon.html: " + "; ".join(
-        f"{name} ({', '.join(files)})" for name, files in sorted(missing.items())
+    assert not missing, (
+        "Icon names used but not defined in components/icon.html: "
+        + "; ".join(
+            f"{name} ({', '.join(files)})" for name, files in sorted(missing.items())
+        )
     )
 
 

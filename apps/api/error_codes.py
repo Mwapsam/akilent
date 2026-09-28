@@ -4,6 +4,7 @@ Every ``{"error": {"code": ...}}`` the API returns should have an entry here so
 the value is documented, greppable, and stable across releases. ``errors.py``
 looks codes up here to attach a ``docs_url``.
 """
+
 from __future__ import annotations
 
 _DOCS_BASE = "https://akilent.com/docs/errors"
@@ -51,30 +52,102 @@ class ErrorCode:
 
 
 CATALOG: dict[str, dict[str, str]] = {
-    ErrorCode.AUTHENTICATION_FAILED: {"message": "The API key is missing or invalid.", "http": "401"},
-    ErrorCode.NOT_AUTHENTICATED: {"message": "Authentication credentials were not provided.", "http": "401"},
-    ErrorCode.PERMISSION_DENIED: {"message": "This key is not permitted to perform this action.", "http": "403"},
-    ErrorCode.MISSING_SCOPE: {"message": "This key is missing a required scope.", "http": "403"},
-    ErrorCode.VALIDATION_ERROR: {"message": "One or more fields failed validation.", "http": "400"},
-    ErrorCode.PARSE_ERROR: {"message": "The request body could not be parsed.", "http": "400"},
-    ErrorCode.MISSING_CONTENT: {"message": "The message or template has no renderable content.", "http": "400"},
-    ErrorCode.INVALID_ATTACHMENT: {"message": "An attachment is missing fields, not valid base64, or exceeds the size limit.", "http": "400"},
-    ErrorCode.UNVERIFIED_DOMAIN: {"message": "The sending domain is not verified for this account.", "http": "403"},
-    ErrorCode.RECIPIENT_CAP_EXCEEDED: {"message": "The campaign exceeds your per-campaign recipient cap.", "http": "403"},
-    ErrorCode.SUPPRESSED_RECIPIENT: {"message": "The recipient is on your suppression list.", "http": "403"},
-    ErrorCode.REPUTATION_HALT: {"message": "Sending is paused for this account due to a reputation halt.", "http": "403"},
-    ErrorCode.WHATSAPP_NOT_CONNECTED: {"message": "The account has no connected WhatsApp number.", "http": "409"},
-    ErrorCode.NO_AUTHENTICATION_TEMPLATE: {"message": "The account has no approved WhatsApp Authentication template.", "http": "409"},
-    ErrorCode.TEMPLATE_NOT_FOUND: {"message": "No approved Authentication template has that name and language.", "http": "404"},
-    ErrorCode.INVALID_CODE: {"message": "The code must be 4 to 15 letters or numbers.", "http": "400"},
-    ErrorCode.INVALID_PHONE: {"message": "The phone number is not a valid international number.", "http": "400"},
-    ErrorCode.TOO_MANY_CODES: {"message": "Too many codes were sent to this number in the last hour.", "http": "429"},
-    ErrorCode.PLAN_LIMIT_EXCEEDED: {"message": "A plan limit was reached.", "http": "403"},
-    ErrorCode.FEATURE_NOT_AVAILABLE: {"message": "Your plan does not include this feature.", "http": "403"},
-    ErrorCode.IDEMPOTENCY_KEY_REUSE: {"message": "This Idempotency-Key was used with a different request body.", "http": "409"},
-    ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS: {"message": "A request with this Idempotency-Key is still being processed.", "http": "409"},
-    ErrorCode.NOT_FOUND: {"message": "The requested resource does not exist.", "http": "404"},
-    ErrorCode.THROTTLED: {"message": "Rate limit exceeded; retry after the indicated delay.", "http": "429"},
+    ErrorCode.AUTHENTICATION_FAILED: {
+        "message": "The API key is missing or invalid.",
+        "http": "401",
+    },
+    ErrorCode.NOT_AUTHENTICATED: {
+        "message": "Authentication credentials were not provided.",
+        "http": "401",
+    },
+    ErrorCode.PERMISSION_DENIED: {
+        "message": "This key is not permitted to perform this action.",
+        "http": "403",
+    },
+    ErrorCode.MISSING_SCOPE: {
+        "message": "This key is missing a required scope.",
+        "http": "403",
+    },
+    ErrorCode.VALIDATION_ERROR: {
+        "message": "One or more fields failed validation.",
+        "http": "400",
+    },
+    ErrorCode.PARSE_ERROR: {
+        "message": "The request body could not be parsed.",
+        "http": "400",
+    },
+    ErrorCode.MISSING_CONTENT: {
+        "message": "The message or template has no renderable content.",
+        "http": "400",
+    },
+    ErrorCode.INVALID_ATTACHMENT: {
+        "message": "An attachment is missing fields, not valid base64, or exceeds the size limit.",
+        "http": "400",
+    },
+    ErrorCode.UNVERIFIED_DOMAIN: {
+        "message": "The sending domain is not verified for this account.",
+        "http": "403",
+    },
+    ErrorCode.RECIPIENT_CAP_EXCEEDED: {
+        "message": "The campaign exceeds your per-campaign recipient cap.",
+        "http": "403",
+    },
+    ErrorCode.SUPPRESSED_RECIPIENT: {
+        "message": "The recipient is on your suppression list.",
+        "http": "403",
+    },
+    ErrorCode.REPUTATION_HALT: {
+        "message": "Sending is paused for this account due to a reputation halt.",
+        "http": "403",
+    },
+    ErrorCode.WHATSAPP_NOT_CONNECTED: {
+        "message": "The account has no connected WhatsApp number.",
+        "http": "409",
+    },
+    ErrorCode.NO_AUTHENTICATION_TEMPLATE: {
+        "message": "The account has no approved WhatsApp Authentication template.",
+        "http": "409",
+    },
+    ErrorCode.TEMPLATE_NOT_FOUND: {
+        "message": "No approved Authentication template has that name and language.",
+        "http": "404",
+    },
+    ErrorCode.INVALID_CODE: {
+        "message": "The code must be 4 to 15 letters or numbers.",
+        "http": "400",
+    },
+    ErrorCode.INVALID_PHONE: {
+        "message": "The phone number is not a valid international number.",
+        "http": "400",
+    },
+    ErrorCode.TOO_MANY_CODES: {
+        "message": "Too many codes were sent to this number in the last hour.",
+        "http": "429",
+    },
+    ErrorCode.PLAN_LIMIT_EXCEEDED: {
+        "message": "A plan limit was reached.",
+        "http": "403",
+    },
+    ErrorCode.FEATURE_NOT_AVAILABLE: {
+        "message": "Your plan does not include this feature.",
+        "http": "403",
+    },
+    ErrorCode.IDEMPOTENCY_KEY_REUSE: {
+        "message": "This Idempotency-Key was used with a different request body.",
+        "http": "409",
+    },
+    ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS: {
+        "message": "A request with this Idempotency-Key is still being processed.",
+        "http": "409",
+    },
+    ErrorCode.NOT_FOUND: {
+        "message": "The requested resource does not exist.",
+        "http": "404",
+    },
+    ErrorCode.THROTTLED: {
+        "message": "Rate limit exceeded; retry after the indicated delay.",
+        "http": "429",
+    },
     ErrorCode.SERVER_ERROR: {"message": "An unexpected error occurred.", "http": "500"},
 }
 

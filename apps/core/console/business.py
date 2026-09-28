@@ -5,6 +5,7 @@ inside functions (module boundary rule); where an app already offers a function 
 reputation reset, job cancel), it's used rather than re-implemented. Views record every action in
 the audit log; nothing here does.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -12,9 +13,16 @@ from datetime import timedelta
 from django.utils import timezone
 
 TABS = [
-    ("overview", "Overview"), ("billing", "Billing"), ("whatsapp", "WhatsApp"), ("email", "Email"),
-    ("automations", "Automations"), ("ai", "AI"), ("team", "Team"), ("api", "API & jobs"),
-    ("data", "Data"), ("activity", "Activity"),
+    ("overview", "Overview"),
+    ("billing", "Billing"),
+    ("whatsapp", "WhatsApp"),
+    ("email", "Email"),
+    ("automations", "Automations"),
+    ("ai", "AI"),
+    ("team", "Team"),
+    ("api", "API & jobs"),
+    ("data", "Data"),
+    ("activity", "Activity"),
 ]
 
 
@@ -23,6 +31,7 @@ class ConsoleError(Exception):
 
 
 # ---- tab data ---------------------------------------------------------------------------------
+
 
 def overview(account) -> dict:
     from apps.conversations import api as conversations_api
@@ -48,7 +57,9 @@ def billing(account) -> dict:
         "usage": billing_api.usage_report(account),
         "cost": billing_api.actual_cost(account),
         "features": billing_api.access_report(account),
-        "payments": ManualPaymentRequest.objects.filter(account=account).select_related("plan").order_by("-created_at")[:10],
+        "payments": ManualPaymentRequest.objects.filter(account=account)
+        .select_related("plan")
+        .order_by("-created_at")[:10],
         "plans": Plan.objects.order_by("price_monthly"),
         "statuses": Subscription.STATUS_CHOICES,
     }
@@ -60,33 +71,73 @@ def whatsapp(account) -> dict:
     from apps.whatsapp.models import MessageTemplate, OutboundMessage, WebhookEventLog
     from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
-    numbers = list(WhatsAppBusinessNumber.objects.filter(account=account).order_by("-is_active", "created_at"))
-    failed = (OutboundMessage.objects.filter(account=account, status=OutboundMessage.Status.FAILED,
-                                             updated_at__gte=timezone.now() - timedelta(days=7))
-              .select_related("contact").order_by("-updated_at")[:25])
+    numbers = list(
+        WhatsAppBusinessNumber.objects.filter(account=account).order_by(
+            "-is_active", "created_at"
+        )
+    )
+    failed = (
+        OutboundMessage.objects.filter(
+            account=account,
+            status=OutboundMessage.Status.FAILED,
+            updated_at__gte=timezone.now() - timedelta(days=7),
+        )
+        .select_related("contact")
+        .order_by("-updated_at")[:25]
+    )
     ids = [n.phone_number_id for n in numbers]
-    webhooks = (WebhookEventLog.objects.filter(
-        processed=False, payload__entry__0__changes__0__value__metadata__phone_number_id__in=ids)
-        .order_by("-created_at")[:25]) if ids else []
+    webhooks = (
+        (
+            WebhookEventLog.objects.filter(
+                processed=False,
+                payload__entry__0__changes__0__value__metadata__phone_number_id__in=ids,
+            ).order_by("-created_at")[:25]
+        )
+        if ids
+        else []
+    )
     return {
-        "numbers": [{"number": n, "status": n.get_registration_status_display(),
-                     "setup": n.setup_status, "health": number_health(n)} for n in numbers],
-        "templates": MessageTemplate.objects.filter(account=account).order_by("approval_status", "name"),
-        "failed": [{"message": m, "reason": friendly_send_error(m.error_code or (m.last_error or "").split(":")[0]),
-                    "retryable": not (m.payload or {}).get("kind")} for m in failed],
+        "numbers": [
+            {
+                "number": n,
+                "status": n.get_registration_status_display(),
+                "setup": n.setup_status,
+                "health": number_health(n),
+            }
+            for n in numbers
+        ],
+        "templates": MessageTemplate.objects.filter(account=account).order_by(
+            "approval_status", "name"
+        ),
+        "failed": [
+            {
+                "message": m,
+                "reason": friendly_send_error(
+                    m.error_code or (m.last_error or "").split(":")[0]
+                ),
+                "retryable": not (m.payload or {}).get("kind"),
+            }
+            for m in failed
+        ],
         "webhooks": webhooks,
     }
 
 
 def email(account) -> dict:
-    from apps.email.models import EmailDomain, EmailMessage, SendReputation, SuppressionListEntry
+    from apps.email.models import (
+        EmailDomain,
+        EmailMessage,
+        SendReputation,
+        SuppressionListEntry,
+    )
 
     return {
         "domains": EmailDomain.objects.filter(account=account).order_by("domain"),
         "reputation": SendReputation.objects.filter(account=account).first(),
         "suppressed": SuppressionListEntry.objects.filter(account=account).count(),
-        "failures": EmailMessage.objects.filter(account=account, status__in=["failed", "bounced", "complained"])
-        .order_by("-created_at")[:15],
+        "failures": EmailMessage.objects.filter(
+            account=account, status__in=["failed", "bounced", "complained"]
+        ).order_by("-created_at")[:15],
     }
 
 
@@ -95,15 +146,37 @@ def automations(account) -> dict:
     from apps.automation.models import Workflow, WorkflowRun
 
     now = timezone.now()
-    failed = (WorkflowRun.objects.filter(workflow__account=account, status=WorkflowRun.Status.FAILED)
-              .select_related("workflow").prefetch_related("step_runs").order_by("-started_at")[:15])
+    failed = (
+        WorkflowRun.objects.filter(
+            workflow__account=account, status=WorkflowRun.Status.FAILED
+        )
+        .select_related("workflow")
+        .prefetch_related("step_runs")
+        .order_by("-started_at")[:15]
+    )
     return {
-        "workflows": Workflow.objects.filter(account=account).order_by("status", "name"),
-        "failed_runs": [{"run": r, "error": next((str((s.result or {}).get("error", ""))
-                                                   for s in reversed(list(r.step_runs.all())) if s.status != "ok"), "")}
-                        for r in failed],
-        "overdue": WorkflowRun.objects.filter(workflow__account=account, status=WorkflowRun.Status.WAITING,
-                                              next_due_at__lt=now - timedelta(minutes=15)).count(),
+        "workflows": Workflow.objects.filter(account=account).order_by(
+            "status", "name"
+        ),
+        "failed_runs": [
+            {
+                "run": r,
+                "error": next(
+                    (
+                        str((s.result or {}).get("error", ""))
+                        for s in reversed(list(r.step_runs.all()))
+                        if s.status != "ok"
+                    ),
+                    "",
+                ),
+            }
+            for r in failed
+        ],
+        "overdue": WorkflowRun.objects.filter(
+            workflow__account=account,
+            status=WorkflowRun.Status.WAITING,
+            next_due_at__lt=now - timedelta(minutes=15),
+        ).count(),
         "adoption": automation_api.adoption(account),
     }
 
@@ -118,9 +191,13 @@ def ai(account) -> dict:
     return {
         "settings": AISettings.objects.filter(account=account).first(),
         "unavailable": ai_api.unavailable_reason(account),
-        "calls_today": cache.get(f"ai-calls:{account.pk}:{timezone.now().date().isoformat()}", 0),
+        "calls_today": cache.get(
+            f"ai-calls:{account.pk}:{timezone.now().date().isoformat()}", 0
+        ),
         "daily_limit": getattr(settings, "AI_DAILY_CALL_LIMIT", 500),
-        "usage": ai_api.usage_summary(account, since=timezone.now() - timedelta(days=7)),
+        "usage": ai_api.usage_summary(
+            account, since=timezone.now() - timedelta(days=7)
+        ),
         "autonomy_site_on": getattr(settings, "AI_AUTONOMY_ENABLED", False),
     }
 
@@ -129,8 +206,12 @@ def team(account) -> dict:
     from apps.accounts.models import Invitation
 
     return {
-        "members": account.memberships.select_related("user").order_by("role", "user__email"),
-        "invitations": Invitation.objects.filter(account=account, accepted_at__isnull=True).order_by("-created_at"),
+        "members": account.memberships.select_related("user").order_by(
+            "role", "user__email"
+        ),
+        "invitations": Invitation.objects.filter(
+            account=account, accepted_at__isnull=True
+        ).order_by("-created_at"),
     }
 
 
@@ -140,12 +221,20 @@ def api_and_jobs(account) -> dict:
 
     now = timezone.now()
     return {
-        "keys": EmailApiKey.objects.filter(account=account).order_by("-is_active", "-created_at"),
-        "failed_jobs": ScheduledJob.objects.filter(account=account, status=ScheduledJob.Status.FAILED).order_by("-fire_at")[:15],
-        "overdue_jobs": ScheduledJob.objects.filter(account=account, status=ScheduledJob.Status.SCHEDULED,
-                                                    fire_at__lt=now - timedelta(minutes=10)).order_by("fire_at")[:15],
-        "upcoming_jobs": ScheduledJob.objects.filter(account=account, status=ScheduledJob.Status.SCHEDULED,
-                                                     fire_at__gte=now).order_by("fire_at")[:15],
+        "keys": EmailApiKey.objects.filter(account=account).order_by(
+            "-is_active", "-created_at"
+        ),
+        "failed_jobs": ScheduledJob.objects.filter(
+            account=account, status=ScheduledJob.Status.FAILED
+        ).order_by("-fire_at")[:15],
+        "overdue_jobs": ScheduledJob.objects.filter(
+            account=account,
+            status=ScheduledJob.Status.SCHEDULED,
+            fire_at__lt=now - timedelta(minutes=10),
+        ).order_by("fire_at")[:15],
+        "upcoming_jobs": ScheduledJob.objects.filter(
+            account=account, status=ScheduledJob.Status.SCHEDULED, fire_at__gte=now
+        ).order_by("fire_at")[:15],
     }
 
 
@@ -169,13 +258,21 @@ def activity(account) -> dict:
 
 
 TAB_DATA = {
-    "overview": overview, "billing": billing, "whatsapp": whatsapp, "email": email,
-    "automations": automations, "ai": ai, "team": team, "api": api_and_jobs, "data": data,
+    "overview": overview,
+    "billing": billing,
+    "whatsapp": whatsapp,
+    "email": email,
+    "automations": automations,
+    "ai": ai,
+    "team": team,
+    "api": api_and_jobs,
+    "data": data,
     "activity": activity,
 }
 
 
 # ---- actions ----------------------------------------------------------------------------------
+
 
 def set_subscription(account, plan_id, status) -> str:
     from apps.billing.models import Plan, Subscription
@@ -185,8 +282,14 @@ def set_subscription(account, plan_id, status) -> str:
         raise ConsoleError("Pick a valid plan and status.")
     now = timezone.now()
     sub, created = Subscription.objects.get_or_create(
-        account=account, defaults={"plan": plan, "status": status, "current_period_start": now,
-                                   "current_period_end": now + timedelta(days=30)})
+        account=account,
+        defaults={
+            "plan": plan,
+            "status": status,
+            "current_period_start": now,
+            "current_period_end": now + timedelta(days=30),
+        },
+    )
     if not created:
         sub.plan, sub.status = plan, status
         if status == Subscription.CANCELLED:
@@ -226,13 +329,17 @@ def set_feature(account, key: str, change: str, *, note: str, by) -> tuple[dict,
         if change == "reset":
             before = billing_api.clear_override(account, key)
         else:
-            before = billing_api.set_override(account, key, grant=change == "grant", note=note, by=by)
+            before = billing_api.set_override(
+                account, key, grant=change == "grant", note=note, by=by
+            )
     except billing_api.FeatureError as exc:
         raise ConsoleError(str(exc)) from exc
     return before, feature.name
 
 
-def set_limit(account, key: str, change: str, *, value: str, note: str, days: str, by) -> tuple[dict, str]:
+def set_limit(
+    account, key: str, change: str, *, value: str, note: str, days: str, by
+) -> tuple[dict, str]:
     """Give this business its own limit (optionally for N days), or go back to the plan's.
     Returns (limit before, limit name)."""
     from apps.billing import api as billing_api
@@ -245,11 +352,15 @@ def set_limit(account, key: str, change: str, *, value: str, note: str, days: st
         return billing_api.clear_limit_override(account, key), lim.name
     try:
         number = int(value)
-        expires = timezone.now() + timedelta(days=int(days)) if (days or "").strip() else None
+        expires = (
+            timezone.now() + timedelta(days=int(days)) if (days or "").strip() else None
+        )
     except ValueError:
         raise ConsoleError("Enter whole numbers (-1 for unlimited).")
     try:
-        return billing_api.set_limit_override(account, key, value=number, note=note, by=by, expires_at=expires), lim.name
+        return billing_api.set_limit_override(
+            account, key, value=number, note=note, by=by, expires_at=expires
+        ), lim.name
     except billing_api.FeatureError as exc:
         raise ConsoleError(str(exc)) from exc
 
@@ -258,13 +369,20 @@ def retry_registration(account, number_pk) -> str:
     from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
     from apps.whatsapp.registration import register_number
 
-    number = WhatsAppBusinessNumber.objects.filter(account=account, pk=number_pk).first()
+    number = WhatsAppBusinessNumber.objects.filter(
+        account=account, pk=number_pk
+    ).first()
     if number is None:
         raise ConsoleError("That number doesn't belong to this business.")
     result = register_number(number)
     number.refresh_from_db()
-    if number.registration_status != WhatsAppBusinessNumber.RegistrationStatus.REGISTERED:
-        raise ConsoleError(f"Registration still failing: {number.registration_error or getattr(result, 'error', '')}")
+    if (
+        number.registration_status
+        != WhatsAppBusinessNumber.RegistrationStatus.REGISTERED
+    ):
+        raise ConsoleError(
+            f"Registration still failing: {number.registration_error or getattr(result, 'error', '')}"
+        )
     return number.display_number or number.phone_number_id
 
 
@@ -277,16 +395,34 @@ def sync_templates(account) -> dict:
 def retry_send(account, message_pk) -> None:
     from apps.whatsapp.models import MessageLog, OutboundMessage
 
-    msg = OutboundMessage.objects.filter(account=account, pk=message_pk, status=OutboundMessage.Status.FAILED).first()
+    msg = OutboundMessage.objects.filter(
+        account=account, pk=message_pk, status=OutboundMessage.Status.FAILED
+    ).first()
     if msg is None:
         raise ConsoleError("That failed message isn't there any more.")
     if (msg.payload or {}).get("kind"):
-        raise ConsoleError("One-time codes can't be resent: the code isn't kept. The customer can ask for a new one.")
-    msg.status, msg.attempts, msg.next_attempt_at = OutboundMessage.Status.QUEUED, 0, None
+        raise ConsoleError(
+            "One-time codes can't be resent: the code isn't kept. The customer can ask for a new one."
+        )
+    msg.status, msg.attempts, msg.next_attempt_at = (
+        OutboundMessage.Status.QUEUED,
+        0,
+        None,
+    )
     msg.error_code, msg.last_error = "", ""
-    msg.save(update_fields=["status", "attempts", "next_attempt_at", "error_code", "last_error"])
+    msg.save(
+        update_fields=[
+            "status",
+            "attempts",
+            "next_attempt_at",
+            "error_code",
+            "last_error",
+        ]
+    )
     if msg.message_log_id:
-        MessageLog.objects.filter(pk=msg.message_log_id).update(status=MessageLog.Status.QUEUED)
+        MessageLog.objects.filter(pk=msg.message_log_id).update(
+            status=MessageLog.Status.QUEUED
+        )
     from apps.whatsapp.tasks import drain_outbound_queue
 
     drain_outbound_queue.delay()
@@ -297,9 +433,15 @@ def resend_webhook(account, event_pk) -> None:
     from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
     from apps.whatsapp.tasks import process_whatsapp_event
 
-    ids = list(WhatsAppBusinessNumber.objects.filter(account=account).values_list("phone_number_id", flat=True))
+    ids = list(
+        WhatsAppBusinessNumber.objects.filter(account=account).values_list(
+            "phone_number_id", flat=True
+        )
+    )
     event = WebhookEventLog.objects.filter(
-        pk=event_pk, payload__entry__0__changes__0__value__metadata__phone_number_id__in=ids).first()
+        pk=event_pk,
+        payload__entry__0__changes__0__value__metadata__phone_number_id__in=ids,
+    ).first()
     if event is None:
         raise ConsoleError("That webhook doesn't belong to this business.")
     process_whatsapp_event.delay(event.pk)
@@ -340,14 +482,18 @@ def ai_off(account, *, autopilot_only: bool) -> None:
     from apps.ai.models import AISettings
 
     rows = AISettings.objects.filter(account=account)
-    rows.update(reply_mode="suggest") if autopilot_only else rows.update(enabled=False, reply_mode="suggest")
+    rows.update(reply_mode="suggest") if autopilot_only else rows.update(
+        enabled=False, reply_mode="suggest"
+    )
 
 
 def resend_invitation(request, account, invite_pk) -> str:
     from apps.accounts.models import Invitation
     from apps.accounts.settings_views import _send_invitation_email
 
-    invite = Invitation.objects.filter(account=account, pk=invite_pk, accepted_at__isnull=True).first()
+    invite = Invitation.objects.filter(
+        account=account, pk=invite_pk, accepted_at__isnull=True
+    ).first()
     if invite is None:
         raise ConsoleError("That invitation isn't pending.")
     invite.created_at = timezone.now()  # a fresh 7 days
@@ -359,7 +505,9 @@ def resend_invitation(request, account, invite_pk) -> str:
 def revoke_invitation(account, invite_pk) -> str:
     from apps.accounts.models import Invitation
 
-    invite = Invitation.objects.filter(account=account, pk=invite_pk, accepted_at__isnull=True).first()
+    invite = Invitation.objects.filter(
+        account=account, pk=invite_pk, accepted_at__isnull=True
+    ).first()
     if invite is None:
         raise ConsoleError("That invitation isn't pending.")
     email = invite.email
@@ -372,12 +520,17 @@ def change_owner(account, membership_pk) -> str:
 
     from apps.accounts.models import Membership
 
-    target = Membership.objects.filter(account=account, pk=membership_pk).select_related("user").first()
+    target = (
+        Membership.objects.filter(account=account, pk=membership_pk)
+        .select_related("user")
+        .first()
+    )
     if target is None:
         raise ConsoleError("That person isn't a member of this business.")
     with transaction.atomic():
-        Membership.objects.filter(account=account, role=Membership.Role.OWNER).exclude(pk=target.pk) \
-            .update(role=Membership.Role.ADMIN)
+        Membership.objects.filter(account=account, role=Membership.Role.OWNER).exclude(
+            pk=target.pk
+        ).update(role=Membership.Role.ADMIN)
         target.role = Membership.Role.OWNER
         target.save(update_fields=["role"])
     return target.user.email or target.user.get_username()

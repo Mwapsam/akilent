@@ -1,4 +1,5 @@
 """Dashboard: contact list + customer profile (Phase 4.4)."""
+
 from __future__ import annotations
 
 import json
@@ -17,10 +18,13 @@ from django.views.decorators.http import require_POST
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import Contact, CustomAttributeDef, Tag
 from apps.contacts.services import (
-    ContactLimitReached, ensure_room_for_contact, upsert_contact, upsert_contact_by_phone,
+    ContactLimitReached,
+    ensure_room_for_contact,
+    upsert_contact,
+    upsert_contact_by_phone,
 )
-from apps.email.models import EmailMessage
 from apps.core.htmx import is_background
+from apps.email.models import EmailMessage
 
 _PAGE_SIZE = 50
 
@@ -40,8 +44,10 @@ def contact_list(request):
     if q:
         # Phone-only contacts (e.g. WhatsApp-first customers) have no email.
         qs = qs.filter(
-            Q(email__icontains=q) | Q(phone__icontains=q)
-            | Q(first_name__icontains=q) | Q(last_name__icontains=q)
+            Q(email__icontains=q)
+            | Q(phone__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
         )
     if st:
         qs = qs.filter(status=st)
@@ -49,7 +55,9 @@ def contact_list(request):
     if tag_slug:
         qs = qs.filter(tags__slug=tag_slug)
 
-    page = Paginator(qs.prefetch_related("tags"), _PAGE_SIZE).get_page(request.GET.get("page"))
+    page = Paginator(qs.prefetch_related("tags"), _PAGE_SIZE).get_page(
+        request.GET.get("page")
+    )
     context = {
         "account": account,
         "page": page,
@@ -84,10 +92,9 @@ def contact_detail(request, public_id: str):
         e.label = event_label(e.type)
         e.detail = event_detail(e.type, e.data)
 
-    messages_to = (
-        EmailMessage.objects.filter(account=account, to_email__iexact=contact.email)
-        .order_by("-created_at")[:50]
-    )
+    messages_to = EmailMessage.objects.filter(
+        account=account, to_email__iexact=contact.email
+    ).order_by("-created_at")[:50]
     # Readable (label, value) pairs instead of a raw attributes dict — R1: no
     # JSON on a page a business user works from (docs/plans amendment).
     attribute_rows = sorted(
@@ -95,16 +102,20 @@ def contact_detail(request, public_id: str):
         for k, v in (contact.attributes or {}).items()
         if v not in (None, "")
     )
-    return render(request, "contacts/detail.html", {
-        "account": account,
-        "contact": contact,
-        "events": events,
-        "messages_to": messages_to,
-        "lists": contact.lists.all(),
-        "attribute_rows": attribute_rows,
-        "contact_tags": contact.tags.all(),
-        "known_tags": Tag.objects.filter(account=account),
-    })
+    return render(
+        request,
+        "contacts/detail.html",
+        {
+            "account": account,
+            "contact": contact,
+            "events": events,
+            "messages_to": messages_to,
+            "lists": contact.lists.all(),
+            "attribute_rows": attribute_rows,
+            "contact_tags": contact.tags.all(),
+            "known_tags": Tag.objects.filter(account=account),
+        },
+    )
 
 
 def _back_to(request, contact):
@@ -149,6 +160,7 @@ def contact_tag_remove(request, public_id: str):
 # the API, a CSV import or an inbound message, so a business owner couldn't add
 # someone they met offline or fix a misspelled name. --------------------------
 
+
 def _clean_identity(request) -> tuple[str, str]:
     """Return ``(email, phone)`` from the POST, normalized, or raise ValueError."""
     from apps.whatsapp.models.contact import normalize_phone
@@ -156,7 +168,9 @@ def _clean_identity(request) -> tuple[str, str]:
     email = (request.POST.get("email") or "").strip().lower()
     phone_raw = (request.POST.get("phone") or "").strip()
     if not email and not phone_raw:
-        raise ValueError("Add a phone number or an email address — we need one to reach them.")
+        raise ValueError(
+            "Add a phone number or an email address — we need one to reach them."
+        )
 
     phone = ""
     if phone_raw:
@@ -194,7 +208,9 @@ def contact_create(request):
     # Phone is the identity for a WhatsApp-first business; email only leads when
     # that's all we were given.
     if phone:
-        contact, created = upsert_contact_by_phone(account, phone, email=email or None, **fields)
+        contact, created = upsert_contact_by_phone(
+            account, phone, email=email or None, **fields
+        )
     else:
         contact, created = upsert_contact(account, email, **fields)
 
@@ -232,7 +248,15 @@ def contact_edit(request, public_id: str):
         # Savepoint: a unique-constraint failure otherwise poisons the whole
         # request transaction and nothing after this point can query.
         with transaction.atomic():
-            contact.save(update_fields=["first_name", "last_name", "email", "phone", "updated_at"])
+            contact.save(
+                update_fields=[
+                    "first_name",
+                    "last_name",
+                    "email",
+                    "phone",
+                    "updated_at",
+                ]
+            )
     except IntegrityError:
         messages.error(
             request, "Another customer already has that phone number or email address."
@@ -257,6 +281,7 @@ def _unique_attribute_key(account, base_key: str) -> str:
 # template builder, apps.whatsapp.views.template_create) — the field itself
 # belongs to Contact, not to whichever feature happened to prompt its
 # creation, so it lives here rather than in that feature's app. ------------
+
 
 @login_required
 @require_POST
@@ -284,10 +309,17 @@ def create_custom_field(request):
     else:
         key = base_key if existing is None else _unique_attribute_key(account, base_key)
         attribute = CustomAttributeDef.objects.create(
-            account=account, key=key, type=field_type, label=label,
+            account=account,
+            key=key,
+            type=field_type,
+            label=label,
         )
 
-    return JsonResponse({
-        "key": attribute.key, "label": attribute.label or attribute.key,
-        "type": attribute.type, "sample": attribute.sample_value,
-    })
+    return JsonResponse(
+        {
+            "key": attribute.key,
+            "label": attribute.label or attribute.key,
+            "type": attribute.type,
+            "sample": attribute.sample_value,
+        }
+    )

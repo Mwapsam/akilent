@@ -17,10 +17,15 @@ def account(db):
     acc = Account.objects.create(company_name="Acme")
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"), email_apis=True,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        email_apis=True,
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return acc
@@ -29,7 +34,9 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
@@ -40,7 +47,9 @@ class _FakeProvider:
     def create_relay_identity(self, email, password, *, description=""):
         self.created[email] = password
         return MailboxInfo(
-            email=email, name="API relay", status=MailboxStatus.ACTIVE,
+            email=email,
+            name="API relay",
+            status=MailboxStatus.ACTIVE,
             quota=QuotaInfo(used_mb=0, limit_mb=0),
         )
 
@@ -62,11 +71,17 @@ def fake_provider(monkeypatch):
 
 
 def _last_audit(account, action):
-    return AuditLog.objects.filter(account=account, action=action).order_by("-timestamp").first()
+    return (
+        AuditLog.objects.filter(account=account, action=action)
+        .order_by("-timestamp")
+        .first()
+    )
 
 
 @pytest.mark.django_db
-def test_provision_creates_credential_with_reveal_once_secret(account, domain, fake_provider):
+def test_provision_creates_credential_with_reveal_once_secret(
+    account, domain, fake_provider
+):
     service = SmtpCredentialService(account)
     credential, secret = service.provision(domain)
 
@@ -123,7 +138,9 @@ def test_view_requires_verified_domain(client, account):
 
 
 @pytest.mark.django_db
-def test_view_provisions_credential_and_shows_reveal_once_banner(client, account, domain):
+def test_view_provisions_credential_and_shows_reveal_once_banner(
+    client, account, domain
+):
     client.force_login(account.owner)
     resp = client.post(f"/email/domains/{domain.pk}/smtp/create/", follow=True)
     assert resp.status_code == 200
@@ -133,7 +150,9 @@ def test_view_provisions_credential_and_shows_reveal_once_banner(client, account
 
 
 @pytest.mark.django_db
-def test_view_blocks_duplicate_active_credential(client, account, domain, fake_provider):
+def test_view_blocks_duplicate_active_credential(
+    client, account, domain, fake_provider
+):
     SmtpCredentialService(account).provision(domain)
     client.force_login(account.owner)
     resp = client.post(f"/email/domains/{domain.pk}/smtp/create/")
@@ -148,7 +167,10 @@ def test_view_rotate_and_revoke(client, account, domain):
 
     rotate_resp = client.post(f"/email/smtp/{credential.pk}/rotate/", follow=True)
     assert rotate_resp.status_code == 200
-    assert b"password rotated" in rotate_resp.content or b"Copy this password now" in rotate_resp.content
+    assert (
+        b"password rotated" in rotate_resp.content
+        or b"Copy this password now" in rotate_resp.content
+    )
 
     revoke_resp = client.post(f"/email/smtp/{credential.pk}/revoke/", follow=True)
     assert revoke_resp.status_code == 200

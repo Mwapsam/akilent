@@ -2,23 +2,30 @@ import json
 import logging
 
 import stripe
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.conf import settings
 
 from apps.accounts.utils import ajax_redirect, get_current_account, is_ajax
 from apps.core.audit import audit
-from apps.core.utils import admin_required
 from apps.core.models import SiteSettings
-from .models import ManualPaymentRequest, Plan, PaymentMethod, ProcessedWebhookEvent, Subscription, UsageSummary
+from apps.core.utils import admin_required
+
 from .flutterwave import FlutterwaveError, get_fw_client
 from .gateways import enabled_payment_methods, get_gateway
+from .models import (
+    ManualPaymentRequest,
+    PaymentMethod,
+    Plan,
+    ProcessedWebhookEvent,
+    Subscription,
+)
 from .pricing import DEFAULT_PERIOD_MULTIPLIERS, PERIOD_MONTH_MULTIPLES
 from .services import activate_subscription
 
@@ -60,23 +67,38 @@ def pricing_page(request):
         for period, label in Subscription.BILLING_PERIOD_CHOICES
     }
 
-    return render(request, "billing/plans.html", {
-        "plans": plans,
-        "cards": [billing_api.plan_card(p, whatsapp=whatsapp) for p in plans],
-        "compare_rows": billing_api.compare_plans(plans, whatsapp=whatsapp),
-        "core_features": billing_api.core_features(),
-        "account": account,
-        "subscription": subscription,
-        "current_plan_slug": current_plan_slug,
-        "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
-        "usage": [u for u in billing_api.usage_report(account)
-                  if u["period"] != "per_use" and (whatsapp or not u["key"].startswith(("whatsapp", "verification", "conversations")))],
-        "usage_warnings": billing_api.usage_warnings(account),
-        "payments_enabled": site.payments_enabled,
-        "payment_methods": enabled_payment_methods() if site.payments_enabled else [],
-        "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
-        "period_pricing_json": json.dumps(period_pricing),
-    })
+    return render(
+        request,
+        "billing/plans.html",
+        {
+            "plans": plans,
+            "cards": [billing_api.plan_card(p, whatsapp=whatsapp) for p in plans],
+            "compare_rows": billing_api.compare_plans(plans, whatsapp=whatsapp),
+            "core_features": billing_api.core_features(),
+            "account": account,
+            "subscription": subscription,
+            "current_plan_slug": current_plan_slug,
+            "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
+            "usage": [
+                u
+                for u in billing_api.usage_report(account)
+                if u["period"] != "per_use"
+                and (
+                    whatsapp
+                    or not u["key"].startswith(
+                        ("whatsapp", "verification", "conversations")
+                    )
+                )
+            ],
+            "usage_warnings": billing_api.usage_warnings(account),
+            "payments_enabled": site.payments_enabled,
+            "payment_methods": enabled_payment_methods()
+            if site.payments_enabled
+            else [],
+            "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
+            "period_pricing_json": json.dumps(period_pricing),
+        },
+    )
 
 
 @login_required
@@ -92,7 +114,10 @@ def feature_locked(request, key):
     if account is None:
         return redirect("/dashboard/")
     feature = catalog.BY_KEY.get(key)
-    if feature is None or feature.availability in (catalog.INTERNAL, catalog.DEPRECATED):
+    if feature is None or feature.availability in (
+        catalog.INTERNAL,
+        catalog.DEPRECATED,
+    ):
         raise Http404
     info = billing_api.access(account, key)
     kept = ""
@@ -101,21 +126,29 @@ def feature_locked(request, key):
 
         count = automation_api.count_active_rules(account)
         if count:
-            kept = (f"Your {count} automation{'s are' if count != 1 else ' is'} kept. "
-                    "They don't run while this is locked, and start again when you have access.")
-    return render(request, "billing/locked.html", {"info": info, "kept": kept, "feature": feature})
+            kept = (
+                f"Your {count} automation{'s are' if count != 1 else ' is'} kept. "
+                "They don't run while this is locked, and start again when you have access."
+            )
+    return render(
+        request, "billing/locked.html", {"info": info, "kept": kept, "feature": feature}
+    )
 
 
 # --- Admin: package (Plan) management -----------------------------------------
 
+
 def _plan_form_fields(post):
     """Pull + coerce Plan fields from POST (shared by create/edit)."""
+
     def _int(name, default=0):
         try:
             return int(post.get(name, default) or default)
         except ValueError:
             return default
+
     from decimal import Decimal, InvalidOperation
+
     try:
         price = Decimal(post.get("price_monthly") or "0")
     except InvalidOperation:
@@ -140,6 +173,7 @@ def _plan_form_fields(post):
 @require_POST
 def plan_create(request):
     from django.utils.text import slugify
+
     fields = _plan_form_fields(request.POST)
     slug = slugify(request.POST.get("slug") or fields["name"])
     if not slug or not fields["name"]:
@@ -158,8 +192,11 @@ def plan_create(request):
             plan.is_active = False
             plan.save(update_fields=["is_active"])
     if reasons:
-        messages.warning(request, f"Package '{plan.name}' created but hidden: {' '.join(reasons)} "
-                                  "Set its limits, or edit it and tick \"I accept\".")
+        messages.warning(
+            request,
+            f"Package '{plan.name}' created but hidden: {' '.join(reasons)} "
+            'Set its limits, or edit it and tick "I accept".',
+        )
         return redirect("core:plans")
     messages.success(request, f"Package '{fields['name']}' created.")
     return redirect("core:plans")
@@ -185,9 +222,14 @@ def plan_edit(request, pk):
     if not fields["name"]:
         messages.error(request, "Package name is required.")
         return redirect("core:plans")
-    reasons = _loss_check(request, plan, price=fields["price_monthly"], is_active=fields["is_active"])
+    reasons = _loss_check(
+        request, plan, price=fields["price_monthly"], is_active=fields["is_active"]
+    )
     if reasons:
-        messages.error(request, f"Not saved: {' '.join(reasons)} Tick \"I accept this plan can lose money\" to save it anyway.")
+        messages.error(
+            request,
+            f'Not saved: {" ".join(reasons)} Tick "I accept this plan can lose money" to save it anyway.',
+        )
         return redirect("core:plans")
     for k, v in fields.items():
         setattr(plan, k, v)
@@ -204,14 +246,18 @@ def plan_toggle(request, pk):
     if not plan.is_active:
         reasons = _loss_check(request, plan, is_active=True)
         if reasons:
-            messages.error(request, f"'{plan.name}' stays hidden: {' '.join(reasons)} "
-                                    "Edit it and tick \"I accept\" to show it anyway.")
+            messages.error(
+                request,
+                f"'{plan.name}' stays hidden: {' '.join(reasons)} "
+                'Edit it and tick "I accept" to show it anyway.',
+            )
             return redirect("core:plans")
     plan.is_active = not plan.is_active
     plan.save(update_fields=["is_active"])
     audit(request, "plan.toggle", target=plan.slug, is_active=plan.is_active)
     messages.success(
-        request, f"Package '{plan.name}' {'activated' if plan.is_active else 'deactivated'}."
+        request,
+        f"Package '{plan.name}' {'activated' if plan.is_active else 'deactivated'}.",
     )
     return redirect("core:plans")
 
@@ -250,12 +296,18 @@ def checkout(request):
         return redirect("/billing/plans/")
 
     method_code = request.GET.get("method")
-    method = PaymentMethod.objects.filter(code=method_code, is_enabled=True).first() if method_code else None
+    method = (
+        PaymentMethod.objects.filter(code=method_code, is_enabled=True).first()
+        if method_code
+        else None
+    )
     if method is None:
         method = enabled_payment_methods()[0] if enabled_payment_methods() else None
     gateway = get_gateway(method.code) if method else None
     if gateway is None:
-        messages.error(request, "No payment method is currently available. Contact support.")
+        messages.error(
+            request, "No payment method is currently available. Contact support."
+        )
         return redirect("/billing/plans/")
 
     period = request.GET.get("period", Subscription.MONTHLY)
@@ -287,7 +339,9 @@ def callback(request):
         transaction = fw.verify_transaction(transaction_id)
     except FlutterwaveError as exc:
         logger.error("callback: verification failed: %s", exc)
-        messages.error(request, "Payment verification failed. Contact support if charged.")
+        messages.error(
+            request, "Payment verification failed. Contact support if charged."
+        )
         return redirect("/billing/plans/")
 
     if transaction.get("status") != "successful":
@@ -296,6 +350,7 @@ def callback(request):
 
     try:
         from apps.accounts.models import Account
+
         account = Account.objects.get(pk=account_id)
         plan = Plan.objects.get(slug=plan_slug)
     except Exception as exc:
@@ -308,14 +363,24 @@ def callback(request):
     if not _amount_covers_plan(transaction.get("amount"), plan):
         logger.error(
             "callback: amount mismatch account=%s plan=%s charged=%s expected=%s",
-            account.pk, plan.slug, transaction.get("amount"), plan.price_monthly,
+            account.pk,
+            plan.slug,
+            transaction.get("amount"),
+            plan.price_monthly,
         )
-        messages.error(request, "Payment amount did not match the plan. Contact support if charged.")
+        messages.error(
+            request,
+            "Payment amount did not match the plan. Contact support if charged.",
+        )
         return redirect("/billing/plans/")
 
     cust_email = (transaction.get("customer") or {}).get("email")
     activate_subscription(
-        account, plan, "flutterwave", billing_period=Subscription.MONTHLY, fw_customer_email=cust_email
+        account,
+        plan,
+        "flutterwave",
+        billing_period=Subscription.MONTHLY,
+        fw_customer_email=cust_email,
     )
 
     # Capture the Flutterwave recurring-subscription id so it can be cancelled later.
@@ -333,7 +398,9 @@ def callback(request):
 
     logger.info(
         "callback: activated %s subscription for account=%s tx=%s",
-        plan.name, account.pk, transaction_id,
+        plan.name,
+        account.pk,
+        transaction_id,
     )
     messages.success(request, f"Successfully subscribed to {plan.name}!")
     return redirect("/dashboard/")
@@ -357,7 +424,9 @@ def cancel_subscription(request):
         role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
     ).exists()
     if not is_privileged:
-        messages.error(request, "Only an account owner or admin can cancel the subscription.")
+        messages.error(
+            request, "Only an account owner or admin can cancel the subscription."
+        )
         return _back_to_plans(request)
 
     sub = getattr(account, "subscription", None)
@@ -369,7 +438,9 @@ def cancel_subscription(request):
         try:
             get_fw_client().cancel_subscription(sub.fw_subscription_id)
         except FlutterwaveError as exc:
-            logger.error("cancel_subscription: FW error for account=%s: %s", account.pk, exc)
+            logger.error(
+                "cancel_subscription: FW error for account=%s: %s", account.pk, exc
+            )
             messages.error(request, f"Could not cancel recurring billing: {exc}")
             return _back_to_plans(request)
     elif sub.payment_method == "stripe" and sub.stripe_subscription_id:
@@ -377,7 +448,9 @@ def cancel_subscription(request):
         try:
             stripe.Subscription.delete(sub.stripe_subscription_id)
         except stripe.error.StripeError as exc:
-            logger.error("cancel_subscription: Stripe error for account=%s: %s", account.pk, exc)
+            logger.error(
+                "cancel_subscription: Stripe error for account=%s: %s", account.pk, exc
+            )
             messages.error(request, f"Could not cancel recurring billing: {exc}")
             return _back_to_plans(request)
 
@@ -409,13 +482,17 @@ def plan_sync_fw(request, pk):
     currency = getattr(settings, "FLUTTERWAVE_CURRENCY", "USD")
     try:
         fp = get_fw_client().create_payment_plan(
-            name=plan.name, amount=plan.price_monthly, interval="monthly", currency=currency
+            name=plan.name,
+            amount=plan.price_monthly,
+            interval="monthly",
+            currency=currency,
         )
         plan.flutterwave_plan_id = str(fp.get("id") or "")
         plan.save(update_fields=["flutterwave_plan_id"])
         audit(request, "plan.sync_flutterwave", target=plan.slug)
         messages.success(
-            request, f"Recurring plan created on Flutterwave (id {plan.flutterwave_plan_id})."
+            request,
+            f"Recurring plan created on Flutterwave (id {plan.flutterwave_plan_id}).",
         )
     except FlutterwaveError as exc:
         messages.error(request, f"Flutterwave error: {exc}")
@@ -476,11 +553,11 @@ def _handle_charge_completed(payload: dict):
         return
 
     try:
-        sub = Subscription.objects.select_related("plan").get(
-            account_id=account_id
-        )
+        sub = Subscription.objects.select_related("plan").get(account_id=account_id)
     except Subscription.DoesNotExist:
-        logger.warning("_handle_charge_completed: no subscription for account=%s", account_id)
+        logger.warning(
+            "_handle_charge_completed: no subscription for account=%s", account_id
+        )
         return
 
     # Resolve the plan we're being asked to grant (fall back to the current one).
@@ -494,22 +571,36 @@ def _handle_charge_completed(payload: dict):
     try:
         verified = get_fw_client().verify_transaction(transaction_id)
     except FlutterwaveError as exc:
-        logger.error("_handle_charge_completed: verify failed tx=%s: %s", transaction_id, exc)
+        logger.error(
+            "_handle_charge_completed: verify failed tx=%s: %s", transaction_id, exc
+        )
         return
 
-    if verified.get("status") != "successful" or not _amount_covers_plan(verified.get("amount"), plan):
+    if verified.get("status") != "successful" or not _amount_covers_plan(
+        verified.get("amount"), plan
+    ):
         logger.error(
             "_handle_charge_completed: rejected account=%s plan=%s status=%s amount=%s expected=%s",
-            account_id, plan.slug, verified.get("status"), verified.get("amount"), plan.price_monthly,
+            account_id,
+            plan.slug,
+            verified.get("status"),
+            verified.get("amount"),
+            plan.price_monthly,
         )
         return
 
     cust_email = (verified.get("customer") or {}).get("email") or sub.fw_customer_email
     activate_subscription(
-        sub.account, plan, "flutterwave", billing_period=Subscription.MONTHLY, fw_customer_email=cust_email
+        sub.account,
+        plan,
+        "flutterwave",
+        billing_period=Subscription.MONTHLY,
+        fw_customer_email=cust_email,
     )
 
-    logger.info("_handle_charge_completed: renewed subscription for account=%s", account_id)
+    logger.info(
+        "_handle_charge_completed: renewed subscription for account=%s", account_id
+    )
 
 
 def _handle_commerce_charge_completed(payload: dict):
@@ -528,11 +619,14 @@ def _handle_commerce_charge_completed(payload: dict):
     payment_id = meta.get("payment_id")
     order_id = meta.get("order_id")
 
-    payment = Payment.objects.filter(public_id=payment_id, order__public_id=order_id).first()
+    payment = Payment.objects.filter(
+        public_id=payment_id, order__public_id=order_id
+    ).first()
     if payment is None:
         logger.warning(
             "_handle_commerce_charge_completed: no payment for payment_id=%s order_id=%s",
-            payment_id, order_id,
+            payment_id,
+            order_id,
         )
         return
 
@@ -540,7 +634,11 @@ def _handle_commerce_charge_completed(payload: dict):
     try:
         verified = get_fw_client().verify_transaction(transaction_id)
     except FlutterwaveError as exc:
-        logger.error("_handle_commerce_charge_completed: verify failed tx=%s: %s", transaction_id, exc)
+        logger.error(
+            "_handle_commerce_charge_completed: verify failed tx=%s: %s",
+            transaction_id,
+            exc,
+        )
         return
 
     from decimal import Decimal, InvalidOperation
@@ -553,9 +651,14 @@ def _handle_commerce_charge_completed(payload: dict):
     if verified.get("status") != "successful" or not covers:
         logger.error(
             "_handle_commerce_charge_completed: rejected payment=%s status=%s amount=%s expected=%s",
-            payment.public_id, verified.get("status"), verified.get("amount"), payment.amount,
+            payment.public_id,
+            verified.get("status"),
+            verified.get("amount"),
+            payment.amount,
         )
-        mark_failed(payment, error=f"verification rejected: status={verified.get('status')}")
+        mark_failed(
+            payment, error=f"verification rejected: status={verified.get('status')}"
+        )
         return
 
     mark_paid(payment, transaction_id=str(transaction_id), raw_payload=verified)
@@ -564,7 +667,7 @@ def _handle_commerce_charge_completed(payload: dict):
 
 def _handle_subscription_cancelled(payload: dict):
     data = payload.get("data", {})
-    meta = (data.get("meta") or {})
+    meta = data.get("meta") or {}
     account_id = meta.get("account_id")
 
     if not account_id:
@@ -576,10 +679,14 @@ def _handle_subscription_cancelled(payload: dict):
         cancelled_at=now,
     )
     if updated:
-        logger.info("_handle_subscription_cancelled: cancelled subscription for account=%s", account_id)
+        logger.info(
+            "_handle_subscription_cancelled: cancelled subscription for account=%s",
+            account_id,
+        )
 
 
 # --- Stripe -----------------------------------------------------------------
+
 
 @login_required
 def stripe_success(request):
@@ -607,7 +714,9 @@ def stripe_success(request):
             session = _stripe_to_dict(stripe.checkout.Session.retrieve(session_id))
             sub = _activate_stripe_session(session, account=account)
         except stripe.error.StripeError as exc:
-            logger.warning("stripe_success: could not retrieve session=%s: %s", session_id, exc)
+            logger.warning(
+                "stripe_success: could not retrieve session=%s: %s", session_id, exc
+            )
 
     if sub is not None:
         messages.success(request, f"Payment confirmed — you're on {sub.plan.name}.")
@@ -708,7 +817,8 @@ def _activate_stripe_session(session: dict, *, account=None):
         # to the browser that the session belongs to a different account.
         logger.warning(
             "_activate_stripe_session: session account_id=%s does not match caller account=%s",
-            meta["account_id"], account.pk,
+            meta["account_id"],
+            account.pk,
         )
         return None
 
@@ -732,7 +842,10 @@ def _activate_stripe_session(session: dict, *, account=None):
     # above is what actually prevents cross-account activation.
     existing_subscription = getattr(target_account, "subscription", None)
     if existing_subscription is None:
-        logger.error("_activate_stripe_session: no subscription row for account=%s", target_account.pk)
+        logger.error(
+            "_activate_stripe_session: no subscription row for account=%s",
+            target_account.pk,
+        )
         return None
 
     # If this subscription already has a Stripe customer on file (e.g. a
@@ -741,10 +854,15 @@ def _activate_stripe_session(session: dict, *, account=None):
     # id being replayed here.
     existing_customer_id = existing_subscription.stripe_customer_id
     session_customer_id = session.get("customer")
-    if existing_customer_id and session_customer_id and str(existing_customer_id) != str(session_customer_id):
+    if (
+        existing_customer_id
+        and session_customer_id
+        and str(existing_customer_id) != str(session_customer_id)
+    ):
         logger.warning(
             "_activate_stripe_session: session customer=%s does not match existing stripe_customer_id=%s",
-            session_customer_id, existing_customer_id,
+            session_customer_id,
+            existing_customer_id,
         )
         return None
 
@@ -756,7 +874,10 @@ def _activate_stripe_session(session: dict, *, account=None):
         stripe_customer_id=session_customer_id,
         stripe_subscription_id=session["subscription"],
     )
-    logger.info("_activate_stripe_session: activated subscription for account=%s", target_account.pk)
+    logger.info(
+        "_activate_stripe_session: activated subscription for account=%s",
+        target_account.pk,
+    )
     return sub
 
 
@@ -769,9 +890,11 @@ def _handle_stripe_invoice_paid(invoice: dict):
     if not stripe_subscription_id:
         return
 
-    sub = Subscription.objects.select_related("plan", "account").filter(
-        stripe_subscription_id=stripe_subscription_id
-    ).first()
+    sub = (
+        Subscription.objects.select_related("plan", "account")
+        .filter(stripe_subscription_id=stripe_subscription_id)
+        .first()
+    )
     if sub is None:
         logger.warning(
             "_handle_stripe_invoice_paid: no subscription for stripe_subscription_id=%s",
@@ -793,16 +916,19 @@ def _handle_stripe_invoice_paid(invoice: dict):
         stripe_customer_id=sub.stripe_customer_id,
         stripe_subscription_id=sub.stripe_subscription_id,
     )
-    logger.info("_handle_stripe_invoice_paid: renewed subscription for account=%s", sub.account_id)
+    logger.info(
+        "_handle_stripe_invoice_paid: renewed subscription for account=%s",
+        sub.account_id,
+    )
 
 
 def _handle_stripe_payment_failed(invoice: dict):
     stripe_subscription_id = invoice.get("subscription")
     if not stripe_subscription_id:
         return
-    updated = Subscription.objects.filter(stripe_subscription_id=stripe_subscription_id).update(
-        status=Subscription.PAST_DUE
-    )
+    updated = Subscription.objects.filter(
+        stripe_subscription_id=stripe_subscription_id
+    ).update(status=Subscription.PAST_DUE)
     if updated:
         logger.info(
             "_handle_stripe_payment_failed: marked past_due for stripe_subscription_id=%s",
@@ -814,9 +940,9 @@ def _handle_stripe_subscription_deleted(subscription: dict):
     stripe_subscription_id = subscription.get("id")
     if not stripe_subscription_id:
         return
-    updated = Subscription.objects.filter(stripe_subscription_id=stripe_subscription_id).update(
-        status=Subscription.CANCELLED, cancelled_at=timezone.now()
-    )
+    updated = Subscription.objects.filter(
+        stripe_subscription_id=stripe_subscription_id
+    ).update(status=Subscription.CANCELLED, cancelled_at=timezone.now())
     if updated:
         logger.info(
             "_handle_stripe_subscription_deleted: cancelled stripe_subscription_id=%s",
@@ -825,6 +951,7 @@ def _handle_stripe_subscription_deleted(subscription: dict):
 
 
 # --- Manual (offline) payments -------------------------------------------------
+
 
 @login_required
 @require_POST
@@ -857,6 +984,7 @@ def manual_submit(request):
         proof=request.FILES.get("proof"),
     )
     from .tasks import notify_admins_of_manual_payment
+
     notify_admins_of_manual_payment.delay(req.pk)
 
     messages.success(request, "Payment submitted. An admin will review it shortly.")
@@ -866,13 +994,21 @@ def manual_submit(request):
 @admin_required
 @require_POST
 def manual_approve(request, pk):
-    req = get_object_or_404(ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING)
+    req = get_object_or_404(
+        ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING
+    )
     activate_subscription(req.account, req.plan, "manual")
     req.status = ManualPaymentRequest.APPROVED
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "reviewed_by", "reviewed_at"])
-    audit(request, "payment.approve", account=req.account, target=req.plan.name, reference=req.reference)
+    audit(
+        request,
+        "payment.approve",
+        account=req.account,
+        target=req.plan.name,
+        reference=req.reference,
+    )
     messages.success(request, f"Approved — {req.account} is now on {req.plan.name}.")
     return redirect("core:payments")
 
@@ -880,13 +1016,21 @@ def manual_approve(request, pk):
 @admin_required
 @require_POST
 def manual_reject(request, pk):
-    req = get_object_or_404(ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING)
+    req = get_object_or_404(
+        ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING
+    )
     req.status = ManualPaymentRequest.REJECTED
     req.note = (request.POST.get("note") or "").strip()
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "note", "reviewed_by", "reviewed_at"])
-    audit(request, "payment.reject", account=req.account, target=req.plan.name, note=req.note)
+    audit(
+        request,
+        "payment.reject",
+        account=req.account,
+        target=req.plan.name,
+        note=req.note,
+    )
     messages.success(request, "Payment request rejected.")
     return redirect("core:payments")
 
@@ -897,7 +1041,12 @@ def payment_method_toggle(request, pk):
     method = get_object_or_404(PaymentMethod, pk=pk)
     method.is_enabled = not method.is_enabled
     method.save(update_fields=["is_enabled"])
-    audit(request, "payment_method.toggle", target=method.code, is_enabled=method.is_enabled)
+    audit(
+        request,
+        "payment_method.toggle",
+        target=method.code,
+        is_enabled=method.is_enabled,
+    )
     messages.success(
         request, f"'{method.name}' {'enabled' if method.is_enabled else 'disabled'}."
     )

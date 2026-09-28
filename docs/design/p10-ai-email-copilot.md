@@ -85,22 +85,24 @@ billing. Those stay human-only.
 class CopilotSession(models.Model):
     account = FK(Account)
     created_by = FK(User, null=True)
-    title = CharField(blank=True)          # first user message, truncated
+    title = CharField(blank=True)  # first user message, truncated
     token_usage = PositiveIntegerField(default=0)
     created_at, updated_at
+
 
 class CopilotMessage(models.Model):
     session = FK(CopilotSession, related_name="messages")
     role = CharField(choices=["user", "assistant", "tool"])
-    content = JSONField                    # text or tool-call/tool-result blocks
+    content = JSONField  # text or tool-call/tool-result blocks
     created_at
+
 
 class CopilotToolCall(models.Model):
     message = FK(CopilotMessage)
     tool = CharField
     arguments = JSONField
     result = JSONField
-    confirmed_at = DateTimeField(null=True)   # set when a write tool is confirmed
+    confirmed_at = DateTimeField(null=True)  # set when a write tool is confirmed
     latency_ms = PositiveIntegerField(default=0)
 ```
 

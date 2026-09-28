@@ -35,6 +35,19 @@ function registerChat() {
         if (!document.hidden) { this.interval = BASE_INTERVAL; this.schedule(0); }
       };
       document.addEventListener('visibilitychange', this._onVisible);
+      // static/js/vendor/htmx-ext-sse.js turns a "message.created" server event into a
+      // same-named DOM CustomEvent wherever an hx-trigger="sse:message.created" element exists
+      // (see the marker in templates/conversations/_conversation_pane.html); its `detail` is the
+      // raw SSE MessageEvent, so `detail.data` is the JSON string apps/core/realtime.py sent.
+      // Ignored entirely when REALTIME_SSE_ENABLED is off — nothing ever fires this event then,
+      // and the existing poll (above) is what keeps the thread current either way.
+      this._onSseMessage = (e) => {
+        try {
+          const ids = JSON.parse(e.detail.data);
+          if (ids.conversation_id === cfg.id) { this.interval = BASE_INTERVAL; this.schedule(0); }
+        } catch (err) { /* not our conversation's event, or not JSON — ignore */ }
+      };
+      document.addEventListener('sse:message.created', this._onSseMessage);
       this.schedule();
     },
 
@@ -42,6 +55,7 @@ function registerChat() {
       this._destroyed = true;
       clearTimeout(this.timer);
       document.removeEventListener('visibilitychange', this._onVisible);
+      document.removeEventListener('sse:message.created', this._onSseMessage);
     },
 
     // ── rendering ────────────────────────────────────────────────

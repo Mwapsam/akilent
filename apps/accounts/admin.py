@@ -28,7 +28,14 @@ class MembershipAdmin(admin.ModelAdmin):
 
 @admin.register(Invitation)
 class InvitationAdmin(admin.ModelAdmin):
-    list_display = ("email", "account", "role", "invited_by", "created_at", "accepted_at")
+    list_display = (
+        "email",
+        "account",
+        "role",
+        "invited_by",
+        "created_at",
+        "accepted_at",
+    )
     list_filter = ("role", "accepted_at")
     search_fields = ("email", "account__company_name")
     raw_id_fields = ("account", "invited_by")

@@ -9,7 +9,6 @@ def is_operator(user) -> bool:
     return bool(user and user.is_authenticated and user.is_superuser)
 
 
-
 def admin_required(view):
     """Gate an Operator Console view. Anonymous users go to log in; a logged-in business user
     gets a 403, not a login loop, since logging in again wouldn't help."""

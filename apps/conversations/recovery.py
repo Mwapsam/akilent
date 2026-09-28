@@ -10,6 +10,7 @@ Idempotent: a conversation is reminded once per customer message. It is skipped 
 follow-up created since the customer's latest message exists (open or done), and reminded
 again only if the customer writes again and is missed again.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -26,7 +27,9 @@ DEFAULT_MAX_AGE = timedelta(days=7)
 NOTE = "No reply sent - customer has been waiting"
 
 
-def create_missed_followups(now: datetime | None = None, *, max_age: timedelta = DEFAULT_MAX_AGE) -> int:
+def create_missed_followups(
+    now: datetime | None = None, *, max_age: timedelta = DEFAULT_MAX_AGE
+) -> int:
     """Create one due follow-up per missed WhatsApp conversation. Returns how many."""
     now = now or timezone.now()
     missed = list(
@@ -34,8 +37,7 @@ def create_missed_followups(now: datetime | None = None, *, max_age: timedelta =
             Conversation.objects.filter(
                 channel=Conversation.Channel.WHATSAPP, status=Conversation.Status.OPEN
             )
-        )
-        .filter(
+        ).filter(
             _unanswered(),
             last_in__lte=now - INACTIVITY_WINDOW,
             last_in__gte=now - max_age,
@@ -47,7 +49,13 @@ def create_missed_followups(now: datetime | None = None, *, max_age: timedelta =
         .annotate(latest=Max("created_at"))
     )
     followups = [
-        FollowUp(account_id=c.account_id, contact_id=c.contact_id, conversation=c, due_at=now, note=NOTE)
+        FollowUp(
+            account_id=c.account_id,
+            contact_id=c.contact_id,
+            conversation=c,
+            due_at=now,
+            note=NOTE,
+        )
         for c in missed
         if latest_reminder.get(c.pk) is None or latest_reminder[c.pk] < c.last_in
     ]

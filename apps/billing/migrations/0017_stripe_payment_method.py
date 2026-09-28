@@ -5,7 +5,10 @@ def add_stripe_payment_method(apps, schema_editor):
     PaymentMethod = apps.get_model("billing", "PaymentMethod")
     if not PaymentMethod.objects.filter(code="stripe").exists():
         next_sort_order = (
-            PaymentMethod.objects.order_by("-sort_order").values_list("sort_order", flat=True).first() or 0
+            PaymentMethod.objects.order_by("-sort_order")
+            .values_list("sort_order", flat=True)
+            .first()
+            or 0
         ) + 1
         PaymentMethod.objects.create(
             code="stripe",
@@ -21,9 +24,8 @@ def remove_stripe_payment_method(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0016_subscription_billing_period_and_more'),
+        ("billing", "0016_subscription_billing_period_and_more"),
     ]
 
     operations = [

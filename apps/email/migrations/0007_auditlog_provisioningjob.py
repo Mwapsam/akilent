@@ -7,6 +7,7 @@ These are append-only/tracking tables:
 Both have FK to accounts.Account and indexes tuned for the expected query
 patterns (filter by account+status, resource_type+resource_id, timestamp).
 """
+
 from __future__ import annotations
 
 import django.db.models.deletion
@@ -16,7 +17,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("email_service", "0006_emailtrackingevent_emailtrackingtoken"),
         ("accounts", "0001_initial"),
@@ -27,41 +27,61 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ProvisioningJob",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("account", models.ForeignKey(
-                    on_delete=django.db.models.deletion.CASCADE,
-                    related_name="provisioning_jobs",
-                    to="accounts.account",
-                )),
-                ("job_type", models.CharField(
-                    choices=[
-                        ("provision_domain", "Provision Domain"),
-                        ("deprovision_domain", "Deprovision Domain"),
-                        ("provision_mailbox", "Provision Mailbox"),
-                        ("deprovision_mailbox", "Deprovision Mailbox"),
-                        ("change_password", "Change Password"),
-                        ("set_quota", "Set Quota"),
-                        ("rotate_dkim", "Rotate DKIM"),
-                        ("suspend_mailbox", "Suspend Mailbox"),
-                        ("provision_alias", "Provision Alias"),
-                        ("deprovision_alias", "Deprovision Alias"),
-                    ],
-                    max_length=50,
-                )),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="provisioning_jobs",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "job_type",
+                    models.CharField(
+                        choices=[
+                            ("provision_domain", "Provision Domain"),
+                            ("deprovision_domain", "Deprovision Domain"),
+                            ("provision_mailbox", "Provision Mailbox"),
+                            ("deprovision_mailbox", "Deprovision Mailbox"),
+                            ("change_password", "Change Password"),
+                            ("set_quota", "Set Quota"),
+                            ("rotate_dkim", "Rotate DKIM"),
+                            ("suspend_mailbox", "Suspend Mailbox"),
+                            ("provision_alias", "Provision Alias"),
+                            ("deprovision_alias", "Deprovision Alias"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
                 ("resource_type", models.CharField(max_length=50)),
                 ("resource_id", models.CharField(max_length=255)),
-                ("status", models.CharField(
-                    choices=[
-                        ("pending", "Pending"),
-                        ("running", "Running"),
-                        ("success", "Success"),
-                        ("failed", "Failed"),
-                        ("retrying", "Retrying"),
-                    ],
-                    default="pending",
-                    max_length=20,
-                )),
-                ("celery_task_id", models.CharField(blank=True, default="", max_length=255)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("running", "Running"),
+                            ("success", "Success"),
+                            ("failed", "Failed"),
+                            ("retrying", "Retrying"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "celery_task_id",
+                    models.CharField(blank=True, default="", max_length=255),
+                ),
                 ("error", models.TextField(blank=True, default="")),
                 ("attempts", models.PositiveSmallIntegerField(default=0)),
                 ("metadata", models.JSONField(default=dict)),
@@ -97,19 +117,33 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="AuditLog",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("account", models.ForeignKey(
-                    on_delete=django.db.models.deletion.CASCADE,
-                    related_name="email_audit_logs",
-                    to="accounts.account",
-                )),
-                ("actor", models.ForeignKey(
-                    blank=True,
-                    null=True,
-                    on_delete=django.db.models.deletion.SET_NULL,
-                    related_name="+",
-                    to=settings.AUTH_USER_MODEL,
-                )),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_audit_logs",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
                 ("action", models.CharField(max_length=100)),
                 ("resource_type", models.CharField(max_length=50)),
                 ("resource_id", models.CharField(max_length=255)),

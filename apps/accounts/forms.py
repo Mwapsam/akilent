@@ -1,5 +1,9 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordResetForm,
+    UserCreationForm,
+)
 from django.contrib.auth.models import User
 
 from apps.accounts.models import Account, Invitation
@@ -16,21 +20,31 @@ class SignupForm(UserCreationForm):
     hidden fields can't be tampered.
     """
 
-    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={"autocomplete": "email"}))
+    email = forms.EmailField(
+        required=True, widget=forms.EmailInput(attrs={"autocomplete": "email"})
+    )
     first_name = forms.CharField(max_length=150, required=True, label="First name")
     last_name = forms.CharField(max_length=150, required=True, label="Last name")
 
     company_name = forms.CharField(max_length=255, required=True, label="Company name")
-    legal_name = forms.CharField(max_length=255, required=False, label="Legal / registered name")
+    legal_name = forms.CharField(
+        max_length=255, required=False, label="Legal / registered name"
+    )
     website = forms.CharField(max_length=255, required=False)
     industry = forms.CharField(max_length=120, required=False)
     company_size = forms.CharField(max_length=40, required=False, label="Company size")
     phone = forms.CharField(max_length=40, required=True, label="Phone number")
 
-    address_line1 = forms.CharField(max_length=255, required=True, label="Address line 1")
-    address_line2 = forms.CharField(max_length=255, required=False, label="Address line 2")
+    address_line1 = forms.CharField(
+        max_length=255, required=True, label="Address line 1"
+    )
+    address_line2 = forms.CharField(
+        max_length=255, required=False, label="Address line 2"
+    )
     city = forms.CharField(max_length=120, required=True)
-    state_region = forms.CharField(max_length=120, required=False, label="State / region")
+    state_region = forms.CharField(
+        max_length=120, required=False, label="State / region"
+    )
     postal_code = forms.CharField(max_length=40, required=False, label="Postal code")
     country = forms.CharField(max_length=120, required=True)
 
@@ -41,10 +55,25 @@ class SignupForm(UserCreationForm):
     class Meta:
         model = User
         fields = (
-            "email", "first_name", "last_name", "company_name", "legal_name",
-            "website", "industry", "company_size", "phone", "address_line1",
-            "address_line2", "city", "state_region", "postal_code", "country",
-            "selected_services", "plan", "password1", "password2",
+            "email",
+            "first_name",
+            "last_name",
+            "company_name",
+            "legal_name",
+            "website",
+            "industry",
+            "company_size",
+            "phone",
+            "address_line1",
+            "address_line2",
+            "city",
+            "state_region",
+            "postal_code",
+            "country",
+            "selected_services",
+            "plan",
+            "password1",
+            "password2",
         )
 
     def clean_email(self):
@@ -107,11 +136,20 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "email")
-        labels = {"first_name": "First name", "last_name": "Last name", "email": "Email"}
+        labels = {
+            "first_name": "First name",
+            "last_name": "Last name",
+            "email": "Email",
+        }
 
     def clean_email(self):
         email = self.cleaned_data["email"]
-        if email and User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+        if (
+            email
+            and User.objects.filter(email__iexact=email)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        ):
             raise forms.ValidationError("Another account already uses this email.")
         return email
 
@@ -142,10 +180,16 @@ class PasswordResetForm(PasswordResetForm):
     """
 
     def send_mail(
-        self, subject_template_name, email_template_name, context, from_email,
-        to_email, html_email_template_name=None,
+        self,
+        subject_template_name,
+        email_template_name,
+        context,
+        from_email,
+        to_email,
+        html_email_template_name=None,
     ):
         from django.template.loader import render_to_string
+
         from apps.email.services.send import send_system_email
 
         subject = render_to_string(subject_template_name, context).strip()
@@ -177,8 +221,13 @@ class BusinessAddressForm(forms.ModelForm):
     class Meta:
         model = Account
         fields = (
-            "legal_name", "address_line1", "address_line2", "city",
-            "state_region", "postal_code", "country",
+            "legal_name",
+            "address_line1",
+            "address_line2",
+            "city",
+            "state_region",
+            "postal_code",
+            "country",
         )
         labels = {
             "legal_name": "Legal / registered name",

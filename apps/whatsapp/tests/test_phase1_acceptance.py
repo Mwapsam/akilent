@@ -5,8 +5,8 @@ most recently - through the real inbound -> reply -> status -> close path.
 All three outbound paths (human reply, template reply, workflow reply) must land in
 ``conversations.Message``, and the inbox must not consult ``MessageLog`` to show it.
 """
-import time
-from datetime import datetime, timedelta, timezone as dt_timezone
+
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
@@ -22,10 +22,16 @@ from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, Message
 from apps.conversations.state import ConversationState as S
 from apps.conversations.state import get_conversation_state, missed, needs_attention
-from apps.whatsapp.models import MessageLog, MessageTemplate, OutboundMessage, WebhookEventLog, WhatsAppContact
+from apps.whatsapp.models import (
+    MessageLog,
+    MessageTemplate,
+    OutboundMessage,
+    WebhookEventLog,
+    WhatsAppContact,
+)
 from apps.whatsapp.providers import WhatsAppProviderError
-from apps.whatsapp.tasks import _handle_inbound_message, drain_outbound_queue as REAL_DRAIN
-from apps.whatsapp.tasks import process_whatsapp_event
+from apps.whatsapp.tasks import _handle_inbound_message, process_whatsapp_event
+from apps.whatsapp.tasks import drain_outbound_queue as REAL_DRAIN
 from apps.whatsapp.tests.test_auto_reply import PHONE, WA_ID, Base
 
 TASKS = "apps.whatsapp.tasks"
@@ -45,7 +51,7 @@ class Clock:
 class PhaseOneAcceptanceTest(Base):
     def setUp(self):
         super().setUp()
-        cache.clear()   # tasks caches the automation-events flag process-wide for 60s
+        cache.clear()  # tasks caches the automation-events flag process-wide for 60s
         self.addCleanup(cache.clear)
         self.clock = Clock()
         for target, kwargs in (
@@ -64,7 +70,9 @@ class PhaseOneAcceptanceTest(Base):
         self.fail_next_send = False
 
         self.user = User.objects.create_user("agent", "a@example.com", "pw")
-        Membership.objects.create(user=self.user, account=self.account, role=Membership.Role.OWNER)
+        Membership.objects.create(
+            user=self.user, account=self.account, role=Membership.Role.OWNER
+        )
         self.client.force_login(self.user)
 
     def _fake_send(self, provider, contact, payload):
@@ -78,20 +86,64 @@ class PhaseOneAcceptanceTest(Base):
 
     # -- helpers ------------------------------------------------------------------------
     def customer_says(self, text, msg_id):
-        body = {"entry": [{"changes": [{"field": "messages", "value": {
-            "metadata": {"phone_number_id": "PNID"},
-            "contacts": [{"profile": {"name": "Mary"}}],
-            "messages": [{"from": WA_ID, "id": msg_id, "timestamp": str(int(self.clock.now.timestamp())),
-                          "type": "text", "text": {"body": text}}]}}]}]}
-        event = WebhookEventLog.objects.create(source="whatsapp", event_type="message", payload=body)
+        body = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "metadata": {"phone_number_id": "PNID"},
+                                "contacts": [{"profile": {"name": "Mary"}}],
+                                "messages": [
+                                    {
+                                        "from": WA_ID,
+                                        "id": msg_id,
+                                        "timestamp": str(
+                                            int(self.clock.now.timestamp())
+                                        ),
+                                        "type": "text",
+                                        "text": {"body": text},
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                }
+            ]
+        }
+        event = WebhookEventLog.objects.create(
+            source="whatsapp", event_type="message", payload=body
+        )
         _handle_inbound_message(event)
 
     def status_webhook(self, message_id, status):
-        body = {"entry": [{"changes": [{"field": "messages", "value": {
-            "metadata": {"phone_number_id": "PNID"},
-            "statuses": [{"id": message_id, "status": status,
-                          "timestamp": str(int(self.clock.now.timestamp()))}]}}]}]}
-        event = WebhookEventLog.objects.create(source="whatsapp", event_type="status", payload=body)
+        body = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "metadata": {"phone_number_id": "PNID"},
+                                "statuses": [
+                                    {
+                                        "id": message_id,
+                                        "status": status,
+                                        "timestamp": str(
+                                            int(self.clock.now.timestamp())
+                                        ),
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                }
+            ]
+        }
+        event = WebhookEventLog.objects.create(
+            source="whatsapp", event_type="status", payload=body
+        )
         process_whatsapp_event(event.id)
 
     def drain(self):
@@ -118,11 +170,16 @@ class PhaseOneAcceptanceTest(Base):
         self.assertTrue(self.in_attention())
 
         # 2. HUMAN reply through the inbox -> lands in the spine, customer now waited on
-        resp = self.client.post(f"/inbox/{self.convo.public_id}/", {"action": "reply", "body": "Yes, K8,500"})
+        resp = self.client.post(
+            f"/inbox/{self.convo.public_id}/",
+            {"action": "reply", "body": "Yes, K8,500"},
+        )
         self.assertEqual(resp.status_code, 302)
         self.drain()
         s = self.state()
-        self.assertEqual((s.state, s.last_speaker), (S.WAITING_FOR_CUSTOMER, "business"))
+        self.assertEqual(
+            (s.state, s.last_speaker), (S.WAITING_FOR_CUSTOMER, "business")
+        )
         self.assertEqual(s.first_response_seconds, 4 * 60)
         self.assertFalse(self.in_attention())
         reply = Message.objects.get(conversation=self.convo, direction="outbound")
@@ -147,16 +204,33 @@ class PhaseOneAcceptanceTest(Base):
 
         # 5. TEMPLATE reply (agent-sent template) lands in the spine
         template = MessageTemplate.objects.create(
-            account=self.account, name="Delivery info", whatsapp_template_name="delivery_info",
-            content="We deliver in 2 days", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-            category=MessageTemplate.Category.UTILITY)
+            account=self.account,
+            name="Delivery info",
+            whatsapp_template_name="delivery_info",
+            content="We deliver in 2 days",
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+            category=MessageTemplate.Category.UTILITY,
+        )
         wa = WhatsAppContact.objects.get(account=self.account, phone_number=PHONE)
         OutboundMessage.objects.create(
-            account=self.account, contact=wa, template=template,
-            payload={"type": "template", "template_name": "delivery_info", "language": "en", "params": {}})
+            account=self.account,
+            contact=wa,
+            template=template,
+            payload={
+                "type": "template",
+                "template_name": "delivery_info",
+                "language": "en",
+                "params": {},
+            },
+        )
         self.drain()
         self.assertEqual(self.state().state, S.WAITING_FOR_CUSTOMER)
-        self.assertEqual(Message.objects.filter(conversation=self.convo, direction="outbound").count(), 2)
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.convo, direction="outbound"
+            ).count(),
+            2,
+        )
 
         # 6. WORKFLOW reply lands in the spine
         self.clock.tick(minutes=5)
@@ -165,21 +239,41 @@ class PhaseOneAcceptanceTest(Base):
         self.assertEqual(self.state().state, S.WAITING_FOR_AGENT)
         contact = Contact.objects.get(account=self.account, phone=PHONE)
         workflow = Workflow.objects.create(
-            account=self.account, name="Confirm", status=Workflow.Status.PUBLISHED,
-            definition={"trigger": {"type": "manual"}, "steps": [
-                {"id": "a", "type": "send_whatsapp", "template": "delivery_info", "next": "b"},
-                {"id": "b", "type": "stop"}]})
+            account=self.account,
+            name="Confirm",
+            status=Workflow.Status.PUBLISHED,
+            definition={
+                "trigger": {"type": "manual"},
+                "steps": [
+                    {
+                        "id": "a",
+                        "type": "send_whatsapp",
+                        "template": "delivery_info",
+                        "next": "b",
+                    },
+                    {"id": "b", "type": "stop"},
+                ],
+            },
+        )
         enroll(workflow, contact)
         self.drain()
         self.assertEqual(self.state().state, S.WAITING_FOR_CUSTOMER)
-        self.assertEqual(Message.objects.filter(conversation=self.convo, direction="outbound").count(), 3)
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.convo, direction="outbound"
+            ).count(),
+            3,
+        )
 
         # 7. a FAILED reply is visible in the thread but leaves the customer waiting
         self.clock.tick(minutes=5)
         self.customer_says("Hello? Any update?", "wamid.IN4")
         self.clock.tick(minutes=1)
         self.fail_next_send = True
-        self.client.post(f"/inbox/{self.convo.public_id}/", {"action": "reply", "body": "Sorry for the wait"})
+        self.client.post(
+            f"/inbox/{self.convo.public_id}/",
+            {"action": "reply", "body": "Sorry for the wait"},
+        )
         self.drain()
         failed = Message.objects.get(conversation=self.convo, body="Sorry for the wait")
         self.assertEqual(failed.status, "failed")
@@ -197,10 +291,16 @@ class PhaseOneAcceptanceTest(Base):
         self.clock.tick(minutes=30)
         self.customer_says("Actually, I changed my mind", "wamid.IN6")
         self.assertEqual(Conversation.objects.filter(account=self.account).count(), 2)
-        fresh = Conversation.objects.filter(account=self.account).exclude(id=stopped.id).get()
+        fresh = (
+            Conversation.objects.filter(account=self.account)
+            .exclude(id=stopped.id)
+            .get()
+        )
         self.assertEqual(get_conversation_state(fresh).state, S.WAITING_FOR_AGENT)
         self.assertIn(fresh.id, {c.id for c in needs_attention(self.account)})
-        self.assertEqual(get_conversation_state(stopped).state, S.CLOSED)   # the old one stays closed
+        self.assertEqual(
+            get_conversation_state(stopped).state, S.CLOSED
+        )  # the old one stays closed
 
     def test_explicit_close_then_customer_message_reopens_the_same_conversation(self):
         self.customer_says("Hi", "wamid.IN1")
@@ -228,8 +328,16 @@ class PhaseOneAcceptanceTest(Base):
         with CaptureQueriesContext(connection) as ctx:
             resp = self.client.get("/inbox/?view=needs_attention")
         self.assertEqual(resp.status_code, 200)
-        self.assertTrue([q for q in ctx.captured_queries if "conversations_conversation" in q["sql"]])
-        self.assertFalse([q for q in ctx.captured_queries if "whatsapp_messagelog" in q["sql"]])
+        self.assertTrue(
+            [
+                q
+                for q in ctx.captured_queries
+                if "conversations_conversation" in q["sql"]
+            ]
+        )
+        self.assertFalse(
+            [q for q in ctx.captured_queries if "whatsapp_messagelog" in q["sql"]]
+        )
         # The waiting age is shown, in the inbox's compact form ("3m" rather
         # than timesince's "3 minutes", which crowded names out on a phone),
         # on the time element marked as a wait rather than plain last activity.
@@ -238,9 +346,18 @@ class PhaseOneAcceptanceTest(Base):
 
     def test_replaying_the_same_send_does_not_duplicate_the_spine_message(self):
         self.customer_says("Hi", "wamid.IN1")
-        self.clock.tick(minutes=1)      # OutboundMessage.scheduled_at binds the real clock at import
-        self.client.post(f"/inbox/{self.convo.public_id}/", {"action": "reply", "body": "Hello"})
+        self.clock.tick(
+            minutes=1
+        )  # OutboundMessage.scheduled_at binds the real clock at import
+        self.client.post(
+            f"/inbox/{self.convo.public_id}/", {"action": "reply", "body": "Hello"}
+        )
         self.drain()
         self.drain()
-        self.assertEqual(Message.objects.filter(conversation=self.convo, direction="outbound").count(), 1)
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.convo, direction="outbound"
+            ).count(),
+            1,
+        )
         self.assertEqual(MessageLog.objects.filter(direction="out").count(), 1)

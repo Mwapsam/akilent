@@ -1,19 +1,18 @@
 """Official Python SDK for the Akilent email API.
 
-    from akilent import Akilent
+from akilent import Akilent
 
-    client = Akilent(api_key="ak_live_…")
-    client.messages.send(from_="billing@acme.com", to="user@example.com",
-                         subject="Receipt", text="Thanks!")
+client = Akilent(api_key="ak_live_…")
+client.messages.send(from_="billing@acme.com", to="user@example.com",
+                     subject="Receipt", text="Thanks!")
 """
+
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import httpx
-
-from ._transport import Transport, _DEFAULT_BASE_URL
 from . import webhooks
+from ._transport import _DEFAULT_BASE_URL, Transport
 from .errors import (
     AkilentError,
     APIConnectionError,
@@ -27,6 +26,9 @@ from .errors import (
     ValidationError,
 )
 from .resources import Campaigns, Messages, RequestLogs, Templates
+
+if TYPE_CHECKING:
+    import httpx
 
 __version__ = "0.1.0"
 __all__ = [
@@ -53,7 +55,7 @@ class Akilent:
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = 30.0,
         max_retries: int = 2,
-        http_client: Optional[httpx.Client] = None,
+        http_client: httpx.Client | None = None,
     ) -> None:
         self._transport = Transport(
             api_key,
@@ -70,7 +72,7 @@ class Akilent:
     def close(self) -> None:
         self._transport.close()
 
-    def __enter__(self) -> "Akilent":
+    def __enter__(self) -> Akilent:
         return self
 
     def __exit__(self, *exc: object) -> None:

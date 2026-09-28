@@ -1,4 +1,5 @@
 """Follow-up completion and per-assignee team performance."""
+
 from datetime import timedelta
 
 import pytest
@@ -20,9 +21,13 @@ def account(db):
 
 
 def followup(account, *, due_days_ago, done=False):
-    contact = Contact.objects.create(account=account, phone=f"+26097{FollowUp.objects.count():07d}")
+    contact = Contact.objects.create(
+        account=account, phone=f"+26097{FollowUp.objects.count():07d}"
+    )
     return FollowUp.objects.create(
-        account=account, contact=contact, due_at=NOW - timedelta(days=due_days_ago),
+        account=account,
+        contact=contact,
+        due_at=NOW - timedelta(days=due_days_ago),
         done_at=NOW if done else None,
     )
 
@@ -34,15 +39,25 @@ def user_in(account, name):
 
 
 def convo(account, assignee, *messages):
-    contact = Contact.objects.create(account=account, phone=f"+26097{Conversation.objects.count() + 5000000}")
+    contact = Contact.objects.create(
+        account=account, phone=f"+26097{Conversation.objects.count() + 5000000}"
+    )
     c = Conversation.objects.create(
-        account=account, contact=contact, channel="whatsapp", assigned_to=assignee,
+        account=account,
+        contact=contact,
+        channel="whatsapp",
+        assigned_to=assignee,
         last_message_at=NOW - timedelta(minutes=min(m[1] for m in messages)),
     )
     for direction, minutes_ago, status in messages:
         Message.objects.create(
-            account=account, conversation=c, direction=direction, body="x", status=status,
-            timestamp=NOW - timedelta(minutes=minutes_ago))
+            account=account,
+            conversation=c,
+            direction=direction,
+            body="x",
+            status=status,
+            timestamp=NOW - timedelta(minutes=minutes_ago),
+        )
     return c
 
 
@@ -50,10 +65,12 @@ def convo(account, assignee, *messages):
 def test_followup_completion_counts_only_those_that_fell_due_in_the_window(account):
     followup(account, due_days_ago=2, done=True)
     followup(account, due_days_ago=3, done=False)
-    followup(account, due_days_ago=45, done=False)   # outside 30 days: not in the rate...
+    followup(
+        account, due_days_ago=45, done=False
+    )  # outside 30 days: not in the rate...
     result = followup_completion(account, now=NOW)
     assert (result["due"], result["completed"], result["completion_pct"]) == (2, 1, 50)
-    assert result["overdue"] == 2                    # ...but still overdue
+    assert result["overdue"] == 2  # ...but still overdue
 
 
 @pytest.mark.django_db
@@ -77,15 +94,27 @@ def test_followup_completion_is_scoped_to_the_account(account):
 @pytest.mark.django_db
 def test_team_performance_per_assignee(account):
     ada, sam = user_in(account, "ada"), user_in(account, "sam")
-    convo(account, ada, (IN, 120, "delivered"), (OUT, 100, "delivered"))    # answered in 20 min
-    convo(account, ada, (IN, 60, "delivered"), (OUT, 30, "delivered"))      # answered in 30 min
-    convo(account, sam, (IN, 45, "delivered"))                              # customer waiting
-    convo(account, None, (IN, 45, "delivered"))                             # unassigned: not counted
+    convo(
+        account, ada, (IN, 120, "delivered"), (OUT, 100, "delivered")
+    )  # answered in 20 min
+    convo(
+        account, ada, (IN, 60, "delivered"), (OUT, 30, "delivered")
+    )  # answered in 30 min
+    convo(account, sam, (IN, 45, "delivered"))  # customer waiting
+    convo(account, None, (IN, 45, "delivered"))  # unassigned: not counted
 
     rows = {r["name"]: r for r in team_performance(account, now=NOW)}
     assert set(rows) == {"ada", "sam"}
-    assert (rows["ada"]["conversations"], rows["ada"]["waiting"], rows["ada"]["avg_first_reply_minutes"]) == (2, 0, 25)
-    assert (rows["sam"]["conversations"], rows["sam"]["waiting"], rows["sam"]["avg_first_reply_minutes"]) == (1, 1, None)
+    assert (
+        rows["ada"]["conversations"],
+        rows["ada"]["waiting"],
+        rows["ada"]["avg_first_reply_minutes"],
+    ) == (2, 0, 25)
+    assert (
+        rows["sam"]["conversations"],
+        rows["sam"]["waiting"],
+        rows["sam"]["avg_first_reply_minutes"],
+    ) == (1, 1, None)
 
 
 @pytest.mark.django_db
@@ -97,7 +126,9 @@ def test_team_rows_are_ordered_by_customers_waiting(account):
 
 
 @pytest.mark.django_db
-def test_team_performance_ignores_conversations_outside_the_window_and_other_accounts(account):
+def test_team_performance_ignores_conversations_outside_the_window_and_other_accounts(
+    account,
+):
     ada = user_in(account, "ada")
     old = convo(account, ada, (IN, 60 * 24 * 40, "delivered"))
     other = Account.objects.create(company_name="Other")

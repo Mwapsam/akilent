@@ -34,7 +34,7 @@ def _themes():
     table with the [data-theme="dark"] overrides applied on top.
     """
     dark_start = CSS.index(':root[data-theme="dark"]')
-    light = _declarations(CSS[:CSS.index("@media (prefers-color-scheme: dark)")])
+    light = _declarations(CSS[: CSS.index("@media (prefers-color-scheme: dark)")])
     dark_block = CSS[dark_start:]
     dark_block = dark_block[: dark_block.index("\n}")]
     dark = dict(light)
@@ -45,13 +45,13 @@ def _themes():
 def _resolve(name, table, seen=None):
     """Follow var() indirection to a literal hex."""
     seen = seen or set()
-    assert name not in seen, "circular token reference at %s" % name
+    assert name not in seen, f"circular token reference at {name}"
     seen.add(name)
     value = table[name]
     ref = re.fullmatch(r"var\((--[\w-]+)\)", value)
     if ref:
         return _resolve(ref.group(1), table, seen)
-    assert re.fullmatch(r"#[0-9A-Fa-f]{6}", value), "%s is not a plain hex: %s" % (name, value)
+    assert re.fullmatch(r"#[0-9A-Fa-f]{6}", value), f"{name} is not a plain hex: {value}"
     return value
 
 
@@ -62,7 +62,7 @@ def _channel(c):
 
 def _luminance(hex_colour):
     h = hex_colour.lstrip("#")
-    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
     return 0.2126 * _channel(r) + 0.7152 * _channel(g) + 0.0722 * _channel(b)
 
 
@@ -77,8 +77,13 @@ def test_contrast_helper_matches_known_values():
     assert round(contrast("#ffffff", "#ffffff"), 2) == 1.0
 
 
-FOREGROUNDS = ["--color-ink", "--color-ink-muted", "--color-ink-subtle",
-               "--color-accent", "--color-accent-strong"]
+FOREGROUNDS = [
+    "--color-ink",
+    "--color-ink-muted",
+    "--color-ink-subtle",
+    "--color-accent",
+    "--color-accent-strong",
+]
 BACKGROUNDS = ["--color-surface", "--color-canvas", "--color-surface-muted"]
 
 
@@ -90,10 +95,9 @@ def test_text_tokens_meet_aa_on_every_surface(theme):
         for bg in BACKGROUNDS:
             value = contrast(_resolve(fg, table), _resolve(bg, table))
             if value < AA_BODY_TEXT:
-                failures.append("%s on %s = %.2f:1" % (fg, bg, value))
+                failures.append(f"{fg} on {bg} = {value:.2f}:1")
     assert not failures, (
-        "%s theme: these text/background pairs fall below WCAG AA (%.1f:1): %s"
-        % (theme, AA_BODY_TEXT, failures)
+        f"{theme} theme: these text/background pairs fall below WCAG AA ({AA_BODY_TEXT:.1f}:1): {failures}"
     )
 
 
@@ -108,7 +112,4 @@ def test_hovering_a_link_never_reduces_its_contrast(theme):
     surface = _resolve("--color-surface", table)
     rest = contrast(_resolve("--color-accent", table), surface)
     hover = contrast(_resolve("--color-accent-strong", table), surface)
-    assert hover >= rest, (
-        "%s theme: hover contrast %.2f:1 is below resting %.2f:1"
-        % (theme, hover, rest)
-    )
+    assert hover >= rest, f"{theme} theme: hover contrast {hover:.2f}:1 is below resting {rest:.2f}:1"

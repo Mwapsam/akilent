@@ -9,6 +9,7 @@ x:Domain, x:Account and x:MailingList shapes are all confirmed live
 still read defensively and fall back to sane defaults rather than raising,
 since Stalwart's schemas allow most fields to be null/absent.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -38,13 +39,17 @@ def adapt_domain_object(
     obj: dict[str, Any], domain_name: str, dkim: DkimRecord | None = None
 ) -> DomainInfo:
     is_enabled = obj.get("isEnabled")
-    status = DomainStatus.ACTIVE if (is_enabled is None or is_enabled) else DomainStatus.DISABLED
+    status = (
+        DomainStatus.ACTIVE
+        if (is_enabled is None or is_enabled)
+        else DomainStatus.DISABLED
+    )
     return DomainInfo(
         domain=obj.get("name") or domain_name,
         status=status,
         dkim=dkim,
-        max_accounts=None,    # not exposed by x:Domain; enforced in Django billing
-        disk_quota_mb=None,   # not exposed by x:Domain; enforced in Django billing
+        max_accounts=None,  # not exposed by x:Domain; enforced in Django billing
+        disk_quota_mb=None,  # not exposed by x:Domain; enforced in Django billing
         description=obj.get("description") or "",
     )
 
@@ -83,7 +88,9 @@ def choose_dkim_signature(
     """
     if not sigs:
         return None
-    chosen = next((s for s in sigs if selector and selector in (s.get("selector") or "")), None)
+    chosen = next(
+        (s for s in sigs if selector and selector in (s.get("selector") or "")), None
+    )
     if chosen is None:
         chosen = next((s for s in sigs if "Rsa" in (s.get("@type") or "")), sigs[0])
     return chosen
@@ -99,7 +106,9 @@ def adapt_account_object(obj: dict[str, Any], email: str) -> MailboxInfo:
     quota = QuotaInfo(used_mb=_bytes_to_mb(used), limit_mb=_bytes_to_mb(quota_limit))
 
     permissions = obj.get("permissions") or {}
-    disabled = permissions.get("@type") == "Replace" and not permissions.get("enabledPermissions")
+    disabled = permissions.get("@type") == "Replace" and not permissions.get(
+        "enabledPermissions"
+    )
     status = MailboxStatus.SUSPENDED if disabled else MailboxStatus.ACTIVE
 
     roles = obj.get("roles") or {}

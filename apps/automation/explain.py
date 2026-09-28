@@ -5,6 +5,7 @@ module is the only place that turns them into sentences, so copy can change with
 automations run. Each explanation is simple first: a headline the owner can act on, an optional
 fix button, and the details only when asked for.
 """
+
 from __future__ import annotations
 
 from django.urls import reverse
@@ -26,15 +27,24 @@ def describe_verdict(verdict: dict) -> dict:
         error = d.get("error")
         run = d["run"]
         if error:
-            headline, detail = "Started, but the reply didn't go out.", humanise_step_error(error)
+            headline, detail = (
+                "Started, but the reply didn't go out.",
+                humanise_step_error(error),
+            )
             tone = PROBLEM
         elif run.status in ("waiting", "active"):
-            headline, detail, tone = "Started. It's waiting for the next step.", "", WAITING
+            headline, detail, tone = (
+                "Started. It's waiting for the next step.",
+                "",
+                WAITING,
+            )
         else:
             headline, detail, tone = "Replied.", "", REPLIED
     elif code == "not_on":
         paused = d.get("status") == "archived"
-        headline = "Didn't reply. This automation is " + ("turned off." if paused else "not turned on yet.")
+        headline = "Didn't reply. This automation is " + (
+            "turned off." if paused else "not turned on yet."
+        )
         detail, tone = "", NOT_REPLIED
         fix = {"label": "Turn it on", "url": edit}
     elif code == "not_new_customer":
@@ -45,7 +55,10 @@ def describe_verdict(verdict: dict) -> dict:
             f"Didn't reply. It answers messages with {_words(d.get('expected') or [])}, "
             f"but the customer said “{(d.get('received') or '').strip()[:80]}”."
         )
-        detail, tone = "You can change the words it listens for when you set it up.", NOT_REPLIED
+        detail, tone = (
+            "You can change the words it listens for when you set it up.",
+            NOT_REPLIED,
+        )
     elif code == "reply_mismatch":
         headline = "Didn't reply. It only follows one particular button the customer didn't tap."
         detail, tone = "", NOT_REPLIED
@@ -65,18 +78,39 @@ def describe_verdict(verdict: dict) -> dict:
             "for the whole site or your plan, or a condition of its own that this customer didn't meet."
         )
         tone = NOT_REPLIED
-    return {"name": name, "tone": tone, "headline": headline, "detail": detail, "fix": fix}
+    return {
+        "name": name,
+        "tone": tone,
+        "headline": headline,
+        "detail": detail,
+        "fix": fix,
+    }
 
 
 # Substrings of engine and send errors, in the order they are checked.
 _ERRORS = (
-    ("no value for", "This customer has no value for one of the blanks in your message, and no fallback was set."),
-    ("24-hour", "The 24-hour window for replying freely had already closed. Only an approved message can be sent now."),
-    ("24h", "The 24-hour window for replying freely had already closed. Only an approved message can be sent now."),
-    ("window", "The 24-hour window for replying freely had already closed. Only an approved message can be sent now."),
+    (
+        "no value for",
+        "This customer has no value for one of the blanks in your message, and no fallback was set.",
+    ),
+    (
+        "24-hour",
+        "The 24-hour window for replying freely had already closed. Only an approved message can be sent now.",
+    ),
+    (
+        "24h",
+        "The 24-hour window for replying freely had already closed. Only an approved message can be sent now.",
+    ),
+    (
+        "window",
+        "The 24-hour window for replying freely had already closed. Only an approved message can be sent now.",
+    ),
     ("opted out", "This customer opted out of messages, so nothing is sent to them."),
     ("opt-out", "This customer opted out of messages, so nothing is sent to them."),
-    ("not approved", "The message hasn't been approved by WhatsApp yet, so it can't be sent."),
+    (
+        "not approved",
+        "The message hasn't been approved by WhatsApp yet, so it can't be sent.",
+    ),
     ("not found", "The message this automation uses no longer exists."),
     ("isn't on your team", "The teammate it should notify is no longer on your team."),
     ("nobody on your team", "There is nobody on your team to hand this to."),
@@ -94,7 +128,9 @@ def humanise_step_error(error: str) -> str:
     return "Something went wrong sending this. Try again, or contact support if it keeps happening."
 
 
-def describe_step(step_type: str, status: str, result: dict, step: dict | None = None) -> dict:
+def describe_step(
+    step_type: str, status: str, result: dict, step: dict | None = None
+) -> dict:
     """One executed step as ``{"ok": bool, "text": str}``, for the "what happened" timeline."""
     step, result = step or {}, result or {}
     if status == "error":
@@ -108,14 +144,18 @@ def describe_step(step_type: str, status: str, result: dict, step: dict | None =
         "send_list": lambda: "Sent a menu list",
         "wait_for_reply": lambda: (
             f"Customer chose “{(result.get('reply') or {}).get('title') or result.get('went_to', '')}”"
-            if result.get("reply") else "Waited for the customer's answer"),
+            if result.get("reply")
+            else "Waited for the customer's answer"
+        ),
         "add_tag": lambda: f"Tagged them “{step.get('tag', '')}”",
         "remove_tag": lambda: f"Removed the tag “{step.get('tag', '')}”",
         "create_lead": lambda: "Marked as interested",
         "update_lead_status": lambda: f"Marked as {step.get('status', 'updated')}",
         "assign_conversation": lambda: (
-            "Assigned the conversation to a teammate" if result.get("changed", True)
-            else "Left the conversation with its current owner"),
+            "Assigned the conversation to a teammate"
+            if result.get("changed", True)
+            else "Left the conversation with its current owner"
+        ),
         "notify_team": lambda: f"Told your team ({result.get('notified', 0)} notified)",
         "wait": lambda: "Waited",
         "branch": lambda: "Checked a condition",
@@ -144,11 +184,23 @@ def _when(trigger: dict) -> str:
     match = trigger.get("match") or {}
     words = _words(match.get("any") or [])
     if kind == "conversation.message_received":
-        how = {"starts_with": "starts with", "exact": "is exactly"}.get(match.get("mode"), "mentions")
-        return f"a customer's message {how} {words}" if match else "a customer messages you"
+        how = {"starts_with": "starts with", "exact": "is exactly"}.get(
+            match.get("mode"), "mentions"
+        )
+        return (
+            f"a customer's message {how} {words}"
+            if match
+            else "a customer messages you"
+        )
     if kind == "contact.created":
         return "someone messages you for the first time"
-    return trigger_label(kind, trigger.get("name", "")).lower().removeprefix("when ").strip() or "something happens"
+    return (
+        trigger_label(kind, trigger.get("name", ""))
+        .lower()
+        .removeprefix("when ")
+        .strip()
+        or "something happens"
+    )
 
 
 def _step_sentence(step: dict) -> str | None:
@@ -178,10 +230,15 @@ def _step_sentence(step: dict) -> str | None:
     if t == "update_lead_status":
         return f"marks them as {step.get('status', 'updated')}"
     if t == "assign_conversation":
-        return "gives the conversation to " + (step["to"] if step.get("to") else "your least busy teammate")
+        return "gives the conversation to " + (
+            step["to"] if step.get("to") else "your least busy teammate"
+        )
     if t == "notify_team":
         to = step.get("to") or "owners"
-        who = {"owners": "your owners and admins", "assignee": "the teammate looking after them"}.get(to, to)
+        who = {
+            "owners": "your owners and admins",
+            "assignee": "the teammate looking after them",
+        }.get(to, to)
         return f"emails {who}"
     if t == "branch":
         if step.get("field") == "within_business_hours":
@@ -210,7 +267,9 @@ def explain_definition(definition: dict) -> dict:
         wont.append("The customer's message doesn't match the words it listens for.")
     if trigger.get("cooldown_minutes") or trigger.get("match"):
         minutes = trigger.get("cooldown_minutes", 60)
-        wont.append(f"It already ran for this customer in the last {_duration(int(minutes) * 60)}.")
+        wont.append(
+            f"It already ran for this customer in the last {_duration(int(minutes) * 60)}."
+        )
     if types & {"reply_text", "send_buttons", "send_list"}:
         wont.append("The 24-hour window for replying to this customer has closed.")
     if types & {"reply_text", "send_buttons", "send_list", "send_whatsapp"}:

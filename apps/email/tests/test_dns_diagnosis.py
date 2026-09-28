@@ -3,10 +3,11 @@
 The core invariant: a lookup that timed out or failed is never reported as
 "missing" -- that would tell a tenant to add a record they already added.
 """
+
 import pytest
 
 from apps.email import dnscheck, dnshost
-from apps.email.dnscheck import NXDOMAIN, NOANSWER, SERVFAIL, TIMEOUT, Answer
+from apps.email.dnscheck import NOANSWER, NXDOMAIN, SERVFAIL, TIMEOUT, Answer
 
 ZONE, DOMAIN = "acme.com", "mail.acme.com"
 MX = "feedback-smtp.us-east-1.amazonses.com"
@@ -24,13 +25,25 @@ def _patch(monkeypatch, *, txt=None, cname=None, mx=None, a=None):
 
 
 def _row(key, rtype, name, value, priority=None):
-    return {"key": key, "type": rtype, "name": name, "value": value, "priority": priority}
+    return {
+        "key": key,
+        "type": rtype,
+        "name": name,
+        "value": value,
+        "priority": priority,
+    }
 
 
 MX_ROW = _row("mfmx", "MX", "bounce.mail.acme.com", MX, 10)
-SPF_ROW = _row("mfspf", "TXT", "bounce.mail.acme.com", "v=spf1 include:amazonses.com ~all")
-DKIM_ROW = _row("dkim", "CNAME", "tok1._domainkey.mail.acme.com", "tok1.dkim.amazonses.com")
-VERIFY_ROW = _row("verify", "TXT", "mail.acme.com", "automator-domain-verification=abc123")
+SPF_ROW = _row(
+    "mfspf", "TXT", "bounce.mail.acme.com", "v=spf1 include:amazonses.com ~all"
+)
+DKIM_ROW = _row(
+    "dkim", "CNAME", "tok1._domainkey.mail.acme.com", "tok1.dkim.amazonses.com"
+)
+VERIFY_ROW = _row(
+    "verify", "TXT", "mail.acme.com", "automator-domain-verification=abc123"
+)
 
 
 def _diag(row):
@@ -39,11 +52,14 @@ def _diag(row):
 
 # --- Found / missing ---------------------------------------------------------
 
+
 def test_found_records_are_ok(monkeypatch):
     _patch(
         monkeypatch,
-        txt={"bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
-             "mail.acme.com": ["automator-domain-verification=abc123"]},
+        txt={
+            "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
+            "mail.acme.com": ["automator-domain-verification=abc123"],
+        },
         cname={"tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."]},
         mx={"bounce.mail.acme.com": [(10, MX + ".")]},
     )
@@ -60,6 +76,7 @@ def test_absent_record_is_not_added_yet(monkeypatch):
 
 
 # --- Timeout is never "missing" ----------------------------------------------
+
 
 @pytest.mark.parametrize("status", [TIMEOUT, SERVFAIL])
 @pytest.mark.parametrize("row", [MX_ROW, SPF_ROW, DKIM_ROW, VERIFY_ROW])
@@ -86,6 +103,7 @@ def test_nxdomain_and_noanswer_both_mean_missing(monkeypatch):
 
 # --- Wrong name --------------------------------------------------------------
 
+
 def test_doubled_zone_suffix_is_explained_with_the_host_to_type(monkeypatch):
     """Typing the full name into a host that appends the zone doubles it."""
     _patch(monkeypatch, mx={"bounce.mail.acme.com.acme.com": [(10, MX + ".")]})
@@ -105,11 +123,17 @@ def test_record_added_without_the_sending_subdomain(monkeypatch):
 
 # --- Wrong value / type -------------------------------------------------------
 
+
 def test_two_spf_records_is_an_error_with_a_merged_suggestion(monkeypatch):
-    _patch(monkeypatch, txt={"bounce.mail.acme.com": [
-        "v=spf1 include:amazonses.com ~all",
-        "v=spf1 include:_spf.mx.cloudflare.net ~all",
-    ]})
+    _patch(
+        monkeypatch,
+        txt={
+            "bounce.mail.acme.com": [
+                "v=spf1 include:amazonses.com ~all",
+                "v=spf1 include:_spf.mx.cloudflare.net ~all",
+            ]
+        },
+    )
     d = _diag(SPF_ROW)
     assert (d.ok, d.code) == (False, "multiple_spf")
     assert len(d.found) == 2
@@ -123,7 +147,9 @@ def test_existing_spf_missing_our_include(monkeypatch):
     d = _diag(SPF_ROW)
     assert d.code == "wrong_value"
     assert "include:amazonses.com" in d.message
-    assert "include:amazonses.com" in d.suggestion and "include:other.net" in d.suggestion
+    assert (
+        "include:amazonses.com" in d.suggestion and "include:other.net" in d.suggestion
+    )
 
 
 def test_wrong_cname_target_shows_what_was_found(monkeypatch):
@@ -134,7 +160,9 @@ def test_wrong_cname_target_shows_what_was_found(monkeypatch):
 
 
 def test_txt_where_cname_is_required(monkeypatch):
-    _patch(monkeypatch, txt={"tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com"]})
+    _patch(
+        monkeypatch, txt={"tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com"]}
+    )
     assert _diag(DKIM_ROW).code == "wrong_type"
 
 
@@ -180,14 +208,23 @@ def test_stale_verification_value(monkeypatch):
 
 # --- Root SPF advice ---------------------------------------------------------
 
+
 def test_root_spf_advice_only_when_there_are_two(monkeypatch):
-    _patch(monkeypatch, txt={"mail.acme.com": ["v=spf1 include:_spf.mx.cloudflare.net ~all"]})
+    _patch(
+        monkeypatch,
+        txt={"mail.acme.com": ["v=spf1 include:_spf.mx.cloudflare.net ~all"]},
+    )
     assert dnscheck.check_root_spf("mail.acme.com") is None
 
-    _patch(monkeypatch, txt={"mail.acme.com": [
-        "v=spf1 include:_spf.mx.cloudflare.net ~all",
-        "v=spf1 include:amazonses.com ~all",
-    ]})
+    _patch(
+        monkeypatch,
+        txt={
+            "mail.acme.com": [
+                "v=spf1 include:_spf.mx.cloudflare.net ~all",
+                "v=spf1 include:amazonses.com ~all",
+            ]
+        },
+    )
     advice = dnscheck.check_root_spf("mail.acme.com")
     assert advice["code"] == "multiple_spf"
     assert "delete it" in advice["message"]
@@ -195,51 +232,61 @@ def test_root_spf_advice_only_when_there_are_two(monkeypatch):
 
 # --- dnshost (pure) ----------------------------------------------------------
 
-@pytest.mark.parametrize("domain,zone", [
-    ("mail.acme.com", "acme.com"),
-    ("acme.com", "acme.com"),
-    ("mail.acme.co.zm", "acme.co.zm"),
-    ("mail.acme.co.uk", "acme.co.uk"),
-    ("news.shop.acme.co.uk", "acme.co.uk"),
-])
+
+@pytest.mark.parametrize(
+    "domain,zone",
+    [
+        ("mail.acme.com", "acme.com"),
+        ("acme.com", "acme.com"),
+        ("mail.acme.co.zm", "acme.co.zm"),
+        ("mail.acme.co.uk", "acme.co.uk"),
+        ("news.shop.acme.co.uk", "acme.co.uk"),
+    ],
+)
 def test_guess_zone(domain, zone):
     assert dnshost.guess_zone(domain) == zone
 
 
-@pytest.mark.parametrize("name,zone,host", [
-    ("bounce.mail.acme.com", "acme.com", "bounce.mail"),
-    ("acme.com", "acme.com", "@"),
-    ("_dmarc.acme.com.", "acme.com", "_dmarc"),
-    ("x.other.org", "acme.com", "x.other.org"),
-    ("bounce.other.com", "acme.com", "bounce.other.com"),
-    ("", "acme.com", "@"),
-    ("bounce.acme.com", "", "bounce.acme.com"),
-])
+@pytest.mark.parametrize(
+    "name,zone,host",
+    [
+        ("bounce.mail.acme.com", "acme.com", "bounce.mail"),
+        ("acme.com", "acme.com", "@"),
+        ("_dmarc.acme.com.", "acme.com", "_dmarc"),
+        ("x.other.org", "acme.com", "x.other.org"),
+        ("bounce.other.com", "acme.com", "bounce.other.com"),
+        ("", "acme.com", "@"),
+        ("bounce.acme.com", "", "bounce.acme.com"),
+    ],
+)
 def test_relative_host(name, zone, host):
     assert dnshost.relative_host(name, zone) == host
 
 
-@pytest.mark.parametrize("ns,slug", [
-    (["ada.ns.cloudflare.com"], "cloudflare"),
-    (["ns01.domaincontrol.com"], "godaddy"),
-    (["dns1.registrar-servers.com"], "namecheap"),
-    # Real Route 53 nameservers: the distinctive part is the awsdns-<nn> label.
-    (["ns-1234.awsdns-12.co.uk"], "route53"),
-    (["ns-123.awsdns-45.org."], "route53"),
-    (["ns-99.awsdns-01.com"], "route53"),
-    # Cloudflare customer NS are <name>.ns.cloudflare.com; label-boundary
-    # suffix matching also covers the plain form, but not look-alikes.
-    (["ns1.cloudflare.com"], "cloudflare"),
-    (["notcloudflare.com"], "other"),
-    (["ns1.awsdns-imitation.example"], "other"),
-    (["unknown.example"], "other"),
-    (["ns-cloud-a1.googledomains.com"], "google"),
-    (["ns1.digitalocean.com"], "digitalocean"),
-    (["ns1-01.azure-dns.com"], "azure"),
-    (["ns1.dns-parking.com"], "hostinger"),
-    (["ns1.some-local-isp.co.zm"], "other"),
-    ([], "other"),
-])
+@pytest.mark.parametrize(
+    "ns,slug",
+    [
+        (["ada.ns.cloudflare.com"], "cloudflare"),
+        (["ns01.domaincontrol.com"], "godaddy"),
+        (["dns1.registrar-servers.com"], "namecheap"),
+        # Real Route 53 nameservers: the distinctive part is the awsdns-<nn> label.
+        (["ns-1234.awsdns-12.co.uk"], "route53"),
+        (["ns-123.awsdns-45.org."], "route53"),
+        (["ns-99.awsdns-01.com"], "route53"),
+        # Cloudflare customer NS are <name>.ns.cloudflare.com; label-boundary
+        # suffix matching also covers the plain form, but not look-alikes.
+        (["ns1.cloudflare.com"], "cloudflare"),
+        (["notcloudflare.com"], "other"),
+        (["ns1.awsdns-imitation.example"], "other"),
+        (["unknown.example"], "other"),
+        (["ns-cloud-a1.googledomains.com"], "google"),
+        (["ns1.digitalocean.com"], "digitalocean"),
+        (["ns1-01.azure-dns.com"], "azure"),
+        (["ns1.dns-parking.com"], "hostinger"),
+        (["ns1.some-local-isp.co.zm"], "other"),
+        ([], "other"),
+    ],
+)
 def test_detect_host(ns, slug):
     assert dnshost.detect_host(ns) == slug
 
@@ -253,6 +300,7 @@ def test_tabs_put_the_detected_host_first_and_never_default_to_one():
 
 
 # --- Authoritative lookups fall back safely ----------------------------------
+
 
 class _Resolver:
     def __init__(self, exc=None, value=None):

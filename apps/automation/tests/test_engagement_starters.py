@@ -4,6 +4,7 @@ The point of a starter is that it is *on* afterwards. These cover the two
 things that would quietly make it useless: installing something that can't
 send, and chasing a customer who has already replied.
 """
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -30,7 +31,9 @@ def logged_in(client, db):
 def approved_template(logged_in):
     _, account = logged_in
     return MessageTemplate.objects.create(
-        account=account, name="Checking in", whatsapp_template_name="checking_in",
+        account=account,
+        name="Checking in",
+        whatsapp_template_name="checking_in",
         content="Hi {{1}}, just checking in about {{2}}.",
         variables=["1", "2"],
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
@@ -40,16 +43,21 @@ def approved_template(logged_in):
 @pytest.mark.django_db
 def test_a_starter_installs_published_and_running(logged_in, approved_template):
     client, account = logged_in
-    resp = client.post(INSTALL_URL, {
-        "starter": "quiet-customer-check-in",
-        "template_id": approved_template.pk,
-        f"var__{approved_template.pk}__1": "there",
-        f"var__{approved_template.pk}__2": "your enquiry",
-    })
+    resp = client.post(
+        INSTALL_URL,
+        {
+            "starter": "quiet-customer-check-in",
+            "template_id": approved_template.pk,
+            f"var__{approved_template.pk}__1": "there",
+            f"var__{approved_template.pk}__2": "your enquiry",
+        },
+    )
     assert resp.status_code == 302
 
     workflow = Workflow.objects.get(account=account, slug="quiet-customer-check-in")
-    assert workflow.status == Workflow.Status.PUBLISHED, "a starter left as a draft does nothing"
+    assert workflow.status == Workflow.Status.PUBLISHED, (
+        "a starter left as a draft does nothing"
+    )
     assert not validate_definition(workflow.definition, account=account)
 
 
@@ -65,7 +73,10 @@ def test_installing_twice_updates_rather_than_duplicates(logged_in, approved_tem
     }
     client.post(INSTALL_URL, payload)
     client.post(INSTALL_URL, payload)
-    assert Workflow.objects.filter(account=account, slug="quiet-customer-check-in").count() == 1
+    assert (
+        Workflow.objects.filter(account=account, slug="quiet-customer-check-in").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
@@ -74,13 +85,20 @@ def test_an_unapproved_template_cannot_be_installed(logged_in):
     produce a workflow that fails every time it runs."""
     client, account = logged_in
     draft = MessageTemplate.objects.create(
-        account=account, name="Draft", whatsapp_template_name="draft_one",
-        content="Hi", variables=[],
+        account=account,
+        name="Draft",
+        whatsapp_template_name="draft_one",
+        content="Hi",
+        variables=[],
         approval_status=MessageTemplate.ApprovalStatus.PENDING,
     )
-    resp = client.post(INSTALL_URL, {"starter": "quiet-customer-check-in", "template_id": draft.pk})
+    resp = client.post(
+        INSTALL_URL, {"starter": "quiet-customer-check-in", "template_id": draft.pk}
+    )
     assert resp.status_code == 302
-    assert not Workflow.objects.filter(account=account, slug="quiet-customer-check-in").exists()
+    assert not Workflow.objects.filter(
+        account=account, slug="quiet-customer-check-in"
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -88,11 +106,16 @@ def test_another_accounts_template_cannot_be_used(logged_in):
     client, _ = logged_in
     other = Account.objects.create(company_name="Someone Else")
     theirs = MessageTemplate.objects.create(
-        account=other, name="Theirs", whatsapp_template_name="theirs",
-        content="Hi", variables=[],
+        account=other,
+        name="Theirs",
+        whatsapp_template_name="theirs",
+        content="Hi",
+        variables=[],
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
-    resp = client.post(INSTALL_URL, {"starter": "quiet-customer-check-in", "template_id": theirs.pk})
+    resp = client.post(
+        INSTALL_URL, {"starter": "quiet-customer-check-in", "template_id": theirs.pk}
+    )
     assert resp.status_code == 302
     assert not Workflow.objects.filter(slug="quiet-customer-check-in").exists()
 
@@ -112,17 +135,22 @@ def test_the_gallery_explains_itself_when_nothing_is_approved(logged_in):
 @pytest.mark.django_db
 def test_the_gallery_shows_a_starter_that_is_already_on(logged_in, approved_template):
     client, _ = logged_in
-    client.post(INSTALL_URL, {
-        "starter": "quiet-customer-check-in",
-        "template_id": approved_template.pk,
-        f"var__{approved_template.pk}__1": "there",
-        f"var__{approved_template.pk}__2": "your enquiry",
-    })
+    client.post(
+        INSTALL_URL,
+        {
+            "starter": "quiet-customer-check-in",
+            "template_id": approved_template.pk,
+            f"var__{approved_template.pk}__1": "there",
+            f"var__{approved_template.pk}__2": "your enquiry",
+        },
+    )
     body = client.get(LIST_URL).content.decode()
     assert "What does this do?" in body
 
 
-@pytest.mark.parametrize("key", [k for k, s in STARTERS_BY_KEY.items() if "quiet_days" in s])
+@pytest.mark.parametrize(
+    "key", [k for k, s in STARTERS_BY_KEY.items() if "quiet_days" in s]
+)
 def test_every_starter_waits_then_checks_the_customer_is_still_quiet(key):
     """The branch is what makes these safe to turn on — without it they would
     message customers who are mid-conversation."""
@@ -166,7 +194,10 @@ def running_check_in(logged_in, approved_template):
         variable_mapping={"1": "there", "2": "your enquiry"},
     )
     return automation_api.upsert_published_workflow(
-        account, slug="quiet-customer-check-in", name="Check in", definition=definition,
+        account,
+        slug="quiet-customer-check-in",
+        name="Check in",
+        definition=definition,
     )
 
 
@@ -174,7 +205,9 @@ def _enroll_and_let_the_wait_elapse(workflow, contact):
     run = enroll(workflow, contact)
     run.refresh_from_db()
     assert run.status == WorkflowRun.Status.WAITING
-    WorkflowRun.objects.filter(pk=run.pk).update(next_due_at=timezone.now() - timedelta(seconds=1))
+    WorkflowRun.objects.filter(pk=run.pk).update(
+        next_due_at=timezone.now() - timedelta(seconds=1)
+    )
     return run
 
 
@@ -188,7 +221,9 @@ def test_a_customer_who_replied_is_not_chased(logged_in, running_check_in):
     run = _enroll_and_let_the_wait_elapse(running_check_in, contact)
 
     # The customer writes back while the wait is running.
-    record_contact_event(contact, "conversation.message_received", data={"body": "Yes please"})
+    record_contact_event(
+        contact, "conversation.message_received", data={"body": "Yes please"}
+    )
 
     run_due()
     run.refresh_from_db()
@@ -221,27 +256,37 @@ def _welcome_workflow(account):
     from apps.automation import api as automation_api
 
     MessageTemplate.objects.create(
-        account=account, name="Welcome", whatsapp_template_name="welcome_new_customer",
-        content="Hi {{1}}, thanks for contacting {{2}}.", variables=["1", "2"],
+        account=account,
+        name="Welcome",
+        whatsapp_template_name="welcome_new_customer",
+        content="Hi {{1}}, thanks for contacting {{2}}.",
+        variables=["1", "2"],
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
 
     definition = build_definition(
-        STARTERS_BY_KEY["welcome-new-enquiry"], template_name="welcome_new_customer",
+        STARTERS_BY_KEY["welcome-new-enquiry"],
+        template_name="welcome_new_customer",
         variable_mapping={"1": "there", "2": "Mwamba Kitchen"},
     )
     return automation_api.upsert_published_workflow(
-        account, slug="welcome-new-enquiry", name="Welcome", definition=definition)
+        account, slug="welcome-new-enquiry", name="Welcome", definition=definition
+    )
 
 
 @pytest.mark.django_db
-def test_welcome_definition_is_valid_and_only_for_customers_who_messaged_first(logged_in):
+def test_welcome_definition_is_valid_and_only_for_customers_who_messaged_first(
+    logged_in,
+):
     _, account = logged_in
     workflow = _welcome_workflow(account)
     assert not validate_definition(workflow.definition, account=account)
     assert workflow.definition["trigger"]["type"] == "contact.created"
     steps = {s["id"]: s for s in workflow.definition["steps"]}
-    assert steps["messaged_first"]["field"] == "source" and steps["messaged_first"]["value"] == "whatsapp"
+    assert (
+        steps["messaged_first"]["field"] == "source"
+        and steps["messaged_first"]["value"] == "whatsapp"
+    )
     assert steps["messaged_first"]["on_false"] == "stop"
 
 
@@ -249,8 +294,12 @@ def test_welcome_definition_is_valid_and_only_for_customers_who_messaged_first(l
 def test_welcome_is_sent_to_a_whatsapp_enquirer_but_not_an_imported_contact(logged_in):
     _, account = logged_in
     workflow = _welcome_workflow(account)
-    enquirer = Contact.objects.create(account=account, phone="+260971111111", source="whatsapp")
-    imported = Contact.objects.create(account=account, phone="+260972222222", source="import")
+    enquirer = Contact.objects.create(
+        account=account, phone="+260971111111", source="whatsapp"
+    )
+    imported = Contact.objects.create(
+        account=account, phone="+260972222222", source="import"
+    )
     assert "send" in _sent_step_ids(enroll(workflow, enquirer))
     assert "send" not in _sent_step_ids(enroll(workflow, imported))
 
@@ -265,7 +314,10 @@ def test_a_keyword_reply_installs_without_any_approved_template(logged_in):
     body = client.get(LIST_URL).content.decode()
     assert "Answer pricing questions" in body and 'name="reply_text"' in body
 
-    resp = client.post(INSTALL_URL, {"starter": "answer-pricing-questions", "reply_text": "Prices start at K50."})
+    resp = client.post(
+        INSTALL_URL,
+        {"starter": "answer-pricing-questions", "reply_text": "Prices start at K50."},
+    )
     assert resp.status_code == 302
     workflow = Workflow.objects.get(account=account, slug="answer-pricing-questions")
     assert workflow.status == Workflow.Status.PUBLISHED
@@ -280,8 +332,12 @@ def test_a_keyword_reply_installs_without_any_approved_template(logged_in):
 @pytest.mark.parametrize("text", ["", "   ", "x" * 1001])
 def test_a_keyword_reply_needs_sensible_text(logged_in, text):
     client, account = logged_in
-    client.post(INSTALL_URL, {"starter": "answer-pricing-questions", "reply_text": text})
-    assert not Workflow.objects.filter(account=account, slug="answer-pricing-questions").exists()
+    client.post(
+        INSTALL_URL, {"starter": "answer-pricing-questions", "reply_text": text}
+    )
+    assert not Workflow.objects.filter(
+        account=account, slug="answer-pricing-questions"
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -301,17 +357,35 @@ def test_an_installed_keyword_reply_answers_end_to_end(logged_in):
     from apps.whatsapp.models import OutboundMessage, WhatsAppContact
 
     client, account = logged_in
-    client.post(INSTALL_URL, {"starter": "answer-where-are-you", "reply_text": "Cairo Road, Lusaka."})
-    contact = Contact.objects.create(account=account, phone="+260971234567", source="whatsapp")
-    wa = WhatsAppContact.objects.create(account=account, phone_number="+260971234567", contact=contact)
-    conversation = Conversation.get_or_create_for_whatsapp(WhatsAppConversation.get_or_open(wa))
+    client.post(
+        INSTALL_URL,
+        {"starter": "answer-where-are-you", "reply_text": "Cairo Road, Lusaka."},
+    )
+    contact = Contact.objects.create(
+        account=account, phone="+260971234567", source="whatsapp"
+    )
+    wa = WhatsAppContact.objects.create(
+        account=account, phone_number="+260971234567", contact=contact
+    )
+    conversation = Conversation.get_or_create_for_whatsapp(
+        WhatsAppConversation.get_or_open(wa)
+    )
 
     from apps.automation.workflow_engine import enroll_for_trigger
 
     def customer_says(body):
-        return enroll_for_trigger(account.id, "conversation.message_received", contact, context={
-            "conversation_id": conversation.public_id, "message": {"body": body, "type": "text"}})
+        return enroll_for_trigger(
+            account.id,
+            "conversation.message_received",
+            contact,
+            context={
+                "conversation_id": conversation.public_id,
+                "message": {"body": body, "type": "text"},
+            },
+        )
 
     assert customer_says("Hello, where are you located?") == 1
     assert customer_says("What time do you open?") == 0
-    assert [m.payload["body"] for m in OutboundMessage.objects.all()] == ["Cairo Road, Lusaka."]
+    assert [m.payload["body"] for m in OutboundMessage.objects.all()] == [
+        "Cairo Road, Lusaka."
+    ]

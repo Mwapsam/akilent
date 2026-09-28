@@ -20,30 +20,36 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com",
+        account=account,
+        domain="mail.acme.com",
         dkim_public_key=DKIM_PUBLIC,
-        verify_record_name="mail.acme.com", verify_record_value=VERIFY_VALUE,
+        verify_record_name="mail.acme.com",
+        verify_record_value=VERIFY_VALUE,
     )
 
 
 def _fake_resolver(mapping):
     def _resolve(name):
         return mapping.get(name, [])
+
     return _resolve
 
 
 def _fake_check_records(result_by_key):
     """Stand in for dnscheck.check_records: reuse the real dns_records() spec
     but force each row's ``ok`` from a {key: bool} map."""
+
     def _inner(record):
         return [
             {**row, "ok": result_by_key.get(row["key"], False)}
             for row in record.dns_records()
         ]
+
     return _inner
 
 
 # --- Model -------------------------------------------------------------------
+
 
 def test_ensure_verification_token_is_idempotent():
     d = EmailDomain(domain="x.com")
@@ -65,14 +71,21 @@ def test_dns_records_spec_and_counts(domain):
 
 # --- Checker -----------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_check_domain_all_present(domain, monkeypatch, settings):
     settings.EMAIL_HOST = "smtp.relay.com"
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "mail.acme.com": [VERIFY_VALUE, "v=spf1 include:smtp.relay.com ~all"],
-        "dkim._domainkey.mail.acme.com": [DKIM_PUBLIC],
-        "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "mail.acme.com": [VERIFY_VALUE, "v=spf1 include:smtp.relay.com ~all"],
+                "dkim._domainkey.mail.acme.com": [DKIM_PUBLIC],
+                "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
+            }
+        ),
+    )
     res = dnscheck.check_domain(domain)
     assert res == {"verify": True, "dkim": True, "spf": True, "dmarc": True}
 
@@ -81,9 +94,15 @@ def test_check_domain_all_present(domain, monkeypatch, settings):
 def test_check_domain_missing_records(domain, monkeypatch, settings):
     settings.EMAIL_HOST = "smtp.relay.com"
     # Only the verification TXT is published; everything else absent.
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "mail.acme.com": [VERIFY_VALUE],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "mail.acme.com": [VERIFY_VALUE],
+            }
+        ),
+    )
     res = dnscheck.check_domain(domain)
     assert res["verify"] is True
     assert res["dkim"] is False
@@ -95,9 +114,15 @@ def test_check_domain_missing_records(domain, monkeypatch, settings):
 def test_spf_requires_matching_include(domain, monkeypatch, settings):
     settings.EMAIL_HOST = "smtp.relay.com"
     # An SPF record for a *different* host shouldn't count.
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "mail.acme.com": ["v=spf1 include:someone-else.com ~all"],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "mail.acme.com": ["v=spf1 include:someone-else.com ~all"],
+            }
+        ),
+    )
     assert dnscheck.check_domain(domain)["spf"] is False
 
 
@@ -109,6 +134,7 @@ def test_value_comparison_is_whitespace_insensitive():
 
 
 # --- Verify view -------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_verify_view_marks_domain_verified(client, account, domain, monkeypatch):
@@ -126,11 +152,15 @@ def test_verify_view_marks_domain_verified(client, account, domain, monkeypatch)
 
 
 @pytest.mark.django_db
-def test_verify_view_stays_pending_without_ownership(client, account, domain, monkeypatch):
+def test_verify_view_stays_pending_without_ownership(
+    client, account, domain, monkeypatch
+):
     client.force_login(account.owner)
     monkeypatch.setattr(
         "apps.email.dnscheck.check_records",
-        _fake_check_records({"verify": False, "dkim": True, "spf": False, "dmarc": False}),
+        _fake_check_records(
+            {"verify": False, "dkim": True, "spf": False, "dmarc": False}
+        ),
     )
     resp = client.post(f"/email/domains/{domain.pk}/verify/")
     assert resp.status_code == 302
@@ -141,6 +171,7 @@ def test_verify_view_stays_pending_without_ownership(client, account, domain, mo
 
 # --- SES Easy DKIM (3 CNAMEs) ----------------------------------------------
 
+
 @pytest.fixture
 def ses_domain(account, monkeypatch):
     """A domain whose DNS spec is EmailDnsRecord rows, as DomainService creates
@@ -149,31 +180,48 @@ def ses_domain(account, monkeypatch):
     from apps.email.models import EmailDnsRecord
 
     d = EmailDomain.objects.create(
-        account=account, domain="mail.acme.com",
-        verify_record_name="mail.acme.com", verify_record_value=VERIFY_VALUE,
+        account=account,
+        domain="mail.acme.com",
+        verify_record_name="mail.acme.com",
+        verify_record_value=VERIFY_VALUE,
         mail_from_domain="bounce.mail.acme.com",
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="verify", record_type="TXT",
-        name="mail.acme.com", value=VERIFY_VALUE,
+        domain=d,
+        key="verify",
+        record_type="TXT",
+        name="mail.acme.com",
+        value=VERIFY_VALUE,
     )
     for tok in ("tok1", "tok2", "tok3"):
         EmailDnsRecord.objects.create(
-            domain=d, key="dkim", record_type="CNAME",
+            domain=d,
+            key="dkim",
+            record_type="CNAME",
             name=f"{tok}._domainkey.mail.acme.com",
             value=f"{tok}.dkim.amazonses.com",
         )
     EmailDnsRecord.objects.create(
-        domain=d, key="mfmx", record_type="MX", name="bounce.mail.acme.com",
-        value="feedback-smtp.us-east-1.amazonses.com", priority=10,
+        domain=d,
+        key="mfmx",
+        record_type="MX",
+        name="bounce.mail.acme.com",
+        value="feedback-smtp.us-east-1.amazonses.com",
+        priority=10,
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="mfspf", record_type="TXT",
-        name="bounce.mail.acme.com", value="v=spf1 include:amazonses.com ~all",
+        domain=d,
+        key="mfspf",
+        record_type="TXT",
+        name="bounce.mail.acme.com",
+        value="v=spf1 include:amazonses.com ~all",
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="dmarc", record_type="TXT",
-        name="_dmarc.mail.acme.com", value="v=DMARC1; p=none",
+        domain=d,
+        key="dmarc",
+        record_type="TXT",
+        name="_dmarc.mail.acme.com",
+        value="v=DMARC1; p=none",
     )
     return d
 
@@ -196,30 +244,68 @@ def test_ses_dns_records_are_cname_backed(ses_domain):
 @pytest.mark.django_db
 def test_ses_check_domain_needs_all_three_cnames(ses_domain, monkeypatch, settings):
     settings.EMAIL_HOST = ""  # SES deployments have no SMTP host
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "mail.acme.com": [VERIFY_VALUE],
-        "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
-        "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
-    }))
-    monkeypatch.setattr(dnscheck, "_resolve_mx", _fake_resolver({
-        "bounce.mail.acme.com": [(10, "feedback-smtp.us-east-1.amazonses.com.")],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "mail.acme.com": [VERIFY_VALUE],
+                "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
+                "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_mx",
+        _fake_resolver(
+            {
+                "bounce.mail.acme.com": [
+                    (10, "feedback-smtp.us-east-1.amazonses.com.")
+                ],
+            }
+        ),
+    )
     # Only two of the three DKIM CNAMEs resolve.
-    monkeypatch.setattr(dnscheck, "_resolve_cname", _fake_resolver({
-        "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
-        "tok2._domainkey.mail.acme.com": ["tok2.dkim.amazonses.com."],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_cname",
+        _fake_resolver(
+            {
+                "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
+                "tok2._domainkey.mail.acme.com": ["tok2.dkim.amazonses.com."],
+            }
+        ),
+    )
     res = dnscheck.check_domain(ses_domain)
-    assert res == {"verify": True, "dkim": False, "mfmx": True, "mfspf": True, "dmarc": True}
+    assert res == {
+        "verify": True,
+        "dkim": False,
+        "mfmx": True,
+        "mfspf": True,
+        "dmarc": True,
+    }
 
     # Publish the third — DKIM (and the whole spec) goes green.
-    monkeypatch.setattr(dnscheck, "_resolve_cname", _fake_resolver({
-        "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
-        "tok2._domainkey.mail.acme.com": ["tok2.dkim.amazonses.com."],
-        "tok3._domainkey.mail.acme.com": ["tok3.dkim.amazonses.com."],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_cname",
+        _fake_resolver(
+            {
+                "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
+                "tok2._domainkey.mail.acme.com": ["tok2.dkim.amazonses.com."],
+                "tok3._domainkey.mail.acme.com": ["tok3.dkim.amazonses.com."],
+            }
+        ),
+    )
     res = dnscheck.check_domain(ses_domain)
-    assert res == {"verify": True, "dkim": True, "mfmx": True, "mfspf": True, "dmarc": True}
+    assert res == {
+        "verify": True,
+        "dkim": True,
+        "mfmx": True,
+        "mfspf": True,
+        "dmarc": True,
+    }
 
 
 @pytest.mark.django_db
@@ -228,9 +314,15 @@ def test_ses_spf_check_ignores_email_host(ses_domain, monkeypatch, settings):
     # is empty on SES, so spf_ok could never go true. It must follow the record's
     # own value (include:amazonses.com) instead.
     settings.EMAIL_HOST = ""
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
+            }
+        ),
+    )
     monkeypatch.setattr(dnscheck, "_resolve_cname", _fake_resolver({}))
     # SES SPF is checked where SES evaluates it: the MAIL FROM subdomain.
     assert dnscheck.check_domain(ses_domain)["mfspf"] is True
@@ -241,14 +333,26 @@ def test_refresh_domain_persists_per_cname_readiness(ses_domain, monkeypatch, se
     from apps.email.verification import refresh_domain
 
     settings.EMAIL_HOST = ""
-    monkeypatch.setattr(dnscheck, "_resolve_txt", _fake_resolver({
-        "mail.acme.com": [VERIFY_VALUE],
-        "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
-        "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
-    }))
-    monkeypatch.setattr(dnscheck, "_resolve_cname", _fake_resolver({
-        "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
-    }))
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_txt",
+        _fake_resolver(
+            {
+                "mail.acme.com": [VERIFY_VALUE],
+                "bounce.mail.acme.com": ["v=spf1 include:amazonses.com ~all"],
+                "_dmarc.mail.acme.com": ["v=DMARC1; p=none"],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        dnscheck,
+        "_resolve_cname",
+        _fake_resolver(
+            {
+                "tok1._domainkey.mail.acme.com": ["tok1.dkim.amazonses.com."],
+            }
+        ),
+    )
     # SES itself not yet reporting SUCCESS -> stays pending even though 1 CNAME is up.
     monkeypatch.setattr(
         "apps.email.verification._ses_identity_verified", lambda rec, prov: False

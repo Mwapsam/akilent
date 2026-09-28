@@ -4,6 +4,7 @@ Service rules (case-folding, idempotence, limits), then everything that reads or
 them: segments and workflow branches, the action registry, the workflow steps, the screens,
 and the keyword starters that tag as they answer.
 """
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -24,7 +25,9 @@ def account(db):
 
 @pytest.fixture
 def contact(account):
-    return Contact.objects.create(account=account, phone="+260971234567", first_name="Ada", source="whatsapp")
+    return Contact.objects.create(
+        account=account, phone="+260971234567", first_name="Ada", source="whatsapp"
+    )
 
 
 def names(contact):
@@ -45,7 +48,7 @@ def test_names_are_one_tag_whatever_the_case_or_spacing(contact):
     tags.add_tag(contact, "VIP")
     assert tags.add_tag(contact, "  vip ") is False
     assert Tag.objects.filter(account=contact.account).count() == 1
-    assert names(contact) == ["VIP"]                # shown as first written
+    assert names(contact) == ["VIP"]  # shown as first written
 
 
 @pytest.mark.django_db
@@ -87,7 +90,7 @@ def test_limits_protect_the_account(contact, monkeypatch):
     other = Contact.objects.create(account=contact.account, phone="+260972222222")
     with pytest.raises(tags.TagError):
         tags.add_tag(other, "brand-new")
-    assert tags.add_tag(other, "a") is True         # an existing tag is still fine
+    assert tags.add_tag(other, "a") is True  # an existing tag is still fine
 
 
 @pytest.mark.django_db
@@ -97,7 +100,10 @@ def test_changes_appear_on_the_customers_timeline(contact):
     tags.add_tag(contact, "vip")
     tags.remove_tag(contact, "vip")
     added, removed = contact.events.order_by("id")
-    assert (event_label(added.type), event_detail(added.type, added.data)) == ("Tag added", "vip")
+    assert (event_label(added.type), event_detail(added.type, added.data)) == (
+        "Tag added",
+        "vip",
+    )
     assert event_label(removed.type) == "Tag removed"
     assert not contact.events.filter(type="tag.added").exclude(pk=added.pk).exists()
 
@@ -122,7 +128,11 @@ def test_segment_conditions_on_tags(account):
     tags.add_tag(both, "pricing-enquiry")
 
     def found(**cond):
-        return set(contacts_for({"op": "and", "conditions": [{"field": "tag", **cond}]}, account))
+        return set(
+            contacts_for(
+                {"op": "and", "conditions": [{"field": "tag", **cond}]}, account
+            )
+        )
 
     assert found(operator="eq", value="Vip") == {vip, both}
     assert found(operator="ne", value="vip") == {plain}
@@ -132,10 +142,15 @@ def test_segment_conditions_on_tags(account):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("cond", [
-    {"operator": "eq", "value": ""}, {"operator": "in", "value": []},
-    {"operator": "gt", "value": "vip"}, {"operator": "eq", "value": 5},
-])
+@pytest.mark.parametrize(
+    "cond",
+    [
+        {"operator": "eq", "value": ""},
+        {"operator": "in", "value": []},
+        {"operator": "gt", "value": "vip"},
+        {"operator": "eq", "value": 5},
+    ],
+)
 def test_bad_tag_conditions_are_rejected(account, cond):
     with pytest.raises(SegmentError):
         contacts_for({"op": "and", "conditions": [{"field": "tag", **cond}]}, account)
@@ -171,18 +186,24 @@ def test_an_action_reports_a_bad_name_as_an_action_error(contact):
 
 def publish(account, steps, trigger=None, slug="tagger"):
     return automation_api.upsert_published_workflow(
-        account, slug=slug, name=slug,
-        definition={"trigger": trigger or {"type": "manual"}, "steps": steps})
+        account,
+        slug=slug,
+        name=slug,
+        definition={"trigger": trigger or {"type": "manual"}, "steps": steps},
+    )
 
 
 @pytest.mark.django_db
 def test_workflow_add_and_remove_tag_steps(account, contact):
-    workflow = publish(account, [
-        {"id": "a", "type": "add_tag", "tag": "hot", "next": "b"},
-        {"id": "b", "type": "add_tag", "tag": "cold", "next": "c"},
-        {"id": "c", "type": "remove_tag", "tag": "cold", "next": "stop"},
-        {"id": "stop", "type": "stop"},
-    ])
+    workflow = publish(
+        account,
+        [
+            {"id": "a", "type": "add_tag", "tag": "hot", "next": "b"},
+            {"id": "b", "type": "add_tag", "tag": "cold", "next": "c"},
+            {"id": "c", "type": "remove_tag", "tag": "cold", "next": "stop"},
+            {"id": "stop", "type": "stop"},
+        ],
+    )
     run = enroll(workflow, contact)
     assert run.status == WorkflowRun.Status.COMPLETED
     assert names(contact) == ["hot"]
@@ -192,8 +213,15 @@ def test_workflow_add_and_remove_tag_steps(account, contact):
 def test_a_workflow_can_branch_on_a_tag_and_not_tag_twice(account, contact):
     """Tag once; later runs see the tag and skip the welcome."""
     steps = [
-        {"id": "seen", "type": "branch", "field": "tag", "operator": "eq", "value": "greeted",
-         "on_true": "stop", "on_false": "mark"},
+        {
+            "id": "seen",
+            "type": "branch",
+            "field": "tag",
+            "operator": "eq",
+            "value": "greeted",
+            "on_true": "stop",
+            "on_false": "mark",
+        },
         {"id": "mark", "type": "add_tag", "tag": "greeted", "next": "stop"},
         {"id": "stop", "type": "stop"},
     ]
@@ -208,10 +236,15 @@ def test_a_workflow_can_branch_on_a_tag_and_not_tag_twice(account, contact):
 @pytest.mark.django_db
 @pytest.mark.parametrize("step_type", ["add_tag", "remove_tag"])
 def test_tag_steps_need_a_valid_tag(step_type):
-    errors = validate_definition({
-        "trigger": {"type": "manual"},
-        "steps": [{"id": "t", "type": step_type, "tag": "  ", "next": "stop"}, {"id": "stop", "type": "stop"}],
-    })
+    errors = validate_definition(
+        {
+            "trigger": {"type": "manual"},
+            "steps": [
+                {"id": "t", "type": step_type, "tag": "  ", "next": "stop"},
+                {"id": "stop", "type": "stop"},
+            ],
+        }
+    )
     assert [e["field"] for e in errors if e["severity"] == "error"] == ["tag"]
 
 
@@ -238,7 +271,9 @@ def test_add_and_remove_from_the_customer_profile(owner, contact):
 
 @pytest.mark.django_db
 def test_a_bad_tag_name_shows_a_message_and_changes_nothing(owner, contact):
-    resp = owner.post(f"/contacts/{contact.public_id}/tags/add/", {"tag": ""}, follow=True)
+    resp = owner.post(
+        f"/contacts/{contact.public_id}/tags/add/", {"tag": ""}, follow=True
+    )
     assert "Type a tag name." in resp.content.decode()
     assert names(contact) == []
 
@@ -247,7 +282,12 @@ def test_a_bad_tag_name_shows_a_message_and_changes_nothing(owner, contact):
 def test_cannot_tag_another_businesses_customer(owner):
     other = Account.objects.create(company_name="Other")
     theirs = Contact.objects.create(account=other, phone="+260979999999")
-    assert owner.post(f"/contacts/{theirs.public_id}/tags/add/", {"tag": "vip"}).status_code == 404
+    assert (
+        owner.post(
+            f"/contacts/{theirs.public_id}/tags/add/", {"tag": "vip"}
+        ).status_code
+        == 404
+    )
     assert names(theirs) == []
 
 
@@ -258,9 +298,14 @@ def test_tag_endpoints_only_accept_post(owner, contact):
 
 @pytest.mark.django_db
 def test_next_returns_to_the_page_tagging_started_on_but_never_off_site(owner, contact):
-    resp = owner.post(f"/contacts/{contact.public_id}/tags/add/", {"tag": "a", "next": "/inbox/"})
+    resp = owner.post(
+        f"/contacts/{contact.public_id}/tags/add/", {"tag": "a", "next": "/inbox/"}
+    )
     assert resp.url == "/inbox/"
-    resp = owner.post(f"/contacts/{contact.public_id}/tags/add/", {"tag": "b", "next": "https://evil.example/x"})
+    resp = owner.post(
+        f"/contacts/{contact.public_id}/tags/add/",
+        {"tag": "b", "next": "https://evil.example/x"},
+    )
     assert resp.url == f"/contacts/{contact.public_id}/"
 
 
@@ -280,12 +325,16 @@ def test_the_contact_list_shows_and_filters_by_tag(owner, account, contact):
 def test_the_inbox_side_panel_shows_tags_and_lets_you_tag(owner, account, contact):
     from apps.conversations.models import Conversation
 
-    conversation = Conversation.objects.create(account=account, contact=contact, channel="whatsapp")
+    conversation = Conversation.objects.create(
+        account=account, contact=contact, channel="whatsapp"
+    )
     tags.add_tag(contact, "VIP")
     page = f"/inbox/{conversation.public_id}/"
     body = owner.get(page).content.decode()
     assert "VIP" in body and f"/contacts/{contact.public_id}/tags/add/" in body
-    resp = owner.post(f"/contacts/{contact.public_id}/tags/add/", {"tag": "asked-price", "next": page})
+    resp = owner.post(
+        f"/contacts/{contact.public_id}/tags/add/", {"tag": "asked-price", "next": page}
+    )
     assert resp.url == page and "asked-price" in names(contact)
 
 
@@ -299,15 +348,30 @@ def test_the_pricing_starter_answers_and_tags_the_customer(owner, account, conta
     from apps.whatsapp.models import Conversation as WhatsAppConversation
     from apps.whatsapp.models import OutboundMessage, WhatsAppContact
 
-    owner.post("/automations/starters/install/",
-               {"starter": "answer-pricing-questions", "reply_text": "Prices start at K50."})
+    owner.post(
+        "/automations/starters/install/",
+        {"starter": "answer-pricing-questions", "reply_text": "Prices start at K50."},
+    )
     workflow = Workflow.objects.get(account=account, slug="answer-pricing-questions")
     assert not validate_definition(workflow.definition, account=account)
 
-    wa = WhatsAppContact.objects.create(account=account, phone_number=contact.phone, contact=contact)
-    conversation = Conversation.get_or_create_for_whatsapp(WhatsAppConversation.get_or_open(wa))
-    enroll_for_trigger(account.id, "conversation.message_received", contact, context={
-        "conversation_id": conversation.public_id, "message": {"body": "How much is it?", "type": "text"}})
+    wa = WhatsAppContact.objects.create(
+        account=account, phone_number=contact.phone, contact=contact
+    )
+    conversation = Conversation.get_or_create_for_whatsapp(
+        WhatsAppConversation.get_or_open(wa)
+    )
+    enroll_for_trigger(
+        account.id,
+        "conversation.message_received",
+        contact,
+        context={
+            "conversation_id": conversation.public_id,
+            "message": {"body": "How much is it?", "type": "text"},
+        },
+    )
 
-    assert [m.payload["body"] for m in OutboundMessage.objects.all()] == ["Prices start at K50."]
+    assert [m.payload["body"] for m in OutboundMessage.objects.all()] == [
+        "Prices start at K50."
+    ]
     assert names(contact) == ["pricing-enquiry"]

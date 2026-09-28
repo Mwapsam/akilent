@@ -1,5 +1,6 @@
 """apps.core.scheduling — timezone + recurrence helpers (no DB)."""
-from datetime import datetime, timezone as _tz
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -40,23 +41,27 @@ def test_validate_iana_recipient_sentinel():
 )
 def test_to_utc_wall_clock(naive, zone, expected_utc_hour):
     got = to_utc(naive, zone)
-    assert got.tzinfo == _tz.utc
+    assert got.tzinfo == UTC
     assert got.hour == expected_utc_hour
 
 
 def test_to_utc_aware_input_ignores_tz_arg():
-    aware = datetime(2026, 9, 15, 9, 0, tzinfo=_tz.utc)
+    aware = datetime(2026, 9, 15, 9, 0, tzinfo=UTC)
     assert to_utc(aware, "America/New_York").hour == 9
 
 
 def test_next_occurrence_weekly_is_dst_safe():
     # Weekly Monday 09:00 New York, starting just before a fall-back DST change.
     after = to_utc(datetime(2026, 10, 30, 12, 0), "America/New_York")
-    nxt = next_occurrence("FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
-                          after=after, tz="America/New_York")
+    nxt = next_occurrence(
+        "FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
+        after=after,
+        tz="America/New_York",
+    )
     # The next Monday is Nov 2 2026 — after the Nov 1 fall-back, so 09:00 EST = 14:00 UTC.
     assert nxt.hour == 14
     from zoneinfo import ZoneInfo
+
     local = nxt.astimezone(ZoneInfo("America/New_York"))
     assert (local.hour, local.minute) == (9, 0)
 

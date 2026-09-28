@@ -1,4 +1,5 @@
 """WhatsApp Business onboarding page — rendering + state-driven messaging."""
+
 import html
 from unittest.mock import patch
 
@@ -25,15 +26,20 @@ class OnboardingPageTest(TestCase):
         self.user.is_staff = self.user.is_superuser = staff  # platform operators only
         request.user = self.user
         request.session = {}
-        with patch(
-            "apps.whatsapp.numbers.get_current_account", return_value=self.account
-        ), patch("apps.billing.api.entitled", return_value=module):
+        with (
+            patch(
+                "apps.whatsapp.numbers.get_current_account", return_value=self.account
+            ),
+            patch("apps.billing.api.entitled", return_value=module),
+        ):
             resp = numbers_views.numbers_list(request)
         return resp.status_code, resp.content.decode()
 
     def _add_number(self, **kw):
         defaults = dict(
-            account=self.account, phone_number_id="PNID", access_token="tok",
+            account=self.account,
+            phone_number_id="PNID",
+            access_token="tok",
             is_active=True,
         )
         defaults.update(kw)
@@ -56,10 +62,14 @@ class OnboardingPageTest(TestCase):
         contact = self.account.contacts.create(phone_number="+260971234567")
         convo = Conversation.get_or_open(contact)
         MessageLog.objects.create(
-            account=self.account, conversation=convo, contact=contact,
+            account=self.account,
+            conversation=convo,
+            contact=contact,
             direction=MessageLog.Direction.INBOUND,
-            message_type=MessageLog.MessageType.TEXT, content="hi",
-            status=MessageLog.Status.DELIVERED, timestamp="2026-09-04T00:00:00Z",
+            message_type=MessageLog.MessageType.TEXT,
+            content="hi",
+            status=MessageLog.Status.DELIVERED,
+            timestamp="2026-09-04T00:00:00Z",
         )
         number = WhatsAppBusinessNumber.objects.get(phone_number_id="PNID")
         number.connection_tests.create(recipient="+260971234567", status="sent")
@@ -85,7 +95,9 @@ class OnboardingPageTest(TestCase):
 
     def test_failed_registration_shows_error_and_retry(self):
         self._add_number(
-            waba_id="WABA1", registration_status="failed", registration_error="133010 nope"
+            waba_id="WABA1",
+            registration_status="failed",
+            registration_error="133010 nope",
         )
         _, body = self._render()
         self.assertIn("133010 nope", body)
@@ -94,7 +106,9 @@ class OnboardingPageTest(TestCase):
 
     def test_missing_token_shows_warning(self):
         WhatsAppBusinessNumber.objects.create(
-            account=self.account, phone_number_id="PNID", access_token=None,
+            account=self.account,
+            phone_number_id="PNID",
+            access_token=None,
             is_active=True,
         )
         _, body = self._render()

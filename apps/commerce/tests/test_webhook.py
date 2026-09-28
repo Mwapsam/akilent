@@ -3,6 +3,7 @@
 ProcessedWebhookEvent idempotency ledger as subscription billing, routed by
 ``meta.order_id`` instead of ``meta.account_id``.
 """
+
 import json
 from decimal import Decimal
 from unittest.mock import patch
@@ -30,9 +31,13 @@ def contact(account):
 
 @pytest.fixture
 def order(account, contact):
-    return create_order(account, contact, items=[
-        {"name": "Chicken Burger", "unit_price": Decimal("100.00"), "quantity": 1},
-    ])
+    return create_order(
+        account,
+        contact,
+        items=[
+            {"name": "Chicken Burger", "unit_price": Decimal("100.00"), "quantity": 1},
+        ],
+    )
 
 
 @pytest.fixture
@@ -55,7 +60,9 @@ def _charge_payload(payment, order, *, tx_id=777, amount="100.00"):
 
 def _post(client, payload):
     return client.post(
-        WEBHOOK_URL, data=json.dumps(payload), content_type="application/json",
+        WEBHOOK_URL,
+        data=json.dumps(payload),
+        content_type="application/json",
         HTTP_VERIF_HASH="test-hash",
     )
 
@@ -84,11 +91,16 @@ def test_commerce_charge_is_idempotent_on_replay(client, account, order, payment
 
     assert resp.status_code == 200
     assert fw.return_value.verify_transaction.call_count == 1
-    assert ProcessedWebhookEvent.objects.filter(event_key="charge.completed:777").count() == 1
+    assert (
+        ProcessedWebhookEvent.objects.filter(event_key="charge.completed:777").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
-def test_commerce_charge_rejected_when_amount_underpays(client, account, order, payment):
+def test_commerce_charge_rejected_when_amount_underpays(
+    client, account, order, payment
+):
     verified = {"status": "successful", "amount": "5.00"}
     with patch("apps.billing.views.get_fw_client") as fw:
         fw.return_value.verify_transaction.return_value = verified
@@ -102,13 +114,17 @@ def test_commerce_charge_rejected_when_amount_underpays(client, account, order, 
 
 
 @pytest.mark.django_db
-def test_commerce_charge_does_not_activate_subscription_path(client, account, order, payment):
+def test_commerce_charge_does_not_activate_subscription_path(
+    client, account, order, payment
+):
     """A commerce charge must be routed away from the subscription handler
     entirely — regression guard for the meta.order_id branch in the shared
     webhook view."""
     verified = {"status": "successful", "amount": "100.00"}
-    with patch("apps.billing.views.get_fw_client") as fw, \
-         patch("apps.billing.views._handle_charge_completed") as legacy_handler:
+    with (
+        patch("apps.billing.views.get_fw_client") as fw,
+        patch("apps.billing.views._handle_charge_completed") as legacy_handler,
+    ):
         fw.return_value.verify_transaction.return_value = verified
         _post(client, _charge_payload(payment, order))
 

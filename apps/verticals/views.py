@@ -2,6 +2,7 @@
 automate": a business owner activates a bundle of pre-built Workflows (and
 the modules they need) in one click, instead of building them by hand.
 """
+
 from __future__ import annotations
 
 from django.contrib import messages
@@ -11,7 +12,12 @@ from django.shortcuts import redirect, render
 from apps.accounts.utils import get_current_account
 from apps.automation import api as automation_api
 from apps.verticals.registry import list_verticals
-from apps.verticals.services import VerticalNotFound, VerticalTemplateInvalid, activate_vertical, activated_vertical_keys
+from apps.verticals.services import (
+    VerticalNotFound,
+    VerticalTemplateInvalid,
+    activate_vertical,
+    activated_vertical_keys,
+)
 
 
 @login_required
@@ -21,11 +27,15 @@ def templates(request):
         return redirect("dashboard")
 
     activated = activated_vertical_keys(account)
-    return render(request, "verticals/templates.html", {
-        "account": account,
-        "verticals": list_verticals(),
-        "activated": activated,
-    })
+    return render(
+        request,
+        "verticals/templates.html",
+        {
+            "account": account,
+            "verticals": list_verticals(),
+            "activated": activated,
+        },
+    )
 
 
 @login_required

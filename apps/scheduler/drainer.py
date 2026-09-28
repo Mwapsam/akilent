@@ -10,6 +10,7 @@ Concurrency safety (three layers):
   * the heavy create_and_queue_* call runs OUTSIDE the lock, after a re-fetch
     that guards on PROCESSING.
 """
+
 from __future__ import annotations
 
 import logging
@@ -145,7 +146,11 @@ def _fire_one(job_id: int) -> str:
     lateness = (timezone.now() - job.fire_at).total_seconds()
     if lateness > job.stale_grace_secs:
         job.mark_failed("missed schedule window", terminal=True)
-        logger.warning("scheduler.drain: job %s stale_skipped (%.0fs late)", job.public_id, lateness)
+        logger.warning(
+            "scheduler.drain: job %s stale_skipped (%.0fs late)",
+            job.public_id,
+            lateness,
+        )
         return "stale_skipped"
 
     try:
@@ -161,13 +166,13 @@ def _fire_one(job_id: int) -> str:
     except _PermanentFireError as exc:
         job.mark_failed(str(exc), terminal=True)
         return "failed"
-    except (UnverifiedDomainError,) as exc:
+    except UnverifiedDomainError as exc:
         job.mark_failed(str(exc), terminal=True)
         return "failed"
     except PlanLimitExceeded as exc:
         job.mark_failed(str(exc))
         return "retried" if job.status == ScheduledJob.Status.SCHEDULED else "failed"
-    except Exception as exc:  # noqa: BLE001 - transient provider/infra hiccup
+    except Exception as exc:
         logger.exception("scheduler.drain: job %s fire error", job.public_id)
         job.mark_failed(str(exc))
         return "retried" if job.status == ScheduledJob.Status.SCHEDULED else "failed"
@@ -187,7 +192,13 @@ def drain() -> dict:
     _recover_stale()
     claimed = _claim_due(now)
 
-    tally = {"due": len(claimed), "fired": 0, "failed": 0, "retried": 0, "stale_skipped": 0}
+    tally = {
+        "due": len(claimed),
+        "fired": 0,
+        "failed": 0,
+        "retried": 0,
+        "stale_skipped": 0,
+    }
     for job_id in claimed:
         outcome = _fire_one(job_id)
         if outcome in ("fired", "fired_recurring"):
@@ -202,6 +213,7 @@ def drain() -> dict:
     if tally["due"]:
         logger.info(
             "scheduler.drain: due=%(due)s fired=%(fired)s failed=%(failed)s "
-            "retried=%(retried)s stale_skipped=%(stale_skipped)s", tally
+            "retried=%(retried)s stale_skipped=%(stale_skipped)s",
+            tally,
         )
     return tally

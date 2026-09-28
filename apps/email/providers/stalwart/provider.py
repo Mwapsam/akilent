@@ -18,6 +18,7 @@ this class maps those contracts onto Stalwart's proprietary JMAP objects
 Credentials are resolved from Django settings by StalwartApiClient.from_settings().
 Never hard-code credentials here.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,10 +26,8 @@ from typing import Any
 
 from apps.email.exceptions import EmailProviderError, ResourceNotFoundError
 from apps.email.providers.base import (
-    DkimResult,
     EmailProvider,
     OperationResult,
-    ProvisionResult,
 )
 from apps.email.providers.stalwart.adapters import (
     adapt_account_object,
@@ -61,7 +60,9 @@ class StalwartProvider(EmailProvider):
     # Every domain/mailbox/alias operation is a JMAP <Type>/get, <Type>/set
     # or <Type>/query call under the hood, where <Type> is e.g. "x:Domain".
 
-    def _create_object(self, type_name: str, key: str, properties: dict[str, Any]) -> dict[str, Any]:
+    def _create_object(
+        self, type_name: str, key: str, properties: dict[str, Any]
+    ) -> dict[str, Any]:
         result = self._client.call(f"{type_name}/set", {"create": {key: properties}})
         not_created = result.get("notCreated") or {}
         if key in not_created:
@@ -74,7 +75,9 @@ class StalwartProvider(EmailProvider):
         created = result.get("created") or {}
         return created.get(key, {})
 
-    def _update_object(self, type_name: str, object_id: str, patch: dict[str, Any]) -> None:
+    def _update_object(
+        self, type_name: str, object_id: str, patch: dict[str, Any]
+    ) -> None:
         result = self._client.call(f"{type_name}/set", {"update": {object_id: patch}})
         not_updated = result.get("notUpdated") or {}
         if object_id in not_updated:
@@ -96,8 +99,12 @@ class StalwartProvider(EmailProvider):
                 details=err if isinstance(err, dict) else {},
             )
 
-    def _query_object_ids(self, type_name: str, filter_: dict[str, Any] | None = None) -> list[str]:
-        result = self._client.call(f"{type_name}/query", {"filter": filter_} if filter_ else {})
+    def _query_object_ids(
+        self, type_name: str, filter_: dict[str, Any] | None = None
+    ) -> list[str]:
+        result = self._client.call(
+            f"{type_name}/query", {"filter": filter_} if filter_ else {}
+        )
         return list(result.get("ids") or [])
 
     def _get_objects(self, type_name: str, ids: list[str]) -> list[dict[str, Any]]:
@@ -106,7 +113,9 @@ class StalwartProvider(EmailProvider):
         result = self._client.call(f"{type_name}/get", {"ids": ids})
         return list(result.get("list") or [])
 
-    def _find_object(self, type_name: str, predicate, *, filter_: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def _find_object(
+        self, type_name: str, predicate, *, filter_: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         ids = self._query_object_ids(type_name, filter_)
         for obj in self._get_objects(type_name, ids):
             if predicate(obj):
@@ -155,7 +164,8 @@ class StalwartProvider(EmailProvider):
         # (confirmed live: "unsupportedFilter") — filter client-side.
         ids = self._query_object_ids("x:DkimSignature")
         return [
-            s for s in self._get_objects("x:DkimSignature", ids)
+            s
+            for s in self._get_objects("x:DkimSignature", ids)
             if s.get("domainId") == domain_id
         ]
 
@@ -271,7 +281,7 @@ class StalwartProvider(EmailProvider):
     # Confirmed live: create/get round-tripped against the production server.
 
     def _find_account(self, email: str) -> dict[str, Any] | None:
-        local, _, domain = email.partition("@")
+        local, _, _domain = email.partition("@")
         return self._find_object(
             "x:Account",
             lambda a: a.get("emailAddress") == email or a.get("name") == local,
@@ -358,7 +368,11 @@ class StalwartProvider(EmailProvider):
         permissions = (
             {"@type": "Inherit"}
             if active
-            else {"@type": "Replace", "enabledPermissions": [], "disabledPermissions": []}
+            else {
+                "@type": "Replace",
+                "enabledPermissions": [],
+                "disabledPermissions": [],
+            }
         )
         self._update_object("x:Account", obj["id"], {"permissions": permissions})
         state = "activated" if active else "suspended"
@@ -418,7 +432,7 @@ class StalwartProvider(EmailProvider):
         properties: dict[str, Any] = {
             "name": local,
             "domainId": domain_obj["id"],
-            "recipients": {t: True for t in targets},
+            "recipients": dict.fromkeys(targets, True),
         }
         if description:
             properties["description"] = description
@@ -439,7 +453,7 @@ class StalwartProvider(EmailProvider):
         description: str | None = None,
     ) -> AliasInfo:
         obj = self._require_mailing_list(address)
-        patch: dict[str, Any] = {"recipients": {t: True for t in targets}}
+        patch: dict[str, Any] = {"recipients": dict.fromkeys(targets, True)}
         if description is not None:
             patch["description"] = description
         self._update_object("x:MailingList", obj["id"], patch)

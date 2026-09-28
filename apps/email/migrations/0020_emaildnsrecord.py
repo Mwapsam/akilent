@@ -5,28 +5,65 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0019_suppressionlistentry_bounce_count_and_more'),
+        ("email_service", "0019_suppressionlistentry_bounce_count_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='EmailDnsRecord',
+            name="EmailDnsRecord",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(choices=[('verify', 'Domain verification'), ('dkim', 'DKIM'), ('spf', 'SPF'), ('dmarc', 'DMARC')], max_length=10)),
-                ('record_type', models.CharField(choices=[('TXT', 'TXT'), ('CNAME', 'CNAME')], default='TXT', max_length=10)),
-                ('name', models.CharField(max_length=255)),
-                ('value', models.TextField()),
-                ('is_ok', models.BooleanField(default=False)),
-                ('checked_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='dns_record_rows', to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "key",
+                    models.CharField(
+                        choices=[
+                            ("verify", "Domain verification"),
+                            ("dkim", "DKIM"),
+                            ("spf", "SPF"),
+                            ("dmarc", "DMARC"),
+                        ],
+                        max_length=10,
+                    ),
+                ),
+                (
+                    "record_type",
+                    models.CharField(
+                        choices=[("TXT", "TXT"), ("CNAME", "CNAME")],
+                        default="TXT",
+                        max_length=10,
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                ("value", models.TextField()),
+                ("is_ok", models.BooleanField(default=False)),
+                ("checked_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="dns_record_rows",
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['domain_id', 'id'],
-                'constraints': [models.UniqueConstraint(fields=('domain', 'key', 'name'), name='uniq_dns_record_per_domain_key_name')],
+                "ordering": ["domain_id", "id"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("domain", "key", "name"),
+                        name="uniq_dns_record_per_domain_key_name",
+                    )
+                ],
             },
         ),
     ]

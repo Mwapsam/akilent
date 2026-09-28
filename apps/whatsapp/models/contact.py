@@ -34,8 +34,11 @@ class WhatsAppContact(models.Model):
     # of only ever being matched by phone-number string comparison. Optional —
     # not every WhatsApp identity has (or needs) a linked Contact.
     contact = models.ForeignKey(
-        "contacts.Contact", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="whatsapp_contacts",
+        "contacts.Contact",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="whatsapp_contacts",
     )
 
     phone_number = models.CharField(max_length=20, db_index=True)
@@ -70,10 +73,15 @@ class WhatsAppContact(models.Model):
         self.opt_in_at = timezone.now()
         self.opt_out_at = None
         self.opt_out_reason = ""
-        self.save(update_fields=[
-            "opt_in_status", "opt_in_source", "opt_in_at",
-            "opt_out_at", "opt_out_reason",
-        ])
+        self.save(
+            update_fields=[
+                "opt_in_status",
+                "opt_in_source",
+                "opt_in_at",
+                "opt_out_at",
+                "opt_out_reason",
+            ]
+        )
         if changed:
             self._record_on_contact("whatsapp.opted_in", {"source": source[:100]})
 
@@ -82,9 +90,13 @@ class WhatsAppContact(models.Model):
         self.opt_in_status = self.OptInStatus.OPTED_OUT
         self.opt_out_at = timezone.now()
         self.opt_out_reason = reason[:255]
-        self.save(update_fields=[
-            "opt_in_status", "opt_out_at", "opt_out_reason",
-        ])
+        self.save(
+            update_fields=[
+                "opt_in_status",
+                "opt_out_at",
+                "opt_out_reason",
+            ]
+        )
         if changed:
             self._record_on_contact("whatsapp.opted_out", {"reason": reason[:255]})
 
@@ -145,12 +157,14 @@ class CrmBinding(models.Model):
     @transaction.atomic
     def make_primary(self):
         """Promote this binding (e.g. after Lead -> Deal conversion)."""
-        CrmBinding.objects.filter(
-            contact=self.contact, is_primary=True
-        ).exclude(pk=self.pk).update(is_primary=False)
+        CrmBinding.objects.filter(contact=self.contact, is_primary=True).exclude(
+            pk=self.pk
+        ).update(is_primary=False)
         self.is_primary = True
         self.save(update_fields=["is_primary"])
 
     def __str__(self):
         flag = " *" if self.is_primary else ""
-        return f"{self.contact.phone_number} -> {self.entity_type}:{self.entity_id}{flag}"
+        return (
+            f"{self.contact.phone_number} -> {self.entity_type}:{self.entity_id}{flag}"
+        )

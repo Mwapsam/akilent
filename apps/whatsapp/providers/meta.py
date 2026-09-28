@@ -9,6 +9,7 @@ official Cloud API. It handles:
 Errors are raised as WhatsAppProviderError; adapting is the provider's
 responsibility, not the caller's.
 """
+
 import logging
 
 import requests
@@ -48,9 +49,22 @@ _NON_RETRYABLE_CODES = {
     # Meta's side), the failure-spike alerter surfaces the pattern within the
     # hour; revisit making *this* code retryable-with-short-cap if that happens.
     "133010",  # phone number not registered
-    "132000", "132001", "132005", "132007", "132012", "132015", "132016", "132068", "132069",  # template errors
-    "133004", "133005", "133006", "133008", "133009", "133016",  # account/registration errors
-    "190",     # access token expired/invalid
+    "132000",
+    "132001",
+    "132005",
+    "132007",
+    "132012",
+    "132015",
+    "132016",
+    "132068",
+    "132069",  # template errors
+    "133004",
+    "133005",
+    "133006",
+    "133008",
+    "133009",
+    "133016",  # account/registration errors
+    "190",  # access token expired/invalid
 }
 
 
@@ -61,21 +75,32 @@ def _classify_meta_error(status_code: int, body: dict) -> tuple[str, str, bool]:
     subcode = err.get("error_subcode")
     if subcode:
         code = f"{code}/{subcode}"
-    message = err.get("message") or err.get("error_data", {}).get("details") or "Meta API error"
+    message = (
+        err.get("message")
+        or err.get("error_data", {}).get("details")
+        or "Meta API error"
+    )
     base = code.split("/")[0]
-    retryable = not (base in _NON_RETRYABLE_CODES) and status_code not in (400, 401, 403)
+    retryable = base not in _NON_RETRYABLE_CODES and status_code not in (400, 401, 403)
     if status_code == 429 or base in ("130429", "131056", "80007"):
         retryable = True
     return code, message, retryable
 
 
-_DROPPED_MARKERS = ("connection aborted", "remotedisconnected", "connection reset", "broken pipe")
+_DROPPED_MARKERS = (
+    "connection aborted",
+    "remotedisconnected",
+    "connection reset",
+    "broken pipe",
+)
 
 
 def _may_have_been_sent(exc: Exception) -> bool:
     if isinstance(exc, requests.ConnectTimeout):
         return False
-    if isinstance(exc, (requests.ReadTimeout, requests.exceptions.ChunkedEncodingError)):
+    if isinstance(
+        exc, (requests.ReadTimeout, requests.exceptions.ChunkedEncodingError)
+    ):
         return True
     if isinstance(exc, requests.ConnectionError):
         text = str(exc).lower()
@@ -102,10 +127,12 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         self._access_token = access_token
         self._app_id = app_id
         self._session = requests.Session()
-        self._session.headers.update({
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        })
+        self._session.headers.update(
+            {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            }
+        )
 
     def _url(self, path: str) -> str:
         """Build a full Graph API URL from a path."""
@@ -138,7 +165,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             except ValueError:
                 body = {}
             code, message, retryable = _classify_meta_error(response.status_code, body)
-            err = WhatsAppProviderError(f"Meta API {response.status_code} [{code}]: {message}")
+            err = WhatsAppProviderError(
+                f"Meta API {response.status_code} [{code}]: {message}"
+            )
             err.code = code
             err.retryable = retryable
             raise err
@@ -260,7 +289,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             except ValueError:
                 body = {}
             code, message, _ = _classify_meta_error(response.status_code, body)
-            err = WhatsAppProviderError(f"Meta API {response.status_code} [{code}]: {message}")
+            err = WhatsAppProviderError(
+                f"Meta API {response.status_code} [{code}]: {message}"
+            )
             err.code = code
             raise err
         return response.json()
@@ -329,7 +360,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 size_bytes=data.get("file_size"),
             )
         except requests.RequestException as e:
-            raise WhatsAppProviderError(f"Failed to get media URL for {media_id}: {e}") from e
+            raise WhatsAppProviderError(
+                f"Failed to get media URL for {media_id}: {e}"
+            ) from e
 
     def download_media(self, media_url: str) -> bytes:
         """Download media from a provider-supplied URL."""

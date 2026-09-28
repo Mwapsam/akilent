@@ -7,6 +7,7 @@ is stable across logins but single-use: once ``Account.email_verified`` flips
 to ``True`` the hash changes and the old link stops validating. A password
 change still invalidates it too (``user.password`` stays in the hash).
 """
+
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 

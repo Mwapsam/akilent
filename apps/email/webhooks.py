@@ -5,6 +5,7 @@ enqueue_event(); apps.email.tasks.deliver_webhook does the actual signed HTTP
 POST with retry/backoff. Signature format mirrors Stripe's:
 ``t=<unix>,v1=<hex hmac-sha256>`` over ``"<t>.<raw body>"``.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -28,14 +29,20 @@ def _hmac_hex(secret: str, timestamp: int, raw_body: bytes) -> str:
     return hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
 
 
-def build_signature_header(secret: str, raw_body: bytes, *, timestamp: int | None = None) -> str:
+def build_signature_header(
+    secret: str, raw_body: bytes, *, timestamp: int | None = None
+) -> str:
     ts = timestamp if timestamp is not None else int(time.time())
     digest = _hmac_hex(secret, ts, raw_body)
     return f"t={ts},v1={digest}"
 
 
 def verify_signature(
-    secret: str, raw_body: bytes, signature_header: str, *, tolerance: int = _TOLERANCE_SECONDS
+    secret: str,
+    raw_body: bytes,
+    signature_header: str,
+    *,
+    tolerance: int = _TOLERANCE_SECONDS,
 ) -> bool:
     """Verify a received webhook's signature header. For customers' own servers."""
     try:
@@ -50,7 +57,9 @@ def verify_signature(
     return hmac.compare_digest(expected_v1, received_v1)
 
 
-def enqueue_event(event_type: str, *, account, message=None, data: dict | None = None) -> list[int]:
+def enqueue_event(
+    event_type: str, *, account, message=None, data: dict | None = None
+) -> list[int]:
     """Fan out an event to every active endpoint subscribed to it.
 
     Best-effort: never raises — a webhook subsystem failure must not break

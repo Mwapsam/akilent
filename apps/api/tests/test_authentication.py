@@ -6,7 +6,6 @@ from django.core.cache import cache
 from apps.api.authentication import (
     _LOCKOUT_MAX_ATTEMPTS,
     _is_locked_out,
-    _lockout_cache_key,
 )
 
 MESSAGES_URL = "/api/v1/messages"

@@ -3,7 +3,7 @@
 "Can't use" is either an operator removal (commercial) or the owner switching an optional tool
 off. With neither, a business keeps today's behaviour (allowed), so deploying locks nobody out.
 """
-import json
+
 from decimal import Decimal
 
 import pytest
@@ -42,15 +42,23 @@ def set_module(account, key, enabled):
 @pytest.fixture
 def contact(logged_in):
     _, account = logged_in
-    return Contact.objects.create(account=account, phone="+260971234567", email="j@x.com")
+    return Contact.objects.create(
+        account=account, phone="+260971234567", email="j@x.com"
+    )
 
 
 def published_workflow(account, trigger="contact.created"):
     return Workflow.objects.create(
-        account=account, name="WF", status=Workflow.Status.PUBLISHED,
-        definition={"trigger": {"type": trigger}, "steps": [
-            {"id": "w", "type": "wait", "seconds": 3600, "next": "done"},
-            {"id": "done", "type": "stop"}]},
+        account=account,
+        name="WF",
+        status=Workflow.Status.PUBLISHED,
+        definition={
+            "trigger": {"type": trigger},
+            "steps": [
+                {"id": "w", "type": "wait", "seconds": 3600, "next": "done"},
+                {"id": "done", "type": "stop"},
+            ],
+        },
     )
 
 
@@ -58,10 +66,10 @@ def published_workflow(account, trigger="contact.created"):
 @pytest.mark.django_db
 def test_usable_semantics(logged_in):
     _, account = logged_in
-    assert billing_api.usable(account, "sales") is True               # nothing stored -> allowed
+    assert billing_api.usable(account, "sales") is True  # nothing stored -> allowed
     set_module(account, "sales", False)
-    assert billing_api.usable(account, "sales") is False              # owner switched it off
-    assert billing_api.entitled(account, "sales") is True             # ...but still entitled
+    assert billing_api.usable(account, "sales") is False  # owner switched it off
+    assert billing_api.entitled(account, "sales") is True  # ...but still entitled
     set_module(account, "sales", True)
     assert billing_api.usable(account, "sales") is True
     with pytest.raises(KeyError):
@@ -78,14 +86,18 @@ def test_disabling_one_tenant_does_not_affect_another(logged_in):
 
 # ---- views ----------------------------------------------------------------------
 @pytest.mark.django_db
-@pytest.mark.parametrize("url,module", [("/sales/", "sales"), ("/orders/", "orders"),
-                                        ("/automations/", "automations")])
+@pytest.mark.parametrize(
+    "url,module",
+    [("/sales/", "sales"), ("/orders/", "orders"), ("/automations/", "automations")],
+)
 def test_view_allowed_by_default_blocked_when_disabled(logged_in, url, module):
     client, account = logged_in
-    assert client.get(url).status_code == 200                        # no row -> unchanged
+    assert client.get(url).status_code == 200  # no row -> unchanged
     set_module(account, module, False)
     resp = client.get(url)
-    assert resp.status_code == 302 and resp.url == f"/billing/locked/{module}/"  # the locked page explains
+    assert (
+        resp.status_code == 302 and resp.url == f"/billing/locked/{module}/"
+    )  # the locked page explains
     set_module(account, module, True)
     assert client.get(url).status_code == 200
 
@@ -116,7 +128,9 @@ def test_disabled_automation_module_blocks_enrollment(logged_in, contact):
 
 
 @pytest.mark.django_db
-def test_enrollment_still_works_with_no_row_or_enabled(logged_in, contact):  # regression
+def test_enrollment_still_works_with_no_row_or_enabled(
+    logged_in, contact
+):  # regression
     _, account = logged_in
     wf = published_workflow(account)
     assert enroll(wf, contact) is not None
@@ -131,7 +145,9 @@ def test_disabled_crm_module_blocks_crm_actions(logged_in, contact):
     _, account = logged_in
     set_module(account, "sales", False)
     with pytest.raises(ActionError, match="sales"):
-        run_action("create_lead", {"account": account}, account=account, contact=contact)
+        run_action(
+            "create_lead", {"account": account}, account=account, contact=contact
+        )
 
 
 @pytest.mark.django_db
@@ -139,27 +155,40 @@ def test_disabled_commerce_module_blocks_commerce_actions(logged_in, contact):
     _, account = logged_in
     set_module(account, "orders", False)
     with pytest.raises(ActionError, match="orders"):
-        run_action("create_order", {"account": account}, account=account, contact=contact,
-                   items=[{"name": "X", "unit_price": Decimal("1.00"), "quantity": 1}])
+        run_action(
+            "create_order",
+            {"account": account},
+            account=account,
+            contact=contact,
+            items=[{"name": "X", "unit_price": Decimal("1.00"), "quantity": 1}],
+        )
 
 
 @pytest.mark.django_db
 def test_actions_still_run_with_no_row_or_enabled(logged_in, contact):  # regression
     _, account = logged_in
-    assert "lead_id" in run_action("create_lead", {"account": account}, account=account, contact=contact)
+    assert "lead_id" in run_action(
+        "create_lead", {"account": account}, account=account, contact=contact
+    )
     set_module(account, "sales", True)
-    assert "lead_id" in run_action("create_lead", {"account": account}, account=account, contact=contact)
+    assert "lead_id" in run_action(
+        "create_lead", {"account": account}, account=account, contact=contact
+    )
 
 
 @pytest.mark.django_db
 def test_modules_gate_independently(logged_in, contact):
     _, account = logged_in
-    set_module(account, "orders", False)          # commerce off must not block crm
-    assert "lead_id" in run_action("create_lead", {"account": account}, account=account, contact=contact)
+    set_module(account, "orders", False)  # commerce off must not block crm
+    assert "lead_id" in run_action(
+        "create_lead", {"account": account}, account=account, contact=contact
+    )
 
 
 @pytest.mark.django_db
-def test_context_without_account_is_unchanged(logged_in, contact):  # trusted internal call
+def test_context_without_account_is_unchanged(
+    logged_in, contact
+):  # trusted internal call
     _, account = logged_in
     set_module(account, "sales", False)
     assert "lead_id" in run_action("create_lead", {}, account=account, contact=contact)
@@ -171,10 +200,20 @@ def test_workflow_api_blocked_when_automation_disabled(client, db):
     from apps.accounts.models import Account as A
 
     acc = A.objects.create(company_name="Api Co")
-    plan = Plan.objects.create(slug="p", name="P", price_monthly=Decimal("10"),
-                               max_emails_per_month=100, email_apis=True, api_rate_per_min=0)
-    Subscription.objects.create(account=acc, plan=plan, status=Subscription.ACTIVE,
-                                current_period_start=timezone.now())
+    plan = Plan.objects.create(
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=100,
+        email_apis=True,
+        api_rate_per_min=0,
+    )
+    Subscription.objects.create(
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
+        current_period_start=timezone.now(),
+    )
     _, key = EmailApiKey.create_for_account(acc, name="k")
     assert client.get("/api/v1/workflows", HTTP_X_API_KEY=key).status_code == 200
     set_module(acc, "automations", False)

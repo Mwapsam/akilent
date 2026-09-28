@@ -6,6 +6,7 @@ SendGrid/Mailgun/SES/Resend provider later means adding a sibling module and
 pointing EMAIL_SEND_PROVIDER_BACKEND at it — this class and its call sites
 don't change.
 """
+
 from __future__ import annotations
 
 from apps.email.exceptions import EmailProviderError

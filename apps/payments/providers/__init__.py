@@ -8,6 +8,7 @@ Usage (Phase 5+):
     provider = get_payment_provider(account)
     result = provider.charge(amount_cents=9999, currency='usd', idempotency_key=...)
 """
+
 import logging
 
 logger = logging.getLogger(__name__)

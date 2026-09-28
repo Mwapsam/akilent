@@ -24,7 +24,9 @@ def owner(db, account):
 
 @pytest.fixture
 def plan(db):
-    return Plan.objects.create(slug="starter", name="Starter", price_monthly=Decimal("19"))
+    return Plan.objects.create(
+        slug="starter", name="Starter", price_monthly=Decimal("19")
+    )
 
 
 @pytest.fixture
@@ -33,7 +35,11 @@ def manual_method(db):
     # (disabled by default) — update it in place rather than re-creating.
     method, _ = PaymentMethod.objects.update_or_create(
         code="manual",
-        defaults={"name": "Bank transfer", "is_enabled": True, "instructions": "Wire to Acme Bank."},
+        defaults={
+            "name": "Bank transfer",
+            "is_enabled": True,
+            "instructions": "Wire to Acme Bank.",
+        },
     )
     return method
 
@@ -41,7 +47,10 @@ def manual_method(db):
 @pytest.fixture
 def admin_user(db):
     return User.objects.create_user(
-        username="admin1", password="pw12345!", email="admin@example.com", is_superuser=True
+        username="admin1",
+        password="pw12345!",
+        email="admin@example.com",
+        is_superuser=True,
     )
 
 
@@ -63,7 +72,9 @@ def test_manual_submit_creates_pending_request_and_notifies_admin(
 
 
 @pytest.mark.django_db
-def test_manual_submit_requires_reference(client, account, owner, plan, manual_method, admin_user):
+def test_manual_submit_requires_reference(
+    client, account, owner, plan, manual_method, admin_user
+):
     client.force_login(owner)
     resp = client.post(MANUAL_SUBMIT_URL, {"plan": plan.slug, "reference": ""})
 
@@ -73,7 +84,9 @@ def test_manual_submit_requires_reference(client, account, owner, plan, manual_m
 
 
 @pytest.mark.django_db
-def test_manual_submit_disabled_method_rejected(client, account, owner, plan, admin_user):
+def test_manual_submit_disabled_method_rejected(
+    client, account, owner, plan, admin_user
+):
     # No enabled PaymentMethod(code="manual") fixture here.
     client.force_login(owner)
     resp = client.post(MANUAL_SUBMIT_URL, {"plan": plan.slug, "reference": "TXN-123"})

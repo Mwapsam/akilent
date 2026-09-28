@@ -5,20 +5,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
+        ("accounts", "0005_account_security_reviewed_at"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='BusinessHours',
+            name="BusinessHours",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timezone', models.CharField(default='UTC', max_length=64)),
-                ('schedule', models.JSONField(blank=True, default=dict)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='business_hours', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("timezone", models.CharField(default="UTC", max_length=64)),
+                ("schedule", models.JSONField(blank=True, default=dict)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="business_hours",
+                        to="accounts.account",
+                    ),
+                ),
             ],
         ),
     ]

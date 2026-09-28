@@ -6,6 +6,7 @@ are always members of the business itself: "owners" (owners and admins), "assign
 the conversation is assigned to, falling back to owners so nobody is silently skipped), or one
 named teammate's email address. Nothing here can email a customer or an outsider.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,11 @@ def absolute_url(path: str) -> str:
 
 
 def _members(account):
-    return Membership.objects.filter(account=account, user__is_active=True).select_related("user").order_by("id")
+    return (
+        Membership.objects.filter(account=account, user__is_active=True)
+        .select_related("user")
+        .order_by("id")
+    )
 
 
 def recipients(account, to: str, *, conversation=None) -> list:
@@ -41,7 +46,11 @@ def recipients(account, to: str, *, conversation=None) -> list:
     if to == "owners":
         return [m.user for m in _members(account) if m.role in _MANAGER_ROLES]
     if to == "assignee":
-        if conversation is not None and conversation.assigned_to_id and conversation.assigned_to.is_active:
+        if (
+            conversation is not None
+            and conversation.assigned_to_id
+            and conversation.assigned_to.is_active
+        ):
             return [conversation.assigned_to]
         return recipients(account, "owners")
     if "@" in to:
@@ -49,10 +58,14 @@ def recipients(account, to: str, *, conversation=None) -> list:
         if member is None:
             raise NotifyError(f"{to} isn't on your team.")
         return [member.user]
-    raise NotifyError("Choose who to tell: your owners, the assigned teammate, or a teammate's email.")
+    raise NotifyError(
+        "Choose who to tell: your owners, the assigned teammate, or a teammate's email."
+    )
 
 
-def notify_team(account, *, to: str, subject: str, text: str, path: str = "", conversation=None) -> int:
+def notify_team(
+    account, *, to: str, subject: str, text: str, path: str = "", conversation=None
+) -> int:
     """Email ``text`` (with a link to ``path``) to the chosen teammates. Returns how many were sent.
 
     A delivery failure for one person is logged and skipped: one bad address must not stop the
@@ -73,7 +86,9 @@ def notify_team(account, *, to: str, subject: str, text: str, path: str = "", co
         if not user.email:
             continue
         try:
-            send_system_email(to_email=user.email, subject=subject[:200], text_body=body)
+            send_system_email(
+                to_email=user.email, subject=subject[:200], text_body=body
+            )
             sent += 1
         except Exception:
             logger.exception("notify_team: could not email user=%s", user.pk)

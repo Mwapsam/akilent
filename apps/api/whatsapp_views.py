@@ -3,6 +3,7 @@
 The caller's app makes the code and checks it later; Akilent only delivers it with the business's
 approved Authentication template. Keys with ``mode="test"`` check the request but send nothing.
 """
+
 from __future__ import annotations
 
 from drf_spectacular.types import OpenApiTypes
@@ -16,12 +17,24 @@ from apps.whatsapp import api as whatsapp_api
 
 
 class VerificationCodeSerializer(serializers.Serializer):
-    to = serializers.CharField(max_length=32, help_text="Phone number with country code, e.g. +260971234567.")
-    code = serializers.CharField(max_length=15, help_text="The code your system made: 4-15 letters or numbers.")
-    template = serializers.CharField(max_length=255, required=False, allow_blank=True,
-                                     help_text="Authentication template name. Defaults to the newest approved one.")
-    language = serializers.CharField(max_length=10, required=False, allow_blank=True,
-                                     help_text="Template language code, e.g. en. Needed only if the name exists in several.")
+    to = serializers.CharField(
+        max_length=32, help_text="Phone number with country code, e.g. +260971234567."
+    )
+    code = serializers.CharField(
+        max_length=15, help_text="The code your system made: 4-15 letters or numbers."
+    )
+    template = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+        help_text="Authentication template name. Defaults to the newest approved one.",
+    )
+    language = serializers.CharField(
+        max_length=10,
+        required=False,
+        allow_blank=True,
+        help_text="Template language code, e.g. en. Needed only if the name exists in several.",
+    )
 
 
 class VerificationCodeCreateView(BaseApiView):
@@ -34,7 +47,9 @@ class VerificationCodeCreateView(BaseApiView):
     @extend_schema(
         operation_id="whatsapp_verification_code_send",
         request=VerificationCodeSerializer,
-        responses={202: OpenApiResponse(OpenApiTypes.OBJECT, "Code accepted for delivery.")},
+        responses={
+            202: OpenApiResponse(OpenApiTypes.OBJECT, "Code accepted for delivery.")
+        },
         tags=["WhatsApp"],
     )
     def post(self, request, *args, **kwargs):
@@ -52,7 +67,9 @@ class VerificationCodeCreateView(BaseApiView):
             dry_run=getattr(request.auth, "mode", "live") == "test",
         )
         request.auth.touch()
-        return self.finish_idempotency(idem, Response(result, status=status.HTTP_202_ACCEPTED))
+        return self.finish_idempotency(
+            idem, Response(result, status=status.HTTP_202_ACCEPTED)
+        )
 
 
 class VerificationCodeDetailView(BaseApiView):
@@ -61,11 +78,16 @@ class VerificationCodeDetailView(BaseApiView):
     permission_classes = [HasWhatsAppModule, HasScope]
     required_scope = "messages:send"
 
-    @extend_schema(operation_id="whatsapp_verification_code_status",
-                   responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["WhatsApp"])
+    @extend_schema(
+        operation_id="whatsapp_verification_code_status",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["WhatsApp"],
+    )
     def get(self, request, message_id, *args, **kwargs):
         result = whatsapp_api.verification_code_status(request.user, message_id)
         if result is None:
-            return Response({"error": {"code": "not_found", "message": "No code with that id."}},
-                            status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": {"code": "not_found", "message": "No code with that id."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(result)

@@ -39,7 +39,7 @@ class TestLineChart:
         assert "var(--chart-series-1)" in html
         assert "var(--chart-series-2)" in html
         paths = re.findall(r'stroke="(#[0-9a-fA-F]{3,8})"', html)
-        assert not paths, "literal stroke colours break dark mode: %s" % paths
+        assert not paths, f"literal stroke colours break dark mode: {paths}"
 
     def test_both_series_are_named_in_the_legend(self):
         """Identity is never colour alone."""
@@ -52,7 +52,7 @@ class TestLineChart:
         reader, in print, and by anyone who needs an exact figure."""
         html = self._html()
         assert "View as table" in html
-        table = html[html.index("chart-table"):]
+        table = html[html.index("chart-table") :]
         for value in ("10", "20", "15", "2", "8", "5"):
             assert value in table
 
@@ -79,13 +79,20 @@ class TestLineChart:
         assert len(ids) == 2 and len(set(ids)) == 2
 
     def test_an_empty_series_renders_nothing_rather_than_empty_axes(self):
-        assert _render("{% line_chart series days %}", series=[("Opens", [])], days=[]).strip() == ""
+        assert (
+            _render(
+                "{% line_chart series days %}", series=[("Opens", [])], days=[]
+            ).strip()
+            == ""
+        )
 
     def test_mismatched_series_and_labels_are_refused(self):
         """A chart drawn from mismatched columns plots real numbers against the
         wrong dates — wrong without looking wrong, so it fails loudly."""
         with pytest.raises(ValueError, match="without looking wrong"):
-            _render("{% line_chart series days %}", series=[("Opens", [1, 2])], days=["Mon"])
+            _render(
+                "{% line_chart series days %}", series=[("Opens", [1, 2])], days=["Mon"]
+            )
 
 
 class TestSparkline:
@@ -98,7 +105,9 @@ class TestSparkline:
         assert _render("{% sparkline values %}", values=[5]).strip() == ""
 
     def test_it_carries_a_text_summary_for_screen_readers(self):
-        html = _render("{% sparkline values label='Opens, last 7 days' %}", values=[1, 2, 3])
+        html = _render(
+            "{% sparkline values label='Opens, last 7 days' %}", values=[1, 2, 3]
+        )
         assert 'aria-hidden="true"' in html
         assert "Opens, last 7 days" in html
 

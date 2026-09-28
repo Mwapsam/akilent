@@ -43,7 +43,10 @@ class OutboundMessage(models.Model):
     last_error = models.TextField(blank=True, null=True)
 
     message_log = models.OneToOneField(
-        MessageLog, blank=True, null=True, on_delete=models.SET_NULL,
+        MessageLog,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
         related_name="outbound_source",
     )
 
@@ -53,8 +56,8 @@ class OutboundMessage(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["status", "scheduled_at"]),            # drain worker
-            models.Index(fields=["account", "status"]),                 # rate limiter
+            models.Index(fields=["status", "scheduled_at"]),  # drain worker
+            models.Index(fields=["account", "status"]),  # rate limiter
         ]
         constraints = [
             models.UniqueConstraint(
@@ -85,9 +88,15 @@ class OutboundMessage(models.Model):
             self.next_attempt_at = timezone.now() + timedelta(
                 minutes=2 ** (self.attempts - 1)
             )
-        self.save(update_fields=[
-            "attempts", "last_error", "status", "next_attempt_at", "error_code",
-        ])
+        self.save(
+            update_fields=[
+                "attempts",
+                "last_error",
+                "status",
+                "next_attempt_at",
+                "error_code",
+            ]
+        )
 
     def __str__(self):
         return f"-> {self.contact.phone_number} [{self.status}]"

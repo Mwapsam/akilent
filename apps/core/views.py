@@ -2,6 +2,7 @@
 
 The Operator Console (/manage/) lives in apps/core/console/.
 """
+
 import logging
 
 from django.http import Http404
@@ -42,24 +43,33 @@ def healthz(request):
 
 # --- Help center (public knowledge base) --------------------------------------
 
+
 def help_index(request):
     q = (request.GET.get("q") or "").strip()
     results = help_kb.search(q) if q else None
-    return render(request, "help/index.html", {
-        "q": q,
-        "results": results,
-        "categories": help_kb.grouped(),
-    })
+    return render(
+        request,
+        "help/index.html",
+        {
+            "q": q,
+            "results": results,
+            "categories": help_kb.grouped(),
+        },
+    )
 
 
 def help_article(request, slug):
     article = help_kb.get_article(slug)
     if article is None:
         raise Http404("No such help article")
-    return render(request, "help/article.html", {
-        "article": article,
-        "related": help_kb.related_to(article),
-    })
+    return render(
+        request,
+        "help/article.html",
+        {
+            "article": article,
+            "related": help_kb.related_to(article),
+        },
+    )
 
 
 # --- Legal pages (public) ------------------------------------------------------
@@ -79,6 +89,7 @@ def legal_page(request, slug):
 
 # --- Developer docs (public) ---------------------------------------------------
 
+
 def docs_page(request, slug="index"):
     from django.conf import settings
 
@@ -86,11 +97,15 @@ def docs_page(request, slug="index"):
     if page is None:
         raise Http404("No such docs page")
     prev_page, next_page = docs_kb.neighbors(page)
-    return render(request, page.template, {
-        "page": page,
-        "pages": docs_kb.PAGES,
-        "prev_page": prev_page,
-        "next_page": next_page,
-        "smtp_relay_host": settings.SMTP_RELAY_HOST,
-        "smtp_relay_port": settings.SMTP_RELAY_PORT,
-    })
+    return render(
+        request,
+        page.template,
+        {
+            "page": page,
+            "pages": docs_kb.PAGES,
+            "prev_page": prev_page,
+            "next_page": next_page,
+            "smtp_relay_host": settings.SMTP_RELAY_HOST,
+            "smtp_relay_port": settings.SMTP_RELAY_PORT,
+        },
+    )

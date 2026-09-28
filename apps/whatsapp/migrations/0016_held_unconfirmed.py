@@ -4,20 +4,46 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0015_messagetemplate_header_format_messagetemplateasset_and_more'),
+        (
+            "whatsapp",
+            "0015_messagetemplate_header_format_messagetemplateasset_and_more",
+        ),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='messagelog',
-            name='status',
-            field=models.CharField(choices=[('queued', 'Queued'), ('sent', 'Sent'), ('delivered', 'Delivered'), ('read', 'Read'), ('failed', 'Failed'), ('held', 'Held (plan limit)'), ('unconfirmed', 'May not have been sent')], default='queued', max_length=20),
+            model_name="messagelog",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("queued", "Queued"),
+                    ("sent", "Sent"),
+                    ("delivered", "Delivered"),
+                    ("read", "Read"),
+                    ("failed", "Failed"),
+                    ("held", "Held (plan limit)"),
+                    ("unconfirmed", "May not have been sent"),
+                ],
+                default="queued",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='outboundmessage',
-            name='status',
-            field=models.CharField(choices=[('queued', 'Queued'), ('sending', 'Sending'), ('sent', 'Sent'), ('failed', 'Failed'), ('cancelled', 'Cancelled'), ('held', 'Held (plan limit)'), ('unconfirmed', 'May not have been sent')], default='queued', max_length=20),
+            model_name="outboundmessage",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("queued", "Queued"),
+                    ("sending", "Sending"),
+                    ("sent", "Sent"),
+                    ("failed", "Failed"),
+                    ("cancelled", "Cancelled"),
+                    ("held", "Held (plan limit)"),
+                    ("unconfirmed", "May not have been sent"),
+                ],
+                default="queued",
+                max_length=20,
+            ),
         ),
     ]

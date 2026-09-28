@@ -1,4 +1,5 @@
 """Unit tests for the AWS SES send provider (SesSendProvider)."""
+
 import pytest
 
 try:
@@ -43,8 +44,10 @@ class SesSendProviderTests(TestCase):
         )
 
     def _provider(self, **settings_over):
-        with patch("apps.core.models.MailProviderSettings.load",
-                   return_value=_settings(**settings_over)):
+        with patch(
+            "apps.core.models.MailProviderSettings.load",
+            return_value=_settings(**settings_over),
+        ):
             return SesSendProvider()
 
     def _msg(self, **over):
@@ -60,8 +63,9 @@ class SesSendProviderTests(TestCase):
 
     def test_send_html_and_text(self):
         provider = self._provider()
-        with patch.object(provider.client, "send_email",
-                          wraps=provider.client.send_email) as spy:
+        with patch.object(
+            provider.client, "send_email", wraps=provider.client.send_email
+        ) as spy:
             res = provider.send(self._msg())
         self.assertTrue(res.success)
         self.assertTrue(res.provider_message_id)
@@ -71,8 +75,9 @@ class SesSendProviderTests(TestCase):
 
     def test_send_text_only(self):
         provider = self._provider()
-        with patch.object(provider.client, "send_email",
-                          wraps=provider.client.send_email) as spy:
+        with patch.object(
+            provider.client, "send_email", wraps=provider.client.send_email
+        ) as spy:
             provider.send(self._msg(html_body=""))
         body = spy.call_args.kwargs["Content"]["Simple"]["Body"]
         self.assertIn("Text", body)
@@ -89,8 +94,9 @@ class SesSendProviderTests(TestCase):
             "List-Unsubscribe": "<mailto:u@acme.com>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         }
-        with patch.object(provider.client, "send_email",
-                          wraps=provider.client.send_email) as spy:
+        with patch.object(
+            provider.client, "send_email", wraps=provider.client.send_email
+        ) as spy:
             provider.send(self._msg(headers=headers))
         sent = {
             h["Name"]: h["Value"]
@@ -103,8 +109,9 @@ class SesSendProviderTests(TestCase):
         client.create_configuration_set(ConfigurationSetName="primary")
         provider = self._provider(ses_configuration_set="primary")
         self.assertEqual(provider.configuration_set, "primary")
-        with patch.object(provider.client, "send_email",
-                          wraps=provider.client.send_email) as spy:
+        with patch.object(
+            provider.client, "send_email", wraps=provider.client.send_email
+        ) as spy:
             provider.send(self._msg())
         self.assertEqual(spy.call_args.kwargs["ConfigurationSetName"], "primary")
 

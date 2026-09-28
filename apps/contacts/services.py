@@ -1,4 +1,5 @@
 """Contact upsert, CSV import, and activity recording."""
+
 from __future__ import annotations
 
 import csv
@@ -41,7 +42,9 @@ class ContactLimitReached(ValueError):
     """Adding another customer by hand, import or API would pass the plan's limit."""
 
 
-def ensure_room_for_contact(account, *, email: str | None = None, phone: str | None = None) -> None:
+def ensure_room_for_contact(
+    account, *, email: str | None = None, phone: str | None = None
+) -> None:
     """Raise ContactLimitReached if this would add a NEW customer past the plan's limit.
 
     Only for deliberate adds (the form, CSV import, the API). A customer who messages the
@@ -57,7 +60,9 @@ def ensure_room_for_contact(account, *, email: str | None = None, phone: str | N
     if phone:
         exists = Contact.objects.filter(account=account, phone=phone).exists()
     elif email:
-        exists = Contact.objects.filter(account=account, email__iexact=email.strip()).exists()
+        exists = Contact.objects.filter(
+            account=account, email__iexact=email.strip()
+        ).exists()
     else:
         exists = False
     if exists:
@@ -68,7 +73,9 @@ def ensure_room_for_contact(account, *, email: str | None = None, phone: str | N
         raise ContactLimitReached(str(exc)) from exc
 
 
-def upsert_contact(account, email: str, *, attributes: dict | None = None, **fields) -> tuple[Contact, bool]:
+def upsert_contact(
+    account, email: str, *, attributes: dict | None = None, **fields
+) -> tuple[Contact, bool]:
     """Create or update a contact by (account, email). Returns (contact, created)."""
     email = (email or "").strip().lower()
     if not email:
@@ -98,7 +105,9 @@ def upsert_contact(account, email: str, *, attributes: dict | None = None, **fie
     return contact, created
 
 
-def upsert_contact_by_phone(account, phone: str, *, attributes: dict | None = None, **fields) -> tuple[Contact, bool]:
+def upsert_contact_by_phone(
+    account, phone: str, *, attributes: dict | None = None, **fields
+) -> tuple[Contact, bool]:
     """Create or update a contact by (account, normalized phone). Returns (contact, created).
 
     Mirrors ``upsert_contact``'s update semantics but keys identity on phone
@@ -141,23 +150,31 @@ def _trigger_workflows(contact, trigger_type: str, context: dict | None = None) 
 
         enroll_for_trigger(contact.account_id, trigger_type, contact, context=context)
     except Exception:
-        logger.exception("_trigger_workflows failed (%s) for %s", trigger_type, contact.pk)
+        logger.exception(
+            "_trigger_workflows failed (%s) for %s", trigger_type, contact.pk
+        )
 
 
 def _notify_contact(contact, event_type: str) -> None:
     try:
         from apps.email.webhooks import notify
 
-        notify(contact.account, event_type, {
-            "id": contact.public_id,
-            "email": contact.email,
-            "status": contact.status,
-        })
+        notify(
+            contact.account,
+            event_type,
+            {
+                "id": contact.public_id,
+                "email": contact.email,
+                "status": contact.status,
+            },
+        )
     except Exception:
         logger.exception("_notify_contact failed for %s", contact.pk)
 
 
-def record_contact_event(contact: Contact, event_type: str, *, occurred_at=None, data: dict | None = None) -> ContactEvent:
+def record_contact_event(
+    contact: Contact, event_type: str, *, occurred_at=None, data: dict | None = None
+) -> ContactEvent:
     ev = ContactEvent.objects.create(
         contact=contact,
         account_id=contact.account_id,
@@ -165,7 +182,7 @@ def record_contact_event(contact: Contact, event_type: str, *, occurred_at=None,
         occurred_at=occurred_at or timezone.now(),
         data=data or {},
     )
-    kind = event_type.split(".")[-1]  # "email.opened" -> "opened"
+    kind = event_type.rsplit(".", maxsplit=1)[-1]  # "email.opened" -> "opened"
     updates = []
     if kind in _ACTIVITY_EVENTS:
         contact.last_engaged_at = ev.occurred_at
@@ -188,7 +205,9 @@ def record_contact_event(contact: Contact, event_type: str, *, occurred_at=None,
     return ev
 
 
-def import_csv(account, text: str, *, filename: str = "", mapping: dict | None = None) -> ContactImport:
+def import_csv(
+    account, text: str, *, filename: str = "", mapping: dict | None = None
+) -> ContactImport:
     """Import contacts from CSV text.
 
     ``mapping`` maps CSV header -> contact field or ``attr:<key>``. Unmapped
@@ -204,7 +223,9 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
     if email_col is None:
         raise ValueError("CSV import needs a column mapped to 'email'")
 
-    imp = ContactImport.objects.create(account=account, filename=filename, mapping=mapping)
+    imp = ContactImport.objects.create(
+        account=account, filename=filename, mapping=mapping
+    )
     created = updated = skipped = limit_skipped = rows = 0
 
     # Read once, then tracked locally, so the plan's customer limit costs no query per row.
@@ -214,8 +235,16 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
     allowed = billing_api.limit(account, "contacts")
     total = count_contacts(account)
     known: set = set()
-    if allowed >= 0:  # only a capped plan needs to tell new customers from existing ones
-        known = {e.lower() for e in Contact.objects.filter(account=account).values_list("email", flat=True) if e}
+    if (
+        allowed >= 0
+    ):  # only a capped plan needs to tell new customers from existing ones
+        known = {
+            e.lower()
+            for e in Contact.objects.filter(account=account).values_list(
+                "email", flat=True
+            )
+            if e
+        }
 
     for row in reader:
         rows += 1
@@ -237,15 +266,19 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
                 fields[dst] = val
         is_new = email.lower() not in known
         if is_new and 0 <= allowed <= total:
-            limit_skipped += 1  # the plan's customer limit: the rest of the file is still read
+            limit_skipped += (
+                1  # the plan's customer limit: the rest of the file is still read
+            )
             continue
         try:
-            _, was_created = upsert_contact(account, email, attributes=attributes, **fields)
+            _, was_created = upsert_contact(
+                account, email, attributes=attributes, **fields
+            )
             if was_created:
                 total += 1
             known.add(email.lower())
             created += was_created
-            updated += (not was_created)
+            updated += not was_created
         except Exception:
             logger.exception("import_csv: row %s failed", rows)
             skipped += 1
@@ -255,6 +288,13 @@ def import_csv(account, text: str, *, filename: str = "", mapping: dict | None =
     imp.updated_count = updated
     imp.skipped_count = skipped
     imp.limit_skipped_count = limit_skipped
-    imp.save(update_fields=["row_count", "created_count", "updated_count", "skipped_count",
-                            "limit_skipped_count"])
+    imp.save(
+        update_fields=[
+            "row_count",
+            "created_count",
+            "updated_count",
+            "skipped_count",
+            "limit_skipped_count",
+        ]
+    )
     return imp

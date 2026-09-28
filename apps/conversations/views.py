@@ -2,6 +2,7 @@
 spine (Conversation/Message/Event/Action Registry) — never a parallel state
 store. See docs/plans — "UI/UX Principle: Complex Architecture, Simple Product".
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -49,7 +50,9 @@ def _inbox_context(request, account) -> dict:
             Conversation.objects.filter(account=account, assigned_to=request.user)
         ).order_by("-last_any", "-id")
     elif view == "all":
-        qs = with_activity(Conversation.objects.filter(account=account)).order_by("-last_any", "-id")
+        qs = with_activity(Conversation.objects.filter(account=account)).order_by(
+            "-last_any", "-id"
+        )
     else:
         view = "needs_attention"
         qs = needs_attention(account, now)
@@ -64,10 +67,16 @@ def _inbox_context(request, account) -> dict:
         c.snapshot = snapshot_of(c, now)
         # Missed is a kind of waiting that has gone on too long, so both show
         # how long the customer has been waiting rather than the last activity.
-        c.is_waiting = bool(
-            c.snapshot.missed or c.snapshot.state == ConversationState.WAITING_FOR_AGENT
-        ) and c.snapshot.last_customer_message_at is not None
-        last = c.messages.order_by("-timestamp", "-id").only("body", "direction").first()
+        c.is_waiting = (
+            bool(
+                c.snapshot.missed
+                or c.snapshot.state == ConversationState.WAITING_FOR_AGENT
+            )
+            and c.snapshot.last_customer_message_at is not None
+        )
+        last = (
+            c.messages.order_by("-timestamp", "-id").only("body", "direction").first()
+        )
         c.preview = last
 
     return {
@@ -114,7 +123,9 @@ def inbox_feed(request):
         return JsonResponse({"error": "no account"}, status=403)
 
     html = render_to_string(
-        "conversations/_inbox_body.html", _inbox_context(request, account), request=request
+        "conversations/_inbox_body.html",
+        _inbox_context(request, account),
+        request=request,
     )
 
     if is_background(request):
@@ -153,7 +164,7 @@ def _automate_offers(account, messages) -> dict:
         return {}
     try:
         return automation_api.automate_offers(account, ids)
-    except Exception:  # noqa: BLE001 - an offer must never break the inbox
+    except Exception:
         logger.exception("automate offers failed")
         return {}
 
@@ -166,8 +177,12 @@ def _ai_config(account, conversation) -> dict:
         return {"enabled": False}
     return {
         "enabled": True,
-        "suggestUrl": reverse("conversations:ai_suggest", args=[conversation.public_id]),
-        "dismissUrl": reverse("conversations:ai_dismiss", args=[conversation.public_id]),
+        "suggestUrl": reverse(
+            "conversations:ai_suggest", args=[conversation.public_id]
+        ),
+        "dismissUrl": reverse(
+            "conversations:ai_dismiss", args=[conversation.public_id]
+        ),
         "applyUrl": reverse("conversations:ai_apply", args=[conversation.public_id]),
         "proposal": _ai_proposal_json(account, conversation),
     }
@@ -179,9 +194,13 @@ def _ai_proposal_json(account, conversation):
 
         if not ai_api.is_available(account):
             return None
-        return ai_api.serialize(ai_api.current_proposal(account, conversation), conversation)
-    except Exception:  # noqa: BLE001 - AI trouble must never break the inbox
-        logger.exception("could not load the AI proposal for conversation=%s", conversation.pk)
+        return ai_api.serialize(
+            ai_api.current_proposal(account, conversation), conversation
+        )
+    except Exception:
+        logger.exception(
+            "could not load the AI proposal for conversation=%s", conversation.pk
+        )
         return None
 
 
@@ -193,7 +212,7 @@ def _record_ai_use(account, request, sent_text: str) -> None:
         from apps.ai import api as ai_api
 
         ai_api.record_used(account, proposal_id, sent_text)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("could not record AI proposal use")
 
 
@@ -209,8 +228,12 @@ def ai_suggest(request, public_id: str):
     conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
     proposal = ai_api.request_proposal(account, conversation, request.user)
     if proposal is None:
-        return JsonResponse({"ok": False, "error": "AI suggestions aren't switched on."}, status=400)
-    return JsonResponse({"ok": True, "proposal": ai_api.serialize(proposal, conversation)})
+        return JsonResponse(
+            {"ok": False, "error": "AI suggestions aren't switched on."}, status=400
+        )
+    return JsonResponse(
+        {"ok": True, "proposal": ai_api.serialize(proposal, conversation)}
+    )
 
 
 @login_required
@@ -237,17 +260,33 @@ def ai_apply(request, public_id: str):
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
     conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
     ok, message = ai_api.apply_extra(
-        account, conversation, request.POST.get("proposal"), request.POST.get("index"), request.user)
+        account,
+        conversation,
+        request.POST.get("proposal"),
+        request.POST.get("index"),
+        request.user,
+    )
     if not ok:
         return JsonResponse({"ok": False, "error": message}, status=400)
-    return JsonResponse({"ok": True, "message": message,
-                         "proposal": ai_api.serialize(ai_api.current_proposal(account, conversation), conversation)})
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": message,
+            "proposal": ai_api.serialize(
+                ai_api.current_proposal(account, conversation), conversation
+            ),
+        }
+    )
 
 
 def _team_members(account):
     from django.contrib.auth import get_user_model
 
-    return get_user_model().objects.filter(memberships__account=account).order_by("first_name", "username")
+    return (
+        get_user_model()
+        .objects.filter(memberships__account=account)
+        .order_by("first_name", "username")
+    )
 
 
 def _resolve_assignee(account, request):
@@ -275,7 +314,12 @@ def conversation_detail(request, public_id: str):
         ctx = {"account": account}
         try:
             if action == "reply":
-                run_action("reply", ctx, conversation=conversation, body=request.POST.get("body", "").strip())
+                run_action(
+                    "reply",
+                    ctx,
+                    conversation=conversation,
+                    body=request.POST.get("body", "").strip(),
+                )
                 conversation.mark_read()
                 _record_ai_use(account, request, request.POST.get("body", ""))
             elif action == "send_template":
@@ -288,7 +332,9 @@ def conversation_detail(request, public_id: str):
                 from apps.whatsapp.models import MessageTemplate
 
                 template = MessageTemplate.objects.filter(
-                    account=account, pk=template_id, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+                    account=account,
+                    pk=template_id,
+                    approval_status=MessageTemplate.ApprovalStatus.APPROVED,
                 ).first()
                 if template is None:
                     raise ActionError("That template isn't available.")
@@ -303,8 +349,12 @@ def conversation_detail(request, public_id: str):
                     for var in (template.variables or [])
                 }
                 run_action(
-                    "send_whatsapp", ctx, account=account,
-                    phone=conversation.contact.phone, template_id=template.id, params=params,
+                    "send_whatsapp",
+                    ctx,
+                    account=account,
+                    phone=conversation.contact.phone,
+                    template_id=template.id,
+                    params=params,
                     conversation=conversation,
                 )
                 conversation.mark_read()
@@ -314,23 +364,34 @@ def conversation_detail(request, public_id: str):
 
                 choice = request.POST.get("when", "").strip()
                 try:
-                    due_at = resolve_due_at(choice, request.POST.get("custom_due_at", ""))
+                    due_at = resolve_due_at(
+                        choice, request.POST.get("custom_due_at", "")
+                    )
                 except ValueError as exc:
                     raise ActionError(str(exc)) from exc
                 run_action(
-                    "create_followup", ctx, conversation=conversation, due_at=due_at,
-                    note=request.POST.get("note", "").strip(), created_by=request.user,
+                    "create_followup",
+                    ctx,
+                    conversation=conversation,
+                    due_at=due_at,
+                    note=request.POST.get("note", "").strip(),
+                    created_by=request.user,
                 )
                 messages.success(request, "Follow-up scheduled.")
             elif action == "assign":
                 run_action(
-                    "assign_conversation", ctx, conversation=conversation,
+                    "assign_conversation",
+                    ctx,
+                    conversation=conversation,
                     user=_resolve_assignee(account, request),
                 )
             elif action == "add_note":
                 run_action(
-                    "add_internal_note", ctx, conversation=conversation,
-                    body=request.POST.get("body", "").strip(), author=request.user,
+                    "add_internal_note",
+                    ctx,
+                    conversation=conversation,
+                    body=request.POST.get("body", "").strip(),
+                    author=request.user,
                 )
             elif action == "mark_read":
                 conversation.mark_read()
@@ -345,14 +406,19 @@ def conversation_detail(request, public_id: str):
                 return JsonResponse({"ok": True})
         return redirect("conversations:detail", public_id=public_id)
 
-    if viewing_as(request) is None:  # support looking "as" the business mustn't clear its unread
+    if (
+        viewing_as(request) is None
+    ):  # support looking "as" the business mustn't clear its unread
         conversation.mark_read()
     thread = list(conversation.messages.all().order_by("timestamp", "id"))
     snapshot = get_conversation_state(conversation)
     now = timezone.now()
     offers = _automate_offers(account, thread)
     chat_config = {
-        "feedUrl": reverse("conversations:messages_feed", args=[conversation.public_id]),
+        "id": conversation.public_id,  # matches the conversation_id realtime.publish() sends
+        "feedUrl": reverse(
+            "conversations:messages_feed", args=[conversation.public_id]
+        ),
         "lastId": thread[-1].id if thread else 0,
         "open": conversation.status == Conversation.Status.OPEN,
         # Only WhatsApp enforces a messaging window today; other channels report
@@ -360,17 +426,28 @@ def conversation_detail(request, public_id: str):
         "windowOpen": _window_is_open(conversation),
         "ai": _ai_config(account, conversation),
         "messages": [
-            {"id": m.id, "direction": m.direction, "body": m.body,
-             "ts": m.timestamp.isoformat(), "status": m.status,
-             "failureReason": (m.metadata or {}).get("failure_reason") or None,
-             "byAi": (m.metadata or {}).get("sent_by") == "ai", "automate": offers.get(m.id)}
+            {
+                "id": m.id,
+                "direction": m.direction,
+                "body": m.body,
+                "ts": m.timestamp.isoformat(),
+                "status": m.status,
+                "failureReason": (m.metadata or {}).get("failure_reason") or None,
+                "byAi": (m.metadata or {}).get("sent_by") == "ai",
+                "automate": offers.get(m.id),
+            }
             for m in thread
         ],
-        "statusHtml": render_to_string("conversations/_status_badges.html", {
-            "conversation": conversation, "snapshot": snapshot, "now": now,
-            "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
-            "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
-        }),
+        "statusHtml": render_to_string(
+            "conversations/_status_badges.html",
+            {
+                "conversation": conversation,
+                "snapshot": snapshot,
+                "now": now,
+                "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
+                "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
+            },
+        ),
     }
     approved_templates = []
     if conversation.channel == Conversation.Channel.WHATSAPP:
@@ -378,28 +455,41 @@ def conversation_detail(request, public_id: str):
 
         approved_templates = list(
             MessageTemplate.objects.filter(
-                account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+                account=account,
+                approval_status=MessageTemplate.ApprovalStatus.APPROVED,
             ).order_by("name")
         )
 
     saved_replies = list(SavedReply.objects.filter(account=account).order_by("title"))
-    open_followup = FollowUp.objects.filter(
-        account=account, contact=conversation.contact, done_at__isnull=True
-    ).order_by("due_at").first()
+    open_followup = (
+        FollowUp.objects.filter(
+            account=account, contact=conversation.contact, done_at__isnull=True
+        )
+        .order_by("due_at")
+        .first()
+    )
 
     open_lead = open_deal = None
     try:
         from apps.crm.models import Deal, Lead
 
         open_lead = Lead.objects.filter(
-            account=account, contact=conversation.contact,
+            account=account,
+            contact=conversation.contact,
             status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
         ).first()
         # Giving a lead a value turns it straight into a deal, which leaves no open lead.
         # A customer in the pipeline is still being tracked, so the panel must say so.
-        open_deal = Deal.objects.filter(
-            account=account, contact=conversation.contact, status=Deal.Status.OPEN,
-        ).select_related("stage").order_by("-created_at").first()
+        open_deal = (
+            Deal.objects.filter(
+                account=account,
+                contact=conversation.contact,
+                status=Deal.Status.OPEN,
+            )
+            .select_related("stage")
+            .order_by("-created_at")
+            .first()
+        )
     except Exception:
         pass  # crm app not installed/migrated — panel just won't show it
 
@@ -410,7 +500,7 @@ def conversation_detail(request, public_id: str):
     except Exception:
         automation_activity = []  # never let a side panel cost the owner their conversation
 
-    return render(request, "conversations/conversation_detail.html", {
+    pane_context = {
         "account": account,
         "now": now,
         "automation_activity": automation_activity,
@@ -424,12 +514,23 @@ def conversation_detail(request, public_id: str):
         "saved_replies": saved_replies,
         "open_followup": open_followup,
         "team_members": _team_members(account),
-    })
+    }
+    # The inbox list (templates/conversations/inbox.html, ≥lg) loads a conversation into its
+    # own pane via a plain background GET — see static/js/inbox_pane.js — rather than a full
+    # navigation, so opening one never re-loads the shell or the list beside it. Below lg there
+    # is no pane to load into, so a row's own href still points here and gets the full page below.
+    if (
+        is_background(request)
+        and request.headers.get("HX-Target") == "conversation-pane-inner"
+    ):
+        return render(request, "conversations/_conversation_pane.html", pane_context)
+
+    return render(request, "conversations/conversation_detail.html", pane_context)
 
 
 @login_required
 def followups_due(request):
-    """"Due today" list (R2.2) — every open follow-up due now or earlier."""
+    """ "Due today" list (R2.2) — every open follow-up due now or earlier."""
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -444,9 +545,16 @@ def followups_due(request):
         .select_related("contact", "conversation")
         .order_by("due_at")[:20]
     )
-    return render(request, "conversations/followups_due.html", {
-        "account": account, "now": now, "due": due, "upcoming": upcoming,
-    })
+    return render(
+        request,
+        "conversations/followups_due.html",
+        {
+            "account": account,
+            "now": now,
+            "due": due,
+            "upcoming": upcoming,
+        },
+    )
 
 
 @login_required
@@ -476,7 +584,11 @@ def saved_replies(request):
             messages.success(request, "Saved reply added.")
         return redirect("conversations:saved_replies")
     replies = SavedReply.objects.filter(account=account).order_by("title")
-    return render(request, "conversations/saved_replies.html", {"account": account, "replies": replies})
+    return render(
+        request,
+        "conversations/saved_replies.html",
+        {"account": account, "replies": replies},
+    )
 
 
 @login_required
@@ -505,40 +617,51 @@ def messages_feed(request, public_id: str):
         after = 0
 
     new = list(conversation.messages.filter(id__gt=after).order_by("id")[:100])
-    if any(m.direction == Message.Direction.INBOUND for m in new) and viewing_as(request) is None:
+    if (
+        any(m.direction == Message.Direction.INBOUND for m in new)
+        and viewing_as(request) is None
+    ):
         conversation.mark_read()
         conversation.refresh_from_db(fields=["status"])
 
-    recent_outbound = conversation.messages.filter(
-        direction=Message.Direction.OUTBOUND
-    ).order_by("-id").only("id", "status", "metadata")[:20]
+    recent_outbound = (
+        conversation.messages.filter(direction=Message.Direction.OUTBOUND)
+        .order_by("-id")
+        .only("id", "status", "metadata")[:20]
+    )
 
-    return JsonResponse({
-        "messages": [
-            {
-                "id": m.id,
-                "direction": m.direction,
-                "body": m.body,
-                "timestamp": m.timestamp.isoformat(),
-                "status": m.status,
-                "failureReason": (m.metadata or {}).get("failure_reason") or None,
-                "byAi": (m.metadata or {}).get("sent_by") == "ai",
-            }
-            for m in new
-        ],
-        "statuses": {str(m.id): m.status for m in recent_outbound},
-        "failureReasons": {
-            str(m.id): (m.metadata or {}).get("failure_reason")
-            for m in recent_outbound if (m.metadata or {}).get("failure_reason")
-        },
-        "windowOpen": _window_is_open(conversation),
-        "aiProposal": _ai_proposal_json(account, conversation),
-        "status_html": render_to_string("conversations/_status_badges.html", {
-            "conversation": conversation,
-            "snapshot": get_conversation_state(conversation),
-            "now": timezone.now(),
-            "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
-            "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
-        }),
-        "open": conversation.status == Conversation.Status.OPEN,
-    })
+    return JsonResponse(
+        {
+            "messages": [
+                {
+                    "id": m.id,
+                    "direction": m.direction,
+                    "body": m.body,
+                    "timestamp": m.timestamp.isoformat(),
+                    "status": m.status,
+                    "failureReason": (m.metadata or {}).get("failure_reason") or None,
+                    "byAi": (m.metadata or {}).get("sent_by") == "ai",
+                }
+                for m in new
+            ],
+            "statuses": {str(m.id): m.status for m in recent_outbound},
+            "failureReasons": {
+                str(m.id): (m.metadata or {}).get("failure_reason")
+                for m in recent_outbound
+                if (m.metadata or {}).get("failure_reason")
+            },
+            "windowOpen": _window_is_open(conversation),
+            "aiProposal": _ai_proposal_json(account, conversation),
+            "status_html": render_to_string(
+                "conversations/_status_badges.html",
+                {
+                    "conversation": conversation,
+                    "snapshot": get_conversation_state(conversation),
+                    "now": timezone.now(),
+                    "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
+                    "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
+                },
+            ),
+            "open": conversation.status == Conversation.Status.OPEN,
+        }
+    )

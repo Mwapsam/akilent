@@ -4,24 +4,23 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0015_systememailtemplate'),
+        ("email_service", "0015_systememailtemplate"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='mailbox',
-            name='account',
+            model_name="mailbox",
+            name="account",
         ),
         migrations.RemoveField(
-            model_name='mailbox',
-            name='domain',
+            model_name="mailbox",
+            name="domain",
         ),
         migrations.DeleteModel(
-            name='EmailAlias',
+            name="EmailAlias",
         ),
         migrations.DeleteModel(
-            name='Mailbox',
+            name="Mailbox",
         ),
     ]

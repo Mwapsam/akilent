@@ -1,4 +1,5 @@
 """Phase 5: Meta template sync + live status webhook."""
+
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -21,17 +22,30 @@ class SyncTemplatesTest(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         WhatsAppBusinessNumber.objects.create(
-            account=self.account, phone_number_id="PNID",
-            waba_id="WABA1", access_token="tok", is_active=True,
+            account=self.account,
+            phone_number_id="PNID",
+            waba_id="WABA1",
+            access_token="tok",
+            is_active=True,
         )
 
     def test_sync_upserts_status_and_category(self):
-        provider = _TemplateProvider([
-            {"name": "order_update", "language": "en", "category": "UTILITY",
-             "status": "APPROVED"},
-            {"name": "promo", "language": "en", "category": "MARKETING",
-             "status": "REJECTED"},
-        ])
+        provider = _TemplateProvider(
+            [
+                {
+                    "name": "order_update",
+                    "language": "en",
+                    "category": "UTILITY",
+                    "status": "APPROVED",
+                },
+                {
+                    "name": "promo",
+                    "language": "en",
+                    "category": "MARKETING",
+                    "status": "REJECTED",
+                },
+            ]
+        )
         with patch(
             "apps.whatsapp.providers.get_whatsapp_provider", return_value=provider
         ):
@@ -58,8 +72,11 @@ class SyncTemplatesTest(TestCase):
 
     def test_status_webhook_updates_template_live(self):
         tpl = MessageTemplate.objects.create(
-            account=self.account, name="Promo", whatsapp_template_name="promo",
-            language_code="en", approval_status=MessageTemplate.ApprovalStatus.PENDING,
+            account=self.account,
+            name="Promo",
+            whatsapp_template_name="promo",
+            language_code="en",
+            approval_status=MessageTemplate.ApprovalStatus.PENDING,
         )
         event = WebhookEventLog.objects.create(
             source=WebhookEventLog.Source.WHATSAPP,
@@ -77,7 +94,7 @@ class SyncTemplatesTest(TestCase):
                                     "event": "APPROVED",
                                 },
                             }
-                        ]
+                        ],
                     }
                 ]
             },

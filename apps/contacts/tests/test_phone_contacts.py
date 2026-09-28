@@ -1,4 +1,5 @@
 """Phone-only contacts (e.g. WhatsApp-first customers) must be visible and findable."""
+
 import pytest
 from django.contrib.auth.models import User
 

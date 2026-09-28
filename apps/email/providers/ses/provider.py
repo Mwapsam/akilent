@@ -6,6 +6,7 @@ records of the form:
 
     {token}._domainkey.{domain}  CNAME  {token}.dkim.amazonses.com
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,8 +21,8 @@ from apps.email.types import (
     SES_MAIL_FROM_SPF,
     DkimRecord,
     DomainInfo,
-    MailFromInfo,
     DomainStatus,
+    MailFromInfo,
     OperationResult,
 )
 
@@ -45,7 +46,9 @@ class SesProvider(EmailProvider):
             settings = MailProviderSettings.load()
             region = settings.aws_region or os.getenv("AWS_REGION", "us-east-1")
         except Exception:
-            logger.debug("Failed to load MailProviderSettings; falling back to env/defaults")
+            logger.debug(
+                "Failed to load MailProviderSettings; falling back to env/defaults"
+            )
             region = os.getenv("AWS_REGION", "us-east-1")
 
         # Kept for the MAIL FROM MX target, which is region-specific.
@@ -88,7 +91,9 @@ class SesProvider(EmailProvider):
                     f"Failed to create domain identity: {exc}"
                 ) from exc
         except Exception as exc:
-            logger.exception("Unexpected error creating SES domain identity: %s", domain)
+            logger.exception(
+                "Unexpected error creating SES domain identity: %s", domain
+            )
             raise EmailProviderError(str(exc)) from exc
 
         return DomainInfo(

@@ -38,7 +38,11 @@ def _extent(values: list[float], baseline_at_zero: bool) -> tuple[float, float]:
         # Pad symmetrically so the line lands mid-height. For an all-zero
         # series that means 0 sits on the floor, which is where a reader
         # expects "nothing happened" to be.
-        return (low, high + 1.0) if low == 0 else (low - abs(low) * 0.5, high + abs(high) * 0.5)
+        return (
+            (low, high + 1.0)
+            if low == 0
+            else (low - abs(low) * 0.5, high + abs(high) * 0.5)
+        )
     return low, high
 
 
@@ -124,7 +128,9 @@ def _area(points: list[Point], height: float) -> str:
     )
 
 
-def sparkline(values: list[float], *, width: float = 96.0, height: float = 24.0) -> Series:
+def sparkline(
+    values: list[float], *, width: float = 96.0, height: float = 24.0
+) -> Series:
     """A trend with no axes, no grid and no hover — context beside a number.
 
     Deliberately not a chart: it carries shape only, which is why it keeps the
@@ -132,7 +138,9 @@ def sparkline(values: list[float], *, width: float = 96.0, height: float = 24.0)
     labels. The number it sits beside is the value; this says which way it went.
     """
     low, high = _extent(values, baseline_at_zero=False)
-    points = scale_series(values, width=width, height=height, low=low, high=high, pad=1.0)
+    points = scale_series(
+        values, width=width, height=height, low=low, high=high, pad=1.0
+    )
     return Series(
         label="",
         values=values,
@@ -242,7 +250,7 @@ def line_chart(
     keep = set()
     if count:
         stride = max(1, count // 5)
-        keep = {i for i in range(0, count, stride)} | {count - 1}
+        keep = set(range(0, count, stride)) | {count - 1}
     reference = built[0].points if built else []
     x_ticks = [
         {"label": labels[i], "x": reference[i].x}
@@ -254,18 +262,20 @@ def line_chart(
     if reference:
         col_w = _round((width - pad * 2) / max(len(reference), 1))
         for i, p in enumerate(reference):
-            columns.append({
-                "index": i,
-                "x": _round(max(p.x - col_w / 2, 0)),
-                "centre": p.x,
-                "width": col_w,
-                "label": labels[i] if i < count else "",
-                "readings": [
-                    {"label": s.label, "value": s.values[i], "y": s.points[i].y}
-                    for s in built
-                    if i < len(s.points)
-                ],
-            })
+            columns.append(
+                {
+                    "index": i,
+                    "x": _round(max(p.x - col_w / 2, 0)),
+                    "centre": p.x,
+                    "width": col_w,
+                    "label": labels[i] if i < count else "",
+                    "readings": [
+                        {"label": s.label, "value": s.values[i], "y": s.points[i].y}
+                        for s in built
+                        if i < len(s.points)
+                    ],
+                }
+            )
 
     return LineChart(
         series=built,
@@ -281,7 +291,9 @@ def line_chart(
     )
 
 
-def stacked_row(segments: list[tuple[str, float]], *, minimum_visible: float = 1.5) -> list[dict]:
+def stacked_row(
+    segments: list[tuple[str, float]], *, minimum_visible: float = 1.5
+) -> list[dict]:
     """Part-to-whole as percentages of one bar.
 
     ``minimum_visible`` keeps a nonzero-but-tiny segment on screen. One failure
@@ -296,12 +308,14 @@ def stacked_row(segments: list[tuple[str, float]], *, minimum_visible: float = 1
     for label, value in segments:
         value = max(value, 0)
         pct = (value / total) * 100
-        out.append({
-            "label": label,
-            "value": value,
-            "percent": round(pct, 2),
-            "width": round(max(pct, minimum_visible) if value else 0, 2),
-        })
+        out.append(
+            {
+                "label": label,
+                "value": value,
+                "percent": round(pct, 2),
+                "width": round(max(pct, minimum_visible) if value else 0, 2),
+            }
+        )
     return out
 
 

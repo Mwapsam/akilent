@@ -3,6 +3,7 @@
 Everything here is safe to call when AI is off: ``is_available`` is False, reads return None, and
 nothing is queued. AI proposes; people and the existing send path act.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,7 +58,13 @@ def seed_notes(account, text: str) -> bool:
     return True
 
 
-DRAFT_KINDS = ("automation", "template", "template_edit", "email_template", "email_edit")
+DRAFT_KINDS = (
+    "automation",
+    "template",
+    "template_edit",
+    "email_template",
+    "email_edit",
+)
 
 
 def request_draft(account, user, kind: str, prompt: str, context: dict | None = None):
@@ -71,8 +78,13 @@ def request_draft(account, user, kind: str, prompt: str, context: dict | None = 
     context = dict(context or {})
     if context.get("conversation"):
         context["conversation"] = drafting.clean_prompt(context["conversation"])
-    draft = AIDraft.objects.create(account=account, kind=kind, prompt=drafting.clean_prompt(prompt),
-                                   context=context, created_by=user if getattr(user, "pk", None) else None)
+    draft = AIDraft.objects.create(
+        account=account,
+        kind=kind,
+        prompt=drafting.clean_prompt(prompt),
+        context=context,
+        created_by=user if getattr(user, "pk", None) else None,
+    )
     transaction.on_commit(lambda: build_draft.apply_async((draft.pk,), queue="ai"))
     return draft
 
@@ -109,17 +121,28 @@ def unchecked_facts(account, text: str) -> list[str]:
     from apps.ai import facts as business_facts
     from apps.ai.models import AISettings
 
-    notes = AISettings.objects.filter(account=account).values_list("business_notes", flat=True).first() or ""
-    return autonomy.unsupported_facts(text, business_facts.build(account, business_notes=notes))
+    notes = (
+        AISettings.objects.filter(account=account)
+        .values_list("business_notes", flat=True)
+        .first()
+        or ""
+    )
+    return autonomy.unsupported_facts(
+        text, business_facts.build(account, business_notes=notes)
+    )
 
 
 def _enqueue(proposal) -> None:
     from apps.ai.tasks import draft_proposal
 
-    transaction.on_commit(lambda: draft_proposal.apply_async((proposal.pk,), countdown=3, queue="ai"))
+    transaction.on_commit(
+        lambda: draft_proposal.apply_async((proposal.pk,), countdown=3, queue="ai")
+    )
 
 
-def on_message_processed(sender, *, conversation, message, handled_by_automation: bool = False, **kwargs) -> None:
+def on_message_processed(
+    sender, *, conversation, message, handled_by_automation: bool = False, **kwargs
+) -> None:
     """Receiver for ``conversations.signals.conversation_message_processed``.
 
     Queues one proposal per customer message, unless an automation already answered it or AI is
@@ -132,7 +155,8 @@ def on_message_processed(sender, *, conversation, message, handled_by_automation
     if not is_available(conversation.account):
         return
     proposal, created = AIProposal.objects.get_or_create(
-        conversation=conversation, trigger_message=message,
+        conversation=conversation,
+        trigger_message=message,
         defaults={"account": conversation.account},
     )
     if created:
@@ -146,10 +170,13 @@ def request_proposal(account, conversation, user):
     if not is_available(account):
         return None
     AIProposal.objects.filter(
-        account=account, conversation=conversation,
+        account=account,
+        conversation=conversation,
         status__in=[AIProposal.Status.READY, AIProposal.Status.PENDING],
     ).update(status=AIProposal.Status.EXPIRED, expired_at=timezone.now())
-    proposal = AIProposal.objects.create(account=account, conversation=conversation, requested_by=user)
+    proposal = AIProposal.objects.create(
+        account=account, conversation=conversation, requested_by=user
+    )
     _enqueue(proposal)
     return proposal
 
@@ -160,9 +187,16 @@ def current_proposal(account, conversation):
 
     return (
         AIProposal.objects.filter(
-            account=account, conversation=conversation,
-            status__in=[AIProposal.Status.PENDING, AIProposal.Status.READY, AIProposal.Status.ERROR],
-        ).order_by("-created_at", "-id").first()
+            account=account,
+            conversation=conversation,
+            status__in=[
+                AIProposal.Status.PENDING,
+                AIProposal.Status.READY,
+                AIProposal.Status.ERROR,
+            ],
+        )
+        .order_by("-created_at", "-id")
+        .first()
     )
 
 
@@ -171,8 +205,12 @@ def serialize(proposal, conversation) -> dict | None:
     if proposal is None:
         return None
     out = {
-        "id": proposal.pk, "status": proposal.status, "action": proposal.action,
-        "reason": proposal.reason, "error": proposal.error, "created": proposal.created_at.isoformat(),
+        "id": proposal.pk,
+        "status": proposal.status,
+        "action": proposal.action,
+        "reason": proposal.reason,
+        "error": proposal.error,
+        "created": proposal.created_at.isoformat(),
         # Business on automatic replies, but this one wasn't sent: say which check held it back.
         "autoNote": _auto_note(proposal.auto_decision),
     }
@@ -183,24 +221,48 @@ def serialize(proposal, conversation) -> dict | None:
         from apps.automation import variables
         from apps.whatsapp import api as whatsapp_api
 
-        template = whatsapp_api.approved_template_by_name(conversation.account, payload.get("template", ""))
+        template = whatsapp_api.approved_template_by_name(
+            conversation.account, payload.get("template", "")
+        )
         values = {}
         for blank, source in (payload.get("variables") or {}).items():
-            value = variables.read_source(
-                source, contact=conversation.contact, account=conversation.account, context={}) \
-                if isinstance(source, str) else source
-            values[blank] = value or ("there" if variables.looks_like_name(blank) else "")
-        out.update({
-            "template": payload.get("template", ""), "templateId": template.pk if template else None,
-            "templateName": template.name if template else payload.get("template", ""), "values": values,
-        })
+            value = (
+                variables.read_source(
+                    source,
+                    contact=conversation.contact,
+                    account=conversation.account,
+                    context={},
+                )
+                if isinstance(source, str)
+                else source
+            )
+            values[blank] = value or (
+                "there" if variables.looks_like_name(blank) else ""
+            )
+        out.update(
+            {
+                "template": payload.get("template", ""),
+                "templateId": template.pk if template else None,
+                "templateName": template.name
+                if template
+                else payload.get("template", ""),
+                "values": values,
+            }
+        )
     elif proposal.action == "handoff":
         out["note"] = payload.get("note", "")
     out["extras"] = [
-        {"index": i, "kind": e.get("kind"), "label": extra_label(e), "applied": bool(e.get("applied_at"))}
+        {
+            "index": i,
+            "kind": e.get("kind"),
+            "label": extra_label(e),
+            "applied": bool(e.get("applied_at")),
+        }
         for i, e in enumerate(proposal.extras or [])
     ]
-    out["lookups"] = [LOOKUP_LABELS.get(name, name) for name in (proposal.tools_used or [])]
+    out["lookups"] = [
+        LOOKUP_LABELS.get(name, name) for name in (proposal.tools_used or [])
+    ]
     return out
 
 
@@ -216,7 +278,9 @@ def _auto_note(decision: dict | None) -> str:
 
 
 LOOKUP_LABELS = {
-    "check_opening_hours": "opening hours", "search_products": "your products", "get_customer": "customer history",
+    "check_opening_hours": "opening hours",
+    "search_products": "your products",
+    "get_customer": "customer history",
 }
 
 
@@ -244,13 +308,20 @@ def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, 
     from apps.core.actions import ActionError, run_action
 
     try:
-        proposal = AIProposal.objects.select_related("conversation__contact").filter(
-            account=account, conversation=conversation, pk=int(proposal_id)).first()
+        proposal = (
+            AIProposal.objects.select_related("conversation__contact")
+            .filter(account=account, conversation=conversation, pk=int(proposal_id))
+            .first()
+        )
         index = int(index)
     except (TypeError, ValueError):
         return False, "That suggestion wasn't found."
     extras = list(proposal.extras or []) if proposal else []
-    if proposal is None or proposal.conversation is None or not 0 <= index < len(extras):
+    if (
+        proposal is None
+        or proposal.conversation is None
+        or not 0 <= index < len(extras)
+    ):
         return False, "That suggestion wasn't found."
     if proposal.status not in (AIProposal.Status.READY, AIProposal.Status.USED):
         return False, "That suggestion is out of date."
@@ -263,13 +334,25 @@ def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, 
             run_action("add_tag", ctx, contact=conversation.contact, tag=extra["tag"])
             done = f"Tagged “{extra['tag']}”."
         elif extra["kind"] == "track_interest":
-            run_action("capture_conversation_lead", ctx, account=account, contact=conversation.contact,
-                       conversation_id=conversation.public_id, signal="AI suggestion", owner=user)
+            run_action(
+                "capture_conversation_lead",
+                ctx,
+                account=account,
+                contact=conversation.contact,
+                conversation_id=conversation.public_id,
+                signal="AI suggestion",
+                owner=user,
+            )
             done = "Tracked as interested."
         elif extra["kind"] == "follow_up":
-            run_action("create_followup", ctx, conversation=conversation,
-                       due_at=timezone.now() + timedelta(days=int(extra.get("in_days") or 1)),
-                       note=extra.get("note", ""), created_by=user)
+            run_action(
+                "create_followup",
+                ctx,
+                conversation=conversation,
+                due_at=timezone.now() + timedelta(days=int(extra.get("in_days") or 1)),
+                note=extra.get("note", ""),
+                created_by=user,
+            )
             done = "Follow-up scheduled."
         else:
             return False, "That suggestion wasn't found."
@@ -284,9 +367,13 @@ def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, 
 def dismiss(account, proposal_id) -> bool:
     from apps.ai.models import AIProposal
 
-    return bool(AIProposal.objects.filter(
-        account=account, pk=proposal_id, status__in=[AIProposal.Status.READY, AIProposal.Status.ERROR],
-    ).update(status=AIProposal.Status.DISMISSED, dismissed_at=timezone.now()))
+    return bool(
+        AIProposal.objects.filter(
+            account=account,
+            pk=proposal_id,
+            status__in=[AIProposal.Status.READY, AIProposal.Status.ERROR],
+        ).update(status=AIProposal.Status.DISMISSED, dismissed_at=timezone.now())
+    )
 
 
 def record_used(account, proposal_id, sent_text: str = "") -> None:
@@ -294,15 +381,23 @@ def record_used(account, proposal_id, sent_text: str = "") -> None:
     from apps.ai.models import AIProposal
 
     try:
-        proposal = AIProposal.objects.filter(account=account, pk=int(proposal_id)).first()
+        proposal = AIProposal.objects.filter(
+            account=account, pk=int(proposal_id)
+        ).first()
     except (TypeError, ValueError):
         return
     if proposal is None or proposal.status != AIProposal.Status.READY:
         return
     edited = None
     if proposal.action == "reply":
-        edited = " ".join((sent_text or "").split()) != " ".join((proposal.payload or {}).get("text", "").split())
-    proposal.status, proposal.used_at, proposal.edited_before_send = AIProposal.Status.USED, timezone.now(), edited
+        edited = " ".join((sent_text or "").split()) != " ".join(
+            (proposal.payload or {}).get("text", "").split()
+        )
+    proposal.status, proposal.used_at, proposal.edited_before_send = (
+        AIProposal.Status.USED,
+        timezone.now(),
+        edited,
+    )
     proposal.save(update_fields=["status", "used_at", "edited_before_send"])
 
 
@@ -313,11 +408,22 @@ MAX_NOTES = 4000
 def settings_for(account):
     from apps.ai.models import AISettings
 
-    return AISettings.objects.filter(account=account).first() or AISettings(account=account)
+    return AISettings.objects.filter(account=account).first() or AISettings(
+        account=account
+    )
 
 
-def save_settings(account, user, *, enabled: bool, business_notes: str, reply_mode: str | None = None,
-                  auto_topics=None, auto_min_confidence=None, auto_only_when_closed: bool = False):
+def save_settings(
+    account,
+    user,
+    *,
+    enabled: bool,
+    business_notes: str,
+    reply_mode: str | None = None,
+    auto_topics=None,
+    auto_min_confidence=None,
+    auto_only_when_closed: bool = False,
+):
     """Turn AI on or off for a business, and choose between suggestions and automatic replies.
 
     Turning AI on, and separately choosing automatic replies, each record who agreed and when.
@@ -332,12 +438,23 @@ def save_settings(account, user, *, enabled: bool, business_notes: str, reply_mo
     ai_settings.enabled = bool(enabled)
     ai_settings.business_notes = (business_notes or "").strip()[:MAX_NOTES]
     if reply_mode is not None:
-        mode = reply_mode if reply_mode in AISettings.ReplyMode.values else AISettings.ReplyMode.SUGGEST
+        mode = (
+            reply_mode
+            if reply_mode in AISettings.ReplyMode.values
+            else AISettings.ReplyMode.SUGGEST
+        )
         if mode == AISettings.ReplyMode.AUTO and ai_settings.reply_mode != mode:
-            ai_settings.auto_consented_at, ai_settings.auto_consented_by = timezone.now(), user
+            ai_settings.auto_consented_at, ai_settings.auto_consented_by = (
+                timezone.now(),
+                user,
+            )
         ai_settings.reply_mode = mode
         locked = autonomy.locked_topics(account)
-        ai_settings.auto_topics = [t for t in autonomy.TOPICS if t in set(auto_topics or []) and t not in locked]
+        ai_settings.auto_topics = [
+            t
+            for t in autonomy.TOPICS
+            if t in set(auto_topics or []) and t not in locked
+        ]
         allowed = {value for value, _label in autonomy.CONFIDENCE_CHOICES}
         try:
             confidence = float(auto_min_confidence)
@@ -361,8 +478,12 @@ def autopilot_report(account, *, days: int = 1, limit: int = 50) -> dict:
     from apps.ai.models import AIProposal
 
     since = timezone.now() - timedelta(days=days)
-    decided = (AIProposal.objects.filter(account=account, created_at__gte=since)
-               .exclude(auto_decision={}).select_related("conversation__contact").order_by("-created_at"))
+    decided = (
+        AIProposal.objects.filter(account=account, created_at__gte=since)
+        .exclude(auto_decision={})
+        .select_related("conversation__contact")
+        .order_by("-created_at")
+    )
     sent = held = reviewed = 0
     reasons: dict[str, int] = {}
     rows = []
@@ -374,23 +495,41 @@ def autopilot_report(account, *, days: int = 1, limit: int = 50) -> dict:
             outcome = "Sent by AI"
         else:
             held += 1
-            reason = decision.get("error") and "Sending failed" or autonomy.HELD_REASONS.get(
-                (failed or {}).get("name"), "Other")
+            reason = (
+                decision.get("error")
+                and "Sending failed"
+                or autonomy.HELD_REASONS.get((failed or {}).get("name"), "Other")
+            )
             reasons[reason] = reasons.get(reason, 0) + 1
             if p.status == AIProposal.Status.USED:
                 reviewed += 1
             outcome = "Held: " + reason
         if len(rows) < limit:
-            rows.append({
-                "at": p.auto_sent_at or p.ready_at or p.created_at, "outcome": outcome, "sent": bool(decision.get("send")),
-                "status": p.get_status_display(), "text": (p.payload or {}).get("text", "") or (p.payload or {}).get("note", ""),
-                "customer": (p.conversation.contact.first_name or "A customer") if p.conversation else "A customer",
-                "conversation_id": p.conversation.public_id if p.conversation else "",
-                "checks": decision.get("checks", []), "error": decision.get("error", ""),
-            })
+            rows.append(
+                {
+                    "at": p.auto_sent_at or p.ready_at or p.created_at,
+                    "outcome": outcome,
+                    "sent": bool(decision.get("send")),
+                    "status": p.get_status_display(),
+                    "text": (p.payload or {}).get("text", "")
+                    or (p.payload or {}).get("note", ""),
+                    "customer": (p.conversation.contact.first_name or "A customer")
+                    if p.conversation
+                    else "A customer",
+                    "conversation_id": p.conversation.public_id
+                    if p.conversation
+                    else "",
+                    "checks": decision.get("checks", []),
+                    "error": decision.get("error", ""),
+                }
+            )
     return {
-        "days": days, "sent": sent, "held": held, "reviewed": reviewed,
-        "reasons": sorted(reasons.items(), key=lambda kv: -kv[1]), "rows": rows,
+        "days": days,
+        "sent": sent,
+        "held": held,
+        "reviewed": reviewed,
+        "reasons": sorted(reasons.items(), key=lambda kv: -kv[1]),
+        "rows": rows,
     }
 
 
@@ -399,14 +538,24 @@ def recent_auto_replies(account, limit: int = 20) -> list[dict]:
     from apps.ai import autonomy
     from apps.ai.models import AIProposal
 
-    rows = (AIProposal.objects.filter(account=account, auto_sent_at__isnull=False)
-            .select_related("conversation__contact").order_by("-auto_sent_at")[:limit])
-    return [{
-        "sent_at": p.auto_sent_at, "text": (p.payload or {}).get("text", ""),
-        "topic": autonomy.TOPICS.get(p.intent, p.intent), "confidence": p.confidence,
-        "customer": (p.conversation.contact.first_name or "A customer") if p.conversation else "A customer",
-        "conversation_id": p.conversation.public_id if p.conversation else "",
-    } for p in rows]
+    rows = (
+        AIProposal.objects.filter(account=account, auto_sent_at__isnull=False)
+        .select_related("conversation__contact")
+        .order_by("-auto_sent_at")[:limit]
+    )
+    return [
+        {
+            "sent_at": p.auto_sent_at,
+            "text": (p.payload or {}).get("text", ""),
+            "topic": autonomy.TOPICS.get(p.intent, p.intent),
+            "confidence": p.confidence,
+            "customer": (p.conversation.contact.first_name or "A customer")
+            if p.conversation
+            else "A customer",
+            "conversation_id": p.conversation.public_id if p.conversation else "",
+        }
+        for p in rows
+    ]
 
 
 def usage_summary(account=None, *, since) -> dict:
@@ -441,4 +590,9 @@ def test_connection() -> dict:
         result = get_ai_provider().health()
     except AIProviderError as exc:
         return {"ok": False, "error": str(exc), "model": "", "latency_ms": None}
-    return {"ok": True, "error": "", "model": result.model, "latency_ms": int((time.monotonic() - started) * 1000)}
+    return {
+        "ok": True,
+        "error": "",
+        "model": result.model,
+        "latency_ms": int((time.monotonic() - started) * 1000),
+    }

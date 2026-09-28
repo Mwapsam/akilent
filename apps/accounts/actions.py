@@ -1,4 +1,5 @@
 """Account actions for the shared Action Registry. Read-only: they look things up, never change them."""
+
 from __future__ import annotations
 
 from apps.core.actions import Action, register

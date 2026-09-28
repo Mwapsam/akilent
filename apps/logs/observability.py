@@ -4,6 +4,7 @@ Kept out of ``services.py`` (message events) on purpose — different concern,
 different consumers. All entry points are best-effort and never raise into the
 API response path.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -60,21 +61,25 @@ def log_api_request(request, response, *, latency_ms: int, view=None) -> None:
             idempotency_replayed=bool(getattr(request, "_idempotency_replayed", False)),
             latency_ms=max(0, latency_ms),
             request_headers=redact_headers(
-                {k[5:].replace("_", "-"): v for k, v in request.META.items() if k.startswith("HTTP_")}
+                {
+                    k[5:].replace("_", "-"): v
+                    for k, v in request.META.items()
+                    if k.startswith("HTTP_")
+                }
             ),
             request_body=redact_body(_safe_data(request)),
             response_body=redact_body(body if isinstance(body, (dict, list)) else {}),
             client_ip=_client_ip(request),
             user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:512],
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("log_api_request failed")
 
 
 def _safe_data(request):
     try:
         data = request.data
-    except Exception:  # noqa: BLE001 - unparseable body
+    except Exception:
         return {}
     return data if isinstance(data, (dict, list)) else {}
 
@@ -114,14 +119,22 @@ def idempotency_lookup(request, endpoint: str):
     if record.request_fingerprint != fingerprint:
         raise IdempotencyReplay(
             409,
-            {"error": {"code": "idempotency_key_reuse",
-                       "message": "This Idempotency-Key was used with a different request body."}},
+            {
+                "error": {
+                    "code": "idempotency_key_reuse",
+                    "message": "This Idempotency-Key was used with a different request body.",
+                }
+            },
         )
     if record.status == IdempotencyRecord.Status.PROCESSING:
         raise IdempotencyReplay(
             409,
-            {"error": {"code": "idempotency_key_in_progress",
-                       "message": "A request with this Idempotency-Key is still being processed."}},
+            {
+                "error": {
+                    "code": "idempotency_key_in_progress",
+                    "message": "A request with this Idempotency-Key is still being processed.",
+                }
+            },
         )
     request._idempotency_replayed = True
     raise IdempotencyReplay(record.response_status or 200, record.response_body or {})
@@ -139,5 +152,5 @@ def idempotency_complete(record, response) -> None:
         record.save(
             update_fields=["status", "response_status", "response_body", "completed_at"]
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("idempotency_complete failed for record %s", record.pk)

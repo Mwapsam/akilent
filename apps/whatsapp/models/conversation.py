@@ -30,7 +30,7 @@ class Conversation(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["contact", "is_open"]),
-            models.Index(fields=["is_open", "window_expires_at"]),  
+            models.Index(fields=["is_open", "window_expires_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -42,9 +42,7 @@ class Conversation(models.Model):
 
     @property
     def window_is_open(self) -> bool:
-        return bool(
-            self.window_expires_at and self.window_expires_at > timezone.now()
-        )
+        return bool(self.window_expires_at and self.window_expires_at > timezone.now())
 
     def register_inbound(self, at):
         self.last_message_at = at
@@ -79,7 +77,7 @@ class Conversation(models.Model):
             if convo:
                 return convo
             try:
-                with transaction.atomic(): 
+                with transaction.atomic():
                     return cls.objects.create(
                         account=contact.account,
                         contact=contact,

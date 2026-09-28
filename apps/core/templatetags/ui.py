@@ -20,7 +20,13 @@ from django.utils.safestring import mark_safe
 
 register = template.Library()
 
-_MODAL_SIZES = {"sm": "max-w-sm", "md": "max-w-md", "lg": "max-w-lg", "xl": "max-w-xl", "2xl": "max-w-2xl"}
+_MODAL_SIZES = {
+    "sm": "max-w-sm",
+    "md": "max-w-md",
+    "lg": "max-w-lg",
+    "xl": "max-w-xl",
+    "2xl": "max-w-2xl",
+}
 
 
 @register.simple_block_tag
@@ -72,6 +78,7 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
     `button_class="unstyled"` and supply your own trigger as the first child
     wrapped in <template x-slot:trigger> … not supported; keep it simple)."""
     import hashlib
+
     # Generate a stable unique id based on content hash for a11y linkage
     menu_id = "dropdown-" + hashlib.md5(content.encode()).hexdigest()[:8]
     return mark_safe(
@@ -116,5 +123,9 @@ def ago(value, now=None):
     if seconds < 7 * 86400:
         return "%dd" % (seconds // 86400)
     local = timezone.localtime(value) if timezone.is_aware(value) else value
-    same_year = local.year == timezone.localtime(now).year if timezone.is_aware(now) else local.year == now.year
+    same_year = (
+        local.year == timezone.localtime(now).year
+        if timezone.is_aware(now)
+        else local.year == now.year
+    )
     return date_format(local, "j M" if same_year else "j M Y")

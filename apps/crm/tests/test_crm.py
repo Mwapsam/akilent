@@ -61,16 +61,23 @@ def test_move_deal_to_won_stage_closes_deal_and_emits_event(account, contact):
     deal.refresh_from_db()
     assert deal.status == Deal.Status.WON
     assert deal.closed_at is not None
-    assert Event.objects.filter(type="deal.stage_changed", subject_id=deal.public_id).exists()
+    assert Event.objects.filter(
+        type="deal.stage_changed", subject_id=deal.public_id
+    ).exists()
 
 
 @pytest.mark.django_db
 def test_move_deal_to_stage_from_other_pipeline_rejected(account, contact):
     lead = create_lead(account, contact)
     deal = convert_lead_to_deal(lead)
-    other_pipeline = Pipeline.objects.create(account=account, name="Other", slug="other")
+    other_pipeline = Pipeline.objects.create(
+        account=account, name="Other", slug="other"
+    )
     from apps.crm.models import Stage
-    other_stage = Stage.objects.create(pipeline=other_pipeline, name="Somewhere", order=0)
+
+    other_stage = Stage.objects.create(
+        pipeline=other_pipeline, name="Somewhere", order=0
+    )
 
     with pytest.raises(ValueError):
         move_deal_stage(deal, other_stage)
@@ -79,7 +86,9 @@ def test_move_deal_to_stage_from_other_pipeline_rejected(account, contact):
 @pytest.mark.django_db
 def test_lead_created_enrolls_published_workflow(account, contact):
     Workflow.objects.create(
-        account=account, name="New lead follow-up", slug="new-lead-followup",
+        account=account,
+        name="New lead follow-up",
+        slug="new-lead-followup",
         status=Workflow.Status.PUBLISHED,
         definition={
             "trigger": {"type": "lead.created"},
@@ -92,7 +101,9 @@ def test_lead_created_enrolls_published_workflow(account, contact):
 
 @pytest.mark.django_db
 def test_action_registry_create_lead_and_create_deal(account, contact):
-    result = run_action("create_lead", {}, account=account, contact=contact, source="ad")
+    result = run_action(
+        "create_lead", {}, account=account, contact=contact, source="ad"
+    )
     lead = Lead.objects.get(public_id=result["lead_id"])
 
     deal_result = run_action("create_deal", {}, lead=lead, title="Deal via registry")
@@ -103,9 +114,14 @@ def test_action_registry_create_lead_and_create_deal(account, contact):
 def test_action_registry_change_deal_stage_rejects_foreign_stage(account, contact):
     lead = create_lead(account, contact)
     deal = convert_lead_to_deal(lead)
-    other_pipeline = Pipeline.objects.create(account=account, name="Other2", slug="other2")
+    other_pipeline = Pipeline.objects.create(
+        account=account, name="Other2", slug="other2"
+    )
     from apps.crm.models import Stage
-    other_stage = Stage.objects.create(pipeline=other_pipeline, name="Elsewhere", order=0)
+
+    other_stage = Stage.objects.create(
+        pipeline=other_pipeline, name="Elsewhere", order=0
+    )
 
     with pytest.raises(ActionError):
         run_action("change_deal_stage", {}, deal=deal, stage=other_stage)

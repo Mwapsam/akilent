@@ -7,6 +7,7 @@ most importantly — that a failure in the new enrollment path never affects
 the legacy AutomationRule dispatch that already runs on the same
 MessageReceived event.
 """
+
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -21,7 +22,9 @@ from apps.whatsapp.models import WhatsAppContact
 
 def _wf(account, trigger_type, steps, name="WF"):
     return Workflow.objects.create(
-        account=account, name=name, status=Workflow.Status.PUBLISHED,
+        account=account,
+        name=name,
+        status=Workflow.Status.PUBLISHED,
         definition={"trigger": {"type": trigger_type}, "steps": steps},
     )
 
@@ -45,24 +48,35 @@ class WhatsAppReceivedTriggerTest(TestCase):
     def test_enrolls_when_whatsapp_contact_already_linked(self):
         contact = Contact.objects.create(account=self.account, email="a@example.com")
         wa_contact = WhatsAppContact.objects.create(
-            account=self.account, phone_number="+260971234567", contact=contact,
+            account=self.account,
+            phone_number="+260971234567",
+            contact=contact,
         )
-        wf = _wf(self.account, "whatsapp.received", [
-            {"id": "a", "type": "stop"},
-        ])
+        wf = _wf(
+            self.account,
+            "whatsapp.received",
+            [
+                {"id": "a", "type": "stop"},
+            ],
+        )
 
         dispatcher.publish(_event(self.account, wa_contact))
 
         run = WorkflowRun.objects.get(workflow=wf, contact=contact)
-        self.assertIn(run.status, (WorkflowRun.Status.ACTIVE, WorkflowRun.Status.COMPLETED))
+        self.assertIn(
+            run.status, (WorkflowRun.Status.ACTIVE, WorkflowRun.Status.COMPLETED)
+        )
         self.assertEqual(run.context["message"]["body"], "hello")
 
     def test_enrolls_via_phone_match_backfill(self):
         contact = Contact.objects.create(
-            account=self.account, email="b@example.com", phone="+260971234568",
+            account=self.account,
+            email="b@example.com",
+            phone="+260971234568",
         )
         wa_contact = WhatsAppContact.objects.create(
-            account=self.account, phone_number="+260971234568",
+            account=self.account,
+            phone_number="+260971234568",
         )
         _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}])
 
@@ -75,10 +89,21 @@ class WhatsAppReceivedTriggerTest(TestCase):
     def test_unknown_phone_creates_contact_and_enrolls(self):
         """WhatsApp-first customer: no linked Contact and no phone match exists yet."""
         wa_contact = WhatsAppContact.objects.create(
-            account=self.account, phone_number="+260971234569",
+            account=self.account,
+            phone_number="+260971234569",
         )
-        wf_received = _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}], name="WF received")
-        wf_created = _wf(self.account, "contact.created", [{"id": "a", "type": "stop"}], name="WF created")
+        wf_received = _wf(
+            self.account,
+            "whatsapp.received",
+            [{"id": "a", "type": "stop"}],
+            name="WF received",
+        )
+        wf_created = _wf(
+            self.account,
+            "contact.created",
+            [{"id": "a", "type": "stop"}],
+            name="WF created",
+        )
 
         dispatcher.publish(_event(self.account, wa_contact))
 
@@ -90,13 +115,18 @@ class WhatsAppReceivedTriggerTest(TestCase):
 
         # A brand-new phone fires both contact.created and whatsapp.received
         # for the same inbound message — intentional, not a bug.
-        self.assertTrue(WorkflowRun.objects.filter(contact=contact, workflow=wf_received).exists())
-        self.assertTrue(WorkflowRun.objects.filter(contact=contact, workflow=wf_created).exists())
+        self.assertTrue(
+            WorkflowRun.objects.filter(contact=contact, workflow=wf_received).exists()
+        )
+        self.assertTrue(
+            WorkflowRun.objects.filter(contact=contact, workflow=wf_created).exists()
+        )
 
     def test_second_message_from_same_phone_reuses_contact(self):
         """Identity must stabilize after the first interaction — no duplicate Contacts."""
         wa_contact = WhatsAppContact.objects.create(
-            account=self.account, phone_number="+260971234571",
+            account=self.account,
+            phone_number="+260971234571",
         )
         _wf(self.account, "whatsapp.received", [{"id": "a", "type": "stop"}])
 
@@ -111,20 +141,28 @@ class WhatsAppReceivedTriggerTest(TestCase):
         self.assertEqual(wa_contact.contact_id, first_contact_id)
         self.assertEqual(Contact.objects.filter(account=self.account).count(), 1)
         self.assertEqual(
-            WorkflowRun.objects.filter(contact_id=first_contact_id).count(), 2,
+            WorkflowRun.objects.filter(contact_id=first_contact_id).count(),
+            2,
         )
 
     def test_legacy_rule_dispatch_unaffected_by_workflow_enrollment_failure(self):
         """The core isolation invariant: a broken new path must not break the old one."""
         contact = Contact.objects.create(account=self.account, email="c@example.com")
         wa_contact = WhatsAppContact.objects.create(
-            account=self.account, phone_number="+260971234570", contact=contact,
+            account=self.account,
+            phone_number="+260971234570",
+            contact=contact,
         )
 
-        with patch(
-            "apps.automation.triggers._enroll_workflows_for_reply",
-            side_effect=RuntimeError("boom"),
-        ), patch("apps.automation.tasks.evaluate_rules_for_message.delay") as mock_delay:
+        with (
+            patch(
+                "apps.automation.triggers._enroll_workflows_for_reply",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "apps.automation.tasks.evaluate_rules_for_message.delay"
+            ) as mock_delay,
+        ):
             dispatcher.publish(_event(self.account, wa_contact))
 
         mock_delay.assert_called_once()

@@ -10,6 +10,7 @@ that's what an agent fills in, while Meta wants them positionally. The mapping
 between the two is ``MessageTemplate.variables``, whose order defines which
 label is ``{{1}}``, ``{{2}}``, and so on.
 """
+
 from __future__ import annotations
 
 import re
@@ -77,10 +78,12 @@ def build_send_components(template, params: dict | None = None) -> list[dict]:
         )
 
     if values:
-        components.append({
-            "type": "body",
-            "parameters": [{"type": "text", "text": v} for v in values],
-        })
+        components.append(
+            {
+                "type": "body",
+                "parameters": [{"type": "text", "text": v} for v in values],
+            }
+        )
 
     button = _button_component(template, values)
     if button:

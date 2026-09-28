@@ -11,6 +11,7 @@ Component bodies are themselves Django-template strings rendered with the
 tag's kwargs as their entire context (no access to the outer context or any
 variable dict) — one level deep, no nested ``{% component %}``.
 """
+
 from __future__ import annotations
 
 from django.template import Context, Engine, Library
@@ -33,9 +34,9 @@ BUILTINS: dict[str, str] = {
     ),
     "AkilentInvoice": (
         '<tr><td style="padding:16px 0;font:14px system-ui,sans-serif;color:#111">'
-        'Invoice <strong>{{ number }}</strong> — '
+        "Invoice <strong>{{ number }}</strong> — "
         '<strong>{{ currency|default:"" }}{{ amount }}</strong>'
-        '{% if due %} · due {{ due }}{% endif %}</td></tr>'
+        "{% if due %} · due {{ due }}{% endif %}</td></tr>"
     ),
     "AkilentFooter": (
         '<tr><td style="padding:24px 0;text-align:center;font:12px system-ui,sans-serif;'
@@ -58,7 +59,7 @@ class UnknownComponentError(Exception):
 def component(context, name, **kwargs):
     body = BUILTINS.get(name)
     if body is None:
-        custom = (context.get("_components") or {})
+        custom = context.get("_components") or {}
         body = custom.get(name)
     if body is None:
         raise UnknownComponentError(f"unknown component {name!r}")
@@ -66,8 +67,7 @@ def component(context, name, **kwargs):
     # string literals safe, so escape unconditionally (str() drops any existing
     # safe marker) before the value reaches the component body.
     safe_kwargs = {
-        k: (escape(str(v)) if isinstance(v, str) else v)
-        for k, v in kwargs.items()
+        k: (escape(str(v)) if isinstance(v, str) else v) for k, v in kwargs.items()
     }
     rendered = _COMPONENT_ENGINE.from_string(body).render(
         Context(safe_kwargs, autoescape=True)

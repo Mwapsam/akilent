@@ -1,4 +1,5 @@
 """From a customer's message to a proposal a person can use. AI never sends anything itself."""
+
 import json
 from datetime import timedelta
 
@@ -19,8 +20,15 @@ from apps.conversations.models import Conversation, Message
 from apps.conversations.signals import conversation_message_processed
 
 NOW = timezone.now()
-PRICE_ANSWER = json.dumps({"version": 1, "action": "reply", "confidence": 0.9, "reason": "Asked price",
-                           "payload": {"text": "Our 3 kW system starts at K18,000."}})
+PRICE_ANSWER = json.dumps(
+    {
+        "version": 1,
+        "action": "reply",
+        "confidence": 0.9,
+        "reason": "Asked price",
+        "payload": {"text": "Our 3 kW system starts at K18,000."},
+    }
+)
 
 
 class FakeProvider(AIProvider):
@@ -48,23 +56,41 @@ def fake_ai(settings, monkeypatch):
 @pytest.fixture
 def account(db):
     account = Account.objects.create(company_name="Sunrise Solar")
-    AISettings.objects.create(account=account, enabled=True, business_notes="3 kW system from K18,000.")
+    AISettings.objects.create(
+        account=account, enabled=True, business_notes="3 kW system from K18,000."
+    )
     return account
 
 
 def convo(account, phone="+260971000001"):
-    contact = Contact.objects.create(account=account, phone=phone, first_name="Sam", email=f"{phone[-3:]}@example.com")
-    return Conversation.objects.create(account=account, contact=contact, channel="email", last_message_at=NOW)
+    contact = Contact.objects.create(
+        account=account,
+        phone=phone,
+        first_name="Sam",
+        email=f"{phone[-3:]}@example.com",
+    )
+    return Conversation.objects.create(
+        account=account, contact=contact, channel="email", last_message_at=NOW
+    )
 
 
 def say(conversation, body, direction=Message.Direction.INBOUND, minutes_ago=0):
-    return Message.objects.create(account=conversation.account, conversation=conversation, direction=direction,
-                                  body=body, timestamp=NOW - timedelta(minutes=minutes_ago))
+    return Message.objects.create(
+        account=conversation.account,
+        conversation=conversation,
+        direction=direction,
+        body=body,
+        timestamp=NOW - timedelta(minutes=minutes_ago),
+    )
 
 
 def announce(conversation, message, handled=False):
     return conversation_message_processed.send_robust(
-        sender=Conversation, conversation=conversation, message=message, handled_by_automation=handled)
+        sender=Conversation,
+        conversation=conversation,
+        message=message,
+        handled_by_automation=handled,
+    )
 
 
 def draft(proposal_id):
@@ -72,25 +98,45 @@ def draft(proposal_id):
 
 
 @pytest.mark.django_db
-def test_a_customer_message_becomes_one_ready_proposal(account, django_capture_on_commit_callbacks, monkeypatch):
+def test_a_customer_message_becomes_one_ready_proposal(
+    account, django_capture_on_commit_callbacks, monkeypatch
+):
     queued = []
-    monkeypatch.setattr(draft_proposal, "apply_async", lambda args, **kw: queued.append((args, kw)))
+    monkeypatch.setattr(
+        draft_proposal, "apply_async", lambda args, **kw: queued.append((args, kw))
+    )
     c = convo(account)
     m = say(c, "How much is the solar package?")
     with django_capture_on_commit_callbacks(execute=True):
         announce(c, m)
         announce(c, m)  # a replayed message reuses its proposal
-    assert len(queued) == 1 and queued[0][1]["queue"] == "ai" and queued[0][1]["countdown"] == 3
+    assert (
+        len(queued) == 1
+        and queued[0][1]["queue"] == "ai"
+        and queued[0][1]["countdown"] == 3
+    )
     draft(queued[0][0][0])
     p = AIProposal.objects.get()
     assert (p.status, p.action, p.payload["text"], p.model) == (
-        "ready", "reply", "Our 3 kW system starts at K18,000.", "fake-1")
-    assert p.trigger_message == m and p.reason == "Asked price" and p.latency_ms is not None
-    assert Message.objects.filter(direction="outbound").count() == 0, "AI must never send"
+        "ready",
+        "reply",
+        "Our 3 kW system starts at K18,000.",
+        "fake-1",
+    )
+    assert (
+        p.trigger_message == m
+        and p.reason == "Asked price"
+        and p.latency_ms is not None
+    )
+    assert Message.objects.filter(direction="outbound").count() == 0, (
+        "AI must never send"
+    )
 
 
 @pytest.mark.django_db
-def test_nothing_is_queued_when_an_automation_answered_or_ai_is_off(account, settings, monkeypatch):
+def test_nothing_is_queued_when_an_automation_answered_or_ai_is_off(
+    account, settings, monkeypatch
+):
     queued = []
     monkeypatch.setattr(draft_proposal, "apply_async", lambda *a, **k: queued.append(1))
     c = convo(account)
@@ -118,16 +164,22 @@ def test_settings_page_says_why_ai_is_off(agent, account):
 
     assert "AI is on." in agent.get("/settings/ai/").content.decode()
     billing_api.set_override(account, "ai_assistant", grant=False, note="test")
-    assert "isn't included in this business's plan" in agent.get("/settings/ai/").content.decode().replace("&#x27;", "'")
+    assert "isn't included in this business's plan" in agent.get(
+        "/settings/ai/"
+    ).content.decode().replace("&#x27;", "'")
 
 
 @pytest.mark.django_db
 def test_a_burst_of_messages_gets_one_answer(account):
     c = convo(account)
     first = say(c, "Hi", minutes_ago=1)
-    p1 = AIProposal.objects.create(account=account, conversation=c, trigger_message=first)
+    p1 = AIProposal.objects.create(
+        account=account, conversation=c, trigger_message=first
+    )
     second = say(c, "How much?")
-    p2 = AIProposal.objects.create(account=account, conversation=c, trigger_message=second)
+    p2 = AIProposal.objects.create(
+        account=account, conversation=c, trigger_message=second
+    )
     draft(p1.pk)
     draft(p2.pk)
     p1.refresh_from_db()
@@ -153,13 +205,19 @@ def test_provider_failure_retries_then_records_a_readable_error(account):
 
     FakeProvider.fail = AIProviderError("The AI service took too long to answer.")
     c = convo(account)
-    p = AIProposal.objects.create(account=account, conversation=c, trigger_message=say(c, "hello?"))
+    p = AIProposal.objects.create(
+        account=account, conversation=c, trigger_message=say(c, "hello?")
+    )
     with pytest.raises(Retry):
         draft_proposal.apply(args=(p.pk,), throw=True)  # first attempt: retried later
     p.refresh_from_db()
     assert p.status == "pending"
-    assert cache.get(f"ai-lock:conversation:{c.pk}") is None, "a retry must not leave the conversation locked"
-    draft_proposal.apply(args=(p.pk,), retries=2)  # the last attempt records the failure
+    assert cache.get(f"ai-lock:conversation:{c.pk}") is None, (
+        "a retry must not leave the conversation locked"
+    )
+    draft_proposal.apply(
+        args=(p.pk,), retries=2
+    )  # the last attempt records the failure
     p.refresh_from_db()
     assert p.status == "error" and "too long" in p.error
 
@@ -168,7 +226,9 @@ def test_provider_failure_retries_then_records_a_readable_error(account):
 def test_an_unusable_answer_is_recorded_not_raised(account):
     FakeProvider.answer = "I think you should say hi"
     c = convo(account)
-    p = AIProposal.objects.create(account=account, conversation=c, trigger_message=say(c, "hello?"))
+    p = AIProposal.objects.create(
+        account=account, conversation=c, trigger_message=say(c, "hello?")
+    )
     draft(p.pk)
     p.refresh_from_db()
     assert p.status == "error" and "format" in p.error
@@ -180,8 +240,15 @@ def test_the_daily_limit_stops_calls(account, settings):
     c = convo(account)
     for body in ("one", "two"):
         m = say(c, body)
-        draft(AIProposal.objects.create(account=account, conversation=c, trigger_message=m).pk)
-    assert list(AIProposal.objects.order_by("id").values_list("status", flat=True)) == ["ready", "error"]
+        draft(
+            AIProposal.objects.create(
+                account=account, conversation=c, trigger_message=m
+            ).pk
+        )
+    assert list(AIProposal.objects.order_by("id").values_list("status", flat=True)) == [
+        "ready",
+        "error",
+    ]
     assert len(FakeProvider.calls) == 1
 
 
@@ -193,12 +260,22 @@ def test_the_prompt_holds_only_this_conversation_and_hides_contact_details(accou
     say(c, "Automated line", direction=Message.Direction.SYSTEM, minutes_ago=3)
     say(c, "Call me on +260 97 555 1234 or mail sam@example.com", minutes_ago=2)
     m = say(c, "How much is it?", minutes_ago=1)
-    draft(AIProposal.objects.create(account=account, conversation=c, trigger_message=m).pk)
+    draft(
+        AIProposal.objects.create(account=account, conversation=c, trigger_message=m).pk
+    )
     sent = FakeProvider.calls[0]
     everything = sent["system"] + " ".join(msg.content for msg in sent["messages"])
     assert "SECRET" not in everything and "Automated line" not in everything
-    assert "555 1234" not in everything and "sam@example.com" not in everything and "[phone]" in everything
-    assert "K18,000" in sent["system"] and "Sam" in sent["system"] and "Sunrise Solar" in sent["system"]
+    assert (
+        "555 1234" not in everything
+        and "sam@example.com" not in everything
+        and "[phone]" in everything
+    )
+    assert (
+        "K18,000" in sent["system"]
+        and "Sam" in sent["system"]
+        and "Sunrise Solar" in sent["system"]
+    )
     assert [msg.role for msg in sent["messages"]] == ["user", "user"]
 
 
@@ -220,7 +297,9 @@ def agent(client, account):
 def test_the_feed_carries_the_ready_proposal(agent, account):
     c = convo(account)
     m = say(c, "How much?")
-    draft(AIProposal.objects.create(account=account, conversation=c, trigger_message=m).pk)
+    draft(
+        AIProposal.objects.create(account=account, conversation=c, trigger_message=m).pk
+    )
     data = agent.get(f"/inbox/{c.public_id}/messages/").json()
     assert data["aiProposal"]["text"] == "Our 3 kW system starts at K18,000."
     html = agent.get(f"/inbox/{c.public_id}/").content.decode()
@@ -270,7 +349,9 @@ def test_settings_page_records_consent(agent, account):
     agent.post("/settings/ai/", {"enabled": "on", "business_notes": "Open 8-5."})
     s = AISettings.objects.get(account=account)
     assert s.enabled and s.consented_at and s.business_notes == "Open 8-5."
-    assert "What is sent to the AI service" in agent.get("/settings/ai/").content.decode()
+    assert (
+        "What is sent to the AI service" in agent.get("/settings/ai/").content.decode()
+    )
 
 
 @pytest.mark.django_db

@@ -13,6 +13,7 @@ Rule: No `from apps.X.models import ...` outside of:
 Violations: Apps that violate this rule lose the ability to swap implementations
 or refactor their internals without breaking the entire system.
 """
+
 import os
 import re
 from pathlib import Path
@@ -28,8 +29,10 @@ class ModuleBoundaryTest(TestCase):
         for dirpath, dirnames, filenames in os.walk(root_dir):
             # Skip certain directories
             dirnames[:] = [
-                d for d in dirnames
-                if d not in (
+                d
+                for d in dirnames
+                if d
+                not in (
                     "__pycache__",
                     ".git",
                     "node_modules",
@@ -84,7 +87,7 @@ class ModuleBoundaryTest(TestCase):
 
             # Read the file and find violations
             try:
-                with open(filepath, "r") as f:
+                with open(filepath) as f:
                     content = f.read()
             except Exception:
                 continue
@@ -98,16 +101,14 @@ class ModuleBoundaryTest(TestCase):
                     if str(rel_path).replace("\\", "/") in temporary_exceptions:
                         continue
 
-                    line_num = content[:match.start()].count("\n") + 1
+                    line_num = content[: match.start()].count("\n") + 1
                     violations.append(
                         f"{rel_path}:{line_num} — {app_name} imports models from {imported_app}"
                     )
 
         if violations:
             msg = "Module boundary violations detected:\n\n" + "\n".join(violations)
-            msg += (
-                "\n\n✓ Fix: Use the public API instead (e.g., from apps.{app} import api)"
-            )
+            msg += "\n\n✓ Fix: Use the public API instead (e.g., from apps.{app} import api)"
             self.fail(msg)
 
     def test_all_apps_have_api_module(self):

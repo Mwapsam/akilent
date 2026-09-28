@@ -19,6 +19,7 @@ Fields:
 
 Operators: eq ne gt gte lt lte contains in exists not_exists
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -107,9 +108,17 @@ def _leaf_q(cond: dict) -> Q:
         raise SegmentError(f"field {field!r} is not queryable")
 
     if op == "exists":
-        return ~Q(**{f"{orm_field}__isnull": True}) if field in _DIRECT_FIELDS else Q(**{f"attributes__has_key": field.split('.', 1)[1]})
+        return (
+            ~Q(**{f"{orm_field}__isnull": True})
+            if field in _DIRECT_FIELDS
+            else Q(**{"attributes__has_key": field.split(".", 1)[1]})
+        )
     if op == "not_exists":
-        return Q(**{f"{orm_field}__isnull": True}) if field in _DIRECT_FIELDS else ~Q(**{f"attributes__has_key": field.split('.', 1)[1]})
+        return (
+            Q(**{f"{orm_field}__isnull": True})
+            if field in _DIRECT_FIELDS
+            else ~Q(**{"attributes__has_key": field.split(".", 1)[1]})
+        )
 
     lookup = f"{orm_field}{_OPERATOR_SUFFIX[op]}"
     q = Q(**{lookup: value})

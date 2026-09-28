@@ -18,8 +18,10 @@ def logged_in(client, account):
 def test_index_redirects_to_campaigns_scheduled_filter(logged_in):
     client, account = logged_in
     ScheduledJob.objects.create(
-        account=account, kind=ScheduledJob.Kind.EMAIL_SINGLE,
-        fire_at=timezone.now() + timedelta(hours=2), idempotency_key="a",
+        account=account,
+        kind=ScheduledJob.Kind.EMAIL_SINGLE,
+        fire_at=timezone.now() + timedelta(hours=2),
+        idempotency_key="a",
     )
     r = client.get("/scheduled/")
     assert r.status_code == 302
@@ -30,8 +32,10 @@ def test_index_redirects_to_campaigns_scheduled_filter(logged_in):
 def test_cancel_endpoint(logged_in):
     client, account = logged_in
     job = ScheduledJob.objects.create(
-        account=account, kind=ScheduledJob.Kind.EMAIL_SINGLE,
-        fire_at=timezone.now() + timedelta(hours=2), idempotency_key="b",
+        account=account,
+        kind=ScheduledJob.Kind.EMAIL_SINGLE,
+        fire_at=timezone.now() + timedelta(hours=2),
+        idempotency_key="b",
     )
     r = client.post(f"/scheduled/{job.public_id}/cancel/")
     assert r.status_code == 200
@@ -41,15 +45,18 @@ def test_cancel_endpoint(logged_in):
 
 @pytest.mark.django_db
 def test_cannot_cancel_other_accounts_job(client, account, db):
-    from apps.accounts.models import Account
     from django.contrib.auth.models import User
+
+    from apps.accounts.models import Account
 
     other_user = User.objects.create_user("stranger", "s@example.com", "pw")
     Account.objects.create(company_name="Stranger")
     client.force_login(other_user)
     job = ScheduledJob.objects.create(
-        account=account, kind=ScheduledJob.Kind.EMAIL_SINGLE,
-        fire_at=timezone.now() + timedelta(hours=2), idempotency_key="c",
+        account=account,
+        kind=ScheduledJob.Kind.EMAIL_SINGLE,
+        fire_at=timezone.now() + timedelta(hours=2),
+        idempotency_key="c",
     )
     r = client.post(f"/scheduled/{job.public_id}/cancel/")
     assert r.status_code in (403, 404)

@@ -3,6 +3,7 @@
 The spine never imports its consumers; they connect in their own ``AppConfig.ready``. A consumer
 that fails can never affect recording a message: the spine sends these with ``send_robust``.
 """
+
 from django.dispatch import Signal
 
 # Sent after a customer's message is on the spine and deterministic automations have had their

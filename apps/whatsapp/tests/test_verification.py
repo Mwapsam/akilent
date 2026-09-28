@@ -1,4 +1,5 @@
 """Verify-connection: test send, structured results, and derived setup status."""
+
 import json
 from datetime import timedelta
 from unittest.mock import patch
@@ -11,7 +12,6 @@ from django.utils import timezone
 from apps.accounts.models import Account
 from apps.whatsapp.models import Conversation, MessageLog
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber as N
-from apps.whatsapp.models.verification import ConnectionTest
 from apps.whatsapp.numbers import numbers_verify
 from apps.whatsapp.types import SendResult
 from apps.whatsapp.verification import verify_connection
@@ -28,15 +28,20 @@ def ok(mid="wamid.1"):
 
 
 def fail(code, msg="boom"):
-    return SendResult(message_id="", success=False, error=msg, error_code=code, retryable=False)
+    return SendResult(
+        message_id="", success=False, error=msg, error_code=code, retryable=False
+    )
 
 
 class VerifyBase(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.number = N.objects.create(
-            account=self.account, phone_number_id="PNID", access_token="tok",
-            waba_id="W", registration_status=R.REGISTERED,
+            account=self.account,
+            phone_number_id="PNID",
+            access_token="tok",
+            waba_id="W",
+            registration_status=R.REGISTERED,
         )
         patcher = patch(LIST, return_value=[])
         self.list_templates = patcher.start()
@@ -46,9 +51,14 @@ class VerifyBase(TestCase):
         contact = self.account.contacts.create(phone_number=phone)
         convo = Conversation.get_or_open(contact)
         return MessageLog.objects.create(
-            account=self.account, conversation=convo, contact=contact,
-            direction=MessageLog.Direction.INBOUND, message_type="text", content="hi",
-            status="delivered", timestamp=when or timezone.now(),
+            account=self.account,
+            conversation=convo,
+            contact=contact,
+            direction=MessageLog.Direction.INBOUND,
+            message_type="text",
+            content="hi",
+            status="delivered",
+            timestamp=when or timezone.now(),
         )
 
 
@@ -73,12 +83,17 @@ class VerifyConnectionTest(VerifyBase):
         with patch(SEND) as send:
             r = verify_connection(self.number, "abc")
         send.assert_not_called()
-        self.assertEqual((r["error_code"], r["action"]), ("invalid_number", "fix_number"))
+        self.assertEqual(
+            (r["error_code"], r["action"]), ("invalid_number", "fix_number")
+        )
 
     def test_133010_flips_number_to_failed_and_offers_retry(self):
         with patch(SEND, return_value=fail("133010")):
             r = verify_connection(self.number, TESTER)
-        self.assertEqual((r["ok"], r["error_code"], r["action"]), (False, "133010", "retry_registration"))
+        self.assertEqual(
+            (r["ok"], r["error_code"], r["action"]),
+            (False, "133010", "retry_registration"),
+        )
         self.number.refresh_from_db()
         self.assertEqual(self.number.registration_status, R.FAILED)
         self.assertFalse(self.number.is_ready)
@@ -86,11 +101,15 @@ class VerifyConnectionTest(VerifyBase):
 
     def test_token_error_offers_reconnect(self):
         with patch(SEND, return_value=fail("190")):
-            self.assertEqual(verify_connection(self.number, TESTER)["action"], "reconnect")
+            self.assertEqual(
+                verify_connection(self.number, TESTER)["action"], "reconnect"
+            )
 
     def test_missing_template_offers_support(self):
         with patch(SEND, return_value=fail("132001")):
-            self.assertEqual(verify_connection(self.number, TESTER)["action"], "contact_support")
+            self.assertEqual(
+                verify_connection(self.number, TESTER)["action"], "contact_support"
+            )
 
     def test_unknown_error_is_generic_retry(self):
         with patch(SEND, return_value=fail("999/1")):
@@ -101,9 +120,13 @@ class VerifyConnectionTest(VerifyBase):
 class TemplateChoiceTest(VerifyBase):
     def test_recent_inbound_from_recipient_sends_free_text(self):
         self.inbound(TESTER)
-        with patch(SEND) as tpl, patch(
-            "apps.whatsapp.verification.MetaCloudAPIProvider.send_text", return_value=ok("wamid.t")
-        ) as text:
+        with (
+            patch(SEND) as tpl,
+            patch(
+                "apps.whatsapp.verification.MetaCloudAPIProvider.send_text",
+                return_value=ok("wamid.t"),
+            ) as text,
+        ):
             r = verify_connection(self.number, TESTER)
         tpl.assert_not_called()
         text.assert_called_once()
@@ -115,9 +138,24 @@ class TemplateChoiceTest(VerifyBase):
             verify_connection(self.number, TESTER)
         tpl.assert_called_once()
 
-    def _tpl(self, name, *, lang="en_US", status="APPROVED", category="UTILITY", components=None):
-        return {"name": name, "language": lang, "status": status, "category": category,
-                "components": components if components is not None else [{"type": "BODY", "text": "Thanks"}]}
+    def _tpl(
+        self,
+        name,
+        *,
+        lang="en_US",
+        status="APPROVED",
+        category="UTILITY",
+        components=None,
+    ):
+        return {
+            "name": name,
+            "language": lang,
+            "status": status,
+            "category": category,
+            "components": components
+            if components is not None
+            else [{"type": "BODY", "text": "Thanks"}],
+        }
 
     def test_uses_meta_language_of_an_approved_parameterless_template(self):
         self.list_templates.return_value = [
@@ -133,11 +171,30 @@ class TemplateChoiceTest(VerifyBase):
 
     def test_skips_templates_needing_media_header_or_dynamic_button(self):
         self.list_templates.return_value = [
-            self._tpl("img", components=[{"type": "HEADER", "format": "IMAGE"}, {"type": "BODY", "text": "x"}]),
-            self._tpl("btn", components=[{"type": "BODY", "text": "x"},
-                                         {"type": "BUTTONS", "buttons": [{"type": "URL", "url": "https://a/{{1}}"}]}]),
-            self._tpl("otp", components=[{"type": "BODY", "text": "x"},
-                                         {"type": "BUTTONS", "buttons": [{"type": "COPY_CODE"}]}]),
+            self._tpl(
+                "img",
+                components=[
+                    {"type": "HEADER", "format": "IMAGE"},
+                    {"type": "BODY", "text": "x"},
+                ],
+            ),
+            self._tpl(
+                "btn",
+                components=[
+                    {"type": "BODY", "text": "x"},
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [{"type": "URL", "url": "https://a/{{1}}"}],
+                    },
+                ],
+            ),
+            self._tpl(
+                "otp",
+                components=[
+                    {"type": "BODY", "text": "x"},
+                    {"type": "BUTTONS", "buttons": [{"type": "COPY_CODE"}]},
+                ],
+            ),
         ]
         with patch(SEND, return_value=ok()) as tpl:
             verify_connection(self.number, TESTER)
@@ -150,9 +207,12 @@ class TemplateChoiceTest(VerifyBase):
         self.assertEqual(tpl.call_args[0][1], "hello_world")
 
     def test_setting_overrides_lookup(self):
-        with self.settings(WHATSAPP_VERIFY_TEMPLATE="mine", WHATSAPP_VERIFY_TEMPLATE_LANG="fr"), patch(
-            SEND, return_value=ok()
-        ) as tpl:
+        with (
+            self.settings(
+                WHATSAPP_VERIFY_TEMPLATE="mine", WHATSAPP_VERIFY_TEMPLATE_LANG="fr"
+            ),
+            patch(SEND, return_value=ok()) as tpl,
+        ):
             verify_connection(self.number, TESTER)
         self.assertEqual(tpl.call_args[0][1:3], ("mine", "fr"))
         self.list_templates.assert_not_called()
@@ -210,11 +270,15 @@ class VerifyViewTest(VerifyBase):
         self.user = User.objects.create_user("u", password="p")
 
     def _post(self, pk, recipient=TESTER):
-        request = RequestFactory().post(f"/whatsapp/numbers/{pk}/verify/", {"recipient": recipient})
+        request = RequestFactory().post(
+            f"/whatsapp/numbers/{pk}/verify/", {"recipient": recipient}
+        )
         request.user = self.user
         request.session = {}
         request._messages = FallbackStorage(request)
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account):
+        with patch(
+            "apps.whatsapp.numbers.get_current_account", return_value=self.account
+        ):
             return numbers_verify(request, pk)
 
     def test_success_json(self):
@@ -233,6 +297,8 @@ class VerifyViewTest(VerifyBase):
     def test_other_accounts_number_404(self):
         from django.http import Http404
 
-        foreign = N.objects.create(account=self.other, phone_number_id="X", access_token="t", waba_id="W")
+        foreign = N.objects.create(
+            account=self.other, phone_number_id="X", access_token="t", waba_id="W"
+        )
         with self.assertRaises(Http404):
             self._post(foreign.pk)

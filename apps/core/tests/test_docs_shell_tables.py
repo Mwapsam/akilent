@@ -39,7 +39,7 @@ def _scrolls(css: str, body_class: str) -> bool:
     A shell that kept the overflow and lost the display change would read as
     protected while clipping exactly as before.
     """
-    rule = re.search(r"\.%s table\s*{([^}]*)}" % re.escape(body_class), css)
+    rule = re.search(rf"\.{re.escape(body_class)} table\s*{{([^}}]*)}}", css)
     if not rule:
         return False
     return bool(
@@ -52,8 +52,8 @@ def test_the_docs_and_help_shells_keep_their_tables_scrollable():
     for shell, (_, body_class) in SHELLS.items():
         css = (TEMPLATES_DIR / shell).read_text(encoding="utf-8")
         assert _scrolls(css, body_class), (
-            "%s no longer makes its tables scroll, so every table on the pages "
-            "it wraps now clips" % shell
+            f"{shell} no longer makes its tables scroll, so every table on the pages "
+            "it wraps now clips"
         )
 
 
@@ -73,11 +73,13 @@ def test_every_page_with_a_table_is_covered_by_a_shell_or_its_own_wrapper():
             continue
         covered = any(
             rel.startswith(prefix)
-            and _scrolls((TEMPLATES_DIR / shell).read_text(encoding="utf-8"), body_class)
+            and _scrolls(
+                (TEMPLATES_DIR / shell).read_text(encoding="utf-8"), body_class
+            )
             for shell, (prefix, body_class) in SHELLS.items()
         )
         if not covered:
             offenders.append(rel)
     assert not offenders, (
-        "these pages render a table that can neither reflow nor scroll: %s" % offenders
+        f"these pages render a table that can neither reflow nor scroll: {offenders}"
     )

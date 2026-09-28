@@ -24,6 +24,24 @@ services:
     depends_on:
       - db
 
+  # Serves only /events/stream/ (apps/core/views_events.py), on ASGI, so a long-lived SSE
+  # connection per browser tab never takes a worker away from `web`'s WSGI pool. Off by default
+  # in the app itself (REALTIME_SSE_ENABLED=False) until this is confirmed reachable — bring it
+  # up and route nginx to it (nginx/conf.d's /events/ location) before flipping that on.
+  events:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8001:8001"
+    command: sh /app/docker/entrypoint_events.sh
+    depends_on:
+      - db
+      - redis
+
 
   db:
     image: postgres:16-alpine

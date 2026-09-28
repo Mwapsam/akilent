@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0002_plan_max_mailboxes'),
+        ("billing", "0002_plan_max_mailboxes"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='plan',
-            name='slug',
+            model_name="plan",
+            name="slug",
             field=models.SlugField(unique=True),
         ),
     ]

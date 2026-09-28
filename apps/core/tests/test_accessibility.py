@@ -22,9 +22,13 @@ TEMPLATES = Path(settings.BASE_DIR) / "templates"
 BASE = (TEMPLATES / "base.html").read_text(encoding="utf-8")
 NAV = (TEMPLATES / "components" / "_nav.html").read_text(encoding="utf-8")
 NAV_ITEM = (TEMPLATES / "components" / "_nav_item.html").read_text(encoding="utf-8")
-PALETTE = (TEMPLATES / "components" / "command_palette.html").read_text(encoding="utf-8")
+PALETTE = (TEMPLATES / "components" / "command_palette.html").read_text(
+    encoding="utf-8"
+)
 TOAST = (TEMPLATES / "components" / "toast.html").read_text(encoding="utf-8")
-APP_JS = (Path(settings.BASE_DIR) / "static" / "js" / "app.js").read_text(encoding="utf-8")
+APP_JS = (Path(settings.BASE_DIR) / "static" / "js" / "app.js").read_text(
+    encoding="utf-8"
+)
 
 
 @pytest.fixture
@@ -41,6 +45,7 @@ def member(db):
 
 
 # --- Rendered shell -------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_shell_renders_skip_link_and_landmarks(client, member):
@@ -61,14 +66,19 @@ def test_current_page_is_marked_for_assistive_tech(client, member):
 
 # --- The user menu --------------------------------------------------------
 
+
 def test_user_menu_trigger_has_an_accessible_name():
     """Its avatar initial and chevron are both aria-hidden.
 
     Without an explicit label the button announced as "button, collapsed" -
     no indication of what it opens.
     """
-    trigger = BASE[BASE.index('aria-controls="user-menu-panel"') - 600:
-                   BASE.index('aria-controls="user-menu-panel"') + 100]
+    trigger = BASE[
+        BASE.index('aria-controls="user-menu-panel"') - 600 : BASE.index(
+            'aria-controls="user-menu-panel"'
+        )
+        + 100
+    ]
     assert 'aria-label="Account menu"' in trigger
 
 
@@ -79,10 +89,11 @@ def test_user_menu_does_not_claim_unimplemented_menu_semantics():
     """
     assert 'role="menu"' not in BASE
     assert 'role="menuitem"' not in BASE
-    assert 'aria-haspopup' not in BASE
+    assert "aria-haspopup" not in BASE
 
 
 # --- Sidebar arrow-key navigation ----------------------------------------
+
 
 def test_arrow_key_nav_reaches_every_link_including_inbox_and_dashboard():
     """Inbox and Dashboard sit above the first [role=group].
@@ -91,7 +102,7 @@ def test_arrow_key_nav_reaches_every_link_including_inbox_and_dashboard():
     the product's two most-used links.
     """
     assert "link.closest('nav')" in APP_JS
-    assert 'link.closest(\'[role="group"]\')' not in APP_JS
+    assert "link.closest('[role=\"group\"]')" not in APP_JS
 
 
 def test_no_dead_nav_group_contract():
@@ -102,6 +113,7 @@ def test_no_dead_nav_group_contract():
 
 
 # --- Command palette ------------------------------------------------------
+
 
 def test_command_palette_listbox_is_wired_to_its_input():
     """Focus never leaves the input, so without aria-activedescendant a
@@ -123,10 +135,12 @@ def test_command_palette_options_are_not_nested_in_interactive_wrappers():
 
 # --- Toasts ---------------------------------------------------------------
 
+
 def test_toast_region_announces_once():
     """role=status inside aria-live nests two live regions, which reads each
     message twice; aria-atomic=true re-read every toast on each new one."""
     assert TOAST.count('aria-live="polite"') == 1
-    assert 'role="status"' not in re.sub(r"\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}",
-                                         "", TOAST, flags=re.S)
+    assert 'role="status"' not in re.sub(
+        r"\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}", "", TOAST, flags=re.S
+    )
     assert 'aria-atomic="false"' in TOAST

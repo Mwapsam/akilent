@@ -12,6 +12,7 @@ What decides whether a domain is *usable* is unchanged: the ownership record
 plus DKIM (and SES's own verdict). MAIL FROM is a separate deliverability layer
 -- recommended, reported, never gating.
 """
+
 from __future__ import annotations
 
 import logging
@@ -151,11 +152,15 @@ def refresh_domain(record: EmailDomain, *, provider=None) -> dict:
     rows = dnscheck.check_records(record)
 
     now = timezone.now()
-    db_rows = {(r.key, r.name): r for r in record.dns_record_rows.all()} if record.pk else {}
+    db_rows = (
+        {(r.key, r.name): r for r in record.dns_record_rows.all()} if record.pk else {}
+    )
     to_update = []
     for row in rows:
         db_row = db_rows.get((row["key"], row["name"]))
-        if db_row is not None and (db_row.is_ok != row["ok"] or db_row.checked_at is None):
+        if db_row is not None and (
+            db_row.is_ok != row["ok"] or db_row.checked_at is None
+        ):
             db_row.is_ok = row["ok"]
             db_row.checked_at = now
             to_update.append(db_row)
@@ -166,9 +171,7 @@ def refresh_domain(record: EmailDomain, *, provider=None) -> dict:
 
     # Persist why each record failed, so the card can explain without doing DNS.
     diagnostics = {
-        f"{row['key']}|{row['name']}": row["diag"]
-        for row in rows
-        if row.get("diag")
+        f"{row['key']}|{row['name']}": row["diag"] for row in rows if row.get("diag")
     }
     try:
         advice = dnscheck.check_root_spf(record.domain, record.effective_zone)
@@ -194,8 +197,12 @@ def refresh_domain(record: EmailDomain, *, provider=None) -> dict:
     record.mail_from_ok = _ok("mfmx") and _ok("mfspf")
     record.last_checked_at = now
     fields += [
-        "dkim_ok", "spf_ok", "dmarc_ok", "mail_from_ok",
-        "dns_diagnostics", "last_checked_at",
+        "dkim_ok",
+        "spf_ok",
+        "dmarc_ok",
+        "mail_from_ok",
+        "dns_diagnostics",
+        "last_checked_at",
     ]
 
     fields += _refresh_mail_from_status(record, provider)

@@ -3,7 +3,6 @@
 This is the single interface other apps should use to access Account data.
 Direct imports of apps.accounts.models are not allowed outside of accounts.
 """
-from django.core.exceptions import ObjectDoesNotExist
 
 from apps.accounts.models import Account
 
@@ -72,9 +71,12 @@ def count_members(account) -> int:
     from apps.accounts.models import Invitation, Membership
 
     cutoff = timezone.now() - timedelta(days=Invitation.EXPIRY_DAYS)
-    return (Membership.objects.filter(account=account).count()
-            + Invitation.objects.filter(account=account, accepted_at__isnull=True,
-                                        created_at__gte=cutoff).count())
+    return (
+        Membership.objects.filter(account=account).count()
+        + Invitation.objects.filter(
+            account=account, accepted_at__isnull=True, created_at__gte=cutoff
+        ).count()
+    )
 
 
 def is_account_admin(user, account) -> bool:
@@ -82,5 +84,7 @@ def is_account_admin(user, account) -> bool:
     from apps.accounts.models import Membership
 
     return Membership.objects.filter(
-        user=user, account=account, role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
+        user=user,
+        account=account,
+        role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
     ).exists()

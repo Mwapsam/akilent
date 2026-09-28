@@ -5,33 +5,51 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('contacts', '0004_contact_consent'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("contacts", "0004_contact_consent"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Tag',
+            name="Tag",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=40)),
-                ('slug', models.SlugField(max_length=60)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='contact_tags', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=40)),
+                ("slug", models.SlugField(max_length=60)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="contact_tags",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.AddField(
-            model_name='contact',
-            name='tags',
-            field=models.ManyToManyField(blank=True, related_name='contacts', to='contacts.tag'),
+            model_name="contact",
+            name="tags",
+            field=models.ManyToManyField(
+                blank=True, related_name="contacts", to="contacts.tag"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='tag',
-            constraint=models.UniqueConstraint(fields=('account', 'slug'), name='uniq_contacttag_account_slug'),
+            model_name="tag",
+            constraint=models.UniqueConstraint(
+                fields=("account", "slug"), name="uniq_contacttag_account_slug"
+            ),
         ),
     ]

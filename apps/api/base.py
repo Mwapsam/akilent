@@ -4,6 +4,7 @@ Centralises auth/throttle wiring and adds request logging + idempotency-key
 support without each view having to opt in. Concrete views still declare their
 own ``permission_classes`` / ``required_scope``.
 """
+
 from __future__ import annotations
 
 import logging

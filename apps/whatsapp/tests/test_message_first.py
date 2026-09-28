@@ -1,4 +1,5 @@
 """Guided "message us first" step: unlocks a plain-text test on any number."""
+
 import html
 import json
 from datetime import timedelta
@@ -27,20 +28,31 @@ class Base(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.number = N.objects.create(
-            account=self.account, phone_number_id="PNID", access_token="tok", waba_id="W",
-            registration_status=R.REGISTERED, display_number="+1 555-025-3483",
+            account=self.account,
+            phone_number_id="PNID",
+            access_token="tok",
+            waba_id="W",
+            registration_status=R.REGISTERED,
+            display_number="+1 555-025-3483",
         )
 
     def inbound(self, phone=TESTER, ago=timedelta(minutes=1)):
         contact = self.account.contacts.create(phone_number=phone)
         return MessageLog.objects.create(
-            account=self.account, conversation=Conversation.get_or_open(contact), contact=contact,
-            direction=MessageLog.Direction.INBOUND, message_type="text", content="Hi",
-            status="delivered", timestamp=timezone.now() - ago,
+            account=self.account,
+            conversation=Conversation.get_or_open(contact),
+            contact=contact,
+            direction=MessageLog.Direction.INBOUND,
+            message_type="text",
+            content="Hi",
+            status="delivered",
+            timestamp=timezone.now() - ago,
         )
 
     def console(self):
-        return build_setup_console([self.number], embedded_enabled=True, inbound_seen=False)
+        return build_setup_console(
+            [self.number], embedded_enabled=True, inbound_seen=False
+        )
 
     def step(self, key):
         return next(s for s in self.console().steps if s.key == key)
@@ -93,19 +105,25 @@ class StatusEndpointTest(Base):
     def _get(self, pk):
         request = RequestFactory().get(f"/whatsapp/numbers/{pk}/status/")
         request.user = self.user
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account):
+        with patch(
+            "apps.whatsapp.numbers.get_current_account", return_value=self.account
+        ):
             return numbers_views.numbers_status(request, pk)
 
     def test_reports_waiting(self):
         body = json.loads(self._get(self.number.pk).content)
-        self.assertEqual((body["message_received"], body["stage"], body["sender"]),
-                         (False, "waiting", ""))
+        self.assertEqual(
+            (body["message_received"], body["stage"], body["sender"]),
+            (False, "waiting", ""),
+        )
 
     def test_reports_received_with_sender(self):
         self.inbound()
         body = json.loads(self._get(self.number.pk).content)
-        self.assertEqual((body["message_received"], body["stage"], body["sender"]),
-                         (True, "received", TESTER))
+        self.assertEqual(
+            (body["message_received"], body["stage"], body["sender"]),
+            (True, "received", TESTER),
+        )
 
     def test_other_accounts_number_404(self):
         foreign = N.objects.create(account=self.other, phone_number_id="X")
@@ -119,7 +137,9 @@ class FetchDisplayNumberTest(TestCase):
 
     @responses.activate
     def test_returns_display_number(self):
-        responses.add(responses.GET, self.URL, json={"display_phone_number": "+1 555-025-3483"})
+        responses.add(
+            responses.GET, self.URL, json={"display_phone_number": "+1 555-025-3483"}
+        )
         self.assertEqual(fetch_display_number("PNID", "tok"), "+1 555-025-3483")
 
     @responses.activate
@@ -161,25 +181,35 @@ class PageRenderTest(Base):
         request.user = User.objects.create_user("u", password="p")
         request.session = {}
         request._messages = FallbackStorage(request)
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account), patch(
-            "apps.billing.api.entitled", return_value=True
-        ), patch(FETCH, return_value=""):
+        with (
+            patch(
+                "apps.whatsapp.numbers.get_current_account", return_value=self.account
+            ),
+            patch("apps.billing.api.entitled", return_value=True),
+            patch(FETCH, return_value=""),
+        ):
             return html.unescape(numbers_views.numbers_list(request).content.decode())
 
     def test_guide_is_rendered_with_link_polling_and_skip(self):
         body = self._render()
         self.assertIn('href="https://wa.me/15550253483?text=Hi"', body)
         self.assertIn("Open WhatsApp", body)
-        self.assertIn(f'data-status-url="/whatsapp/numbers/{self.number.pk}/status/"', body)
+        self.assertIn(
+            f'data-status-url="/whatsapp/numbers/{self.number.pk}/status/"', body
+        )
         self.assertIn("Skip — send a template test instead", body)
 
     def test_polling_keeps_running_in_a_background_tab(self):
         body = self._render()
-        self.assertNotIn("if (document.hidden) return", body)  # would pause while they use WhatsApp
+        self.assertNotIn(
+            "if (document.hidden) return", body
+        )  # would pause while they use WhatsApp
         self.assertIn("visibilitychange", body)  # and re-check as soon as they return
 
     def test_test_form_is_prefilled_after_they_message_us(self):
         self.inbound()
         body = self._render()
         self.assertIn(f'value="{TESTER}"', body)
-        self.assertNotIn("data-status-url=", body)  # the poll element is gone once they messaged
+        self.assertNotIn(
+            "data-status-url=", body
+        )  # the poll element is gone once they messaged

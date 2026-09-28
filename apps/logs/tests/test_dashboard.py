@@ -56,7 +56,11 @@ def test_message_detail_scoped_to_account(logged_in):
 def test_request_log_list_renders(logged_in):
     client, acc = logged_in
     ApiRequest.objects.create(
-        account=acc, method="POST", path="/api/v1/messages", status_code=202, latency_ms=5
+        account=acc,
+        method="POST",
+        path="/api/v1/messages",
+        status_code=202,
+        latency_ms=5,
     )
     resp = client.get("/logs/requests/")
     assert resp.status_code == 200

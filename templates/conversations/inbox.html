@@ -28,23 +28,39 @@ The links are icon buttons on a phone with their labels kept for screen readers
 </header>
 
 {% comment %}
-  Live refresh, driven by HTMX rather than a bespoke fetch loop.
-
-  The trigger filter skips a poll when the tab is hidden (no work in a
-  background tab) and when focus is inside the list - re-writing the DOM under a
-  keyboard user would throw their focus away every 8 seconds.
-
-  The server answers 204 when the rendered list is byte-identical to the digest
-  we send back in ?h=, and HTMX swaps nothing on a 204. after-request stores the
-  new digest so the next poll can be compared against it.
+  Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever
+  conversation was opened from it on the right, so opening another one never re-loads the
+  shell or the list itself. static/js/inbox_pane.js intercepts a row click at that width and
+  loads the conversation into #conversation-pane-inner instead of following the link; below
+  lg there's no room for both, so a row click falls through to its plain href — the existing
+  boosted, full-page navigation to conversations:detail, unchanged from before this feature.
 {% endcomment %}
-<div id="inbox-body"
-     data-hash=""
-     hx-get="{% url 'conversations:inbox_feed' %}?view={{ view|urlencode }}&channel={{ channel|urlencode }}"
-     hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))]"
-     hx-swap="innerHTML"
-     hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
-     hx-on::after-request="if (event.detail.xhr.status === 200) this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''">
-  {% include "conversations/_inbox_body.html" %}
+<div class="inbox-split" id="inbox-split">
+  <div class="inbox-list-col">
+    {% comment %}
+      Live refresh, driven by HTMX rather than a bespoke fetch loop.
+
+      The trigger filter skips a poll when the tab is hidden (no work in a
+      background tab) and when focus is inside the list - re-writing the DOM under a
+      keyboard user would throw their focus away every 8 seconds.
+
+      The server answers 204 when the rendered list is byte-identical to the digest
+      we send back in ?h=, and HTMX swaps nothing on a 204. after-request stores the
+      new digest so the next poll can be compared against it.
+    {% endcomment %}
+    <div id="inbox-body"
+         data-hash=""
+         hx-get="{% url 'conversations:inbox_feed' %}?view={{ view|urlencode }}&channel={{ channel|urlencode }}"
+         hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))]{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
+         hx-swap="innerHTML"
+         hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
+         hx-on::after-request="if (event.detail.xhr.status === 200) this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''">
+      {% include "conversations/_inbox_body.html" %}
+    </div>
+  </div>
+  <div class="inbox-pane-col">
+    <div class="inbox-pane-empty">Select a conversation to view it here.</div>
+    <div id="conversation-pane-inner"></div>
+  </div>
 </div>
 {% endblock %}

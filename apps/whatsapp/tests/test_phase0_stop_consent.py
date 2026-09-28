@@ -3,6 +3,7 @@
 Contact.status is email subscription state and gates email audiences, so a WhatsApp
 opt-out must not touch it (and an email unsubscribe must not opt out of WhatsApp).
 """
+
 from unittest.mock import patch
 
 from apps.contacts.models import Contact, ContactEvent
@@ -32,7 +33,7 @@ class StopConsentTest(Base):
         self.receive(text="STOP", msg_id="wamid.2")
         c = self.contact()
         self.assertTrue(c.whatsapp_opted_out)
-        self.assertEqual(c.status, Contact.Status.SUBSCRIBED)      # email state untouched
+        self.assertEqual(c.status, Contact.Status.SUBSCRIBED)  # email state untouched
         self.assertEqual(self.events("whatsapp.opted_out").count(), 1)
 
     def test_start_after_stop_reflects_opt_in(self):
@@ -48,7 +49,9 @@ class StopConsentTest(Base):
 
     def test_opt_out_from_any_source_is_reflected(self):
         self.receive(text="Hi", msg_id="wamid.1")
-        WhatsAppContact.objects.get(account=self.account, phone_number=PHONE).record_opt_out("api")
+        WhatsAppContact.objects.get(
+            account=self.account, phone_number=PHONE
+        ).record_opt_out("api")
         self.assertTrue(self.contact().whatsapp_opted_out)
 
     def test_email_unsubscribe_does_not_opt_out_of_whatsapp(self):
@@ -60,7 +63,9 @@ class StopConsentTest(Base):
         self.assertFalse(c.whatsapp_opted_out)
 
     def test_identity_without_a_linked_contact_can_still_opt_out(self):  # regression
-        wa = WhatsAppContact.objects.create(account=self.account, phone_number="+260961111111")
+        wa = WhatsAppContact.objects.create(
+            account=self.account, phone_number="+260961111111"
+        )
         wa.record_opt_out("keyword")
         wa.refresh_from_db()
         self.assertTrue(wa.is_opted_out)

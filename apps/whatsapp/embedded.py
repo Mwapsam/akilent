@@ -73,7 +73,9 @@ def subscribe_app_to_waba(waba_id: str, access_token: str) -> None:
     if resp.status_code != 200:
         logger.warning(
             "subscribe_app_to_waba: failed for waba=%s (%s): %s",
-            waba_id, resp.status_code, resp.text[:300],
+            waba_id,
+            resp.status_code,
+            resp.text[:300],
         )
 
 
@@ -140,13 +142,16 @@ def discover_waba_and_phone(access_token: str) -> tuple[list[str], dict]:
         else:
             logger.warning(
                 "discover_waba_and_phone: phone_numbers list failed for waba=%s (%s): %s",
-                waba_id, resp.status_code, resp.text[:300],
+                waba_id,
+                resp.status_code,
+                resp.text[:300],
             )
             phone_numbers_by_waba[waba_id] = []
 
     logger.info(
         "discover_waba_and_phone: waba_ids=%s phone_numbers=%s",
-        waba_ids, phone_numbers_by_waba,
+        waba_ids,
+        phone_numbers_by_waba,
     )
     return waba_ids, phone_numbers_by_waba
 
@@ -167,7 +172,8 @@ def _discover_waba_ids_via_businesses(access_token: str) -> list[str]:
     if resp.status_code != 200:
         logger.warning(
             "discover_waba_and_phone: me/businesses failed (%s): %s",
-            resp.status_code, resp.text[:300],
+            resp.status_code,
+            resp.text[:300],
         )
         return []
 
@@ -189,7 +195,9 @@ def _discover_waba_ids_via_businesses(access_token: str) -> list[str]:
             logger.warning(
                 "discover_waba_and_phone: owned_whatsapp_business_accounts failed "
                 "for business=%s (%s): %s",
-                business_id, resp.status_code, resp.text[:300],
+                business_id,
+                resp.status_code,
+                resp.text[:300],
             )
             continue
         wabas = data.get("data") or []

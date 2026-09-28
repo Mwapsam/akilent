@@ -10,12 +10,11 @@ monkeypatched network seam for test coverage.
 """
 
 import logging
-from typing import Optional
 
 import dns.resolver
 from django.core.cache import cache
-from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,7 @@ def has_mx_record(domain: str) -> bool:
 
     # Load cache TTL from settings singleton
     from apps.core.models import MailProviderSettings
+
     settings = MailProviderSettings.load()
     ttl = settings.mx_validation_cache_ttl_seconds
 
@@ -73,6 +73,7 @@ def validate_recipient(email: str) -> bool:
     Short-circuits to True if validation is disabled globally.
     """
     from apps.core.models import MailProviderSettings
+
     settings = MailProviderSettings.load()
 
     if not settings.enable_recipient_validation:

@@ -21,25 +21,25 @@ def seed_module_subscriptions(apps, schema_editor):
     both has_feature() checks will log fallback-hits. Once zeros, we drop
     the Plan fields in a cleanup PR.
     """
-    Account = apps.get_model('accounts', 'Account')
-    Subscription = apps.get_model('billing', 'Subscription')
-    Plan = apps.get_model('billing', 'Plan')
-    ModuleSubscription = apps.get_model('billing', 'ModuleSubscription')
+    apps.get_model("accounts", "Account")
+    Subscription = apps.get_model("billing", "Subscription")
+    apps.get_model("billing", "Plan")
+    ModuleSubscription = apps.get_model("billing", "ModuleSubscription")
 
-    for subscription in Subscription.objects.select_related('plan', 'account'):
+    for subscription in Subscription.objects.select_related("plan", "account"):
         account = subscription.account
         plan = subscription.plan
 
         # Email: enabled if plan has email_apis
         ModuleSubscription.objects.update_or_create(
             account=account,
-            module='email',
+            module="email",
             defaults={
-                'subscription': subscription,
-                'enabled': bool(plan.email_apis),
-                'limits': {
-                    'emails_per_month': plan.max_emails_per_month,
-                    'bulk_recipients_per_campaign': plan.max_bulk_recipients_per_campaign,
+                "subscription": subscription,
+                "enabled": bool(plan.email_apis),
+                "limits": {
+                    "emails_per_month": plan.max_emails_per_month,
+                    "bulk_recipients_per_campaign": plan.max_bulk_recipients_per_campaign,
                 },
             },
         )
@@ -47,12 +47,12 @@ def seed_module_subscriptions(apps, schema_editor):
         # Automation: enabled for all active subscriptions
         ModuleSubscription.objects.update_or_create(
             account=account,
-            module='automation',
+            module="automation",
             defaults={
-                'subscription': subscription,
-                'enabled': True,
-                'limits': {
-                    'max_rules': plan.max_automation_rules,
+                "subscription": subscription,
+                "enabled": True,
+                "limits": {
+                    "max_rules": plan.max_automation_rules,
                 },
             },
         )
@@ -60,13 +60,13 @@ def seed_module_subscriptions(apps, schema_editor):
         # WhatsApp: enabled for all active subscriptions
         ModuleSubscription.objects.update_or_create(
             account=account,
-            module='whatsapp',
+            module="whatsapp",
             defaults={
-                'subscription': subscription,
-                'enabled': True,
-                'limits': {
-                    'max_numbers': plan.max_whatsapp_numbers,
-                    'max_conversations_per_month': plan.max_conversations_per_month,
+                "subscription": subscription,
+                "enabled": True,
+                "limits": {
+                    "max_numbers": plan.max_whatsapp_numbers,
+                    "max_conversations_per_month": plan.max_conversations_per_month,
                 },
             },
         )
@@ -74,36 +74,35 @@ def seed_module_subscriptions(apps, schema_editor):
         # Payments: disabled by default (Phase 5)
         ModuleSubscription.objects.update_or_create(
             account=account,
-            module='payments',
+            module="payments",
             defaults={
-                'subscription': subscription,
-                'enabled': False,
-                'limits': {},
+                "subscription": subscription,
+                "enabled": False,
+                "limits": {},
             },
         )
 
         # AI: disabled by default (Phase 5)
         ModuleSubscription.objects.update_or_create(
             account=account,
-            module='ai',
+            module="ai",
             defaults={
-                'subscription': subscription,
-                'enabled': False,
-                'limits': {},
+                "subscription": subscription,
+                "enabled": False,
+                "limits": {},
             },
         )
 
 
 def reverse_seed(apps, schema_editor):
     """Clear all ModuleSubscription rows during rollback."""
-    ModuleSubscription = apps.get_model('billing', 'ModuleSubscription')
+    ModuleSubscription = apps.get_model("billing", "ModuleSubscription")
     ModuleSubscription.objects.all().delete()
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0012_create_module_subscription'),
+        ("billing", "0012_create_module_subscription"),
     ]
 
     operations = [

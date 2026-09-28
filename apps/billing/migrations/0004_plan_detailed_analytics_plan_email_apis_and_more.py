@@ -4,35 +4,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0003_alter_plan_slug'),
+        ("billing", "0003_alter_plan_slug"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='detailed_analytics',
+            model_name="plan",
+            name="detailed_analytics",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='email_apis',
+            model_name="plan",
+            name="email_apis",
             field=models.BooleanField(default=True),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='inbound_email',
+            model_name="plan",
+            name="inbound_email",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='log_retention_days',
+            model_name="plan",
+            name="log_retention_days",
             field=models.PositiveIntegerField(default=7),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='tracking_webhooks',
+            model_name="plan",
+            name="tracking_webhooks",
             field=models.BooleanField(default=False),
         ),
     ]

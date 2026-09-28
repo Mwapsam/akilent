@@ -9,6 +9,7 @@ principle of hiding infrastructure complexity behind the business task. Each
 category maps to one card in the picker; each entry to one "Use template"
 row within it.
 """
+
 from __future__ import annotations
 
 import re
@@ -40,7 +41,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "What they asked about", "example": "our delivery times"},
-                    {"label": "Answer/detail", "example": "We deliver within 2-3 business days"},
+                    {
+                        "label": "Answer/detail",
+                        "example": "We deliver within 2-3 business days",
+                    },
                 ],
             },
             {
@@ -62,7 +66,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "body": "Hi {{1}}, here's the information you asked for:\n\n{{2}}\n\nLet us know if you need anything else.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
-                    {"label": "Information", "example": "Our store is open Mon-Sat, 9am-6pm"},
+                    {
+                        "label": "Information",
+                        "example": "Our store is open Mon-Sat, 9am-6pm",
+                    },
                 ],
             },
             {
@@ -157,7 +164,11 @@ STARTER_CATEGORIES: list[dict] = [
                     {"label": "Order number", "example": "1029"},
                 ],
                 "buttons": [
-                    {"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"},
+                    {
+                        "text": "Pay now",
+                        "url": "https://pay.example.com/{{2}}",
+                        "example": "https://pay.example.com/1029",
+                    },
                 ],
             },
             {
@@ -180,7 +191,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {"label": "Payment link", "example": "https://pay.example.com/1029"},
+                    {
+                        "label": "Payment link",
+                        "example": "https://pay.example.com/1029",
+                    },
                 ],
             },
             {
@@ -192,7 +206,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "What it's for", "example": "your order"},
-                    {"label": "Payment link", "example": "https://pay.example.com/1029"},
+                    {
+                        "label": "Payment link",
+                        "example": "https://pay.example.com/1029",
+                    },
                 ],
             },
             {
@@ -204,7 +221,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {"label": "Payment link", "example": "https://pay.example.com/1029"},
+                    {
+                        "label": "Payment link",
+                        "example": "https://pay.example.com/1029",
+                    },
                 ],
             },
         ],
@@ -247,7 +267,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {"label": "Update", "example": "it will now arrive tomorrow morning"},
+                    {
+                        "label": "Update",
+                        "example": "it will now arrive tomorrow morning",
+                    },
                 ],
             },
             {
@@ -343,7 +366,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "body": "Hi {{1}}, just checking in about {{2}}. Let us know if there's anything we can help with.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
-                    {"label": "What to check in about", "example": "your recent enquiry"},
+                    {
+                        "label": "What to check in about",
+                        "example": "your recent enquiry",
+                    },
                 ],
             },
             {
@@ -354,7 +380,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "body": "Hi {{1}}, just checking in about {{2}}.\n\nAre you still interested? If you have any questions, we're happy to help.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
-                    {"label": "What they were interested in", "example": "the website package"},
+                    {
+                        "label": "What they were interested in",
+                        "example": "the website package",
+                    },
                 ],
             },
             {
@@ -428,7 +457,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "body": "Hi {{1}}, it's been a while! We'd love to see you again.\n\n{{2}}",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
-                    {"label": "Offer/reason to return", "example": "Here's 10% off your next order"},
+                    {
+                        "label": "Offer/reason to return",
+                        "example": "Here's 10% off your next order",
+                    },
                 ],
             },
             {
@@ -469,10 +501,17 @@ STARTER_CATEGORIES: list[dict] = [
                 "body": "Hi {{1}}, we have a special offer for you.\n\n{{2}}\n\nReply to this message if you'd like more information.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
-                    {"label": "Offer details", "example": "20% off all orders this week"},
+                    {
+                        "label": "Offer details",
+                        "example": "20% off all orders this week",
+                    },
                 ],
                 "buttons": [
-                    {"text": "Learn more", "url": "https://example.com/offer", "example": ""},
+                    {
+                        "text": "Learn more",
+                        "url": "https://example.com/offer",
+                        "example": "",
+                    },
                 ],
             },
             {

@@ -10,11 +10,16 @@ does for templates created directly in Meta Business Manager. Meta stays the
 one source of truth for approval; Akilent never marks a template approved
 itself.
 """
+
 from __future__ import annotations
 
 import re
 
-from apps.whatsapp.models import MessageTemplate, MessageTemplateAsset, WhatsAppBusinessNumber
+from apps.whatsapp.models import (
+    MessageTemplate,
+    MessageTemplateAsset,
+    WhatsAppBusinessNumber,
+)
 from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 
 _NAME_RE = re.compile(r"^[a-z0-9_]{1,512}$")
@@ -48,19 +53,25 @@ def _validate_url_button(button: dict, body_variable_numbers: list[int]) -> None
     if not url:
         raise TemplateBuilderError("The button needs a URL.")
     if not _URL_RE.match(url):
-        raise TemplateBuilderError("The button URL must start with http:// or https://.")
+        raise TemplateBuilderError(
+            "The button URL must start with http:// or https://."
+        )
 
     numbers = _extract_variable_numbers(url)
     if len(numbers) > 1:
         raise TemplateBuilderError("The button URL can contain only one variable.")
     if numbers and numbers[0] not in body_variable_numbers:
-        raise TemplateBuilderError("The button URL must use a variable that's already in the message.")
+        raise TemplateBuilderError(
+            "The button URL must use a variable that's already in the message."
+        )
     if numbers and not example:
         raise TemplateBuilderError(
             f"Give an example URL for the button's {{{{{numbers[0]}}}}} — required by WhatsApp for approval."
         )
     if not numbers and example:
-        raise TemplateBuilderError("Remove the button's example URL, or reference a message variable in the URL to use it.")
+        raise TemplateBuilderError(
+            "Remove the button's example URL, or reference a message variable in the URL to use it."
+        )
 
 
 def _validate_phone_button(button: dict) -> None:
@@ -68,13 +79,17 @@ def _validate_phone_button(button: dict) -> None:
     if not phone:
         raise TemplateBuilderError("The button needs a phone number.")
     if not _PHONE_RE.match(phone):
-        raise TemplateBuilderError("The button's phone number must be in international format, e.g. +15551234567.")
+        raise TemplateBuilderError(
+            "The button's phone number must be in international format, e.g. +15551234567."
+        )
 
 
 def _validate_copy_code_button(button: dict) -> None:
     example = (button.get("example") or "").strip()
     if not example:
-        raise TemplateBuilderError("Give an example code for the copy-code button — required by WhatsApp for approval.")
+        raise TemplateBuilderError(
+            "Give an example code for the copy-code button — required by WhatsApp for approval."
+        )
 
 
 def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> None:
@@ -87,9 +102,9 @@ def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> 
     text = (button.get("text") or "").strip()
 
     if button_type not in BUTTON_TYPES:
-        raise TemplateBuilderError(f"\"{button_type}\" isn't a supported button type.")
+        raise TemplateBuilderError(f'"{button_type}" isn\'t a supported button type.')
     if not text:
-        raise TemplateBuilderError("The button needs text, e.g. \"Visit website\".")
+        raise TemplateBuilderError('The button needs text, e.g. "Visit website".')
     if len(text) > 25:
         raise TemplateBuilderError("Button text must be 25 characters or fewer.")
 
@@ -108,7 +123,9 @@ AUTH_CODE_EXPIRY_RANGE = (1, 90)
 AUTH_DEFAULT_BUTTON = "Copy code"
 
 
-def auth_content(*, security_recommendation: bool, expiry_minutes: int | None) -> tuple[str, str]:
+def auth_content(
+    *, security_recommendation: bool, expiry_minutes: int | None
+) -> tuple[str, str]:
     """``(body, footer)`` as Meta will show them, for the local copy and the preview."""
     body = "*{{1}}* is your verification code."
     if security_recommendation:
@@ -117,11 +134,14 @@ def auth_content(*, security_recommendation: bool, expiry_minutes: int | None) -
     return body, footer
 
 
-def validate_auth_options(*, name: str, language: str, expiry_minutes, button_text: str) -> int | None:
+def validate_auth_options(
+    *, name: str, language: str, expiry_minutes, button_text: str
+) -> int | None:
     """Check an Authentication template's options; returns the expiry in minutes (or None)."""
     if not name or not _NAME_RE.match(name):
         raise TemplateBuilderError(
-            "Template name can only use lowercase letters, numbers and underscores (e.g. login_code).")
+            "Template name can only use lowercase letters, numbers and underscores (e.g. login_code)."
+        )
     if not language:
         raise TemplateBuilderError("Choose a language.")
     if len((button_text or "").strip()) > 25:
@@ -134,58 +154,126 @@ def validate_auth_options(*, name: str, language: str, expiry_minutes, button_te
         raise TemplateBuilderError("Code expiry must be a number of minutes.") from None
     low, high = AUTH_CODE_EXPIRY_RANGE
     if not low <= minutes <= high:
-        raise TemplateBuilderError(f"Code expiry must be between {low} and {high} minutes.")
+        raise TemplateBuilderError(
+            f"Code expiry must be between {low} and {high} minutes."
+        )
     return minutes
 
 
-def build_auth_payload(*, name: str, language: str, security_recommendation: bool,
-                       expiry_minutes: int | None, button_text: str = "") -> dict:
+def build_auth_payload(
+    *,
+    name: str,
+    language: str,
+    security_recommendation: bool,
+    expiry_minutes: int | None,
+    button_text: str = "",
+) -> dict:
     """Meta's shape for an Authentication (one-time code) template: fixed wording, a copy-code button."""
-    components = [{"type": "BODY", "add_security_recommendation": bool(security_recommendation)}]
+    components = [
+        {"type": "BODY", "add_security_recommendation": bool(security_recommendation)}
+    ]
     if expiry_minutes:
         components.append({"type": "FOOTER", "code_expiration_minutes": expiry_minutes})
-    components.append({"type": "BUTTONS", "buttons": [
-        {"type": "OTP", "otp_type": "COPY_CODE", "text": (button_text or "").strip() or AUTH_DEFAULT_BUTTON}]})
-    return {"name": name, "language": language, "category": "AUTHENTICATION", "components": components}
+    components.append(
+        {
+            "type": "BUTTONS",
+            "buttons": [
+                {
+                    "type": "OTP",
+                    "otp_type": "COPY_CODE",
+                    "text": (button_text or "").strip() or AUTH_DEFAULT_BUTTON,
+                }
+            ],
+        }
+    )
+    return {
+        "name": name,
+        "language": language,
+        "category": "AUTHENTICATION",
+        "components": components,
+    }
 
 
-def create_and_submit_auth_template(account, *, name: str, language: str, security_recommendation: bool = True,
-                                    expiry_minutes=None, button_text: str = "") -> MessageTemplate:
+def create_and_submit_auth_template(
+    account,
+    *,
+    name: str,
+    language: str,
+    security_recommendation: bool = True,
+    expiry_minutes=None,
+    button_text: str = "",
+) -> MessageTemplate:
     """Validate, submit an Authentication template to Meta, and store it locally as PENDING."""
-    minutes = validate_auth_options(name=name, language=language, expiry_minutes=expiry_minutes,
-                                    button_text=button_text)
+    minutes = validate_auth_options(
+        name=name,
+        language=language,
+        expiry_minutes=expiry_minutes,
+        button_text=button_text,
+    )
     number = (
         WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
-        .exclude(waba_id__isnull=True).exclude(waba_id="").first()
+        .exclude(waba_id__isnull=True)
+        .exclude(waba_id="")
+        .first()
     )
     if number is None:
-        raise TemplateBuilderError("Connect a WhatsApp Business number before creating templates.")
-    if MessageTemplate.objects.filter(account=account, whatsapp_template_name=name, language_code=language).exists():
-        raise TemplateBuilderError("A template with that name and language already exists.")
-    payload = build_auth_payload(name=name, language=language, security_recommendation=security_recommendation,
-                                 expiry_minutes=minutes, button_text=button_text)
+        raise TemplateBuilderError(
+            "Connect a WhatsApp Business number before creating templates."
+        )
+    if MessageTemplate.objects.filter(
+        account=account, whatsapp_template_name=name, language_code=language
+    ).exists():
+        raise TemplateBuilderError(
+            "A template with that name and language already exists."
+        )
+    payload = build_auth_payload(
+        name=name,
+        language=language,
+        security_recommendation=security_recommendation,
+        expiry_minutes=minutes,
+        button_text=button_text,
+    )
     try:
         get_whatsapp_provider(account).create_template(number.waba_id, payload)
     except (WhatsAppProviderError, NotImplementedError) as exc:
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
-    body, footer = auth_content(security_recommendation=security_recommendation, expiry_minutes=minutes)
+    body, footer = auth_content(
+        security_recommendation=security_recommendation, expiry_minutes=minutes
+    )
     return MessageTemplate.objects.create(
-        account=account, name=name, whatsapp_template_name=name, language_code=language, category=AUTH,
-        approval_status=MessageTemplate.ApprovalStatus.PENDING, content=body, footer=footer,
-        variables=["Verification code"], variable_examples=["123456"],
-        buttons=payload["components"][-1]["buttons"], header_format="text",
+        account=account,
+        name=name,
+        whatsapp_template_name=name,
+        language_code=language,
+        category=AUTH,
+        approval_status=MessageTemplate.ApprovalStatus.PENDING,
+        content=body,
+        footer=footer,
+        variables=["Verification code"],
+        variable_examples=["123456"],
+        buttons=payload["components"][-1]["buttons"],
+        header_format="text",
     )
 
 
 def validate_fields(
-    *, name: str, category: str, language: str, body: str,
-    variable_labels: list[str], variable_examples: list[str], header: str = "", footer: str = "",
-    header_format: str = "text", header_media_handle: str = "",
+    *,
+    name: str,
+    category: str,
+    language: str,
+    body: str,
+    variable_labels: list[str],
+    variable_examples: list[str],
+    header: str = "",
+    footer: str = "",
+    header_format: str = "text",
+    header_media_handle: str = "",
     buttons: list[dict] | None = None,
 ) -> None:
     if category == AUTH:
         raise TemplateBuilderError(
-            "Authentication templates use WhatsApp's own wording; choose the options instead of writing a message.")
+            "Authentication templates use WhatsApp's own wording; choose the options instead of writing a message."
+        )
     if header_format not in {c[0] for c in MessageTemplate.HeaderFormat.choices}:
         raise TemplateBuilderError("Choose a valid header type.")
     if header_format != "text" and not header_media_handle:
@@ -221,7 +309,14 @@ def validate_fields(
     _validate_buttons(buttons or [], numbers)
 
 
-def _build_button(*, type: str = "url", text: str = "", url: str = "", example: str = "", phone_number: str = "") -> dict:
+def _build_button(
+    *,
+    type: str = "url",
+    text: str = "",
+    url: str = "",
+    example: str = "",
+    phone_number: str = "",
+) -> dict:
     text = text.strip()
     if type == "url":
         btn = {"type": "URL", "text": text, "url": url.strip()}
@@ -229,28 +324,45 @@ def _build_button(*, type: str = "url", text: str = "", url: str = "", example: 
             btn["example"] = [example.strip()]
         return btn
     if type == "phone_number":
-        return {"type": "PHONE_NUMBER", "text": text, "phone_number": phone_number.strip()}
+        return {
+            "type": "PHONE_NUMBER",
+            "text": text,
+            "phone_number": phone_number.strip(),
+        }
     if type == "voice_call":
-        return {"type": "VOICE_CALL", "text": text, "phone_number": phone_number.strip()}
+        return {
+            "type": "VOICE_CALL",
+            "text": text,
+            "phone_number": phone_number.strip(),
+        }
     if type == "copy_code":
         return {"type": "COPY_CODE", "text": text, "example": [example.strip()]}
-    raise TemplateBuilderError(f"\"{type}\" isn't a supported button type.")
+    raise TemplateBuilderError(f'"{type}" isn\'t a supported button type.')
 
 
 def build_meta_payload(
-    *, name: str, category: str, language: str, body: str,
-    variable_examples: list[str], header: str = "", footer: str = "",
-    header_format: str = "text", header_media_handle: str = "",
+    *,
+    name: str,
+    category: str,
+    language: str,
+    body: str,
+    variable_examples: list[str],
+    header: str = "",
+    footer: str = "",
+    header_format: str = "text",
+    header_media_handle: str = "",
     buttons: list[dict] | None = None,
 ) -> dict:
     """Meta's template-creation schema — the only place this shape is built."""
     components = []
     if header_format != "text" and header_media_handle:
-        components.append({
-            "type": "HEADER",
-            "format": header_format.upper(),
-            "example": {"header_handle": [header_media_handle]},
-        })
+        components.append(
+            {
+                "type": "HEADER",
+                "format": header_format.upper(),
+                "example": {"header_handle": [header_media_handle]},
+            }
+        )
     elif header.strip():
         components.append({"type": "HEADER", "format": "TEXT", "text": header.strip()})
 
@@ -273,10 +385,19 @@ def build_meta_payload(
 
 
 def create_and_submit_template(
-    account, *, name: str, category: str, language: str, body: str,
-    variable_labels: list[str] | None = None, variable_examples: list[str] | None = None,
-    header: str = "", footer: str = "", buttons: list[dict] | None = None,
-    header_format: str = "text", header_media: MessageTemplateAsset | None = None,
+    account,
+    *,
+    name: str,
+    category: str,
+    language: str,
+    body: str,
+    variable_labels: list[str] | None = None,
+    variable_examples: list[str] | None = None,
+    header: str = "",
+    footer: str = "",
+    buttons: list[dict] | None = None,
+    header_format: str = "text",
+    header_media: MessageTemplateAsset | None = None,
 ) -> MessageTemplate:
     """Validate, submit to Meta, and store the resulting template locally.
 
@@ -289,29 +410,49 @@ def create_and_submit_template(
     buttons = buttons or []
     header_media_handle = header_media.meta_handle if header_media else ""
     validate_fields(
-        name=name, category=category, language=language, body=body,
-        variable_labels=variable_labels, variable_examples=variable_examples,
-        header=header, footer=footer, buttons=buttons,
-        header_format=header_format, header_media_handle=header_media_handle,
+        name=name,
+        category=category,
+        language=language,
+        body=body,
+        variable_labels=variable_labels,
+        variable_examples=variable_examples,
+        header=header,
+        footer=footer,
+        buttons=buttons,
+        header_format=header_format,
+        header_media_handle=header_media_handle,
     )
 
     number = (
         WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
-        .exclude(waba_id__isnull=True).exclude(waba_id="").first()
+        .exclude(waba_id__isnull=True)
+        .exclude(waba_id="")
+        .first()
     )
     if number is None:
-        raise TemplateBuilderError("Connect a WhatsApp Business number before creating templates.")
+        raise TemplateBuilderError(
+            "Connect a WhatsApp Business number before creating templates."
+        )
 
     if MessageTemplate.objects.filter(
         account=account, whatsapp_template_name=name, language_code=language
     ).exists():
-        raise TemplateBuilderError("A template with that name and language already exists.")
+        raise TemplateBuilderError(
+            "A template with that name and language already exists."
+        )
 
     meta_buttons = [_build_button(**buttons[0])] if buttons else []
     payload = build_meta_payload(
-        name=name, category=category, language=language, body=body,
-        variable_examples=variable_examples, header=header, footer=footer, buttons=meta_buttons,
-        header_format=header_format, header_media_handle=header_media_handle,
+        name=name,
+        category=category,
+        language=language,
+        body=body,
+        variable_examples=variable_examples,
+        header=header,
+        footer=footer,
+        buttons=meta_buttons,
+        header_format=header_format,
+        header_media_handle=header_media_handle,
     )
     try:
         provider = get_whatsapp_provider(account)
@@ -320,9 +461,18 @@ def create_and_submit_template(
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
 
     return MessageTemplate.objects.create(
-        account=account, name=name, whatsapp_template_name=name, language_code=language,
-        category=category, approval_status=MessageTemplate.ApprovalStatus.PENDING,
-        content=body.strip(), variables=variable_labels, variable_examples=variable_examples,
-        header=header.strip() if header_format == "text" else "", footer=footer.strip(), buttons=meta_buttons,
-        header_format=header_format, header_media=header_media,
+        account=account,
+        name=name,
+        whatsapp_template_name=name,
+        language_code=language,
+        category=category,
+        approval_status=MessageTemplate.ApprovalStatus.PENDING,
+        content=body.strip(),
+        variables=variable_labels,
+        variable_examples=variable_examples,
+        header=header.strip() if header_format == "text" else "",
+        footer=footer.strip(),
+        buttons=meta_buttons,
+        header_format=header_format,
+        header_media=header_media,
     )

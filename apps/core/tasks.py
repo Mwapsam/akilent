@@ -4,10 +4,12 @@ Beat runs ``send_heartbeats`` every minute; it sends one ``heartbeat`` through e
 ``settings.WORKER_QUEUES``. A queue whose worker is down, or that no worker consumes, stops
 updating its cache key, and the Command Center shows it as late.
 """
-from celery import shared_task
+
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+
+from celery import shared_task
 
 KEY = "ops:heartbeat:{}"
 TTL = 60 * 60 * 24

@@ -1,4 +1,5 @@
 """The public landing page: owner-first copy that only claims what the product does."""
+
 import pytest
 
 from apps.billing.models import Plan
@@ -11,9 +12,13 @@ UNBACKED = ("99.9%", "Enterprise", "Usage-based", "infrastructure layer")
 @pytest.fixture
 def plans(db):
     return [
-        Plan.objects.create(slug=Plan.TRIAL, name="Trial", price_monthly=0, trial_days=14),
+        Plan.objects.create(
+            slug=Plan.TRIAL, name="Trial", price_monthly=0, trial_days=14
+        ),
         Plan.objects.create(slug=Plan.STARTER, name="Starter", price_monthly=19),
-        Plan.objects.create(slug=Plan.PROFESSIONAL, name="Professional", price_monthly=49),
+        Plan.objects.create(
+            slug=Plan.PROFESSIONAL, name="Professional", price_monthly=49
+        ),
     ]
 
 
@@ -42,7 +47,7 @@ def test_whatsapp_hero_only_when_whatsapp_is_on(client, settings, plans):
     settings.WHATSAPP_ENABLED = False
     html = _get(client)
     assert "Manage your WhatsApp conversations" not in html
-    assert "mock-frame\" aria-hidden" not in html
+    assert 'mock-frame" aria-hidden' not in html
     hero = html.split('<section class="hero dark">', 1)[1].split("</section>", 1)[0]
     assert "WhatsApp" not in hero
 
@@ -56,6 +61,7 @@ def test_trial_line_follows_the_plan(client, plans):
 
 
 # The hero links to a plain /signup/, so its number must be what auto_create_trial grants.
+
 
 @pytest.mark.django_db
 def test_trial_line_falls_back_to_site_default_like_signup(client, plans):
@@ -129,8 +135,11 @@ def test_header_follows_sign_in_state(client, plans, django_user_model):
     html = _get(client)
     assert "Sign in" in html and "Open dashboard" not in html
 
-    client.force_login(django_user_model.objects.create_user(
-        username="owner@example.com", email="owner@example.com", password="x"))
+    client.force_login(
+        django_user_model.objects.create_user(
+            username="owner@example.com", email="owner@example.com", password="x"
+        )
+    )
     html = _get(client)
     assert "Open dashboard" in html and 'href="/auth/login/"' not in html
 

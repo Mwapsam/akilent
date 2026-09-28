@@ -24,6 +24,7 @@ rather than a fixed WhatsApp template name: the owner chooses which of their
 own approved templates to send, because only Meta-approved templates can be
 sent and only the owner knows which of theirs fits.
 """
+
 from __future__ import annotations
 
 _DAY = 86400
@@ -73,8 +74,7 @@ ENGAGEMENT_STARTERS = [
         "name": "Say thank you after a conversation",
         "goal": "A customer who feels looked after comes back.",
         "explain": (
-            "A day after a conversation ends, thank the customer for getting "
-            "in touch."
+            "A day after a conversation ends, thank the customer for getting in touch."
         ),
         "stop_condition": "Nothing is sent while the conversation is still going.",
         "trigger": "conversation.message_received",
@@ -120,41 +120,47 @@ _REPLY_STARTERS = [
         "reply_hint": "Hi {first_name}, thanks for getting in touch. How can we help?",
     },
 ]
-_REPLY_STARTERS.append({
-    "key": "route-new-leads",
-    "name": "Hand new interested customers to your team",
-    "goal": "A customer who shows interest is never left sitting until someone notices.",
-    "explain": (
-        "When someone is tracked as interested, give their conversation to your least busy "
-        "teammate and email the team so they follow up straight away."
-    ),
-    "stop_condition": "Nobody who already has a teammate looking after them is reassigned.",
-    "trigger": "lead.created",
-    "team": True,
-    "reply_hint": "{contact} is interested. Please reply to them soon.",
-})
-_REPLY_STARTERS.append({
-    "key": "offer-a-menu",
-    "name": "Offer a menu when someone says hello",
-    "goal": "Customers get to what they need in one tap, without waiting for a person.",
-    "explain": (
-        "When someone says hello, ask what they need and offer up to three buttons. "
-        "Each button gets its own answer. Use this instead of the plain greeting."
-    ),
-    "stop_condition": "Asks the same customer at most once an hour, and waits a day for their tap.",
-    "menu": True,
-    "hello_words": ["hello", "hi", "hey", "good morning", "good afternoon"],
-})
-_REPLY_STARTERS.append({
-    "key": "reply-when-closed",
-    "name": "Reply when you're closed",
-    "goal": "Customers who write after hours know when to expect an answer.",
-    "explain": "When a message arrives outside your opening hours, tell the customer when you'll reply.",
-    "stop_condition": "Tells the same customer at most once every 8 hours.",
-    "after_hours": True,
-    "reply_hint": "Thanks for getting in touch. We're closed right now and will reply when we open at 8am.",
-    "needs_hours": True,
-})
+_REPLY_STARTERS.append(
+    {
+        "key": "route-new-leads",
+        "name": "Hand new interested customers to your team",
+        "goal": "A customer who shows interest is never left sitting until someone notices.",
+        "explain": (
+            "When someone is tracked as interested, give their conversation to your least busy "
+            "teammate and email the team so they follow up straight away."
+        ),
+        "stop_condition": "Nobody who already has a teammate looking after them is reassigned.",
+        "trigger": "lead.created",
+        "team": True,
+        "reply_hint": "{contact} is interested. Please reply to them soon.",
+    }
+)
+_REPLY_STARTERS.append(
+    {
+        "key": "offer-a-menu",
+        "name": "Offer a menu when someone says hello",
+        "goal": "Customers get to what they need in one tap, without waiting for a person.",
+        "explain": (
+            "When someone says hello, ask what they need and offer up to three buttons. "
+            "Each button gets its own answer. Use this instead of the plain greeting."
+        ),
+        "stop_condition": "Asks the same customer at most once an hour, and waits a day for their tap.",
+        "menu": True,
+        "hello_words": ["hello", "hi", "hey", "good morning", "good afternoon"],
+    }
+)
+_REPLY_STARTERS.append(
+    {
+        "key": "reply-when-closed",
+        "name": "Reply when you're closed",
+        "goal": "Customers who write after hours know when to expect an answer.",
+        "explain": "When a message arrives outside your opening hours, tell the customer when you'll reply.",
+        "stop_condition": "Tells the same customer at most once every 8 hours.",
+        "after_hours": True,
+        "reply_hint": "Thanks for getting in touch. We're closed right now and will reply when we open at 8am.",
+        "needs_hours": True,
+    }
+)
 for _starter in _REPLY_STARTERS:
     _starter.setdefault("trigger", "conversation.message_received")
     _starter.update({"reply": True, "suggested_template": ""})
@@ -164,21 +170,40 @@ STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
 
 # How the Automations home groups them: by what the owner wants help with, not by mechanism.
 GOAL_GROUPS = (
-    ("Answer customer questions", (
-        "answer-pricing-questions", "answer-where-are-you", "welcome-new-enquiry",
-        "greet-hello", "offer-a-menu",
-    )),
-    ("Never miss a customer", (
-        "interested-customer-check-back", "quiet-customer-check-in",
-        "thank-you-after-a-conversation", "reply-when-closed",
-    )),
+    (
+        "Answer customer questions",
+        (
+            "answer-pricing-questions",
+            "answer-where-are-you",
+            "welcome-new-enquiry",
+            "greet-hello",
+            "offer-a-menu",
+        ),
+    ),
+    (
+        "Never miss a customer",
+        (
+            "interested-customer-check-back",
+            "quiet-customer-check-in",
+            "thank-you-after-a-conversation",
+            "reply-when-closed",
+        ),
+    ),
     ("Keep your team informed", ("route-new-leads",)),
 )
-assert {k for _, keys in GOAL_GROUPS for k in keys} == set(STARTERS_BY_KEY), "every starter belongs to a goal"
+assert {k for _, keys in GOAL_GROUPS for k in keys} == set(STARTERS_BY_KEY), (
+    "every starter belongs to a goal"
+)
 
 
-def build_reply_definition(starter: dict, *, text: str, keywords: list[str] | None = None,
-                           tag: bool = True, notify: bool = False) -> dict:
+def build_reply_definition(
+    starter: dict,
+    *,
+    text: str,
+    keywords: list[str] | None = None,
+    tag: bool = True,
+    notify: bool = False,
+) -> dict:
     """A one-message auto-reply, then stop.
 
     Keyword starters answer when the message matches, and tag the customer if the starter
@@ -189,8 +214,15 @@ def build_reply_definition(starter: dict, *, text: str, keywords: list[str] | No
         return {
             "trigger": {"type": starter["trigger"], "cooldown_minutes": 480},
             "steps": [
-                {"id": "open_now", "type": "branch", "field": "within_business_hours",
-                 "operator": "eq", "value": True, "on_true": "stop", "on_false": "reply"},
+                {
+                    "id": "open_now",
+                    "type": "branch",
+                    "field": "within_business_hours",
+                    "operator": "eq",
+                    "value": True,
+                    "on_true": "stop",
+                    "on_false": "reply",
+                },
                 {"id": "reply", "type": "reply_text", "text": text, "next": "stop"},
                 {"id": "stop", "type": "stop"},
             ],
@@ -200,30 +232,57 @@ def build_reply_definition(starter: dict, *, text: str, keywords: list[str] | No
     if tag_name:
         chain.append(("tag", {"type": "add_tag", "tag": tag_name}))
     if notify:
-        chain.append(("tell", {
-            "type": "notify_team", "to": "owners",
-            "text": "{contact} sent a message that " + starter["name"] + " answered. Take a look if you'd like to follow up.",
-        }))
+        chain.append(
+            (
+                "tell",
+                {
+                    "type": "notify_team",
+                    "to": "owners",
+                    "text": "{contact} sent a message that "
+                    + starter["name"]
+                    + " answered. Take a look if you'd like to follow up.",
+                },
+            )
+        )
     steps = []
     for n, (sid, body) in enumerate(chain):
-        steps.append({"id": sid, **body, "next": chain[n + 1][0] if n + 1 < len(chain) else "stop"})
+        steps.append(
+            {
+                "id": sid,
+                **body,
+                "next": chain[n + 1][0] if n + 1 < len(chain) else "stop",
+            }
+        )
     steps.append({"id": "stop", "type": "stop"})
     return {
         "trigger": {
             "type": starter["trigger"],
-            "match": {"mode": starter["mode"], "any": list(keywords or starter["keywords"])},
+            "match": {
+                "mode": starter["mode"],
+                "any": list(keywords or starter["keywords"]),
+            },
             "cooldown_minutes": 60,
         },
         "steps": steps,
     }
 
 
-def build_team_definition(starter: dict, *, text: str, notify: str = "assignee", assign: bool = True) -> dict:
+def build_team_definition(
+    starter: dict, *, text: str, notify: str = "assignee", assign: bool = True
+) -> dict:
     """New lead -> (give it to the least busy teammate) -> tell the team."""
     steps = []
     if assign:
         steps.append({"id": "assign", "type": "assign_conversation", "next": "tell"})
-    steps.append({"id": "tell", "type": "notify_team", "to": notify, "text": text, "next": "stop"})
+    steps.append(
+        {
+            "id": "tell",
+            "type": "notify_team",
+            "to": notify,
+            "text": text,
+            "next": "stop",
+        }
+    )
     steps.append({"id": "stop", "type": "stop"})
     return {"trigger": {"type": starter["trigger"]}, "steps": steps}
 
@@ -237,19 +296,44 @@ def build_menu_definition(starter: dict, *, question: str, options: list[dict]) 
     from django.utils.text import slugify
 
     steps = [
-        {"id": "ask", "type": "send_buttons", "text": question,
-         "buttons": [{"title": o["title"]} for o in options], "next": "wait"},
+        {
+            "id": "ask",
+            "type": "send_buttons",
+            "text": question,
+            "buttons": [{"title": o["title"]} for o in options],
+            "next": "wait",
+        },
     ]
     routes = {}
     answers = []
     for n, option in enumerate(options, start=1):
         key = slugify(option["title"])[:200]
         routes[key] = f"answer_{n}"
-        answers.append({"id": f"answer_{n}", "type": "reply_text", "text": option["reply"], "next": f"tag_{n}"})
-        answers.append({"id": f"tag_{n}", "type": "add_tag",
-                        "tag": f"asked-{slugify(option['title'])}"[:40], "next": "stop"})
-    steps.append({"id": "wait", "type": "wait_for_reply", "timeout_seconds": 86400,
-                  "routes": routes, "on_timeout": "stop"})
+        answers.append(
+            {
+                "id": f"answer_{n}",
+                "type": "reply_text",
+                "text": option["reply"],
+                "next": f"tag_{n}",
+            }
+        )
+        answers.append(
+            {
+                "id": f"tag_{n}",
+                "type": "add_tag",
+                "tag": f"asked-{slugify(option['title'])}"[:40],
+                "next": "stop",
+            }
+        )
+    steps.append(
+        {
+            "id": "wait",
+            "type": "wait_for_reply",
+            "timeout_seconds": 86400,
+            "routes": routes,
+            "on_timeout": "stop",
+        }
+    )
     steps.extend(answers)
     steps.append({"id": "stop", "type": "stop"})
     return {
@@ -262,8 +346,13 @@ def build_menu_definition(starter: dict, *, question: str, options: list[dict]) 
     }
 
 
-def build_definition(starter: dict, *, template_name: str, variable_mapping: dict | None = None,
-                     variable_fallbacks: dict | None = None) -> dict:
+def build_definition(
+    starter: dict,
+    *,
+    template_name: str,
+    variable_mapping: dict | None = None,
+    variable_fallbacks: dict | None = None,
+) -> dict:
     """Turn a starter plus the owner's chosen template into a workflow definition.
 
     The shape is always the same: wait out the quiet period, check the customer
@@ -271,19 +360,31 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
     on — without it the workflow would chase customers mid-conversation.
     """
     if starter.get("welcome"):
-        return _welcome_definition(starter, template_name, variable_mapping, variable_fallbacks)
+        return _welcome_definition(
+            starter, template_name, variable_mapping, variable_fallbacks
+        )
     days = starter["quiet_days"]
     return {
         "trigger": {"type": starter["trigger"]},
         "steps": [
-            {"id": "wait", "type": "wait", "seconds": days * _DAY, "next": "still_quiet"},
             {
-                "id": "still_quiet", "type": "branch",
-                "field": "last_engaged_days", "operator": "gte", "value": days,
-                "on_true": "send", "on_false": "stop",
+                "id": "wait",
+                "type": "wait",
+                "seconds": days * _DAY,
+                "next": "still_quiet",
             },
             {
-                "id": "send", "type": "send_whatsapp",
+                "id": "still_quiet",
+                "type": "branch",
+                "field": "last_engaged_days",
+                "operator": "gte",
+                "value": days,
+                "on_true": "send",
+                "on_false": "stop",
+            },
+            {
+                "id": "send",
+                "type": "send_whatsapp",
                 "template": template_name,
                 "variable_mapping": variable_mapping or {},
                 "variable_fallbacks": variable_fallbacks or {},
@@ -294,8 +395,12 @@ def build_definition(starter: dict, *, template_name: str, variable_mapping: dic
     }
 
 
-def _welcome_definition(starter: dict, template_name: str, variable_mapping: dict | None,
-                        variable_fallbacks: dict | None = None) -> dict:
+def _welcome_definition(
+    starter: dict,
+    template_name: str,
+    variable_mapping: dict | None,
+    variable_fallbacks: dict | None = None,
+) -> dict:
     """Welcome a brand-new WhatsApp enquirer immediately, once.
 
     ``contact.created`` fires once per customer, so the welcome is never repeated. The branch
@@ -306,12 +411,17 @@ def _welcome_definition(starter: dict, template_name: str, variable_mapping: dic
         "trigger": {"type": starter["trigger"]},
         "steps": [
             {
-                "id": "messaged_first", "type": "branch",
-                "field": "source", "operator": "eq", "value": "whatsapp",
-                "on_true": "send", "on_false": "stop",
+                "id": "messaged_first",
+                "type": "branch",
+                "field": "source",
+                "operator": "eq",
+                "value": "whatsapp",
+                "on_true": "send",
+                "on_false": "stop",
             },
             {
-                "id": "send", "type": "send_whatsapp",
+                "id": "send",
+                "type": "send_whatsapp",
                 "template": template_name,
                 "variable_mapping": variable_mapping or {},
                 "variable_fallbacks": variable_fallbacks or {},

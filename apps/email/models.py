@@ -23,7 +23,7 @@ _DNS_DESCS = {
     "dkim": "Signs your mail so providers trust it wasn't tampered with.",
     "mfmx": (
         "Routes bounce reports for your mail back through your own domain, so "
-        "it lines up with your From address (fixes \"MAIL FROM not aligned\")."
+        'it lines up with your From address (fixes "MAIL FROM not aligned").'
     ),
     "mfspf": (
         "Authorises Amazon SES to send on behalf of your bounce domain, so SPF "
@@ -44,22 +44,22 @@ class ProvisioningJob(models.Model):
     """
 
     class Status(models.TextChoices):
-        PENDING  = "pending",  "Pending"
-        RUNNING  = "running",  "Running"
-        SUCCESS  = "success",  "Success"
-        FAILED   = "failed",   "Failed"
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
         RETRYING = "retrying", "Retrying"
 
     class JobType(models.TextChoices):
-        PROVISION_DOMAIN  = "provision_domain",  "Provision Domain"
+        PROVISION_DOMAIN = "provision_domain", "Provision Domain"
         DEPROVISION_DOMAIN = "deprovision_domain", "Deprovision Domain"
         PROVISION_MAILBOX = "provision_mailbox", "Provision Mailbox"
         DEPROVISION_MAILBOX = "deprovision_mailbox", "Deprovision Mailbox"
-        CHANGE_PASSWORD   = "change_password",   "Change Password"
-        SET_QUOTA         = "set_quota",         "Set Quota"
-        ROTATE_DKIM       = "rotate_dkim",       "Rotate DKIM"
-        SUSPEND_MAILBOX   = "suspend_mailbox",   "Suspend Mailbox"
-        PROVISION_ALIAS   = "provision_alias",   "Provision Alias"
+        CHANGE_PASSWORD = "change_password", "Change Password"
+        SET_QUOTA = "set_quota", "Set Quota"
+        ROTATE_DKIM = "rotate_dkim", "Rotate DKIM"
+        SUSPEND_MAILBOX = "suspend_mailbox", "Suspend Mailbox"
+        PROVISION_ALIAS = "provision_alias", "Provision Alias"
         DEPROVISION_ALIAS = "deprovision_alias", "Deprovision Alias"
 
     account = models.ForeignKey(
@@ -67,17 +67,21 @@ class ProvisioningJob(models.Model):
         on_delete=models.CASCADE,
         related_name="provisioning_jobs",
     )
-    job_type      = models.CharField(max_length=50, choices=JobType.choices)
-    resource_type = models.CharField(max_length=50)    # "domain" | "mailbox" | "alias"
-    resource_id   = models.CharField(max_length=255)   # domain name / email / alias address
-    status        = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    job_type = models.CharField(max_length=50, choices=JobType.choices)
+    resource_type = models.CharField(max_length=50)  # "domain" | "mailbox" | "alias"
+    resource_id = models.CharField(
+        max_length=255
+    )  # domain name / email / alias address
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     celery_task_id = models.CharField(max_length=255, blank=True, default="")
-    error         = models.TextField(blank=True, default="")
-    attempts      = models.PositiveSmallIntegerField(default=0)
-    metadata      = models.JSONField(default=dict)
-    created_at    = models.DateTimeField(auto_now_add=True)
-    started_at    = models.DateTimeField(blank=True, null=True)
-    completed_at  = models.DateTimeField(blank=True, null=True)
+    error = models.TextField(blank=True, default="")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -130,13 +134,13 @@ class AuditLog(models.Model):
         blank=True,
         related_name="+",
     )
-    action        = models.CharField(max_length=100)   # e.g. "domain.create"
-    resource_type = models.CharField(max_length=50)    # "domain" | "mailbox" | "alias"
-    resource_id   = models.CharField(max_length=255)
-    success       = models.BooleanField(default=True)
-    error         = models.TextField(blank=True, default="")
-    metadata      = models.JSONField(default=dict)
-    timestamp     = models.DateTimeField(auto_now_add=True, db_index=True)
+    action = models.CharField(max_length=100)  # e.g. "domain.create"
+    resource_type = models.CharField(max_length=50)  # "domain" | "mailbox" | "alias"
+    resource_id = models.CharField(max_length=255)
+    success = models.BooleanField(default=True)
+    error = models.TextField(blank=True, default="")
+    metadata = models.JSONField(default=dict)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-timestamp"]
@@ -256,7 +260,10 @@ class EmailDomain(models.Model):
         try:
             mail_settings = MailProviderSettings.load()
             # For SES, use Amazon's SES mail server (region-specific)
-            if mail_settings.infra_backend == "ses" or mail_settings.send_backend == "ses":
+            if (
+                mail_settings.infra_backend == "ses"
+                or mail_settings.send_backend == "ses"
+            ):
                 # For SES this belongs on the MAIL FROM subdomain
                 # (bounce.<domain>), not the root: SPF is evaluated against the
                 # return-path domain.
@@ -304,31 +311,48 @@ class EmailDomain(models.Model):
         else:
             specs = [
                 {
-                    "key": "verify", "label": "Domain verification", "type": "TXT",
+                    "key": "verify",
+                    "label": "Domain verification",
+                    "type": "TXT",
                     "name": self.verify_record_name or self.domain,
-                    "value": self.verify_record_value, "priority": None,
+                    "value": self.verify_record_value,
+                    "priority": None,
                     "desc": "Proves you own this domain so we can switch it on.",
-                    "required": True, "ok": self.is_verified,
+                    "required": True,
+                    "ok": self.is_verified,
                 },
                 {
-                    "key": "dkim", "label": "DKIM", "type": "TXT",
-                    "name": self.dkim_record_name, "value": self.dkim_txt_value,
+                    "key": "dkim",
+                    "label": "DKIM",
+                    "type": "TXT",
+                    "name": self.dkim_record_name,
+                    "value": self.dkim_txt_value,
                     "priority": None,
                     "desc": "Signs your mail so providers trust it wasn't tampered with.",
-                    "required": True, "ok": self.dkim_ok,
+                    "required": True,
+                    "ok": self.dkim_ok,
                 },
                 {
-                    "key": "spf", "label": "SPF", "type": "TXT",
-                    "name": self.domain, "value": self.spf_value, "priority": None,
+                    "key": "spf",
+                    "label": "SPF",
+                    "type": "TXT",
+                    "name": self.domain,
+                    "value": self.spf_value,
+                    "priority": None,
                     "desc": "Lists the servers allowed to send for your domain.",
-                    "required": False, "ok": self.spf_ok,
+                    "required": False,
+                    "ok": self.spf_ok,
                 },
                 {
-                    "key": "dmarc", "label": "DMARC", "type": "TXT",
-                    "name": self.dmarc_record_name, "value": self.dmarc_value,
+                    "key": "dmarc",
+                    "label": "DMARC",
+                    "type": "TXT",
+                    "name": self.dmarc_record_name,
+                    "value": self.dmarc_value,
                     "priority": None,
                     "desc": "Tells receivers what to do with mail that fails the checks.",
-                    "required": False, "ok": self.dmarc_ok,
+                    "required": False,
+                    "ok": self.dmarc_ok,
                 },
             ]
         return [self._present(spec) for spec in specs]
@@ -495,9 +519,13 @@ class EmailApiKey(models.Model):
     name = models.CharField(max_length=100, default="default")
 
     # Legacy plaintext column — new keys leave this blank.
-    key = models.CharField(max_length=64, unique=True, db_index=True, blank=True, null=True)
+    key = models.CharField(
+        max_length=64, unique=True, db_index=True, blank=True, null=True
+    )
 
-    key_hash = models.CharField(max_length=64, unique=True, db_index=True, blank=True, null=True)
+    key_hash = models.CharField(
+        max_length=64, unique=True, db_index=True, blank=True, null=True
+    )
     key_prefix = models.CharField(max_length=12, default="ak_live_")
     last4 = models.CharField(max_length=4, blank=True, default="")
 
@@ -552,12 +580,18 @@ class EmailApiKey(models.Model):
         """Look up an active key by hash, falling back to the legacy plaintext column."""
         if not raw_key:
             return None
-        by_hash = cls.objects.filter(
-            key_hash=cls.hash_key(raw_key), is_active=True
-        ).select_related("account").first()
+        by_hash = (
+            cls.objects.filter(key_hash=cls.hash_key(raw_key), is_active=True)
+            .select_related("account")
+            .first()
+        )
         if by_hash is not None:
             return by_hash
-        return cls.objects.filter(key=raw_key, is_active=True).select_related("account").first()
+        return (
+            cls.objects.filter(key=raw_key, is_active=True)
+            .select_related("account")
+            .first()
+        )
 
     def touch(self):
         self.last_used_at = timezone.now()
@@ -777,7 +811,9 @@ class EmailTemplateAsset(models.Model):
     """An image uploaded for use inside the drag-and-drop template builder."""
 
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="email_template_assets"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="email_template_assets",
     )
     file = models.ImageField(upload_to="email_assets/%Y/%m/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -841,7 +877,7 @@ class BulkEmailCampaign(models.Model):
         indexes = [models.Index(fields=["account", "status"])]
 
     def mark_sending(self) -> None:
-        if self.status == self.Status.DRAFT or self.status == self.Status.QUEUED:
+        if self.status in (self.Status.DRAFT, self.Status.QUEUED):
             self.status = self.Status.SENDING
             if self.started_at is None:
                 self.started_at = timezone.now()
@@ -860,14 +896,18 @@ class BulkEmailCampaign(models.Model):
         try:
             from apps.email.webhooks import notify
 
-            notify(self.account, event_type, {
-                "id": self.pk,
-                "status": self.status,
-                "recipient_count": self.recipient_count,
-                "sent_count": self.sent_count,
-                "failed_count": self.failed_count,
-            })
-        except Exception:  # noqa: BLE001
+            notify(
+                self.account,
+                event_type,
+                {
+                    "id": self.pk,
+                    "status": self.status,
+                    "recipient_count": self.recipient_count,
+                    "sent_count": self.sent_count,
+                    "failed_count": self.failed_count,
+                },
+            )
+        except Exception:
             import logging
 
             logging.getLogger(__name__).exception(
@@ -1063,17 +1103,21 @@ class EmailMessage(models.Model):
         self.save(update_fields=["status", "error"])
         self._record_event("failed", source="pipeline", data={"error": self.error})
 
-    def _record_event(self, event_type: str, *, source: str, data: dict | None = None) -> None:
+    def _record_event(
+        self, event_type: str, *, source: str, data: dict | None = None
+    ) -> None:
         """Append a MessageEvent (which owns the outbound-webhook fan-out)."""
         from apps.logs.services import record_message_event
 
         try:
             record_message_event(self, event_type, source=source, data=data or {})
-        except Exception:  # noqa: BLE001 - observability must not break sends
+        except Exception:
             import logging
 
             logging.getLogger(__name__).exception(
-                "EmailMessage._record_event failed (message %s, %s)", self.pk, event_type
+                "EmailMessage._record_event failed (message %s, %s)",
+                self.pk,
+                event_type,
             )
 
     def _enqueue_webhook_event(self, event_type: str) -> None:
@@ -1222,7 +1266,9 @@ class WebhookEndpoint(models.Model):
         self.consecutive_failures = 0
         self.last_success_at = timezone.now()
         self.last_error = ""
-        self.save(update_fields=["consecutive_failures", "last_success_at", "last_error"])
+        self.save(
+            update_fields=["consecutive_failures", "last_success_at", "last_error"]
+        )
 
     def record_failure(self, error: str = "") -> bool:
         """Register one exhausted delivery. Returns True if this auto-disabled the endpoint."""
@@ -1235,9 +1281,7 @@ class WebhookEndpoint(models.Model):
         if self.is_active and self.consecutive_failures >= self.AUTO_DISABLE_THRESHOLD:
             self.is_active = False
             self.disabled_at = timezone.now()
-            self.disabled_reason = (
-                f"Auto-disabled after {self.consecutive_failures} consecutive failed deliveries"
-            )
+            self.disabled_reason = f"Auto-disabled after {self.consecutive_failures} consecutive failed deliveries"
             fields += ["is_active", "disabled_at", "disabled_reason"]
             disabled = True
         self.save(update_fields=fields)
@@ -1249,9 +1293,15 @@ class WebhookEndpoint(models.Model):
         self.disabled_at = None
         self.disabled_reason = ""
         self.last_error = ""
-        self.save(update_fields=[
-            "is_active", "consecutive_failures", "disabled_at", "disabled_reason", "last_error",
-        ])
+        self.save(
+            update_fields=[
+                "is_active",
+                "consecutive_failures",
+                "disabled_at",
+                "disabled_reason",
+                "last_error",
+            ]
+        )
 
 
 class WebhookDelivery(models.Model):
@@ -1288,14 +1338,30 @@ class WebhookDelivery(models.Model):
         self.response_code = response_code
         self.attempt_count += 1
         self.last_attempt_at = timezone.now()
-        self.save(update_fields=["status", "response_code", "attempt_count", "last_attempt_at"])
+        self.save(
+            update_fields=[
+                "status",
+                "response_code",
+                "attempt_count",
+                "last_attempt_at",
+            ]
+        )
 
-    def mark_failed(self, response_code: int | None, *, exhausted: bool = False) -> None:
+    def mark_failed(
+        self, response_code: int | None, *, exhausted: bool = False
+    ) -> None:
         self.status = self.Status.EXHAUSTED if exhausted else self.Status.FAILED
         self.response_code = response_code
         self.attempt_count += 1
         self.last_attempt_at = timezone.now()
-        self.save(update_fields=["status", "response_code", "attempt_count", "last_attempt_at"])
+        self.save(
+            update_fields=[
+                "status",
+                "response_code",
+                "attempt_count",
+                "last_attempt_at",
+            ]
+        )
 
     def __str__(self):
         return f"{self.event_type} -> {self.endpoint_id} [{self.status}]"
@@ -1347,7 +1413,9 @@ class SuppressionListEntry(models.Model):
         "accounts.Account", on_delete=models.CASCADE, related_name="email_suppressions"
     )
     email = models.EmailField()
-    reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.BOUNCE)
+    reason = models.CharField(
+        max_length=20, choices=Reason.choices, default=Reason.BOUNCE
+    )
 
     # For auditing: which message triggered the suppression (if any)
     triggered_by_message = models.ForeignKey(
@@ -1360,8 +1428,10 @@ class SuppressionListEntry(models.Model):
 
     # SNS bounce/complaint metadata (if from SES)
     bounce_type = models.CharField(
-        max_length=20, blank=True, default="",
-        help_text="SES bounce type: Permanent, Transient, or Undetermined"
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="SES bounce type: Permanent, Transient, or Undetermined",
     )
 
     # Track repeat events for soft bounces and other reasons
@@ -1409,11 +1479,14 @@ class GlobalSuppression(models.Model):
         max_length=20, choices=Reason.choices, default=Reason.BOUNCE
     )
     bounce_type = models.CharField(
-        max_length=20, blank=True, default="",
+        max_length=20,
+        blank=True,
+        default="",
         help_text="SES bounce type: Permanent, Transient, or Undetermined",
     )
     source = models.CharField(
-        max_length=40, default="ses_webhook",
+        max_length=40,
+        default="ses_webhook",
         help_text="Where this suppression came from, e.g. ses_webhook, orphan_sns, manual",
     )
     hit_count = models.PositiveIntegerField(default=1)
@@ -1496,7 +1569,9 @@ class DeliverabilitySnapshot(models.Model):
     """
 
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="deliverability_snapshots"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="deliverability_snapshots",
     )
     domain = models.ForeignKey(
         EmailDomain, on_delete=models.CASCADE, blank=True, null=True

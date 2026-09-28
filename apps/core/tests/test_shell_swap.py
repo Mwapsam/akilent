@@ -4,6 +4,7 @@ The rule under test: a boosted navigation gets a fragment only when the fragment
 replace <main> in the shell the browser already has; every other case becomes an ordinary page
 load (HX-Redirect / HX-Refresh), which is exactly what the app did before.
 """
+
 import pytest
 from django.contrib.auth.models import User
 from django.http import HttpResponse, HttpResponseRedirect
@@ -13,15 +14,21 @@ from django.test import RequestFactory
 from apps.accounts.models import Account, Membership
 from apps.core.htmx import ShellMiddleware, full_page_load, is_background, is_shell_swap
 
-BOOSTED = {"HTTP_HX_REQUEST": "true", "HTTP_HX_BOOSTED": "true", "HTTP_X_AKILENT_SHELL": "app"}
+BOOSTED = {
+    "HTTP_HX_REQUEST": "true",
+    "HTTP_HX_BOOSTED": "true",
+    "HTTP_X_AKILENT_SHELL": "app",
+}
 
 
 @pytest.fixture
 def owner(db):
     user = User.objects.create_user("owner", "owner@example.com", "Sup3r-secret-pw")
     account = Account.objects.create(
-        company_name="Acme", selected_services=Account.Services.EMAIL,
-        onboarding_state=Account.Onboarding.ACCOUNT_CREATED, email_verified=True,
+        company_name="Acme",
+        selected_services=Account.Services.EMAIL,
+        onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
+        email_verified=True,
     )
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return user
@@ -34,6 +41,7 @@ def owner_client(client, owner):
 
 
 # --- base.html render modes -----------------------------------------------------------------
+
 
 def test_full_load_renders_the_whole_shell(owner_client):
     resp = owner_client.get("/dashboard/")
@@ -54,7 +62,13 @@ def test_boosted_navigation_gets_only_the_page(owner_client):
     assert html.lstrip().startswith("<title>")
     assert '<meta name="akilent-shell" content="app">' in html
     # No shell chrome, but the nav and breadcrumbs come along out of band.
-    for shell_only in ("<aside", 'aria-label="Account menu"', "app-shell-pl", '<main id="main"', "toggleSidebar"):
+    for shell_only in (
+        "<aside",
+        'aria-label="Account menu"',
+        "app-shell-pl",
+        '<main id="main"',
+        "toggleSidebar",
+    ):
         assert shell_only not in html, shell_only
     assert 'id="shell-nav-desktop" hx-swap-oob="innerHTML"' in html
     assert 'id="shell-nav-mobile" hx-swap-oob="innerHTML"' in html
@@ -77,7 +91,9 @@ def test_boosted_request_is_a_page_not_a_background_partial(owner_client):
 
 
 def test_other_shell_gets_a_real_page_load(owner_client):
-    resp = owner_client.get("/dashboard/", **{**BOOSTED, "HTTP_X_AKILENT_SHELL": "operator"})
+    resp = owner_client.get(
+        "/dashboard/", **{**BOOSTED, "HTTP_X_AKILENT_SHELL": "operator"}
+    )
     assert resp.status_code == 204
     assert resp["HX-Redirect"] == "/dashboard/"
 
@@ -94,7 +110,9 @@ def test_page_outside_the_shell_gets_a_real_page_load(owner_client):
 
 
 def test_history_restore_gets_the_full_page(owner_client):
-    resp = owner_client.get("/dashboard/", HTTP_HX_REQUEST="true", HTTP_HX_HISTORY_RESTORE_REQUEST="true")
+    resp = owner_client.get(
+        "/dashboard/", HTTP_HX_REQUEST="true", HTTP_HX_HISTORY_RESTORE_REQUEST="true"
+    )
     assert resp.content.decode().lstrip().lower().startswith("<!doctype")
     assert not resp.has_header("HX-Redirect")
 
@@ -106,13 +124,16 @@ def test_signed_out_pages_are_not_boosted(client, db):
 
 # --- ShellMiddleware fallbacks, in isolation ---------------------------------------------------
 
+
 def _run(response, *, method="get", path="/somewhere/", **headers):
     request = getattr(RequestFactory(), method)(path, **{**BOOSTED, **headers})
     return ShellMiddleware(lambda r: response)(request)
 
 
 def _fragment(body=""):
-    return HttpResponse('<title>T</title>\n<meta name="akilent-shell" content="app">\n' + body)
+    return HttpResponse(
+        '<title>T</title>\n<meta name="akilent-shell" content="app">\n' + body
+    )
 
 
 def test_redirect_to_another_site_leaves_the_app():
@@ -132,8 +153,15 @@ def test_download_is_fetched_for_real():
 
 
 def test_page_scripts_force_a_full_load_unless_marked_safe():
-    assert _run(_fragment("<script src='/static/js/editor.js'></script>"))["HX-Redirect"] == "/somewhere/"
-    ok = _run(_fragment('<script type="application/json">[]</script><script data-shell-safe>1</script>'))
+    assert (
+        _run(_fragment("<script src='/static/js/editor.js'></script>"))["HX-Redirect"]
+        == "/somewhere/"
+    )
+    ok = _run(
+        _fragment(
+            '<script type="application/json">[]</script><script data-shell-safe>1</script>'
+        )
+    )
     assert ok.status_code == 200 and ok["HX-Push-Url"] == "/somewhere/"
 
 
@@ -184,6 +212,9 @@ def test_full_page_load_decorator():
 
 # --- nav helpers ----------------------------------------------------------------------------
 
+
 def test_nav_targets_resolves_names_and_paths():
-    out = Template('{% load nav %}{% nav_targets "inbox email/campaigns /x/" %}').render(Context({}))
+    out = Template(
+        '{% load nav %}{% nav_targets "inbox email/campaigns /x/" %}'
+    ).render(Context({}))
     assert out.split() == ["/inbox/", "/email/campaigns/", "/x/"]

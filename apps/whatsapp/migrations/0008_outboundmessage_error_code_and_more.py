@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0007_messagelog_media_attempts_messagelog_media_error_and_more'),
+        ("whatsapp", "0007_messagelog_media_attempts_messagelog_media_error_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='outboundmessage',
-            name='error_code',
-            field=models.CharField(blank=True, default='', max_length=32),
+            model_name="outboundmessage",
+            name="error_code",
+            field=models.CharField(blank=True, default="", max_length=32),
         ),
         migrations.AddField(
-            model_name='whatsappbusinessnumber',
-            name='send_rate_limit',
+            model_name="whatsappbusinessnumber",
+            name="send_rate_limit",
             field=models.PositiveSmallIntegerField(default=20),
         ),
     ]

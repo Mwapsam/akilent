@@ -4,6 +4,7 @@ All exceptions that escape the provider layer are subclasses of
 EmailProviderError. Services, views, and Celery tasks import only from here —
 never from provider-specific modules.
 """
+
 from __future__ import annotations
 
 

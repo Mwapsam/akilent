@@ -1,4 +1,5 @@
 """Dashboard: Email Logs + Request logs (Phase 2 / Epic P0.2)."""
+
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
@@ -6,9 +7,9 @@ from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
 
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import is_background
 from apps.email.models import EmailMessage, WebhookDelivery
 from apps.logs.models import ApiRequest, MessageEvent
-from apps.core.htmx import is_background
 
 _PAGE_SIZE = 50
 _STATUS_CHOICES = EmailMessage.Status.choices
@@ -33,7 +34,9 @@ def message_list(request):
         qs = qs.filter(status=st)
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
-    total_ever = qs.model.objects.filter(account=account).exists() if (q or st) else qs.exists()
+    total_ever = (
+        qs.model.objects.filter(account=account).exists() if (q or st) else qs.exists()
+    )
     context = {
         "account": account,
         "page": page,
@@ -56,9 +59,8 @@ def message_detail(request, public_id: str):
         return redirect("dashboard")
 
     try:
-        msg = (
-            EmailMessage.objects.select_related("template", "domain", "campaign")
-            .get(account=account, public_id=public_id)
+        msg = EmailMessage.objects.select_related("template", "domain", "campaign").get(
+            account=account, public_id=public_id
         )
     except EmailMessage.DoesNotExist:
         return render(request, "logs/not_found.html", status=404)
@@ -73,13 +75,17 @@ def message_detail(request, public_id: str):
         .select_related("endpoint")
         .order_by("-created_at")
     )
-    return render(request, "logs/message_detail.html", {
-        "account": account,
-        "msg": msg,
-        "events": events,
-        "api_request": api_request,
-        "webhook_deliveries": webhook_deliveries,
-    })
+    return render(
+        request,
+        "logs/message_detail.html",
+        {
+            "account": account,
+            "msg": msg,
+            "events": events,
+            "api_request": api_request,
+            "webhook_deliveries": webhook_deliveries,
+        },
+    )
 
 
 @login_required
@@ -125,8 +131,12 @@ def request_detail(request, public_id: str):
             .first()
         )
         linked_message = ev.message if ev else None
-    return render(request, "logs/request_detail.html", {
-        "account": account,
-        "row": row,
-        "linked_message": linked_message,
-    })
+    return render(
+        request,
+        "logs/request_detail.html",
+        {
+            "account": account,
+            "row": row,
+            "linked_message": linked_message,
+        },
+    )

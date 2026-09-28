@@ -4,6 +4,7 @@ Callback branches pick a ``SetupError`` code; the words live in one place
 (``SETUP_ERRORS``). The error is kept in the session until the user starts a new
 connection or one succeeds, so it survives reloads and always has a next action.
 """
+
 from django.db import models
 from django.shortcuts import redirect
 
@@ -30,7 +31,8 @@ SETUP_ERRORS = {
     SetupError.NOT_CONFIGURED: {
         "title": "WhatsApp connection isn't available yet",
         "message": "One-click setup isn't configured. Add a number manually below, or contact support.",
-        "action_label": "", "action_url": "",
+        "action_label": "",
+        "action_url": "",
     },
     SetupError.STATE_EXPIRED: {
         "title": "Your connection request expired",
@@ -58,12 +60,16 @@ SETUP_ERRORS = {
             "We couldn't find a WhatsApp Business Account in the Meta account you "
             "selected. Select or create one during sign-in."
         ),
-        **_TRY_AGAIN, "help_label": "What you need from Meta", "help_url": META_HELP_URL,
+        **_TRY_AGAIN,
+        "help_label": "What you need from Meta",
+        "help_url": META_HELP_URL,
     },
     SetupError.NO_PHONE: {
         "title": "Your WhatsApp Business Account has no phone number",
         "message": "Add a phone number in Meta Business Manager, then connect again.",
-        **_TRY_AGAIN, "help_label": "What you need from Meta", "help_url": META_HELP_URL,
+        **_TRY_AGAIN,
+        "help_label": "What you need from Meta",
+        "help_url": META_HELP_URL,
     },
     SetupError.SELECTION_EXPIRED: {
         "title": "Your number selection expired",
@@ -73,7 +79,8 @@ SETUP_ERRORS = {
     SetupError.CONNECT_REJECTED: {
         "title": "This number couldn't be connected",
         "message": "",
-        "action_label": "", "action_url": "",
+        "action_label": "",
+        "action_url": "",
     },
 }
 

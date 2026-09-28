@@ -14,7 +14,9 @@ def execute_rule(rule: AutomationRule, context: dict) -> None:
     handler = _ACTION_HANDLERS.get(action_type)
     if handler is None:
         logger.warning(
-            "execute_rule: unknown action type '%s' for rule pk=%s", action_type, rule.pk
+            "execute_rule: unknown action type '%s' for rule pk=%s",
+            action_type,
+            rule.pk,
         )
         return
 
@@ -22,7 +24,9 @@ def execute_rule(rule: AutomationRule, context: dict) -> None:
     handler(rule, action, context)
 
 
-def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = False, link_contact=None):
+def _resolve_or_provision_contact(
+    account, phone: str, *, auto_create: bool = False, link_contact=None
+):
     """Resolve the ``WhatsAppContact`` for ``phone``, or provision one if allowed.
 
     By default (``auto_create=False``) a missing contact/opt-in record is a hard
@@ -40,7 +44,9 @@ def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = Fa
     """
     from apps.whatsapp.models import WhatsAppContact
 
-    contact = WhatsAppContact.objects.filter(account=account, phone_number=phone).first()
+    contact = WhatsAppContact.objects.filter(
+        account=account, phone_number=phone
+    ).first()
     if contact is not None:
         return contact
     if not auto_create:
@@ -48,12 +54,21 @@ def _resolve_or_provision_contact(account, phone: str, *, auto_create: bool = Fa
             f"no WhatsApp contact/opt-in record for {phone!r} on account {account.pk}; "
             "add one under WhatsApp Contacts or enable auto_create_contact for this step"
         )
-    return WhatsAppContact.objects.create(account=account, phone_number=phone, contact=link_contact)
+    return WhatsAppContact.objects.create(
+        account=account, phone_number=phone, contact=link_contact
+    )
 
 
 def send_whatsapp_message(
-    account, *, phone: str, template_id, params: dict | None = None, scheduled_at=None,
-    auto_create_contact: bool = False, link_contact=None, conversation=None,
+    account,
+    *,
+    phone: str,
+    template_id,
+    params: dict | None = None,
+    scheduled_at=None,
+    auto_create_contact: bool = False,
+    link_contact=None,
+    conversation=None,
 ) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
@@ -122,12 +137,18 @@ def _send_whatsapp_message(rule: AutomationRule, action: dict, context: dict) ->
     phone = context.get("phone_number")
     template_id = action.get("template_id")
     if not phone or not template_id:
-        logger.warning("_send_whatsapp_message: missing phone or template_id in rule pk=%s", rule.pk)
+        logger.warning(
+            "_send_whatsapp_message: missing phone or template_id in rule pk=%s",
+            rule.pk,
+        )
         return
 
     try:
         send_whatsapp_message(
-            rule.account, phone=phone, template_id=template_id, params=action.get("params", {})
+            rule.account,
+            phone=phone,
+            template_id=template_id,
+            params=action.get("params", {}),
         )
     except (ValueError, MessageTemplate.DoesNotExist) as exc:
         logger.error("_send_whatsapp_message: %s", exc)

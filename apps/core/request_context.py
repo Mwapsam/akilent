@@ -4,12 +4,15 @@
 hooks in ``apps.core.celery_utils`` carry it across task boundaries so log rows
 written by a worker can be traced back to the API call that triggered them.
 """
+
 from __future__ import annotations
 
 import contextvars
 import uuid
 
-_request_id: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
+_request_id: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "request_id", default=""
+)
 
 
 def get_request_id() -> str:

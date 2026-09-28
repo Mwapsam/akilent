@@ -6,6 +6,7 @@ static/js/app.js already reads X-Toast on every htmx:afterRequest (background po
 boosted navigations alike); this is that same wire format, not a second one — apps/email/views.py
 used to carry its own private copy of exactly this function before it moved here.
 """
+
 from urllib.parse import unquote
 
 from django.http import HttpResponse

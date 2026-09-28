@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.email import views, ses_webhooks
+from apps.email import ses_webhooks, views
 
 urlpatterns = [
     # SNS webhook for SES bounce/complaint notifications
@@ -17,9 +17,19 @@ urlpatterns = [
     path("smtp/<int:pk>/revoke/", views.smtp_revoke, name="email-smtp-revoke"),
     path("webhooks/", views.webhooks_list, name="email-webhooks"),
     path("webhooks/create/", views.webhook_create, name="email-webhook-create"),
-    path("webhooks/<int:pk>/delete/", views.webhook_delete, name="email-webhook-delete"),
-    path("webhooks/<int:pk>/reactivate/", views.webhook_reactivate, name="email-webhook-reactivate"),
-    path("webhooks/deliveries/<int:pk>/resend/", views.webhook_redeliver, name="email-webhook-redeliver"),
+    path(
+        "webhooks/<int:pk>/delete/", views.webhook_delete, name="email-webhook-delete"
+    ),
+    path(
+        "webhooks/<int:pk>/reactivate/",
+        views.webhook_reactivate,
+        name="email-webhook-reactivate",
+    ),
+    path(
+        "webhooks/deliveries/<int:pk>/resend/",
+        views.webhook_redeliver,
+        name="email-webhook-redeliver",
+    ),
     path("insights/", views.insights, name="email-insights"),
     path("send/", views.api_send, name="email-send"),
     path("t/open/<str:token>/", views.tracking_open, name="email-tracking-open"),
@@ -34,17 +44,47 @@ urlpatterns = [
         views.template_version_restore,
         name="email-template-version-restore",
     ),
-    path("templates/<int:pk>/clone/", views.template_clone, name="email-template-clone"),
-    path("templates/<int:pk>/delete/", views.template_delete, name="email-template-delete"),
-    path("templates/<int:pk>/preview/", views.template_preview, name="email-template-preview"),
-    path("templates/<int:pk>/send-test/", views.template_send_test, name="email-template-send-test"),
-    path("templates/assets/upload/", views.template_asset_upload, name="email-template-asset-upload"),
+    path(
+        "templates/<int:pk>/clone/", views.template_clone, name="email-template-clone"
+    ),
+    path(
+        "templates/<int:pk>/delete/",
+        views.template_delete,
+        name="email-template-delete",
+    ),
+    path(
+        "templates/<int:pk>/preview/",
+        views.template_preview,
+        name="email-template-preview",
+    ),
+    path(
+        "templates/<int:pk>/send-test/",
+        views.template_send_test,
+        name="email-template-send-test",
+    ),
+    path(
+        "templates/assets/upload/",
+        views.template_asset_upload,
+        name="email-template-asset-upload",
+    ),
     path("templates/assets/", views.asset_library, name="email-assets"),
-    path("templates/assets/<int:pk>/delete/", views.asset_delete, name="email-asset-delete"),
+    path(
+        "templates/assets/<int:pk>/delete/",
+        views.asset_delete,
+        name="email-asset-delete",
+    ),
     path("campaigns/", views.campaigns_list, name="email-campaigns"),
     path("campaigns/new/", views.campaign_compose, name="email-campaign-compose"),
     path("campaigns/create/", views.campaign_create, name="email-campaign-create"),
-    path("campaigns/send-test/", views.campaign_send_test, name="email-campaign-send-test"),
-    path("campaigns/sample.csv", views.campaign_sample_csv, name="email-campaign-sample-csv"),
+    path(
+        "campaigns/send-test/",
+        views.campaign_send_test,
+        name="email-campaign-send-test",
+    ),
+    path(
+        "campaigns/sample.csv",
+        views.campaign_sample_csv,
+        name="email-campaign-sample-csv",
+    ),
     path("campaigns/<int:pk>/", views.campaign_detail, name="email-campaign-detail"),
 ]

@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0006_processedwebhookevent'),
+        ("billing", "0006_processedwebhookevent"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='api_rate_per_min',
+            model_name="plan",
+            name="api_rate_per_min",
             field=models.PositiveIntegerField(default=60),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='outbound_webhooks',
+            model_name="plan",
+            name="outbound_webhooks",
             field=models.BooleanField(default=False),
         ),
     ]

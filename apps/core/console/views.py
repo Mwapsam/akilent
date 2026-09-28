@@ -1,4 +1,5 @@
 """Operator Console pages (/manage/). Every view is operator-only and every change is audited."""
+
 import logging
 from datetime import timedelta
 
@@ -17,7 +18,12 @@ from apps.core.audit import audit, label
 from apps.core.console import attention, business, data
 from apps.core.console.business import ConsoleError
 from apps.core.forms import ConfigurationForm
-from apps.core.models import AdminAction, Configurations, MailProviderSettings, SiteSettings
+from apps.core.models import (
+    AdminAction,
+    Configurations,
+    MailProviderSettings,
+    SiteSettings,
+)
 from apps.core.utils import admin_required
 from apps.email.models import AuditLog, SendReputation
 from apps.whatsapp.models import WebhookEventLog
@@ -35,11 +41,18 @@ def _late_queues(now):
     rows = []
     for queue in settings.WORKER_QUEUES:
         seen = last_seen(queue)
-        rows.append({"name": queue, "seen": seen, "late": seen is None or now - seen > HEARTBEAT_LATE})
+        rows.append(
+            {
+                "name": queue,
+                "seen": seen,
+                "late": seen is None or now - seen > HEARTBEAT_LATE,
+            }
+        )
     return rows
 
 
 # --- Home ---------------------------------------------------------------------------------------
+
 
 @admin_required
 def home(request):
@@ -49,20 +62,29 @@ def home(request):
     now = timezone.now()
     rows = attention.businesses()
     queues = _late_queues(now)
-    return render(request, "manage/home.html", {
-        "total": len(rows),
-        "needing": [r for r in rows if r["reasons"]][:15],
-        "needing_count": sum(1 for r in rows if r["reasons"]),
-        "pending_payments": ManualPaymentRequest.objects.filter(status=ManualPaymentRequest.PENDING).count(),
-        "late_queues": [q for q in queues if q["late"]],
-        "whatsapp": whatsapp_api.ops_status(),
-        "backup": backups.status(),
-        "recent_actions": [{"row": a, "label": label(a.action)}
-                           for a in AdminAction.objects.select_related("actor", "account")[:8]],
-    })
+    return render(
+        request,
+        "manage/home.html",
+        {
+            "total": len(rows),
+            "needing": [r for r in rows if r["reasons"]][:15],
+            "needing_count": sum(1 for r in rows if r["reasons"]),
+            "pending_payments": ManualPaymentRequest.objects.filter(
+                status=ManualPaymentRequest.PENDING
+            ).count(),
+            "late_queues": [q for q in queues if q["late"]],
+            "whatsapp": whatsapp_api.ops_status(),
+            "backup": backups.status(),
+            "recent_actions": [
+                {"row": a, "label": label(a.action)}
+                for a in AdminAction.objects.select_related("actor", "account")[:8]
+            ],
+        },
+    )
 
 
 # --- Businesses ---------------------------------------------------------------------------------
+
 
 @admin_required
 def businesses(request):
@@ -70,10 +92,16 @@ def businesses(request):
     filter_key = request.GET.get("filter") or ""
     if filter_key not in attention.FILTERS:
         filter_key = ""
-    return render(request, "manage/businesses.html", {
-        "rows": attention.businesses(q=q, filter_key=filter_key),
-        "q": q, "filter_key": filter_key, "filters": attention.FILTERS,
-    })
+    return render(
+        request,
+        "manage/businesses.html",
+        {
+            "rows": attention.businesses(q=q, filter_key=filter_key),
+            "q": q,
+            "filter_key": filter_key,
+            "filters": attention.FILTERS,
+        },
+    )
 
 
 @admin_required
@@ -81,12 +109,16 @@ def business_detail(request, pk, tab="overview"):
     account = get_object_or_404(Account, pk=pk)
     if tab not in business.TAB_DATA:
         tab = "overview"
-    return render(request, "manage/business.html", {
-        "business": account,
-        "tab": tab,
-        "tabs": business.TABS,
-        "d": business.TAB_DATA[tab](account),
-    })
+    return render(
+        request,
+        "manage/business.html",
+        {
+            "business": account,
+            "tab": tab,
+            "tabs": business.TABS,
+            "d": business.TAB_DATA[tab](account),
+        },
+    )
 
 
 def _business_redirect(account, tab):
@@ -99,12 +131,16 @@ def _act_suspend(request, account):
     if account.is_active:
         account.scheduled_deletion_at = None
     account.save(update_fields=["is_active", "scheduled_deletion_at"])
-    audit(request, "account.activate" if account.is_active else "account.suspend", account)
+    audit(
+        request, "account.activate" if account.is_active else "account.suspend", account
+    )
     return f"{account.company_name} is {'active again' if account.is_active else 'suspended'}."
 
 
 def _act_subscription(request, account):
-    result = business.set_subscription(account, request.POST.get("plan"), request.POST.get("status"))
+    result = business.set_subscription(
+        account, request.POST.get("plan"), request.POST.get("status")
+    )
     audit(request, "subscription.set", account, target=result)
     return f"Subscription set to {result}."
 
@@ -124,25 +160,56 @@ def _act_feature(request, account):
     before, so "why does this customer have X?" is answered from history."""
     key = request.POST.get("key", "")
     change = request.POST.get("change", "")
-    before, name = business.set_feature(account, key, change, note=request.POST.get("note", ""), by=request.user)
-    audit(request, f"business.feature.{change}", account, target=key, key=key,
-          old_entitled=before["entitled"], old_source=before["source"],
-          new_override={"grant": True, "remove": False}.get(change), note=request.POST.get("note", "").strip())
-    return {"grant": f"{name} granted.", "remove": f"{name} removed.",
-            "reset": f"{name} follows the plan again."}[change]
+    before, name = business.set_feature(
+        account, key, change, note=request.POST.get("note", ""), by=request.user
+    )
+    audit(
+        request,
+        f"business.feature.{change}",
+        account,
+        target=key,
+        key=key,
+        old_entitled=before["entitled"],
+        old_source=before["source"],
+        new_override={"grant": True, "remove": False}.get(change),
+        note=request.POST.get("note", "").strip(),
+    )
+    return {
+        "grant": f"{name} granted.",
+        "remove": f"{name} removed.",
+        "reset": f"{name} follows the plan again.",
+    }[change]
 
 
 def _act_limit(request, account):
     """Set or clear this business's own limit. The audit row keeps the value before."""
     key, change = request.POST.get("key", ""), request.POST.get("change", "")
-    before, name = business.set_limit(account, key, change, value=request.POST.get("value", ""),
-                                      note=request.POST.get("note", ""), days=request.POST.get("days", ""),
-                                      by=request.user)
-    audit(request, "business.limit.override" if change == "set" else "business.limit.reset", account, target=key,
-          key=key, old_value=before["value"], old_source=before["source"],
-          new_value=request.POST.get("value") if change == "set" else None,
-          note=request.POST.get("note", "").strip(), days=request.POST.get("days", ""))
-    return f"{name}: now {request.POST.get('value')} for this business." if change == "set" else f"{name} follows the plan again."
+    before, name = business.set_limit(
+        account,
+        key,
+        change,
+        value=request.POST.get("value", ""),
+        note=request.POST.get("note", ""),
+        days=request.POST.get("days", ""),
+        by=request.user,
+    )
+    audit(
+        request,
+        "business.limit.override" if change == "set" else "business.limit.reset",
+        account,
+        target=key,
+        key=key,
+        old_value=before["value"],
+        old_source=before["source"],
+        new_value=request.POST.get("value") if change == "set" else None,
+        note=request.POST.get("note", "").strip(),
+        days=request.POST.get("days", ""),
+    )
+    return (
+        f"{name}: now {request.POST.get('value')} for this business."
+        if change == "set"
+        else f"{name} follows the plan again."
+    )
 
 
 def _act_retry_registration(request, account):
@@ -233,7 +300,9 @@ def _act_cancel_job(request, account):
 
 def _confirmed(request, account) -> None:
     if (request.POST.get("confirm") or "").strip() != account.slug:
-        raise ConsoleError(f"Type the business's short name ({account.slug}) to confirm.")
+        raise ConsoleError(
+            f"Type the business's short name ({account.slug}) to confirm."
+        )
 
 
 def _act_delete_customer(request, account):
@@ -249,9 +318,16 @@ def _act_delete_customer(request, account):
 def _act_close(request, account):
     _confirmed(request, account)
     data.close_account(account)
-    audit(request, "account.close", account, deletes_on=account.scheduled_deletion_at.isoformat())
-    return (f"{account.company_name} is closed and suspended. Everything will be deleted on "
-            f"{timezone.localtime(account.scheduled_deletion_at):%d %b %Y} unless you reactivate it.")
+    audit(
+        request,
+        "account.close",
+        account,
+        deletes_on=account.scheduled_deletion_at.isoformat(),
+    )
+    return (
+        f"{account.company_name} is closed and suspended. Everything will be deleted on "
+        f"{timezone.localtime(account.scheduled_deletion_at):%d %b %Y} unless you reactivate it."
+    )
 
 
 ACTIONS = {
@@ -302,12 +378,17 @@ def business_action(request, pk, action):
 def business_export_contacts(request, pk):
     account = get_object_or_404(Account, pk=pk)
     audit(request, "data.export_contacts", account)
-    response = HttpResponse(data.contacts_csv(account), content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = f'attachment; filename="{account.slug}-contacts.csv"'
+    response = HttpResponse(
+        data.contacts_csv(account), content_type="text/csv; charset=utf-8"
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{account.slug}-contacts.csv"'
+    )
     return response
 
 
 # --- View as (read-only support) ----------------------------------------------------------------
+
 
 @admin_required
 @require_POST
@@ -334,6 +415,7 @@ def view_as_stop(request):
 
 # --- Old URLs -----------------------------------------------------------------------------------
 
+
 @admin_required
 def old_customers(request):
     return redirect("core:businesses")
@@ -351,23 +433,38 @@ def old_billing_requests(request):
 
 # --- Payments and plans -------------------------------------------------------------------------
 
+
 @admin_required
 def payments(request):
-    pending = (ManualPaymentRequest.objects.filter(status=ManualPaymentRequest.PENDING)
-               .select_related("account", "plan").order_by("-created_at"))
-    recent_resolved = (ManualPaymentRequest.objects.exclude(status=ManualPaymentRequest.PENDING)
-                       .select_related("account", "plan", "reviewed_by").order_by("-reviewed_at")[:20])
-    return render(request, "manage/billing_requests.html", {"pending": pending, "recent_resolved": recent_resolved})
+    pending = (
+        ManualPaymentRequest.objects.filter(status=ManualPaymentRequest.PENDING)
+        .select_related("account", "plan")
+        .order_by("-created_at")
+    )
+    recent_resolved = (
+        ManualPaymentRequest.objects.exclude(status=ManualPaymentRequest.PENDING)
+        .select_related("account", "plan", "reviewed_by")
+        .order_by("-reviewed_at")[:20]
+    )
+    return render(
+        request,
+        "manage/billing_requests.html",
+        {"pending": pending, "recent_resolved": recent_resolved},
+    )
 
 
 @admin_required
 def plans(request):
-    return render(request, "manage/plans.html", {
-        "plans": Plan.objects.order_by("price_monthly"),
-        "payment_methods": PaymentMethod.objects.all(),
-        "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
-        "payments_enabled": SiteSettings.load().payments_enabled,
-    })
+    return render(
+        request,
+        "manage/plans.html",
+        {
+            "plans": Plan.objects.order_by("price_monthly"),
+            "payment_methods": PaymentMethod.objects.all(),
+            "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
+            "payments_enabled": SiteSettings.load().payments_enabled,
+        },
+    )
 
 
 def _wanted_matrix(post) -> dict:
@@ -378,7 +475,12 @@ def _wanted_matrix(post) -> dict:
     keys = {f.key for f in catalog.matrix_features()}
     for name in post:
         parts = name.split(":")
-        if len(parts) == 3 and parts[0] == "f" and parts[1].isdigit() and parts[2] in keys:
+        if (
+            len(parts) == 3
+            and parts[0] == "f"
+            and parts[1].isdigit()
+            and parts[2] in keys
+        ):
             wanted.setdefault(int(parts[1]), set()).add(parts[2])
     return wanted
 
@@ -400,12 +502,30 @@ def plan_features(request):
             for change in applied:
                 plan = change["plan"]
                 for key in change["added"]:
-                    audit(request, "plan.feature.add", target=f"{plan.slug}:{key}", plan=plan.slug, key=key,
-                          old=False, new=True, businesses=change["businesses"])
+                    audit(
+                        request,
+                        "plan.feature.add",
+                        target=f"{plan.slug}:{key}",
+                        plan=plan.slug,
+                        key=key,
+                        old=False,
+                        new=True,
+                        businesses=change["businesses"],
+                    )
                 for key in change["removed"]:
-                    audit(request, "plan.feature.remove", target=f"{plan.slug}:{key}", plan=plan.slug, key=key,
-                          old=True, new=False, businesses=change["businesses"])
-            messages.success(request, "Plan features updated." if applied else "Nothing changed.")
+                    audit(
+                        request,
+                        "plan.feature.remove",
+                        target=f"{plan.slug}:{key}",
+                        plan=plan.slug,
+                        key=key,
+                        old=True,
+                        new=False,
+                        businesses=change["businesses"],
+                    )
+            messages.success(
+                request, "Plan features updated." if applied else "Nothing changed."
+            )
             return redirect("core:plan-features")
         changes = billing_api.diff_plan_features(wanted)
         matrix = wanted  # show the proposed ticks while confirming
@@ -414,18 +534,45 @@ def plan_features(request):
             return redirect("core:plan-features")
 
     names = {f.key: f.name for f in catalog.FEATURES}
-    rows = [(group, [{"feature": f, "cells": [{"plan": p, "on": f.key in matrix.get(p.pk, set())} for p in plans_list]}
-                     for f in feats])
-            for group, feats in catalog.grouped(catalog.matrix_features())]
-    return render(request, "manage/plan_features.html", {
-        "plans": plans_list,
-        "rows": rows,
-        "changes": [dict(c, added_names=[names[k] for k in c["added"]], removed_names=[names[k] for k in c["removed"]])
-                    for c in changes] if changes else None,
-        "core": billing_api.core_features(),
-        "not_sold": [f for f in catalog.FEATURES if f.availability == catalog.NOT_SOLD],
-        "coming_soon": billing_api.coming_soon_features(),
-    })
+    rows = [
+        (
+            group,
+            [
+                {
+                    "feature": f,
+                    "cells": [
+                        {"plan": p, "on": f.key in matrix.get(p.pk, set())}
+                        for p in plans_list
+                    ],
+                }
+                for f in feats
+            ],
+        )
+        for group, feats in catalog.grouped(catalog.matrix_features())
+    ]
+    return render(
+        request,
+        "manage/plan_features.html",
+        {
+            "plans": plans_list,
+            "rows": rows,
+            "changes": [
+                dict(
+                    c,
+                    added_names=[names[k] for k in c["added"]],
+                    removed_names=[names[k] for k in c["removed"]],
+                )
+                for c in changes
+            ]
+            if changes
+            else None,
+            "core": billing_api.core_features(),
+            "not_sold": [
+                f for f in catalog.FEATURES if f.availability == catalog.NOT_SOLD
+            ],
+            "coming_soon": billing_api.coming_soon_features(),
+        },
+    )
 
 
 @admin_required
@@ -442,28 +589,61 @@ def plan_limits(request):
         wanted: dict = {}
         for name, raw in request.POST.items():
             parts = name.split(":")
-            if len(parts) == 3 and parts[0] == "l" and parts[1].isdigit() and parts[2] in limit_catalog.BY_KEY:
+            if (
+                len(parts) == 3
+                and parts[0] == "l"
+                and parts[1].isdigit()
+                and parts[2] in limit_catalog.BY_KEY
+            ):
                 try:
                     wanted.setdefault(int(parts[1]), {})[parts[2]] = max(-1, int(raw))
                 except ValueError:
                     continue
         changes = billing_api.diff_plan_limits(wanted)
         # Only plans this save changes are checked: an existing plan isn't re-litigated on every save.
-        risks = [{"plan": c["plan"], "reasons": billing_api.loss_reasons(c["plan"], limit_overrides=wanted[c["plan"].pk])}
-                 for c in changes]
+        risks = [
+            {
+                "plan": c["plan"],
+                "reasons": billing_api.loss_reasons(
+                    c["plan"], limit_overrides=wanted[c["plan"].pk]
+                ),
+            }
+            for c in changes
+        ]
         risks = [r for r in risks if r["reasons"]]
-        if request.POST.get("apply") == "1" and risks and request.POST.get("accept_loss") != "on":
-            messages.error(request, "These limits let a paid plan lose money. Tick \"I accept\" to apply them anyway.")
+        if (
+            request.POST.get("apply") == "1"
+            and risks
+            and request.POST.get("accept_loss") != "on"
+        ):
+            messages.error(
+                request,
+                'These limits let a paid plan lose money. Tick "I accept" to apply them anyway.',
+            )
         elif request.POST.get("apply") == "1":
             for r in risks:
-                audit(request, "plan.loss_acknowledged", target=r["plan"].slug, reasons=r["reasons"])
+                audit(
+                    request,
+                    "plan.loss_acknowledged",
+                    target=r["plan"].slug,
+                    reasons=r["reasons"],
+                )
             applied = billing_api.apply_plan_limits(wanted)
             for change in applied:
                 for row in change["limits"]:
-                    audit(request, "plan.limit.change", target=f"{change['plan'].slug}:{row['key']}",
-                          plan=change["plan"].slug, key=row["key"], old=row["old"], new=row["new"],
-                          businesses=change["businesses"])
-            messages.success(request, "Plan limits updated." if applied else "Nothing changed.")
+                    audit(
+                        request,
+                        "plan.limit.change",
+                        target=f"{change['plan'].slug}:{row['key']}",
+                        plan=change["plan"].slug,
+                        key=row["key"],
+                        old=row["old"],
+                        new=row["new"],
+                        businesses=change["businesses"],
+                    )
+            messages.success(
+                request, "Plan limits updated." if applied else "Nothing changed."
+            )
             return redirect("core:plan-limits")
         if not changes:
             messages.info(request, "Nothing changed.")
@@ -471,11 +651,21 @@ def plan_limits(request):
         for plan_id, values in wanted.items():
             matrix.setdefault(plan_id, {}).update(values)
 
-    rows = [{"limit": lim, "cells": [{"plan": p, "value": matrix.get(p.pk, {}).get(lim.key, lim.default)}
-                                     for p in plans_list]}
-            for lim in limit_catalog.LIMITS]
-    return render(request, "manage/plan_limits.html", {"plans": plans_list, "rows": rows, "changes": changes,
-                                                       "risks": risks})
+    rows = [
+        {
+            "limit": lim,
+            "cells": [
+                {"plan": p, "value": matrix.get(p.pk, {}).get(lim.key, lim.default)}
+                for p in plans_list
+            ],
+        }
+        for lim in limit_catalog.LIMITS
+    ]
+    return render(
+        request,
+        "manage/plan_limits.html",
+        {"plans": plans_list, "rows": rows, "changes": changes, "risks": risks},
+    )
 
 
 @admin_required
@@ -489,7 +679,10 @@ def plan_costs(request):
 
     if request.method == "POST":
         try:
-            costs = {d.key: Decimal(request.POST.get(f"cost:{d.key}") or "0") for d in billing_api.COST_DRIVERS}
+            costs = {
+                d.key: Decimal(request.POST.get(f"cost:{d.key}") or "0")
+                for d in billing_api.COST_DRIVERS
+            }
             fixed = Decimal(request.POST.get("fixed") or "0")
             target = int(request.POST.get("target") or 50)
             if any(v < 0 for v in costs.values()) or fixed < 0:
@@ -497,22 +690,45 @@ def plan_costs(request):
         except (InvalidOperation, ValueError):
             messages.error(request, "Enter costs as numbers of 0 or more, e.g. 0.0001.")
             return redirect("core:plan-costs")
-        before = {"costs": {k: str(v) for k, v in billing_api.unit_costs().items()},
-                  "fixed": str(billing_api.cost_settings().fixed_monthly_cost_per_business)}
-        billing_api.save_cost_settings(unit_costs_by_driver=costs, fixed=fixed, target_margin_pct=target)
-        audit(request, "costs.save", old=before, new={"costs": {k: str(v) for k, v in costs.items()},
-                                                       "fixed": str(fixed), "target": target})
+        before = {
+            "costs": {k: str(v) for k, v in billing_api.unit_costs().items()},
+            "fixed": str(billing_api.cost_settings().fixed_monthly_cost_per_business),
+        }
+        billing_api.save_cost_settings(
+            unit_costs_by_driver=costs, fixed=fixed, target_margin_pct=target
+        )
+        audit(
+            request,
+            "costs.save",
+            old=before,
+            new={
+                "costs": {k: str(v) for k, v in costs.items()},
+                "fixed": str(fixed),
+                "target": target,
+            },
+        )
         messages.success(request, "Costs saved.")
         return redirect("core:plan-costs")
 
-    return render(request, "manage/plan_costs.html", {
-        "drivers": billing_api.COST_DRIVERS,
-        "driver_costs": [{"driver": d, "cost": cost} for d, cost in
-                         zip(billing_api.COST_DRIVERS, billing_api.unit_costs().values())],
-        "settings": billing_api.cost_settings(),
-        "plans": [billing_api.plan_economics(p) for p in Plan.objects.order_by("price_monthly")],
-        "businesses": billing_api.businesses_by_margin(),
-    })
+    return render(
+        request,
+        "manage/plan_costs.html",
+        {
+            "drivers": billing_api.COST_DRIVERS,
+            "driver_costs": [
+                {"driver": d, "cost": cost}
+                for d, cost in zip(
+                    billing_api.COST_DRIVERS, billing_api.unit_costs().values()
+                )
+            ],
+            "settings": billing_api.cost_settings(),
+            "plans": [
+                billing_api.plan_economics(p)
+                for p in Plan.objects.order_by("price_monthly")
+            ],
+            "businesses": billing_api.businesses_by_margin(),
+        },
+    )
 
 
 @admin_required
@@ -521,7 +737,9 @@ def coming_soon_save(request):
     from apps.billing.models import ComingSoonFeature
 
     pk = request.POST.get("pk")
-    item = ComingSoonFeature.objects.filter(pk=pk).first() if pk else ComingSoonFeature()
+    item = (
+        ComingSoonFeature.objects.filter(pk=pk).first() if pk else ComingSoonFeature()
+    )
     if item is None:
         messages.error(request, "That entry isn't there any more.")
         return redirect("core:plan-features")
@@ -537,7 +755,12 @@ def coming_soon_save(request):
         item.order = 0
     item.save()
     item.plans.set(Plan.objects.filter(pk__in=request.POST.getlist("plans")))
-    audit(request, "coming_soon.save", target=item.name, plans=[p.slug for p in item.plans.all()])
+    audit(
+        request,
+        "coming_soon.save",
+        target=item.name,
+        plans=[p.slug for p in item.plans.all()],
+    )
     messages.success(request, f"Saved “{item.name}”.")
     return redirect("core:plan-features")
 
@@ -557,13 +780,24 @@ def coming_soon_delete(request, pk):
 
 # --- Platform -----------------------------------------------------------------------------------
 
+
 @admin_required
 def platform_health(request):
-    return render(request, "manage/platform_health.html", {
-        "reputation_issues": SendReputation.objects.exclude(state="ok").select_related("account").order_by("-state"),
-        "audit_failures": AuditLog.objects.filter(success=False).select_related("account").order_by("-timestamp")[:50],
-        "webhook_failures": WebhookEventLog.objects.filter(processed=False).order_by("-created_at")[:50],
-    })
+    return render(
+        request,
+        "manage/platform_health.html",
+        {
+            "reputation_issues": SendReputation.objects.exclude(state="ok")
+            .select_related("account")
+            .order_by("-state"),
+            "audit_failures": AuditLog.objects.filter(success=False)
+            .select_related("account")
+            .order_by("-timestamp")[:50],
+            "webhook_failures": WebhookEventLog.objects.filter(
+                processed=False
+            ).order_by("-created_at")[:50],
+        },
+    )
 
 
 @admin_required
@@ -583,27 +817,37 @@ def pilot_command_center(request):
         activity = conversations_api.activity(account, since=week)
         adoption = automation_api.adoption(account, since=connected_at)
         last_in = activity["last_customer_message_at"]
-        rows.append({
-            "account": account,
-            "connected_at": connected_at,
-            "first_value": adoption["first_run_at"] - connected_at if adoption["first_run_at"] else None,
-            "automations_on": adoption["on"],
-            "conversations_7d": activity["conversations"],
-            "last_customer_message_at": last_in,
-            "quiet": last_in is None or now - last_in > QUIET_AFTER,
-            "ai": ai_api.usage_summary(account, since=week),
-            "starting_point": conversations_api.starting_point(account, now),
-        })
+        rows.append(
+            {
+                "account": account,
+                "connected_at": connected_at,
+                "first_value": adoption["first_run_at"] - connected_at
+                if adoption["first_run_at"]
+                else None,
+                "automations_on": adoption["on"],
+                "conversations_7d": activity["conversations"],
+                "last_customer_message_at": last_in,
+                "quiet": last_in is None or now - last_in > QUIET_AFTER,
+                "ai": ai_api.usage_summary(account, since=week),
+                "starting_point": conversations_api.starting_point(account, now),
+            }
+        )
 
-    return render(request, "manage/pilot.html", {
-        "now": now,
-        "queues": _late_queues(now),
-        "whatsapp": whatsapp_api.ops_status(),
-        "backup": backups.status(),
-        "failed_runs": automation_api.recent_failed_runs(),
-        "ai_errors_24h": ai_api.usage_summary(since=now - timedelta(hours=24))["errors"],
-        "businesses": rows,
-    })
+    return render(
+        request,
+        "manage/pilot.html",
+        {
+            "now": now,
+            "queues": _late_queues(now),
+            "whatsapp": whatsapp_api.ops_status(),
+            "backup": backups.status(),
+            "failed_runs": automation_api.recent_failed_runs(),
+            "ai_errors_24h": ai_api.usage_summary(since=now - timedelta(hours=24))[
+                "errors"
+            ],
+            "businesses": rows,
+        },
+    )
 
 
 @admin_required
@@ -612,22 +856,33 @@ def audit_log(request):
     action = request.GET.get("action") or ""
     if action:
         rows = rows.filter(action=action)
-    return render(request, "manage/audit.html", {
-        "rows": [{"row": r, "label": label(r.action)} for r in rows[:200]],
-        "action": action,
-        "actions": sorted({a for a in AdminAction.objects.values_list("action", flat=True).distinct()}),
-        "label": label,
-    })
+    return render(
+        request,
+        "manage/audit.html",
+        {
+            "rows": [{"row": r, "label": label(r.action)} for r in rows[:200]],
+            "action": action,
+            "actions": sorted(
+                set(AdminAction.objects.values_list(
+                        "action", flat=True
+                    ).distinct())
+            ),
+            "label": label,
+        },
+    )
 
 
 # --- Settings -----------------------------------------------------------------------------------
+
 
 @admin_required
 def settings_page(request):
     site = SiteSettings.load()
 
     if request.method == "POST":
-        site.app_name = (request.POST.get("app_name") or "Automator").strip() or "Automator"
+        site.app_name = (
+            request.POST.get("app_name") or "Automator"
+        ).strip() or "Automator"
         site.support_email = (request.POST.get("support_email") or "").strip()
         site.signups_enabled = "signups_enabled" in request.POST
         site.payments_enabled = "payments_enabled" in request.POST
@@ -635,7 +890,9 @@ def settings_page(request):
         dp = request.POST.get("default_plan") or None
         site.default_plan = Plan.objects.filter(pk=dp).first() if dp else None
         try:
-            site.default_trial_days = max(0, int(request.POST.get("default_trial_days") or 0))
+            site.default_trial_days = max(
+                0, int(request.POST.get("default_trial_days") or 0)
+            )
         except ValueError:
             pass
         if request.FILES.get("logo"):
@@ -646,17 +903,21 @@ def settings_page(request):
         return redirect("core:settings")
 
     mail = MailProviderSettings.load()
-    return render(request, "manage/settings.html", {
-        "plans": Plan.objects.all().order_by("price_monthly"),
-        "admins": User.objects.order_by("-is_superuser", "username"),
-        "mail": mail,
-        "percents": {  # stored as fractions, typed as percentages
-            "bounce_warn": f"{mail.reputation_bounce_warn * 100:g}",
-            "bounce_halt": f"{mail.reputation_bounce_halt * 100:g}",
-            "complaint_halt": f"{mail.reputation_complaint_halt * 100:g}",
+    return render(
+        request,
+        "manage/settings.html",
+        {
+            "plans": Plan.objects.all().order_by("price_monthly"),
+            "admins": User.objects.order_by("-is_superuser", "username"),
+            "mail": mail,
+            "percents": {  # stored as fractions, typed as percentages
+                "bounce_warn": f"{mail.reputation_bounce_warn * 100:g}",
+                "bounce_halt": f"{mail.reputation_bounce_halt * 100:g}",
+                "complaint_halt": f"{mail.reputation_complaint_halt * 100:g}",
+            },
+            "whatsapp_env": settings.WHATSAPP_ENABLED,
         },
-        "whatsapp_env": settings.WHATSAPP_ENABLED,
-    })
+    )
 
 
 def _int(post, name, current, minimum=0):
@@ -687,17 +948,33 @@ def mail_settings_save(request):
     mail.aws_region = (post.get("aws_region") or "").strip() or mail.aws_region
     mail.ses_configuration_set = (post.get("ses_configuration_set") or "").strip()
     mail.ses_sns_topic_arn = (post.get("ses_sns_topic_arn") or "").strip()
-    mail.ses_send_rate_limit = _int(post, "ses_send_rate_limit", mail.ses_send_rate_limit, 1)
+    mail.ses_send_rate_limit = _int(
+        post, "ses_send_rate_limit", mail.ses_send_rate_limit, 1
+    )
     mail.smtp_require_tls = "smtp_require_tls" in post
     mail.enable_recipient_validation = "enable_recipient_validation" in post
-    mail.mx_validation_cache_ttl_seconds = _int(post, "mx_validation_cache_ttl_seconds", mail.mx_validation_cache_ttl_seconds)
-    mail.soft_bounce_threshold = _int(post, "soft_bounce_threshold", mail.soft_bounce_threshold, 1)
+    mail.mx_validation_cache_ttl_seconds = _int(
+        post, "mx_validation_cache_ttl_seconds", mail.mx_validation_cache_ttl_seconds
+    )
+    mail.soft_bounce_threshold = _int(
+        post, "soft_bounce_threshold", mail.soft_bounce_threshold, 1
+    )
     mail.require_explicit_consent = "require_explicit_consent" in post
-    mail.reputation_bounce_warn = _rate(post, "reputation_bounce_warn", mail.reputation_bounce_warn)
-    mail.reputation_bounce_halt = _rate(post, "reputation_bounce_halt", mail.reputation_bounce_halt)
-    mail.reputation_complaint_halt = _rate(post, "reputation_complaint_halt", mail.reputation_complaint_halt)
-    mail.reputation_min_volume = _int(post, "reputation_min_volume", mail.reputation_min_volume, 1)
-    mail.reputation_window_hours = _int(post, "reputation_window_hours", mail.reputation_window_hours, 1)
+    mail.reputation_bounce_warn = _rate(
+        post, "reputation_bounce_warn", mail.reputation_bounce_warn
+    )
+    mail.reputation_bounce_halt = _rate(
+        post, "reputation_bounce_halt", mail.reputation_bounce_halt
+    )
+    mail.reputation_complaint_halt = _rate(
+        post, "reputation_complaint_halt", mail.reputation_complaint_halt
+    )
+    mail.reputation_min_volume = _int(
+        post, "reputation_min_volume", mail.reputation_min_volume, 1
+    )
+    mail.reputation_window_hours = _int(
+        post, "reputation_window_hours", mail.reputation_window_hours, 1
+    )
 
     mail.save()
     audit(request, "settings.mail")
@@ -713,19 +990,32 @@ def user_toggle_admin(request, pk):
         messages.error(request, "You can't change your own operator access.")
         return redirect("core:settings")
     u.is_superuser = not u.is_superuser
-    u.is_staff = u.is_superuser  # one admin flag: operators are superusers, and only they
+    u.is_staff = (
+        u.is_superuser
+    )  # one admin flag: operators are superusers, and only they
     u.save(update_fields=["is_superuser", "is_staff"])
-    audit(request, "operator.grant" if u.is_superuser else "operator.revoke", target=u.get_username())
+    audit(
+        request,
+        "operator.grant" if u.is_superuser else "operator.revoke",
+        target=u.get_username(),
+    )
     messages.success(
-        request, f"{u.get_username()} is {'now an operator' if u.is_superuser else 'no longer an operator'}.")
+        request,
+        f"{u.get_username()} is {'now an operator' if u.is_superuser else 'no longer an operator'}.",
+    )
     return redirect("core:settings")
 
 
 # --- Configurations -----------------------------------------------------------------------------
 
+
 @admin_required
 def configurations_list(request):
-    return render(request, "manage/configurations_list.html", {"configurations": Configurations.objects.all()})
+    return render(
+        request,
+        "manage/configurations_list.html",
+        {"configurations": Configurations.objects.all()},
+    )
 
 
 @admin_required
@@ -755,7 +1045,11 @@ def edit_configuration(request, pk):
         form.add_error_classes()
     else:
         form = ConfigurationForm(instance=configuration)
-    return render(request, "manage/edit_configuration.html", {"form": form, "configuration": configuration})
+    return render(
+        request,
+        "manage/edit_configuration.html",
+        {"form": form, "configuration": configuration},
+    )
 
 
 @admin_required
@@ -767,7 +1061,9 @@ def delete_configuration(request, pk):
         audit(request, "configuration.delete", target=name)
         messages.success(request, "Configuration deleted successfully.")
         return redirect("core:configurations-list")
-    return render(request, "manage/delete_configuration.html", {"configuration": configuration})
+    return render(
+        request, "manage/delete_configuration.html", {"configuration": configuration}
+    )
 
 
 @admin_required
@@ -778,16 +1074,35 @@ def styleguide(request):
     See docs/design/akilent-ui-spec.md §7. The chart samples include the two shapes that break naive
     scaling — a flat series and a single reading.
     """
-    return render(request, "manage/styleguide.html", {
-        "styleguide_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        "styleguide_series": [
-            ("Opens", [42, 58, 51, 74, 66, 31, 39]),
-            ("Clicks", [8, 14, 11, 22, 19, 6, 9]),
-        ],
-        "styleguide_trend": [12, 18, 15, 24, 21, 30, 27, 34, 31, 42, 38, 47, 44, 52],
-        "styleguide_flat": [4, 4, 4, 4, 4, 4],
-        "styleguide_segments": [
-            ("Succeeded", 842, "good"),
-            ("Failed", 37, "critical"),
-        ],
-    })
+    return render(
+        request,
+        "manage/styleguide.html",
+        {
+            "styleguide_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            "styleguide_series": [
+                ("Opens", [42, 58, 51, 74, 66, 31, 39]),
+                ("Clicks", [8, 14, 11, 22, 19, 6, 9]),
+            ],
+            "styleguide_trend": [
+                12,
+                18,
+                15,
+                24,
+                21,
+                30,
+                27,
+                34,
+                31,
+                42,
+                38,
+                47,
+                44,
+                52,
+            ],
+            "styleguide_flat": [4, 4, 4, 4, 4, 4],
+            "styleguide_segments": [
+                ("Succeeded", 842, "good"),
+                ("Failed", 37, "critical"),
+            ],
+        },
+    )

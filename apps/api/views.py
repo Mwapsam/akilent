@@ -103,7 +103,9 @@ class MessageCreateView(BaseApiView):
 
     @extend_schema(
         operation_id="messages_list",
-        responses=OpenApiResponse(OpenApiTypes.OBJECT, "Paginated list of sent messages."),
+        responses=OpenApiResponse(
+            OpenApiTypes.OBJECT, "Paginated list of sent messages."
+        ),
         tags=["Messages"],
     )
     def get(self, request, *args, **kwargs):
@@ -112,7 +114,9 @@ class MessageCreateView(BaseApiView):
     @extend_schema(
         operation_id="messages_send",
         request=MessageCreateSerializer,
-        responses={202: OpenApiResponse(OpenApiTypes.OBJECT, "Message accepted for delivery.")},
+        responses={
+            202: OpenApiResponse(OpenApiTypes.OBJECT, "Message accepted for delivery.")
+        },
         tags=["Messages"],
     )
     def post(self, request, *args, **kwargs):
@@ -154,7 +158,11 @@ class TemplateListCreateView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_list_create_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="template_list_create_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, *args, **kwargs):
         templates = EmailTemplate.objects.filter(account=request.user, is_active=True)
         return Response(
@@ -170,7 +178,12 @@ class TemplateListCreateView(BaseApiView):
             ]
         )
 
-    @extend_schema(operation_id="template_create", request=TemplateSerializer, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_create",
+        request=TemplateSerializer,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def post(self, request, *args, **kwargs):
         serializer = TemplateSerializer(
             data=TemplateSerializer.from_request_data(request.data)
@@ -205,7 +218,11 @@ class TemplateDetailView(BaseApiView):
     def _get_template(self, request, slug):
         return EmailTemplate.objects.get(account=request.user, slug=slug)
 
-    @extend_schema(operation_id="template_detail_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="template_detail_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, slug, *args, **kwargs):
         t = self._get_template(request, slug)
         return Response(
@@ -222,7 +239,12 @@ class TemplateDetailView(BaseApiView):
             }
         )
 
-    @extend_schema(operation_id="template_update", request=TemplateSerializer, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_update",
+        request=TemplateSerializer,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def patch(self, request, slug, *args, **kwargs):
         t = self._get_template(request, slug)
         data = TemplateSerializer.from_request_data(request.data)
@@ -238,7 +260,11 @@ class TemplateDetailView(BaseApiView):
         )
         return Response({"id": t.id, "name": t.name, "slug": t.slug})
 
-    @extend_schema(operation_id="template_detail_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="template_detail_delete",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def delete(self, request, slug, *args, **kwargs):
         t = self._get_template(request, slug)
         t.is_active = False
@@ -252,13 +278,20 @@ class TemplateRenderView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_render", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_render",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def post(self, request, slug, *args, **kwargs):
         template = EmailTemplate.objects.get(account=request.user, slug=slug)
         body = request.data if isinstance(request.data, dict) else {}
         variables = body.get("variables")
         locale = body.get("locale")
-        result = render_template_preview(template=template, variables=variables, locale=locale)
+        result = render_template_preview(
+            template=template, variables=variables, locale=locale
+        )
         request.auth.touch()
         return Response(result)
 
@@ -266,7 +299,12 @@ class TemplateRenderView(BaseApiView):
 class TemplatePreviewView(TemplateRenderView):
     """POST /api/v1/templates/<slug>/preview — alias of render, for CI pipelines."""
 
-    @extend_schema(operation_id="template_preview", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_preview",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def post(self, request, slug, *args, **kwargs):
         return super().post(request, slug, *args, **kwargs)
 
@@ -277,7 +315,12 @@ class TemplateCloneView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_clone", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_clone",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def post(self, request, slug, *args, **kwargs):
         template = EmailTemplate.objects.get(account=request.user, slug=slug)
         clone = clone_template(template=template)
@@ -295,7 +338,12 @@ class CampaignCreateView(BaseApiView):
     required_scope = "messages:send:bulk"
     idempotency_endpoint = "POST /v1/campaigns"
 
-    @extend_schema(operation_id="campaign_create", request=CampaignCreateSerializer, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Campaigns"])
+    @extend_schema(
+        operation_id="campaign_create",
+        request=CampaignCreateSerializer,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Campaigns"],
+    )
     def post(self, request, *args, **kwargs):
         idem = self.begin_idempotency(request)
         serializer = CampaignCreateSerializer(
@@ -328,7 +376,9 @@ class CampaignCreateView(BaseApiView):
         if isinstance(result, ScheduledJob):
             body = _scheduled_job_body(result)
             body["recipient_count"] = (
-                result.target_campaign.recipient_count if result.target_campaign_id else 0
+                result.target_campaign.recipient_count
+                if result.target_campaign_id
+                else 0
             )
         else:
             body = {
@@ -347,7 +397,11 @@ class CampaignDetailView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasBulkEmailFeature, HasScope]
     required_scope = "messages:send:bulk"
 
-    @extend_schema(operation_id="campaign_detail_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="campaign_detail_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, pk, *args, **kwargs):
         campaign = BulkEmailCampaign.objects.get(pk=pk, account=request.user)
         return Response(
@@ -368,23 +422,31 @@ class CampaignVersionsView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasBulkEmailFeature, HasScope]
     required_scope = "messages:send:bulk"
 
-    @extend_schema(operation_id="campaign_versions", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Campaigns"])
+    @extend_schema(
+        operation_id="campaign_versions",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Campaigns"],
+    )
     def get(self, request, pk, *args, **kwargs):
         campaign = BulkEmailCampaign.objects.get(pk=pk, account=request.user)
-        return Response({"data": [
+        return Response(
             {
-                "number": v.number,
-                "label": v.label,
-                "from_email": v.from_email,
-                "subject": v.subject_override,
-                "template": v.template.slug if v.template_id else None,
-                "template_version": v.template_version_number,
-                "recipient_count": v.recipient_count,
-                "status_at_snapshot": v.status_at_snapshot,
-                "created_at": v.created_at,
+                "data": [
+                    {
+                        "number": v.number,
+                        "label": v.label,
+                        "from_email": v.from_email,
+                        "subject": v.subject_override,
+                        "template": v.template.slug if v.template_id else None,
+                        "template_version": v.template_version_number,
+                        "recipient_count": v.recipient_count,
+                        "status_at_snapshot": v.status_at_snapshot,
+                        "created_at": v.created_at,
+                    }
+                    for v in campaign.versions.all()
+                ]
             }
-            for v in campaign.versions.all()
-        ]})
+        )
 
 
 def _message_list_response(request):
@@ -423,7 +485,11 @@ class MessageDetailView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="message_detail_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="message_detail_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, public_id, *args, **kwargs):
         m = EmailMessage.objects.select_related("template", "domain").get(
             account=request.user, public_id=public_id
@@ -451,7 +517,11 @@ class MessageEventsView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="message_events_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="message_events_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, public_id, *args, **kwargs):
         m = EmailMessage.objects.get(account=request.user, public_id=public_id)
         events = m.events.order_by("occurred_at", "id")
@@ -463,7 +533,11 @@ class RequestLogListView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="request_log_list_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="request_log_list_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, *args, **kwargs):
         qs = ApiRequest.objects.filter(account=request.user).order_by("-created_at")
         p = request.query_params
@@ -505,7 +579,11 @@ class RequestLogDetailView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="request_log_detail_get", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["API"])
+    @extend_schema(
+        operation_id="request_log_detail_get",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["API"],
+    )
     def get(self, request, request_id, *args, **kwargs):
         r = (
             ApiRequest.objects.filter(account=request.user)
@@ -548,7 +626,11 @@ class DeliverabilityView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="deliverability", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Deliverability"])
+    @extend_schema(
+        operation_id="deliverability",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Deliverability"],
+    )
     def get(self, request, *args, **kwargs):
         from apps.email.models import EmailDomain
         from apps.email.services.deliverability import compute_score
@@ -557,7 +639,9 @@ class DeliverabilityView(BaseApiView):
         domain = None
         if domain_name:
             try:
-                domain = EmailDomain.objects.get(account=request.user, domain=domain_name)
+                domain = EmailDomain.objects.get(
+                    account=request.user, domain=domain_name
+                )
             except EmailDomain.DoesNotExist:
                 return Response(
                     {"error": {"code": "not_found", "message": "Domain not found."}},
@@ -576,19 +660,27 @@ class TemplateVersionsView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_versions", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_versions",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def get(self, request, slug, *args, **kwargs):
         t = EmailTemplate.objects.get(account=request.user, slug=slug)
-        return Response({"data": [
+        return Response(
             {
-                "number": v.number,
-                "label": v.label or None,
-                "active": v.is_active,
-                "created_at": v.created_at,
-                "subject": v.subject,
+                "data": [
+                    {
+                        "number": v.number,
+                        "label": v.label or None,
+                        "active": v.is_active,
+                        "created_at": v.created_at,
+                        "subject": v.subject,
+                    }
+                    for v in t.versions.all()
+                ]
             }
-            for v in t.versions.all()
-        ]})
+        )
 
 
 class TemplateVersionActivateView(BaseApiView):
@@ -597,7 +689,12 @@ class TemplateVersionActivateView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_version_activate", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_version_activate",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def post(self, request, slug, number, *args, **kwargs):
         from apps.email.services.versions import activate_version
 
@@ -605,7 +702,9 @@ class TemplateVersionActivateView(BaseApiView):
         # EmailTemplateVersion.DoesNotExist -> ObjectDoesNotExist -> 404 envelope.
         v = activate_version(t, int(number))
         request.auth.touch()
-        return Response({"number": v.number, "active": v.is_active, "subject": t.subject})
+        return Response(
+            {"number": v.number, "active": v.is_active, "subject": t.subject}
+        )
 
 
 class TemplateLocalesView(BaseApiView):
@@ -614,19 +713,27 @@ class TemplateLocalesView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_locales", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_locales",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def get(self, request, slug, *args, **kwargs):
         t = EmailTemplate.objects.get(account=request.user, slug=slug)
-        return Response({"data": [
+        return Response(
             {
-                "locale": lo.locale,
-                "subject": lo.subject,
-                "text": lo.text_body,
-                "html": lo.html_body,
-                "updated_at": lo.updated_at,
+                "data": [
+                    {
+                        "locale": lo.locale,
+                        "subject": lo.subject,
+                        "text": lo.text_body,
+                        "html": lo.html_body,
+                        "updated_at": lo.updated_at,
+                    }
+                    for lo in t.locales.all()
+                ]
             }
-            for lo in t.locales.all()
-        ]})
+        )
 
 
 class TemplateLocaleDetailView(BaseApiView):
@@ -635,14 +742,20 @@ class TemplateLocaleDetailView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_locale_upsert", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_locale_upsert",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def put(self, request, slug, locale, *args, **kwargs):
         from apps.email.models import EmailTemplateLocale
 
         t = EmailTemplate.objects.get(account=request.user, slug=slug)
         d = request.data if isinstance(request.data, dict) else {}
         row, _ = EmailTemplateLocale.objects.update_or_create(
-            template=t, locale=locale,
+            template=t,
+            locale=locale,
             defaults={
                 "subject": d.get("subject", ""),
                 "text_body": d.get("text", ""),
@@ -650,12 +763,20 @@ class TemplateLocaleDetailView(BaseApiView):
             },
         )
         request.auth.touch()
-        return Response({
-            "locale": row.locale, "subject": row.subject,
-            "text": row.text_body, "html": row.html_body,
-        })
+        return Response(
+            {
+                "locale": row.locale,
+                "subject": row.subject,
+                "text": row.text_body,
+                "html": row.html_body,
+            }
+        )
 
-    @extend_schema(operation_id="template_locale_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_locale_delete",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def delete(self, request, slug, locale, *args, **kwargs):
         from apps.email.models import EmailTemplateLocale
 
@@ -670,13 +791,21 @@ class TemplateDataSourcesView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_data_sources", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_data_sources",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def get(self, request, slug, *args, **kwargs):
         t = EmailTemplate.objects.get(account=request.user, slug=slug)
-        return Response({"data": [
-            {"key": s.key, "url": s.url, "ttl_seconds": s.ttl_seconds}
-            for s in t.data_sources.all()
-        ]})
+        return Response(
+            {
+                "data": [
+                    {"key": s.key, "url": s.url, "ttl_seconds": s.ttl_seconds}
+                    for s in t.data_sources.all()
+                ]
+            }
+        )
 
 
 class TemplateDataSourceDetailView(BaseApiView):
@@ -685,7 +814,12 @@ class TemplateDataSourceDetailView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasEmailTemplatesFeature, HasScope]
     required_scope = "templates:manage"
 
-    @extend_schema(operation_id="template_data_source_upsert", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_data_source_upsert",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def put(self, request, slug, key, *args, **kwargs):
         from apps.email.models import EmailTemplateDataSource
         from apps.email.services.datafetch import DataFetchError, _assert_public_https
@@ -694,15 +828,20 @@ class TemplateDataSourceDetailView(BaseApiView):
         d = request.data if isinstance(request.data, dict) else {}
         url = (d.get("url") or "").strip()
         if not url:
-            return Response({"error": {"code": "validation_error", "message": "url is required"}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": {"code": "validation_error", "message": "url is required"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             _assert_public_https(url)
         except DataFetchError as exc:
-            return Response({"error": {"code": "validation_error", "message": str(exc)}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": {"code": "validation_error", "message": str(exc)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         row, _ = EmailTemplateDataSource.objects.update_or_create(
-            template=t, key=key,
+            template=t,
+            key=key,
             defaults={
                 "url": url,
                 "headers": d.get("headers") or {},
@@ -710,9 +849,15 @@ class TemplateDataSourceDetailView(BaseApiView):
             },
         )
         request.auth.touch()
-        return Response({"key": row.key, "url": row.url, "ttl_seconds": row.ttl_seconds})
+        return Response(
+            {"key": row.key, "url": row.url, "ttl_seconds": row.ttl_seconds}
+        )
 
-    @extend_schema(operation_id="template_data_source_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Templates"])
+    @extend_schema(
+        operation_id="template_data_source_delete",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Templates"],
+    )
     def delete(self, request, slug, key, *args, **kwargs):
         from apps.email.models import EmailTemplateDataSource
 
@@ -726,18 +871,26 @@ class ApiVersionView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="api_version", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Meta"])
+    @extend_schema(
+        operation_id="api_version",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Meta"],
+    )
     def get(self, request, *args, **kwargs):
         from django.conf import settings as dj_settings
 
-        return Response({
-            "version": getattr(request, "version", "v1") or "v1",
-            "supported": list(dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS", ["v1"])),
-            "sunset": None,
-            "changelog": "https://akilent.com/docs/changelog",
-            "changelog_feed": "/api/v1/changelog",
-            "openapi": "/api/schema",
-        })
+        return Response(
+            {
+                "version": getattr(request, "version", "v1") or "v1",
+                "supported": list(
+                    dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS", ["v1"])
+                ),
+                "sunset": None,
+                "changelog": "https://akilent.com/docs/changelog",
+                "changelog_feed": "/api/v1/changelog",
+                "openapi": "/api/schema",
+            }
+        )
 
 
 class ChangelogView(BaseApiView):
@@ -745,7 +898,11 @@ class ChangelogView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="changelog", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Meta"])
+    @extend_schema(
+        operation_id="changelog",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Meta"],
+    )
     def get(self, request, *args, **kwargs):
         from apps.api.changelog import CHANGELOG
 

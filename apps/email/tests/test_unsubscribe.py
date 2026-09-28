@@ -1,4 +1,5 @@
 """List-Unsubscribe (RFC 8058) wiring for bulk sends."""
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -69,12 +70,18 @@ def test_send_path_attaches_headers_for_campaign(account, monkeypatch):
         account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
     )
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain,
-        from_email="news@acme.com", subject_override="Hi",
+        account=account,
+        domain=domain,
+        from_email="news@acme.com",
+        subject_override="Hi",
     )
     msg = EmailMessage.objects.create(
-        account=account, domain=domain, campaign=campaign,
-        from_email="news@acme.com", to_email="rcpt@x.com", subject="Hi",
+        account=account,
+        domain=domain,
+        campaign=campaign,
+        from_email="news@acme.com",
+        to_email="rcpt@x.com",
+        subject="Hi",
     )
 
     captured = {}
@@ -83,6 +90,7 @@ def test_send_path_attaches_headers_for_campaign(account, monkeypatch):
         def send(self, outbound):
             captured["headers"] = dict(outbound.headers)
             from apps.email.types import SendResult
+
             return SendResult(success=True, provider_message_id="mid-1")
 
     monkeypatch.setattr("apps.email.tasks.get_send_provider", lambda: _Provider())
@@ -100,13 +108,18 @@ def test_send_path_attaches_headers_for_campaign(account, monkeypatch):
 
     assert captured["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert "List-Unsubscribe" in captured["headers"]
-    assert UnsubscribeToken.objects.filter(email="rcpt@x.com", campaign=campaign).exists()
+    assert UnsubscribeToken.objects.filter(
+        email="rcpt@x.com", campaign=campaign
+    ).exists()
 
 
 @pytest.mark.django_db
 def test_send_path_no_headers_for_transactional(account, monkeypatch):
     msg = EmailMessage.objects.create(
-        account=account, from_email="app@acme.com", to_email="rcpt@x.com", subject="Hi",
+        account=account,
+        from_email="app@acme.com",
+        to_email="rcpt@x.com",
+        subject="Hi",
     )
     captured = {}
 
@@ -114,6 +127,7 @@ def test_send_path_no_headers_for_transactional(account, monkeypatch):
         def send(self, outbound):
             captured["headers"] = dict(outbound.headers)
             from apps.email.types import SendResult
+
             return SendResult(success=True, provider_message_id="mid-2")
 
     monkeypatch.setattr("apps.email.tasks.get_send_provider", lambda: _Provider())
@@ -143,6 +157,7 @@ def test_one_click_post_unsubscribes(client, account):
     UnsubscribeToken.objects.get(token=token, is_used=True)
 
     from apps.email.services.suppression import is_suppressed
+
     assert is_suppressed(account, "gone@x.com")
 
 
@@ -163,17 +178,25 @@ def test_context_mints_exactly_one_token_backing_header_and_link(account):
 
 
 @pytest.mark.django_db
-def test_campaign_body_carries_unsubscribe_link_and_postal_address(account, monkeypatch):
+def test_campaign_body_carries_unsubscribe_link_and_postal_address(
+    account, monkeypatch
+):
     domain = EmailDomain.objects.create(
         account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
     )
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain,
-        from_email="news@acme.com", subject_override="Hi",
+        account=account,
+        domain=domain,
+        from_email="news@acme.com",
+        subject_override="Hi",
     )
     msg = EmailMessage.objects.create(
-        account=account, domain=domain, campaign=campaign,
-        from_email="news@acme.com", to_email="rcpt@x.com", subject="Hi",
+        account=account,
+        domain=domain,
+        campaign=campaign,
+        from_email="news@acme.com",
+        to_email="rcpt@x.com",
+        subject="Hi",
     )
 
     captured = {}
@@ -184,6 +207,7 @@ def test_campaign_body_carries_unsubscribe_link_and_postal_address(account, monk
             captured["text"] = outbound.text_body
             captured["headers"] = dict(outbound.headers)
             from apps.email.types import SendResult
+
             return SendResult(success=True, provider_message_id="mid-3")
 
     monkeypatch.setattr("apps.email.tasks.get_send_provider", lambda: _Provider())
@@ -225,12 +249,18 @@ def test_unsubscribe_link_is_never_click_tracked(account, monkeypatch):
         account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
     )
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain,
-        from_email="news@acme.com", subject_override="Hi",
+        account=account,
+        domain=domain,
+        from_email="news@acme.com",
+        subject_override="Hi",
     )
     msg = EmailMessage.objects.create(
-        account=account, domain=domain, campaign=campaign,
-        from_email="news@acme.com", to_email="rcpt@x.com", subject="Hi",
+        account=account,
+        domain=domain,
+        campaign=campaign,
+        from_email="news@acme.com",
+        to_email="rcpt@x.com",
+        subject="Hi",
     )
 
     captured = {}
@@ -239,6 +269,7 @@ def test_unsubscribe_link_is_never_click_tracked(account, monkeypatch):
         def send(self, outbound):
             captured["html"] = outbound.html_body
             from apps.email.types import SendResult
+
             return SendResult(success=True, provider_message_id="mid-4")
 
     monkeypatch.setattr("apps.email.tasks.get_send_provider", lambda: _Provider())
@@ -257,7 +288,9 @@ def test_unsubscribe_link_is_never_click_tracked(account, monkeypatch):
             retries = 0
 
     _send_email_message(
-        _Task, msg, "text",
+        _Task,
+        msg,
+        "text",
         '<html><body><a href="https://acme.com/sale">Sale</a></body></html>',
     )
 
@@ -288,11 +321,13 @@ def test_unsubscribe_marks_the_contact_unsubscribed(client, account):
     assert contact.opt_out_at is not None
     assert "email_unsubscribe" in contact.opt_out_reason
 
-    assert ContactEvent.objects.filter(
-        contact=contact, type="email.unsubscribed"
-    ).count() == 1
+    assert (
+        ContactEvent.objects.filter(contact=contact, type="email.unsubscribed").count()
+        == 1
+    )
 
     from apps.email.services.suppression import is_suppressed
+
     assert is_suppressed(account, "gone@x.com")
 
 
@@ -304,6 +339,7 @@ def test_unsubscribe_survives_a_missing_contact(client, account):
     assert resp.status_code == 200
 
     from apps.email.services.suppression import is_suppressed
+
     assert is_suppressed(account, "nobody@x.com")
 
 
@@ -320,9 +356,10 @@ def test_reusing_a_spent_token_is_a_no_op(client, account):
     resp = client.get(f"/email/t/unsub/{token}/")
     assert resp.status_code == 200
     assert Contact.objects.get(pk=contact.pk).opt_out_at == first_opt_out
-    assert ContactEvent.objects.filter(
-        contact=contact, type="email.unsubscribed"
-    ).count() == 1
+    assert (
+        ContactEvent.objects.filter(contact=contact, type="email.unsubscribed").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db

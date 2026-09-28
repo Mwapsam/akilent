@@ -1,4 +1,5 @@
 """Celery tasks for the conversation spine."""
+
 import logging
 
 from celery import shared_task

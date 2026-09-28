@@ -9,6 +9,7 @@ tasks, services) needing to know which.
 Design principle, matching EmailProvider: methods return typed dataclasses
 from apps.email.types, never raw dicts or provider SDK objects.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

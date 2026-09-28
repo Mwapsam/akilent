@@ -4,6 +4,7 @@ Features come from the catalog (``entitled``) and limits from the limit catalog 
 ``reserve``); nothing here reads Plan columns. The email checks keep their original rule that the
 subscription must be active (trialing or paid).
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -78,13 +79,21 @@ class LimitChecker:
         from apps.billing import api as billing_api
 
         self._require_active_plan()
-        taken, blocked = billing_api.reserve_all_verbose(self.account, EMAIL_LIMITS, operation_id=operation_id)
+        taken, blocked = billing_api.reserve_all_verbose(
+            self.account, EMAIL_LIMITS, operation_id=operation_id
+        )
         if taken is None:
             # Named from the reservation attempt itself, not a re-query after the fact: usage can
             # move between the failed reserve and a later check, and would then name the wrong limit.
-            which = ("Daily email limit" if blocked == "emails_day" else "Monthly email limit")
+            which = (
+                "Daily email limit"
+                if blocked == "emails_day"
+                else "Monthly email limit"
+            )
             limit_value = billing_api.limit(self.account, blocked)
-            raise PlanLimitExceeded(f"{which} of {limit_value} reached. Please upgrade your plan.", "emails")
+            raise PlanLimitExceeded(
+                f"{which} of {limit_value} reached. Please upgrade your plan.", "emails"
+            )
 
     def settle_email(self, operation_id: str, *, ok: bool) -> None:
         """Commit (sent) or release (never delivered) an email's reservation."""

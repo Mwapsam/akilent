@@ -1,24 +1,28 @@
 """Numbered template versions + rollback."""
+
 from __future__ import annotations
 
 from django.db import transaction
 from django.db.models import Max
 
 
-def snapshot_version(template, *, created_by=None, label: str = "", make_active: bool = True):
+def snapshot_version(
+    template, *, created_by=None, label: str = "", make_active: bool = True
+):
     """Record the template's current content as the next numbered version."""
     from apps.email.models import EmailTemplateVersion
 
     with transaction.atomic():
         last = (
-            EmailTemplateVersion.objects.filter(template=template)
-            .aggregate(n=Max("number"))["n"]
+            EmailTemplateVersion.objects.filter(template=template).aggregate(
+                n=Max("number")
+            )["n"]
             or 0
         )
         if make_active:
-            EmailTemplateVersion.objects.filter(template=template, is_active=True).update(
-                is_active=False
-            )
+            EmailTemplateVersion.objects.filter(
+                template=template, is_active=True
+            ).update(is_active=False)
         return EmailTemplateVersion.objects.create(
             template=template,
             number=last + 1,
@@ -42,7 +46,9 @@ def activate_version(template, number: int):
         template.text_body = version.text_body
         template.html_body = version.html_body
         template.content_blocks = version.content_blocks
-        template.save(update_fields=["subject", "text_body", "html_body", "content_blocks"])
+        template.save(
+            update_fields=["subject", "text_body", "html_body", "content_blocks"]
+        )
         EmailTemplateVersion.objects.filter(template=template, is_active=True).update(
             is_active=False
         )

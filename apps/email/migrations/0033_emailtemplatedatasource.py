@@ -5,27 +5,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0032_emailmessage_attachments'),
+        ("email_service", "0032_emailmessage_attachments"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='EmailTemplateDataSource',
+            name="EmailTemplateDataSource",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.SlugField(max_length=60)),
-                ('url', models.URLField(max_length=1000)),
-                ('headers', models.JSONField(blank=True, default=dict)),
-                ('ttl_seconds', models.PositiveIntegerField(default=300)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='data_sources', to='email_service.emailtemplate')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("key", models.SlugField(max_length=60)),
+                ("url", models.URLField(max_length=1000)),
+                ("headers", models.JSONField(blank=True, default=dict)),
+                ("ttl_seconds", models.PositiveIntegerField(default=300)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "template",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="data_sources",
+                        to="email_service.emailtemplate",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['key'],
-                'constraints': [models.UniqueConstraint(fields=('template', 'key'), name='uniq_template_datasource_key')],
+                "ordering": ["key"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("template", "key"), name="uniq_template_datasource_key"
+                    )
+                ],
             },
         ),
     ]

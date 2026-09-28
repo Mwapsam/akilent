@@ -1,4 +1,5 @@
 """Tag actions for the shared Action Registry (workflows, API, and anything later)."""
+
 from __future__ import annotations
 
 from apps.core.actions import Action, ActionError, register

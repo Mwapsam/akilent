@@ -4,15 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('conversations', '0002_savedreply_followup'),
+        ("conversations", "0002_savedreply_followup"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='message',
-            name='direction',
-            field=models.CharField(choices=[('inbound', 'Inbound'), ('outbound', 'Outbound'), ('system', 'System')], max_length=10),
+            model_name="message",
+            name="direction",
+            field=models.CharField(
+                choices=[
+                    ("inbound", "Inbound"),
+                    ("outbound", "Outbound"),
+                    ("system", "System"),
+                ],
+                max_length=10,
+            ),
         ),
     ]

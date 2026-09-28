@@ -4,30 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0013_whatsappcampaign'),
+        ("whatsapp", "0013_whatsappcampaign"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='messagetemplate',
-            name='buttons',
+            model_name="messagetemplate",
+            name="buttons",
             field=models.JSONField(blank=True, default=list),
         ),
         migrations.AddField(
-            model_name='messagetemplate',
-            name='footer',
-            field=models.CharField(blank=True, default='', max_length=60),
+            model_name="messagetemplate",
+            name="footer",
+            field=models.CharField(blank=True, default="", max_length=60),
         ),
         migrations.AddField(
-            model_name='messagetemplate',
-            name='header',
-            field=models.CharField(blank=True, default='', max_length=60),
+            model_name="messagetemplate",
+            name="header",
+            field=models.CharField(blank=True, default="", max_length=60),
         ),
         migrations.AddField(
-            model_name='messagetemplate',
-            name='variable_examples',
+            model_name="messagetemplate",
+            name="variable_examples",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

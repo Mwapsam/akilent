@@ -10,7 +10,9 @@ class MessageTemplateAsset(models.Model):
     """
 
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="whatsapp_template_assets"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="whatsapp_template_assets",
     )
     file = models.FileField(upload_to="whatsapp_headers/%Y/%m/")
     content_type = models.CharField(max_length=100, blank=True, default="")
@@ -25,7 +27,6 @@ class MessageTemplateAsset(models.Model):
 
 
 class MessageTemplate(models.Model):
-
     class ApprovalStatus(models.TextChoices):
         DRAFT = "draft", "Draft (local only)"
         PENDING = "pending", "Pending Meta approval"
@@ -52,7 +53,9 @@ class MessageTemplate(models.Model):
 
     content = models.TextField()
     variables = models.JSONField(default=list)  # ["name", "company"]
-    variable_examples = models.JSONField(default=list, blank=True)  # example values, same order as `variables`
+    variable_examples = models.JSONField(
+        default=list, blank=True
+    )  # example values, same order as `variables`
 
     class HeaderFormat(models.TextChoices):
         TEXT = "text", "Text"
@@ -60,10 +63,18 @@ class MessageTemplate(models.Model):
         VIDEO = "video", "Video"
         DOCUMENT = "document", "Document"
 
-    header_format = models.CharField(max_length=10, choices=HeaderFormat.choices, default=HeaderFormat.TEXT)
-    header = models.CharField(max_length=60, blank=True, default="")  # header_format == TEXT only
+    header_format = models.CharField(
+        max_length=10, choices=HeaderFormat.choices, default=HeaderFormat.TEXT
+    )
+    header = models.CharField(
+        max_length=60, blank=True, default=""
+    )  # header_format == TEXT only
     header_media = models.ForeignKey(
-        MessageTemplateAsset, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+        MessageTemplateAsset,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
     )
     footer = models.CharField(max_length=60, blank=True, default="")
     buttons = models.JSONField(default=list, blank=True)  # Meta BUTTONS component shape

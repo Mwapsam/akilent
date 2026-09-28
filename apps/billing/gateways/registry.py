@@ -17,6 +17,9 @@ def get_gateway(code: str):
 def enabled_payment_methods():
     """PaymentMethod rows that are enabled and have a registered gateway."""
     return [
-        m for m in PaymentMethod.objects.filter(is_enabled=True).order_by("sort_order", "name")
+        m
+        for m in PaymentMethod.objects.filter(is_enabled=True).order_by(
+            "sort_order", "name"
+        )
         if m.code in _GATEWAYS
     ]

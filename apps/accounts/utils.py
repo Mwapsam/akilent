@@ -40,7 +40,9 @@ def _resolve_current_account(request):
 
     # A suspended business (Account.is_active=False) resolves to no workspace, so its pages,
     # sends and settings stop working; SuspendedAccountMiddleware tells its members why.
-    memberships = Membership.objects.filter(user=user, account__is_active=True).select_related("account")
+    memberships = Membership.objects.filter(
+        user=user, account__is_active=True
+    ).select_related("account")
 
     pinned = request.session.get(_SESSION_KEY)
     if pinned:
@@ -93,7 +95,10 @@ def viewing_as(request):
 def start_view_as(request, account) -> None:
     from django.utils import timezone
 
-    request.session[VIEW_AS_KEY] = {"account": account.pk, "started": timezone.now().isoformat()}
+    request.session[VIEW_AS_KEY] = {
+        "account": account.pk,
+        "started": timezone.now().isoformat(),
+    }
     setattr(request, _CACHE_ATTR, account)
 
 
@@ -111,7 +116,10 @@ def is_suspended_member(request) -> bool:
     if not user or not user.is_authenticated:
         return False
     memberships = Membership.objects.filter(user=user)
-    return memberships.exists() and not memberships.filter(account__is_active=True).exists()
+    return (
+        memberships.exists()
+        and not memberships.filter(account__is_active=True).exists()
+    )
 
 
 def user_accounts(user):
@@ -130,7 +138,9 @@ def is_ajax(request) -> bool:
     from apps.core.htmx import is_background
 
     # A boosted link or form (HX-Boosted) is a navigation, not a background request.
-    return request.headers.get("x-requested-with") == "XMLHttpRequest" or is_background(request)
+    return request.headers.get("x-requested-with") == "XMLHttpRequest" or is_background(
+        request
+    )
 
 
 def ajax_redirect(url: str):

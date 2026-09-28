@@ -9,6 +9,7 @@ Privacy: only what is needed. Phone numbers and email addresses inside message t
 internal notes and automated system lines are never included, and nothing from any other
 conversation or customer is sent.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,9 +62,20 @@ def mask(text: str) -> str:
     return _PHONE.sub("[phone]", _EMAIL.sub("[email]", text or ""))
 
 
-def build(*, business_name: str, business_notes: str, hours_text: str, templates: list[dict],
-          customer: dict, thread: list[dict], window_open: bool, memory=None, tools_text: str = "",
-          business_tags=(), structured_facts: dict | None = None) -> tuple[str, list[ChatMessage]]:
+def build(
+    *,
+    business_name: str,
+    business_notes: str,
+    hours_text: str,
+    templates: list[dict],
+    customer: dict,
+    thread: list[dict],
+    window_open: bool,
+    memory=None,
+    tools_text: str = "",
+    business_tags=(),
+    structured_facts: dict | None = None,
+) -> tuple[str, list[ChatMessage]]:
     """``(system, messages)`` ready for ``AIProvider.chat``.
 
     ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
@@ -71,16 +83,34 @@ def build(*, business_name: str, business_notes: str, hours_text: str, templates
     "blanks"}``. ``memory`` is ``{"summary", "facts"}`` for the part of the thread before ``thread``.
     ``tools_text`` describes the look-ups the model may ask for.
     """
-    lines = [SYSTEM_RULES, "", "## About the business", f"Name: {business_name or 'the business'}"]
+    lines = [
+        SYSTEM_RULES,
+        "",
+        "## About the business",
+        f"Name: {business_name or 'the business'}",
+    ]
     if hours_text:
         lines.append(f"Opening hours: {hours_text}")
-    lines.append(business_notes.strip() if business_notes.strip() else "(The owner hasn't added any facts yet.)")
-    structured = {k: v for k, v in (structured_facts or {}).items() if k != "notes" and v}
+    lines.append(
+        business_notes.strip()
+        if business_notes.strip()
+        else "(The owner hasn't added any facts yet.)"
+    )
+    structured = {
+        k: v for k, v in (structured_facts or {}).items() if k != "notes" and v
+    }
     if structured:
-        lines += ["", "## Facts (exact; quote prices and times only from here or the notes)",
-                  json.dumps(structured, ensure_ascii=False)]
+        lines += [
+            "",
+            "## Facts (exact; quote prices and times only from here or the notes)",
+            json.dumps(structured, ensure_ascii=False),
+        ]
 
-    lines += ["", "## About this customer", f"First name: {customer.get('first_name') or 'unknown'}"]
+    lines += [
+        "",
+        "## About this customer",
+        f"First name: {customer.get('first_name') or 'unknown'}",
+    ]
     if customer.get("tags"):
         lines.append("Tags: " + ", ".join(customer["tags"]))
     if customer.get("interested"):
@@ -95,7 +125,9 @@ def build(*, business_name: str, business_notes: str, hours_text: str, templates
     if templates:
         lines += ["", "## Approved templates"]
         for t in templates:
-            lines.append(f"- {t['name']} (blanks: {', '.join(t['blanks']) or 'none'}): {t['body'][:300]}")
+            lines.append(
+                f"- {t['name']} (blanks: {', '.join(t['blanks']) or 'none'}): {t['body'][:300]}"
+            )
     if business_tags:
         lines += ["", "## The business's tags", ", ".join(business_tags)]
     if tools_text:
@@ -111,5 +143,7 @@ def build(*, business_name: str, business_notes: str, hours_text: str, templates
         elif entry.get("direction") == "outbound":
             messages.append(ChatMessage("assistant", body))
     if not messages or messages[-1].role != "user":
-        messages.append(ChatMessage("user", "(Propose the best next message for the team to send.)"))
+        messages.append(
+            ChatMessage("user", "(Propose the best next message for the team to send.)")
+        )
     return "\n".join(lines), messages

@@ -9,6 +9,7 @@ words, so the keyword "hi" matches "Hi!" and "hi there" but not "this". A keywor
 several words ("opening hours"); it must appear as that whole phrase. Plurals and typos are
 not guessed: list "price" and "prices" if both should match.
 """
+
 from __future__ import annotations
 
 import re
@@ -51,7 +52,7 @@ def matches(match: dict | None, body: str) -> bool:
 def validate(match) -> list[str]:
     """Human-readable problems with a ``match`` rule (empty list = valid)."""
     if not isinstance(match, dict):
-        return ["match must be an object like {\"mode\": \"contains\", \"any\": [\"price\"]}"]
+        return ['match must be an object like {"mode": "contains", "any": ["price"]}']
     problems = []
     if match.get("mode", "contains") not in MODES:
         problems.append(f"match.mode must be one of {', '.join(MODES)}")
@@ -66,6 +67,8 @@ def validate(match) -> list[str]:
                 problems.append("every keyword must be some text")
                 break
             if len(word) > MAX_KEYWORD_LENGTH:
-                problems.append(f"a keyword can be at most {MAX_KEYWORD_LENGTH} characters")
+                problems.append(
+                    f"a keyword can be at most {MAX_KEYWORD_LENGTH} characters"
+                )
                 break
     return problems

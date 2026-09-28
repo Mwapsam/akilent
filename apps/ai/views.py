@@ -1,4 +1,5 @@
 """Settings, then AI: the owner's opt-in, the facts AI may use, and a connection test."""
+
 from __future__ import annotations
 
 from django.contrib import messages
@@ -32,12 +33,19 @@ def settings_ai(request):
         if request.POST.get("action") == "test":
             result = ai_api.test_connection()
             if result["ok"]:
-                messages.success(request, f"Connected to {result['model']} in {result['latency_ms']} ms.")
+                messages.success(
+                    request,
+                    f"Connected to {result['model']} in {result['latency_ms']} ms.",
+                )
             else:
-                messages.error(request, f"Couldn't reach the AI service: {result['error']}")
+                messages.error(
+                    request, f"Couldn't reach the AI service: {result['error']}"
+                )
             return redirect("settings-ai")
         saved = ai_api.save_settings(
-            account, request.user, enabled=request.POST.get("enabled") == "on",
+            account,
+            request.user,
+            enabled=request.POST.get("enabled") == "on",
             business_notes=request.POST.get("business_notes", ""),
             reply_mode=request.POST.get("reply_mode", "suggest"),
             auto_topics=request.POST.getlist("auto_topics"),
@@ -45,22 +53,40 @@ def settings_ai(request):
             auto_only_when_closed=request.POST.get("auto_only_when_closed") == "on",
         )
         if saved.reply_mode == "auto" and not saved.auto_topics:
-            messages.warning(request, "Saved. Tick at least one kind of question, or AI won't reply to anything on its own.")
+            messages.warning(
+                request,
+                "Saved. Tick at least one kind of question, or AI won't reply to anything on its own.",
+            )
         else:
             messages.success(request, "AI settings saved.")
         return redirect("settings-ai")
     ai = ai_api.settings_for(account)
     locked = autonomy.locked_topics(account)
-    return render(request, "accounts/settings_ai.html", {
-        "account": account, "active_tab": "ai", "can_edit": can_edit,
-        "site_configured": is_configured(), "ai": ai,
-        "max_notes": ai_api.MAX_NOTES, "off_reason": ai_api.unavailable_reason(account),
-        "topics": [{"key": k, "label": v, "on": k in (ai.auto_topics or []) and k not in locked,
-                    "locked": locked.get(k, "")} for k, v in autonomy.TOPICS.items()],
-        "confidence_choices": autonomy.CONFIDENCE_CHOICES,
-        "autonomy_site_on": autonomy_site_on(),
-        "auto_replies": ai_api.recent_auto_replies(account),
-    })
+    return render(
+        request,
+        "accounts/settings_ai.html",
+        {
+            "account": account,
+            "active_tab": "ai",
+            "can_edit": can_edit,
+            "site_configured": is_configured(),
+            "ai": ai,
+            "max_notes": ai_api.MAX_NOTES,
+            "off_reason": ai_api.unavailable_reason(account),
+            "topics": [
+                {
+                    "key": k,
+                    "label": v,
+                    "on": k in (ai.auto_topics or []) and k not in locked,
+                    "locked": locked.get(k, ""),
+                }
+                for k, v in autonomy.TOPICS.items()
+            ],
+            "confidence_choices": autonomy.CONFIDENCE_CHOICES,
+            "autonomy_site_on": autonomy_site_on(),
+            "auto_replies": ai_api.recent_auto_replies(account),
+        },
+    )
 
 
 @login_required
@@ -73,10 +99,16 @@ def settings_ai_autopilot(request):
         days = 7 if int(request.GET.get("days", 1)) == 7 else 1
     except ValueError:
         days = 1
-    return render(request, "accounts/settings_ai_autopilot.html", {
-        "account": account, "active_tab": "ai", "report": ai_api.autopilot_report(account, days=days),
-        "ai": ai_api.settings_for(account),
-    })
+    return render(
+        request,
+        "accounts/settings_ai_autopilot.html",
+        {
+            "account": account,
+            "active_tab": "ai",
+            "report": ai_api.autopilot_report(account, days=days),
+            "ai": ai_api.settings_for(account),
+        },
+    )
 
 
 @login_required
@@ -92,27 +124,48 @@ def draft_create(request):
     if kind == "automation":
         context["conversation"] = request.POST.get("conversation", "")
         if not prompt and not context["conversation"].strip():
-            return JsonResponse({"ok": False, "error": "Describe what you want, or paste a conversation."}, status=400)
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Describe what you want, or paste a conversation.",
+                },
+                status=400,
+            )
         prompt = prompt or "Turn this conversation into an automation."
     elif kind == "template":
         if not prompt:
-            return JsonResponse({"ok": False, "error": "Describe the message you need."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Describe the message you need."}, status=400
+            )
     elif kind == "template_edit":
-        context = {k: request.POST.get(k, "") for k in ("body", "instruction", "category", "language")}
+        context = {
+            k: request.POST.get(k, "")
+            for k in ("body", "instruction", "category", "language")
+        }
         if not context["body"].strip():
-            return JsonResponse({"ok": False, "error": "Write the message first."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Write the message first."}, status=400
+            )
         prompt = context["instruction"]
     elif kind == "email_template":
         if not prompt:
-            return JsonResponse({"ok": False, "error": "Describe the email you need."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Describe the email you need."}, status=400
+            )
     elif kind == "email_edit":
         context, error = _email_edit_context(request)
         if error:
             return JsonResponse({"ok": False, "error": error}, status=400)
         prompt = context["instruction"]
-    draft =ai_api.request_draft(account, request.user, kind, prompt, context)
+    draft = ai_api.request_draft(account, request.user, kind, prompt, context)
     if draft is None:
-        return JsonResponse({"ok": False, "error": "AI isn't switched on for your business (Settings, AI)."}, status=400)
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "AI isn't switched on for your business (Settings, AI).",
+            },
+            status=400,
+        )
     return JsonResponse({"ok": True, "draft": ai_api.draft_json(draft)})
 
 
@@ -134,7 +187,10 @@ def _email_edit_context(request) -> tuple[dict, str]:
         return {"instruction": instruction, "parts": parts}, ""
     if instruction != SUBJECTS:
         return {}, "Draft the email first."
-    context = {k: request.POST.get(k, "")[:20000] for k in ("subject", "text_body", "html_body")}
+    context = {
+        k: request.POST.get(k, "")[:20000]
+        for k in ("subject", "text_body", "html_body")
+    }
     if not (context["subject"].strip() or context["text_body"].strip()):
         return {}, "Write the email first."
     return {"instruction": instruction, **context}, ""

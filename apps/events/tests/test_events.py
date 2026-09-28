@@ -1,7 +1,4 @@
-from datetime import timezone as _tz
-
 import pytest
-from django.utils import timezone
 
 from apps.accounts.models import Account
 from apps.contacts.models import Contact, ContactEvent
@@ -17,8 +14,9 @@ def account(db):
 
 @pytest.mark.django_db
 def test_ingest_creates_contact_by_email_and_links(account):
-    ev = ingest_event(account, name="invoice.paid", customer="buyer@x.com",
-                      data={"amount": 2500})
+    ev = ingest_event(
+        account, name="invoice.paid", customer="buyer@x.com", data={"amount": 2500}
+    )
     assert ev.public_id.startswith("bev_")
     contact = Contact.objects.get(account=account, email="buyer@x.com")
     assert ev.contact_id == contact.id
@@ -37,7 +35,9 @@ def test_ingest_resolves_existing_contact_by_public_id(account):
 def test_ingest_publishes_domain_event(account):
     received = []
     dispatcher.subscribe(BusinessEventReceived, received.append)
-    ingest_event(account, name="signup.completed", customer="new@x.com", data={"plan": "pro"})
+    ingest_event(
+        account, name="signup.completed", customer="new@x.com", data={"plan": "pro"}
+    )
     assert len(received) == 1
     assert received[0].name == "signup.completed"
     assert received[0].data == {"plan": "pro"}
@@ -47,7 +47,10 @@ def test_ingest_publishes_domain_event(account):
 def test_ingest_without_customer_stores_unlinked_event(account):
     ev = ingest_event(account, name="system.maintenance")
     assert ev.contact_id is None
-    assert BusinessEvent.objects.filter(account=account, name="system.maintenance").count() == 1
+    assert (
+        BusinessEvent.objects.filter(account=account, name="system.maintenance").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db

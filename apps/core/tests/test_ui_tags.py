@@ -11,7 +11,9 @@ def render(src: str, ctx: dict | None = None) -> str:
 
 class ModalDropdownTests(SimpleTestCase):
     def test_modal_wraps_slot_and_wires_open_event(self):
-        out = render('{% modal "invite" title="Invite a teammate" %}<p id="x">hi</p>{% endmodal %}')
+        out = render(
+            '{% modal "invite" title="Invite a teammate" %}<p id="x">hi</p>{% endmodal %}'
+        )
         self.assertIn("Invite a teammate", out)
         self.assertIn('id="x"', out)
         self.assertIn("modal-open", out)
@@ -37,7 +39,9 @@ class FormFieldTests(SimpleTestCase):
 
     def test_render_field_picks_widget_class(self):
         f = self.DemoForm()
-        self.assertIn('class="input"', render("{% render_field form.name %}", {"form": f}))
+        self.assertIn(
+            'class="input"', render("{% render_field form.name %}", {"form": f})
+        )
         self.assertIn("select", render("{% render_field form.plan %}", {"form": f}))
         self.assertIn("textarea", render("{% render_field form.bio %}", {"form": f}))
 

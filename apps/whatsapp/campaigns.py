@@ -3,14 +3,15 @@ concept (R1.5c). See ``apps.whatsapp.models.campaign.WhatsAppCampaign`` for
 why this is intentionally MVP-sized rather than mirroring every
 ``apps.email`` bulk-campaign capability.
 """
+
 from __future__ import annotations
 
 import logging
 
-from celery import shared_task
 from django.db import transaction
 
 from apps.whatsapp.models import MessageTemplate, WhatsAppCampaign, WhatsAppContact
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +35,20 @@ def _resolve_campaign_variables(variables: list, mapping: dict, contact) -> dict
             continue
         source = mapping[var]
         if isinstance(source, str) and source.startswith("contact."):
-            params[var] = attrs.get(source[len("contact."):])
+            params[var] = attrs.get(source[len("contact.") :])
         else:
             params[var] = source
     return params
 
 
 def create_and_queue_campaign(
-    *, account, name: str, contact_list, template_id: int,
-    variable_mapping: dict | None = None, created_by=None,
+    *,
+    account,
+    name: str,
+    contact_list,
+    template_id: int,
+    variable_mapping: dict | None = None,
+    created_by=None,
 ) -> WhatsAppCampaign:
     """Create a ``WhatsAppCampaign`` and enqueue its send.
 
@@ -62,7 +68,9 @@ def create_and_queue_campaign(
         raise CampaignError("This customer list is empty.")
     from apps.billing import api as billing_api
 
-    if not billing_api.check_rule(account, "whatsapp_campaign_recipients", recipient_count):
+    if not billing_api.check_rule(
+        account, "whatsapp_campaign_recipients", recipient_count
+    ):
         cap = billing_api.limit(account, "whatsapp_campaign_recipients")
         raise CampaignError(
             f"This list has {recipient_count:,} customers, but your plan sends a WhatsApp campaign to "
@@ -70,9 +78,13 @@ def create_and_queue_campaign(
         )
 
     campaign = WhatsAppCampaign.objects.create(
-        account=account, name=name.strip() or template.name, contact_list=contact_list,
-        template=template, variable_mapping=variable_mapping or {},
-        recipient_count=recipient_count, status=WhatsAppCampaign.Status.QUEUED,
+        account=account,
+        name=name.strip() or template.name,
+        contact_list=contact_list,
+        template=template,
+        variable_mapping=variable_mapping or {},
+        recipient_count=recipient_count,
+        status=WhatsAppCampaign.Status.QUEUED,
         created_by=created_by,
     )
     transaction.on_commit(lambda: send_campaign.delay(campaign.id))
@@ -92,7 +104,9 @@ def send_campaign(campaign_id: int) -> None:
     from apps.automation.workflows import send_whatsapp_message
 
     try:
-        campaign = WhatsAppCampaign.objects.select_related("template", "contact_list").get(pk=campaign_id)
+        campaign = WhatsAppCampaign.objects.select_related(
+            "template", "contact_list"
+        ).get(pk=campaign_id)
     except WhatsAppCampaign.DoesNotExist:
         logger.warning("send_campaign: campaign %s no longer exists", campaign_id)
         return
@@ -101,8 +115,13 @@ def send_campaign(campaign_id: int) -> None:
     queued = skipped = 0
     contacts = campaign.contact_list.contacts.filter(account=campaign.account)
     for contact in contacts:
-        wa_contact = WhatsAppContact.objects.filter(account=campaign.account, contact=contact).first()
-        if wa_contact is None or wa_contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT:
+        wa_contact = WhatsAppContact.objects.filter(
+            account=campaign.account, contact=contact
+        ).first()
+        if (
+            wa_contact is None
+            or wa_contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT
+        ):
             # No WhatsApp identity to send to, or they've opted out — never overridden here.
             skipped += 1
             continue
@@ -111,13 +130,17 @@ def send_campaign(campaign_id: int) -> None:
         )
         try:
             send_whatsapp_message(
-                campaign.account, phone=wa_contact.phone_number,
-                template_id=campaign.template_id, params=params,
+                campaign.account,
+                phone=wa_contact.phone_number,
+                template_id=campaign.template_id,
+                params=params,
             )
             queued += 1
         except Exception:
             logger.exception(
-                "send_campaign: failed to queue campaign=%s contact=%s", campaign.pk, contact.pk
+                "send_campaign: failed to queue campaign=%s contact=%s",
+                campaign.pk,
+                contact.pk,
             )
             skipped += 1
 

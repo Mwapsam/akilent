@@ -9,7 +9,7 @@ pip install akilent
 ```python
 from akilent import Akilent
 
-client = Akilent(api_key="ak_live_...")           # or ak_test_... for the sandbox
+client = Akilent(api_key="ak_live_...")  # or ak_test_... for the sandbox
 
 msg = client.messages.send(
     from_="billing@acme.com",

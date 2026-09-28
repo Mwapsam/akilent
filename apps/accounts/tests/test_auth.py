@@ -37,7 +37,10 @@ def _payload(**overrides):
 def trial_plan(db):
     # Present so the auto_create_trial signal attaches a trial subscription.
     return Plan.objects.create(
-        slug=Plan.TRIAL, name="Trial", price_monthly=0, trial_days=14,
+        slug=Plan.TRIAL,
+        name="Trial",
+        price_monthly=0,
+        trial_days=14,
         service_type=Plan.SERVICE_BOTH,
     )
 
@@ -48,7 +51,9 @@ def email_plan(db):
     # billing — kept free so signup completes without a Stripe checkout
     # redirect. See test_signup_billing.py for paid-plan behavior.
     return Plan.objects.create(
-        slug=Plan.STARTER, name="Starter", price_monthly=0,
+        slug=Plan.STARTER,
+        name="Starter",
+        price_monthly=0,
         service_type=Plan.SERVICE_EMAIL,
     )
 
@@ -56,13 +61,17 @@ def email_plan(db):
 @pytest.fixture
 def whatsapp_plan(db):
     return Plan.objects.create(
-        slug=Plan.PROFESSIONAL, name="Professional", price_monthly=0,
+        slug=Plan.PROFESSIONAL,
+        name="Professional",
+        price_monthly=0,
         service_type=Plan.SERVICE_WHATSAPP,
     )
 
 
 @pytest.mark.django_db
-def test_signup_creates_active_account_and_sends_verification(client, trial_plan, email_plan):
+def test_signup_creates_active_account_and_sends_verification(
+    client, trial_plan, email_plan
+):
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302
     assert resp.url == "/email/domains/"  # email-only → straight to domain setup
@@ -92,13 +101,17 @@ def test_signup_creates_active_account_and_sends_verification(client, trial_plan
 
 
 @pytest.mark.django_db
-def test_signup_whatsapp_routes_to_meta_onboarding(client, settings, trial_plan, whatsapp_plan):
+def test_signup_whatsapp_routes_to_meta_onboarding(
+    client, settings, trial_plan, whatsapp_plan
+):
     settings.WHATSAPP_ENABLED = True
     resp = client.post(
         SIGNUP_URL,
         _payload(
-            email="wa@example.com", company_name="WA Co",
-            selected_services=Account.Services.WHATSAPP, plan=Plan.PROFESSIONAL,
+            email="wa@example.com",
+            company_name="WA Co",
+            selected_services=Account.Services.WHATSAPP,
+            plan=Plan.PROFESSIONAL,
         ),
     )
     assert resp.status_code == 302
@@ -108,7 +121,9 @@ def test_signup_whatsapp_routes_to_meta_onboarding(client, settings, trial_plan,
 
 
 @pytest.mark.django_db
-def test_signup_rejects_plan_service_mismatch(client, trial_plan, email_plan, whatsapp_plan):
+def test_signup_rejects_plan_service_mismatch(
+    client, trial_plan, email_plan, whatsapp_plan
+):
     resp = client.post(
         SIGNUP_URL,
         _payload(selected_services=Account.Services.WHATSAPP, plan=Plan.STARTER),
@@ -120,14 +135,18 @@ def test_signup_rejects_plan_service_mismatch(client, trial_plan, email_plan, wh
 
 @pytest.mark.django_db
 def test_active_user_can_log_in_with_email(client, trial_plan, email_plan):
-    client.post(SIGNUP_URL, _payload(email="active@example.com", company_name="Active Co"))
+    client.post(
+        SIGNUP_URL, _payload(email="active@example.com", company_name="Active Co")
+    )
     client.logout()
     assert client.login(username="active@example.com", password=PW) is True
 
 
 @pytest.mark.django_db
 def test_login_view_redirects_to_dashboard(client, trial_plan, email_plan):
-    client.post(SIGNUP_URL, _payload(email="viaform@example.com", company_name="Via Co"))
+    client.post(
+        SIGNUP_URL, _payload(email="viaform@example.com", company_name="Via Co")
+    )
     client.logout()
     resp = client.post(
         reverse("login"), {"username": "viaform@example.com", "password": PW}
@@ -138,7 +157,9 @@ def test_login_view_redirects_to_dashboard(client, trial_plan, email_plan):
 
 @pytest.mark.django_db
 def test_verify_email_marks_account_verified(client, trial_plan, email_plan):
-    client.post(SIGNUP_URL, _payload(email="confirm@example.com", company_name="Confirm Co"))
+    client.post(
+        SIGNUP_URL, _payload(email="confirm@example.com", company_name="Confirm Co")
+    )
     user = User.objects.get(email="confirm@example.com")
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = email_verification_token.make_token(user)
@@ -153,7 +174,9 @@ def test_verify_email_marks_account_verified(client, trial_plan, email_plan):
 @pytest.mark.django_db
 def test_verify_email_survives_a_re_login(client, trial_plan, email_plan):
     """The link must still validate after the owner signs in again."""
-    client.post(SIGNUP_URL, _payload(email="relog@example.com", company_name="Relog Co"))
+    client.post(
+        SIGNUP_URL, _payload(email="relog@example.com", company_name="Relog Co")
+    )
     user = User.objects.get(email="relog@example.com")
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = email_verification_token.make_token(user)
@@ -211,7 +234,9 @@ def test_signup_disabled_redirects_to_landing_pricing(client, trial_plan):
 
 @pytest.mark.django_db
 def test_resend_verification_for_signed_in_owner(client, trial_plan, email_plan):
-    client.post(SIGNUP_URL, _payload(email="resend@example.com", company_name="Resend Co"))
+    client.post(
+        SIGNUP_URL, _payload(email="resend@example.com", company_name="Resend Co")
+    )
     assert len(mail.outbox) == 1
 
     resp = client.post(reverse("resend-verification"))

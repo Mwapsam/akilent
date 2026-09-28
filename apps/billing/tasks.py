@@ -1,9 +1,10 @@
 import logging
 
-from celery import shared_task
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +62,28 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
     if percent >= 100:
         subject = f"You've reached your {lim.name.lower()} limit"
         if lim.over_limit == limit_catalog.HOLD:
-            what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
-                    "Anything more is held (not sent and not lost) until it resets or you upgrade.")
+            what = (
+                f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
+                "Anything more is held (not sent and not lost) until it resets or you upgrade."
+            )
         else:
-            what = (f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
-                    "This is a heads-up only — nothing is blocked or held; customers are never affected.")
+            what = (
+                f"{account.company_name} has used all {allowed:,} {lim.unit} its plan includes. "
+                "This is a heads-up only — nothing is blocked or held; customers are never affected."
+            )
     else:
         subject = f"You've used {percent}% of your {lim.name.lower()}"
         what = f"{account.company_name} has used {n:,} of {allowed:,} {lim.unit}."
-    body = (f"{what}\n\nIt resets on {resets:%d %B %Y}.\n\n"
-            f"See your usage or upgrade: {_absolute_url('/billing/plans/')}\n")
+    body = (
+        f"{what}\n\nIt resets on {resets:%d %B %Y}.\n\n"
+        f"See your usage or upgrade: {_absolute_url('/billing/plans/')}\n"
+    )
     try:
         send_system_email(owner.email, subject, text_body=body)
     except Exception:
-        logger.exception("send_limit_warning: couldn't email the owner of account %s", account_id)
+        logger.exception(
+            "send_limit_warning: couldn't email the owner of account %s", account_id
+        )
 
 
 @shared_task
@@ -90,9 +99,13 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
     from apps.billing.models import ManualPaymentRequest
 
     try:
-        req = ManualPaymentRequest.objects.select_related("account", "plan").get(pk=request_id)
+        req = ManualPaymentRequest.objects.select_related("account", "plan").get(
+            pk=request_id
+        )
     except ManualPaymentRequest.DoesNotExist:
-        logger.error("notify_admins_of_manual_payment: request %s not found", request_id)
+        logger.error(
+            "notify_admins_of_manual_payment: request %s not found", request_id
+        )
         return
 
     ctx = {
@@ -103,7 +116,9 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
     }
 
     admin_emails = list(
-        User.objects.filter(is_superuser=True, is_active=True).exclude(email="").values_list("email", flat=True)
+        User.objects.filter(is_superuser=True, is_active=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
     )
     if admin_emails:
         from apps.email.services.system_templates import render_system_email
@@ -115,9 +130,18 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
             fallback_body_template="billing/manual_payment_admin.txt",
         )
         try:
-            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, admin_emails, fail_silently=False)
+            send_mail(
+                subject,
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                admin_emails,
+                fail_silently=False,
+            )
         except Exception:
-            logger.exception("notify_admins_of_manual_payment: email failed for request=%s", request_id)
+            logger.exception(
+                "notify_admins_of_manual_payment: email failed for request=%s",
+                request_id,
+            )
     else:
         logger.warning("notify_admins_of_manual_payment: no admin emails to notify")
 
@@ -129,4 +153,7 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
             f"(ref: {req.reference or '—'})\n{ctx['review_url']}"
         )
     except Exception:
-        logger.exception("notify_admins_of_manual_payment: slack post failed for request=%s", request_id)
+        logger.exception(
+            "notify_admins_of_manual_payment: slack post failed for request=%s",
+            request_id,
+        )

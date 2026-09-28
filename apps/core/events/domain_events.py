@@ -12,6 +12,7 @@ never sees vendor-specific shapes.
 
 All domain events MUST be immutable (frozen dataclasses).
 """
+
 from dataclasses import dataclass
 from datetime import datetime
 

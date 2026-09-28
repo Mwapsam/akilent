@@ -11,13 +11,19 @@ class VerticalActivation(models.Model):
     second row here.
     """
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="vertical_activations")
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="vertical_activations",
+    )
     key = models.CharField(max_length=50)
     activated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["account", "key"], name="unique_vertical_activation_per_account"),
+            models.UniqueConstraint(
+                fields=["account", "key"], name="unique_vertical_activation_per_account"
+            ),
         ]
 
     def __str__(self):

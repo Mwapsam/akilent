@@ -13,23 +13,35 @@ Rules for keys:
 Access checks go through ``apps.billing.api`` (``entitled`` / ``usable`` / ``access``), never
 through this module or the models directly.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 # access_mode
-CORE = "core"   # every business has it; never in the plan matrix, can't be granted or removed
-PLAN = "plan"   # sold through PlanFeature; an operator can grant or remove it per business
+CORE = "core"  # every business has it; never in the plan matrix, can't be granted or removed
+PLAN = (
+    "plan"  # sold through PlanFeature; an operator can grant or remove it per business
+)
 
 # availability
-SELLABLE = "sellable"      # built and sold: in the plan matrix and on pricing
-NOT_SOLD = "not_sold"      # built but deliberately not sold yet: only an operator grant gives it
-INTERNAL = "internal"      # platform-only: never in the matrix, on pricing, or overridable
+SELLABLE = "sellable"  # built and sold: in the plan matrix and on pricing
+NOT_SOLD = (
+    "not_sold"  # built but deliberately not sold yet: only an operator grant gives it
+)
+INTERNAL = "internal"  # platform-only: never in the matrix, on pricing, or overridable
 DEPRECATED = "deprecated"  # retired: never entitled or shown; the key is never reused
 
 GROUPS = (
-    "Communication", "Customer management", "Automation", "AI", "Sales", "Commerce", "Email",
-    "Developer/API", "Support",
+    "Communication",
+    "Customer management",
+    "Automation",
+    "AI",
+    "Sales",
+    "Commerce",
+    "Email",
+    "Developer/API",
+    "Support",
 )
 
 
@@ -42,62 +54,165 @@ class Feature:
     access_mode: str = PLAN
     availability: str = SELLABLE
     optional: bool = False  # the owner can switch it off in Settings > Optional tools
-    nav_paths: tuple = ()   # sidebar links that show a lock when the business isn't entitled
+    nav_paths: tuple = ()  # sidebar links that show a lock when the business isn't entitled
 
 
 FEATURES: tuple[Feature, ...] = (
     # --- core: every plan ---
-    Feature("inbox", "Inbox", "Every customer conversation in one place.", "Communication", CORE),
-    Feature("whatsapp", "WhatsApp", "Connect your number, chat with customers and send approved "
-            "templates.", "Communication", CORE),
-    Feature("customers", "Customers", "One record per customer, built from every conversation.",
-            "Customer management", CORE),
-    Feature("follow_ups", "Follow-ups", "Never forget to get back to a customer.",
-            "Customer management", CORE),
-    Feature("message_history", "Message history", "See every message sent and received.",
-            "Customer management", CORE),
-    Feature("dashboard", "Dashboard", "How your business is doing at a glance.",
-            "Customer management", CORE),
+    Feature(
+        "inbox",
+        "Inbox",
+        "Every customer conversation in one place.",
+        "Communication",
+        CORE,
+    ),
+    Feature(
+        "whatsapp",
+        "WhatsApp",
+        "Connect your number, chat with customers and send approved templates.",
+        "Communication",
+        CORE,
+    ),
+    Feature(
+        "customers",
+        "Customers",
+        "One record per customer, built from every conversation.",
+        "Customer management",
+        CORE,
+    ),
+    Feature(
+        "follow_ups",
+        "Follow-ups",
+        "Never forget to get back to a customer.",
+        "Customer management",
+        CORE,
+    ),
+    Feature(
+        "message_history",
+        "Message history",
+        "See every message sent and received.",
+        "Customer management",
+        CORE,
+    ),
+    Feature(
+        "dashboard",
+        "Dashboard",
+        "How your business is doing at a glance.",
+        "Customer management",
+        CORE,
+    ),
     # --- sold through plans ---
-    Feature("whatsapp_campaigns", "WhatsApp campaigns",
-            "Send an approved WhatsApp message to a list of customers at once.", "Communication"),
-    Feature("verification_codes", "Verification codes",
-            "Send one-time login codes over WhatsApp from your own system.", "Developer/API"),
-    Feature("automations", "Automations",
-            "Reminders, follow-ups and replies that run on their own.", "Automation",
-            nav_paths=("/automations/", "/build/")),
-    Feature("ai_assistant", "AI assistant",
-            "Reply suggestions and drafts written from your business's own information.", "AI"),
-    Feature("sales", "Sales tracking", "See customers who are considering buying, and where each "
-            "one stands.", "Sales", optional=True, nav_paths=("/sales/",)),
-    Feature("orders", "Orders & payment links",
-            "Record what a customer bought and send them a payment link.", "Commerce",
-            optional=True, nav_paths=("/orders/",)),
-    Feature("email_sending", "Email sending", "Send email from your own domain, by API or SMTP.",
-            "Email"),
-    Feature("email_templates", "Email templates", "Reusable email designs, with AI help to write "
-            "them.", "Email"),
-    Feature("email_campaigns", "Email campaigns", "Send an email to a list of customers at once.",
-            "Email"),
-    Feature("email_tracking", "Open & click tracking",
-            "See who opened your emails and clicked your links.", "Email"),
-    Feature("insights", "Detailed insights", "Detailed reports on how your messages perform.",
-            "Email"),
-    Feature("webhooks", "Webhooks", "Get delivery, open and click events sent to your own system.",
-            "Developer/API"),
-    Feature("priority_support", "Priority support", "Faster answers from the Akilent team.",
-            "Support"),
+    Feature(
+        "whatsapp_campaigns",
+        "WhatsApp campaigns",
+        "Send an approved WhatsApp message to a list of customers at once.",
+        "Communication",
+    ),
+    Feature(
+        "verification_codes",
+        "Verification codes",
+        "Send one-time login codes over WhatsApp from your own system.",
+        "Developer/API",
+    ),
+    Feature(
+        "automations",
+        "Automations",
+        "Reminders, follow-ups and replies that run on their own.",
+        "Automation",
+        nav_paths=("/automations/", "/build/"),
+    ),
+    Feature(
+        "ai_assistant",
+        "AI assistant",
+        "Reply suggestions and drafts written from your business's own information.",
+        "AI",
+    ),
+    Feature(
+        "sales",
+        "Sales tracking",
+        "See customers who are considering buying, and where each one stands.",
+        "Sales",
+        optional=True,
+        nav_paths=("/sales/",),
+    ),
+    Feature(
+        "orders",
+        "Orders & payment links",
+        "Record what a customer bought and send them a payment link.",
+        "Commerce",
+        optional=True,
+        nav_paths=("/orders/",),
+    ),
+    Feature(
+        "email_sending",
+        "Email sending",
+        "Send email from your own domain, by API or SMTP.",
+        "Email",
+    ),
+    Feature(
+        "email_templates",
+        "Email templates",
+        "Reusable email designs, with AI help to write them.",
+        "Email",
+    ),
+    Feature(
+        "email_campaigns",
+        "Email campaigns",
+        "Send an email to a list of customers at once.",
+        "Email",
+    ),
+    Feature(
+        "email_tracking",
+        "Open & click tracking",
+        "See who opened your emails and clicked your links.",
+        "Email",
+    ),
+    Feature(
+        "insights",
+        "Detailed insights",
+        "Detailed reports on how your messages perform.",
+        "Email",
+    ),
+    Feature(
+        "webhooks",
+        "Webhooks",
+        "Get delivery, open and click events sent to your own system.",
+        "Developer/API",
+    ),
+    Feature(
+        "priority_support",
+        "Priority support",
+        "Faster answers from the Akilent team.",
+        "Support",
+    ),
 )
 
 BY_KEY: dict[str, Feature] = {f.key: f for f in FEATURES}
 
 # Every key ever issued. Append only: removing or renaming one fails the catalog test.
-ISSUED_KEYS = frozenset({
-    "inbox", "whatsapp", "customers", "follow_ups", "message_history", "dashboard",
-    "whatsapp_campaigns", "verification_codes", "automations", "ai_assistant", "sales", "orders",
-    "email_sending", "email_templates", "email_campaigns", "email_tracking", "insights",
-    "webhooks", "priority_support",
-})
+ISSUED_KEYS = frozenset(
+    {
+        "inbox",
+        "whatsapp",
+        "customers",
+        "follow_ups",
+        "message_history",
+        "dashboard",
+        "whatsapp_campaigns",
+        "verification_codes",
+        "automations",
+        "ai_assistant",
+        "sales",
+        "orders",
+        "email_sending",
+        "email_templates",
+        "email_campaigns",
+        "email_tracking",
+        "insights",
+        "webhooks",
+        "priority_support",
+    }
+)
 
 # The old Plan boolean columns and the feature each became. Only the billing shims and the data
 # migration read these names.
@@ -120,9 +235,16 @@ OWNER_SWITCH_MODULE = {"sales": "crm", "orders": "commerce"}
 # - a business with no subscription row at all (possible only when no plan existed at signup)
 #   keeps these; setting a plan replaces them with the plan's features;
 # - a newly created plan starts with these plus its old capability columns (signals.py).
-MODULE_FEATURES = frozenset({
-    "whatsapp_campaigns", "verification_codes", "automations", "ai_assistant", "sales", "orders",
-})
+MODULE_FEATURES = frozenset(
+    {
+        "whatsapp_campaigns",
+        "verification_codes",
+        "automations",
+        "ai_assistant",
+        "sales",
+        "orders",
+    }
+)
 
 
 def get(key: str) -> Feature:
@@ -131,7 +253,11 @@ def get(key: str) -> Feature:
 
 
 def core_keys() -> frozenset[str]:
-    return frozenset(f.key for f in FEATURES if f.access_mode == CORE and f.availability != DEPRECATED)
+    return frozenset(
+        f.key
+        for f in FEATURES
+        if f.access_mode == CORE and f.availability != DEPRECATED
+    )
 
 
 def matrix_features() -> list[Feature]:
@@ -153,5 +279,8 @@ def plan_assignable(key: str) -> bool:
 
 def grouped(features) -> list[tuple[str, list[Feature]]]:
     """``features`` in catalog group order, skipping empty groups."""
-    return [(g, [f for f in features if f.group == g]) for g in GROUPS
-            if any(f.group == g for f in features)]
+    return [
+        (g, [f for f in features if f.group == g])
+        for g in GROUPS
+        if any(f.group == g for f in features)
+    ]

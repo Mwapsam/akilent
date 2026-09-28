@@ -7,6 +7,7 @@ later Commerce) can register into the same registry without depending on
 ``apps.conversations``. Re-exported here (``Action``, ``ActionError``,
 ``run_action``, ...) so existing imports keep working.
 """
+
 from __future__ import annotations
 
 from apps.core.actions import (  # noqa: F401 — re-exported for existing imports
@@ -37,8 +38,17 @@ class SendWhatsAppAction(Action):
             "optional": ["params", "scheduled_at", "conversation"],
         }
 
-    def execute(self, context: dict, *, account, phone: str, template_id: int,
-                params: dict | None = None, scheduled_at=None, conversation=None) -> dict:
+    def execute(
+        self,
+        context: dict,
+        *,
+        account,
+        phone: str,
+        template_id: int,
+        params: dict | None = None,
+        scheduled_at=None,
+        conversation=None,
+    ) -> dict:
         from apps.automation.workflows import send_whatsapp_message
 
         wa_conversation = getattr(conversation, "whatsapp_conversation", None)
@@ -52,8 +62,11 @@ class SendWhatsAppAction(Action):
             raise ActionError("send_whatsapp requires a phone number")
         try:
             msg = send_whatsapp_message(
-                account, phone=phone, template_id=template_id,
-                params=params or {}, scheduled_at=scheduled_at,
+                account,
+                phone=phone,
+                template_id=template_id,
+                params=params or {},
+                scheduled_at=scheduled_at,
                 conversation=wa_conversation,
             )
         except ValueError as exc:
@@ -80,7 +93,14 @@ class ReplyAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation", "body"], "optional": ["idempotency_key"]}
 
-    def execute(self, context: dict, *, conversation, body: str, idempotency_key: str | None = None) -> dict:
+    def execute(
+        self,
+        context: dict,
+        *,
+        conversation,
+        body: str,
+        idempotency_key: str | None = None,
+    ) -> dict:
         if not body:
             raise ActionError("reply requires a body")
 
@@ -90,11 +110,15 @@ class ReplyAction(Action):
             wa_contact = conversation.whatsapp_conversation.contact
             # A caller that may retry (an automatic AI reply) passes a fixed key, so a retry
             # returns the first message instead of sending the customer a second one.
-            msg = whatsapp_api.send_message(conversation.account, wa_contact, body, idempotency_key=idempotency_key)
+            msg = whatsapp_api.send_message(
+                conversation.account, wa_contact, body, idempotency_key=idempotency_key
+            )
             conversation.whatsapp_conversation.register_outbound(msg.created_at)
             return {"outbound_message_id": msg.id}
 
-        raise ActionError(f"reply not yet implemented for channel {conversation.channel!r}")
+        raise ActionError(
+            f"reply not yet implemented for channel {conversation.channel!r}"
+        )
 
 
 class AssignConversationAction(Action):
@@ -114,12 +138,18 @@ class AssignConversationAction(Action):
     def execute(self, context: dict, *, conversation, user) -> dict:
         from apps.accounts.models import Membership
 
-        if user is not None and not Membership.objects.filter(
-            account_id=conversation.account_id, user=user
-        ).exists():
+        if (
+            user is not None
+            and not Membership.objects.filter(
+                account_id=conversation.account_id, user=user
+            ).exists()
+        ):
             raise ActionError("That person isn't on your team.")
         conversation.assign(user)
-        return {"conversation_id": conversation.id, "assigned_to_id": user.id if user else None}
+        return {
+            "conversation_id": conversation.id,
+            "assigned_to_id": user.id if user else None,
+        }
 
 
 class AutoAssignConversationAction(Action):
@@ -137,23 +167,38 @@ class AutoAssignConversationAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation"], "optional": ["email", "force"]}
 
-    def execute(self, context: dict, *, conversation, email: str = "", force: bool = False) -> dict:
+    def execute(
+        self, context: dict, *, conversation, email: str = "", force: bool = False
+    ) -> dict:
         from django.db.models import Count
 
         from apps.accounts.models import Membership
         from apps.conversations.models import Conversation
 
         if conversation.assigned_to_id and not force:
-            return {"conversation_id": conversation.id, "assigned_to_id": conversation.assigned_to_id,
-                    "changed": False}
+            return {
+                "conversation_id": conversation.id,
+                "assigned_to_id": conversation.assigned_to_id,
+                "changed": False,
+            }
 
         members = list(
-            Membership.objects.filter(account_id=conversation.account_id, user__is_active=True)
-            .select_related("user").order_by("id")
+            Membership.objects.filter(
+                account_id=conversation.account_id, user__is_active=True
+            )
+            .select_related("user")
+            .order_by("id")
         )
         email = (email or "").strip()
         if email:
-            chosen = next((m.user for m in members if (m.user.email or "").lower() == email.lower()), None)
+            chosen = next(
+                (
+                    m.user
+                    for m in members
+                    if (m.user.email or "").lower() == email.lower()
+                ),
+                None,
+            )
             if chosen is None:
                 raise ActionError(f"{email} isn't on your team.")
         else:
@@ -161,13 +206,22 @@ class AutoAssignConversationAction(Action):
                 raise ActionError("There is nobody on your team to assign this to.")
             load = dict(
                 Conversation.objects.filter(
-                    account_id=conversation.account_id, status=Conversation.Status.OPEN,
+                    account_id=conversation.account_id,
+                    status=Conversation.Status.OPEN,
                     assigned_to__isnull=False,
-                ).values_list("assigned_to").annotate(n=Count("id"))
+                )
+                .values_list("assigned_to")
+                .annotate(n=Count("id"))
             )
-            chosen = min((m.user for m in members), key=lambda u: (load.get(u.id, 0), u.id))
+            chosen = min(
+                (m.user for m in members), key=lambda u: (load.get(u.id, 0), u.id)
+            )
         conversation.assign(chosen)
-        return {"conversation_id": conversation.id, "assigned_to_id": chosen.id, "changed": True}
+        return {
+            "conversation_id": conversation.id,
+            "assigned_to_id": chosen.id,
+            "changed": True,
+        }
 
 
 class AddInternalNoteAction(Action):
@@ -185,8 +239,10 @@ class AddInternalNoteAction(Action):
         if not body:
             raise ActionError("add_internal_note requires a body")
         note = ConversationNote.objects.create(
-            account=conversation.account, conversation=conversation,
-            author=author, body=body,
+            account=conversation.account,
+            conversation=conversation,
+            author=author,
+            body=body,
         )
         return {"note_id": note.id}
 
@@ -198,9 +254,14 @@ class CreateFollowUpAction(Action):
     scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
-        return {"required": ["conversation", "due_at"], "optional": ["note", "created_by"]}
+        return {
+            "required": ["conversation", "due_at"],
+            "optional": ["note", "created_by"],
+        }
 
-    def execute(self, context: dict, *, conversation, due_at, note: str = "", created_by=None) -> dict:
+    def execute(
+        self, context: dict, *, conversation, due_at, note: str = "", created_by=None
+    ) -> dict:
         from apps.conversations.models import FollowUp
 
         followup = FollowUp.objects.create(
@@ -246,17 +307,40 @@ class LookupCustomerAction(Action):
         from apps.crm.models import Lead
 
         account, contact = conversation.account, conversation.contact
-        followup = FollowUp.objects.filter(account=account, contact=contact, done_at__isnull=True).order_by("due_at").first()
-        lead = Lead.objects.filter(account=account, contact=contact).order_by("-created_at").first()
-        orders = Order.objects.filter(account=account, contact=contact).order_by("-created_at")[:3]
+        followup = (
+            FollowUp.objects.filter(
+                account=account, contact=contact, done_at__isnull=True
+            )
+            .order_by("due_at")
+            .first()
+        )
+        lead = (
+            Lead.objects.filter(account=account, contact=contact)
+            .order_by("-created_at")
+            .first()
+        )
+        orders = Order.objects.filter(account=account, contact=contact).order_by(
+            "-created_at"
+        )[:3]
         return {
             "first_name": (contact.first_name or "").strip(),
-            "customer_since": contact.created_at.date().isoformat() if getattr(contact, "created_at", None) else "",
+            "customer_since": contact.created_at.date().isoformat()
+            if getattr(contact, "created_at", None)
+            else "",
             "interest": lead.get_status_display() if lead else "not tracked",
-            "open_followup": {"due": followup.due_at.date().isoformat(), "note": followup.note} if followup else None,
+            "open_followup": {
+                "due": followup.due_at.date().isoformat(),
+                "note": followup.note,
+            }
+            if followup
+            else None,
             "recent_orders": [
-                {"date": o.created_at.date().isoformat(), "status": o.get_status_display(),
-                 "total": str(o.total), "currency": o.currency}
+                {
+                    "date": o.created_at.date().isoformat(),
+                    "status": o.get_status_display(),
+                    "total": str(o.total),
+                    "currency": o.currency,
+                }
                 for o in orders
             ],
         }

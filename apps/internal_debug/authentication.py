@@ -7,6 +7,7 @@ constant-time compared, no per-account DB model. Combined with the
 INTERNAL_DEBUG_ENABLED kill-switch in urls.py, both must be true for any of
 these routes to be reachable at all.
 """
+
 from __future__ import annotations
 
 import hmac

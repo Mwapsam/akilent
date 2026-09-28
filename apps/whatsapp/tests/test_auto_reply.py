@@ -1,5 +1,6 @@
 """First inbound message on a new number: logged reliably, and answered so the
 user sees the connection work. Plus the staged feedback the setup step polls."""
+
 import json
 import time
 from datetime import timedelta
@@ -24,12 +25,30 @@ SEND_TEXT = "apps.whatsapp.verification.MetaCloudAPIProvider.send_text"
 
 
 def payload(text="Hi", wa_id=WA_ID, msg_id="wamid.1", pnid="PNID"):
-    return {"entry": [{"changes": [{"field": "messages", "value": {
-        "metadata": {"phone_number_id": pnid},
-        "contacts": [{"profile": {"name": "Tester"}}],
-        "messages": [{"from": wa_id, "id": msg_id, "timestamp": str(int(time.time())),
-                      "type": "text", "text": {"body": text}}],
-    }}]}]}
+    return {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "metadata": {"phone_number_id": pnid},
+                            "contacts": [{"profile": {"name": "Tester"}}],
+                            "messages": [
+                                {
+                                    "from": wa_id,
+                                    "id": msg_id,
+                                    "timestamp": str(int(time.time())),
+                                    "type": "text",
+                                    "text": {"body": text},
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        ]
+    }
 
 
 class Base(TestCase):
@@ -38,22 +57,34 @@ class Base(TestCase):
 
         self.account = Account.objects.create(company_name="Co", slug="co")
         plan = Plan.objects.first() or Plan.objects.create(
-            name="Test Plan", slug="test-plan", price_monthly=0, max_whatsapp_numbers=5)
-        Subscription.objects.create(account=self.account, plan=plan, status=Subscription.ACTIVE,
-                                    current_period_start=timezone.now())
+            name="Test Plan", slug="test-plan", price_monthly=0, max_whatsapp_numbers=5
+        )
+        Subscription.objects.create(
+            account=self.account,
+            plan=plan,
+            status=Subscription.ACTIVE,
+            current_period_start=timezone.now(),
+        )
         self.number = N.objects.create(
-            account=self.account, phone_number_id="PNID", access_token="tok", waba_id="W",
+            account=self.account,
+            phone_number_id="PNID",
+            access_token="tok",
+            waba_id="W",
             registration_status=R.REGISTERED,
         )
-        for target in ("apps.whatsapp.tasks.mark_read", "apps.whatsapp.tasks.dispatcher",
-                       "apps.whatsapp.tasks.drain_outbound_queue"):
+        for target in (
+            "apps.whatsapp.tasks.mark_read",
+            "apps.whatsapp.tasks.dispatcher",
+            "apps.whatsapp.tasks.drain_outbound_queue",
+        ):
             p = patch(target)
             p.start()
             self.addCleanup(p.stop)
 
     def receive(self, **kw):
         event = WebhookEventLog.objects.create(
-            source="whatsapp", event_type="message", payload=payload(**kw))
+            source="whatsapp", event_type="message", payload=payload(**kw)
+        )
         _handle_inbound_message(event)
         return event
 
@@ -64,7 +95,9 @@ class InboundContactTest(Base):
         with patch(SEND_TEXT, return_value=SendResult(message_id="m", success=True)):
             self.receive()
         self.assertEqual(MessageLog.objects.filter(direction="in").count(), 1)
-        self.assertEqual(WhatsAppContact.objects.filter(account=self.account).count(), 1)
+        self.assertEqual(
+            WhatsAppContact.objects.filter(account=self.account).count(), 1
+        )
 
     def test_new_contact_is_stored_normalized(self):
         with patch(SEND_TEXT, return_value=SendResult(message_id="m", success=True)):
@@ -74,7 +107,9 @@ class InboundContactTest(Base):
 
 class AutoReplyTest(Base):
     def _ok(self):
-        return patch(SEND_TEXT, return_value=SendResult(message_id="wamid.out", success=True))
+        return patch(
+            SEND_TEXT, return_value=SendResult(message_id="wamid.out", success=True)
+        )
 
     def test_first_message_gets_a_confirmation_and_records_the_test(self):
         with self._ok() as send:
@@ -91,9 +126,14 @@ class AutoReplyTest(Base):
         with self._ok():
             self.receive()
         out = MessageLog.objects.get(direction="out")
-        self.assertEqual((out.message_id, out.content, out.status), ("wamid.out", AUTO_REPLY_BODY, "sent"))
+        self.assertEqual(
+            (out.message_id, out.content, out.status),
+            ("wamid.out", AUTO_REPLY_BODY, "sent"),
+        )
         snapshot = get_conversation_state(Spine.objects.get())
-        self.assertFalse(snapshot.needs_attention)  # the setup message is not left "waiting"
+        self.assertFalse(
+            snapshot.needs_attention
+        )  # the setup message is not left "waiting"
 
     def test_only_replies_once_during_setup(self):
         with self._ok() as send:
@@ -114,7 +154,13 @@ class AutoReplyTest(Base):
         send.assert_not_called()
 
     def test_failed_reply_never_breaks_inbound_processing(self):
-        fail = SendResult(message_id="", success=False, error="x", error_code="131058", retryable=False)
+        fail = SendResult(
+            message_id="",
+            success=False,
+            error="x",
+            error_code="131058",
+            retryable=False,
+        )
         with patch(SEND_TEXT, return_value=fail):
             self.receive()
         self.assertEqual(MessageLog.objects.filter(direction="in").count(), 1)
@@ -142,7 +188,11 @@ class AutoReplyTest(Base):
 class InboundStageTest(Base):
     def _event(self, *, pnid="PNID", ago=timedelta(seconds=5), **fields):
         e = WebhookEventLog.objects.create(
-            source="whatsapp", event_type="message", payload=payload(pnid=pnid), **fields)
+            source="whatsapp",
+            event_type="message",
+            payload=payload(pnid=pnid),
+            **fields,
+        )
         WebhookEventLog.objects.filter(pk=e.pk).update(created_at=timezone.now() - ago)
         return e
 
@@ -170,7 +220,9 @@ class InboundStageTest(Base):
 
     def test_events_before_the_step_started_are_ignored(self):
         self._event(ago=timedelta(minutes=5))
-        self.assertEqual(inbound_stage(self.number, since=time.time())["stage"], "waiting")
+        self.assertEqual(
+            inbound_stage(self.number, since=time.time())["stage"], "waiting"
+        )
 
     def test_received_mentions_the_reply_when_sent(self):
         with patch(SEND_TEXT, return_value=SendResult(message_id="m", success=True)):
@@ -182,10 +234,16 @@ class InboundStageTest(Base):
 
 class StatusEndpointStageTest(Base):
     def test_contract(self):
-        request = RequestFactory().get(f"/whatsapp/numbers/{self.number.pk}/status/", {"since": "abc"})
+        request = RequestFactory().get(
+            f"/whatsapp/numbers/{self.number.pk}/status/", {"since": "abc"}
+        )
         request.user = User.objects.create_user("u", password="p")
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account):
-            body = json.loads(numbers_views.numbers_status(request, self.number.pk).content)
+        with patch(
+            "apps.whatsapp.numbers.get_current_account", return_value=self.account
+        ):
+            body = json.loads(
+                numbers_views.numbers_status(request, self.number.pk).content
+            )
         self.assertEqual(body["stage"], "waiting")
         self.assertFalse(body["message_received"])
         self.assertTrue(body["message"])

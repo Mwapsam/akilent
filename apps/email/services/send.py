@@ -5,6 +5,7 @@ rewritten to a Django redirect endpoint; an open-pixel is injected before
 </body>. Both resolve through EmailTrackingToken rows minted here and consumed
 by the tracking views (apps.email.views.tracking_open / tracking_click).
 """
+
 from __future__ import annotations
 
 import logging
@@ -92,9 +93,9 @@ def send_system_email(
     Raises on non-suppression errors (caller should log/retry).
     """
     from apps.email.providers import get_send_provider
-    from apps.email.types import OutboundEmail
     from apps.email.services.suppression import is_suppressed_globally
     from apps.email.services.validation import validate_recipient
+    from apps.email.types import OutboundEmail
 
     # Platform-wide check: only hard bounces and complaints block system mail.
     # A tenant's unsubscribe must never stop account-critical mail like
@@ -111,14 +112,20 @@ def send_system_email(
     from_email = settings.DEFAULT_FROM_EMAIL
 
     try:
-        result = get_send_provider().send(OutboundEmail(
-            from_email=from_email,
-            to_email=to_email,
-            subject=subject,
-            text_body=text_body,
-            html_body=html_body,
-        ))
-        logger.debug("Sent system email to %s via %s", to_email, get_send_provider().__class__.__name__)
+        get_send_provider().send(
+            OutboundEmail(
+                from_email=from_email,
+                to_email=to_email,
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+            )
+        )
+        logger.debug(
+            "Sent system email to %s via %s",
+            to_email,
+            get_send_provider().__class__.__name__,
+        )
     except Exception as exc:
         logger.error("Failed to send system email to %s: %s", to_email, exc)
         raise

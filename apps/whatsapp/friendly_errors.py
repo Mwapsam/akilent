@@ -16,15 +16,15 @@ raw code is always kept alongside it.
 # setup test-message flow. Keyed as strings, matching how they're stored.
 _GRAPH_ERRORS = {
     "131047": "This customer hasn't messaged in the last 24 hours, so WhatsApp only "
-               "allows an approved message template, not a plain reply.",
+    "allows an approved message template, not a plain reply.",
     "131037": "Meta isn't letting this WhatsApp number send yet: its display name needs Meta's "
-               "approval. For a number Meta gave you (+1 555…), that usually means your business "
-               "verification must finish first. Check Business Settings and WhatsApp Manager in Meta.",
+    "approval. For a number Meta gave you (+1 555…), that usually means your business "
+    "verification must finish first. Check Business Settings and WhatsApp Manager in Meta.",
     "131030": "This phone number can't receive messages from this WhatsApp account "
-               "yet (it may need to be added as an allowed recipient, or the "
-               "account has restrictions).",
+    "yet (it may need to be added as an allowed recipient, or the "
+    "account has restrictions).",
     "131026": "WhatsApp couldn't deliver this message. The number may not have "
-               "WhatsApp, or has blocked this business.",
+    "WhatsApp, or has blocked this business.",
     "131053": "The file or image couldn't be sent — WhatsApp rejected the media.",
     "190": "The WhatsApp connection needs to be reconnected.",
 }
@@ -32,12 +32,12 @@ _GRAPH_ERRORS = {
 # Our own policy codes, raised before a send is even attempted (SendNotAuthorized.code).
 _POLICY_ERRORS = {
     "PLAN_LIMIT": "Held, not sent: your plan's WhatsApp message limit for this month is used up. "
-                  "Nothing was lost. It resets on the 1st, or upgrade to send more.",
+    "Nothing was lost. It resets on the 1st, or upgrade to send more.",
     "UNCONFIRMED": "WhatsApp didn't confirm this message, so it may or may not have arrived. "
-                   "It won't be resent automatically, so it can't arrive twice.",
+    "It won't be resent automatically, so it can't arrive twice.",
     "OUTSIDE_WINDOW_NO_TEMPLATE": "This customer hasn't messaged in the last 24 hours, so "
-                                   "WhatsApp only allows an approved message template, not "
-                                   "a plain reply.",
+    "WhatsApp only allows an approved message template, not "
+    "a plain reply.",
     "TEMPLATE_NOT_APPROVED": "This message template hasn't been approved by Meta yet.",
     "MARKETING_REQUIRES_OPT_IN": "This customer hasn't opted in to marketing messages.",
     "CONTACT_OPTED_OUT": "This customer has opted out of WhatsApp messages (replied STOP).",
@@ -58,6 +58,8 @@ def friendly_send_error(error_code: str | None) -> str:
     if not code:
         return _DEFAULT
     # A policy code, or a Graph error code possibly followed by "/<subcode>".
-    return _POLICY_ERRORS.get(code) or _GRAPH_ERRORS.get(code.split("/")[0]) or (
-        f"{_DEFAULT} (error {code})"
+    return (
+        _POLICY_ERRORS.get(code)
+        or _GRAPH_ERRORS.get(code.split("/")[0])
+        or (f"{_DEFAULT} (error {code})")
     )

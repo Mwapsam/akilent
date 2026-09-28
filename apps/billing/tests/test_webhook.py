@@ -40,7 +40,11 @@ def test_webhook_rejects_bad_signature(client):
 
 @pytest.mark.django_db
 def test_charge_activates_subscription(client, account, plan, subscription):
-    verified = {"status": "successful", "amount": "19.00", "customer": {"email": "buyer@example.com"}}
+    verified = {
+        "status": "successful",
+        "amount": "19.00",
+        "customer": {"email": "buyer@example.com"},
+    }
     with patch("apps.billing.views.get_fw_client") as fw:
         fw.return_value.verify_transaction.return_value = verified
         resp = _post(client, _charge_payload(account))
@@ -52,7 +56,11 @@ def test_charge_activates_subscription(client, account, plan, subscription):
 
 @pytest.mark.django_db
 def test_charge_is_idempotent_on_replay(client, account, plan, subscription):
-    verified = {"status": "successful", "amount": "19.00", "customer": {"email": "buyer@example.com"}}
+    verified = {
+        "status": "successful",
+        "amount": "19.00",
+        "customer": {"email": "buyer@example.com"},
+    }
     with patch("apps.billing.views.get_fw_client") as fw:
         fw.return_value.verify_transaction.return_value = verified
         _post(client, _charge_payload(account))
@@ -67,13 +75,20 @@ def test_charge_is_idempotent_on_replay(client, account, plan, subscription):
     # The period was not extended a second time, and we only verified once.
     assert subscription.current_period_end == first_end
     assert fw.return_value.verify_transaction.call_count == 1
-    assert ProcessedWebhookEvent.objects.filter(event_key="charge.completed:555").count() == 1
+    assert (
+        ProcessedWebhookEvent.objects.filter(event_key="charge.completed:555").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
 def test_charge_rejected_when_amount_underpays(client, account, plan, subscription):
     # Flutterwave confirms only $5 was charged for a $19 plan — must not activate.
-    verified = {"status": "successful", "amount": "5.00", "customer": {"email": "buyer@example.com"}}
+    verified = {
+        "status": "successful",
+        "amount": "5.00",
+        "customer": {"email": "buyer@example.com"},
+    }
     with patch("apps.billing.views.get_fw_client") as fw:
         fw.return_value.verify_transaction.return_value = verified
         resp = _post(client, _charge_payload(account, amount="5.00"))

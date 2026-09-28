@@ -1,7 +1,8 @@
 """Typed errors mirroring the API's ``{"error": {...}}`` envelope."""
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 class AkilentError(Exception):
@@ -20,9 +21,9 @@ class APIStatusError(AkilentError):
         message: str,
         *,
         status_code: int,
-        code: Optional[str] = None,
-        request_id: Optional[str] = None,
-        docs_url: Optional[str] = None,
+        code: str | None = None,
+        request_id: str | None = None,
+        docs_url: str | None = None,
         body: Any = None,
     ) -> None:
         super().__init__(message)
@@ -34,7 +35,9 @@ class APIStatusError(AkilentError):
 
     def __str__(self) -> str:  # pragma: no cover - cosmetic
         base = super().__str__()
-        extra = f" (code={self.code}, request_id={self.request_id})" if self.code else ""
+        extra = (
+            f" (code={self.code}, request_id={self.request_id})" if self.code else ""
+        )
         return base + extra
 
 
@@ -57,7 +60,9 @@ class ConflictError(APIStatusError):
 class RateLimitError(APIStatusError):
     """429 — too many requests. Inspect ``retry_after``."""
 
-    def __init__(self, *args: Any, retry_after: Optional[int] = None, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, retry_after: int | None = None, **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.retry_after = retry_after
 

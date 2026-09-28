@@ -4,35 +4,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0028_alter_emailtemplateversion_options_and_more'),
+        ("email_service", "0028_alter_emailtemplateversion_options_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='webhookendpoint',
-            name='consecutive_failures',
+            model_name="webhookendpoint",
+            name="consecutive_failures",
             field=models.PositiveSmallIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='webhookendpoint',
-            name='disabled_at',
+            model_name="webhookendpoint",
+            name="disabled_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='webhookendpoint',
-            name='disabled_reason',
-            field=models.CharField(blank=True, default='', max_length=255),
+            model_name="webhookendpoint",
+            name="disabled_reason",
+            field=models.CharField(blank=True, default="", max_length=255),
         ),
         migrations.AddField(
-            model_name='webhookendpoint',
-            name='last_failure_at',
+            model_name="webhookendpoint",
+            name="last_failure_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='webhookendpoint',
-            name='last_success_at',
+            model_name="webhookendpoint",
+            name="last_success_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]

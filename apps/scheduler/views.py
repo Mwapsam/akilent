@@ -3,6 +3,7 @@
 The list view has moved to the Campaigns page's "Scheduled" status filter;
 this module now only redirects there and serves the cancel/reschedule API.
 """
+
 from __future__ import annotations
 
 import json
@@ -60,7 +61,9 @@ def scheduled_reschedule(request, public_id: str):
         return JsonResponse({"error": "invalid JSON"}, status=400)
     scheduled_at = parse_datetime(str(body.get("scheduled_at") or ""))
     if scheduled_at is None:
-        return JsonResponse({"error": "scheduled_at is required (ISO 8601)"}, status=400)
+        return JsonResponse(
+            {"error": "scheduled_at is required (ISO 8601)"}, status=400
+        )
     try:
         reschedule_job(job, scheduled_at=scheduled_at, tz=body.get("timezone") or "")
     except SchedulingError as exc:

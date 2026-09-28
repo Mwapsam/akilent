@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0004_emaildomain_verify_record_name_and_more'),
+        ("email_service", "0004_emaildomain_verify_record_name_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emaildomain',
-            name='dmarc_ok',
+            model_name="emaildomain",
+            name="dmarc_ok",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='emaildomain',
-            name='last_checked_at',
+            model_name="emaildomain",
+            name="last_checked_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]

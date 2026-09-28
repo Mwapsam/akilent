@@ -1,4 +1,5 @@
 """Management command to start the SMTP relay server."""
+
 import asyncio
 import base64
 import hashlib
@@ -44,8 +45,8 @@ class RelayHandler:
         if not session.authenticated:
             return "530 Authentication required"
 
-        from apps.email.models import SmtpCredential
         from apps.api.services import create_and_queue_message
+        from apps.email.models import SmtpCredential
 
         username = session.authenticated
         try:
@@ -142,7 +143,9 @@ class Command(BaseCommand):
                 )
                 password_hash = hashlib.sha256(password.encode()).hexdigest()
                 if password_hash == cred.secret_hash:
-                    logger.info(f"SMTP auth successful: {username} (account={cred.account_id})")
+                    logger.info(
+                        f"SMTP auth successful: {username} (account={cred.account_id})"
+                    )
                     return AuthResult(success=True, identity=username)
             except SmtpCredential.DoesNotExist:
                 logger.warning(f"SMTP auth failed: credential not found for {username}")
@@ -155,10 +158,13 @@ class Command(BaseCommand):
         require_tls = True
         try:
             from apps.core.models import MailProviderSettings
+
             settings_obj = MailProviderSettings.load()
             require_tls = settings_obj.smtp_require_tls
         except Exception as e:
-            logger.warning(f"Failed to load SMTP TLS setting; defaulting to required: {e}")
+            logger.warning(
+                f"Failed to load SMTP TLS setting; defaulting to required: {e}"
+            )
 
         # Create and run the controller
         controller = Controller(

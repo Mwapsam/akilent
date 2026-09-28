@@ -5,6 +5,7 @@ the ``akilent.metrics`` logger: ``metric name=<name> value=<n> tag=...``. They e
 we can tell whether the spine is trustworthy (projection created/duplicate/failed,
 status updates applied/failed, status lag) and are cheap to aggregate from logs.
 """
+
 import logging
 
 logger = logging.getLogger("akilent.metrics")

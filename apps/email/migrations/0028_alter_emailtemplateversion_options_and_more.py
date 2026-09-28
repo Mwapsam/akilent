@@ -10,20 +10,20 @@ def backfill_version_numbers(apps, schema_editor):
     Existing rows all carry the AddField default of 0, which violates the
     (template, number) unique constraint added next.
     """
-    Version = apps.get_model('email_service', 'EmailTemplateVersion')
+    Version = apps.get_model("email_service", "EmailTemplateVersion")
     template_ids = (
-        Version.objects.order_by('template_id')
-        .values_list('template_id', flat=True)
+        Version.objects.order_by("template_id")
+        .values_list("template_id", flat=True)
         .distinct()
     )
     for template_id in template_ids:
         rows = list(
-            Version.objects.filter(template_id=template_id).order_by('created_at', 'pk')
+            Version.objects.filter(template_id=template_id).order_by("created_at", "pk")
         )
         for idx, row in enumerate(rows, start=1):
             row.number = idx
             row.is_active = idx == len(rows)
-        Version.objects.bulk_update(rows, ['number', 'is_active'])
+        Version.objects.bulk_update(rows, ["number", "is_active"])
 
 
 def noop_reverse(apps, schema_editor):
@@ -31,35 +31,36 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0027_templatecomponent'),
+        ("email_service", "0027_templatecomponent"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='emailtemplateversion',
-            options={'ordering': ['-number', '-created_at']},
+            name="emailtemplateversion",
+            options={"ordering": ["-number", "-created_at"]},
         ),
         migrations.AddField(
-            model_name='emailtemplateversion',
-            name='is_active',
+            model_name="emailtemplateversion",
+            name="is_active",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='emailtemplateversion',
-            name='label',
-            field=models.CharField(blank=True, default='', max_length=120),
+            model_name="emailtemplateversion",
+            name="label",
+            field=models.CharField(blank=True, default="", max_length=120),
         ),
         migrations.AddField(
-            model_name='emailtemplateversion',
-            name='number',
+            model_name="emailtemplateversion",
+            name="number",
             field=models.PositiveIntegerField(default=0),
         ),
         migrations.RunPython(backfill_version_numbers, noop_reverse),
         migrations.AddConstraint(
-            model_name='emailtemplateversion',
-            constraint=models.UniqueConstraint(fields=('template', 'number'), name='uniq_template_version_number'),
+            model_name="emailtemplateversion",
+            constraint=models.UniqueConstraint(
+                fields=("template", "number"), name="uniq_template_version_number"
+            ),
         ),
     ]

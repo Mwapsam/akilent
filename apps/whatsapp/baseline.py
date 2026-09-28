@@ -21,6 +21,7 @@ Definitions (see ``baseline_schema.LIMITATIONS`` for what they do not capture):
 Every MessageLog query is filtered by ``account_id``. Cross-account totals are
 only ever the arithmetic sum of independently computed per-account results.
 """
+
 import math
 import statistics
 from collections import Counter, namedtuple
@@ -48,8 +49,12 @@ QUALIFYING_STATUSES = (
 )
 _CHUNK = 500
 
-Row = namedtuple("Row", "ts direction status message_type created_at keyword wa_contact_fk")
-Enquiry = namedtuple("Enquiry", "start contact_fk outcome reason response_seconds never_answered")
+Row = namedtuple(
+    "Row", "ts direction status message_type created_at keyword wa_contact_fk"
+)
+Enquiry = namedtuple(
+    "Enquiry", "start contact_fk outcome reason response_seconds never_answered"
+)
 
 
 def _is_consent_keyword(message_type, content) -> bool:
@@ -57,7 +62,8 @@ def _is_consent_keyword(message_type, content) -> bool:
         return False
     token = (content or "").strip().strip(".!?").upper()
     return bool(token) and (
-        token in settings.WHATSAPP_STOP_KEYWORDS or token in settings.WHATSAPP_START_KEYWORDS
+        token in settings.WHATSAPP_STOP_KEYWORDS
+        or token in settings.WHATSAPP_START_KEYWORDS
     )
 
 
@@ -67,15 +73,31 @@ def _load_rows(account, lower_bound):
     if lower_bound is not None:
         qs = qs.filter(timestamp__gte=lower_bound)
     qs = qs.order_by("contact_id", "timestamp", "id").values_list(
-        "contact_id", "direction", "timestamp", "status", "message_type",
-        "created_at", "content", "contact__contact_id",
+        "contact_id",
+        "direction",
+        "timestamp",
+        "status",
+        "message_type",
+        "created_at",
+        "content",
+        "contact__contact_id",
     )
     for contact_id, group in groupby(qs.iterator(), key=lambda r: r[0]):
-        yield contact_id, [
-            Row(ts, direction, status, mtype, created_at,
-                _is_consent_keyword(mtype, content), contact_fk)
-            for _cid, direction, ts, status, mtype, created_at, content, contact_fk in group
-        ]
+        yield (
+            contact_id,
+            [
+                Row(
+                    ts,
+                    direction,
+                    status,
+                    mtype,
+                    created_at,
+                    _is_consent_keyword(mtype, content),
+                    contact_fk,
+                )
+                for _cid, direction, ts, status, mtype, created_at, content, contact_fk in group
+            ],
+        )
 
 
 def _exchanges(rows, gap):
@@ -96,8 +118,12 @@ def _classify(exchange, contact_rows, as_of, grace, account_has_outbound):
     if not account_has_outbound:
         return "indeterminate", "no_outbound_logged_for_account", None, False
 
-    qualifying = [r for r in exchange
-                  if r.direction == MessageLog.Direction.OUTBOUND and r.status in QUALIFYING_STATUSES]
+    qualifying = [
+        r
+        for r in exchange
+        if r.direction == MessageLog.Direction.OUTBOUND
+        and r.status in QUALIFYING_STATUSES
+    ]
     if qualifying:
         reply = qualifying[0]  # rows are time-ordered
         if reply.created_at < first.created_at:
@@ -107,12 +133,18 @@ def _classify(exchange, contact_rows, as_of, grace, account_has_outbound):
         return "answered", None, (reply.ts - first.ts).total_seconds(), False
 
     if any(r.direction == MessageLog.Direction.OUTBOUND for r in exchange):
-        return "indeterminate", "outbound_not_delivered", None, False  # queued/failed only
+        return (
+            "indeterminate",
+            "outbound_not_delivered",
+            None,
+            False,
+        )  # queued/failed only
     if as_of - first.ts < grace:
         return "indeterminate", "within_grace_period", None, False
 
     never = not any(
-        r.direction == MessageLog.Direction.OUTBOUND and r.status in QUALIFYING_STATUSES
+        r.direction == MessageLog.Direction.OUTBOUND
+        and r.status in QUALIFYING_STATUSES
         and r.ts >= first.ts
         for r in contact_rows
     )
@@ -148,12 +180,14 @@ def _cohort_counts(account, enquiries, until):
         ids = sorted(linked)
         for i in range(0, len(ids), _CHUNK):
             for contact_id, created_at in model.objects.filter(
-                account_id=account.id, contact_id__in=ids[i:i + _CHUNK]
+                account_id=account.id, contact_id__in=ids[i : i + _CHUNK]
             ).values_list("contact_id", "created_at"):
                 created.setdefault(contact_id, []).append(created_at)
         counts[key] = sum(
-            1 for e in enquiries
-            if e.contact_fk and any(
+            1
+            for e in enquiries
+            if e.contact_fk
+            and any(
                 c >= e.start and (until is None or c < until)
                 for c in created.get(e.contact_fk, ())
             )
@@ -194,16 +228,26 @@ def measure_account(account, gap_hours_list, grace_hours, since, until, as_of):
     grace = timedelta(hours=grace_hours)
 
     by_contact = list(_load_rows(account, lower_bound))
-    window_rows = [r for _cid, rows in by_contact for r in rows if _in_window(r.ts, since, until)]
+    window_rows = [
+        r for _cid, rows in by_contact for r in rows if _in_window(r.ts, since, until)
+    ]
     quality = {
-        "inbound_rows": sum(r.direction == MessageLog.Direction.INBOUND for r in window_rows),
-        "outbound_rows": sum(r.direction == MessageLog.Direction.OUTBOUND for r in window_rows),
+        "inbound_rows": sum(
+            r.direction == MessageLog.Direction.INBOUND for r in window_rows
+        ),
+        "outbound_rows": sum(
+            r.direction == MessageLog.Direction.OUTBOUND for r in window_rows
+        ),
         "outbound_failed": sum(
-            r.direction == MessageLog.Direction.OUTBOUND and r.status == MessageLog.Status.FAILED
-            for r in window_rows),
+            r.direction == MessageLog.Direction.OUTBOUND
+            and r.status == MessageLog.Status.FAILED
+            for r in window_rows
+        ),
         "outbound_template": sum(
             r.direction == MessageLog.Direction.OUTBOUND
-            and r.message_type == MessageLog.MessageType.TEMPLATE for r in window_rows),
+            and r.message_type == MessageLog.MessageType.TEMPLATE
+            for r in window_rows
+        ),
     }
     account_has_outbound = quality["outbound_rows"] > 0
 
@@ -213,13 +257,28 @@ def measure_account(account, gap_hours_list, grace_hours, since, until, as_of):
         for _cid, rows in by_contact:
             for exchange in _exchanges(rows, gap):
                 first = exchange[0]
-                if (first.direction != MessageLog.Direction.INBOUND or first.keyword
-                        or not _in_window(first.ts, since, until)):
+                if (
+                    first.direction != MessageLog.Direction.INBOUND
+                    or first.keyword
+                    or not _in_window(first.ts, since, until)
+                ):
                     continue
                 outcome, reason, seconds, never = _classify(
-                    exchange, rows, as_of, grace, account_has_outbound)
-                enquiries.append(Enquiry(first.ts, first.wa_contact_fk, outcome, reason, seconds, never))
-        results.append(_result(gap_hours, enquiries, _cohort_counts(account, enquiries, until), dict(quality)))
+                    exchange, rows, as_of, grace, account_has_outbound
+                )
+                enquiries.append(
+                    Enquiry(
+                        first.ts, first.wa_contact_fk, outcome, reason, seconds, never
+                    )
+                )
+        results.append(
+            _result(
+                gap_hours,
+                enquiries,
+                _cohort_counts(account, enquiries, until),
+                dict(quality),
+            )
+        )
     return results
 
 
@@ -234,37 +293,71 @@ def sum_results(per_account_results):
         reasons = Counter()
         for r in items:
             reasons.update(r["enquiries"]["indeterminate_reasons"])
-        totals.append({
-            "enquiry_gap_hours": gap_hours,
-            "enquiries": {
-                **{k: sum(r["enquiries"][k] for r in items)
-                   for k in ("inbound", "answered", "unanswered", "never_answered", "indeterminate")},
-                "indeterminate_reasons": dict(sorted(reasons.items())),
-            },
-            "response_time": {
-                **{name: sum(r["response_time"][name] for r in items) for name in BUCKET_NAMES},
-                "median_seconds": None,  # not derivable from per-account aggregates
-                "p90_seconds": None,
-            },
-            "conversion_cohort": {
-                k: sum(r["conversion_cohort"][k] for r in items)
-                for k in ("enquiries_with_lead", "enquiries_with_deal", "enquiries_with_order")
-            },
-            "data_quality": {
-                k: sum(r["data_quality"][k] for r in items)
-                for k in ("inbound_rows", "outbound_rows", "outbound_failed", "outbound_template")
-            },
-        })
+        totals.append(
+            {
+                "enquiry_gap_hours": gap_hours,
+                "enquiries": {
+                    **{
+                        k: sum(r["enquiries"][k] for r in items)
+                        for k in (
+                            "inbound",
+                            "answered",
+                            "unanswered",
+                            "never_answered",
+                            "indeterminate",
+                        )
+                    },
+                    "indeterminate_reasons": dict(sorted(reasons.items())),
+                },
+                "response_time": {
+                    **{
+                        name: sum(r["response_time"][name] for r in items)
+                        for name in BUCKET_NAMES
+                    },
+                    "median_seconds": None,  # not derivable from per-account aggregates
+                    "p90_seconds": None,
+                },
+                "conversion_cohort": {
+                    k: sum(r["conversion_cohort"][k] for r in items)
+                    for k in (
+                        "enquiries_with_lead",
+                        "enquiries_with_deal",
+                        "enquiries_with_order",
+                    )
+                },
+                "data_quality": {
+                    k: sum(r["data_quality"][k] for r in items)
+                    for k in (
+                        "inbound_rows",
+                        "outbound_rows",
+                        "outbound_failed",
+                        "outbound_template",
+                    )
+                },
+            }
+        )
     return totals
 
 
-def build_snapshot(accounts, gap_hours_list, grace_hours, since, until, since_arg, until_arg,
-                   as_of, git_commit, include_total=False):
+def build_snapshot(
+    accounts,
+    gap_hours_list,
+    grace_hours,
+    since,
+    until,
+    since_arg,
+    until_arg,
+    as_of,
+    git_commit,
+    include_total=False,
+):
     """Measure each account independently and assemble the v1.0 snapshot."""
     entries = [
         {
             "account": {"id": account.id, "slug": account.slug},
-            "results": measure_account(account, gap_hours_list, grace_hours, since, until, as_of),
+            "results": measure_account(
+                account, gap_hours_list, grace_hours, since, until, as_of
+            ),
         }
         for account in accounts
     ]
@@ -293,7 +386,12 @@ def _fmt_seconds(value):
 
 
 def _render_result(r):
-    e, rt, c, d = r["enquiries"], r["response_time"], r["conversion_cohort"], r["data_quality"]
+    e, rt, c, d = (
+        r["enquiries"],
+        r["response_time"],
+        r["conversion_cohort"],
+        r["data_quality"],
+    )
     ok = e["answered"] + e["unanswered"] + e["indeterminate"] == e["inbound"]
     lines = [
         f"  Enquiry gap {r['enquiry_gap_hours']}h",
@@ -323,20 +421,31 @@ def render_report(snapshot) -> str:
         f"  grace {m['grace_hours']}h  timezone {m['timezone']}  business-hours adjustment: {m['business_hours_adjustment']}",
         "",
     ]
-    sections = [(f"Account {e['account']['slug']} (id {e['account']['id']})", e["results"])
-                for e in snapshot["accounts"]]
+    sections = [
+        (f"Account {e['account']['slug']} (id {e['account']['id']})", e["results"])
+        for e in snapshot["accounts"]
+    ]
     if "total" in snapshot:
-        sections.append(("TOTAL (arithmetic sum of the accounts above)", snapshot["total"]["results"]))
+        sections.append(
+            (
+                "TOTAL (arithmetic sum of the accounts above)",
+                snapshot["total"]["results"],
+            )
+        )
     for title, results in sections:
         lines.append(title)
         for r in results:
             lines += _render_result(r)
         if len(results) > 1:
-            lines.append("  Sensitivity (enquiries / answered / unanswered / indeterminate):")
+            lines.append(
+                "  Sensitivity (enquiries / answered / unanswered / indeterminate):"
+            )
             for r in results:
                 e = r["enquiries"]
-                lines.append(f"    gap {r['enquiry_gap_hours']:>3}h: {e['inbound']} / {e['answered']}"
-                             f" / {e['unanswered']} / {e['indeterminate']}")
+                lines.append(
+                    f"    gap {r['enquiry_gap_hours']:>3}h: {e['inbound']} / {e['answered']}"
+                    f" / {e['unanswered']} / {e['indeterminate']}"
+                )
         lines.append("")
     lines.append("Limitations")
     lines += [f"  - {text}" for text in snapshot["limitations"]]

@@ -28,9 +28,13 @@ def contact(logged_in):
 @pytest.fixture
 def order(logged_in, contact):
     _, account, _ = logged_in
-    return create_order(account, contact, items=[
-        {"name": "Chicken Burger", "unit_price": Decimal("75.00"), "quantity": 2},
-    ])
+    return create_order(
+        account,
+        contact,
+        items=[
+            {"name": "Chicken Burger", "unit_price": Decimal("75.00"), "quantity": 2},
+        ],
+    )
 
 
 @pytest.mark.django_db
@@ -46,9 +50,13 @@ def test_order_detail_scoped_to_account(logged_in):
     client, _, _ = logged_in
     other = Account.objects.create(company_name="Other Co")
     other_contact = Contact.objects.create(account=other, phone="+260970000000")
-    other_order = create_order(other, other_contact, items=[
-        {"name": "X", "unit_price": Decimal("1.00"), "quantity": 1},
-    ])
+    other_order = create_order(
+        other,
+        other_contact,
+        items=[
+            {"name": "X", "unit_price": Decimal("1.00"), "quantity": 1},
+        ],
+    )
     resp = client.get(f"/orders/{other_order.public_id}/")
     assert resp.status_code == 404
 
@@ -56,10 +64,16 @@ def test_order_detail_scoped_to_account(logged_in):
 @pytest.mark.django_db
 def test_create_order_via_orders_page(logged_in, contact):
     client, account, _ = logged_in
-    resp = client.post("/orders/create/", {
-        "contact": contact.phone, "name": "Website package",
-        "unit_price": "500", "quantity": "1", "currency": "USD",
-    })
+    resp = client.post(
+        "/orders/create/",
+        {
+            "contact": contact.phone,
+            "name": "Website package",
+            "unit_price": "500",
+            "quantity": "1",
+            "currency": "USD",
+        },
+    )
     assert resp.status_code == 302
     order = Order.objects.get(account=account, contact=contact)
     assert order.total == Decimal("500.00")
@@ -84,7 +98,12 @@ def test_create_order_invalid_price_shows_error(logged_in, contact):
     client, account, _ = logged_in
     resp = client.post(
         "/orders/create/",
-        {"contact": contact.phone, "name": "X", "unit_price": "not-a-number", "quantity": "1"},
+        {
+            "contact": contact.phone,
+            "name": "X",
+            "unit_price": "not-a-number",
+            "quantity": "1",
+        },
         follow=True,
     )
     assert resp.status_code == 200

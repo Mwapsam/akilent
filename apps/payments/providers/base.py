@@ -11,11 +11,11 @@ service layer.
 PHASE 3 STUB: This file defines the interface but has no concrete implementations yet.
 Payment execution will be added in a later phase once transaction module needs it.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -31,7 +31,7 @@ class ChargeResult:
     amount_cents: int
     """Amount charged in cents."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if success=False."""
 
     metadata: dict = None
@@ -55,7 +55,7 @@ class RefundResult:
     amount_cents: int
     """Amount refunded in cents."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if success=False."""
 
 
@@ -69,7 +69,7 @@ class TransactionStatusResult:
     amount_cents: int
     """Original transaction amount in cents."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if status could not be determined."""
 
 

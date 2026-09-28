@@ -5,26 +5,49 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0006_business_hours'),
+        ("accounts", "0006_business_hours"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='BusinessProfile',
+            name="BusinessProfile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('what_you_sell', models.CharField(blank=True, default='', max_length=300)),
-                ('location', models.CharField(blank=True, default='', max_length=300)),
-                ('delivers', models.BooleanField(blank=True, null=True)),
-                ('delivery_notes', models.CharField(blank=True, default='', max_length=300)),
-                ('payment_methods', models.JSONField(blank=True, default=list)),
-                ('payment_other', models.CharField(blank=True, default='', max_length=120)),
-                ('website', models.URLField(blank=True, default='', max_length=300)),
-                ('completed_at', models.DateTimeField(blank=True, null=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='business_profile', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "what_you_sell",
+                    models.CharField(blank=True, default="", max_length=300),
+                ),
+                ("location", models.CharField(blank=True, default="", max_length=300)),
+                ("delivers", models.BooleanField(blank=True, null=True)),
+                (
+                    "delivery_notes",
+                    models.CharField(blank=True, default="", max_length=300),
+                ),
+                ("payment_methods", models.JSONField(blank=True, default=list)),
+                (
+                    "payment_other",
+                    models.CharField(blank=True, default="", max_length=120),
+                ),
+                ("website", models.URLField(blank=True, default="", max_length=300)),
+                ("completed_at", models.DateTimeField(blank=True, null=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="business_profile",
+                        to="accounts.account",
+                    ),
+                ),
             ],
         ),
     ]

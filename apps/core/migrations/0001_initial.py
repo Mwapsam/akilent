@@ -5,31 +5,53 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('billing', '0003_alter_plan_slug'),
+        ("billing", "0003_alter_plan_slug"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SiteSettings',
+            name="SiteSettings",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('app_name', models.CharField(default='Automator', max_length=100)),
-                ('logo', models.ImageField(blank=True, null=True, upload_to='branding/')),
-                ('support_email', models.EmailField(blank=True, default='', max_length=254)),
-                ('whatsapp_enabled', models.BooleanField(default=True)),
-                ('bitrix_enabled', models.BooleanField(default=True)),
-                ('signups_enabled', models.BooleanField(default=True)),
-                ('default_trial_days', models.PositiveIntegerField(default=14)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('default_plan', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='billing.plan')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("app_name", models.CharField(default="Automator", max_length=100)),
+                (
+                    "logo",
+                    models.ImageField(blank=True, null=True, upload_to="branding/"),
+                ),
+                (
+                    "support_email",
+                    models.EmailField(blank=True, default="", max_length=254),
+                ),
+                ("whatsapp_enabled", models.BooleanField(default=True)),
+                ("bitrix_enabled", models.BooleanField(default=True)),
+                ("signups_enabled", models.BooleanField(default=True)),
+                ("default_trial_days", models.PositiveIntegerField(default=14)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "default_plan",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to="billing.plan",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Site settings',
-                'verbose_name_plural': 'Site settings',
+                "verbose_name": "Site settings",
+                "verbose_name_plural": "Site settings",
             },
         ),
     ]

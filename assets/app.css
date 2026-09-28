@@ -575,6 +575,27 @@
   /* Square 44px icon buttons on a phone; icon + label from sm up. */
   .inbox-header-link { @apply w-11 h-11 !p-0 justify-center gap-1.5 sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
 
+  /* Two-pane at lg: list + the conversation opened from it, side by side, so switching
+     conversations never re-loads the shell or loses the list. Below lg there's only room
+     for one at a time — .has-conversation (set server-side, when a conversation is loaded)
+     is what decides which one shows; a bare /inbox/ visit has neither, so the list wins. */
+  .inbox-list-col { display: block; }
+  .inbox-pane-col { display: none; }
+  .inbox-split.has-conversation .inbox-list-col { display: none; }
+  .inbox-split.has-conversation .inbox-pane-col { display: block; }
+  .inbox-pane-empty {
+    @apply hidden items-center justify-center h-full text-sm text-gray-400 border border-dashed
+      border-border rounded-2xl;
+  }
+  @media (min-width: 1024px) {
+    .inbox-split { @apply grid gap-4; grid-template-columns: 380px minmax(0, 1fr); }
+    .inbox-split .inbox-list-col,
+    .inbox-split.has-conversation .inbox-list-col { display: block; }
+    .inbox-split .inbox-pane-col,
+    .inbox-split.has-conversation .inbox-pane-col { display: block; }
+    .inbox-split:not(.has-conversation) .inbox-pane-empty { display: flex; }
+  }
+
   .inbox-toolbar { @apply flex items-center gap-2 mb-3 sm:mb-4; }
   /* The tabs scroll sideways with a fade on the trailing edge, because four
      labelled tabs do not fit on a phone and the old row simply cut the last

@@ -7,6 +7,7 @@ write goes through ``apps.logs.services.record_message_event`` which owns the
 fan-out to outbound webhooks, analytics rollups, contact activity and workflow
 triggers.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -200,7 +201,10 @@ class MessageStatsDaily(models.Model):
         "email_service.EmailTemplate", on_delete=models.SET_NULL, blank=True, null=True
     )
     campaign = models.ForeignKey(
-        "email_service.BulkEmailCampaign", on_delete=models.CASCADE, blank=True, null=True
+        "email_service.BulkEmailCampaign",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
     )
     day = models.DateField()
     key_mode = models.CharField(max_length=10, default="live")

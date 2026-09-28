@@ -4,6 +4,7 @@ The public API accepts ``[{filename, content_b64, content_type?}]``. Content is
 base64 in / base64 out so it survives JSON (the request body and the Celery task
 kwargs). Providers receive decoded ``apps.email.types.Attachment`` objects.
 """
+
 from __future__ import annotations
 
 import base64
@@ -11,8 +12,8 @@ import binascii
 
 from apps.email.types import Attachment
 
-MAX_FILE_BYTES = 5 * 1024 * 1024        # 5 MiB per file
-MAX_TOTAL_BYTES = 10 * 1024 * 1024      # 10 MiB across all attachments
+MAX_FILE_BYTES = 5 * 1024 * 1024  # 5 MiB per file
+MAX_TOTAL_BYTES = 10 * 1024 * 1024  # 10 MiB across all attachments
 MAX_COUNT = 10
 
 
@@ -39,11 +40,15 @@ def parse_attachments(raw) -> list[Attachment]:
             raise AttachmentError(f"attachments[{i}] is missing a filename")
         b64 = item.get("content_b64") or item.get("content")
         if not b64:
-            raise AttachmentError(f"attachments[{i}] ({filename}) is missing content_b64")
+            raise AttachmentError(
+                f"attachments[{i}] ({filename}) is missing content_b64"
+            )
         try:
             content = base64.b64decode(b64, validate=True)
         except (binascii.Error, ValueError) as exc:
-            raise AttachmentError(f"attachments[{i}] ({filename}) is not valid base64") from exc
+            raise AttachmentError(
+                f"attachments[{i}] ({filename}) is not valid base64"
+            ) from exc
         if len(content) > MAX_FILE_BYTES:
             raise AttachmentError(
                 f"attachment {filename} is {len(content)} bytes; the limit is {MAX_FILE_BYTES}"
@@ -53,11 +58,15 @@ def parse_attachments(raw) -> list[Attachment]:
             raise AttachmentError(
                 f"attachments total {total} bytes; the limit is {MAX_TOTAL_BYTES}"
             )
-        out.append(Attachment(
-            filename=filename,
-            content=content,
-            content_type=(item.get("content_type") or "application/octet-stream").strip(),
-        ))
+        out.append(
+            Attachment(
+                filename=filename,
+                content=content,
+                content_type=(
+                    item.get("content_type") or "application/octet-stream"
+                ).strip(),
+            )
+        )
     return out
 
 
@@ -85,9 +94,11 @@ def decode_from_task(raw) -> list[Attachment]:
     """Inverse of :func:`encode_for_task` — trusted input, no size re-check."""
     out: list[Attachment] = []
     for item in raw or []:
-        out.append(Attachment(
-            filename=item["filename"],
-            content=base64.b64decode(item["content_b64"]),
-            content_type=item.get("content_type", "application/octet-stream"),
-        ))
+        out.append(
+            Attachment(
+                filename=item["filename"],
+                content=base64.b64decode(item["content_b64"]),
+                content_type=item.get("content_type", "application/octet-stream"),
+            )
+        )
     return out

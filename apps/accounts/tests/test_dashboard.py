@@ -37,6 +37,7 @@ def account(db):
 
 # --- The page ------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_dashboard_renders_work_queue_inline(client, account):
     """The primary answer is server-rendered, not waited on."""
@@ -84,6 +85,7 @@ def test_dashboard_without_a_workspace(client, db):
 
 # --- The fragments -------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_work_queue_fragment_renders_counts(client, account):
     contact = Contact.objects.create(account=account, email="c@example.com")
@@ -123,7 +125,7 @@ def test_panels_fragment_renders(client, account):
 
 @pytest.mark.django_db
 def test_scheduled_is_not_duplicated_as_a_stat(client, account):
-    """"Scheduled" is answered by the Upcoming sends panel, not also by a stat
+    """ "Scheduled" is answered by the Upcoming sends panel, not also by a stat
     card. The old dashboard showed both, which read as two different numbers
     for the same question."""
     client.force_login(account.owner)
@@ -178,12 +180,11 @@ def test_progress_bars_have_accessible_names(client, account):
 
 # --- Swap-target layout parity -------------------------------------------
 
+
 def _class_attr(html, element_id):
     """The class list of the element carrying `element_id`, as a set."""
-    m = re.search(
-        r'<div[^>]*\bid="%s"[^>]*>' % re.escape(element_id), html
-    )
-    assert m, "no element with id=%r in the rendered HTML" % element_id
+    m = re.search(rf'<div[^>]*\bid="{re.escape(element_id)}"[^>]*>', html)
+    assert m, f"no element with id={element_id!r} in the rendered HTML"
     cls = re.search(r'\bclass="([^"]*)"', m.group(0))
     return set(cls.group(1).split()) if cls else set()
 
@@ -208,6 +209,6 @@ def test_panels_fragment_keeps_the_skeletons_layout_classes(client, account):
     layout = {c for c in placeholder if re.match(r"^(mt|mb|space-y|grid|gap)-", c)}
     missing = layout - swapped_in
     assert not missing, (
-        "the panels fragment drops layout classes the skeleton had: %s - "
-        "the page will shift when HTMX swaps it in" % sorted(missing)
+        f"the panels fragment drops layout classes the skeleton had: {sorted(missing)} - "
+        "the page will shift when HTMX swaps it in"
     )

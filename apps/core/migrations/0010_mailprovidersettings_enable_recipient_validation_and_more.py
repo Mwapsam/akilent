@@ -4,25 +4,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0009_add_phase3_settings'),
+        ("core", "0009_add_phase3_settings"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='enable_recipient_validation',
-            field=models.BooleanField(default=True, help_text='Enable pre-send email validation (syntax + MX record checks) to suppress invalid addresses'),
+            model_name="mailprovidersettings",
+            name="enable_recipient_validation",
+            field=models.BooleanField(
+                default=True,
+                help_text="Enable pre-send email validation (syntax + MX record checks) to suppress invalid addresses",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='mx_validation_cache_ttl_seconds',
-            field=models.PositiveIntegerField(default=86400, help_text='Cache time-to-live for MX record lookups in seconds (default 24 hours)'),
+            model_name="mailprovidersettings",
+            name="mx_validation_cache_ttl_seconds",
+            field=models.PositiveIntegerField(
+                default=86400,
+                help_text="Cache time-to-live for MX record lookups in seconds (default 24 hours)",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='soft_bounce_threshold',
-            field=models.PositiveIntegerField(default=3, help_text='Number of transient bounces before escalating to hard suppression (default 3)'),
+            model_name="mailprovidersettings",
+            name="soft_bounce_threshold",
+            field=models.PositiveIntegerField(
+                default=3,
+                help_text="Number of transient bounces before escalating to hard suppression (default 3)",
+            ),
         ),
     ]

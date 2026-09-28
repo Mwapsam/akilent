@@ -5,6 +5,7 @@ real inbound webhook handler, so this pins the behaviour an owner relies on: a t
 the conversation the automation started, a typed answer works too, silence times out, and a
 tap is never also treated as a fresh keyword message.
 """
+
 import time
 from datetime import timedelta
 from unittest.mock import patch
@@ -13,7 +14,11 @@ from django.utils import timezone
 
 from apps.automation import api as automation_api
 from apps.automation.models import WorkflowRun
-from apps.automation.workflow_engine import DEFAULT_REPLY_TIMEOUT_SECONDS, run_due, validate_definition
+from apps.automation.workflow_engine import (
+    DEFAULT_REPLY_TIMEOUT_SECONDS,
+    run_due,
+    validate_definition,
+)
 from apps.contacts.models import Contact
 from apps.whatsapp.models import OutboundMessage, WebhookEventLog
 from apps.whatsapp.tasks import _handle_inbound_message
@@ -25,16 +30,49 @@ TRIGGER = "conversation.message_received"
 def menu(**wait):
     """hello -> [Prices | Book | Talk] -> wait -> answer. ``wait`` overrides the wait step."""
     return {
-        "trigger": {"type": TRIGGER, "match": {"mode": "starts_with", "any": ["hello"]}},
+        "trigger": {
+            "type": TRIGGER,
+            "match": {"mode": "starts_with", "any": ["hello"]},
+        },
         "steps": [
-            {"id": "ask", "type": "send_buttons", "text": "What do you need, {first_name}?",
-             "buttons": [{"title": "Prices"}, {"title": "Book"}, {"title": "Talk to us"}], "next": "wait"},
-            {"id": "wait", "type": "wait_for_reply", "timeout_seconds": 3600,
-             "routes": {"prices": "say_prices", "book": "say_book"}, "on_timeout": "stop", **wait},
-            {"id": "say_prices", "type": "reply_text", "text": "Prices start at K50.", "next": "tag"},
+            {
+                "id": "ask",
+                "type": "send_buttons",
+                "text": "What do you need, {first_name}?",
+                "buttons": [
+                    {"title": "Prices"},
+                    {"title": "Book"},
+                    {"title": "Talk to us"},
+                ],
+                "next": "wait",
+            },
+            {
+                "id": "wait",
+                "type": "wait_for_reply",
+                "timeout_seconds": 3600,
+                "routes": {"prices": "say_prices", "book": "say_book"},
+                "on_timeout": "stop",
+                **wait,
+            },
+            {
+                "id": "say_prices",
+                "type": "reply_text",
+                "text": "Prices start at K50.",
+                "next": "tag",
+            },
             {"id": "tag", "type": "add_tag", "tag": "asked-prices", "next": "stop"},
-            {"id": "say_book", "type": "reply_text", "text": "Call us to book.", "next": "stop"},
-            {"id": "say_other", "type": "reply_text", "text": "A person will reply soon.", "next": "stop"},
+            {
+                "id": "say_book",
+                "type": "reply_text",
+                "text": "Call us to book.",
+                "next": "stop",
+            },
+            {
+                "id": "say_other",
+                "type": "reply_text",
+                "text": "A person will reply soon.",
+                "next": "stop",
+            },
             {"id": "stop", "type": "stop"},
         ],
     }
@@ -45,8 +83,13 @@ def text(body):
 
 
 def tap(option_id, title):
-    return {"type": "interactive", "interactive": {
-        "type": "button_reply", "button_reply": {"id": option_id, "title": title}}}
+    return {
+        "type": "interactive",
+        "interactive": {
+            "type": "button_reply",
+            "button_reply": {"id": option_id, "title": title},
+        },
+    }
 
 
 class FlowBase(Base):
@@ -63,23 +106,45 @@ class FlowBase(Base):
 
     def publish(self, definition, slug="menu"):
         return automation_api.upsert_published_workflow(
-            self.account, slug=slug, name=slug, definition=definition)
+            self.account, slug=slug, name=slug, definition=definition
+        )
 
     def customer(self, message):
         self.seq += 1
-        payload = {"entry": [{"changes": [{"field": "messages", "value": {
-            "metadata": {"phone_number_id": "PNID"}, "contacts": [{"profile": {"name": "Ada Mwape"}}],
-            "messages": [{"from": WA_ID, "id": f"wamid.{self.seq}", "timestamp": str(int(time.time())), **message}],
-        }}]}]}
-        _handle_inbound_message(WebhookEventLog.objects.create(
-            source="whatsapp", event_type="message", payload=payload))
+        payload = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "metadata": {"phone_number_id": "PNID"},
+                                "contacts": [{"profile": {"name": "Ada Mwape"}}],
+                                "messages": [
+                                    {
+                                        "from": WA_ID,
+                                        "id": f"wamid.{self.seq}",
+                                        "timestamp": str(int(time.time())),
+                                        **message,
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                }
+            ]
+        }
+        _handle_inbound_message(
+            WebhookEventLog.objects.create(
+                source="whatsapp", event_type="message", payload=payload
+            )
+        )
 
     def sent(self):
         return [m.payload for m in OutboundMessage.objects.order_by("id")]
 
     def run_(self):
         return WorkflowRun.objects.order_by("id").last()
-
 
 
 class MenuFlowTest(FlowBase):
@@ -99,11 +164,17 @@ class MenuFlowTest(FlowBase):
         self.publish(menu())
         self.customer(text("Hello"))
         self.customer(tap("prices", "Prices"))
-        self.assertEqual([p.get("body") for p in self.sent()], ["What do you need, Ada Mwape?", "Prices start at K50."])
+        self.assertEqual(
+            [p.get("body") for p in self.sent()],
+            ["What do you need, Ada Mwape?", "Prices start at K50."],
+        )
         run = self.run_()
         self.assertEqual(run.status, WorkflowRun.Status.COMPLETED)
         self.assertEqual(run.context["reply"]["id"], "prices")
-        self.assertEqual(list(Contact.objects.get().tags.values_list("name", flat=True)), ["asked-prices"])
+        self.assertEqual(
+            list(Contact.objects.get().tags.values_list("name", flat=True)),
+            ["asked-prices"],
+        )
 
     def test_the_other_button_takes_its_own_route(self):
         self.publish(menu())
@@ -122,9 +193,21 @@ class MenuFlowTest(FlowBase):
 
     def test_an_unrelated_message_is_not_swallowed_and_the_menu_keeps_waiting(self):
         self.publish(menu())
-        self.publish({"trigger": {"type": TRIGGER, "match": {"any": ["opening hours"]}},
-                      "steps": [{"id": "r", "type": "reply_text", "text": "9 to 5.", "next": "stop"},
-                                {"id": "stop", "type": "stop"}]}, slug="hours")
+        self.publish(
+            {
+                "trigger": {"type": TRIGGER, "match": {"any": ["opening hours"]}},
+                "steps": [
+                    {
+                        "id": "r",
+                        "type": "reply_text",
+                        "text": "9 to 5.",
+                        "next": "stop",
+                    },
+                    {"id": "stop", "type": "stop"},
+                ],
+            },
+            slug="hours",
+        )
         self.customer(text("Hello"))
         self.customer(text("What are your opening hours?"))
         self.assertEqual(self.sent()[-1]["body"], "9 to 5.")
@@ -141,9 +224,21 @@ class MenuFlowTest(FlowBase):
         """The customer tapped "Prices". A separate rule listening for the word "prices"
         must not answer as well, or they get two replies to one tap."""
         self.publish(menu())
-        self.publish({"trigger": {"type": TRIGGER, "match": {"any": ["prices"]}},
-                      "steps": [{"id": "r", "type": "reply_text", "text": "KEYWORD ANSWER", "next": "stop"},
-                                {"id": "stop", "type": "stop"}]}, slug="keyword")
+        self.publish(
+            {
+                "trigger": {"type": TRIGGER, "match": {"any": ["prices"]}},
+                "steps": [
+                    {
+                        "id": "r",
+                        "type": "reply_text",
+                        "text": "KEYWORD ANSWER",
+                        "next": "stop",
+                    },
+                    {"id": "stop", "type": "stop"},
+                ],
+            },
+            slug="keyword",
+        )
         self.customer(text("Hello"))
         self.customer(tap("prices", "Prices"))
         bodies = [p.get("body") for p in self.sent()]
@@ -151,9 +246,21 @@ class MenuFlowTest(FlowBase):
         self.assertNotIn("KEYWORD ANSWER", bodies)
 
     def test_a_tap_with_no_waiting_menu_is_an_ordinary_message(self):
-        self.publish({"trigger": {"type": TRIGGER, "match": {"any": ["prices"]}},
-                      "steps": [{"id": "r", "type": "reply_text", "text": "KEYWORD ANSWER", "next": "stop"},
-                                {"id": "stop", "type": "stop"}]}, slug="keyword")
+        self.publish(
+            {
+                "trigger": {"type": TRIGGER, "match": {"any": ["prices"]}},
+                "steps": [
+                    {
+                        "id": "r",
+                        "type": "reply_text",
+                        "text": "KEYWORD ANSWER",
+                        "next": "stop",
+                    },
+                    {"id": "stop", "type": "stop"},
+                ],
+            },
+            slug="keyword",
+        )
         self.customer(tap("prices", "Prices"))
         self.assertEqual([p["body"] for p in self.sent()], ["KEYWORD ANSWER"])
 
@@ -167,7 +274,7 @@ class MenuFlowTest(FlowBase):
         self.assertEqual(self.run_().status, WorkflowRun.Status.COMPLETED)
         before = len(self.sent())
         self.customer(tap("prices", "Prices"))
-        self.assertEqual(len(self.sent()), before)          # nothing was waiting for it
+        self.assertEqual(len(self.sent()), before)  # nothing was waiting for it
 
     def test_the_timeout_can_take_a_fallback_route(self):
         self.publish(menu(on_timeout="say_other"))
@@ -185,32 +292,74 @@ class MenuFlowTest(FlowBase):
     # -- lists ------------------------------------------------------------------------------------------
 
     def test_a_list_can_be_offered_and_a_choice_routed(self):
-        self.publish({
-            "trigger": {"type": TRIGGER, "match": {"any": ["menu"]}},
-            "steps": [
-                {"id": "ask", "type": "send_list", "text": "Pick a product", "button": "See products",
-                 "rows": [{"title": "Sofa", "description": "3 seater"}, {"title": "Bed"}], "next": "wait"},
-                {"id": "wait", "type": "wait_for_reply", "routes": {"sofa": "say"}, "on_timeout": "stop"},
-                {"id": "say", "type": "reply_text", "text": "Sofas are K2000.", "next": "stop"},
-                {"id": "stop", "type": "stop"},
-            ]}, slug="list")
+        self.publish(
+            {
+                "trigger": {"type": TRIGGER, "match": {"any": ["menu"]}},
+                "steps": [
+                    {
+                        "id": "ask",
+                        "type": "send_list",
+                        "text": "Pick a product",
+                        "button": "See products",
+                        "rows": [
+                            {"title": "Sofa", "description": "3 seater"},
+                            {"title": "Bed"},
+                        ],
+                        "next": "wait",
+                    },
+                    {
+                        "id": "wait",
+                        "type": "wait_for_reply",
+                        "routes": {"sofa": "say"},
+                        "on_timeout": "stop",
+                    },
+                    {
+                        "id": "say",
+                        "type": "reply_text",
+                        "text": "Sofas are K2000.",
+                        "next": "stop",
+                    },
+                    {"id": "stop", "type": "stop"},
+                ],
+            },
+            slug="list",
+        )
         self.customer(text("menu"))
         offer = self.sent()[0]["interactive"]
         self.assertEqual(offer["type"], "list")
         self.assertEqual(self.run_().current_step, "wait")
-        self.customer({"type": "interactive", "interactive": {
-            "type": "list_reply", "list_reply": {"id": "sofa", "title": "Sofa"}}})
+        self.customer(
+            {
+                "type": "interactive",
+                "interactive": {
+                    "type": "list_reply",
+                    "list_reply": {"id": "sofa", "title": "Sofa"},
+                },
+            }
+        )
         self.assertEqual(self.sent()[-1]["body"], "Sofas are K2000.")
 
     # -- routing a workflow on a specific tap -------------------------------------------------------------
 
     def test_a_workflow_can_start_from_one_particular_button(self):
-        self.publish({"trigger": {"type": TRIGGER, "reply_id": ["prices"]},
-                      "steps": [{"id": "r", "type": "reply_text", "text": "Here are the prices.", "next": "stop"},
-                                {"id": "stop", "type": "stop"}]}, slug="from-button")
+        self.publish(
+            {
+                "trigger": {"type": TRIGGER, "reply_id": ["prices"]},
+                "steps": [
+                    {
+                        "id": "r",
+                        "type": "reply_text",
+                        "text": "Here are the prices.",
+                        "next": "stop",
+                    },
+                    {"id": "stop", "type": "stop"},
+                ],
+            },
+            slug="from-button",
+        )
         self.customer(tap("book", "Book"))
         self.assertEqual(self.sent(), [])
-        self.customer(tap("PRICES", "Prices"))                 # ids match ignoring case
+        self.customer(tap("PRICES", "Prices"))  # ids match ignoring case
         self.assertEqual(self.sent()[-1]["body"], "Here are the prices.")
 
 
@@ -218,7 +367,11 @@ class MenuFlowTest(FlowBase):
 
 
 def errors(definition):
-    return [(e["field"], e["message"]) for e in validate_definition(definition) if e["severity"] == "error"]
+    return [
+        (e["field"], e["message"])
+        for e in validate_definition(definition)
+        if e["severity"] == "error"
+    ]
 
 
 def test_a_complete_menu_is_valid():
@@ -233,28 +386,52 @@ def test_buttons_need_a_conversation_to_reply_in():
 
 def test_bad_buttons_are_caught_when_saving_not_when_a_customer_is_waiting():
     definition = menu()
-    definition["steps"][0]["buttons"] = [{"title": "A"}, {"title": "B"}, {"title": "C"}, {"title": "D"}]
-    assert any(field == "buttons" and "between 1 and 3" in msg for field, msg in errors(definition))
+    definition["steps"][0]["buttons"] = [
+        {"title": "A"},
+        {"title": "B"},
+        {"title": "C"},
+        {"title": "D"},
+    ]
+    assert any(
+        field == "buttons" and "between 1 and 3" in msg
+        for field, msg in errors(definition)
+    )
 
 
 def test_a_wait_for_reply_needs_a_route_a_sensible_timeout_and_real_targets():
     definition = menu(routes={})
     assert any(field == "routes" for field, _ in errors(definition))
-    assert any(field == "timeout_seconds" for field, _ in errors(menu(timeout_seconds=5)))
-    assert any(field == "timeout_seconds" for field, _ in errors(menu(timeout_seconds=99999999)))
-    assert any(field == "routes" for field, _ in errors(menu(routes={"prices": "nowhere"})))
+    assert any(
+        field == "timeout_seconds" for field, _ in errors(menu(timeout_seconds=5))
+    )
+    assert any(
+        field == "timeout_seconds"
+        for field, _ in errors(menu(timeout_seconds=99999999))
+    )
+    assert any(
+        field == "routes" for field, _ in errors(menu(routes={"prices": "nowhere"}))
+    )
     assert any(field == "default" for field, _ in errors(menu(default="nowhere")))
     assert any(field == "on_timeout" for field, _ in errors(menu(on_timeout="nowhere")))
 
 
 def test_a_reply_id_trigger_filter_is_validated():
-    ok = {"trigger": {"type": TRIGGER, "reply_id": "prices"},
-          "steps": [{"id": "stop", "type": "stop"}]}
+    ok = {
+        "trigger": {"type": TRIGGER, "reply_id": "prices"},
+        "steps": [{"id": "stop", "type": "stop"}],
+    }
     assert errors(ok) == []
     for bad in ("", [], [""], 5):
-        assert any(f == "trigger.reply_id" for f, _ in errors({**ok, "trigger": {"type": TRIGGER, "reply_id": bad}}))
-    assert any(f == "trigger.reply_id" for f, _ in errors(
-        {**ok, "trigger": {"type": "contact.created", "reply_id": "prices"}}))
+        assert any(
+            f == "trigger.reply_id"
+            for f, _ in errors({**ok, "trigger": {"type": TRIGGER, "reply_id": bad}})
+        )
+    assert any(
+        f == "trigger.reply_id"
+        for f, _ in errors(
+            {**ok, "trigger": {"type": "contact.created", "reply_id": "prices"}}
+        )
+    )
 
 
 def test_the_default_wait_is_a_day():
@@ -274,19 +451,29 @@ class MenuStarterTest(FlowBase):
         from apps.accounts.models import Membership
 
         user = User.objects.create_user("owner", "owner@example.com", "pw")
-        Membership.objects.create(user=user, account=self.account, role=Membership.Role.OWNER)
+        Membership.objects.create(
+            user=user, account=self.account, role=Membership.Role.OWNER
+        )
         self.client.force_login(user)
 
     def install(self, **fields):
-        data = {"starter": "offer-a-menu", "menu_text": "Hi {first_name}, what do you need?",
-                "opt_title_1": "Prices", "opt_reply_1": "Prices start at K50.",
-                "opt_title_2": "Book a visit", "opt_reply_2": "Call us on 0971 234 567.", **fields}
+        data = {
+            "starter": "offer-a-menu",
+            "menu_text": "Hi {first_name}, what do you need?",
+            "opt_title_1": "Prices",
+            "opt_reply_1": "Prices start at K50.",
+            "opt_title_2": "Book a visit",
+            "opt_reply_2": "Call us on 0971 234 567.",
+            **fields,
+        }
         return self.client.post(INSTALL, data, follow=True)
 
     def workflow(self):
         from apps.automation.models import Workflow
 
-        return Workflow.objects.filter(account=self.account, slug="offer-a-menu").first()
+        return Workflow.objects.filter(
+            account=self.account, slug="offer-a-menu"
+        ).first()
 
     def test_the_gallery_offers_the_menu_with_its_form(self):
         body = self.client.get("/automations/").content.decode()
@@ -300,8 +487,12 @@ class MenuStarterTest(FlowBase):
         self.assertEqual(wf.status, "published")
         self.assertEqual(errors(wf.definition), [])
         steps = {s["id"]: s for s in wf.definition["steps"]}
-        self.assertEqual([b["title"] for b in steps["ask"]["buttons"]], ["Prices", "Book a visit"])
-        self.assertEqual(steps["wait"]["routes"], {"prices": "answer_1", "book-a-visit": "answer_2"})
+        self.assertEqual(
+            [b["title"] for b in steps["ask"]["buttons"]], ["Prices", "Book a visit"]
+        )
+        self.assertEqual(
+            steps["wait"]["routes"], {"prices": "answer_1", "book-a-visit": "answer_2"}
+        )
         self.assertEqual(steps["tag_2"]["tag"], "asked-book-a-visit")
 
     def test_the_installed_menu_works_end_to_end(self):
@@ -310,7 +501,10 @@ class MenuStarterTest(FlowBase):
         self.assertEqual(self.sent()[0]["options"], ["Prices", "Book a visit"])
         self.customer(tap("book-a-visit", "Book a visit"))
         self.assertEqual(self.sent()[-1]["body"], "Call us on 0971 234 567.")
-        self.assertEqual(list(Contact.objects.get().tags.values_list("name", flat=True)), ["asked-book-a-visit"])
+        self.assertEqual(
+            list(Contact.objects.get().tags.values_list("name", flat=True)),
+            ["asked-book-a-visit"],
+        )
 
     def test_an_option_needs_both_a_label_and_an_answer(self):
         resp = self.install(opt_reply_2="")
@@ -318,14 +512,18 @@ class MenuStarterTest(FlowBase):
         self.assertIsNone(self.workflow())
 
     def test_at_least_one_option_is_required(self):
-        resp = self.install(opt_title_1="", opt_reply_1="", opt_title_2="", opt_reply_2="")
+        resp = self.install(
+            opt_title_1="", opt_reply_1="", opt_title_2="", opt_reply_2=""
+        )
         self.assertIn("Add at least one button", resp.content.decode())
         self.assertIsNone(self.workflow())
 
     def test_whatsapp_limits_are_explained_in_plain_words(self):
         self.assertIn("at most 20", self.install(opt_title_1="A" * 21).content.decode())
         self.assertIsNone(self.workflow())
-        self.assertIn("share the name", self.install(opt_title_2="prices").content.decode())
+        self.assertIn(
+            "share the name", self.install(opt_title_2="prices").content.decode()
+        )
         self.assertIsNone(self.workflow())
 
     def test_installing_again_updates_rather_than_duplicating(self):
@@ -333,6 +531,9 @@ class MenuStarterTest(FlowBase):
 
         self.install()
         self.install(opt_reply_1="New prices.")
-        self.assertEqual(Workflow.objects.filter(account=self.account, slug="offer-a-menu").count(), 1)
+        self.assertEqual(
+            Workflow.objects.filter(account=self.account, slug="offer-a-menu").count(),
+            1,
+        )
         steps = {s["id"]: s for s in self.workflow().definition["steps"]}
         self.assertEqual(steps["answer_1"]["text"], "New prices.")

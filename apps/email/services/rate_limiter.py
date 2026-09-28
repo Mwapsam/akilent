@@ -13,9 +13,9 @@ Two backends, same interface (``acquire`` / ``wait_for``):
 ``get_ses_rate_limiter()`` picks the backend once and keeps the rate in sync
 with ``MailProviderSettings.ses_send_rate_limit`` on every call.
 """
+
 import logging
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +23,15 @@ logger = logging.getLogger(__name__)
 class TokenBucket:
     """Per-process token bucket rate limiter for per-second flow control."""
 
-    def __init__(self, rate: float, capacity: Optional[float] = None):
+    def __init__(self, rate: float, capacity: float | None = None):
         self.rate = rate
         self.capacity = capacity or rate
         self.tokens = self.capacity
         self.last_refill = time.time()
 
-    def acquire(self, tokens: float = 1.0, blocking: bool = True, timeout: float = 5.0) -> bool:
+    def acquire(
+        self, tokens: float = 1.0, blocking: bool = True, timeout: float = 5.0
+    ) -> bool:
         start = time.time()
         while True:
             now = time.time()
@@ -47,7 +49,9 @@ class TokenBucket:
             if time.time() - start >= timeout:
                 logger.warning(
                     "TokenBucket.acquire timeout after %.1f sec (rate=%.1f/sec, need %.1f tokens)",
-                    timeout, self.rate, tokens
+                    timeout,
+                    self.rate,
+                    tokens,
                 )
                 return False
 
@@ -105,8 +109,13 @@ return tostring((requested - tokens) / rate)
 class RedisTokenBucket:
     """Distributed token bucket backed by a single Redis key + Lua script."""
 
-    def __init__(self, client, rate: float, capacity: Optional[float] = None,
-                 key: str = "ses:ratelimit"):
+    def __init__(
+        self,
+        client,
+        rate: float,
+        capacity: float | None = None,
+        key: str = "ses:ratelimit",
+    ):
         self._client = client
         self.rate = rate
         self.capacity = capacity or rate
@@ -120,7 +129,9 @@ class RedisTokenBucket:
         )
         return float(raw.decode() if isinstance(raw, bytes) else raw)
 
-    def acquire(self, tokens: float = 1.0, blocking: bool = True, timeout: float = 5.0) -> bool:
+    def acquire(
+        self, tokens: float = 1.0, blocking: bool = True, timeout: float = 5.0
+    ) -> bool:
         start = time.time()
         while True:
             try:
@@ -137,7 +148,8 @@ class RedisTokenBucket:
             if time.time() - start >= timeout:
                 logger.warning(
                     "RedisTokenBucket.acquire timeout after %.1fs (rate=%.1f/s)",
-                    timeout, self.rate,
+                    timeout,
+                    self.rate,
                 )
                 return False
             time.sleep(min(wait, 0.25))
@@ -165,7 +177,8 @@ def _make_redis_bucket(rate: float):
     except Exception:
         logger.warning(
             "SES rate limiter: Redis unavailable (%s) — falling back to per-process bucket",
-            url, exc_info=True,
+            url,
+            exc_info=True,
         )
         return None
 
@@ -177,7 +190,9 @@ def get_ses_rate_limiter():
 
         rate = MailProviderSettings.load().ses_send_rate_limit or 14
     except Exception as e:
-        logger.warning("Failed to load SES rate limit from settings: %s; using default 14/sec", e)
+        logger.warning(
+            "Failed to load SES rate limit from settings: %s; using default 14/sec", e
+        )
         rate = 14
 
     inst = getattr(get_ses_rate_limiter, "_instance", None)

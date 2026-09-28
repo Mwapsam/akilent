@@ -12,13 +12,14 @@ new artifact) next to a ``.measurement.json`` record holding baseline_id,
 generated_at, git_commit, command_arguments, output_sha256 and operator.
 Only aggregate counts are output - no message content or phone numbers.
 """
+
 import hashlib
 import json
 import os
 import subprocess
 import sys
 import uuid
-from datetime import datetime, time, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 
 from django.apps import apps
@@ -42,7 +43,10 @@ def _git_commit(override=None) -> str:
             ["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.DEVNULL
         ).strip()
         dirty = subprocess.check_output(
-            ["git", "status", "--porcelain"], cwd=root, text=True, stderr=subprocess.DEVNULL
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
         ).strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
@@ -72,18 +76,40 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         who = parser.add_mutually_exclusive_group(required=True)
         who.add_argument("--account", help="Account id or slug.")
-        who.add_argument("--all-accounts", action="store_true",
-                         help="Measure every account, each independently.")
-        parser.add_argument("--all-accounts-total", action="store_true",
-                            help="Add a total that is the arithmetic sum of the per-account results.")
-        parser.add_argument("--since", help="Enquiries starting on/after this date (UTC).")
-        parser.add_argument("--until", help="Enquiries starting on/before this date (UTC, inclusive).")
-        parser.add_argument("--gap-hours", default="24,72",
-                            help="Enquiry-gap values to compare (default 24,72).")
-        parser.add_argument("--grace-hours", type=float, default=1,
-                            help="Applied uniformly to every gap (default 1).")
-        parser.add_argument("--out", help="Write the JSON snapshot here (never overwrites).")
-        parser.add_argument("--git-commit", help="Commit to record (default: $AKILENT_GIT_COMMIT, else git).")
+        who.add_argument(
+            "--all-accounts",
+            action="store_true",
+            help="Measure every account, each independently.",
+        )
+        parser.add_argument(
+            "--all-accounts-total",
+            action="store_true",
+            help="Add a total that is the arithmetic sum of the per-account results.",
+        )
+        parser.add_argument(
+            "--since", help="Enquiries starting on/after this date (UTC)."
+        )
+        parser.add_argument(
+            "--until", help="Enquiries starting on/before this date (UTC, inclusive)."
+        )
+        parser.add_argument(
+            "--gap-hours",
+            default="24,72",
+            help="Enquiry-gap values to compare (default 24,72).",
+        )
+        parser.add_argument(
+            "--grace-hours",
+            type=float,
+            default=1,
+            help="Applied uniformly to every gap (default 1).",
+        )
+        parser.add_argument(
+            "--out", help="Write the JSON snapshot here (never overwrites)."
+        )
+        parser.add_argument(
+            "--git-commit",
+            help="Commit to record (default: $AKILENT_GIT_COMMIT, else git).",
+        )
         parser.add_argument("--operator", help="Who ran this; required with --out.")
 
     def handle(self, *args, **options):
@@ -94,7 +120,11 @@ class Command(BaseCommand):
         if options["grace_hours"] < 0:
             raise CommandError("--grace-hours must be >= 0")
         out_path = Path(options["out"]) if options["out"] else None
-        record_path = out_path.with_name(out_path.name + ".measurement.json") if out_path else None
+        record_path = (
+            out_path.with_name(out_path.name + ".measurement.json")
+            if out_path
+            else None
+        )
         for path in (out_path, record_path):
             if path is not None and path.exists():
                 raise CommandError(
@@ -102,11 +132,20 @@ class Command(BaseCommand):
                 )
 
         gaps = _parse_gaps(options["gap_hours"])
-        since_date = _parse_date(options["since"], "--since") if options["since"] else None
-        until_date = _parse_date(options["until"], "--until") if options["until"] else None
-        since = datetime.combine(since_date, time.min, tzinfo=dt_timezone.utc) if since_date else None
-        until = (datetime.combine(until_date, time.min, tzinfo=dt_timezone.utc) + timedelta(days=1)
-                 if until_date else None)
+        since_date = (
+            _parse_date(options["since"], "--since") if options["since"] else None
+        )
+        until_date = (
+            _parse_date(options["until"], "--until") if options["until"] else None
+        )
+        since = (
+            datetime.combine(since_date, time.min, tzinfo=UTC) if since_date else None
+        )
+        until = (
+            datetime.combine(until_date, time.min, tzinfo=UTC) + timedelta(days=1)
+            if until_date
+            else None
+        )
         if since and until and since >= until:
             raise CommandError("--since must be before --until")
 
@@ -115,8 +154,10 @@ class Command(BaseCommand):
             accounts = list(Account.objects.order_by("id"))
         else:
             ref = options["account"]
-            accounts = list(Account.objects.filter(id=int(ref) if ref.isdigit() else None)
-                            or Account.objects.filter(slug=ref))
+            accounts = list(
+                Account.objects.filter(id=int(ref) if ref.isdigit() else None)
+                or Account.objects.filter(slug=ref)
+            )
             if not accounts:
                 raise CommandError(f"No account matches {ref!r}")
 
@@ -126,8 +167,15 @@ class Command(BaseCommand):
                 with connection.cursor() as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
             snapshot = build_snapshot(
-                accounts, gaps, options["grace_hours"], since, until,
-                options["since"], options["until"], as_of, _git_commit(options["git_commit"]),
+                accounts,
+                gaps,
+                options["grace_hours"],
+                since,
+                until,
+                options["since"],
+                options["until"],
+                as_of,
+                _git_commit(options["git_commit"]),
                 include_total=options["all_accounts_total"],
             )
 
@@ -153,7 +201,9 @@ class Command(BaseCommand):
             }
             with open(record_path, "x") as fh:
                 json.dump(record, fh, indent=2, sort_keys=True)
-            self.stdout.write(self.style.SUCCESS(
-                f"\nSnapshot: {out_path}\nsha256: {record['output_sha256']}\n"
-                f"Record: {record_path} (baseline_id {record['baseline_id']})"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"\nSnapshot: {out_path}\nsha256: {record['output_sha256']}\n"
+                    f"Record: {record_path} (baseline_id {record['baseline_id']})"
+                )
+            )

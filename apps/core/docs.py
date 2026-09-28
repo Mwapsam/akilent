@@ -6,6 +6,7 @@ versioned REST API, SMTP relay, and webhooks — plus the auth/error/rate-limit
 model shared across all of them. No database, no admin churn, same pattern
 as ``apps.core.help``.
 """
+
 from dataclasses import dataclass
 
 

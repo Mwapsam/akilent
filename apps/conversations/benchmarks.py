@@ -9,6 +9,7 @@ the same numbers, so businesses that connected before this existed get theirs on
 The comparison states counts, never causes: "9 enquiries went unanswered in your first week,
 2 this week", not "Akilent saved 7".
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -20,13 +21,18 @@ from apps.conversations.models import Benchmark
 
 WINDOW = timedelta(days=7)
 DAY30_START = timedelta(days=30)
-SETTLE = timedelta(days=1)  # every enquiry in the window gets 24h to be answered before measuring
+SETTLE = timedelta(
+    days=1
+)  # every enquiry in the window gets 24h to be answered before measuring
 
 
 def windows(connected_at) -> dict:
     return {
         Benchmark.Kind.STARTING: (connected_at, connected_at + WINDOW),
-        Benchmark.Kind.DAY30: (connected_at + DAY30_START, connected_at + DAY30_START + WINDOW),
+        Benchmark.Kind.DAY30: (
+            connected_at + DAY30_START,
+            connected_at + DAY30_START + WINDOW,
+        ),
     }
 
 
@@ -41,8 +47,13 @@ def capture(account, connected_at, now=None) -> list[str]:
         if kind in have or now < end + SETTLE:
             continue
         try:
-            Benchmark.objects.create(account=account, kind=kind, window_start=start, window_end=end,
-                                     metrics=window_metrics(account, start, end))
+            Benchmark.objects.create(
+                account=account,
+                kind=kind,
+                window_start=start,
+                window_end=end,
+                metrics=window_metrics(account, start, end),
+            )
             made.append(kind)
         except IntegrityError:
             pass  # another run got there first
@@ -59,13 +70,28 @@ def card(account, connected_at, now=None) -> dict | None:
     ranges = windows(connected_at)
     if starting is None:
         day = min(7, max(1, (now - connected_at).days + 1))
-        return {"state": "measuring", "day": day, "ready_on": ranges[Benchmark.Kind.STARTING][1] + SETTLE}
+        return {
+            "state": "measuring",
+            "day": day,
+            "ready_on": ranges[Benchmark.Kind.STARTING][1] + SETTLE,
+        }
     if later is None:
-        return {"state": "starting", "start": starting.metrics,
-                "compare_on": ranges[Benchmark.Kind.DAY30][1] + SETTLE}
-    return {"state": "compared", "start": starting.metrics, "now": later.metrics,
-            "rows": _comparison(starting.metrics, later.metrics),
-            "fewer_unanswered": max(0, (starting.metrics.get("unanswered") or 0) - (later.metrics.get("unanswered") or 0))}
+        return {
+            "state": "starting",
+            "start": starting.metrics,
+            "compare_on": ranges[Benchmark.Kind.DAY30][1] + SETTLE,
+        }
+    return {
+        "state": "compared",
+        "start": starting.metrics,
+        "now": later.metrics,
+        "rows": _comparison(starting.metrics, later.metrics),
+        "fewer_unanswered": max(
+            0,
+            (starting.metrics.get("unanswered") or 0)
+            - (later.metrics.get("unanswered") or 0),
+        ),
+    }
 
 
 def _comparison(before: dict, after: dict) -> list[dict]:
@@ -73,10 +99,29 @@ def _comparison(before: dict, after: dict) -> list[dict]:
         return "—" if value is None else f"{value} min"
 
     return [
-        {"label": "Conversations started", "before": before.get("conversations", 0), "after": after.get("conversations", 0)},
-        {"label": "Enquiries with no reply within 24 hours", "before": before.get("unanswered", 0), "after": after.get("unanswered", 0)},
-        {"label": "Median time to first reply", "before": minutes(before.get("median_first_reply_minutes")),
-         "after": minutes(after.get("median_first_reply_minutes"))},
-        {"label": "Interested customers", "before": before.get("interested", 0), "after": after.get("interested", 0)},
-        {"label": "Paid orders from conversations", "before": before.get("paid_orders", 0), "after": after.get("paid_orders", 0)},
+        {
+            "label": "Conversations started",
+            "before": before.get("conversations", 0),
+            "after": after.get("conversations", 0),
+        },
+        {
+            "label": "Enquiries with no reply within 24 hours",
+            "before": before.get("unanswered", 0),
+            "after": after.get("unanswered", 0),
+        },
+        {
+            "label": "Median time to first reply",
+            "before": minutes(before.get("median_first_reply_minutes")),
+            "after": minutes(after.get("median_first_reply_minutes")),
+        },
+        {
+            "label": "Interested customers",
+            "before": before.get("interested", 0),
+            "after": after.get("interested", 0),
+        },
+        {
+            "label": "Paid orders from conversations",
+            "before": before.get("paid_orders", 0),
+            "after": after.get("paid_orders", 0),
+        },
     ]

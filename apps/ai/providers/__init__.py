@@ -7,6 +7,7 @@ normal state and hide the AI features.
 Two model tiers: ``standard`` uses ``AI_MODEL`` (or the provider's default) and ``fast`` uses
 ``AI_MODEL_FAST`` when it is set, else the standard model. ``apps.ai.router`` picks the tier.
 """
+
 import importlib
 import logging
 
@@ -63,4 +64,10 @@ def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
     return cls(model=model) if model else cls()
 
 
-__all__ = ["AIProvider", "AIProviderError", "backend_name", "get_ai_provider", "is_configured"]
+__all__ = [
+    "AIProvider",
+    "AIProviderError",
+    "backend_name",
+    "get_ai_provider",
+    "is_configured",
+]

@@ -5,6 +5,7 @@
 is best-effort: a failing consumer is logged and swallowed so it can never
 break the send / tracking / webhook request path that produced the event.
 """
+
 from __future__ import annotations
 
 import logging
@@ -70,9 +71,12 @@ def record_message_event(
     Returns the created row, or ``None`` if it was suppressed as a duplicate of
     an already-recorded provider event.
     """
-    if provider_event_id and MessageEvent.objects.filter(
-        message=message, type=event_type, provider_event_id=provider_event_id
-    ).exists():
+    if (
+        provider_event_id
+        and MessageEvent.objects.filter(
+            message=message, type=event_type, provider_event_id=provider_event_id
+        ).exists()
+    ):
         return None
 
     if not request_id:
@@ -108,10 +112,15 @@ def _reconcile_status(message, event_type: str) -> None:
 
 
 def _fan_out(event: MessageEvent) -> None:
-    for sink in (_sink_webhooks, _sink_analytics, _sink_contact_activity, _sink_workflows):
+    for sink in (
+        _sink_webhooks,
+        _sink_analytics,
+        _sink_contact_activity,
+        _sink_workflows,
+    ):
         try:
             sink(event)
-        except Exception:  # noqa: BLE001 - a sink must never break the caller
+        except Exception:
             logger.exception(
                 "record_message_event: sink %s failed",
                 getattr(sink, "__name__", repr(sink)),
@@ -148,7 +157,12 @@ def _sink_analytics(event: MessageEvent) -> None:
 
 
 _CONTACT_ACTIVITY_TYPES = {
-    "delivered", "opened", "clicked", "bounced", "complained", "unsubscribed",
+    "delivered",
+    "opened",
+    "clicked",
+    "bounced",
+    "complained",
+    "unsubscribed",
 }
 
 

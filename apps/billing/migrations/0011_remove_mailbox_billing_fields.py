@@ -4,26 +4,25 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0010_seed_payment_methods'),
+        ("billing", "0010_seed_payment_methods"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='plan',
-            name='mailbox_storage_gb',
+            model_name="plan",
+            name="mailbox_storage_gb",
         ),
         migrations.RemoveField(
-            model_name='plan',
-            name='max_aliases',
+            model_name="plan",
+            name="max_aliases",
         ),
         migrations.RemoveField(
-            model_name='plan',
-            name='max_forwarding_rules',
+            model_name="plan",
+            name="max_forwarding_rules",
         ),
         migrations.RemoveField(
-            model_name='plan',
-            name='max_mailboxes',
+            model_name="plan",
+            name="max_mailboxes",
         ),
     ]

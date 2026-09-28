@@ -8,22 +8,44 @@ steps run inline; a ``wait`` step parks the run with ``next_due_at`` and the
 Definition shape::
 
     {
-      "trigger": {"type": "business_event", "name": "signup.completed"},
-      "steps": [
-        {"id": "welcome", "type": "send_email", "template": "welcome",
-         "from": "hi@acme.com", "next": "wait1"},
-        {"id": "wait1", "type": "wait", "seconds": 172800, "next": "check"},
-        {"id": "check", "type": "branch",
-         "field": "opened_in_last_90d", "operator": "eq", "value": true,
-         "on_true": "tips", "on_false": "reminder"},
-        {"id": "tips", "type": "send_email", "template": "tips",
-         "from": "hi@acme.com", "next": "stop"},
-        {"id": "reminder", "type": "send_email", "template": "reminder",
-         "from": "hi@acme.com", "next": "stop"},
-        {"id": "stop", "type": "stop"}
-      ]
+        "trigger": {"type": "business_event", "name": "signup.completed"},
+        "steps": [
+            {
+                "id": "welcome",
+                "type": "send_email",
+                "template": "welcome",
+                "from": "hi@acme.com",
+                "next": "wait1",
+            },
+            {"id": "wait1", "type": "wait", "seconds": 172800, "next": "check"},
+            {
+                "id": "check",
+                "type": "branch",
+                "field": "opened_in_last_90d",
+                "operator": "eq",
+                "value": true,
+                "on_true": "tips",
+                "on_false": "reminder",
+            },
+            {
+                "id": "tips",
+                "type": "send_email",
+                "template": "tips",
+                "from": "hi@acme.com",
+                "next": "stop",
+            },
+            {
+                "id": "reminder",
+                "type": "send_email",
+                "template": "reminder",
+                "from": "hi@acme.com",
+                "next": "stop",
+            },
+            {"id": "stop", "type": "stop"},
+        ],
     }
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,16 +61,29 @@ logger = logging.getLogger(__name__)
 _MAX_STEPS_PER_CALL = 50
 
 _STEP_TYPES = {
-    "send_email", "send_whatsapp", "webhook", "wait", "branch", "set_attribute", "stop", "exit",
+    "send_email",
+    "send_whatsapp",
+    "webhook",
+    "wait",
+    "branch",
+    "set_attribute",
+    "stop",
+    "exit",
     # Free-text reply into the conversation that triggered the run (message triggers only).
     "reply_text",
     # Label the customer ("pricing-enquiry"); adding or removing is idempotent.
-    "add_tag", "remove_tag",
+    "add_tag",
+    "remove_tag",
     # WhatsApp reply buttons / lists, and "ask, then wait for the customer's choice".
-    "send_buttons", "send_list", "wait_for_reply",
+    "send_buttons",
+    "send_list",
+    "wait_for_reply",
     # Lifecycle: track the customer, say how interested they are, hand them to a teammate,
     # and tell the team.
-    "create_lead", "update_lead_status", "assign_conversation", "notify_team",
+    "create_lead",
+    "update_lead_status",
+    "assign_conversation",
+    "notify_team",
     # Phase 4: a generic step that calls through the shared Action Registry
     # (apps.core.actions) by name, rather than requiring a hand-written
     # ``_run_<type>`` function per capability. New actions (CRM, Commerce,
@@ -57,9 +92,12 @@ _STEP_TYPES = {
     "action",
 }
 _TRIGGER_TYPES = {
-    "business_event", "manual",
-    "contact.created", "contact.updated",
-    "email.opened", "email.clicked",
+    "business_event",
+    "manual",
+    "contact.created",
+    "contact.updated",
+    "email.opened",
+    "email.clicked",
     "whatsapp.received",
     # Phase 1 operational spine: channel-agnostic equivalent of
     # "whatsapp.received" — fired once per channel from apps.conversations
@@ -107,15 +145,28 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
     errors: list[dict] = []
 
     def _error(
-        message: str, *, step_id: str | None = None, field: str | None = None,
+        message: str,
+        *,
+        step_id: str | None = None,
+        field: str | None = None,
         severity: str = "error",
     ) -> None:
-        errors.append({"step_id": step_id, "field": field, "message": message, "severity": severity})
+        errors.append(
+            {
+                "step_id": step_id,
+                "field": field,
+                "message": message,
+                "severity": severity,
+            }
+        )
 
     definition = definition or {}
     trig = definition.get("trigger") or {}
     if trig.get("type") not in _TRIGGER_TYPES:
-        _error(f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}", field="trigger.type")
+        _error(
+            f"trigger.type must be one of {sorted(_TRIGGER_TYPES)}",
+            field="trigger.type",
+        )
     elif trig.get("type") == "business_event" and not trig.get("name"):
         _error("business_event trigger requires trigger.name", field="trigger.name")
 
@@ -123,7 +174,10 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         from apps.automation import keywords
 
         if trig.get("type") not in _MESSAGE_TRIGGERS:
-            _error("trigger.match only works on a 'customer messages you' trigger", field="trigger.match")
+            _error(
+                "trigger.match only works on a 'customer messages you' trigger",
+                field="trigger.match",
+            )
         else:
             for problem in keywords.validate(trig["match"]):
                 _error(problem, field="trigger.match")
@@ -131,12 +185,27 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         wanted = trig["reply_id"]
         wanted = [wanted] if isinstance(wanted, str) else wanted
         if trig.get("type") not in _MESSAGE_TRIGGERS:
-            _error("trigger.reply_id only works on a 'customer messages you' trigger", field="trigger.reply_id")
-        elif not isinstance(wanted, list) or not wanted or not all(isinstance(w, str) and w.strip() for w in wanted):
-            _error("trigger.reply_id must be a button name or a list of them", field="trigger.reply_id")
+            _error(
+                "trigger.reply_id only works on a 'customer messages you' trigger",
+                field="trigger.reply_id",
+            )
+        elif (
+            not isinstance(wanted, list)
+            or not wanted
+            or not all(isinstance(w, str) and w.strip() for w in wanted)
+        ):
+            _error(
+                "trigger.reply_id must be a button name or a list of them",
+                field="trigger.reply_id",
+            )
     cooldown = trig.get("cooldown_minutes")
-    if cooldown is not None and (not isinstance(cooldown, int) or isinstance(cooldown, bool) or cooldown < 0):
-        _error("trigger.cooldown_minutes must be a whole number of minutes (0 or more)", field="trigger.cooldown_minutes")
+    if cooldown is not None and (
+        not isinstance(cooldown, int) or isinstance(cooldown, bool) or cooldown < 0
+    ):
+        _error(
+            "trigger.cooldown_minutes must be a whole number of minutes (0 or more)",
+            field="trigger.cooldown_minutes",
+        )
 
     steps = definition.get("steps")
     if not isinstance(steps, list) or not steps:
@@ -153,16 +222,36 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
             _error(f"duplicate step id {sid!r}", step_id=sid, field="id")
         ids.add(sid)
         if step.get("type") not in _STEP_TYPES:
-            _error(f"step {sid!r}: type must be one of {sorted(_STEP_TYPES)}", step_id=sid, field="type")
+            _error(
+                f"step {sid!r}: type must be one of {sorted(_STEP_TYPES)}",
+                step_id=sid,
+                field="type",
+            )
         if step.get("type") == "send_email" and not (
             step.get("template") or step.get("subject")
         ):
-            _error(f"step {sid!r}: send_email needs a template or subject", step_id=sid, field="template")
+            _error(
+                f"step {sid!r}: send_email needs a template or subject",
+                step_id=sid,
+                field="template",
+            )
         if step.get("type") == "send_email" and not step.get("from"):
-            _error(f"step {sid!r}: send_email needs a from address", step_id=sid, field="from")
+            _error(
+                f"step {sid!r}: send_email needs a from address",
+                step_id=sid,
+                field="from",
+            )
         if step.get("type") == "send_whatsapp" and not step.get("template"):
-            _error(f"step {sid!r}: send_whatsapp needs a template", step_id=sid, field="template")
-        if step.get("type") == "send_whatsapp" and step.get("template") and account is not None:
+            _error(
+                f"step {sid!r}: send_whatsapp needs a template",
+                step_id=sid,
+                field="template",
+            )
+        if (
+            step.get("type") == "send_whatsapp"
+            and step.get("template")
+            and account is not None
+        ):
             from apps.whatsapp.models import MessageTemplate
 
             template = MessageTemplate.objects.filter(
@@ -171,14 +260,17 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
             if template is None:
                 _error(
                     f"step {sid!r}: template {step['template']!r} not found",
-                    step_id=sid, field="template",
+                    step_id=sid,
+                    field="template",
                 )
             else:
                 if template.approval_status != template.ApprovalStatus.APPROVED:
                     _error(
                         f"step {sid!r}: template {step['template']!r} is not yet approved "
                         f"by Meta (status={template.approval_status}) — sends will fail until approved",
-                        step_id=sid, field="template", severity="warning",
+                        step_id=sid,
+                        field="template",
+                        severity="warning",
                     )
                 mapping = step.get("variable_mapping") or {}
                 missing = [v for v in (template.variables or []) if v not in mapping]
@@ -186,20 +278,31 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     _error(
                         f"step {sid!r}: template {step['template']!r} needs a mapping for "
                         f"variable(s) {', '.join(missing)}",
-                        step_id=sid, field="variable_mapping",
+                        step_id=sid,
+                        field="variable_mapping",
                     )
                 from apps.automation import variables as wa_variables
 
                 for var in template.variables or []:
-                    if var in mapping and wa_variables.looks_like_name(var) and wa_variables.is_fixed_text(mapping[var]):
+                    if (
+                        var in mapping
+                        and wa_variables.looks_like_name(var)
+                        and wa_variables.is_fixed_text(mapping[var])
+                    ):
                         _error(
                             f"step {sid!r}: '{var}' is fixed text, so every customer would get the same "
                             "name. Fill it from the customer's own details instead",
-                            step_id=sid, field="variable_mapping", severity="warning",
+                            step_id=sid,
+                            field="variable_mapping",
+                            severity="warning",
                         )
         if step.get("type") == "action":
             if not step.get("action"):
-                _error(f"step {sid!r}: action needs an action name", step_id=sid, field="action")
+                _error(
+                    f"step {sid!r}: action needs an action name",
+                    step_id=sid,
+                    field="action",
+                )
             else:
                 from apps.core.actions import ActionError, get_action
 
@@ -208,7 +311,8 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 except ActionError:
                     _error(
                         f"step {sid!r}: no action registered as {step['action']!r}",
-                        step_id=sid, field="action",
+                        step_id=sid,
+                        field="action",
                     )
                 else:
                     params = step.get("params") or {}
@@ -225,38 +329,71 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                         _error(
                             f"step {sid!r}: action {step['action']!r} needs "
                             f"{field_name!r} in params (or {field_name}_id)",
-                            step_id=sid, field="params",
+                            step_id=sid,
+                            field="params",
                         )
         if step.get("type") == "reply_text":
             if not (step.get("text") or "").strip():
-                _error(f"step {sid!r}: reply_text needs the text to send", step_id=sid, field="text")
+                _error(
+                    f"step {sid!r}: reply_text needs the text to send",
+                    step_id=sid,
+                    field="text",
+                )
             if trig.get("type") != "conversation.message_received":
                 _error(
                     f"step {sid!r}: reply_text needs the 'customer messages you' trigger, "
                     "because it replies in that conversation",
-                    step_id=sid, field="type",
+                    step_id=sid,
+                    field="type",
                 )
-        if step.get("type") == "create_lead" and len(str(step.get("source") or "")) > 50:
-            _error(f"step {sid!r}: keep the source under 50 characters", step_id=sid, field="source")
+        if (
+            step.get("type") == "create_lead"
+            and len(str(step.get("source") or "")) > 50
+        ):
+            _error(
+                f"step {sid!r}: keep the source under 50 characters",
+                step_id=sid,
+                field="source",
+            )
         if step.get("type") == "update_lead_status":
             from apps.crm.services import SETTABLE_LEAD_STATUSES
 
             if step.get("status") not in {s.value for s in SETTABLE_LEAD_STATUSES}:
-                _error(f"step {sid!r}: choose new, contacted, qualified or lost", step_id=sid, field="status")
+                _error(
+                    f"step {sid!r}: choose new, contacted, qualified or lost",
+                    step_id=sid,
+                    field="status",
+                )
         if step.get("type") == "assign_conversation":
             who = step.get("to")
             if who not in (None, "") and not (isinstance(who, str) and "@" in who):
-                _error(f"step {sid!r}: 'to' is a teammate's email, or empty for the least busy",
-                       step_id=sid, field="to")
+                _error(
+                    f"step {sid!r}: 'to' is a teammate's email, or empty for the least busy",
+                    step_id=sid,
+                    field="to",
+                )
         if step.get("type") == "notify_team":
             who = step.get("to") or "owners"
-            if who not in ("owners", "assignee") and not (isinstance(who, str) and "@" in who):
-                _error(f"step {sid!r}: tell your owners, the assignee, or a teammate's email",
-                       step_id=sid, field="to")
+            if who not in ("owners", "assignee") and not (
+                isinstance(who, str) and "@" in who
+            ):
+                _error(
+                    f"step {sid!r}: tell your owners, the assignee, or a teammate's email",
+                    step_id=sid,
+                    field="to",
+                )
             if not (step.get("text") or "").strip():
-                _error(f"step {sid!r}: write what the team should be told", step_id=sid, field="text")
+                _error(
+                    f"step {sid!r}: write what the team should be told",
+                    step_id=sid,
+                    field="text",
+                )
             elif len(step["text"]) > 1000:
-                _error(f"step {sid!r}: keep the message under 1000 characters", step_id=sid, field="text")
+                _error(
+                    f"step {sid!r}: keep the message under 1000 characters",
+                    step_id=sid,
+                    field="text",
+                )
         if step.get("type") in ("send_buttons", "send_list"):
             from apps.whatsapp import interactive as wa_interactive
 
@@ -264,22 +401,41 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 if step["type"] == "send_buttons":
                     wa_interactive.build_buttons(step.get("text"), step.get("buttons"))
                 else:
-                    wa_interactive.build_list(step.get("text"), step.get("button"), step.get("rows"))
+                    wa_interactive.build_list(
+                        step.get("text"), step.get("button"), step.get("rows")
+                    )
             except wa_interactive.InteractiveError as exc:
-                _error(f"step {sid!r}: {exc}", step_id=sid, field="buttons" if step["type"] == "send_buttons" else "rows")
+                _error(
+                    f"step {sid!r}: {exc}",
+                    step_id=sid,
+                    field="buttons" if step["type"] == "send_buttons" else "rows",
+                )
             if trig.get("type") != "conversation.message_received":
                 _error(
                     f"step {sid!r}: {step['type']} needs the 'customer messages you' trigger, "
                     "because it replies in that conversation",
-                    step_id=sid, field="type",
+                    step_id=sid,
+                    field="type",
                 )
         if step.get("type") == "wait_for_reply":
             routes = step.get("routes")
             if not isinstance(routes, dict) or not routes:
-                _error(f"step {sid!r}: wait_for_reply needs at least one choice to route", step_id=sid, field="routes")
+                _error(
+                    f"step {sid!r}: wait_for_reply needs at least one choice to route",
+                    step_id=sid,
+                    field="routes",
+                )
             timeout = step.get("timeout_seconds", DEFAULT_REPLY_TIMEOUT_SECONDS)
-            if not isinstance(timeout, int) or isinstance(timeout, bool) or not 60 <= timeout <= MAX_REPLY_TIMEOUT_SECONDS:
-                _error(f"step {sid!r}: wait between 1 minute and 30 days", step_id=sid, field="timeout_seconds")
+            if (
+                not isinstance(timeout, int)
+                or isinstance(timeout, bool)
+                or not 60 <= timeout <= MAX_REPLY_TIMEOUT_SECONDS
+            ):
+                _error(
+                    f"step {sid!r}: wait between 1 minute and 30 days",
+                    step_id=sid,
+                    field="timeout_seconds",
+                )
         if step.get("type") in ("add_tag", "remove_tag"):
             from apps.contacts import tags as contact_tags
 
@@ -292,14 +448,26 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
         if step.get("type") == "branch" and not (
             step.get("on_true") and step.get("on_false") and step.get("field")
         ):
-            _error(f"step {sid!r}: branch needs field, on_true, on_false", step_id=sid, field="field")
+            _error(
+                f"step {sid!r}: branch needs field, on_true, on_false",
+                step_id=sid,
+                field="field",
+            )
         if step.get("type") in ("send_email", "send_whatsapp") and step.get("send_at"):
             if parse_datetime(step["send_at"]) is None:
-                _error(f"step {sid!r}: send_at is not a valid datetime", step_id=sid, field="send_at")
+                _error(
+                    f"step {sid!r}: send_at is not a valid datetime",
+                    step_id=sid,
+                    field="send_at",
+                )
 
     def _check(ref, sid, field):
         if ref and ref not in ids:
-            _error(f"step {sid!r}.{field} points to unknown step {ref!r}", step_id=sid, field=field)
+            _error(
+                f"step {sid!r}.{field} points to unknown step {ref!r}",
+                step_id=sid,
+                field=field,
+            )
 
     for step in steps:
         sid = step.get("id")
@@ -319,7 +487,9 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
 
 
 def _steps_by_id(workflow: Workflow) -> dict:
-    return {s["id"]: s for s in (workflow.definition or {}).get("steps", []) if "id" in s}
+    return {
+        s["id"]: s for s in (workflow.definition or {}).get("steps", []) if "id" in s
+    }
 
 
 def _first_step_id(workflow: Workflow) -> str | None:
@@ -362,17 +532,21 @@ def _notify_workflow(run: WorkflowRun, event_type: str) -> None:
     try:
         from apps.email.webhooks import notify
 
-        notify(run.workflow.account, event_type, {
-            "run_id": run.public_id,
-            "workflow": run.workflow.slug,
-            "contact": run.contact.public_id,
-            "status": run.status,
-        })
+        notify(
+            run.workflow.account,
+            event_type,
+            {
+                "run_id": run.public_id,
+                "workflow": run.workflow.slug,
+                "contact": run.contact.public_id,
+                "status": run.status,
+            },
+        )
     except Exception:
         logger.exception("_notify_workflow failed for run %s", run.pk)
 
 
-_TRUTHY = {True, "true", "True", "yes", "1", 1}
+_TRUTHY = {True, "true", "True", "yes", "1"}
 
 
 def _condition_matches(contact, step: dict) -> bool:
@@ -406,7 +580,9 @@ def _run_send_email(run: WorkflowRun, step: dict) -> dict:
 
     contact = run.contact
     if not contact.email:
-        raise ValueError(f"send_email step requires an email, but contact {contact.pk} has none")
+        raise ValueError(
+            f"send_email step requires an email, but contact {contact.pk} has none"
+        )
     send_at = parse_datetime(step["send_at"]) if step.get("send_at") else None
     msg = create_and_queue_message(
         account=run.workflow.account,
@@ -457,7 +633,9 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     phone_field = step.get("phone_field", "phone")
     # The canonical number lives on Contact.phone (WhatsApp-originated contacts have
     # no attributes); a custom phone_field still reads from attributes.
-    phone = (contact.phone if phone_field == "phone" else None) or (contact.attributes or {}).get(phone_field)
+    phone = (contact.phone if phone_field == "phone" else None) or (
+        contact.attributes or {}
+    ).get(phone_field)
     if not phone:
         raise ValueError(
             f"send_whatsapp step {step.get('id')!r}: contact {contact.pk} has no "
@@ -476,7 +654,10 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
         )
 
     params = _resolve_variable_mapping(
-        template.variables, step.get("variable_mapping") or {}, run, contact,
+        template.variables,
+        step.get("variable_mapping") or {},
+        run,
+        contact,
         fallbacks=step.get("variable_fallbacks") or {},
     )
 
@@ -508,15 +689,26 @@ def _conversation_for_run(run: WorkflowRun, step: dict, *, fallback: bool = Fals
 
     public_id = (run.context or {}).get("conversation_id")
     conversation = (
-        Conversation.objects.filter(account=run.workflow.account, public_id=public_id).first()
-        if public_id else None
+        Conversation.objects.filter(
+            account=run.workflow.account, public_id=public_id
+        ).first()
+        if public_id
+        else None
     )
     if conversation is None and fallback:
-        conversation = Conversation.objects.filter(
-            account=run.workflow.account, contact=run.contact, status=Conversation.Status.OPEN,
-        ).order_by("-last_message_at", "-id").first()
+        conversation = (
+            Conversation.objects.filter(
+                account=run.workflow.account,
+                contact=run.contact,
+                status=Conversation.Status.OPEN,
+            )
+            .order_by("-last_message_at", "-id")
+            .first()
+        )
     if conversation is None:
-        raise ValueError(f"{step.get('type')} step {step.get('id')!r}: this run has no conversation to reply in")
+        raise ValueError(
+            f"{step.get('type')} step {step.get('id')!r}: this run has no conversation to reply in"
+        )
     return conversation
 
 
@@ -525,7 +717,9 @@ def _first_name_merge(run: WorkflowRun, text: str) -> str:
     # reach into objects with "{contact.__class__}" style placeholders.
     from apps.automation.variables import merge_business_facts, merge_first_name
 
-    return merge_business_facts(merge_first_name(text, run.contact.first_name), run.contact.account)
+    return merge_business_facts(
+        merge_first_name(text, run.contact.first_name), run.contact.account
+    )
 
 
 def _run_interactive(run: WorkflowRun, step: dict) -> dict:
@@ -538,18 +732,26 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
     from apps.whatsapp import interactive as wa_interactive
 
     conversation = _conversation_for_run(run, step)
-    if conversation.channel != conversation.Channel.WHATSAPP or conversation.whatsapp_conversation is None:
-        raise ValueError(f"{step['type']} step {step.get('id')!r}: buttons and lists are WhatsApp-only")
+    if (
+        conversation.channel != conversation.Channel.WHATSAPP
+        or conversation.whatsapp_conversation is None
+    ):
+        raise ValueError(
+            f"{step['type']} step {step.get('id')!r}: buttons and lists are WhatsApp-only"
+        )
     text = _first_name_merge(run, step.get("text"))
     try:
         if step["type"] == "send_buttons":
             interactive = wa_interactive.build_buttons(text, step.get("buttons"))
         else:
-            interactive = wa_interactive.build_list(text, step.get("button"), step.get("rows"))
+            interactive = wa_interactive.build_list(
+                text, step.get("button"), step.get("rows")
+            )
     except wa_interactive.InteractiveError as exc:
         raise ValueError(f"{step['type']} step {step.get('id')!r}: {exc}") from exc
     msg = whatsapp_api.send_interactive(
-        run.workflow.account, conversation.whatsapp_conversation.contact, interactive)
+        run.workflow.account, conversation.whatsapp_conversation.contact, interactive
+    )
     conversation.whatsapp_conversation.register_outbound(msg.created_at)
     return {"outbound_message_id": msg.id}
 
@@ -582,8 +784,10 @@ def resume_on_reply(account_id: int, contact, message: dict) -> bool:
     still reaches the normal keyword workflows.
     """
     waiting = WorkflowRun.objects.filter(
-        contact=contact, workflow__account_id=account_id,
-        status=WorkflowRun.Status.WAITING, next_due_at__isnull=False,
+        contact=contact,
+        workflow__account_id=account_id,
+        status=WorkflowRun.Status.WAITING,
+        next_due_at__isnull=False,
     ).select_related("workflow")
     for run in waiting:
         step = _steps_by_id(run.workflow).get(run.current_step)
@@ -593,11 +797,21 @@ def resume_on_reply(account_id: int, contact, message: dict) -> bool:
         if not target:
             continue
         with transaction.atomic():
-            run = WorkflowRun.objects.select_for_update().select_related("workflow").get(pk=run.pk)
-            if run.status != WorkflowRun.Status.WAITING or run.current_step != step["id"]:
+            run = (
+                WorkflowRun.objects.select_for_update()
+                .select_related("workflow")
+                .get(pk=run.pk)
+            )
+            if (
+                run.status != WorkflowRun.Status.WAITING
+                or run.current_step != step["id"]
+            ):
                 continue  # another worker already handled it
-            reply = {"id": message.get("reply_id", ""), "title": message.get("reply_title", ""),
-                     "text": message.get("body", "")}
+            reply = {
+                "id": message.get("reply_id", ""),
+                "title": message.get("reply_title", ""),
+                "text": message.get("body", ""),
+            }
             _record(run, step, {"reply": reply, "went_to": target})
             run.context = {**(run.context or {}), "reply": reply}
             run.status = WorkflowRun.Status.ACTIVE
@@ -623,8 +837,13 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
     try:
         # A fixed key per run and step: a retried step returns the first message instead of sending
         # a second, and the inbox can tell this reply came from an automation, not a person.
-        return run_action("reply", {"account": run.workflow.account}, conversation=conversation, body=text,
-                          idempotency_key=f"wf:{run.pk}:{step.get('id')}")
+        return run_action(
+            "reply",
+            {"account": run.workflow.account},
+            conversation=conversation,
+            body=text,
+            idempotency_key=f"wf:{run.pk}:{step.get('id')}",
+        )
     except ActionError as exc:
         raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
 
@@ -636,14 +855,27 @@ def _lead_for_run(run: WorkflowRun, step: dict):
     account = run.workflow.account
     lead = None
     if (run.context or {}).get("lead_id"):
-        lead = Lead.objects.filter(account=account, public_id=run.context["lead_id"]).first()
-    if lead is None:
         lead = Lead.objects.filter(
-            account=account, contact=run.contact,
-            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
-        ).order_by("-created_at").first()
+            account=account, public_id=run.context["lead_id"]
+        ).first()
     if lead is None:
-        raise ValueError(f"{step['type']} step {step.get('id')!r}: this customer has no open lead")
+        lead = (
+            Lead.objects.filter(
+                account=account,
+                contact=run.contact,
+                status__in=[
+                    Lead.Status.NEW,
+                    Lead.Status.CONTACTED,
+                    Lead.Status.QUALIFIED,
+                ],
+            )
+            .order_by("-created_at")
+            .first()
+        )
+    if lead is None:
+        raise ValueError(
+            f"{step['type']} step {step.get('id')!r}: this customer has no open lead"
+        )
     return lead
 
 
@@ -653,8 +885,12 @@ def _run_create_lead(run: WorkflowRun, step: dict) -> dict:
     account = run.workflow.account
     try:
         result = run_action(
-            "create_lead", {"account": account}, account=account, contact=run.contact,
-            source=(step.get("source") or "automation")[:50], workflow_run=run,
+            "create_lead",
+            {"account": account},
+            account=account,
+            contact=run.contact,
+            source=(step.get("source") or "automation")[:50],
+            workflow_run=run,
             conversation_id=(run.context or {}).get("conversation_id") or "",
         )
     except ActionError as exc:
@@ -671,7 +907,11 @@ def _run_update_lead_status(run: WorkflowRun, step: dict) -> dict:
     lead = _lead_for_run(run, step)
     try:
         return run_action(
-            "update_lead_status", {"account": run.workflow.account}, lead=lead, status=step.get("status"))
+            "update_lead_status",
+            {"account": run.workflow.account},
+            lead=lead,
+            status=step.get("status"),
+        )
     except ActionError as exc:
         raise ValueError(f"update_lead_status step {step.get('id')!r}: {exc}") from exc
 
@@ -682,8 +922,10 @@ def _run_assign_conversation(run: WorkflowRun, step: dict) -> dict:
     conversation = _conversation_for_run(run, step, fallback=True)
     try:
         return run_action(
-            "auto_assign_conversation", {"account": run.workflow.account},
-            conversation=conversation, email=step.get("to") or "",
+            "auto_assign_conversation",
+            {"account": run.workflow.account},
+            conversation=conversation,
+            email=step.get("to") or "",
         )
     except ActionError as exc:
         raise ValueError(f"assign_conversation step {step.get('id')!r}: {exc}") from exc
@@ -699,17 +941,21 @@ def _run_notify_team(run: WorkflowRun, step: dict) -> dict:
     except ValueError:
         conversation = None  # a notification about a customer needs no conversation
     contact = run.contact
-    who = (contact.full_name or contact.phone or contact.email or "A customer")
+    who = contact.full_name or contact.phone or contact.email or "A customer"
     text = _first_name_merge(run, step.get("text")).replace("{contact}", who)
     path = (
-        reverse("conversations:detail", args=[conversation.public_id]) if conversation is not None
+        reverse("conversations:detail", args=[conversation.public_id])
+        if conversation is not None
         else reverse("contacts:detail", args=[contact.public_id])
     )
     try:
         sent = notifications.notify_team(
-            run.workflow.account, to=step.get("to") or "owners",
+            run.workflow.account,
+            to=step.get("to") or "owners",
             subject=(step.get("subject") or f"Akilent: {who}")[:200],
-            text=text, path=path, conversation=conversation,
+            text=text,
+            path=path,
+            conversation=conversation,
         )
     except notifications.NotifyError as exc:
         raise ValueError(f"notify_team step {step.get('id')!r}: {exc}") from exc
@@ -719,7 +965,9 @@ def _run_notify_team(run: WorkflowRun, step: dict) -> dict:
 def _run_tag_step(run: WorkflowRun, step: dict) -> dict:
     from apps.contacts import tags as contact_tags
 
-    change = contact_tags.add_tag if step["type"] == "add_tag" else contact_tags.remove_tag
+    change = (
+        contact_tags.add_tag if step["type"] == "add_tag" else contact_tags.remove_tag
+    )
     try:
         changed = change(run.contact, step.get("tag") or "")
     except contact_tags.TagError as exc:
@@ -732,11 +980,18 @@ def _resolve_whatsapp_template(account, name):
         return None
     from apps.whatsapp.models import MessageTemplate
 
-    return MessageTemplate.objects.filter(account=account, whatsapp_template_name=name).first()
+    return MessageTemplate.objects.filter(
+        account=account, whatsapp_template_name=name
+    ).first()
 
 
-def _resolve_variable_mapping(variables: list, mapping: dict, run: WorkflowRun, contact,
-                              fallbacks: dict | None = None) -> dict:
+def _resolve_variable_mapping(
+    variables: list,
+    mapping: dict,
+    run: WorkflowRun,
+    contact,
+    fallbacks: dict | None = None,
+) -> dict:
     """Build the WhatsApp template ``params`` dict from an explicit, allow-listed mapping.
 
     See ``apps.automation.variables`` for what a mapping entry can be. Only variable names the
@@ -748,8 +1003,13 @@ def _resolve_variable_mapping(variables: list, mapping: dict, run: WorkflowRun, 
 
     try:
         return wa_variables.resolve(
-            variables, mapping, contact=contact, account=run.workflow.account, context=run.context or {},
-            fallbacks=fallbacks)
+            variables,
+            mapping,
+            contact=contact,
+            account=run.workflow.account,
+            context=run.context or {},
+            fallbacks=fallbacks,
+        )
     except wa_variables.MissingValue as exc:
         raise ValueError(f"send_whatsapp: {exc}") from exc
 
@@ -795,9 +1055,9 @@ def _resolve_action_param(source, run: WorkflowRun):
     contact_attrs = run.contact.attributes or {}
     context = run.context or {}
     if isinstance(source, str) and source.startswith("contact."):
-        return _dig(contact_attrs, source[len("contact."):])
+        return _dig(contact_attrs, source[len("contact.") :])
     if isinstance(source, str) and source.startswith("context."):
-        return _dig(context, source[len("context."):])
+        return _dig(context, source[len("context.") :])
     return source
 
 
@@ -837,7 +1097,9 @@ def _build_action_kwargs(run: WorkflowRun, step: dict) -> dict:
             if id_source is not None:
                 public_id = _resolve_action_param(id_source, run)
                 if public_id:
-                    kwargs[field_name] = _resolve_action_object(field_name, public_id, run)
+                    kwargs[field_name] = _resolve_action_object(
+                        field_name, public_id, run
+                    )
             continue
         if field_name in params:
             kwargs[field_name] = _resolve_action_param(params[field_name], run)
@@ -864,7 +1126,9 @@ def _run_action_step(run: WorkflowRun, step: dict) -> dict:
         # advance_run's caller treats any exception from a step as a failed
         # run — this just gives it a clean message instead of leaking
         # ActionError's type across the module boundary.
-        raise ValueError(f"action step {step.get('id')!r} ({step['action']}): {exc}") from exc
+        raise ValueError(
+            f"action step {step.get('id')!r} ({step['action']}): {exc}"
+        ) from exc
 
 
 def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
@@ -892,7 +1156,11 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
         stype = step.get("type")
 
         if stype == "wait":
-            if run.status == WorkflowRun.Status.WAITING and run.next_due_at and run.next_due_at <= timezone.now():
+            if (
+                run.status == WorkflowRun.Status.WAITING
+                and run.next_due_at
+                and run.next_due_at <= timezone.now()
+            ):
                 # resuming from the wait
                 _record(run, step, {"resumed": True})
                 run.status = WorkflowRun.Status.ACTIVE
@@ -901,12 +1169,18 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 run.save(update_fields=["status", "next_due_at", "current_step"])
                 continue
             run.status = WorkflowRun.Status.WAITING
-            run.next_due_at = timezone.now() + timedelta(seconds=int(step.get("seconds", 0)))
+            run.next_due_at = timezone.now() + timedelta(
+                seconds=int(step.get("seconds", 0))
+            )
             run.save(update_fields=["status", "next_due_at"])
             return run
 
         if stype == "wait_for_reply":
-            if run.status == WorkflowRun.Status.WAITING and run.next_due_at and run.next_due_at <= timezone.now():
+            if (
+                run.status == WorkflowRun.Status.WAITING
+                and run.next_due_at
+                and run.next_due_at <= timezone.now()
+            ):
                 # Nobody answered in time: take the timeout path (or simply end).
                 _record(run, step, {"timed_out": True})
                 run.status = WorkflowRun.Status.ACTIVE
@@ -964,7 +1238,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 return _complete(run)
             else:
                 raise ValueError(f"unsupported workflow step type {stype!r}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("workflow run %s step %s failed", run.pk, step.get("id"))
             _record(run, step, {"error": str(exc)}, status="error")
             run.status = WorkflowRun.Status.FAILED
@@ -983,7 +1257,9 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
     return run
 
 
-def _next_after(step: dict, run: WorkflowRun, *, branch_result: dict | None = None) -> str:
+def _next_after(
+    step: dict, run: WorkflowRun, *, branch_result: dict | None = None
+) -> str:
     if step.get("type") == "branch":
         if branch_result is None:
             branch_result = {"matched": _condition_matches(run.contact, step)}
@@ -996,8 +1272,11 @@ def _record(run: WorkflowRun, step: dict, result: dict, *, status: str = "ok") -
 
     try:
         WorkflowStepRun.objects.create(
-            run=run, step_id=step["id"], step_type=step.get("type", ""),
-            status=status, result=result,
+            run=run,
+            step_id=step["id"],
+            step_type=step.get("type", ""),
+            status=status,
+            result=result,
             # Keep the FK in sync with the legacy JSON key so both the
             # reconciliation hook (apps.automation.integrations.whatsapp) and
             # any existing code reading result["outbound_message_id"] work.
@@ -1029,7 +1308,8 @@ def _alert_failure(run: WorkflowRun, error: str) -> None:
         contact = run.contact
         who = contact.full_name or contact.phone or contact.email or "a customer"
         notifications.notify_team(
-            run.workflow.account, to="owners",
+            run.workflow.account,
+            to="owners",
             subject=f"Akilent: {run.workflow.name} couldn't send",
             text=(
                 f"Your automation {run.workflow.name} couldn't finish for {who}.\n\n"
@@ -1038,7 +1318,7 @@ def _alert_failure(run: WorkflowRun, error: str) -> None:
             ),
             path=reverse("automation:why-not"),
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("could not send the failure alert for run %s", run.pk)
 
 
@@ -1052,6 +1332,7 @@ def _complete(run: WorkflowRun) -> WorkflowRun:
 
 
 # ── Trigger evaluation ───────────────────────────────────────────────────────
+
 
 def on_business_event(event, **kwargs) -> None:
     """Enroll the event's contact into workflows triggered by this event name."""
@@ -1071,12 +1352,17 @@ def on_business_event(event, **kwargs) -> None:
             try:
                 with transaction.atomic():
                     enroll(wf, contact, context={"event": event.data})
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("on_business_event: enroll failed wf=%s", wf.pk)
 
 
 def enroll_for_trigger(
-    account_id: int, trigger_type: str, contact, *, context: dict | None = None, subject_key: str = ""
+    account_id: int,
+    trigger_type: str,
+    contact,
+    *,
+    context: dict | None = None,
+    subject_key: str = "",
 ) -> int:
     """Enroll ``contact`` into every published workflow whose trigger matches.
 
@@ -1096,10 +1382,15 @@ def enroll_for_trigger(
             continue
         try:
             with transaction.atomic():
-                if enroll(wf, contact, context=context or {}, subject_key=subject_key) is not None:
+                if (
+                    enroll(wf, contact, context=context or {}, subject_key=subject_key)
+                    is not None
+                ):
                     n += 1
-        except Exception:  # noqa: BLE001
-            logger.exception("enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type)
+        except Exception:
+            logger.exception(
+                "enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type
+            )
     return n
 
 
@@ -1108,7 +1399,9 @@ def _trigger_allows(workflow: Workflow, trigger: dict, contact, context: dict) -
     return trigger_verdict(workflow, trigger, contact, context) is None
 
 
-def trigger_verdict(workflow: Workflow, trigger: dict, contact, context: dict) -> dict | None:
+def trigger_verdict(
+    workflow: Workflow, trigger: dict, contact, context: dict
+) -> dict | None:
     """Why a trigger's own filters refuse this event, or None if they let it through.
 
     Returns a structured reason (``{"code": ..., "details": {...}}``), never wording; the owner-facing
@@ -1123,21 +1416,42 @@ def trigger_verdict(workflow: Workflow, trigger: dict, contact, context: dict) -
 
         body = message.get("body") or ""
         if not keywords.matches(match, body):
-            return {"code": "keyword_mismatch", "details": {"expected": list(match.get("any") or []),
-                                                           "mode": match.get("mode"), "received": body}}
+            return {
+                "code": "keyword_mismatch",
+                "details": {
+                    "expected": list(match.get("any") or []),
+                    "mode": match.get("mode"),
+                    "received": body,
+                },
+            }
     wanted = trigger.get("reply_id")
     if wanted:
-        wanted = {w.casefold() for w in ([wanted] if isinstance(wanted, str) else wanted)}
-        got = (message.get("reply_id") or "")
+        wanted = {
+            w.casefold() for w in ([wanted] if isinstance(wanted, str) else wanted)
+        }
+        got = message.get("reply_id") or ""
         if got.casefold() not in wanted:
-            return {"code": "reply_mismatch", "details": {"expected": sorted(wanted), "received": got}}
-    cooldown = trigger.get("cooldown_minutes", DEFAULT_KEYWORD_COOLDOWN_MINUTES if match else 0)
+            return {
+                "code": "reply_mismatch",
+                "details": {"expected": sorted(wanted), "received": got},
+            }
+    cooldown = trigger.get(
+        "cooldown_minutes", DEFAULT_KEYWORD_COOLDOWN_MINUTES if match else 0
+    )
     if cooldown:
         since = timezone.now() - timedelta(minutes=cooldown)
-        last = WorkflowRun.objects.filter(
-            workflow=workflow, contact=contact, started_at__gte=since).order_by("-started_at").first()
+        last = (
+            WorkflowRun.objects.filter(
+                workflow=workflow, contact=contact, started_at__gte=since
+            )
+            .order_by("-started_at")
+            .first()
+        )
         if last is not None:
-            return {"code": "cooldown", "details": {"minutes": cooldown, "last_started_at": last.started_at}}
+            return {
+                "code": "cooldown",
+                "details": {"minutes": cooldown, "last_started_at": last.started_at},
+            }
     return None
 
 
@@ -1146,7 +1460,12 @@ MESSAGE_TRIGGERS = ("conversation.message_received", "contact.created")
 
 
 def explain_enrollment(
-    account_id: int, contact, *, message: dict, message_at, is_first_message: bool,
+    account_id: int,
+    contact,
+    *,
+    message: dict,
+    message_at,
+    is_first_message: bool,
 ) -> list[dict]:
     """For each automation a customer's message could have started: did it, and if not, why not.
 
@@ -1174,19 +1493,34 @@ def explain_enrollment(
             verdict("not_new_customer")
             continue
         run = (
-            WorkflowRun.objects.filter(workflow=wf, contact=contact, started_at__gte=message_at - timedelta(minutes=2))
-            .order_by("-started_at").first()
+            WorkflowRun.objects.filter(
+                workflow=wf,
+                contact=contact,
+                started_at__gte=message_at - timedelta(minutes=2),
+            )
+            .order_by("-started_at")
+            .first()
         )
         if run is not None:
             failed = run.step_runs.filter(status="error").order_by("-id").first()
-            verdict("ran", run=run, error=(failed.result or {}).get("error", "") if failed else "")
+            verdict(
+                "ran",
+                run=run,
+                error=(failed.result or {}).get("error", "") if failed else "",
+            )
             continue
-        blocked = trigger_verdict(wf, trigger, contact, context) if kind == "conversation.message_received" else None
+        blocked = (
+            trigger_verdict(wf, trigger, contact, context)
+            if kind == "conversation.message_received"
+            else None
+        )
         if blocked is not None:
             verdict(blocked["code"], **blocked["details"])
             continue
         if WorkflowRun.objects.filter(
-            workflow=wf, contact=contact, status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
+            workflow=wf,
+            contact=contact,
+            status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
         ).exists():
             verdict("already_running")
             continue
@@ -1215,9 +1549,12 @@ def run_due() -> int:
     with transaction.atomic():
         due = (
             WorkflowRun.objects.select_for_update(**lock_kwargs)
-            .filter(status=WorkflowRun.Status.WAITING, next_due_at__lte=timezone.now(),
-                    workflow__status=Workflow.Status.PUBLISHED,
-                    workflow__account__is_active=True)  # suspended: waits resume on reactivation
+            .filter(
+                status=WorkflowRun.Status.WAITING,
+                next_due_at__lte=timezone.now(),
+                workflow__status=Workflow.Status.PUBLISHED,
+                workflow__account__is_active=True,
+            )  # suspended: waits resume on reactivation
             .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
         )
         runs = list(due)
@@ -1227,6 +1564,6 @@ def run_due() -> int:
             with transaction.atomic():
                 advance_run(run)
             n += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("run_due: advance failed for run %s", run.pk)
     return n

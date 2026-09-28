@@ -5,14 +5,15 @@ These tasks are dispatched asynchronously from domain event subscribers,
 keeping the event publisher (WhatsApp webhook handling) decoupled from
 the automation engine's latency.
 """
+
 import json
 import logging
 
 import requests
-from celery import shared_task
 
 from apps.automation.rules import evaluate_conditions, get_matching_rules
 from apps.automation.workflows import execute_rule
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,13 @@ _WEBHOOK_TIMEOUT_SECONDS = 10
 
 
 def _webhook_backoff_delay(retry_count: int) -> int:
-    return _WEBHOOK_RETRY_DELAY_BASE * (_WEBHOOK_RETRY_DELAY_MULTIPLIER ** retry_count)
+    return _WEBHOOK_RETRY_DELAY_BASE * (_WEBHOOK_RETRY_DELAY_MULTIPLIER**retry_count)
 
 
 @shared_task
-def evaluate_rules_for_message(account_id: int, trigger_event: str, context: dict) -> None:
+def evaluate_rules_for_message(
+    account_id: int, trigger_event: str, context: dict
+) -> None:
     """Evaluate and execute automation rules for a trigger event.
 
     This is dispatched asynchronously onto the 'automation' Celery queue
@@ -46,7 +49,9 @@ def evaluate_rules_for_message(account_id: int, trigger_event: str, context: dic
             try:
                 execute_rule(rule, context)
             except Exception:
-                logger.exception("evaluate_rules_for_message: error executing rule pk=%s", rule.pk)
+                logger.exception(
+                    "evaluate_rules_for_message: error executing rule pk=%s", rule.pk
+                )
                 # Don't re-raise — continue to next rule if one fails
 
 
@@ -61,7 +66,7 @@ def find_repeated_replies() -> int:
     for account in list_active_accounts():
         try:
             with_patterns += bool(patterns.refresh(account))
-        except Exception:  # noqa: BLE001 - one business's data must not stop the others
+        except Exception:
             logger.exception("find_repeated_replies failed for account=%s", account.pk)
     return with_patterns
 
@@ -104,7 +109,11 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
         # Not retryable — a business-supplied URL that resolves to a private
         # target will never become valid on retry.
         delivery.mark_failed(None, str(exc), exhausted=True)
-        logger.warning("deliver_workflow_webhook: SSRF guard rejected delivery %s: %s", delivery_id, exc)
+        logger.warning(
+            "deliver_workflow_webhook: SSRF guard rejected delivery %s: %s",
+            delivery_id,
+            exc,
+        )
         return
 
     try:
@@ -118,7 +127,7 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
         )
         response.raise_for_status()
         delivery.mark_succeeded(response.status_code)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         response_obj = getattr(exc, "response", None)
         response_code = response_obj.status_code if response_obj is not None else None
 
@@ -127,7 +136,11 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
         if is_last:
             logger.error(
                 "deliver_workflow_webhook: exhausted retries for delivery %s (%s): %s",
-                delivery_id, delivery.url, exc,
+                delivery_id,
+                delivery.url,
+                exc,
             )
             return
-        raise self.retry(exc=exc, countdown=_webhook_backoff_delay(self.request.retries))
+        raise self.retry(
+            exc=exc, countdown=_webhook_backoff_delay(self.request.retries)
+        )

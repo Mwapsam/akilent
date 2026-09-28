@@ -6,6 +6,7 @@ placeholder value so domain creation completes and DNS records can be displayed.
 
 Never use this in production — no mail is actually delivered or provisioned.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +21,8 @@ from apps.email.types import (
     OperationResult,
     QuotaInfo,
 )
-from .base import DkimResult, EmailProvider, ProvisionResult
+
+from .base import EmailProvider
 
 logger = logging.getLogger(__name__)
 
@@ -243,8 +245,11 @@ class NullSendProvider:
     All send operations succeed silently without actually delivering anything.
     """
 
-    def send(self, message) -> "OperationResult":
+    def send(self, message) -> OperationResult:
         """Silently succeed on any send request."""
         from apps.email.types import SendResult
-        logger.debug("NullSendProvider.send() to %s (silently discarded)", message.to_email)
+
+        logger.debug(
+            "NullSendProvider.send() to %s (silently discarded)", message.to_email
+        )
         return SendResult(success=True, provider_message_id=f"null-{id(message)}")

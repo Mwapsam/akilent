@@ -5,6 +5,7 @@
 for any increment that was missed (crash between the event write and the
 counter bump).
 """
+
 from __future__ import annotations
 
 import logging
@@ -93,7 +94,10 @@ def reconcile(day) -> int:
         if event.type == MessageEvent.Type.OPENED and event.message_id not in seen_open:
             seen_open.add(event.message_id)
             counters[key]["unique_opens"] += 1
-        elif event.type == MessageEvent.Type.CLICKED and event.message_id not in seen_click:
+        elif (
+            event.type == MessageEvent.Type.CLICKED
+            and event.message_id not in seen_click
+        ):
             seen_click.add(event.message_id)
             counters[key]["unique_clicks"] += 1
 

@@ -46,7 +46,9 @@ class StripeGateway(PaymentGateway):
                     }
                 ],
                 customer_email=request.user.email or None,
-                success_url=request.build_absolute_uri(reverse("billing:stripe-success"))
+                success_url=request.build_absolute_uri(
+                    reverse("billing:stripe-success")
+                )
                 + "?session_id={CHECKOUT_SESSION_ID}",
                 cancel_url=request.build_absolute_uri("/billing/plans/"),
                 client_reference_id=f"sub_{account.pk}_{plan.slug}_{uuid.uuid4().hex[:8]}",
@@ -57,7 +59,12 @@ class StripeGateway(PaymentGateway):
                 },
             )
         except stripe.error.StripeError as exc:
-            logger.error("checkout: Stripe error for account=%s plan=%s: %s", account.pk, plan.slug, exc)
+            logger.error(
+                "checkout: Stripe error for account=%s plan=%s: %s",
+                account.pk,
+                plan.slug,
+                exc,
+            )
             messages.error(request, f"Payment initialization failed: {exc}")
             return redirect("/billing/plans/")
 

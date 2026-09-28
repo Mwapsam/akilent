@@ -9,6 +9,7 @@ time the drainer calls the existing chokepoints
 quota, reputation, suppression, MX and verified-domain checks all run exactly as
 for an immediate send.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -74,16 +75,25 @@ class ScheduledJob(models.Model):
     idempotency_key = models.CharField(max_length=64, unique=True)
 
     target_message = models.ForeignKey(
-        "email_service.EmailMessage", on_delete=models.SET_NULL,
-        blank=True, null=True, related_name="+",
+        "email_service.EmailMessage",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
     )
     target_campaign = models.ForeignKey(
-        "email_service.BulkEmailCampaign", on_delete=models.SET_NULL,
-        blank=True, null=True, related_name="scheduled_jobs",
+        "email_service.BulkEmailCampaign",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="scheduled_jobs",
     )
     target_outbound = models.ForeignKey(
-        "whatsapp.OutboundMessage", on_delete=models.SET_NULL,
-        blank=True, null=True, related_name="+",
+        "whatsapp.OutboundMessage",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
     )
     parent = models.ForeignKey(
         "self", on_delete=models.CASCADE, blank=True, null=True, related_name="children"
@@ -144,11 +154,17 @@ class ScheduledJob(models.Model):
             self.next_attempt_at = None
         else:
             self.status = self.Status.SCHEDULED
-            delay = min(2 * (2 ** self.attempts), 3600)
+            delay = min(2 * (2**self.attempts), 3600)
             self.next_attempt_at = timezone.now() + timedelta(seconds=delay)
-        self.save(update_fields=[
-            "attempts", "error", "status", "next_attempt_at", "updated_at",
-        ])
+        self.save(
+            update_fields=[
+                "attempts",
+                "error",
+                "status",
+                "next_attempt_at",
+                "updated_at",
+            ]
+        )
 
     def reschedule(self, fire_at, tz: str) -> None:
         self.fire_at = fire_at
@@ -157,10 +173,17 @@ class ScheduledJob(models.Model):
         self.next_attempt_at = None
         self.error = ""
         self.status = self.Status.SCHEDULED
-        self.save(update_fields=[
-            "fire_at", "tz", "attempts", "next_attempt_at", "error", "status",
-            "updated_at",
-        ])
+        self.save(
+            update_fields=[
+                "fire_at",
+                "tz",
+                "attempts",
+                "next_attempt_at",
+                "error",
+                "status",
+                "updated_at",
+            ]
+        )
 
     def cancel(self) -> None:
         self.status = self.Status.CANCELLED
@@ -192,8 +215,15 @@ class ScheduledJob(models.Model):
         self.attempts = 0
         self.next_attempt_at = None
         self.error = ""
-        self.save(update_fields=[
-            "fire_at", "status", "attempts", "next_attempt_at", "error",
-            "occurrence_count", "updated_at",
-        ])
+        self.save(
+            update_fields=[
+                "fire_at",
+                "status",
+                "attempts",
+                "next_attempt_at",
+                "error",
+                "occurrence_count",
+                "updated_at",
+            ]
+        )
         return True

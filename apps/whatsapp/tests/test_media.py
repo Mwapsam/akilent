@@ -4,6 +4,7 @@
 the configured Django storage backend, recording size/mime, and must retire a
 row after repeated failures so it stops being re-selected.
 """
+
 import tempfile
 from unittest.mock import patch
 
@@ -28,8 +29,11 @@ class _MediaProvider:
     def get_media_url(self, media_id):
         if self.exc:
             raise self.exc
-        return MediaUrlResult(url="https://media.example/x", media_type=self.mime,
-                              size_bytes=len(self.content))
+        return MediaUrlResult(
+            url="https://media.example/x",
+            media_type=self.mime,
+            size_bytes=len(self.content),
+        )
 
     def download_media(self, url):
         return self.content
@@ -40,8 +44,10 @@ class DownloadMediaTest(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Test Co", slug="test-co")
         WhatsAppBusinessNumber.objects.create(
-            account=self.account, phone_number_id="123456789",
-            access_token="tok", is_active=True,
+            account=self.account,
+            phone_number_id="123456789",
+            access_token="tok",
+            is_active=True,
         )
         from apps.whatsapp import api as whatsapp_api
 

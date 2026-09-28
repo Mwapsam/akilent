@@ -3,11 +3,10 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth.models import User
-from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
-from apps.billing.models import Plan, Subscription
+from apps.billing.models import Plan
 from apps.contacts.models import Contact
 from apps.email.models import EmailTemplate
 from apps.whatsapp.models import MessageTemplate
@@ -45,7 +44,9 @@ def test_list_renders_trigger_without_name_key(client, user_account):
     user, acc = user_account
     client.force_login(user)
     Workflow.objects.create(
-        account=acc, name="No name key", slug="no-name-key",
+        account=acc,
+        name="No name key",
+        slug="no-name-key",
         definition={"trigger": {"type": "contact.created"}, "steps": []},
     )
     resp = client.get("/automations/")
@@ -57,16 +58,27 @@ def test_list_renders_trigger_without_name_key(client, user_account):
 def test_editor_save_and_publish(client, user_account):
     user, acc = user_account
     client.force_login(user)
-    wf = Workflow.objects.create(account=acc, name="WF", slug="wf",
-                                 definition={"trigger": {"type": "manual"}, "steps": []})
+    wf = Workflow.objects.create(
+        account=acc,
+        name="WF",
+        slug="wf",
+        definition={"trigger": {"type": "manual"}, "steps": []},
+    )
 
     assert client.get("/automations/wf/").status_code == 200
 
-    good = {"trigger": {"type": "manual"},
-            "steps": [{"id": "a", "type": "set_attribute", "key": "x", "value": 1, "next": "b"},
-                      {"id": "b", "type": "stop"}]}
-    save = client.post("/automations/wf/save/", data=json.dumps({"definition": good}),
-                       content_type="application/json")
+    good = {
+        "trigger": {"type": "manual"},
+        "steps": [
+            {"id": "a", "type": "set_attribute", "key": "x", "value": 1, "next": "b"},
+            {"id": "b", "type": "stop"},
+        ],
+    }
+    save = client.post(
+        "/automations/wf/save/",
+        data=json.dumps({"definition": good}),
+        content_type="application/json",
+    )
     assert save.status_code == 200
     assert save.json()["errors"] == []
     wf.refresh_from_db()
@@ -85,20 +97,34 @@ def test_editor_scopes_template_pickers_to_account(client, user_account):
     client.force_login(user)
     other_acc = Account.objects.create(company_name="Other")
 
-    EmailTemplate.objects.create(account=acc, name="Welcome", slug="welcome", subject="Hi")
+    EmailTemplate.objects.create(
+        account=acc, name="Welcome", slug="welcome", subject="Hi"
+    )
     EmailTemplate.objects.create(account=other_acc, name="Not mine", slug="not-mine")
-    EmailTemplate.objects.create(account=acc, name="Inactive", slug="inactive", is_active=False)
-
-    MessageTemplate.objects.create(
-        account=acc, name="Order update", whatsapp_template_name="order_update",
-        content="x", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-    )
-    MessageTemplate.objects.create(
-        account=other_acc, name="Not mine", whatsapp_template_name="not_mine", content="x",
+    EmailTemplate.objects.create(
+        account=acc, name="Inactive", slug="inactive", is_active=False
     )
 
-    wf = Workflow.objects.create(account=acc, name="WF", slug="wf",
-                                 definition={"trigger": {"type": "manual"}, "steps": []})
+    MessageTemplate.objects.create(
+        account=acc,
+        name="Order update",
+        whatsapp_template_name="order_update",
+        content="x",
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    MessageTemplate.objects.create(
+        account=other_acc,
+        name="Not mine",
+        whatsapp_template_name="not_mine",
+        content="x",
+    )
+
+    Workflow.objects.create(
+        account=acc,
+        name="WF",
+        slug="wf",
+        definition={"trigger": {"type": "manual"}, "steps": []},
+    )
     r = client.get("/automations/wf/")
     assert r.status_code == 200
 
@@ -112,7 +138,10 @@ def test_editor_scopes_template_pickers_to_account(client, user_account):
     whatsapp_names = [t["name"] for t in whatsapp_templates]
     assert "order_update" in whatsapp_names
     assert "not_mine" not in whatsapp_names
-    assert next(t for t in whatsapp_templates if t["name"] == "order_update")["approved"] is True
+    assert (
+        next(t for t in whatsapp_templates if t["name"] == "order_update")["approved"]
+        is True
+    )
 
 
 @pytest.mark.django_db
@@ -121,21 +150,41 @@ def test_workflow_stats_shows_funnel_and_step_breakdown(client, user_account):
     client.force_login(user)
     other_acc = Account.objects.create(company_name="Other")
 
-    wf = Workflow.objects.create(account=acc, name="WF", slug="wf",
-                                 definition={"trigger": {"type": "manual"}, "steps": []})
-    other_wf = Workflow.objects.create(account=other_acc, name="Other WF", slug="other-wf",
-                                       definition={"trigger": {"type": "manual"}, "steps": []})
+    wf = Workflow.objects.create(
+        account=acc,
+        name="WF",
+        slug="wf",
+        definition={"trigger": {"type": "manual"}, "steps": []},
+    )
+    other_wf = Workflow.objects.create(
+        account=other_acc,
+        name="Other WF",
+        slug="other-wf",
+        definition={"trigger": {"type": "manual"}, "steps": []},
+    )
 
     c1 = Contact.objects.create(account=acc, email="a@example.com")
     c2 = Contact.objects.create(account=acc, email="b@example.com")
-    run1 = WorkflowRun.objects.create(workflow=wf, contact=c1, status=WorkflowRun.Status.COMPLETED)
-    run2 = WorkflowRun.objects.create(workflow=wf, contact=c2, status=WorkflowRun.Status.FAILED)
-    WorkflowStepRun.objects.create(run=run1, step_id="a", step_type="send_email", status="ok")
-    WorkflowStepRun.objects.create(run=run2, step_id="a", step_type="send_email", status="ok")
-    WorkflowStepRun.objects.create(run=run2, step_id="b", step_type="webhook", status="error")
+    run1 = WorkflowRun.objects.create(
+        workflow=wf, contact=c1, status=WorkflowRun.Status.COMPLETED
+    )
+    run2 = WorkflowRun.objects.create(
+        workflow=wf, contact=c2, status=WorkflowRun.Status.FAILED
+    )
+    WorkflowStepRun.objects.create(
+        run=run1, step_id="a", step_type="send_email", status="ok"
+    )
+    WorkflowStepRun.objects.create(
+        run=run2, step_id="a", step_type="send_email", status="ok"
+    )
+    WorkflowStepRun.objects.create(
+        run=run2, step_id="b", step_type="webhook", status="error"
+    )
 
     other_contact = Contact.objects.create(account=other_acc, email="c@example.com")
-    WorkflowRun.objects.create(workflow=other_wf, contact=other_contact, status=WorkflowRun.Status.COMPLETED)
+    WorkflowRun.objects.create(
+        workflow=other_wf, contact=other_contact, status=WorkflowRun.Status.COMPLETED
+    )
 
     r = client.get("/automations/wf/stats/")
     assert r.status_code == 200
@@ -154,9 +203,15 @@ def test_workflow_stats_shows_funnel_and_step_breakdown(client, user_account):
 def test_publish_blocked_on_invalid_definition(client, user_account):
     user, acc = user_account
     client.force_login(user)
-    wf = Workflow.objects.create(account=acc, name="Bad", slug="bad",
-                                 definition={"trigger": {"type": "manual"},
-                                             "steps": [{"id": "a", "type": "send_email", "next": "missing"}]})
-    r = client.post("/automations/bad/publish/", follow=True)
+    wf = Workflow.objects.create(
+        account=acc,
+        name="Bad",
+        slug="bad",
+        definition={
+            "trigger": {"type": "manual"},
+            "steps": [{"id": "a", "type": "send_email", "next": "missing"}],
+        },
+    )
+    client.post("/automations/bad/publish/", follow=True)
     wf.refresh_from_db()
     assert wf.status == Workflow.Status.DRAFT

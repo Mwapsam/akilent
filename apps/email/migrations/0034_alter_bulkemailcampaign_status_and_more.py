@@ -4,20 +4,46 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0033_emailtemplatedatasource'),
+        ("email_service", "0033_emailtemplatedatasource"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='bulkemailcampaign',
-            name='status',
-            field=models.CharField(choices=[('draft', 'Draft'), ('scheduled', 'Scheduled'), ('queued', 'Queued'), ('sending', 'Sending'), ('paused', 'Paused'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], default='draft', max_length=20),
+            model_name="bulkemailcampaign",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("draft", "Draft"),
+                    ("scheduled", "Scheduled"),
+                    ("queued", "Queued"),
+                    ("sending", "Sending"),
+                    ("paused", "Paused"),
+                    ("completed", "Completed"),
+                    ("failed", "Failed"),
+                    ("cancelled", "Cancelled"),
+                ],
+                default="draft",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='emailmessage',
-            name='status',
-            field=models.CharField(choices=[('scheduled', 'Scheduled'), ('queued', 'Queued'), ('sent', 'Sent'), ('delivered', 'Delivered'), ('failed', 'Failed'), ('bounced', 'Bounced'), ('complained', 'Complained'), ('opened', 'Opened'), ('clicked', 'Clicked')], default='queued', max_length=20),
+            model_name="emailmessage",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("scheduled", "Scheduled"),
+                    ("queued", "Queued"),
+                    ("sent", "Sent"),
+                    ("delivered", "Delivered"),
+                    ("failed", "Failed"),
+                    ("bounced", "Bounced"),
+                    ("complained", "Complained"),
+                    ("opened", "Opened"),
+                    ("clicked", "Clicked"),
+                ],
+                default="queued",
+                max_length=20,
+            ),
         ),
     ]

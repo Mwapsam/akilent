@@ -10,6 +10,7 @@ Used two ways:
 Kept as plain data (no DB dependency) so both call sites share one source of
 truth without a migration.
 """
+
 from __future__ import annotations
 
 STARTER_TEMPLATES: list[dict] = [
@@ -26,8 +27,8 @@ STARTER_TEMPLATES: list[dict] = [
         "html_body": (
             '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#12182B;">\n'
             '  <h1 style="font-size:20px;margin:0 0 16px;">Welcome, {{ first_name }}!</h1>\n'
-            "  <p style=\"font-size:14px;line-height:1.6;margin:0 0 16px;\">Thanks for joining "
-            '{{ company_name }}. We\'re glad to have you on board.</p>\n'
+            '  <p style="font-size:14px;line-height:1.6;margin:0 0 16px;">Thanks for joining '
+            "{{ company_name }}. We're glad to have you on board.</p>\n"
             '  <p style="font-size:14px;line-height:1.6;margin:0 0 24px;">'
             "If you have any questions, just reply to this email — we're happy to help.</p>\n"
             '  <a href="{{ login_url }}" style="display:inline-block;background:#FFB020;color:#12182B;'
@@ -95,7 +96,7 @@ STARTER_TEMPLATES: list[dict] = [
             '    <h1 style="margin:8px 0 0;font-size:20px;">{{ headline }}</h1>\n'
             "  </div>\n"
             '  <div style="padding:20px;border:1px solid #E8EDF3;border-top:none;border-radius:0 0 12px 12px;">\n'
-            '    <p style="font-size:14px;line-height:1.6;margin:0;">Hi {{ first_name }}, here\'s what\'s '
+            "    <p style=\"font-size:14px;line-height:1.6;margin:0;\">Hi {{ first_name }}, here's what's "
             "new this month. Reply to this email if you have any questions.</p>\n"
             "  </div>\n"
             "</div>"

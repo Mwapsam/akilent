@@ -4,50 +4,49 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0007_auditlog_provisioningjob'),
+        ("email_service", "0007_auditlog_provisioningjob"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='email_servi_account_04304c_idx',
-            old_name='email_servi_audit_account_ts_idx',
+            model_name="auditlog",
+            new_name="email_servi_account_04304c_idx",
+            old_name="email_servi_audit_account_ts_idx",
         ),
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='email_servi_resourc_166ecd_idx',
-            old_name='email_servi_audit_resource_idx',
+            model_name="auditlog",
+            new_name="email_servi_resourc_166ecd_idx",
+            old_name="email_servi_audit_resource_idx",
         ),
         migrations.RenameIndex(
-            model_name='emailtrackingevent',
-            new_name='email_servi_message_53e798_idx',
-            old_name='email_servi_message_kind_idx',
+            model_name="emailtrackingevent",
+            new_name="email_servi_message_53e798_idx",
+            old_name="email_servi_message_kind_idx",
         ),
         migrations.RenameIndex(
-            model_name='emailtrackingevent',
-            new_name='email_servi_occurre_a1af4b_idx',
-            old_name='email_servi_occurred_at_idx',
+            model_name="emailtrackingevent",
+            new_name="email_servi_occurre_a1af4b_idx",
+            old_name="email_servi_occurred_at_idx",
         ),
         migrations.RenameIndex(
-            model_name='emailtrackingtoken',
-            new_name='email_servi_created_9ec851_idx',
-            old_name='email_servi_created_tracking_idx',
+            model_name="emailtrackingtoken",
+            new_name="email_servi_created_9ec851_idx",
+            old_name="email_servi_created_tracking_idx",
         ),
         migrations.RenameIndex(
-            model_name='provisioningjob',
-            new_name='email_servi_account_628896_idx',
-            old_name='email_servi_account_pjob_status_idx',
+            model_name="provisioningjob",
+            new_name="email_servi_account_628896_idx",
+            old_name="email_servi_account_pjob_status_idx",
         ),
         migrations.RenameIndex(
-            model_name='provisioningjob',
-            new_name='email_servi_resourc_4623b9_idx',
-            old_name='email_servi_pjob_resource_idx',
+            model_name="provisioningjob",
+            new_name="email_servi_resourc_4623b9_idx",
+            old_name="email_servi_pjob_resource_idx",
         ),
         migrations.RenameIndex(
-            model_name='provisioningjob',
-            new_name='email_servi_created_2a663c_idx',
-            old_name='email_servi_pjob_created_at_idx',
+            model_name="provisioningjob",
+            new_name="email_servi_created_2a663c_idx",
+            old_name="email_servi_pjob_created_at_idx",
         ),
     ]

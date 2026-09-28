@@ -2,6 +2,7 @@ from django.db import models
 
 from apps.accounts.fields import EncryptedTextField
 
+
 class Configurations(models.Model):
     name = models.CharField(max_length=100, unique=True)
     value = EncryptedTextField()
@@ -42,7 +43,11 @@ class SiteSettings(models.Model):
 
     # New-signup defaults
     default_plan = models.ForeignKey(
-        "billing.Plan", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "billing.Plan",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     default_trial_days = models.PositiveIntegerField(default=14)
 
@@ -89,7 +94,7 @@ class MailProviderSettings(models.Model):
         max_length=32,
         choices=BACKEND_CHOICES,
         default="stalwart",
-        help_text="Mail server for domain/DKIM infrastructure"
+        help_text="Mail server for domain/DKIM infrastructure",
     )
 
     # Message delivery provider
@@ -97,52 +102,52 @@ class MailProviderSettings(models.Model):
         max_length=32,
         choices=SEND_BACKEND_CHOICES,
         default="smtp",
-        help_text="Provider for outbound message delivery"
+        help_text="Provider for outbound message delivery",
     )
 
     # SES-specific configuration (read from env vars at runtime, just store names here)
     aws_region = models.CharField(
         max_length=32,
         default="us-east-1",
-        help_text="AWS region for SES (e.g., us-east-1, eu-west-1). Credentials from AWS_ACCESS_KEY_ID env vars."
+        help_text="AWS region for SES (e.g., us-east-1, eu-west-1). Credentials from AWS_ACCESS_KEY_ID env vars.",
     )
     ses_configuration_set = models.CharField(
         max_length=255,
         blank=True,
         default="",
-        help_text="SES configuration set name for tracking bounces/complaints (optional but recommended)"
+        help_text="SES configuration set name for tracking bounces/complaints (optional but recommended)",
     )
     ses_sns_topic_arn = models.CharField(
         max_length=500,
         blank=True,
         default="",
-        help_text="SNS topic ARN for receiving bounce/complaint notifications (required if configuration_set is used)"
+        help_text="SNS topic ARN for receiving bounce/complaint notifications (required if configuration_set is used)",
     )
 
     # SES operational hardening (Phase 3)
     ses_send_rate_limit = models.PositiveIntegerField(
         default=14,
-        help_text="Max sends per second for SES (default 14, AWS SES sandbox default; can go higher with send limit increase)"
+        help_text="Max sends per second for SES (default 14, AWS SES sandbox default; can go higher with send limit increase)",
     )
 
     # SMTP relay hardening (Phase 3)
     smtp_require_tls = models.BooleanField(
         default=True,
-        help_text="Enforce TLS for SMTP relay connections (security best-practice; set False only for dev/testing)"
+        help_text="Enforce TLS for SMTP relay connections (security best-practice; set False only for dev/testing)",
     )
 
     # Phase 4: recipient validation & suppression hardening
     enable_recipient_validation = models.BooleanField(
         default=True,
-        help_text="Enable pre-send email validation (syntax + MX record checks) to suppress invalid addresses"
+        help_text="Enable pre-send email validation (syntax + MX record checks) to suppress invalid addresses",
     )
     mx_validation_cache_ttl_seconds = models.PositiveIntegerField(
         default=86400,
-        help_text="Cache time-to-live for MX record lookups in seconds (default 24 hours)"
+        help_text="Cache time-to-live for MX record lookups in seconds (default 24 hours)",
     )
     soft_bounce_threshold = models.PositiveIntegerField(
         default=3,
-        help_text="Number of transient bounces before escalating to hard suppression (default 3)"
+        help_text="Number of transient bounces before escalating to hard suppression (default 3)",
     )
     require_explicit_consent = models.BooleanField(
         default=False,
@@ -159,23 +164,23 @@ class MailProviderSettings(models.Model):
     # complaint >0.1% (review) / >0.5% (pause); defaults sit just inside those.
     reputation_bounce_warn = models.FloatField(
         default=0.05,
-        help_text="Bounce rate at which an account is flagged (warned) — 0.05 = 5%"
+        help_text="Bounce rate at which an account is flagged (warned) — 0.05 = 5%",
     )
     reputation_bounce_halt = models.FloatField(
         default=0.10,
-        help_text="Bounce rate at which an account's non-system sends are halted — 0.10 = 10%"
+        help_text="Bounce rate at which an account's non-system sends are halted — 0.10 = 10%",
     )
     reputation_complaint_halt = models.FloatField(
         default=0.005,
-        help_text="Complaint rate at which an account's non-system sends are halted — 0.005 = 0.5%"
+        help_text="Complaint rate at which an account's non-system sends are halted — 0.005 = 0.5%",
     )
     reputation_min_volume = models.PositiveIntegerField(
         default=100,
-        help_text="Minimum sends in the window before the breaker can act (avoids tiny-sample noise)"
+        help_text="Minimum sends in the window before the breaker can act (avoids tiny-sample noise)",
     )
     reputation_window_hours = models.PositiveIntegerField(
         default=24,
-        help_text="Trailing window (hours) over which bounce/complaint rates are measured"
+        help_text="Trailing window (hours) over which bounce/complaint rates are measured",
     )
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -206,9 +211,15 @@ class AdminAction(models.Model):
     """
 
     actor = models.ForeignKey(
-        "auth.User", on_delete=models.SET_NULL, null=True, related_name="admin_actions")
+        "auth.User", on_delete=models.SET_NULL, null=True, related_name="admin_actions"
+    )
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.SET_NULL, null=True, blank=True, related_name="admin_actions")
+        "accounts.Account",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="admin_actions",
+    )
     action = models.CharField(max_length=64)
     target = models.CharField(max_length=200, blank=True, default="")
     detail = models.JSONField(default=dict, blank=True)

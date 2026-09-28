@@ -4,8 +4,9 @@ The frontend never parses Meta responses; it reads ``ok``, ``error_code``,
 ``message`` and ``action`` (one of ``retry_registration``, ``reconnect``,
 ``fix_number``, ``message_first``, ``retry``, ``contact_support``).
 """
+
 import logging
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -19,30 +20,53 @@ from apps.whatsapp.providers.meta import MetaCloudAPIProvider
 logger = logging.getLogger(__name__)
 
 RETRY_REGISTRATION, RECONNECT, FIX_NUMBER, MESSAGE_FIRST, RETRY, CONTACT_SUPPORT = (
-    "retry_registration", "reconnect", "fix_number", "message_first", "retry", "contact_support",
+    "retry_registration",
+    "reconnect",
+    "fix_number",
+    "message_first",
+    "retry",
+    "contact_support",
 )
 
 WINDOW = timedelta(hours=24)
 TEXT_BODY = "Your WhatsApp connection is working. You can ignore this message."
-AUTO_REPLY_BODY = (
-    "✅ Your WhatsApp number is connected. Messages you send here will now appear in your inbox."
-)
+AUTO_REPLY_BODY = "✅ Your WhatsApp number is connected. Messages you send here will now appear in your inbox."
 DELAYED_AFTER = timedelta(seconds=30)
 
 # error code (before any "/subcode") -> (friendly message, action)
 _ERRORS = {
-    "133010": ("This number isn't registered on the WhatsApp Cloud API yet.", RETRY_REGISTRATION),
-    "190": ("Meta rejected the access token. Reconnect WhatsApp to refresh it.", RECONNECT),
-    "131030": ("That phone number isn't allowed to receive messages from this account yet. "
-               "Add it as a test recipient in Meta, or use another number.", FIX_NUMBER),
-    "131026": ("WhatsApp couldn't deliver to that number. Check it has WhatsApp.", FIX_NUMBER),
+    "133010": (
+        "This number isn't registered on the WhatsApp Cloud API yet.",
+        RETRY_REGISTRATION,
+    ),
+    "190": (
+        "Meta rejected the access token. Reconnect WhatsApp to refresh it.",
+        RECONNECT,
+    ),
+    "131030": (
+        "That phone number isn't allowed to receive messages from this account yet. "
+        "Add it as a test recipient in Meta, or use another number.",
+        FIX_NUMBER,
+    ),
+    "131026": (
+        "WhatsApp couldn't deliver to that number. Check it has WhatsApp.",
+        FIX_NUMBER,
+    ),
     # hello_world is only deliverable from Meta's Public Test Numbers; a real
     # number needs the recipient to message first (free text) or its own template.
-    "131058": ("Meta only allows its built-in test template from its public test numbers. "
-               "Message this WhatsApp number from your phone first, then send the test again.",
-               MESSAGE_FIRST),
-    "132000": ("The test template isn't available on your WhatsApp account.", CONTACT_SUPPORT),
-    "132001": ("The test template isn't available on your WhatsApp account.", CONTACT_SUPPORT),
+    "131058": (
+        "Meta only allows its built-in test template from its public test numbers. "
+        "Message this WhatsApp number from your phone first, then send the test again.",
+        MESSAGE_FIRST,
+    ),
+    "132000": (
+        "The test template isn't available on your WhatsApp account.",
+        CONTACT_SUPPORT,
+    ),
+    "132001": (
+        "The test template isn't available on your WhatsApp account.",
+        CONTACT_SUPPORT,
+    ),
 }
 
 
@@ -84,14 +108,18 @@ def _is_parameterless(tpl: dict) -> bool:
     for c in tpl.get("components") or []:
         kind = (c.get("type") or "").upper()
         if kind == "HEADER":
-            if (c.get("format") or "TEXT").upper() != "TEXT" or "{{" in (c.get("text") or ""):
+            if (c.get("format") or "TEXT").upper() != "TEXT" or "{{" in (
+                c.get("text") or ""
+            ):
                 return False
         elif kind == "BODY":
             if "{{" in (c.get("text") or ""):
                 return False
         elif kind == "BUTTONS":
             for btn in c.get("buttons") or []:
-                if (btn.get("type") or "").upper() not in _SAFE_BUTTONS or "{{" in (btn.get("url") or ""):
+                if (btn.get("type") or "").upper() not in _SAFE_BUTTONS or "{{" in (
+                    btn.get("url") or ""
+                ):
                     return False
         elif kind not in ("FOOTER",):
             return False
@@ -114,7 +142,9 @@ def _pick_template(number, provider) -> tuple[str, str]:
     try:
         templates = provider.list_templates(number.waba_id) if number.waba_id else []
     except Exception as exc:  # a lookup failure must not block the test
-        logger.warning("verify: could not list templates for %s: %s", number.waba_id, exc)
+        logger.warning(
+            "verify: could not list templates for %s: %s", number.waba_id, exc
+        )
         templates = []
     for tpl in templates:
         if _is_parameterless(tpl):
@@ -134,7 +164,11 @@ def verify_connection(
     try:
         recipient = normalize_phone((recipient_raw or "").strip())
     except ValidationError:
-        return _fail("invalid_number", "Enter a valid phone number with country code.", FIX_NUMBER)
+        return _fail(
+            "invalid_number",
+            "Enter a valid phone number with country code.",
+            FIX_NUMBER,
+        )
 
     provider = MetaCloudAPIProvider(number.access_token, number.phone_number_id)
     if _window_open(number, recipient):
@@ -147,25 +181,34 @@ def verify_connection(
 
     if result.success:
         ConnectionTest.objects.create(
-            number=number, recipient=recipient,
-            status=ConnectionTest.Status.SENT, message_id=result.message_id,
+            number=number,
+            recipient=recipient,
+            status=ConnectionTest.Status.SENT,
+            message_id=result.message_id,
         )
         return {"ok": True, "message_id": result.message_id, "status": "sent"}
 
     code = str(result.error_code or "")
     ConnectionTest.objects.create(
-        number=number, recipient=recipient, status=ConnectionTest.Status.FAILED,
-        error_code=code[:32], error=(result.error or "")[:2000],
+        number=number,
+        recipient=recipient,
+        status=ConnectionTest.Status.FAILED,
+        error_code=code[:32],
+        error=(result.error or "")[:2000],
     )
     friendly, action = _ERRORS.get(
-        code.split("/")[0],
+        code.split("/", maxsplit=1)[0],
         ("Meta couldn't send the test message. Try again in a moment.", RETRY),
     )
     if action == RETRY_REGISTRATION:
         # Meta says it isn't registered: reflect that so the Retry button shows.
         number.registration_status = number.RegistrationStatus.FAILED
-        number.registration_error = f"Meta error {code}: not registered on the Cloud API."
-        number.save(update_fields=["registration_status", "registration_error", "updated_at"])
+        number.registration_error = (
+            f"Meta error {code}: not registered on the Cloud API."
+        )
+        number.save(
+            update_fields=["registration_status", "registration_error", "updated_at"]
+        )
     return _fail(code or "send_failed", friendly, action)
 
 
@@ -188,7 +231,7 @@ def inbound_stage(number: WhatsAppBusinessNumber, since: float | None = None) ->
     Uses the raw webhook log (written synchronously) so the user gets feedback
     even when message processing is slow or failing.
     """
-    from datetime import datetime, timezone as dt_tz
+    from datetime import datetime
 
     from apps.whatsapp.models.webhook import WebhookEventLog
 
@@ -197,13 +240,16 @@ def inbound_stage(number: WhatsAppBusinessNumber, since: float | None = None) ->
         sender = inbound.contact.phone_number
         replied = number.last_successful_test() is not None
         return {
-            "stage": "received", "sender": sender,
+            "stage": "received",
+            "sender": sender,
             "message": f"Message received from {sender}."
             + (" We sent a confirmation reply — check your phone." if replied else ""),
         }
 
     started = (
-        datetime.fromtimestamp(since, tz=dt_tz.utc) if since else timezone.now() - timedelta(minutes=10)
+        datetime.fromtimestamp(since, tz=UTC)
+        if since
+        else timezone.now() - timedelta(minutes=10)
     )
     event = (
         WebhookEventLog.objects.filter(
@@ -215,17 +261,26 @@ def inbound_stage(number: WhatsAppBusinessNumber, since: float | None = None) ->
         .first()
     )
     if event is None:
-        return {"stage": "waiting", "sender": "", "message": "Waiting for your message…"}
+        return {
+            "stage": "waiting",
+            "sender": "",
+            "message": "Waiting for your message…",
+        }
     if event.error_message or event.attempts:
         return {
-            "stage": "failed", "sender": "",
+            "stage": "failed",
+            "sender": "",
             "message": "Your message reached us but we couldn't process it yet. We'll keep "
-                       "retrying — if this doesn't clear, contact support.",
+            "retrying — if this doesn't clear, contact support.",
         }
     if not event.processed and timezone.now() - event.created_at > DELAYED_AFTER:
         return {
-            "stage": "delayed", "sender": "",
+            "stage": "delayed",
+            "sender": "",
             "message": "Your message reached us, but processing is taking longer than usual…",
         }
-    return {"stage": "processing", "sender": "",
-            "message": "We heard from Meta — processing your message…"}
+    return {
+        "stage": "processing",
+        "sender": "",
+        "message": "We heard from Meta — processing your message…",
+    }

@@ -12,6 +12,7 @@ they can run (an approved WhatsApp template, a verified sending domain) —
 ``add_internal_note``/``create_lead``/``create_deal``/``request_payment``
 work the moment a vertical is activated, so "Activate" is never a lie.
 """
+
 from __future__ import annotations
 
 RESTAURANT = {
@@ -31,8 +32,13 @@ RESTAURANT = {
                 "trigger": {"type": "order.created"},
                 "steps": [
                     {
-                        "id": "charge", "type": "action", "action": "request_payment",
-                        "params": {"order_id": "context.order_id", "redirect_url": "/orders/"},
+                        "id": "charge",
+                        "type": "action",
+                        "action": "request_payment",
+                        "params": {
+                            "order_id": "context.order_id",
+                            "redirect_url": "/orders/",
+                        },
                         "next": "done",
                     },
                     {"id": "done", "type": "stop"},
@@ -47,8 +53,11 @@ RESTAURANT = {
                 "steps": [
                     {"id": "wait", "type": "wait", "seconds": 1209600, "next": "lead"},
                     {
-                        "id": "lead", "type": "action", "action": "create_lead",
-                        "params": {"source": "win_back"}, "next": "done",
+                        "id": "lead",
+                        "type": "action",
+                        "action": "create_lead",
+                        "params": {"source": "win_back"},
+                        "next": "done",
                     },
                     {"id": "done", "type": "stop"},
                 ],
@@ -74,8 +83,11 @@ REAL_ESTATE = {
                 "trigger": {"type": "conversation.message_received"},
                 "steps": [
                     {
-                        "id": "lead", "type": "action", "action": "create_lead",
-                        "params": {"source": "whatsapp_enquiry"}, "next": "done",
+                        "id": "lead",
+                        "type": "action",
+                        "action": "create_lead",
+                        "params": {"source": "whatsapp_enquiry"},
+                        "next": "done",
                     },
                     {"id": "done", "type": "stop"},
                 ],
@@ -89,8 +101,13 @@ REAL_ESTATE = {
                 "steps": [
                     {"id": "wait", "type": "wait", "seconds": 86400, "next": "deal"},
                     {
-                        "id": "deal", "type": "action", "action": "create_deal",
-                        "params": {"lead_id": "context.lead_id", "title": "New enquiry"},
+                        "id": "deal",
+                        "type": "action",
+                        "action": "create_deal",
+                        "params": {
+                            "lead_id": "context.lead_id",
+                            "title": "New enquiry",
+                        },
                         "next": "done",
                     },
                     {"id": "done", "type": "stop"},

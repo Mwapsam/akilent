@@ -4,8 +4,8 @@ from django.test import TestCase
 
 from apps.accounts.models import Account
 from apps.email.models import EmailMessage
-from apps.logs.models import MessageEvent
 from apps.logs import services
+from apps.logs.models import MessageEvent
 
 
 class RecordMessageEventTests(TestCase):

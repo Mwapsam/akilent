@@ -1,10 +1,16 @@
 """Sender-reputation circuit breaker."""
+
 import pytest
 from django.contrib.auth.models import User
 
 from apps.accounts.models import Account, Membership
 from apps.core.models import MailProviderSettings
-from apps.email.models import BulkEmailCampaign, EmailDomain, EmailMessage, SendReputation
+from apps.email.models import (
+    BulkEmailCampaign,
+    EmailDomain,
+    EmailMessage,
+    SendReputation,
+)
 from apps.email.services import reputation
 
 
@@ -62,11 +68,15 @@ def test_warn_then_halt_transitions(account):
         reputation.record_send(account)
     for _ in range(6):  # 6% -> warn (>=5%, <10%)
         reputation.record_bounce(account)
-    assert SendReputation.objects.get(account=account).state == SendReputation.State.WARNED
+    assert (
+        SendReputation.objects.get(account=account).state == SendReputation.State.WARNED
+    )
 
     for _ in range(5):  # now 11% -> halt
         reputation.record_bounce(account)
-    assert SendReputation.objects.get(account=account).state == SendReputation.State.HALTED
+    assert (
+        SendReputation.objects.get(account=account).state == SendReputation.State.HALTED
+    )
 
 
 @pytest.mark.django_db
@@ -75,7 +85,9 @@ def test_complaint_rate_halts(account):
         reputation.record_send(account)
     for _ in range(6):  # 0.6% > 0.5% complaint halt
         reputation.record_complaint(account)
-    assert SendReputation.objects.get(account=account).state == SendReputation.State.HALTED
+    assert (
+        SendReputation.objects.get(account=account).state == SendReputation.State.HALTED
+    )
 
 
 @pytest.mark.django_db
@@ -96,7 +108,9 @@ def test_reset_clears_halt(account):
 @pytest.mark.django_db
 def test_halt_fires_slack_alert_once(account, monkeypatch):
     calls = []
-    monkeypatch.setattr("apps.billing.slack.post_message", lambda text: calls.append(text))
+    monkeypatch.setattr(
+        "apps.billing.slack.post_message", lambda text: calls.append(text)
+    )
 
     for _ in range(100):
         reputation.record_send(account)
@@ -112,10 +126,15 @@ def test_halt_fires_slack_alert_once(account, monkeypatch):
 @pytest.mark.django_db
 def test_send_task_drops_message_for_halted_account(account, monkeypatch):
     SendReputation.objects.create(
-        account=account, state=SendReputation.State.HALTED, halted_reason="bounce rate 12%"
+        account=account,
+        state=SendReputation.State.HALTED,
+        halted_reason="bounce rate 12%",
     )
     msg = EmailMessage.objects.create(
-        account=account, from_email="a@acme.com", to_email="r@x.com", subject="Hi",
+        account=account,
+        from_email="a@acme.com",
+        to_email="r@x.com",
+        subject="Hi",
     )
     monkeypatch.setattr(
         "apps.email.services.suppression.is_suppressed", lambda acc, em: False
@@ -145,11 +164,16 @@ def test_dispatch_campaign_pauses_for_halted_account(account, monkeypatch):
         account=account, domain="acme.com", status=EmailDomain.Status.VERIFIED
     )
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain, from_email="n@acme.com",
-        subject_override="Hi", status=BulkEmailCampaign.Status.QUEUED,
+        account=account,
+        domain=domain,
+        from_email="n@acme.com",
+        subject_override="Hi",
+        status=BulkEmailCampaign.Status.QUEUED,
     )
     SendReputation.objects.create(
-        account=account, state=SendReputation.State.HALTED, halted_reason="bounce rate 12%"
+        account=account,
+        state=SendReputation.State.HALTED,
+        halted_reason="bounce rate 12%",
     )
 
     from apps.email.tasks import dispatch_campaign

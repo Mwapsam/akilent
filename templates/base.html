@@ -45,12 +45,25 @@
     https://cdn.jsdelivr.net/npm/htmx-ext-preload@2.1.1/preload.js, unmodified.
   {% endcomment %}
   <script defer src="{% static 'js/vendor/htmx-ext-preload.js' %}"></script>
+  {% comment %}
+    Real-time updates (apps/core/realtime.py publishes, apps/core/views_events.py serves this
+    connection). Vendored from https://cdn.jsdelivr.net/npm/htmx-ext-sse@2.2.2/sse.js,
+    unmodified. The connection itself opens from <body> below, once, and survives in-place
+    navigation; a page opts in to a specific event with hx-trigger="sse:<name>" or sse-swap.
+  {% endcomment %}
+  <script defer src="{% static 'js/vendor/htmx-ext-sse.js' %}"></script>
 
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
   {% comment %}Before Alpine, like app.js: it defines the chartHover() factory
   that charts reference in x-data.{% endcomment %}
   <script defer src="{% static 'js/chart-hover.js' %}"></script>
+  {% comment %}
+    Two-pane inbox (assets/app.css .inbox-split, apps/conversations/views.py's HX-Target
+    branch): a no-op via akilent.onPage's own check on any page but /inbox/, so it's cheap to
+    load everywhere rather than special-cased into just that one page's extra_js block.
+  {% endcomment %}
+  <script defer src="{% static 'js/inbox_pane.js' %}"></script>
   {% comment %}
     Alpine components pages use, loaded with the shell so a page swapped in place finds them
     already defined (see apps/core/htmx.py) instead of forcing a full page load just to run one
@@ -75,7 +88,7 @@
         boosted <form> it disables that form's own submit button for the request's duration, so a
         slow save can't be double-clicked. A page can override it with its own hx-disabled-elt.
       {% endcomment %}
-      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload" hx-disabled-elt="find [type=submit]"{% endif %}>
+      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload{% if REALTIME_SSE_ENABLED %} sse{% endif %}" hx-disabled-elt="find [type=submit]"{% if REALTIME_SSE_ENABLED %} sse-connect="{% url 'events-stream' %}"{% endif %}{% endif %}>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3

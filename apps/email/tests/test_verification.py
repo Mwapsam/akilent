@@ -1,4 +1,5 @@
 """Tests for apps.email.verification.refresh_domain and the reverify task."""
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -22,9 +23,11 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com",
+        account=account,
+        domain="mail.acme.com",
         dkim_public_key="v=DKIM1; k=rsa; p=ABCDEF",
-        verify_record_name="mail.acme.com", verify_record_value=VERIFY_VALUE,
+        verify_record_name="mail.acme.com",
+        verify_record_value=VERIFY_VALUE,
     )
 
 
@@ -34,13 +37,17 @@ def _rows(result_by_key):
             {**row, "ok": result_by_key.get(row["key"], False)}
             for row in record.dns_records()
         ]
+
     return _inner
 
 
 @pytest.mark.django_db
 def test_refresh_domain_transitions_pending_to_verified(domain, monkeypatch):
-    monkeypatch.setattr(dnscheck, "check_records",
-                        _rows({"verify": True, "dkim": True, "spf": True, "dmarc": True}))
+    monkeypatch.setattr(
+        dnscheck,
+        "check_records",
+        _rows({"verify": True, "dkim": True, "spf": True, "dmarc": True}),
+    )
     out = refresh_domain(domain)
     assert out == {"verify": True, "dkim": True, "spf": True, "dmarc": True}
     domain.refresh_from_db()
@@ -50,8 +57,11 @@ def test_refresh_domain_transitions_pending_to_verified(domain, monkeypatch):
 
 @pytest.mark.django_db
 def test_refresh_domain_stays_pending_without_ownership(domain, monkeypatch):
-    monkeypatch.setattr(dnscheck, "check_records",
-                        _rows({"verify": False, "dkim": True, "spf": False, "dmarc": False}))
+    monkeypatch.setattr(
+        dnscheck,
+        "check_records",
+        _rows({"verify": False, "dkim": True, "spf": False, "dmarc": False}),
+    )
     refresh_domain(domain)
     domain.refresh_from_db()
     assert not domain.is_verified
@@ -61,19 +71,24 @@ def test_refresh_domain_stays_pending_without_ownership(domain, monkeypatch):
 @pytest.mark.django_db
 def test_refresh_domain_ses_needs_provider_success(domain, monkeypatch):
     monkeypatch.setattr(EmailDomain, "is_ses_backed", lambda self: True)
-    monkeypatch.setattr(dnscheck, "check_records",
-                        _rows({"verify": True, "dkim": True, "spf": True, "dmarc": True}))
+    monkeypatch.setattr(
+        dnscheck,
+        "check_records",
+        _rows({"verify": True, "dkim": True, "spf": True, "dmarc": True}),
+    )
 
     # DNS is all green but SES itself hasn't flipped to SUCCESS yet.
-    monkeypatch.setattr("apps.email.verification._ses_identity_verified",
-                        lambda rec, prov: False)
+    monkeypatch.setattr(
+        "apps.email.verification._ses_identity_verified", lambda rec, prov: False
+    )
     refresh_domain(domain)
     domain.refresh_from_db()
     assert not domain.is_verified
 
     # SES now reports SUCCESS -> verified.
-    monkeypatch.setattr("apps.email.verification._ses_identity_verified",
-                        lambda rec, prov: True)
+    monkeypatch.setattr(
+        "apps.email.verification._ses_identity_verified", lambda rec, prov: True
+    )
     refresh_domain(domain)
     domain.refresh_from_db()
     assert domain.is_verified
@@ -81,21 +96,28 @@ def test_refresh_domain_ses_needs_provider_success(domain, monkeypatch):
 
 @pytest.mark.django_db
 def test_reverify_pending_domains_only_touches_pending(account, monkeypatch):
-    pending = EmailDomain.objects.create(
-        account=account, domain="a.acme.com",
-        verify_record_name="a.acme.com", verify_record_value=VERIFY_VALUE,
+    EmailDomain.objects.create(
+        account=account,
+        domain="a.acme.com",
+        verify_record_name="a.acme.com",
+        verify_record_value=VERIFY_VALUE,
     )
-    done = EmailDomain.objects.create(
-        account=account, domain="b.acme.com", status=EmailDomain.Status.VERIFIED,
-        verify_record_name="b.acme.com", verify_record_value=VERIFY_VALUE,
+    EmailDomain.objects.create(
+        account=account,
+        domain="b.acme.com",
+        status=EmailDomain.Status.VERIFIED,
+        verify_record_name="b.acme.com",
+        verify_record_value=VERIFY_VALUE,
     )
 
     seen = []
+
     def _fake_refresh(record, **kw):
         seen.append(record.domain)
         record.status = EmailDomain.Status.VERIFIED
         record.save(update_fields=["status"])
         return {}
+
     monkeypatch.setattr("apps.email.verification.refresh_domain", _fake_refresh)
 
     verified = reverify_pending_domains()
@@ -104,6 +126,7 @@ def test_reverify_pending_domains_only_touches_pending(account, monkeypatch):
 
 
 # --- MAIL FROM, rollups, drift ------------------------------------------------
+
 
 @pytest.fixture(autouse=False)
 def clear_cache():
@@ -119,19 +142,33 @@ def ses_mail_from_domain(account, clear_cache):
     from apps.email.models import EmailDnsRecord
 
     d = EmailDomain.objects.create(
-        account=account, domain="mail.acme.com",
-        verify_record_name="mail.acme.com", verify_record_value=VERIFY_VALUE,
-        mail_from_domain="bounce.mail.acme.com", mail_from_status="FAILED",
+        account=account,
+        domain="mail.acme.com",
+        verify_record_name="mail.acme.com",
+        verify_record_value=VERIFY_VALUE,
+        mail_from_domain="bounce.mail.acme.com",
+        mail_from_status="FAILED",
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="verify", record_type="TXT", name="mail.acme.com", value=VERIFY_VALUE,
+        domain=d,
+        key="verify",
+        record_type="TXT",
+        name="mail.acme.com",
+        value=VERIFY_VALUE,
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="mfmx", record_type="MX", name="bounce.mail.acme.com",
-        value="feedback-smtp.us-east-1.amazonses.com", priority=10,
+        domain=d,
+        key="mfmx",
+        record_type="MX",
+        name="bounce.mail.acme.com",
+        value="feedback-smtp.us-east-1.amazonses.com",
+        priority=10,
     )
     EmailDnsRecord.objects.create(
-        domain=d, key="mfspf", record_type="TXT", name="bounce.mail.acme.com",
+        domain=d,
+        key="mfspf",
+        record_type="TXT",
+        name="bounce.mail.acme.com",
         value="v=spf1 include:amazonses.com ~all",
     )
     return d
@@ -186,7 +223,9 @@ def test_failed_mail_from_is_retriggered_once_records_are_found(
 def test_failed_mail_from_is_not_retriggered_while_records_are_missing(
     ses_mail_from_domain, monkeypatch
 ):
-    monkeypatch.setattr(dnscheck, "check_records", _rows({"mfmx": False, "mfspf": True}))
+    monkeypatch.setattr(
+        dnscheck, "check_records", _rows({"mfmx": False, "mfspf": True})
+    )
     provider = _SesStub("FAILED")
     refresh_domain(ses_mail_from_domain, provider=provider)
     assert provider.configure_calls == 0
@@ -249,15 +288,21 @@ def test_recheck_verified_domains_only_touches_stale_verified(account, monkeypat
 
     now = timezone.now()
     stale = EmailDomain.objects.create(
-        account=account, domain="stale.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="stale.acme.com",
+        status=EmailDomain.Status.VERIFIED,
         last_checked_at=now - timedelta(hours=30),
     )
     EmailDomain.objects.create(
-        account=account, domain="fresh.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="fresh.acme.com",
+        status=EmailDomain.Status.VERIFIED,
         last_checked_at=now - timedelta(hours=1),
     )
     EmailDomain.objects.create(
-        account=account, domain="pending.acme.com", status=EmailDomain.Status.PENDING,
+        account=account,
+        domain="pending.acme.com",
+        status=EmailDomain.Status.PENDING,
     )
     seen = []
     monkeypatch.setattr(

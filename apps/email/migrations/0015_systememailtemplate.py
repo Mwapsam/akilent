@@ -3,41 +3,43 @@
 from django.db import migrations, models
 
 INVITE_TEXT = (
-    '{% if inviter %}{{ inviter.get_username }} has invited you{% else %}You have been invited{% endif %} '
+    "{% if inviter %}{{ inviter.get_username }} has invited you{% else %}You have been invited{% endif %} "
     'to join the "{{ invite.account.company_name }}" workspace on {{ site_name }} as a {{ invite.get_role_display }}.\n'
-    '\n'
-    'Accept your invitation:\n'
-    '{{ link }}\n'
-    '\n'
+    "\n"
+    "Accept your invitation:\n"
+    "{{ link }}\n"
+    "\n"
     "This link expires in {{ invite.EXPIRY_DAYS }} days. If you weren't expecting this invitation, "
-    'you can safely ignore this email.\n'
+    "you can safely ignore this email.\n"
 )
-INVITE_SUBJECT = "You're invited to join {{ invite.account.company_name }} on {{ site_name }}"
+INVITE_SUBJECT = (
+    "You're invited to join {{ invite.account.company_name }} on {{ site_name }}"
+)
 
 VERIFY_TEXT = (
-    'Welcome to {{ site_name }}!\n'
-    '\n'
-    'Please confirm your email address to activate your account and start sending.\n'
-    'Open the link below:\n'
-    '\n'
-    '{{ link }}\n'
-    '\n'
+    "Welcome to {{ site_name }}!\n"
+    "\n"
+    "Please confirm your email address to activate your account and start sending.\n"
+    "Open the link below:\n"
+    "\n"
+    "{{ link }}\n"
+    "\n"
     "If you didn't create this account, you can safely ignore this email.\n"
-    '\n'
-    'Thanks,\n'
-    'The {{ site_name }} team\n'
+    "\n"
+    "Thanks,\n"
+    "The {{ site_name }} team\n"
 )
 VERIFY_SUBJECT = "Confirm your {{ site_name }} email"
 
 MANUAL_PAYMENT_TEXT = (
-    'A tenant submitted a bank transfer for review.\n'
-    '\n'
-    'Account: {{ account }}\n'
-    'Plan: {{ plan.name }} (${{ plan.price_monthly }}/mo)\n'
+    "A tenant submitted a bank transfer for review.\n"
+    "\n"
+    "Account: {{ account }}\n"
+    "Plan: {{ plan.name }} (${{ plan.price_monthly }}/mo)\n"
     'Reference: {{ reference|default:"—" }}\n'
-    '\n'
-    'Review and approve/reject it here:\n'
-    '{{ review_url }}\n'
+    "\n"
+    "Review and approve/reject it here:\n"
+    "{{ review_url }}\n"
 )
 MANUAL_PAYMENT_SUBJECT = "New bank transfer to review — {{ account }} ({{ plan.name }})"
 
@@ -59,7 +61,10 @@ SEED_ROWS = [
         "name": "Signup email verification",
         "subject": VERIFY_SUBJECT,
         "text_body": VERIFY_TEXT,
-        "sample_variables": {"site_name": "Automator", "link": "https://.../verify/<token>/"},
+        "sample_variables": {
+            "site_name": "Automator",
+            "link": "https://.../verify/<token>/",
+        },
     },
     {
         "key": "billing.manual_payment_admin",
@@ -96,28 +101,35 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0014_emailtemplateasset'),
+        ("email_service", "0014_emailtemplateasset"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SystemEmailTemplate',
+            name="SystemEmailTemplate",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.SlugField(max_length=100, unique=True)),
-                ('name', models.CharField(max_length=150)),
-                ('subject', models.CharField(blank=True, default='', max_length=998)),
-                ('text_body', models.TextField(blank=True, default='')),
-                ('html_body', models.TextField(blank=True, default='')),
-                ('sample_variables', models.JSONField(blank=True, default=dict)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("key", models.SlugField(max_length=100, unique=True)),
+                ("name", models.CharField(max_length=150)),
+                ("subject", models.CharField(blank=True, default="", max_length=998)),
+                ("text_body", models.TextField(blank=True, default="")),
+                ("html_body", models.TextField(blank=True, default="")),
+                ("sample_variables", models.JSONField(blank=True, default=dict)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['key'],
+                "ordering": ["key"],
             },
         ),
         migrations.RunPython(seed_system_email_templates, noop_reverse),

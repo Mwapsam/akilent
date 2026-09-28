@@ -1,4 +1,5 @@
 """Per-number health panel and the DEGRADED derived state."""
+
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -10,7 +11,12 @@ from django.utils import timezone
 from apps.accounts.models import Account
 from apps.whatsapp import numbers as numbers_views
 from apps.whatsapp.health import DEGRADED_STREAK, is_degraded, number_health
-from apps.whatsapp.models import Conversation, MessageLog, OutboundMessage, WebhookEventLog
+from apps.whatsapp.models import (
+    Conversation,
+    MessageLog,
+    OutboundMessage,
+    WebhookEventLog,
+)
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber as N
 
 R = N.RegistrationStatus
@@ -23,14 +29,21 @@ class HealthBase(TestCase):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.contact = self.account.contacts.create(phone_number=TESTER)
         self.number = N.objects.create(
-            account=self.account, phone_number_id="PNID", access_token="tok",
-            waba_id="W", registration_status=R.REGISTERED,
+            account=self.account,
+            phone_number_id="PNID",
+            access_token="tok",
+            waba_id="W",
+            registration_status=R.REGISTERED,
         )
 
     def outbound(self, status, *, ago=timedelta(minutes=1), code="", err=""):
         m = OutboundMessage.objects.create(
-            account=self.account, contact=self.contact, payload={},
-            status=status, error_code=code, last_error=err,
+            account=self.account,
+            contact=self.contact,
+            payload={},
+            status=status,
+            error_code=code,
+            last_error=err,
         )
         stamp = timezone.now() - ago
         OutboundMessage.objects.filter(pk=m.pk).update(updated_at=stamp, sent_at=stamp)
@@ -40,9 +53,14 @@ class HealthBase(TestCase):
         self.number.connection_tests.create(recipient=TESTER, status="sent")
         convo = Conversation.get_or_open(self.contact)
         MessageLog.objects.create(
-            account=self.account, conversation=convo, contact=self.contact,
-            direction=MessageLog.Direction.INBOUND, message_type="text", content="hi",
-            status="delivered", timestamp=timezone.now() + timedelta(seconds=1),
+            account=self.account,
+            conversation=convo,
+            contact=self.contact,
+            direction=MessageLog.Direction.INBOUND,
+            message_type="text",
+            content="hi",
+            status="delivered",
+            timestamp=timezone.now() + timedelta(seconds=1),
         )
 
 
@@ -98,7 +116,9 @@ class NumberHealthTest(HealthBase):
         self.assertIn("133010 nope", reg["detail"])
         self.assertEqual(h["headline"], "Attention needed")
         retry = h["actions"][0]
-        self.assertEqual((retry["label"], retry["method"]), ("Retry registration", "post"))
+        self.assertEqual(
+            (retry["label"], retry["method"]), ("Retry registration", "post")
+        )
 
     def test_missing_token_offers_reconnect(self):
         self.number.access_token = None
@@ -125,16 +145,30 @@ class NumberHealthTest(HealthBase):
             self.outbound("failed", code="190", err="token expired")
         h = self._h()
         self.assertEqual(h["headline"], "Attention needed")
-        failing = [i for i in self._items(h, "Messaging") if i["label"] == "Recent sends failing"]
+        failing = [
+            i
+            for i in self._items(h, "Messaging")
+            if i["label"] == "Recent sends failing"
+        ]
         # Translated via apps.whatsapp.friendly_errors — no raw code/exception text.
         self.assertIn("reconnected", failing[0]["detail"])
 
     def test_last_webhook_is_matched_by_phone_number_id(self):
         def event(pnid):
             return WebhookEventLog.objects.create(
-                source="whatsapp", event_type="message",
-                payload={"entry": [{"changes": [{"value": {"metadata": {"phone_number_id": pnid}}}]}]},
+                source="whatsapp",
+                event_type="message",
+                payload={
+                    "entry": [
+                        {
+                            "changes": [
+                                {"value": {"metadata": {"phone_number_id": pnid}}}
+                            ]
+                        }
+                    ]
+                },
             )
+
         event("OTHER")
         self.assertEqual(self._items(self._h(), "Webhooks")[0]["state"], "none")
         event("PNID")
@@ -149,10 +183,20 @@ class HealthPanelRenderTest(HealthBase):
         request.user = User.objects.create_user("u", password="p")
         request.session = {}
         request._messages = FallbackStorage(request)
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account), patch(
-            "apps.billing.api.entitled", return_value=True
-        ), patch("apps.whatsapp.embedded.fetch_display_number", return_value=""):
+        with (
+            patch(
+                "apps.whatsapp.numbers.get_current_account", return_value=self.account
+            ),
+            patch("apps.billing.api.entitled", return_value=True),
+            patch("apps.whatsapp.embedded.fetch_display_number", return_value=""),
+        ):
             body = numbers_views.numbers_list(request).content.decode()
-        for text in ("Connection", "Messaging", "Webhooks", "Ready to test", "Troubleshoot"):
+        for text in (
+            "Connection",
+            "Messaging",
+            "Webhooks",
+            "Ready to test",
+            "Troubleshoot",
+        ):
             self.assertIn(text, body)
         self.assertNotIn("Cloud API registered", body)

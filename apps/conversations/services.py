@@ -8,6 +8,7 @@ already run, using the already-resolved WhatsApp records, and never knows
 about WhatsApp beyond receiving them as arguments — the workflow trigger it
 raises (``conversation.message_received``) is channel-agnostic.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,9 +25,16 @@ logger = logging.getLogger(__name__)
 
 
 def emit_event(
-    *, account, type: str, occurred_at: datetime, source: str,
-    source_event_id: str = "", payload: dict | None = None,
-    actor: str = "", subject_type: str = "", subject_id: str = "",
+    *,
+    account,
+    type: str,
+    occurred_at: datetime,
+    source: str,
+    source_event_id: str = "",
+    payload: dict | None = None,
+    actor: str = "",
+    subject_type: str = "",
+    subject_id: str = "",
     correlation_id: str = "",
 ) -> Event | None:
     """Idempotently record a durable domain Event.
@@ -38,22 +46,34 @@ def emit_event(
     try:
         with transaction.atomic():
             return Event.objects.create(
-                account=account, type=type, occurred_at=occurred_at,
-                source=source, source_event_id=source_event_id,
-                payload=payload or {}, actor=actor,
-                subject_type=subject_type, subject_id=subject_id,
+                account=account,
+                type=type,
+                occurred_at=occurred_at,
+                source=source,
+                source_event_id=source_event_id,
+                payload=payload or {},
+                actor=actor,
+                subject_type=subject_type,
+                subject_id=subject_id,
                 correlation_id=correlation_id,
             )
     except IntegrityError:
         logger.info(
             "emit_event: duplicate event type=%s source=%s source_event_id=%s",
-            type, source, source_event_id,
+            type,
+            source,
+            source_event_id,
         )
         return None
 
 
 def record_inbound_whatsapp_message(
-    *, contact, wa_contact, whatsapp_conversation, message_log, enroll_workflows: bool = True,
+    *,
+    contact,
+    wa_contact,
+    whatsapp_conversation,
+    message_log,
+    enroll_workflows: bool = True,
 ) -> Conversation | None:
     """Project an already-recorded inbound WhatsApp message onto the spine.
 
@@ -80,7 +100,10 @@ def record_inbound_whatsapp_message(
             "body": message_log.content,
             "timestamp": message_log.timestamp,
             "status": message_log.status,
-            "metadata": {"message_type": message_log.message_type, **({"reply": reply} if reply else {})},
+            "metadata": {
+                "message_type": message_log.message_type,
+                **({"reply": reply} if reply else {}),
+            },
         },
     )
     if not created:
@@ -136,12 +159,15 @@ def _record_customer_activity(contact, message_log) -> None:
 
     try:
         record_contact_event(
-            contact, "conversation.message_received",
+            contact,
+            "conversation.message_received",
             occurred_at=message_log.timestamp,
             data={"body": (message_log.content or "")[:280]},
         )
     except Exception:
-        logger.exception("could not record customer activity for contact=%s", contact.pk)
+        logger.exception(
+            "could not record customer activity for contact=%s", contact.pk
+        )
 
 
 def _clear_obsolete_followups(conversation, contact) -> None:
@@ -155,7 +181,9 @@ def _clear_obsolete_followups(conversation, contact) -> None:
 
     try:
         open_followups = FollowUp.objects.filter(
-            account=conversation.account, contact=contact, done_at__isnull=True,
+            account=conversation.account,
+            contact=contact,
+            done_at__isnull=True,
         )
         for followup in open_followups:
             followup.mark_done()
@@ -163,7 +191,9 @@ def _clear_obsolete_followups(conversation, contact) -> None:
         logger.exception("could not close follow-ups for contact=%s", contact.pk)
 
 
-def record_system_message(*, account, contact, body: str, metadata: dict | None = None) -> Message | None:
+def record_system_message(
+    *, account, contact, body: str, metadata: dict | None = None
+) -> Message | None:
     """Put a fact about the customer's story into their conversation thread.
 
     For things that happened outside the chat but belong to it — "Payment
@@ -184,9 +214,12 @@ def record_system_message(*, account, contact, body: str, metadata: dict | None 
         return None
 
     return Message.objects.create(
-        account=account, conversation=conversation,
-        direction=Message.Direction.SYSTEM, body=body,
-        timestamp=timezone.now(), metadata=metadata or {},
+        account=account,
+        conversation=conversation,
+        direction=Message.Direction.SYSTEM,
+        body=body,
+        timestamp=timezone.now(),
+        metadata=metadata or {},
     )
 
 
@@ -212,9 +245,12 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
         # switched off) and CRM's own rules apply exactly as they do for the
         # agent's manual button — and no crm model is imported here.
         run_action(
-            "capture_conversation_lead", {"account": conversation.account},
-            account=conversation.account, contact=contact,
-            conversation_id=conversation.public_id, signal=phrase,
+            "capture_conversation_lead",
+            {"account": conversation.account},
+            account=conversation.account,
+            contact=contact,
+            conversation_id=conversation.public_id,
+            signal=phrase,
         )
     except Exception:
         logger.exception(
@@ -238,23 +274,35 @@ def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
     if resume_on_reply(conversation.account_id, contact, message):
         return True
 
-    return enroll_for_trigger(
-        conversation.account_id,
-        "conversation.message_received",
-        contact,
-        context={"conversation_id": conversation.public_id, "message": message},
-    ) > 0
+    return (
+        enroll_for_trigger(
+            conversation.account_id,
+            "conversation.message_received",
+            contact,
+            context={"conversation_id": conversation.public_id, "message": message},
+        )
+        > 0
+    )
 
 
-def _announce_processed(conversation: Conversation, message: Message, handled: bool) -> None:
+def _announce_processed(
+    conversation: Conversation, message: Message, handled: bool
+) -> None:
     """Let optional consumers (AI) react once deterministic automation has had its chance."""
     from apps.conversations.signals import conversation_message_processed
 
     for receiver, result in conversation_message_processed.send_robust(
-        sender=Conversation, conversation=conversation, message=message, handled_by_automation=bool(handled),
+        sender=Conversation,
+        conversation=conversation,
+        message=message,
+        handled_by_automation=bool(handled),
     ):
         if isinstance(result, Exception):
-            logger.error("conversation_message_processed receiver %r failed: %r", receiver, result)
+            logger.error(
+                "conversation_message_processed receiver %r failed: %r",
+                receiver,
+                result,
+            )
 
 
 # Same ordering as the provider-side log: a status only moves forward, and "failed" is terminal.
@@ -262,8 +310,13 @@ _STATUS_RANK = {"queued": 0, "sent": 1, "delivered": 2, "read": 3, "failed": 99}
 
 
 def record_outbound_message(
-    *, conversation: Conversation, body: str, timestamp: datetime, status: str,
-    metadata: dict | None = None, whatsapp_message=None,
+    *,
+    conversation: Conversation,
+    body: str,
+    timestamp: datetime,
+    status: str,
+    metadata: dict | None = None,
+    whatsapp_message=None,
 ) -> tuple[Message, bool]:
     """Record a business message (human reply, template or workflow send) on the spine.
 
@@ -277,16 +330,24 @@ def record_outbound_message(
         message, created = Message.objects.get_or_create(
             whatsapp_message=whatsapp_message,
             defaults={
-                "account": conversation.account, "conversation": conversation,
-                "direction": Message.Direction.OUTBOUND, "body": body,
-                "timestamp": timestamp, "status": status, "metadata": metadata or {},
+                "account": conversation.account,
+                "conversation": conversation,
+                "direction": Message.Direction.OUTBOUND,
+                "body": body,
+                "timestamp": timestamp,
+                "status": status,
+                "metadata": metadata or {},
             },
         )
     else:
         message = Message.objects.create(
-            account=conversation.account, conversation=conversation,
-            direction=Message.Direction.OUTBOUND, body=body, timestamp=timestamp,
-            status=status, metadata=metadata or {},
+            account=conversation.account,
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+            body=body,
+            timestamp=timestamp,
+            status=status,
+            metadata=metadata or {},
         )
         created = True
 

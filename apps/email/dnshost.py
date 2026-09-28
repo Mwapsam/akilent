@@ -6,6 +6,7 @@ in this module is presentation: which part of a record name to type into a
 influence whether a record is judged correct; the diagnosis in dnscheck is
 deliberately independent of who hosts the DNS.
 """
+
 from __future__ import annotations
 
 import re
@@ -13,7 +14,20 @@ from collections.abc import Iterable
 
 # Second-level labels that sit under a two-letter country code, e.g. acme.co.zm,
 # acme.co.uk, acme.com.au. Used only when a live zone lookup isn't available.
-_SLD_UNDER_CC = {"co", "com", "net", "org", "ac", "gov", "edu", "ltd", "plc", "or", "ne", "go"}
+_SLD_UNDER_CC = {
+    "co",
+    "com",
+    "net",
+    "org",
+    "ac",
+    "gov",
+    "edu",
+    "ltd",
+    "plc",
+    "or",
+    "ne",
+    "go",
+}
 
 # (slug, display name, nameserver domains). A nameserver matches a domain when
 # it *is* that domain or ends with "." + it -- label-boundary suffix matching,
@@ -28,7 +42,11 @@ PROVIDERS: list[tuple[str, str, tuple[str, ...]]] = [
     ("route53", "Amazon Route 53", ()),
     ("google", "Google / Squarespace", ("googledomains.com", "squarespacedns.com")),
     ("digitalocean", "DigitalOcean", ("digitalocean.com",)),
-    ("azure", "Azure DNS", ("azure-dns.com", "azure-dns.net", "azure-dns.org", "azure-dns.info")),
+    (
+        "azure",
+        "Azure DNS",
+        ("azure-dns.com", "azure-dns.net", "azure-dns.org", "azure-dns.info"),
+    ),
     ("hostinger", "Hostinger", ("dns-parking.com",)),
 ]
 

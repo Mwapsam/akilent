@@ -14,6 +14,7 @@ Setup (run once):
 Register with Claude Code:
     claude mcp add --transport stdio akilent_debug -- poetry run python tools/mcp_akilent_debug/server.py
 """
+
 from __future__ import annotations
 
 import os
@@ -41,7 +42,9 @@ def _headers() -> dict:
 
 
 def _get(path: str, params: dict | None = None) -> dict:
-    resp = requests.get(f"{BASE_URL}{path}", headers=_headers(), params=params, timeout=15)
+    resp = requests.get(
+        f"{BASE_URL}{path}", headers=_headers(), params=params, timeout=15
+    )
     resp.raise_for_status()
     return resp.json()
 

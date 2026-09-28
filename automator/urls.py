@@ -1,18 +1,25 @@
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import path, include
+from django.urls import include, path
 
 from apps.accounts.forms import LoginForm
 from apps.accounts.views import LoginView, LogoutView, PasswordResetView
 from apps.core import views as core_views
+from apps.core import views_events
 
 urlpatterns = [
     path("healthz", core_views.healthz, name="healthz"),
+    # Served by a separate ASGI process (docker-compose.yml's `events` service) behind nginx's
+    # /events/ location — the main `web` service stays on WSGI. Routed here too so it resolves
+    # under DEBUG/runserver and `{% url %}`/reverse() have one definition to agree with.
+    path("events/stream/", views_events.event_stream, name="events-stream"),
     path("admin/", admin.site.urls),
     path(
         "auth/login/",
-        LoginView.as_view(template_name="auth/login.html", authentication_form=LoginForm),
+        LoginView.as_view(
+            template_name="auth/login.html", authentication_form=LoginForm
+        ),
         name="login",
     ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
@@ -28,7 +35,9 @@ urlpatterns = [
     ),
     path(
         "auth/password-reset/done/",
-        auth_views.PasswordResetDoneView.as_view(template_name="auth/password_reset_done.html"),
+        auth_views.PasswordResetDoneView.as_view(
+            template_name="auth/password_reset_done.html"
+        ),
         name="password_reset_done",
     ),
     path(
@@ -41,14 +50,21 @@ urlpatterns = [
     ),
     path(
         "auth/reset/done/",
-        auth_views.PasswordResetCompleteView.as_view(template_name="auth/password_reset_complete.html"),
+        auth_views.PasswordResetCompleteView.as_view(
+            template_name="auth/password_reset_complete.html"
+        ),
         name="password_reset_complete",
     ),
     path("help/", core_views.help_index, name="help"),
     path("help/<slug:slug>/", core_views.help_article, name="help-article"),
     path("privacy/", core_views.legal_page, {"slug": "privacy"}, name="privacy"),
     path("terms/", core_views.legal_page, {"slug": "terms"}, name="terms"),
-    path("data-deletion/", core_views.legal_page, {"slug": "data-deletion"}, name="data-deletion"),
+    path(
+        "data-deletion/",
+        core_views.legal_page,
+        {"slug": "data-deletion"},
+        name="data-deletion",
+    ),
     path("docs/", core_views.docs_page, name="docs"),
     path("docs/<slug:slug>/", core_views.docs_page, name="docs-page"),
     path("", include("apps.accounts.urls")),
@@ -58,7 +74,9 @@ urlpatterns = [
     path("inbox/", include("apps.conversations.urls", namespace="conversations")),
     path("sales/", include("apps.crm.urls", namespace="crm")),
     path("orders/", include("apps.commerce.urls", namespace="commerce")),
-    path("automations/templates/", include("apps.verticals.urls", namespace="verticals")),
+    path(
+        "automations/templates/", include("apps.verticals.urls", namespace="verticals")
+    ),
     path("automations/", include("apps.automation.urls", namespace="automation")),
     path("build/", include("apps.automation.build_urls", namespace="build")),
     path("ai/", include("apps.ai.urls", namespace="ai")),

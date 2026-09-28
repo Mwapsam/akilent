@@ -5,6 +5,7 @@ conversation has lapsed, and `Conversation.get_or_open` opens a *new* session
 row for a closed conversation — so the reply surfaced in a different inbox
 thread than the one on screen.
 """
+
 import pytest
 from django.utils import timezone
 
@@ -18,17 +19,25 @@ from apps.whatsapp.tasks import _ensure_outbound_log
 def setup(db):
     account = Account.objects.create(company_name="Co", slug="co")
     wa_contact = WhatsAppContact.objects.create(
-        account=account, phone_number="+260971234567",
+        account=account,
+        phone_number="+260971234567",
     )
     template = MessageTemplate.objects.create(
-        account=account, name="Follow up", whatsapp_template_name="follow_up",
-        language_code="en", content="Hi {{1}}", variables=["Customer name"],
+        account=account,
+        name="Follow up",
+        whatsapp_template_name="follow_up",
+        language_code="en",
+        content="Hi {{1}}",
+        variables=["Customer name"],
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
     # A lapsed conversation: closed, and its 24h window long gone.
     lapsed = Conversation.objects.create(
-        account=account, contact=wa_contact, is_open=False,
-        closed_at=timezone.now(), window_expires_at=timezone.now() - timezone.timedelta(days=3),
+        account=account,
+        contact=wa_contact,
+        is_open=False,
+        closed_at=timezone.now(),
+        window_expires_at=timezone.now() - timezone.timedelta(days=3),
     )
     return account, wa_contact, template, lapsed
 
@@ -38,8 +47,11 @@ def test_pinned_send_stays_in_the_lapsed_conversation(setup):
     account, wa_contact, template, lapsed = setup
 
     msg = send_whatsapp_message(
-        account, phone=wa_contact.phone_number, template_id=template.id,
-        params={"Customer name": "Ada"}, conversation=lapsed,
+        account,
+        phone=wa_contact.phone_number,
+        template_id=template.id,
+        params={"Customer name": "Ada"},
+        conversation=lapsed,
     )
     log = _ensure_outbound_log(msg)
 
@@ -53,7 +65,9 @@ def test_unpinned_send_still_opens_a_new_session(setup):
     account, wa_contact, template, lapsed = setup
 
     msg = send_whatsapp_message(
-        account, phone=wa_contact.phone_number, template_id=template.id,
+        account,
+        phone=wa_contact.phone_number,
+        template_id=template.id,
         params={"Customer name": "Ada"},
     )
     log = _ensure_outbound_log(msg)
@@ -77,14 +91,20 @@ def test_recipient_comes_from_the_conversations_whatsapp_identity(setup):
     wa_contact.contact = person
     wa_contact.save(update_fields=["contact"])
     spine = SpineConversation.objects.create(
-        account=account, contact=person, channel=SpineConversation.Channel.WHATSAPP,
+        account=account,
+        contact=person,
+        channel=SpineConversation.Channel.WHATSAPP,
         whatsapp_conversation=lapsed,
     )
 
     run_action(
-        "send_whatsapp", {"account": account}, account=account,
-        phone=person.phone, template_id=template.id,
-        params={"Customer name": "Ada"}, conversation=spine,
+        "send_whatsapp",
+        {"account": account},
+        account=account,
+        phone=person.phone,
+        template_id=template.id,
+        params={"Customer name": "Ada"},
+        conversation=spine,
     )
 
     msg = OutboundMessage.objects.get(account=account)
@@ -95,13 +115,17 @@ def test_recipient_comes_from_the_conversations_whatsapp_identity(setup):
 def test_pin_to_another_contacts_conversation_is_ignored(setup):
     account, wa_contact, template, lapsed = setup
     other_contact = WhatsAppContact.objects.create(
-        account=account, phone_number="+260970000000",
+        account=account,
+        phone_number="+260970000000",
     )
     other_convo = Conversation.objects.create(account=account, contact=other_contact)
 
     msg = send_whatsapp_message(
-        account, phone=wa_contact.phone_number, template_id=template.id,
-        params={"Customer name": "Ada"}, conversation=other_convo,
+        account,
+        phone=wa_contact.phone_number,
+        template_id=template.id,
+        params={"Customer name": "Ada"},
+        conversation=other_convo,
     )
     log = _ensure_outbound_log(msg)
 

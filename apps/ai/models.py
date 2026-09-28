@@ -3,6 +3,7 @@
 Nothing here is read by the engine or the inbox to decide anything. Every row can be deleted and
 Akilent keeps working exactly as before, which is the point: no domain model gains an AI column.
 """
+
 from __future__ import annotations
 
 from django.conf import settings
@@ -12,27 +13,41 @@ from django.db import models
 class AISettings(models.Model):
     """One business's AI switch and the facts AI may use. Off until the owner opts in."""
 
-    account = models.OneToOneField("accounts.Account", on_delete=models.CASCADE, related_name="ai_settings")
+    account = models.OneToOneField(
+        "accounts.Account", on_delete=models.CASCADE, related_name="ai_settings"
+    )
     enabled = models.BooleanField(default=False)
     # Prices, address, hours, policies: the only facts AI may state about the business.
     business_notes = models.TextField(blank=True, default="")
     consented_at = models.DateTimeField(null=True, blank=True)
     consented_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
 
     class ReplyMode(models.TextChoices):
         SUGGEST = "suggest", "Suggest replies for my team to send"
         AUTO = "auto", "Reply automatically to the questions I choose"
 
     # Whether AI may send some replies on its own (see apps.ai.autonomy). Suggest-only by default.
-    reply_mode = models.CharField(max_length=10, choices=ReplyMode.choices, default=ReplyMode.SUGGEST)
+    reply_mode = models.CharField(
+        max_length=10, choices=ReplyMode.choices, default=ReplyMode.SUGGEST
+    )
     # Which kinds of question it may answer alone: keys of apps.ai.autonomy.TOPICS.
     auto_topics = models.JSONField(default=list, blank=True)
     auto_min_confidence = models.FloatField(default=0.85)
     auto_only_when_closed = models.BooleanField(default=False)
     auto_consented_at = models.DateTimeField(null=True, blank=True)
     auto_consented_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -48,20 +63,37 @@ class AIProposal(models.Model):
     """
 
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"      # queued, the model hasn't answered yet
-        READY = "ready", "Ready"            # a valid proposal is waiting for a person
-        ERROR = "error", "Error"            # the model failed or proposed something invalid
-        USED = "used", "Used"               # a person sent it (possibly edited)
+        PENDING = "pending", "Pending"  # queued, the model hasn't answered yet
+        READY = "ready", "Ready"  # a valid proposal is waiting for a person
+        ERROR = "error", "Error"  # the model failed or proposed something invalid
+        USED = "used", "Used"  # a person sent it (possibly edited)
         DISMISSED = "dismissed", "Dismissed"
-        EXPIRED = "expired", "Expired"      # overtaken by a newer message or a human reply
+        EXPIRED = "expired", "Expired"  # overtaken by a newer message or a human reply
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="ai_proposals")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="ai_proposals"
+    )
     conversation = models.ForeignKey(
-        "conversations.Conversation", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     trigger_message = models.ForeignKey(
-        "conversations.Message", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        "conversations.Message",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     requested_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
 
     version = models.PositiveSmallIntegerField(default=1)
     action = models.CharField(max_length=32, blank=True, default="")
@@ -69,7 +101,9 @@ class AIProposal(models.Model):
     reason = models.CharField(max_length=300, blank=True, default="")
     payload = models.JSONField(default=dict, blank=True)
 
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING
+    )
     provider = models.CharField(max_length=40, blank=True, default="")
     model = models.CharField(max_length=80, blank=True, default="")
     latency_ms = models.PositiveIntegerField(null=True, blank=True)
@@ -130,17 +164,26 @@ class AIDraft(models.Model):
         ERROR = "error", "Error"
         USED = "used", "Used"
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="ai_drafts")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="ai_drafts"
+    )
     kind = models.CharField(max_length=20, choices=Kind.choices)
-    prompt = models.TextField()                       # the owner's request, contact details masked
+    prompt = models.TextField()  # the owner's request, contact details masked
     context = models.JSONField(default=dict, blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING
+    )
     result = models.JSONField(default=dict, blank=True)
     warnings = models.JSONField(default=list, blank=True)
     error = models.CharField(max_length=300, blank=True, default="")
     model = models.CharField(max_length=80, blank=True, default="")
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
@@ -160,9 +203,12 @@ class AIConversationMemory(models.Model):
     already folded in. Discardable: delete it and the next refresh rebuilds it.
     """
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="+")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="+"
+    )
     conversation = models.OneToOneField(
-        "conversations.Conversation", on_delete=models.CASCADE, related_name="ai_memory")
+        "conversations.Conversation", on_delete=models.CASCADE, related_name="ai_memory"
+    )
     summary = models.TextField(blank=True, default="")
     # Short facts the customer has told the business, e.g. {"wants": "3 kW system", "town": "Kitwe"}.
     facts = models.JSONField(default=dict, blank=True)

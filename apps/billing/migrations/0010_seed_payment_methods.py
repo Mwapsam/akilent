@@ -19,7 +19,6 @@ def remove_payment_methods(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("billing", "0009_paymentmethod_subscription_payment_method_and_more"),
     ]

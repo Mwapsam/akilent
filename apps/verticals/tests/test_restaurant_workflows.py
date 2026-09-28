@@ -23,14 +23,24 @@ def contact(account):
 
 
 @pytest.mark.django_db
-def test_confirm_and_charge_workflow_requests_payment_on_order_created(account, contact):
+def test_confirm_and_charge_workflow_requests_payment_on_order_created(
+    account, contact
+):
     activate_vertical(account, "restaurant")
 
     with patch("apps.billing.flutterwave.get_fw_client") as fw:
         fw.return_value.initialize_payment.return_value = "https://pay.example/abc"
-        order = create_order(account, contact, items=[
-            {"name": "Chicken Burger", "unit_price": Decimal("75.00"), "quantity": 2},
-        ])
+        order = create_order(
+            account,
+            contact,
+            items=[
+                {
+                    "name": "Chicken Burger",
+                    "unit_price": Decimal("75.00"),
+                    "quantity": 2,
+                },
+            ],
+        )
 
     order.refresh_from_db()
     assert order.status == Order.Status.AWAITING_PAYMENT
@@ -44,14 +54,19 @@ def test_win_back_workflow_enrolls_and_waits_on_order_paid(account, contact):
 
     with patch("apps.billing.flutterwave.get_fw_client") as fw:
         fw.return_value.initialize_payment.return_value = "https://pay.example/abc"
-        order = create_order(account, contact, items=[
-            {"name": "Coke", "unit_price": Decimal("15.00"), "quantity": 1},
-        ])
+        order = create_order(
+            account,
+            contact,
+            items=[
+                {"name": "Coke", "unit_price": Decimal("15.00"), "quantity": 1},
+            ],
+        )
     payment = Payment.objects.get(order=order)
     mark_paid(payment, transaction_id="tx-1")
 
     run = WorkflowRun.objects.get(
-        workflow__slug="restaurant-win-back", contact=contact,
+        workflow__slug="restaurant-win-back",
+        contact=contact,
     )
     assert run.status == WorkflowRun.Status.WAITING
     assert Lead.objects.filter(account=account, contact=contact).count() == 0

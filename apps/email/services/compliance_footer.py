@@ -9,6 +9,7 @@ Injection happens at send time in apps.email.tasks._send_email_message, after
 click-tracking rewrites, so the unsubscribe link is never turned into a tracked
 redirect.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -32,7 +33,7 @@ _ADDRESS_FIELDS = (
 )
 
 
-def format_postal_address(account: "Account") -> str:
+def format_postal_address(account: Account) -> str:
     """The account's mailing address as a single comma-joined line.
 
     Blank fields are skipped, so a partial address still renders sensibly.
@@ -43,7 +44,7 @@ def format_postal_address(account: "Account") -> str:
     return ", ".join(part for part in parts if part)
 
 
-def has_postal_address(account: "Account") -> bool:
+def has_postal_address(account: Account) -> bool:
     """Whether the account has enough of an address to satisfy CAN-SPAM.
 
     Street, city and country are the minimum that identifies a real location;
@@ -55,7 +56,7 @@ def has_postal_address(account: "Account") -> bool:
     )
 
 
-def _sender_label(account: "Account", sender_name: str = "") -> str:
+def _sender_label(account: Account, sender_name: str = "") -> str:
     return (
         sender_name
         or str(getattr(account, "legal_name", "") or "").strip()
@@ -64,7 +65,7 @@ def _sender_label(account: "Account", sender_name: str = "") -> str:
 
 
 def build_footer(
-    account: "Account", unsubscribe_url: str, *, sender_name: str = ""
+    account: Account, unsubscribe_url: str, *, sender_name: str = ""
 ) -> tuple[str, str]:
     """Return the (text, html) footer blocks for this account.
 
@@ -78,7 +79,7 @@ def build_footer(
 
     html = (
         f'{FOOTER_MARKER}<div style="margin-top:32px;padding-top:16px;'
-        'border-top:1px solid #e5e5e5;font-family:Arial,Helvetica,sans-serif;'
+        "border-top:1px solid #e5e5e5;font-family:Arial,Helvetica,sans-serif;"
         'font-size:12px;line-height:18px;color:#666666;">'
         f"<div>{escape(identity)}</div>"
         f'<div style="margin-top:8px;">'
@@ -93,7 +94,7 @@ def append_footer(
     text_body: str,
     html_body: str,
     *,
-    account: "Account",
+    account: Account,
     unsubscribe_url: str,
     sender_name: str = "",
 ) -> tuple[str, str]:

@@ -1,4 +1,5 @@
 """Bulk-campaign wizard web flow (templates/email/campaigns.html + views)."""
+
 import json
 from decimal import Decimal
 
@@ -14,6 +15,7 @@ from apps.email.models import BulkEmailCampaign, EmailDomain
 @pytest.fixture(autouse=True)
 def _clear_cache():
     from django.core.cache import cache
+
     cache.clear()
     yield
     cache.clear()
@@ -35,12 +37,18 @@ def account(db):
 @pytest.fixture
 def bulk_plan(account):
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        max_emails_per_month=1000, email_apis=True, bulk_email=True,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=1000,
+        email_apis=True,
+        bulk_email=True,
         max_bulk_recipients_per_campaign=500,
     )
     Subscription.objects.create(
-        account=account, plan=plan, status=Subscription.ACTIVE,
+        account=account,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return plan
@@ -49,7 +57,9 @@ def bulk_plan(account):
 @pytest.fixture
 def verified_domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
@@ -64,7 +74,9 @@ def test_sample_csv_download(client, account):
 
 
 @pytest.mark.django_db
-def test_compose_page_exposes_verified_domain_to_wizard(client, account, bulk_plan, verified_domain):
+def test_compose_page_exposes_verified_domain_to_wizard(
+    client, account, bulk_plan, verified_domain
+):
     client.force_login(account.owner)
     resp = client.get("/email/campaigns/new/")
     assert resp.status_code == 200
@@ -73,15 +85,20 @@ def test_compose_page_exposes_verified_domain_to_wizard(client, account, bulk_pl
 
 
 @pytest.mark.django_db
-def test_create_from_pasted_addresses_queues_campaign(client, account, bulk_plan, verified_domain):
+def test_create_from_pasted_addresses_queues_campaign(
+    client, account, bulk_plan, verified_domain
+):
     client.force_login(account.owner)
-    resp = client.post("/email/campaigns/create/", {
-        "mode": "text",
-        "from_email": "hello@mail.acme.com",
-        "subject": "Hello",
-        "text_body": "Hi everyone",
-        "recipients_text": "ada@example.com, grace@example.com\nada@example.com",
-    })
+    resp = client.post(
+        "/email/campaigns/create/",
+        {
+            "mode": "text",
+            "from_email": "hello@mail.acme.com",
+            "subject": "Hello",
+            "text_body": "Hi everyone",
+            "recipients_text": "ada@example.com, grace@example.com\nada@example.com",
+        },
+    )
     assert resp.status_code == 302
     campaign = BulkEmailCampaign.objects.get(account=account)
     assert campaign.from_email == "hello@mail.acme.com"
@@ -91,23 +108,28 @@ def test_create_from_pasted_addresses_queues_campaign(client, account, bulk_plan
 
 
 @pytest.mark.django_db
-def test_schedule_toggle_defers_the_campaign(client, account, bulk_plan, verified_domain):
+def test_schedule_toggle_defers_the_campaign(
+    client, account, bulk_plan, verified_domain
+):
     from datetime import timedelta
 
     from apps.scheduler.models import ScheduledJob
 
     client.force_login(account.owner)
     when = (timezone.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
-    resp = client.post("/email/campaigns/create/", {
-        "mode": "text",
-        "from_email": "hello@mail.acme.com",
-        "subject": "Later",
-        "text_body": "Hi",
-        "recipients_text": "ada@example.com",
-        "schedule_enabled": "1",
-        "scheduled_at": when,
-        "schedule_timezone": "UTC",
-    })
+    resp = client.post(
+        "/email/campaigns/create/",
+        {
+            "mode": "text",
+            "from_email": "hello@mail.acme.com",
+            "subject": "Later",
+            "text_body": "Hi",
+            "recipients_text": "ada@example.com",
+            "schedule_enabled": "1",
+            "scheduled_at": when,
+            "schedule_timezone": "UTC",
+        },
+    )
     assert resp.status_code == 302
     campaign = BulkEmailCampaign.objects.get(account=account)
     assert campaign.status == BulkEmailCampaign.Status.SCHEDULED
@@ -118,15 +140,20 @@ def test_schedule_toggle_defers_the_campaign(client, account, bulk_plan, verifie
 
 
 @pytest.mark.django_db
-def test_invalid_submission_rerenders_with_input_preserved(client, account, bulk_plan, verified_domain):
+def test_invalid_submission_rerenders_with_input_preserved(
+    client, account, bulk_plan, verified_domain
+):
     client.force_login(account.owner)
-    resp = client.post("/email/campaigns/create/", {
-        "mode": "text",
-        "from_email": "hello@mail.acme.com",
-        "subject": "My subject line",
-        "text_body": "Body copy",
-        "recipients_text": "",  # nothing -> error
-    })
+    resp = client.post(
+        "/email/campaigns/create/",
+        {
+            "mode": "text",
+            "from_email": "hello@mail.acme.com",
+            "subject": "My subject line",
+            "text_body": "Body copy",
+            "recipients_text": "",  # nothing -> error
+        },
+    )
     assert resp.status_code == 400
     assert not BulkEmailCampaign.objects.filter(account=account).exists()
     body = resp.content.decode()
@@ -135,12 +162,15 @@ def test_invalid_submission_rerenders_with_input_preserved(client, account, bulk
 
 
 @pytest.mark.django_db
-def test_send_test_uses_logged_in_user_address(client, account, bulk_plan, verified_domain, monkeypatch):
+def test_send_test_uses_logged_in_user_address(
+    client, account, bulk_plan, verified_domain, monkeypatch
+):
     sent = {}
 
     def fake_send(**kwargs):
         sent.update(kwargs)
         from types import SimpleNamespace
+
         return SimpleNamespace(id=1, status="queued")
 
     monkeypatch.setattr("apps.api.services.create_and_queue_message", fake_send)
@@ -148,12 +178,14 @@ def test_send_test_uses_logged_in_user_address(client, account, bulk_plan, verif
 
     resp = client.post(
         "/email/campaigns/send-test/",
-        data=json.dumps({
-            "from_email": "hello@mail.acme.com",
-            "subject": "Preview me",
-            "text_body": "Hi {{ first_name }}",
-            "variables": {"first_name": "Ada"},
-        }),
+        data=json.dumps(
+            {
+                "from_email": "hello@mail.acme.com",
+                "subject": "Preview me",
+                "text_body": "Hi {{ first_name }}",
+                "variables": {"first_name": "Ada"},
+            }
+        ),
         content_type="application/json",
     )
     assert resp.status_code == 202
@@ -174,7 +206,9 @@ def test_send_test_requires_content(client, account, bulk_plan, verified_domain)
 
 
 @pytest.mark.django_db
-def test_campaign_requires_a_postal_address(client, account, bulk_plan, verified_domain):
+def test_campaign_requires_a_postal_address(
+    client, account, bulk_plan, verified_domain
+):
     """Every marketing email must carry the sender's physical address.
 
     Without one on the Account there is nothing to render into the footer, so
@@ -184,13 +218,16 @@ def test_campaign_requires_a_postal_address(client, account, bulk_plan, verified
     account.save(update_fields=["address_line1"])
 
     client.force_login(account.owner)
-    resp = client.post("/email/campaigns/create/", {
-        "mode": "text",
-        "from_email": "hello@mail.acme.com",
-        "subject": "Hi",
-        "text_body": "Hello",
-        "recipients_text": "ada@example.com",
-    })
+    resp = client.post(
+        "/email/campaigns/create/",
+        {
+            "mode": "text",
+            "from_email": "hello@mail.acme.com",
+            "subject": "Hi",
+            "text_body": "Hello",
+            "recipients_text": "ada@example.com",
+        },
+    )
 
     assert resp.status_code == 400
     assert b"mailing address" in resp.content

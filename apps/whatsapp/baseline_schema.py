@@ -51,18 +51,37 @@ LIMITATIONS = (
 )
 
 ENQUIRY_KEYS = {
-    "inbound", "answered", "unanswered", "never_answered", "indeterminate",
+    "inbound",
+    "answered",
+    "unanswered",
+    "never_answered",
+    "indeterminate",
     "indeterminate_reasons",
 }
 RESPONSE_TIME_KEYS = set(BUCKET_NAMES) | {"median_seconds", "p90_seconds"}
 CONVERSION_KEYS = {"enquiries_with_lead", "enquiries_with_deal", "enquiries_with_order"}
-DATA_QUALITY_KEYS = {"inbound_rows", "outbound_rows", "outbound_failed", "outbound_template"}
+DATA_QUALITY_KEYS = {
+    "inbound_rows",
+    "outbound_rows",
+    "outbound_failed",
+    "outbound_template",
+}
 RESULT_KEYS = {
-    "enquiry_gap_hours", "enquiries", "response_time", "conversion_cohort", "data_quality",
+    "enquiry_gap_hours",
+    "enquiries",
+    "response_time",
+    "conversion_cohort",
+    "data_quality",
 }
 METADATA_KEYS = {
-    "generated_at", "git_commit", "since", "until", "grace_hours", "timezone",
-    "business_hours_adjustment", "source",
+    "generated_at",
+    "git_commit",
+    "since",
+    "until",
+    "grace_hours",
+    "timezone",
+    "business_hours_adjustment",
+    "source",
 }
 TOP_LEVEL_KEYS = {"schema_version", "metadata", "accounts", "limitations"}
 
@@ -89,7 +108,9 @@ def _count(path: str, value):
 
 
 def _nullable_number(path: str, value):
-    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+    if value is not None and (
+        isinstance(value, bool) or not isinstance(value, (int, float))
+    ):
         _fail(path, f"must be a number or null, got {value!r}")
 
 
@@ -106,11 +127,16 @@ def validate_result(path: str, result: dict) -> None:
         _fail(f"{path}.enquiries.indeterminate_reasons", "must be an object")
     for reason, n in reasons.items():
         if reason not in INDETERMINATE_REASONS:
-            _fail(f"{path}.enquiries.indeterminate_reasons", f"unknown reason {reason!r}")
+            _fail(
+                f"{path}.enquiries.indeterminate_reasons", f"unknown reason {reason!r}"
+            )
         _count(f"{path}.enquiries.indeterminate_reasons.{reason}", n)
 
     if enq["answered"] + enq["unanswered"] + enq["indeterminate"] != enq["inbound"]:
-        _fail(f"{path}.enquiries", "answered + unanswered + indeterminate must equal inbound")
+        _fail(
+            f"{path}.enquiries",
+            "answered + unanswered + indeterminate must equal inbound",
+        )
     if enq["never_answered"] > enq["unanswered"]:
         _fail(f"{path}.enquiries", "never_answered must be a subset of unanswered")
     if sum(reasons.values()) != enq["indeterminate"]:
@@ -125,7 +151,10 @@ def validate_result(path: str, result: dict) -> None:
     for key in ("median_seconds", "p90_seconds"):
         _nullable_number(f"{path}.response_time.{key}", rt[key])
         if enq["answered"] < PERCENTILE_MIN_SAMPLES and rt[key] is not None:
-            _fail(f"{path}.response_time.{key}", f"must be null when answered < {PERCENTILE_MIN_SAMPLES}")
+            _fail(
+                f"{path}.response_time.{key}",
+                f"must be null when answered < {PERCENTILE_MIN_SAMPLES}",
+            )
 
     conv = result["conversion_cohort"]
     _keys(f"{path}.conversion_cohort", conv, CONVERSION_KEYS)
@@ -149,7 +178,10 @@ def validate_snapshot(snapshot: dict) -> None:
     meta = snapshot["metadata"]
     _keys("metadata", meta, METADATA_KEYS)
     if meta["business_hours_adjustment"] != BUSINESS_HOURS_ADJUSTMENT:
-        _fail("metadata.business_hours_adjustment", f"must be {BUSINESS_HOURS_ADJUSTMENT!r}")
+        _fail(
+            "metadata.business_hours_adjustment",
+            f"must be {BUSINESS_HOURS_ADJUSTMENT!r}",
+        )
     if meta["source"] != SOURCE:
         _fail("metadata.source", f"must be {SOURCE!r}")
 
@@ -170,4 +202,6 @@ def validate_snapshot(snapshot: dict) -> None:
             validate_result(f"total.results[{j}]", result)
 
     if list(snapshot["limitations"]) != list(LIMITATIONS):
-        _fail("limitations", "must be the mandatory limitations for this schema version")
+        _fail(
+            "limitations", "must be the mandatory limitations for this schema version"
+        )

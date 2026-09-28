@@ -13,29 +13,48 @@ changing what a plan includes is configuration in the Operator Console, not a de
 
 Direct imports of apps.billing.models are not allowed outside of billing.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from django.db import transaction
 
 from apps.accounts.models import Account
 from apps.billing import features as catalog
 from apps.billing import limit_catalog
+
 # Unit economics live in costs.py; re-exported for the Operator Console.
-from apps.billing.costs import (  # noqa: F401
-    DRIVERS as COST_DRIVERS, actual_cost, businesses_by_margin, loss_reasons, plan_economics, unit_costs,
+from apps.billing.costs import (
+    DRIVERS as COST_DRIVERS,
 )
+
 # Limits and usage live in metering.py; re-exported here because other apps only import billing.api.
 from apps.billing.metering import (  # noqa: F401
-    LimitReached, check_rule, commit, count, limit, limit_source, release, require_room, reserve,
-    reserve_all, reserve_all_verbose, settle_operation, usage_report, used, warnings as usage_warnings,
+    LimitReached,
+    check_rule,
+    commit,
+    count,
+    limit,
+    limit_source,
+    release,
+    require_room,
+    reserve,
+    reserve_all,
+    reserve_all_verbose,
+    settle_operation,
+    usage_report,
+    used,
 )
 from apps.billing.models import (
-    AccountFeatureOverride, ComingSoonFeature, ModuleSubscription, Plan, PlanFeature, Subscription,
-    UsageReservation, UsageSummary,
+    AccountFeatureOverride,
+    ComingSoonFeature,
+    ModuleSubscription,
+    Plan,
+    PlanFeature,
+    Subscription,
+    UsageSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,7 +66,9 @@ SOURCE_GRANT = "grant"
 SOURCE_REMOVED = "removed"
 SOURCE_NOT_IN_PLAN = "not_in_plan"
 SOURCE_RETIRED = "retired"
-SOURCE_NO_PLAN = "no_plan"  # no subscription row at all: keeps the pre-plan module features
+SOURCE_NO_PLAN = (
+    "no_plan"  # no subscription row at all: keeps the pre-plan module features
+)
 
 
 class FeatureError(ValueError):
@@ -56,7 +77,7 @@ class FeatureError(ValueError):
 
 @dataclass
 class _State:
-    plan: Optional[Plan]
+    plan: Plan | None
     has_subscription: bool
     plan_keys: frozenset
     overrides: dict = field(default_factory=dict)
@@ -68,14 +89,32 @@ def _state(account: Account) -> _State:
     queries). Not cached on the account object: the same object often outlives a change."""
     sub = Subscription.objects.filter(account=account).select_related("plan").first()
     plan = sub.plan if sub else None
-    plan_keys = frozenset(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True)) if plan else frozenset()
-    overrides = {o.key: o for o in AccountFeatureOverride.objects.filter(account=account).select_related("set_by")}
-    off_modules = set(ModuleSubscription.objects.filter(
-        account=account, enabled=False, module__in=list(catalog.OWNER_SWITCH_MODULE.values()),
-    ).values_list("module", flat=True))
+    plan_keys = (
+        frozenset(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
+        if plan
+        else frozenset()
+    )
+    overrides = {
+        o.key: o
+        for o in AccountFeatureOverride.objects.filter(account=account).select_related(
+            "set_by"
+        )
+    }
+    off_modules = set(
+        ModuleSubscription.objects.filter(
+            account=account,
+            enabled=False,
+            module__in=list(catalog.OWNER_SWITCH_MODULE.values()),
+        ).values_list("module", flat=True)
+    )
     return _State(
-        plan=plan, has_subscription=sub is not None, plan_keys=plan_keys, overrides=overrides,
-        owner_off=frozenset(k for k, m in catalog.OWNER_SWITCH_MODULE.items() if m in off_modules),
+        plan=plan,
+        has_subscription=sub is not None,
+        plan_keys=plan_keys,
+        overrides=overrides,
+        owner_off=frozenset(
+            k for k, m in catalog.OWNER_SWITCH_MODULE.items() if m in off_modules
+        ),
     )
 
 
@@ -86,7 +125,11 @@ def _decide(state: _State, feature: catalog.Feature) -> tuple[bool, str]:
         return False, SOURCE_RETIRED
     if feature.access_mode == catalog.CORE:
         return True, SOURCE_CORE
-    override = state.overrides.get(feature.key) if feature.availability != catalog.INTERNAL else None
+    override = (
+        state.overrides.get(feature.key)
+        if feature.availability != catalog.INTERNAL
+        else None
+    )
     if override is not None and not override.grant:
         return False, SOURCE_REMOVED
     if not state.has_subscription and feature.key in catalog.MODULE_FEATURES:
@@ -125,7 +168,10 @@ def entitled_features(account: Account) -> frozenset[str]:
 def usable_features(account: Account) -> frozenset[str]:
     """``entitled_features`` minus the optional tools the owner switched off."""
     state = _state(account)
-    return frozenset(f.key for f in catalog.FEATURES if _decide(state, f)[0]) - state.owner_off
+    return (
+        frozenset(f.key for f in catalog.FEATURES if _decide(state, f)[0])
+        - state.owner_off
+    )
 
 
 def nav_state(account: Account) -> dict:
@@ -146,8 +192,11 @@ def available_in(key: str) -> list[str]:
     feature = catalog.get(key)
     if feature.availability != catalog.SELLABLE or feature.access_mode != catalog.PLAN:
         return []
-    return list(Plan.objects.filter(is_active=True, features__key=key)
-                .order_by("price_monthly").values_list("name", flat=True))
+    return list(
+        Plan.objects.filter(is_active=True, features__key=key)
+        .order_by("price_monthly")
+        .values_list("name", flat=True)
+    )
 
 
 def access(account: Account, key: str) -> dict:
@@ -168,8 +217,11 @@ def access(account: Account, key: str) -> dict:
         "source": source,
         "plan_name": state.plan.name if state.plan else None,
         "owner_off": owner_off,
-        "override": None if override is None else {
-            "grant": override.grant, "note": override.note,
+        "override": None
+        if override is None
+        else {
+            "grant": override.grant,
+            "note": override.note,
             "set_by": override.set_by.get_username() if override.set_by else "",
             "created": override.updated_at or override.created_at,
         },
@@ -180,11 +232,15 @@ def access(account: Account, key: str) -> dict:
 
 def access_report(account: Account) -> list[dict]:
     """``access`` for every shown catalog feature, in catalog order (Business 360)."""
-    return [access(account, f.key) for f in catalog.FEATURES
-            if f.availability not in (catalog.DEPRECATED, catalog.INTERNAL)]
+    return [
+        access(account, f.key)
+        for f in catalog.FEATURES
+        if f.availability not in (catalog.DEPRECATED, catalog.INTERNAL)
+    ]
 
 
 # ---- owner switches (Settings > Optional tools) -----------------------------------------------
+
 
 def set_owner_switch(account: Account, key: str, on: bool) -> None:
     """Turn an optional tool on or off for this business: the owner's choice, not commercial
@@ -192,7 +248,9 @@ def set_owner_switch(account: Account, key: str, on: bool) -> None:
     module = catalog.OWNER_SWITCH_MODULE.get(key)
     if module is None:
         raise FeatureError(f"{key!r} isn't an optional tool.")
-    ModuleSubscription.objects.update_or_create(account=account, module=module, defaults={"enabled": on})
+    ModuleSubscription.objects.update_or_create(
+        account=account, module=module, defaults={"enabled": on}
+    )
 
 
 def owner_switched_off(account: Account, key: str) -> bool:
@@ -201,7 +259,10 @@ def owner_switched_off(account: Account, key: str) -> bool:
 
 # ---- operator changes ---------------------------------------------------------------------------
 
-def set_override(account: Account, key: str, *, grant: bool, note: str, by=None) -> dict:
+
+def set_override(
+    account: Account, key: str, *, grant: bool, note: str, by=None
+) -> dict:
     """Grant or remove ``key`` for one business. Returns the access state before the change,
     for the audit log. Raises FeatureError for a core, internal or unknown feature."""
     if not catalog.overridable(key):
@@ -211,7 +272,10 @@ def set_override(account: Account, key: str, *, grant: bool, note: str, by=None)
         raise FeatureError("Add a note saying why.")
     before = access(account, key)
     AccountFeatureOverride.objects.update_or_create(
-        account=account, key=key, defaults={"grant": grant, "note": note[:255], "set_by": by})
+        account=account,
+        key=key,
+        defaults={"grant": grant, "note": note[:255], "set_by": by},
+    )
     return before
 
 
@@ -245,10 +309,14 @@ def diff_plan_features(wanted: dict) -> list[dict]:
         want = set(keys) & assignable
         added, removed = sorted(want - have), sorted(have - want)
         if added or removed:
-            changes.append({
-                "plan": plans[plan_id], "added": added, "removed": removed,
-                "businesses": Subscription.objects.filter(plan_id=plan_id).count(),
-            })
+            changes.append(
+                {
+                    "plan": plans[plan_id],
+                    "added": added,
+                    "removed": removed,
+                    "businesses": Subscription.objects.filter(plan_id=plan_id).count(),
+                }
+            )
     return changes
 
 
@@ -267,11 +335,14 @@ def apply_plan_features(wanted: dict) -> list[dict]:
 
 # ---- limits and usage (see apps.billing.metering for the reservation contract) ------------------
 
+
 def whatsapp_limit_for(category: str, *, verification_code: bool = False) -> str:
     """Which monthly limit a WhatsApp template send of ``category`` uses."""
     if verification_code:
         return "verification_codes_month"
-    return limit_catalog.TEMPLATE_CATEGORY_LIMIT.get((category or "").lower(), "whatsapp_utility_msgs")
+    return limit_catalog.TEMPLATE_CATEGORY_LIMIT.get(
+        (category or "").lower(), "whatsapp_utility_msgs"
+    )
 
 
 def count_conversation(account: Account) -> None:
@@ -304,10 +375,22 @@ def diff_plan_limits(wanted: dict) -> list[dict]:
                 continue
             old = current.get(plan_id, {}).get(key, limit_catalog.get(key).default)
             if old != value:
-                rows.append({"key": key, "name": limit_catalog.get(key).name, "old": old, "new": value})
+                rows.append(
+                    {
+                        "key": key,
+                        "name": limit_catalog.get(key).name,
+                        "old": old,
+                        "new": value,
+                    }
+                )
         if rows:
-            changes.append({"plan": plans[plan_id], "limits": rows,
-                            "businesses": Subscription.objects.filter(plan_id=plan_id).count()})
+            changes.append(
+                {
+                    "plan": plans[plan_id],
+                    "limits": rows,
+                    "businesses": Subscription.objects.filter(plan_id=plan_id).count(),
+                }
+            )
     return changes
 
 
@@ -318,18 +401,24 @@ def apply_plan_limits(wanted: dict) -> list[dict]:
     changes = diff_plan_limits(wanted)
     for change in changes:
         for row in change["limits"]:
-            PlanLimit.objects.update_or_create(plan=change["plan"], key=row["key"], defaults={"value": row["new"]})
+            PlanLimit.objects.update_or_create(
+                plan=change["plan"], key=row["key"], defaults={"value": row["new"]}
+            )
     return changes
 
 
-def save_cost_settings(*, unit_costs_by_driver: dict, fixed, target_margin_pct: int) -> None:
+def save_cost_settings(
+    *, unit_costs_by_driver: dict, fixed, target_margin_pct: int
+) -> None:
     """Set what Akilent pays per unit (email, AI action), the fixed cost per business and the
     target margin."""
     from apps.billing.models import CostSettings, UnitCost
 
     for driver, value in unit_costs_by_driver.items():
         if driver in {d.key for d in COST_DRIVERS}:
-            UnitCost.objects.update_or_create(driver=driver, defaults={"cost_per_unit": value})
+            UnitCost.objects.update_or_create(
+                driver=driver, defaults={"cost_per_unit": value}
+            )
     settings = CostSettings.load()
     settings.fixed_monthly_cost_per_business = fixed
     settings.target_margin_pct = max(0, min(100, int(target_margin_pct)))
@@ -342,7 +431,9 @@ def cost_settings():
     return CostSettings.load()
 
 
-def set_limit_override(account: Account, key: str, *, value: int, note: str, by=None, expires_at=None) -> dict:
+def set_limit_override(
+    account: Account, key: str, *, value: int, note: str, by=None, expires_at=None
+) -> dict:
     """Give one business a different limit than its plan. Returns the state before (for audit)."""
     from apps.billing.models import AccountLimitOverride
 
@@ -353,8 +444,16 @@ def set_limit_override(account: Account, key: str, *, value: int, note: str, by=
     if value < -1:
         raise FeatureError("Use -1 for unlimited, or 0 or more.")
     old, source = limit_source(account, key)
-    AccountLimitOverride.objects.update_or_create(account=account, key=key, defaults={
-        "value": value, "note": note[:255], "set_by": by, "expires_at": expires_at})
+    AccountLimitOverride.objects.update_or_create(
+        account=account,
+        key=key,
+        defaults={
+            "value": value,
+            "note": note[:255],
+            "set_by": by,
+            "expires_at": expires_at,
+        },
+    )
     return {"value": old, "source": source}
 
 
@@ -367,6 +466,7 @@ def clear_limit_override(account: Account, key: str) -> dict:
 
 
 # ---- pricing ------------------------------------------------------------------------------------
+
 
 def _limit_line(value: int, unit: str) -> str:
     if value == 1 and unit.endswith("s"):
@@ -407,8 +507,12 @@ def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
             limits.append(_limit_line(value, label))
     if plan.log_retention_days:
         limits.append(f"{plan.log_retention_days} days of message history")
-    included = [f for f in catalog.matrix_features()
-                if f.key in keys and (whatsapp or f.key not in ("whatsapp_campaigns", "verification_codes"))]
+    included = [
+        f
+        for f in catalog.matrix_features()
+        if f.key in keys
+        and (whatsapp or f.key not in ("whatsapp_campaigns", "verification_codes"))
+    ]
     return {
         "plan": plan,
         "limits": limits,
@@ -418,7 +522,7 @@ def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
     }
 
 
-def default_signup_trial() -> tuple[Optional[Plan], int]:
+def default_signup_trial() -> tuple[Plan | None, int]:
     """The plan and trial length a plain signup (no ``?plan=``) starts on.
 
     The auto_create_trial signal uses this, and the landing page advertises its number, so what
@@ -436,7 +540,11 @@ def default_signup_trial() -> tuple[Optional[Plan], int]:
 
 def core_features() -> list:
     """What every plan includes (for "Included in every plan" on pricing)."""
-    return [f for f in catalog.FEATURES if f.access_mode == catalog.CORE and f.availability != catalog.DEPRECATED]
+    return [
+        f
+        for f in catalog.FEATURES
+        if f.access_mode == catalog.CORE and f.availability != catalog.DEPRECATED
+    ]
 
 
 def compare_plans(plans, *, whatsapp: bool = True) -> list[dict]:
@@ -447,7 +555,9 @@ def compare_plans(plans, *, whatsapp: bool = True) -> list[dict]:
     for f in catalog.matrix_features():
         if not whatsapp and f.key in ("whatsapp_campaigns", "verification_codes"):
             continue
-        rows.append({"feature": f, "cells": [f.key in matrix.get(p.pk, set()) for p in plans]})
+        rows.append(
+            {"feature": f, "cells": [f.key in matrix.get(p.pk, set()) for p in plans]}
+        )
     return rows
 
 
@@ -457,7 +567,8 @@ def coming_soon_features():
 
 # ---- subscription and usage ---------------------------------------------------------------------
 
-def get_subscription(account: Account) -> Optional[Subscription]:
+
+def get_subscription(account: Account) -> Subscription | None:
     """Get the subscription for an account.
 
     Returns:
@@ -466,7 +577,7 @@ def get_subscription(account: Account) -> Optional[Subscription]:
     return Subscription.objects.filter(account=account).first()
 
 
-def get_plan(account: Account) -> Optional[Plan]:
+def get_plan(account: Account) -> Plan | None:
     """Get the plan for an account.
 
     Returns:
@@ -476,7 +587,7 @@ def get_plan(account: Account) -> Optional[Plan]:
     return subscription.plan if subscription else None
 
 
-def get_current_usage(account: Account) -> Optional[UsageSummary]:
+def get_current_usage(account: Account) -> UsageSummary | None:
     """Get current usage for an account."""
     return UsageSummary.objects.filter(account=account).first()
 

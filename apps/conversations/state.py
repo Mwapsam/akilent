@@ -40,11 +40,12 @@ Closing and re-opening (kept deliberately different):
 
 Both paths are pinned by ``apps/whatsapp/tests/test_phase1_acceptance.py``.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 
 from django.db.models import F, Max, Min, Q
 from django.utils import timezone
@@ -55,23 +56,25 @@ INACTIVITY_WINDOW = timedelta(hours=24)
 RESPONSE_STATUSES = ("sent", "delivered", "read")
 
 
-class ConversationState(str, Enum):
+class ConversationState(StrEnum):
     WAITING_FOR_AGENT = "waiting_for_agent"
     WAITING_FOR_CUSTOMER = "waiting_for_customer"
     CLOSED = "closed"
-    INDETERMINATE = "indeterminate"  # the data can't tell us (no message from either side)
+    INDETERMINATE = (
+        "indeterminate"  # the data can't tell us (no message from either side)
+    )
 
 
 @dataclass(frozen=True)
 class ConversationSnapshot:
     state: ConversationState
-    last_speaker: str | None            # "customer" | "business" | None
+    last_speaker: str | None  # "customer" | "business" | None
     last_customer_message_at: datetime | None
     last_business_message_at: datetime | None
-    last_activity_at: datetime | None   # any message, including queued/failed outbound
-    waiting_age: timedelta | None       # only when WAITING_FOR_AGENT
-    closed_reason: str | None           # "closed" | "inactive_24h" | None
-    missed: bool                        # open, customer spoke last, unanswered for 24h+
+    last_activity_at: datetime | None  # any message, including queued/failed outbound
+    waiting_age: timedelta | None  # only when WAITING_FOR_AGENT
+    closed_reason: str | None  # "closed" | "inactive_24h" | None
+    missed: bool  # open, customer spoke last, unanswered for 24h+
     first_response_seconds: float | None
 
     @property
@@ -83,7 +86,9 @@ def _customer_spoke_last(last_in, last_out) -> bool:
     return last_in is not None and (last_out is None or last_in > last_out)
 
 
-def derive_state(*, status, last_in, last_out, last_any, now, first_response_seconds=None):
+def derive_state(
+    *, status, last_in, last_out, last_any, now, first_response_seconds=None
+):
     """Pure derivation from the four facts every caller can obtain in one query."""
     inactive = last_in is not None and now - last_in >= INACTIVITY_WINDOW
     closed = status == Conversation.Status.CLOSED
@@ -135,12 +140,15 @@ def calculate_response_time(conversation: Conversation) -> float | None:
     first_in = facts["first_in"]
     if first_in is None:
         return None
-    reply = conversation.messages.filter(_response_filter(), timestamp__gte=first_in).aggregate(
-        first_reply=Min("timestamp"))["first_reply"]
+    reply = conversation.messages.filter(
+        _response_filter(), timestamp__gte=first_in
+    ).aggregate(first_reply=Min("timestamp"))["first_reply"]
     return None if reply is None else (reply - first_in).total_seconds()
 
 
-def get_conversation_state(conversation: Conversation, now: datetime | None = None) -> ConversationSnapshot:
+def get_conversation_state(
+    conversation: Conversation, now: datetime | None = None
+) -> ConversationSnapshot:
     now = now or timezone.now()
     facts = conversation.messages.aggregate(
         last_in=Max("timestamp", filter=Q(direction=Message.Direction.INBOUND)),
@@ -148,40 +156,59 @@ def get_conversation_state(conversation: Conversation, now: datetime | None = No
         last_any=Max("timestamp"),
     )
     return derive_state(
-        status=conversation.status, now=now,
-        first_response_seconds=calculate_response_time(conversation), **facts,
+        status=conversation.status,
+        now=now,
+        first_response_seconds=calculate_response_time(conversation),
+        **facts,
     )
 
 
 def with_activity(qs):
     """Annotate conversations with the facts ``derive_state`` needs (one query)."""
     return qs.annotate(
-        last_in=Max("messages__timestamp", filter=Q(messages__direction=Message.Direction.INBOUND)),
+        last_in=Max(
+            "messages__timestamp",
+            filter=Q(messages__direction=Message.Direction.INBOUND),
+        ),
         last_out=Max(
             "messages__timestamp",
-            filter=Q(messages__direction=Message.Direction.OUTBOUND, messages__status__in=RESPONSE_STATUSES),
+            filter=Q(
+                messages__direction=Message.Direction.OUTBOUND,
+                messages__status__in=RESPONSE_STATUSES,
+            ),
         ),
         last_any=Max("messages__timestamp"),
     )
 
 
-def snapshot_of(annotated: Conversation, now: datetime | None = None) -> ConversationSnapshot:
+def snapshot_of(
+    annotated: Conversation, now: datetime | None = None
+) -> ConversationSnapshot:
     """Snapshot for a conversation produced by :func:`with_activity`."""
     return derive_state(
-        status=annotated.status, last_in=annotated.last_in, last_out=annotated.last_out,
-        last_any=annotated.last_any, now=now or timezone.now(),
+        status=annotated.status,
+        last_in=annotated.last_in,
+        last_out=annotated.last_out,
+        last_any=annotated.last_any,
+        now=now or timezone.now(),
     )
 
 
 def _unanswered():
-    return Q(last_in__isnull=False) & (Q(last_out__isnull=True) | Q(last_in__gt=F("last_out")))
+    return Q(last_in__isnull=False) & (
+        Q(last_out__isnull=True) | Q(last_in__gt=F("last_out"))
+    )
 
 
 def needs_attention(account, now: datetime | None = None):
     """Conversations waiting on the business, longest-waiting first. A pure derived query."""
     now = now or timezone.now()
     return (
-        with_activity(Conversation.objects.filter(account=account, status=Conversation.Status.OPEN))
+        with_activity(
+            Conversation.objects.filter(
+                account=account, status=Conversation.Status.OPEN
+            )
+        )
         .filter(_unanswered(), last_in__gt=now - INACTIVITY_WINDOW)
         .order_by("last_in")
     )
@@ -211,7 +238,11 @@ def missed(account, now: datetime | None = None):
     """Open conversations the customer wrote to that went 24h+ with no business reply."""
     now = now or timezone.now()
     return (
-        with_activity(Conversation.objects.filter(account=account, status=Conversation.Status.OPEN))
+        with_activity(
+            Conversation.objects.filter(
+                account=account, status=Conversation.Status.OPEN
+            )
+        )
         .filter(_unanswered(), last_in__lte=now - INACTIVITY_WINDOW)
         .order_by("last_in")
     )

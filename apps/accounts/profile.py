@@ -4,6 +4,7 @@ One place reads and writes it so every consumer sees the same wording: automatio
 template blanks (``business.location``...), AI's structured facts, and the notes AI starts from.
 Answers are optional; an unanswered one is simply absent, never guessed.
 """
+
 from __future__ import annotations
 
 from django.utils import timezone
@@ -28,8 +29,17 @@ def get_profile(account):
     return BusinessProfile.objects.filter(account=account).first()
 
 
-def save_profile(account, *, what_you_sell="", location="", delivers=None, delivery_notes="",
-                 payment_methods=(), payment_other="", website=""):
+def save_profile(
+    account,
+    *,
+    what_you_sell="",
+    location="",
+    delivers=None,
+    delivery_notes="",
+    payment_methods=(),
+    payment_other="",
+    website="",
+):
     from django.core.exceptions import ValidationError
     from django.core.validators import URLValidator
 
@@ -47,8 +57,12 @@ def save_profile(account, *, what_you_sell="", location="", delivers=None, deliv
     profile.what_you_sell = (what_you_sell or "").strip()[:MAX_TEXT]
     profile.location = (location or "").strip()[:MAX_TEXT]
     profile.delivers = delivers
-    profile.delivery_notes = (delivery_notes or "").strip()[:MAX_TEXT] if delivers else ""
-    profile.payment_methods = [m for m in PAYMENT_METHODS if m in set(payment_methods or ())]
+    profile.delivery_notes = (
+        (delivery_notes or "").strip()[:MAX_TEXT] if delivers else ""
+    )
+    profile.payment_methods = [
+        m for m in PAYMENT_METHODS if m in set(payment_methods or ())
+    ]
     profile.payment_other = (payment_other or "").strip()[:120]
     profile.website = website
     profile.completed_at = profile.completed_at or timezone.now()
@@ -57,10 +71,14 @@ def save_profile(account, *, what_you_sell="", location="", delivers=None, deliv
 
 
 def payment_text(profile) -> str:
-    """"MTN MoMo, Airtel Money or Cash", or "" when not answered."""
+    """ "MTN MoMo, Airtel Money or Cash", or "" when not answered."""
     if profile is None:
         return ""
-    names = [PAYMENT_METHODS[m] for m in profile.payment_methods or [] if m in PAYMENT_METHODS]
+    names = [
+        PAYMENT_METHODS[m]
+        for m in profile.payment_methods or []
+        if m in PAYMENT_METHODS
+    ]
     if profile.payment_other:
         names.append(profile.payment_other)
     if not names:
@@ -73,7 +91,11 @@ def delivery_text(profile) -> str:
         return ""
     if not profile.delivers:
         return "We don't deliver; customers collect."
-    return f"We deliver. {profile.delivery_notes}".strip() if profile.delivery_notes else "We deliver."
+    return (
+        f"We deliver. {profile.delivery_notes}".strip()
+        if profile.delivery_notes
+        else "We deliver."
+    )
 
 
 def value(account, key: str) -> str | None:
@@ -86,8 +108,11 @@ def value(account, key: str) -> str | None:
     if profile is None:
         return None
     text = {
-        "location": profile.location, "website": profile.website, "what_you_sell": profile.what_you_sell,
-        "payment_methods": payment_text(profile), "delivery": delivery_text(profile),
+        "location": profile.location,
+        "website": profile.website,
+        "what_you_sell": profile.what_you_sell,
+        "payment_methods": payment_text(profile),
+        "delivery": delivery_text(profile),
     }.get(key, "")
     return text or None
 
@@ -98,15 +123,25 @@ def as_facts(account) -> dict:
     if profile is None:
         return {}
     facts = {
-        "what_you_sell": profile.what_you_sell, "location": profile.location,
-        "payment_methods": payment_text(profile), "delivery": delivery_text(profile), "website": profile.website,
+        "what_you_sell": profile.what_you_sell,
+        "location": profile.location,
+        "payment_methods": payment_text(profile),
+        "delivery": delivery_text(profile),
+        "website": profile.website,
     }
     return {k: v for k, v in facts.items() if v}
 
 
 def as_notes(account) -> str:
     """The answers as a readable starting point for the AI notes the owner can then edit."""
-    labels = (("what_you_sell", "What we sell"), ("location", "Where we are"), ("delivery", "Delivery"),
-              ("payment_methods", "Payment"), ("website", "Website"))
+    labels = (
+        ("what_you_sell", "What we sell"),
+        ("location", "Where we are"),
+        ("delivery", "Delivery"),
+        ("payment_methods", "Payment"),
+        ("website", "Website"),
+    )
     facts = as_facts(account)
-    return "\n".join(f"{label}: {facts[key]}" for key, label in labels if facts.get(key))
+    return "\n".join(
+        f"{label}: {facts[key]}" for key, label in labels if facts.get(key)
+    )

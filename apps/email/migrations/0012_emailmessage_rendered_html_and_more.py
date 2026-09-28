@@ -5,105 +5,217 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0011_webhookendpoint_webhookdelivery'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0011_webhookendpoint_webhookdelivery"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emailmessage',
-            name='rendered_html',
-            field=models.TextField(blank=True, default=''),
+            model_name="emailmessage",
+            name="rendered_html",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='emailmessage',
-            name='rendered_subject',
-            field=models.CharField(blank=True, default='', max_length=998),
+            model_name="emailmessage",
+            name="rendered_subject",
+            field=models.CharField(blank=True, default="", max_length=998),
         ),
         migrations.AddField(
-            model_name='emailmessage',
-            name='rendered_text',
-            field=models.TextField(blank=True, default=''),
+            model_name="emailmessage",
+            name="rendered_text",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.CreateModel(
-            name='BulkEmailCampaign',
+            name="BulkEmailCampaign",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('from_email', models.EmailField(max_length=254)),
-                ('subject_override', models.CharField(blank=True, default='', max_length=998)),
-                ('text_override', models.TextField(blank=True, default='')),
-                ('html_override', models.TextField(blank=True, default='')),
-                ('status', models.CharField(choices=[('draft', 'Draft'), ('queued', 'Queued'), ('sending', 'Sending'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], default='draft', max_length=20)),
-                ('recipient_count', models.PositiveIntegerField(default=0)),
-                ('queued_count', models.PositiveIntegerField(default=0)),
-                ('sent_count', models.PositiveIntegerField(default=0)),
-                ('failed_count', models.PositiveIntegerField(default=0)),
-                ('error', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('started_at', models.DateTimeField(blank=True, null=True)),
-                ('completed_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bulk_campaigns', to='accounts.account')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("from_email", models.EmailField(max_length=254)),
+                (
+                    "subject_override",
+                    models.CharField(blank=True, default="", max_length=998),
+                ),
+                ("text_override", models.TextField(blank=True, default="")),
+                ("html_override", models.TextField(blank=True, default="")),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("draft", "Draft"),
+                            ("queued", "Queued"),
+                            ("sending", "Sending"),
+                            ("completed", "Completed"),
+                            ("failed", "Failed"),
+                            ("cancelled", "Cancelled"),
+                        ],
+                        default="draft",
+                        max_length=20,
+                    ),
+                ),
+                ("recipient_count", models.PositiveIntegerField(default=0)),
+                ("queued_count", models.PositiveIntegerField(default=0)),
+                ("sent_count", models.PositiveIntegerField(default=0)),
+                ("failed_count", models.PositiveIntegerField(default=0)),
+                ("error", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("started_at", models.DateTimeField(blank=True, null=True)),
+                ("completed_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="bulk_campaigns",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.AddField(
-            model_name='emailmessage',
-            name='campaign',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='messages', to='email_service.bulkemailcampaign'),
+            model_name="emailmessage",
+            name="campaign",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="messages",
+                to="email_service.bulkemailcampaign",
+            ),
         ),
         migrations.CreateModel(
-            name='EmailTemplate',
+            name="EmailTemplate",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=150)),
-                ('slug', models.SlugField(max_length=150)),
-                ('subject', models.CharField(blank=True, default='', max_length=998)),
-                ('text_body', models.TextField(blank=True, default='')),
-                ('html_body', models.TextField(blank=True, default='')),
-                ('sample_variables', models.JSONField(blank=True, default=dict)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_templates', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=150)),
+                ("slug", models.SlugField(max_length=150)),
+                ("subject", models.CharField(blank=True, default="", max_length=998)),
+                ("text_body", models.TextField(blank=True, default="")),
+                ("html_body", models.TextField(blank=True, default="")),
+                ("sample_variables", models.JSONField(blank=True, default=dict)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_templates",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
-                'unique_together': {('account', 'slug')},
+                "ordering": ["name"],
+                "unique_together": {("account", "slug")},
             },
         ),
         migrations.AddField(
-            model_name='bulkemailcampaign',
-            name='template',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emailtemplate'),
+            model_name="bulkemailcampaign",
+            name="template",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to="email_service.emailtemplate",
+            ),
         ),
         migrations.AddField(
-            model_name='emailmessage',
-            name='template',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emailtemplate'),
+            model_name="emailmessage",
+            name="template",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to="email_service.emailtemplate",
+            ),
         ),
         migrations.CreateModel(
-            name='BulkEmailRecipient',
+            name="BulkEmailRecipient",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('to_email', models.EmailField(max_length=254)),
-                ('variables', models.JSONField(blank=True, default=dict)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('queued', 'Queued'), ('sent', 'Sent'), ('failed', 'Failed')], default='pending', max_length=20)),
-                ('error', models.TextField(blank=True, default='')),
-                ('campaign', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='recipients', to='email_service.bulkemailcampaign')),
-                ('message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emailmessage')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("to_email", models.EmailField(max_length=254)),
+                ("variables", models.JSONField(blank=True, default=dict)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("queued", "Queued"),
+                            ("sent", "Sent"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("error", models.TextField(blank=True, default="")),
+                (
+                    "campaign",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="recipients",
+                        to="email_service.bulkemailcampaign",
+                    ),
+                ),
+                (
+                    "message",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="email_service.emailmessage",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['pk'],
-                'indexes': [models.Index(fields=['campaign', 'status'], name='email_servi_campaig_0b5a37_idx')],
+                "ordering": ["pk"],
+                "indexes": [
+                    models.Index(
+                        fields=["campaign", "status"],
+                        name="email_servi_campaig_0b5a37_idx",
+                    )
+                ],
             },
         ),
         migrations.AddIndex(
-            model_name='bulkemailcampaign',
-            index=models.Index(fields=['account', 'status'], name='email_servi_account_0ccc61_idx'),
+            model_name="bulkemailcampaign",
+            index=models.Index(
+                fields=["account", "status"], name="email_servi_account_0ccc61_idx"
+            ),
         ),
     ]

@@ -5,31 +5,71 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0021_processedsnsmessage'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0021_processedsnsmessage"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='bulkemailcampaign',
-            name='status',
-            field=models.CharField(choices=[('draft', 'Draft'), ('queued', 'Queued'), ('sending', 'Sending'), ('paused', 'Paused'), ('completed', 'Completed'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], default='draft', max_length=20),
+            model_name="bulkemailcampaign",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("draft", "Draft"),
+                    ("queued", "Queued"),
+                    ("sending", "Sending"),
+                    ("paused", "Paused"),
+                    ("completed", "Completed"),
+                    ("failed", "Failed"),
+                    ("cancelled", "Cancelled"),
+                ],
+                default="draft",
+                max_length=20,
+            ),
         ),
         migrations.CreateModel(
-            name='SendReputation',
+            name="SendReputation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('window_started_at', models.DateTimeField(auto_now_add=True)),
-                ('sent', models.PositiveIntegerField(default=0)),
-                ('bounced', models.PositiveIntegerField(default=0)),
-                ('complained', models.PositiveIntegerField(default=0)),
-                ('state', models.CharField(choices=[('ok', 'OK'), ('warned', 'Warned'), ('halted', 'Halted')], default='ok', max_length=10)),
-                ('state_changed_at', models.DateTimeField(auto_now_add=True)),
-                ('halted_reason', models.CharField(blank=True, default='', max_length=255)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='send_reputation', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("window_started_at", models.DateTimeField(auto_now_add=True)),
+                ("sent", models.PositiveIntegerField(default=0)),
+                ("bounced", models.PositiveIntegerField(default=0)),
+                ("complained", models.PositiveIntegerField(default=0)),
+                (
+                    "state",
+                    models.CharField(
+                        choices=[
+                            ("ok", "OK"),
+                            ("warned", "Warned"),
+                            ("halted", "Halted"),
+                        ],
+                        default="ok",
+                        max_length=10,
+                    ),
+                ),
+                ("state_changed_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "halted_reason",
+                    models.CharField(blank=True, default="", max_length=255),
+                ),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="send_reputation",
+                        to="accounts.account",
+                    ),
+                ),
             ],
         ),
     ]

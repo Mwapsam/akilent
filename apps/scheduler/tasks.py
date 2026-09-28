@@ -1,14 +1,15 @@
 """Celery tasks for the scheduler: the 60s drainer + a daily retention/reconcile."""
+
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
 
-from celery import shared_task
 from django.utils import timezone
 
 from apps.scheduler.drainer import drain
 from apps.scheduler.models import ScheduledJob
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -57,15 +58,15 @@ def prune_scheduled_jobs():
     orphans = BulkEmailCampaign.objects.filter(
         status=BulkEmailCampaign.Status.SCHEDULED,
         created_at__lt=now - timedelta(hours=1),
-    ).exclude(
-        scheduled_jobs__status__in=list(ScheduledJob.ACTIVE_STATUSES)
-    )
+    ).exclude(scheduled_jobs__status__in=list(ScheduledJob.ACTIVE_STATUSES))
     orphaned = orphans.update(
         status=BulkEmailCampaign.Status.FAILED, error="orphaned scheduled campaign"
     )
 
     logger.info(
         "prune_scheduled_jobs: deleted=%s reconciled=%s orphaned=%s",
-        deleted, reconciled, orphaned,
+        deleted,
+        reconciled,
+        orphaned,
     )
     return {"deleted": deleted, "reconciled": reconciled, "orphaned": orphaned}

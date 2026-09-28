@@ -5,6 +5,7 @@ Step 1 "Tell us about your business" (profile + opening hours), step 2 "Bring in
 something else" and "create a template" when AI is on. Every automation, whatever proposed it, is
 built by ``intents.build_from_intent`` and shown on the review page before anything is saved.
 """
+
 from __future__ import annotations
 
 from django.contrib import messages
@@ -17,7 +18,11 @@ from apps.accounts.utils import get_current_account
 from apps.automation import intents, patterns, recommendations
 from apps.core.module_gate import module_required
 
-STEPS = ((1, "Tell us about your business"), (2, "Bring in what you have"), (3, "Three things to automate"))
+STEPS = (
+    (1, "Tell us about your business"),
+    (2, "Bring in what you have"),
+    (3, "Three things to automate"),
+)
 
 
 def _ai_on(account) -> bool:
@@ -55,19 +60,33 @@ def build_home(request):
         step = 3 if profile and profile.completed_at else 1
     hours = bh.get_hours(account)
     ctx = {
-        "account": account, "step": step, "steps": STEPS, "profile": profile,
+        "account": account,
+        "step": step,
+        "steps": STEPS,
+        "profile": profile,
         "payment_choices": business_profile.PAYMENT_METHODS.items(),
-        "rows": bh.form_rows(hours), "timezones": bh.timezone_choices(),
-        "current_tz": hours.timezone if hours else "Africa/Lusaka", "can_edit": True,
-        "ai_on": _ai_on(account), "template_url": _template_page_url(),
+        "rows": bh.form_rows(hours),
+        "timezones": bh.timezone_choices(),
+        "current_tz": hours.timezone if hours else "Africa/Lusaka",
+        "can_edit": True,
+        "ai_on": _ai_on(account),
+        "template_url": _template_page_url(),
     }
     if step == 2:
         ctx["template_counts"] = whatsapp_api.template_counts(account)
         facts = business_profile.as_facts(account)
-        ctx["starter_tags"] = [t for t, needed in (
-            ("asked-prices", True), ("asked-location", facts.get("location")), ("asked-hours", bh.is_configured(account)),
-            ("asked-delivery", facts.get("delivery")), ("asked-payment", facts.get("payment_methods")),
-            ("welcomed", True)) if needed]
+        ctx["starter_tags"] = [
+            t
+            for t, needed in (
+                ("asked-prices", True),
+                ("asked-location", facts.get("location")),
+                ("asked-hours", bh.is_configured(account)),
+                ("asked-delivery", facts.get("delivery")),
+                ("asked-payment", facts.get("payment_methods")),
+                ("welcomed", True),
+            )
+            if needed
+        ]
     if step == 3:
         ctx["cards"] = recommendations.recommend(account)
     return render(request, "automation/build.html", ctx)
@@ -88,18 +107,28 @@ def build_profile(request):
     delivers = {"yes": True, "no": False}.get(request.POST.get("delivers", ""))
     try:
         business_profile.save_profile(
-            account, what_you_sell=request.POST.get("what_you_sell", ""), location=request.POST.get("location", ""),
-            delivers=delivers, delivery_notes=request.POST.get("delivery_notes", ""),
-            payment_methods=request.POST.getlist("payment_methods"), payment_other=request.POST.get("payment_other", ""),
+            account,
+            what_you_sell=request.POST.get("what_you_sell", ""),
+            location=request.POST.get("location", ""),
+            delivers=delivers,
+            delivery_notes=request.POST.get("delivery_notes", ""),
+            payment_methods=request.POST.getlist("payment_methods"),
+            payment_other=request.POST.get("payment_other", ""),
             website=request.POST.get("website", ""),
         )
         if request.POST.get("set_hours") == "on":
-            bh.save_hours(account, tz=request.POST.get("timezone", ""), schedule=bh.schedule_from_form(request.POST))
+            bh.save_hours(
+                account,
+                tz=request.POST.get("timezone", ""),
+                schedule=bh.schedule_from_form(request.POST),
+            )
     except (business_profile.ProfileError, bh.HoursError) as exc:
         messages.error(request, str(exc))
         return redirect(reverse("build:home") + "?step=1")
     ai_api.seed_notes(account, business_profile.as_notes(account))
-    messages.success(request, "Saved. Akilent will use these answers in replies and templates.")
+    messages.success(
+        request, "Saved. Akilent will use these answers in replies and templates."
+    )
     return redirect(reverse("build:home") + "?step=2")
 
 
@@ -114,13 +143,17 @@ def build_import_templates(request):
         return redirect("dashboard")
     try:
         result = whatsapp_api.import_templates(account)
-    except Exception:  # noqa: BLE001 - the button must explain, never 500
+    except Exception:
         result = {"synced": 0, "errors": ["WhatsApp couldn't be reached."]}
     errors = result.get("errors") or []
     if errors:
-        messages.error(request, "Couldn't bring in all your templates: " + str(errors[0]))
+        messages.error(
+            request, "Couldn't bring in all your templates: " + str(errors[0])
+        )
     else:
-        messages.success(request, f"Brought in {result.get('synced', 0)} templates from WhatsApp.")
+        messages.success(
+            request, f"Brought in {result.get('synced', 0)} templates from WhatsApp."
+        )
     return redirect(reverse("build:home") + "?step=2")
 
 
@@ -144,16 +177,31 @@ def _source(account, params) -> tuple[str, dict, dict, object]:
     from apps.automation.models import ReplyPattern
 
     if params.get("pattern"):
-        pattern = ReplyPattern.objects.filter(account=account, key=params["pattern"]).first()
+        pattern = ReplyPattern.objects.filter(
+            account=account, key=params["pattern"]
+        ).first()
         if pattern is None:
             raise intents.IntentError("That suggestion is no longer available.")
-        return ("answer_question", {"keywords": pattern.question_keywords, "reply_text": pattern.reply_text,
-                                    "topic_label": pattern.topic}, {"team_reply_count": pattern.count}, None)
+        return (
+            "answer_question",
+            {
+                "keywords": pattern.question_keywords,
+                "reply_text": pattern.reply_text,
+                "topic_label": pattern.topic,
+            },
+            {"team_reply_count": pattern.count},
+            None,
+        )
     if params.get("draft"):
         draft = ai_api.get_draft(account, params["draft"], kind="automation")
         if draft is None or draft.status not in ("ready", "used"):
             raise intents.IntentError("That draft isn't ready.")
-        return draft.result.get("intent", ""), draft.result.get("entities") or {}, {}, draft
+        return (
+            draft.result.get("intent", ""),
+            draft.result.get("entities") or {},
+            {},
+            draft,
+        )
     return params.get("intent", ""), {}, {}, None
 
 
@@ -178,7 +226,9 @@ def build_review(request):
         if params.get("reply_text") is not None:
             entities["reply_text"] = params.get("reply_text", "")
         if params.get("keywords") is not None:
-            entities["keywords"] = [w.strip() for w in params.get("keywords", "").split(",") if w.strip()]
+            entities["keywords"] = [
+                w.strip() for w in params.get("keywords", "").split(",") if w.strip()
+            ]
         if params.get("tag") is not None:
             entities["tag"] = params.get("tag", "").strip()
     try:
@@ -191,25 +241,48 @@ def build_review(request):
             return redirect(reverse("build:home") + "?step=3")
 
     action = params.get("action", "") if request.method == "POST" else ""
-    if built and action in ("save", "turn_on") and not (action == "turn_on" and built["errors"]):
+    if (
+        built
+        and action in ("save", "turn_on")
+        and not (action == "turn_on" and built["errors"])
+    ):
         try:
             workflow = automation_api.save_built_workflow(
-                account, slug=built["slug"], name=built["name"], definition=built["definition"],
-                turn_on=action == "turn_on")
+                account,
+                slug=built["slug"],
+                name=built["name"],
+                definition=built["definition"],
+                turn_on=action == "turn_on",
+            )
         except automation_api.WorkflowNotReady as exc:
             messages.error(request, f"It can't be turned on yet: {exc}")
         else:
             ai_api.mark_draft_used(draft)
             if params.get("pattern"):
                 patterns.dismiss(account, f"pattern:{params['pattern']}", days=365)
-            messages.success(request, f"{workflow.name} is on." if action == "turn_on"
-                             else f"Saved {workflow.name} as a draft. Turn it on from Automations when you're ready.")
+            messages.success(
+                request,
+                f"{workflow.name} is on."
+                if action == "turn_on"
+                else f"Saved {workflow.name} as a draft. Turn it on from Automations when you're ready.",
+            )
             return redirect("automation:list")
 
-    return render(request, "automation/build_review.html", {
-        "account": account, "built": built, "intent": intent,
-        "summary": explain.explain_definition(built["definition"]) if built else None,
-        "source": {k: params.get(k, "") for k in ("intent", "pattern", "draft") if params.get(k)},
-        "keywords_text": ", ".join(built["keywords"]) if built else "",
-    })
-
+    return render(
+        request,
+        "automation/build_review.html",
+        {
+            "account": account,
+            "built": built,
+            "intent": intent,
+            "summary": explain.explain_definition(built["definition"])
+            if built
+            else None,
+            "source": {
+                k: params.get(k, "")
+                for k in ("intent", "pattern", "draft")
+                if params.get(k)
+            },
+            "keywords_text": ", ".join(built["keywords"]) if built else "",
+        },
+    )

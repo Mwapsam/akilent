@@ -7,7 +7,9 @@ from apps.billing.models import ProcessedWebhookEvent, Subscription
 WEBHOOK_URL = "/billing/stripe/webhook/"
 
 
-def _checkout_completed_event(account, *, plan_slug="starter", billing_period="quarterly", event_id="evt_1"):
+def _checkout_completed_event(
+    account, *, plan_slug="starter", billing_period="quarterly", event_id="evt_1"
+):
     return {
         "id": event_id,
         "type": "checkout.session.completed",
@@ -30,12 +32,17 @@ def _checkout_completed_event(account, *, plan_slug="starter", billing_period="q
 def _post(client, event):
     with patch("apps.billing.views.stripe.Webhook.construct_event", return_value=event):
         return client.post(
-            WEBHOOK_URL, data=b"{}", content_type="application/json", HTTP_STRIPE_SIGNATURE="sig"
+            WEBHOOK_URL,
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="sig",
         )
 
 
 @pytest.mark.django_db
-def test_checkout_completed_activates_subscription(client, account, plan, subscription, settings):
+def test_checkout_completed_activates_subscription(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     resp = _post(client, _checkout_completed_event(account))
 
@@ -48,7 +55,9 @@ def test_checkout_completed_activates_subscription(client, account, plan, subscr
 
 
 @pytest.mark.django_db
-def test_checkout_completed_is_idempotent_on_replay(client, account, plan, subscription, settings):
+def test_checkout_completed_is_idempotent_on_replay(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     event = _checkout_completed_event(account)
 
@@ -61,11 +70,18 @@ def test_checkout_completed_is_idempotent_on_replay(client, account, plan, subsc
 
     assert resp.status_code == 200
     assert subscription.current_period_end == first_end
-    assert ProcessedWebhookEvent.objects.filter(event_key="checkout.session.completed:evt_1").count() == 1
+    assert (
+        ProcessedWebhookEvent.objects.filter(
+            event_key="checkout.session.completed:evt_1"
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
-def test_invoice_payment_failed_marks_past_due(client, account, plan, subscription, settings):
+def test_invoice_payment_failed_marks_past_due(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     subscription.status = Subscription.ACTIVE
     subscription.stripe_subscription_id = "sub_123"
@@ -84,7 +100,9 @@ def test_invoice_payment_failed_marks_past_due(client, account, plan, subscripti
 
 
 @pytest.mark.django_db
-def test_subscription_deleted_cancels_locally(client, account, plan, subscription, settings):
+def test_subscription_deleted_cancels_locally(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     subscription.status = Subscription.ACTIVE
     subscription.stripe_subscription_id = "sub_123"
@@ -126,7 +144,9 @@ def _post_stripe_objects(client, event):
 
 
 @pytest.mark.django_db
-def test_webhook_handles_non_dict_stripe_objects(client, account, plan, subscription, settings):
+def test_webhook_handles_non_dict_stripe_objects(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     resp = _post_stripe_objects(client, _checkout_completed_event(account))
 
@@ -136,15 +156,21 @@ def test_webhook_handles_non_dict_stripe_objects(client, account, plan, subscrip
 
 
 @pytest.mark.django_db(transaction=True)
-def test_failed_handler_does_not_burn_the_dedupe_key(client, account, plan, subscription, settings):
+def test_failed_handler_does_not_burn_the_dedupe_key(
+    client, account, plan, subscription, settings
+):
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     client.raise_request_exception = False
     event = _checkout_completed_event(account)
 
-    with patch("apps.billing.views._activate_stripe_session", side_effect=RuntimeError("boom")):
+    with patch(
+        "apps.billing.views._activate_stripe_session", side_effect=RuntimeError("boom")
+    ):
         resp = _post(client, event)
     assert resp.status_code == 500
-    assert not ProcessedWebhookEvent.objects.filter(event_key="checkout.session.completed:evt_1").exists()
+    assert not ProcessedWebhookEvent.objects.filter(
+        event_key="checkout.session.completed:evt_1"
+    ).exists()
 
     # Stripe's retry must now be processed, not ignored as a duplicate.
     resp = _post(client, event)

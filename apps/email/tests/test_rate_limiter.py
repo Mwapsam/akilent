@@ -1,7 +1,7 @@
 """SES send rate limiter — token-bucket math and backend selection."""
+
 import time
 
-from apps.email.services import rate_limiter
 from apps.email.services.rate_limiter import (
     RedisTokenBucket,
     TokenBucket,
@@ -101,6 +101,7 @@ def test_get_ses_rate_limiter_rate_tracks_settings(settings, db, monkeypatch):
     get_ses_rate_limiter._instance = None
 
     from apps.core.models import MailProviderSettings
+
     s = MailProviderSettings.load()
     s.ses_send_rate_limit = 7
     s.save()

@@ -4,6 +4,7 @@ Personalization variables for each recipient are the contact's own fields plus
 its ``attributes`` — so a template can use ``{{ first_name }}`` or
 ``{{ attributes.plan }}``.
 """
+
 from __future__ import annotations
 
 from apps.contacts.models import Contact, ContactList, Segment
@@ -22,7 +23,9 @@ def _variables(contact: Contact) -> dict:
     }
 
 
-def resolve_recipients(account, *, list_slug: str | None = None, segment_slug: str | None = None) -> list[dict]:
+def resolve_recipients(
+    account, *, list_slug: str | None = None, segment_slug: str | None = None
+) -> list[dict]:
     """Return ``[{"to": email, "variables": {...}}]`` for a list or segment.
 
     Only ``subscribed`` contacts are included.

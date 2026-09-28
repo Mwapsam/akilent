@@ -6,6 +6,7 @@ API's ``scheduled_at`` + ``timezone`` into a UTC instant. The ``schedule_*``
 functions create the ScheduledJob row; the drainer (apps.scheduler.drainer)
 fires it later through the same chokepoints.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -58,9 +59,7 @@ def resolve_fire_at(scheduled_at: datetime, tz: str) -> datetime:
 
     now = timezone.now()
     if fire_at <= now + MIN_LEAD:
-        raise SchedulingError(
-            "scheduled_at must be at least 60 seconds in the future"
-        )
+        raise SchedulingError("scheduled_at must be at least 60 seconds in the future")
     if fire_at > now + MAX_LEAD:
         raise SchedulingError("scheduled_at is more than a year in the future")
     return fire_at
@@ -76,6 +75,7 @@ def _validate_recurrence(recurrence: str) -> str:
 
 
 # --- schedule creators -----------------------------------------------------
+
 
 def schedule_email_message(
     *,
@@ -132,7 +132,13 @@ def schedule_email_campaign(
 
 
 def schedule_whatsapp_message(
-    *, account, outbound, fire_at: datetime, tz: str, idempotency_key: str, created_by=None
+    *,
+    account,
+    outbound,
+    fire_at: datetime,
+    tz: str,
+    idempotency_key: str,
+    created_by=None,
 ) -> ScheduledJob:
     """Shadow job over a natively-scheduled OutboundMessage (drain_outbound_queue
     already honours its future ``scheduled_at``)."""
@@ -149,7 +155,10 @@ def schedule_whatsapp_message(
 
 # --- edit / cancel / list ------------------------------------------------
 
-def reschedule_job(job: ScheduledJob, *, scheduled_at: datetime, tz: str) -> ScheduledJob:
+
+def reschedule_job(
+    job: ScheduledJob, *, scheduled_at: datetime, tz: str
+) -> ScheduledJob:
     if job.status != ScheduledJob.Status.SCHEDULED:
         raise SchedulingError(
             f"job {job.public_id} is {job.status} and can no longer be rescheduled"

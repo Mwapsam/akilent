@@ -4,6 +4,7 @@ Phase 4 of the platform roadmap — the audience/data layer that campaigns,
 personalization, workflows, and customer profiles all build on. Before this,
 audiences were ephemeral CSV rows on a campaign.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -128,7 +129,9 @@ class Contact(models.Model):
     def is_opted_out(self) -> bool:
         return self.consent_status == self.ConsentStatus.OPTED_OUT
 
-    def record_opt_in(self, source: str, *, ip: str = "", evidence: dict | None = None) -> None:
+    def record_opt_in(
+        self, source: str, *, ip: str = "", evidence: dict | None = None
+    ) -> None:
         """Record proof that this contact agreed to be emailed.
 
         Callers own the timeline entry — unlike the WhatsApp equivalent this
@@ -142,10 +145,18 @@ class Contact(models.Model):
         self.consent_evidence = evidence or {}
         self.opt_out_at = None
         self.opt_out_reason = ""
-        self.save(update_fields=[
-            "consent_status", "consent_source", "consent_at", "consent_ip",
-            "consent_evidence", "opt_out_at", "opt_out_reason", "updated_at",
-        ])
+        self.save(
+            update_fields=[
+                "consent_status",
+                "consent_source",
+                "consent_at",
+                "consent_ip",
+                "consent_evidence",
+                "opt_out_at",
+                "opt_out_reason",
+                "updated_at",
+            ]
+        )
 
     def record_opt_out(self, reason: str) -> None:
         """Withdraw consent, preserving the original opt-in proof.
@@ -156,9 +167,14 @@ class Contact(models.Model):
         self.consent_status = self.ConsentStatus.OPTED_OUT
         self.opt_out_at = timezone.now()
         self.opt_out_reason = reason[:255]
-        self.save(update_fields=[
-            "consent_status", "opt_out_at", "opt_out_reason", "updated_at",
-        ])
+        self.save(
+            update_fields=[
+                "consent_status",
+                "opt_out_at",
+                "opt_out_reason",
+                "updated_at",
+            ]
+        )
 
 
 class Tag(models.Model):
@@ -178,7 +194,9 @@ class Tag(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["account", "slug"], name="uniq_contacttag_account_slug")
+            models.UniqueConstraint(
+                fields=["account", "slug"], name="uniq_contacttag_account_slug"
+            )
         ]
         ordering = ["name"]
 
@@ -228,7 +246,10 @@ class ContactListMembership(models.Model):
 
 
 _SAMPLE_VALUE_BY_ATTRIBUTE_TYPE = {
-    "string": "Sample text", "number": "123", "boolean": "Yes", "date": "2026-09-26",
+    "string": "Sample text",
+    "number": "123",
+    "boolean": "Yes",
+    "date": "2026-09-26",
 }
 
 
@@ -274,7 +295,9 @@ class ContactImport(models.Model):
     updated_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
     limit_skipped_count = models.PositiveIntegerField(
-        default=0, help_text="New customers not added because the plan's customer limit was reached.")
+        default=0,
+        help_text="New customers not added because the plan's customer limit was reached.",
+    )
     mapping = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

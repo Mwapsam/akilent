@@ -36,7 +36,7 @@ def test_app_overlays_use_the_z_index_tokens():
         if (found := AD_HOC.findall(source))
     }
     assert not offenders, (
-        "Use the z-index tokens (style=\"z-index: var(--z-drawer)\" / --z-modal) "
+        'Use the z-index tokens (style="z-index: var(--z-drawer)" / --z-modal) '
         "and bg-gray-900/50 instead of ad-hoc z-40 / z-50 / bg-black: "
         f"{offenders}"
     )

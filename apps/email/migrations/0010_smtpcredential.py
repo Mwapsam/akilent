@@ -5,28 +5,52 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0009_emailapikey_expires_at_emailapikey_key_hash_and_more'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0009_emailapikey_expires_at_emailapikey_key_hash_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SmtpCredential',
+            name="SmtpCredential",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('username', models.EmailField(max_length=254, unique=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('secret_hash', models.CharField(blank=True, default='', max_length=64)),
-                ('last4', models.CharField(blank=True, default='', max_length=4)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('last_used_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='smtp_credentials', to='accounts.account')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='smtp_credentials', to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("username", models.EmailField(max_length=254, unique=True)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "secret_hash",
+                    models.CharField(blank=True, default="", max_length=64),
+                ),
+                ("last4", models.CharField(blank=True, default="", max_length=4)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("last_used_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="smtp_credentials",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="smtp_credentials",
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

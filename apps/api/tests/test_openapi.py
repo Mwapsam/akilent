@@ -5,9 +5,9 @@ import pytest
 def test_openapi_schema_served(client):
     resp = client.get("/api/schema")
     assert resp.status_code == 200
-    assert "openapi" in resp.headers.get("content-type", "") or resp["content-type"].startswith(
-        ("application/vnd.oai.openapi", "application/yaml")
-    )
+    assert "openapi" in resp.headers.get("content-type", "") or resp[
+        "content-type"
+    ].startswith(("application/vnd.oai.openapi", "application/yaml"))
     body = resp.content.decode()
     assert "Akilent API" in body
     assert "/api/v1/messages" in body

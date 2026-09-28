@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('contacts', '0005_contact_tags'),
+        ("contacts", "0005_contact_tags"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='contactimport',
-            name='limit_skipped_count',
-            field=models.PositiveIntegerField(default=0, help_text="New customers not added because the plan's customer limit was reached."),
+            model_name="contactimport",
+            name="limit_skipped_count",
+            field=models.PositiveIntegerField(
+                default=0,
+                help_text="New customers not added because the plan's customer limit was reached.",
+            ),
         ),
     ]

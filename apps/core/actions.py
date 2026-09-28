@@ -22,6 +22,7 @@ Lives in ``apps.core`` because it's platform infrastructure, not owned by any
 one business module: ``apps.conversations``, ``apps.crm``, and
 ``apps.commerce`` all register their actions here.
 """
+
 from __future__ import annotations
 
 import abc
@@ -76,11 +77,17 @@ class Action(abc.ABC):
         target = kwargs.get(self.scope_kwarg)
         if target is None:
             return True
-        target_account = target if self.scope_kwarg == "account" else getattr(target, "account", None)
+        target_account = (
+            target
+            if self.scope_kwarg == "account"
+            else getattr(target, "account", None)
+        )
         if target_account is None:
             return True
 
-        return getattr(target_account, "pk", target_account) == getattr(account, "pk", account)
+        return getattr(target_account, "pk", target_account) == getattr(
+            account, "pk", account
+        )
 
     @abc.abstractmethod
     def execute(self, context: dict, **kwargs) -> dict:
@@ -121,7 +128,9 @@ def run_action(name: str, context: dict, **kwargs) -> dict:
     required = action.input_schema().get("required", [])
     missing = [field for field in required if field not in kwargs]
     if missing:
-        raise ActionError(f"action {name!r} missing required input(s): {', '.join(missing)}")
+        raise ActionError(
+            f"action {name!r} missing required input(s): {', '.join(missing)}"
+        )
 
     if not action.has_permission(context, **kwargs):
         raise ActionError(f"action {name!r} not permitted for this context")

@@ -22,10 +22,14 @@ def owner_client(client, owner):
 
 # --- Profile & security -------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_profile_update(owner_client, owner):
     user, _ = owner
-    resp = owner_client.post("/settings/", {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@example.com"})
+    resp = owner_client.post(
+        "/settings/",
+        {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@example.com"},
+    )
     assert resp.status_code == 302
     user.refresh_from_db()
     assert user.first_name == "Ada"
@@ -35,18 +39,23 @@ def test_profile_update(owner_client, owner):
 @pytest.mark.django_db
 def test_profile_rejects_duplicate_email(owner_client, owner):
     User.objects.create_user("other", "taken@example.com", "x")
-    resp = owner_client.post("/settings/", {"first_name": "", "last_name": "", "email": "taken@example.com"})
+    resp = owner_client.post(
+        "/settings/", {"first_name": "", "last_name": "", "email": "taken@example.com"}
+    )
     assert resp.status_code == 200  # re-rendered with error
     assert b"Another account already uses this email." in resp.content
 
 
 @pytest.mark.django_db
 def test_password_change_keeps_user_logged_in(owner_client, owner):
-    resp = owner_client.post("/settings/security/", {
-        "old_password": "Sup3r-secret-pw",
-        "new_password1": "An0ther-secret-pw",
-        "new_password2": "An0ther-secret-pw",
-    })
+    resp = owner_client.post(
+        "/settings/security/",
+        {
+            "old_password": "Sup3r-secret-pw",
+            "new_password1": "An0ther-secret-pw",
+            "new_password2": "An0ther-secret-pw",
+        },
+    )
     assert resp.status_code == 302
     user, _ = owner
     user.refresh_from_db()
@@ -64,6 +73,7 @@ def test_settings_pages_render(owner_client):
 
 
 # --- Optional tools (R1.5a) ----------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_optional_tools_default_to_enabled(owner_client, owner):
@@ -91,7 +101,9 @@ def test_optional_tools_can_be_turned_off_and_back_on(owner_client, owner):
 @pytest.mark.django_db
 def test_accept_register_page_renders_for_new_email(client, owner):
     _, account = owner
-    invite = Invitation.objects.create(account=account, email="brand-new@example.com", role="admin")
+    invite = Invitation.objects.create(
+        account=account, email="brand-new@example.com", role="admin"
+    )
     resp = client.get(f"/invite/{invite.token}/")
     assert resp.status_code == 200
     assert b"Create account" in resp.content
@@ -99,10 +111,13 @@ def test_accept_register_page_renders_for_new_email(client, owner):
 
 # --- Invitations --------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_owner_can_invite_and_email_is_sent(owner_client, owner):
     _, account = owner
-    resp = owner_client.post("/settings/team/invite/", {"email": "new@example.com", "role": "member"})
+    resp = owner_client.post(
+        "/settings/team/invite/", {"email": "new@example.com", "role": "member"}
+    )
     assert resp.status_code == 302
     invite = Invitation.objects.get(email="new@example.com")
     assert invite.account == account
@@ -113,9 +128,15 @@ def test_owner_can_invite_and_email_is_sent(owner_client, owner):
 
 @pytest.mark.django_db
 def test_reinviting_same_email_updates_not_duplicates(owner_client, owner):
-    owner_client.post("/settings/team/invite/", {"email": "dup@example.com", "role": "member"})
-    owner_client.post("/settings/team/invite/", {"email": "dup@example.com", "role": "admin"})
-    invites = Invitation.objects.filter(email="dup@example.com", accepted_at__isnull=True)
+    owner_client.post(
+        "/settings/team/invite/", {"email": "dup@example.com", "role": "member"}
+    )
+    owner_client.post(
+        "/settings/team/invite/", {"email": "dup@example.com", "role": "admin"}
+    )
+    invites = Invitation.objects.filter(
+        email="dup@example.com", accepted_at__isnull=True
+    )
     assert invites.count() == 1
     assert invites.first().role == "admin"
 
@@ -126,7 +147,9 @@ def test_member_cannot_invite(client, owner):
     member = User.objects.create_user("member", "m@example.com", "Sup3r-secret-pw")
     Membership.objects.create(user=member, account=account, role=Membership.Role.MEMBER)
     client.force_login(member)
-    resp = client.post("/settings/team/invite/", {"email": "x@example.com", "role": "member"})
+    resp = client.post(
+        "/settings/team/invite/", {"email": "x@example.com", "role": "member"}
+    )
     assert resp.status_code == 302
     assert not Invitation.objects.filter(email="x@example.com").exists()
 
@@ -134,12 +157,17 @@ def test_member_cannot_invite(client, owner):
 @pytest.mark.django_db
 def test_accept_invitation_new_user(client, owner):
     _, account = owner
-    invite = Invitation.objects.create(account=account, email="join@example.com", role="member")
-    resp = client.post(f"/invite/{invite.token}/", {
-        "username": "joiner",
-        "password1": "Sup3r-secret-pw",
-        "password2": "Sup3r-secret-pw",
-    })
+    invite = Invitation.objects.create(
+        account=account, email="join@example.com", role="member"
+    )
+    resp = client.post(
+        f"/invite/{invite.token}/",
+        {
+            "username": "joiner",
+            "password1": "Sup3r-secret-pw",
+            "password2": "Sup3r-secret-pw",
+        },
+    )
     assert resp.status_code == 302
     user = User.objects.get(username="joiner")
     assert user.is_active and user.email == "join@example.com"
@@ -152,7 +180,9 @@ def test_accept_invitation_new_user(client, owner):
 def test_accept_invitation_existing_user_redirects_to_signin(client, owner):
     _, account = owner
     User.objects.create_user("existing", "exists@example.com", "Sup3r-secret-pw")
-    invite = Invitation.objects.create(account=account, email="exists@example.com", role="member")
+    invite = Invitation.objects.create(
+        account=account, email="exists@example.com", role="member"
+    )
     resp = client.get(f"/invite/{invite.token}/")
     assert resp.status_code == 200
     assert b"Sign in to accept" in resp.content
@@ -160,11 +190,14 @@ def test_accept_invitation_existing_user_redirects_to_signin(client, owner):
 
 @pytest.mark.django_db
 def test_expired_invitation_is_rejected(client, owner):
-    from django.utils import timezone
     from datetime import timedelta
 
+    from django.utils import timezone
+
     _, account = owner
-    invite = Invitation.objects.create(account=account, email="late@example.com", role="member")
+    invite = Invitation.objects.create(
+        account=account, email="late@example.com", role="member"
+    )
     Invitation.objects.filter(pk=invite.pk).update(
         created_at=timezone.now() - timedelta(days=Invitation.EXPIRY_DAYS + 1)
     )
@@ -175,11 +208,14 @@ def test_expired_invitation_is_rejected(client, owner):
 
 # --- Member management --------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_owner_changes_member_role_and_removes(owner_client, owner):
     _, account = owner
     target_user = User.objects.create_user("t", "t@example.com", "x")
-    m = Membership.objects.create(user=target_user, account=account, role=Membership.Role.MEMBER)
+    m = Membership.objects.create(
+        user=target_user, account=account, role=Membership.Role.MEMBER
+    )
 
     owner_client.post(f"/settings/team/members/{m.pk}/role/", {"role": "admin"})
     m.refresh_from_db()

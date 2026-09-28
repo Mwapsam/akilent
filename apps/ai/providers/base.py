@@ -7,11 +7,11 @@ a concrete provider module, so swapping providers is a configuration change.
 Every method returns a typed dataclass, never a raw dict. Adapting a vendor's wire format is the
 provider's job and stays inside the provider.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -27,7 +27,7 @@ class CompletionResult:
     usage: dict = None
     """Token usage: {'input_tokens': N, 'output_tokens': M} when the provider reports it."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if the call failed."""
 
     def __post_init__(self):
@@ -56,7 +56,7 @@ class AIProvider(ABC):
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.3,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> CompletionResult:
         """Send a conversation (a list of ``apps.ai.types.ChatMessage``) and return the reply.
 
@@ -76,9 +76,14 @@ class AIProvider(ABC):
         from apps.ai.types import ChatMessage
 
         return self.chat(
-            [ChatMessage("user", prompt)], system=system, max_tokens=max_tokens, temperature=temperature,
+            [ChatMessage("user", prompt)],
+            system=system,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
 
     def health(self) -> CompletionResult:
         """A tiny round trip that proves the key, the network and the model all work."""
-        return self.complete("Reply with the single word OK.", max_tokens=64, temperature=0.0)
+        return self.complete(
+            "Reply with the single word OK.", max_tokens=64, temperature=0.0
+        )

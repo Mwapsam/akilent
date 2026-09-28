@@ -5,6 +5,7 @@ the onboarding page, the dashboard banner, and the always-available floating
 widget (via the context processor). Steps reflect the real customer journey:
 add a domain → verify DNS → start using email → invite the team.
 """
+
 from django.conf import settings
 
 
@@ -110,7 +111,9 @@ def _whatsapp_step(account) -> dict:
     from apps.whatsapp.setup import build_setup_console
 
     numbers = list(
-        WhatsAppBusinessNumber.objects.filter(account=account).order_by("phone_number_id")
+        WhatsAppBusinessNumber.objects.filter(account=account).order_by(
+            "phone_number_id"
+        )
     )
     console = build_setup_console(
         numbers,
@@ -126,14 +129,18 @@ def _whatsapp_step(account) -> dict:
     else:
         cta = None
     return {
-        "key": "whatsapp", "title": "Set up WhatsApp",
+        "key": "whatsapp",
+        "title": "Set up WhatsApp",
         "desc": (
-            current.hint if current
+            current.hint
+            if current
             else "Your number is registered and sending. Reply to the test message to confirm inbound."
         ),
         "done": done,
-        "url": WHATSAPP_SETUP_URL, "cta": cta,
-        "icon": "chat", "optional": False,
+        "url": WHATSAPP_SETUP_URL,
+        "cta": cta,
+        "icon": "chat",
+        "optional": False,
     }
 
 
@@ -141,7 +148,7 @@ BUILD_URL = "/build/"
 
 
 def _build_step(account, *, whatsapp_ready: bool) -> dict:
-    """"Set up your first automations": the Build area, once WhatsApp works.
+    """ "Set up your first automations": the Build area, once WhatsApp works.
 
     Done once the owner has answered "Tell us about your business" or has an automation on.
     Optional: Akilent is useful without it, it just saves them work.
@@ -152,14 +159,18 @@ def _build_step(account, *, whatsapp_ready: bool) -> dict:
     answered = bool(getattr(profile.get_profile(account), "completed_at", None))
     done = answered or bool(automation_api.published_slugs(account))
     return {
-        "key": "build", "title": "Set up your first automations",
+        "key": "build",
+        "title": "Set up your first automations",
         "desc": (
             "Tell Akilent about your business in a minute and see three things worth automating."
-            if whatsapp_ready else "Once WhatsApp is connected, Akilent helps you choose what to automate."
+            if whatsapp_ready
+            else "Once WhatsApp is connected, Akilent helps you choose what to automate."
         ),
-        "done": done, "url": BUILD_URL if whatsapp_ready else None,
+        "done": done,
+        "url": BUILD_URL if whatsapp_ready else None,
         "cta": "Start" if whatsapp_ready and not done else None,
-        "icon": "sparkles", "optional": True,
+        "icon": "sparkles",
+        "optional": True,
     }
 
 
@@ -180,7 +191,11 @@ def get_state(account) -> dict:
         .order_by("pk")
         .first()
     )
-    verify_url = f"/email/domains/#domain-card-{pending_domain.pk}" if pending_domain else "/email/domains/"
+    verify_url = (
+        f"/email/domains/#domain-card-{pending_domain.pk}"
+        if pending_domain
+        else "/email/domains/"
+    )
     has_key = EmailApiKey.objects.filter(account=account, is_active=True).exists()
     has_team = (
         Membership.objects.filter(account=account).count() > 1
@@ -189,16 +204,24 @@ def get_state(account) -> dict:
 
     steps = [
         {
-            "key": "account", "title": "Create your account",
+            "key": "account",
+            "title": "Create your account",
             "desc": "Your workspace is ready to go.",
-            "done": True, "url": None, "cta": None,
-            "icon": "check-circle", "optional": False,
+            "done": True,
+            "url": None,
+            "cta": None,
+            "icon": "check-circle",
+            "optional": False,
         },
         {
-            "key": "verify_email", "title": "Verify your email address",
+            "key": "verify_email",
+            "title": "Verify your email address",
             "desc": "Confirm your email so we can send you delivery reports and alerts.",
-            "done": account.email_verified, "url": "/resend-verification/", "cta": "Resend link",
-            "icon": "mail", "optional": False,
+            "done": account.email_verified,
+            "url": "/resend-verification/",
+            "cta": "Resend link",
+            "icon": "mail",
+            "optional": False,
         },
     ]
 
@@ -210,37 +233,61 @@ def get_state(account) -> dict:
     if _wants_email(account):
         steps += [
             {
-                "key": "domain", "title": "Add a sending domain",
+                "key": "domain",
+                "title": "Add a sending domain",
                 "desc": "Add the domain you'll send email from, e.g. mail.yourcompany.com.",
-                "done": has_domain, "url": "/email/domains/", "cta": "Add domain",
-                "icon": "globe", "optional": False,
+                "done": has_domain,
+                "url": "/email/domains/",
+                "cta": "Add domain",
+                "icon": "globe",
+                "optional": False,
             },
             {
-                "key": "verify", "title": "Verify your domain",
+                "key": "verify",
+                "title": "Verify your domain",
                 "desc": "Add the DNS records and run the DNS check to switch sending on.",
-                "done": has_verified, "url": verify_url, "cta": "Verify DNS",
-                "icon": "check-circle", "optional": False,
+                "done": has_verified,
+                "url": verify_url,
+                "cta": "Verify DNS",
+                "icon": "check-circle",
+                "optional": False,
             },
             {
-                "key": "use", "title": "Set up your email API",
+                "key": "use",
+                "title": "Set up your email API",
                 "desc": "Generate an API key to start sending email from your app.",
-                "done": has_key, "url": "/email/api/", "cta": "Get API key",
-                "icon": "code", "optional": False,
+                "done": has_key,
+                "url": "/email/api/",
+                "cta": "Get API key",
+                "icon": "code",
+                "optional": False,
             },
         ]
 
-    steps.append({
-        "key": "team", "title": "Invite your team",
-        "desc": "Bring colleagues into your workspace so they can help manage email.",
-        "done": has_team, "url": "/settings/team/", "cta": "Invite teammate",
-        "icon": "user", "optional": True,
-    })
-    steps.append({
-        "key": "security", "title": "Review your security settings",
-        "desc": "Check your password and active sessions, and confirm your account details are correct.",
-        "done": bool(account.security_reviewed_at), "url": "/settings/security/", "cta": "Review",
-        "icon": "key", "optional": True,
-    })
+    steps.append(
+        {
+            "key": "team",
+            "title": "Invite your team",
+            "desc": "Bring colleagues into your workspace so they can help manage email.",
+            "done": has_team,
+            "url": "/settings/team/",
+            "cta": "Invite teammate",
+            "icon": "user",
+            "optional": True,
+        }
+    )
+    steps.append(
+        {
+            "key": "security",
+            "title": "Review your security settings",
+            "desc": "Check your password and active sessions, and confirm your account details are correct.",
+            "done": bool(account.security_reviewed_at),
+            "url": "/settings/security/",
+            "cta": "Review",
+            "icon": "key",
+            "optional": True,
+        }
+    )
 
     required = [s for s in steps if not s["optional"]]
     required_done = sum(1 for s in required if s["done"])

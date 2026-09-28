@@ -19,7 +19,9 @@ class MessageCreateSerializer(serializers.Serializer):
 
     template_id = serializers.IntegerField(required=False, allow_null=True)
     template_variables = serializers.DictField(required=False, default=dict)
-    locale = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+    locale = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=""
+    )
     attachments = serializers.ListField(
         child=serializers.DictField(), required=False, default=list
     )
@@ -27,11 +29,17 @@ class MessageCreateSerializer(serializers.Serializer):
     # Scheduling (Akilent Scheduler). `scheduled_at` may carry a UTC offset
     # ("2026-09-15T09:00:00-04:00") or be naive + paired with `timezone`
     # (an IANA zone, or "recipient").
-    scheduled_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    scheduled_at = serializers.DateTimeField(
+        required=False, allow_null=True, default=None
+    )
     timezone = serializers.CharField(required=False, allow_blank=True, default="")
     recurrence = serializers.CharField(required=False, allow_blank=True, default="")
-    recurrence_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
-    max_occurrences = serializers.IntegerField(required=False, allow_null=True, default=None)
+    recurrence_until = serializers.DateTimeField(
+        required=False, allow_null=True, default=None
+    )
+    max_occurrences = serializers.IntegerField(
+        required=False, allow_null=True, default=None
+    )
 
     @staticmethod
     def from_request_data(data: dict) -> dict:
@@ -59,12 +67,16 @@ class TemplateSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=150)
     slug = serializers.SlugField(max_length=150, required=False, allow_blank=True)
-    subject = serializers.CharField(max_length=998, required=False, allow_blank=True, default="")
+    subject = serializers.CharField(
+        max_length=998, required=False, allow_blank=True, default=""
+    )
     text = serializers.CharField(required=False, allow_blank=True, default="")
     html = serializers.CharField(required=False, allow_blank=True, default="")
     sample_variables = serializers.DictField(required=False, default=dict)
     content_blocks = serializers.DictField(required=False, default=dict)
-    builder_mode = serializers.ChoiceField(choices=["raw", "blocks"], required=False, default="raw")
+    builder_mode = serializers.ChoiceField(
+        choices=["raw", "blocks"], required=False, default="raw"
+    )
 
     @staticmethod
     def from_request_data(data: dict) -> dict:
@@ -103,11 +115,17 @@ class CampaignCreateSerializer(serializers.Serializer):
     list = serializers.SlugField(required=False, allow_blank=True, default="")
     segment = serializers.SlugField(required=False, allow_blank=True, default="")
 
-    scheduled_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    scheduled_at = serializers.DateTimeField(
+        required=False, allow_null=True, default=None
+    )
     timezone = serializers.CharField(required=False, allow_blank=True, default="")
     recurrence = serializers.CharField(required=False, allow_blank=True, default="")
-    recurrence_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
-    max_occurrences = serializers.IntegerField(required=False, allow_null=True, default=None)
+    recurrence_until = serializers.DateTimeField(
+        required=False, allow_null=True, default=None
+    )
+    max_occurrences = serializers.IntegerField(
+        required=False, allow_null=True, default=None
+    )
 
     @staticmethod
     def from_request_data(data: dict) -> dict:

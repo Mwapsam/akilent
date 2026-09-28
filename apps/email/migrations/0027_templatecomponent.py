@@ -5,27 +5,46 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('email_service', '0026_deliverabilitysnapshot'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("email_service", "0026_deliverabilitysnapshot"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TemplateComponent',
+            name="TemplateComponent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=64)),
-                ('html', models.TextField(blank=True, default='')),
-                ('text', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='template_components', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=64)),
+                ("html", models.TextField(blank=True, default="")),
+                ("text", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="template_components",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
-                'constraints': [models.UniqueConstraint(fields=('account', 'name'), name='uniq_template_component_account_name')],
+                "ordering": ["name"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("account", "name"),
+                        name="uniq_template_component_account_name",
+                    )
+                ],
             },
         ),
     ]

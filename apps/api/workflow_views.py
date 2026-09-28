@@ -1,4 +1,5 @@
 """Public API for lifecycle Workflows (Phase 6 / Release 3)."""
+
 from __future__ import annotations
 
 from drf_spectacular.types import OpenApiTypes
@@ -57,14 +58,23 @@ def _run_dict(r: WorkflowRun, *, with_steps: bool = False) -> dict:
 class WorkflowCollectionView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
-    @extend_schema(operation_id="workflows_list", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_list",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def get(self, request, *args, **kwargs):
         qs = Workflow.objects.filter(account=request.user)
         if request.query_params.get("status"):
             qs = qs.filter(status=request.query_params["status"])
         return Response({"data": [_workflow_dict(w) for w in qs]})
 
-    @extend_schema(operation_id="workflows_create", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_create",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def post(self, request, *args, **kwargs):
         d = request.data if isinstance(request.data, dict) else {}
         definition = d.get("definition") or {}
@@ -72,23 +82,39 @@ class WorkflowCollectionView(BaseApiView):
         if d.get("from_template"):
             tpl = get_template(d["from_template"])
             if tpl is None:
-                return Response({"error": {"code": "not_found",
-                                           "message": f"unknown workflow template {d['from_template']!r}"}},
-                                status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {
+                        "error": {
+                            "code": "not_found",
+                            "message": f"unknown workflow template {d['from_template']!r}",
+                        }
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             definition = definition or tpl["definition"]
             name = name or tpl["name"]
         if not name:
-            return Response({"error": {"code": "validation_error", "message": "name is required"}},
-                            status=status.HTTP_400_BAD_REQUEST)
-        w = Workflow.objects.create(account=request.user, name=name, definition=definition)
+            return Response(
+                {"error": {"code": "validation_error", "message": "name is required"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        w = Workflow.objects.create(
+            account=request.user, name=name, definition=definition
+        )
         request.auth.touch()
-        return Response(_workflow_dict(w, with_definition=True), status=status.HTTP_201_CREATED)
+        return Response(
+            _workflow_dict(w, with_definition=True), status=status.HTTP_201_CREATED
+        )
 
 
 class WorkflowTemplateCatalogView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
-    @extend_schema(operation_id="workflow_templates", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflow_templates",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def get(self, request, *args, **kwargs):
         return Response({"data": list_templates()})
 
@@ -99,11 +125,20 @@ class WorkflowDetailView(BaseApiView):
     def _get(self, request, slug):
         return Workflow.objects.get(account=request.user, slug=slug)
 
-    @extend_schema(operation_id="workflows_retrieve", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_retrieve",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def get(self, request, slug, *args, **kwargs):
         return Response(_workflow_dict(self._get(request, slug), with_definition=True))
 
-    @extend_schema(operation_id="workflows_update", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_update",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def patch(self, request, slug, *args, **kwargs):
         w = self._get(request, slug)
         d = request.data if isinstance(request.data, dict) else {}
@@ -118,7 +153,11 @@ class WorkflowDetailView(BaseApiView):
             w.save(update_fields=[*fields, "updated_at"])
         return Response(_workflow_dict(w, with_definition=True))
 
-    @extend_schema(operation_id="workflows_delete", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_delete",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def delete(self, request, slug, *args, **kwargs):
         self._get(request, slug).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -127,23 +166,36 @@ class WorkflowDetailView(BaseApiView):
 class WorkflowPublishView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
-    @extend_schema(operation_id="workflows_publish", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_publish",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def post(self, request, slug, *args, **kwargs):
         w = Workflow.objects.get(account=request.user, slug=slug)
         errors = validate_definition(w.definition, account=w.account)
         errors = [e for e in errors if e.get("severity", "error") != "warning"]
         if errors:
-            return Response({"error": {"code": "invalid_workflow",
-                                       "message": "workflow definition is invalid",
-                                       "details": errors}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": {
+                        "code": "invalid_workflow",
+                        "message": "workflow definition is invalid",
+                        "details": errors,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         from apps.automation import api as automation_api
 
         try:
             automation_api.ensure_room_to_turn_on(w.account, w)
         except automation_api.AutomationLimitReached as exc:
-            return Response({"error": {"code": "plan_limit", "message": str(exc)}},
-                            status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": {"code": "plan_limit", "message": str(exc)}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if w.status != Workflow.Status.PUBLISHED:
             w.version += 1
         w.status = Workflow.Status.PUBLISHED
@@ -154,7 +206,12 @@ class WorkflowPublishView(BaseApiView):
 class WorkflowArchiveView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
-    @extend_schema(operation_id="workflows_archive", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_archive",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def post(self, request, slug, *args, **kwargs):
         w = Workflow.objects.get(account=request.user, slug=slug)
         w.status = Workflow.Status.ARCHIVED
@@ -165,7 +222,11 @@ class WorkflowArchiveView(BaseApiView):
 class WorkflowRunsView(BaseApiView):
     permission_classes = [HasEmailApiFeature, HasAutomationModule]
 
-    @extend_schema(operation_id="workflows_runs_list", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_runs_list",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def get(self, request, slug, *args, **kwargs):
         w = Workflow.objects.get(account=request.user, slug=slug)
         qs = w.runs.select_related("contact")
@@ -177,28 +238,54 @@ class WorkflowRunsView(BaseApiView):
             limit = 50
         return Response({"data": [_run_dict(r) for r in qs[:limit]]})
 
-    @extend_schema(operation_id="workflows_enroll", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflows_enroll",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def post(self, request, slug, *args, **kwargs):
         w = Workflow.objects.get(account=request.user, slug=slug)
         if w.status != Workflow.Status.PUBLISHED:
-            return Response({"error": {"code": "workflow_not_published",
-                                       "message": "publish the workflow before enrolling contacts"}},
-                            status=status.HTTP_409_CONFLICT)
+            return Response(
+                {
+                    "error": {
+                        "code": "workflow_not_published",
+                        "message": "publish the workflow before enrolling contacts",
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         d = request.data if isinstance(request.data, dict) else {}
         ref = d.get("contact")
         if not ref:
-            return Response({"error": {"code": "validation_error", "message": "contact is required"}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "contact is required",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if ref.startswith("con_"):
             contact = Contact.objects.get(account=request.user, public_id=ref)
         else:
             contact = Contact.objects.get(account=request.user, email__iexact=ref)
         run = enroll(w, contact, context=d.get("context") or {})
         if run is None:
-            return Response({"error": {"code": "enroll_failed",
-                                       "message": "workflow could not enroll this contact"}},
-                            status=status.HTTP_409_CONFLICT)
-        return Response(_run_dict(run, with_steps=True), status=status.HTTP_202_ACCEPTED)
+            return Response(
+                {
+                    "error": {
+                        "code": "enroll_failed",
+                        "message": "workflow could not enroll this contact",
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            _run_dict(run, with_steps=True), status=status.HTTP_202_ACCEPTED
+        )
 
 
 class WorkflowRunDetailView(BaseApiView):
@@ -209,11 +296,20 @@ class WorkflowRunDetailView(BaseApiView):
             workflow__account=request.user, public_id=run_id
         )
 
-    @extend_schema(operation_id="workflow_runs_retrieve", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflow_runs_retrieve",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def get(self, request, run_id, *args, **kwargs):
         return Response(_run_dict(self._get(request, run_id), with_steps=True))
 
-    @extend_schema(operation_id="workflow_runs_cancel", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Workflows"])
+    @extend_schema(
+        operation_id="workflow_runs_cancel",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Workflows"],
+    )
     def delete(self, request, run_id, *args, **kwargs):
         run = self._get(request, run_id)
         if run.status in (WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING):

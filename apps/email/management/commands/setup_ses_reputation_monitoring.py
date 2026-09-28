@@ -3,7 +3,7 @@
 This command helps operators understand and validate the configuration needed
 to monitor SES sending reputation via CloudWatch and SNS event destinations.
 """
-import json
+
 import logging
 
 import boto3
@@ -22,18 +22,18 @@ class Command(BaseCommand):
             "--configuration-set",
             type=str,
             required=True,
-            help="SES configuration set name to check/setup"
+            help="SES configuration set name to check/setup",
         )
         parser.add_argument(
             "--region",
             type=str,
             default="us-east-1",
-            help="AWS region (default: us-east-1)"
+            help="AWS region (default: us-east-1)",
         )
         parser.add_argument(
             "--sns-topic-arn",
             type=str,
-            help="SNS topic ARN for bounce/complaint notifications (for reference only; create manually)"
+            help="SNS topic ARN for bounce/complaint notifications (for reference only; create manually)",
         )
 
     def handle(self, *args, **options):
@@ -46,13 +46,15 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Failed to connect to SES in {region}: {e}")
 
-        self.stdout.write(f"\n=== SES Reputation Monitoring Setup ===\n")
+        self.stdout.write("\n=== SES Reputation Monitoring Setup ===\n")
         self.stdout.write(f"Configuration Set: {config_set}")
         self.stdout.write(f"Region: {region}\n")
 
         try:
-            config = client.get_configuration_set(ConfigurationSetName=config_set)
-            self.stdout.write(self.style.SUCCESS(f"[OK] Configuration set '{config_set}' exists\n"))
+            client.get_configuration_set(ConfigurationSetName=config_set)
+            self.stdout.write(
+                self.style.SUCCESS(f"[OK] Configuration set '{config_set}' exists\n")
+            )
         except client.exceptions.NotFoundException:
             raise CommandError(
                 f"Configuration set '{config_set}' not found in {region}. "
@@ -81,9 +83,13 @@ class Command(BaseCommand):
 
             for dest in destinations:
                 name = dest.get("Name", "")
-                dest_type = dest.get("EventDestinationName", "")
+                dest.get("EventDestinationName", "")
                 enabled = dest.get("Enabled", False)
-                status = self.style.SUCCESS("enabled") if enabled else self.style.ERROR("disabled")
+                status = (
+                    self.style.SUCCESS("enabled")
+                    if enabled
+                    else self.style.ERROR("disabled")
+                )
                 self.stdout.write(f"  • {name}: {status}\n")
 
                 event_types = dest.get("MatchingEventTypes", [])
@@ -95,7 +101,9 @@ class Command(BaseCommand):
                 self.style.WARNING(f"  [WARN] Could not list event destinations: {e}\n")
             )
 
-    def _print_setup_instructions(self, config_set: str, region: str, sns_arn: str | None):
+    def _print_setup_instructions(
+        self, config_set: str, region: str, sns_arn: str | None
+    ):
         """Print instructions for setting up event destinations."""
         self.stdout.write("\nSetup Instructions:\n")
         self.stdout.write(

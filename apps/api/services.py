@@ -3,6 +3,7 @@
 Used by both the versioned apps.api.views.MessageCreateView and the legacy
 apps.email.views.api_send shim, so the two entry points can never drift.
 """
+
 from __future__ import annotations
 
 from django.db import transaction
@@ -10,7 +11,13 @@ from django.utils.text import slugify
 
 from apps.billing.limits import LimitChecker
 from apps.email.exceptions import UnverifiedDomainError
-from apps.email.models import BulkEmailCampaign, EmailDomain, EmailMessage, EmailTemplate, _message_public_id
+from apps.email.models import (
+    BulkEmailCampaign,
+    EmailDomain,
+    EmailMessage,
+    EmailTemplate,
+    _message_public_id,
+)
 from apps.email.services import render_template, validate_variables
 from apps.email.services.bulk import create_campaign
 from apps.email.tasks import send_email
@@ -40,7 +47,9 @@ class RecipientCapExceededError(Exception):
         )
 
 
-def _validate_schedulable_from(account, from_email: str, template_id: int | None) -> None:
+def _validate_schedulable_from(
+    account, from_email: str, template_id: int | None
+) -> None:
     """Structural checks that must hold at schedule time (fast-fail before a job
     row is created). Volume-sensitive gates — quota, reputation, suppression,
     MX — run at fire time via the normal immediate path instead.
@@ -204,7 +213,9 @@ def create_and_queue_message(
         raise
     transaction.on_commit(
         lambda: send_email.delay(
-            msg.id, text_body=text_body, html_body=html_body,
+            msg.id,
+            text_body=text_body,
+            html_body=html_body,
             attachments=task_attachments or None,
         )
     )
@@ -320,7 +331,6 @@ def create_and_queue_campaign(
     RecipientCapExceededError, or apps.billing.limits.PlanLimitExceeded —
     callers translate those into their own response shape.
     """
-    from apps.email.models import BulkEmailCampaign
     from apps.scheduler.api import (
         new_idempotency_key,
         resolve_fire_at,
@@ -361,8 +371,12 @@ def create_and_queue_campaign(
 
     from apps.billing import api as billing_api
 
-    if not billing_api.check_rule(account, "email_campaign_recipients", len(recipients)):
-        raise RecipientCapExceededError(billing_api.limit(account, "email_campaign_recipients"), len(recipients))
+    if not billing_api.check_rule(
+        account, "email_campaign_recipients", len(recipients)
+    ):
+        raise RecipientCapExceededError(
+            billing_api.limit(account, "email_campaign_recipients"), len(recipients)
+        )
 
     template = None
     if template_id is not None:
@@ -380,24 +394,26 @@ def create_and_queue_campaign(
         text_override=text_body,
         html_override=html_body,
         recipients=recipients,
-        initial_status=(
-            BulkEmailCampaign.Status.SCHEDULED if scheduled else None
-        ),
+        initial_status=(BulkEmailCampaign.Status.SCHEDULED if scheduled else None),
     )
     if not scheduled:
         return campaign
 
     # Recurring campaigns re-resolve their audience each occurrence, so the job
     # replays the create-kwargs rather than pointing at this frozen campaign.
-    payload = {
-        "from_email": from_email,
-        "template_id": template_id,
-        "subject": subject,
-        "text_body": text_body,
-        "html_body": html_body,
-        "list_slug": list_slug,
-        "segment_slug": segment_slug,
-    } if recurrence else {}
+    payload = (
+        {
+            "from_email": from_email,
+            "template_id": template_id,
+            "subject": subject,
+            "text_body": text_body,
+            "html_body": html_body,
+            "list_slug": list_slug,
+            "segment_slug": segment_slug,
+        }
+        if recurrence
+        else {}
+    )
 
     return schedule_email_campaign(
         account=account,

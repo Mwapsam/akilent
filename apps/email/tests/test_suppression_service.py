@@ -1,17 +1,16 @@
 """Tests for apps.email.services.suppression module."""
 
 import pytest
-from django.db.models import F
 
 from apps.accounts.models import Account
-from apps.email.models import SuppressionListEntry, EmailMessage
+from apps.core.models import MailProviderSettings
+from apps.email.models import EmailMessage, SuppressionListEntry
 from apps.email.services.suppression import (
+    get_suppressed_emails,
     is_suppressed,
     is_suppressed_globally,
-    get_suppressed_emails,
     record_event,
 )
-from apps.core.models import MailProviderSettings
 
 
 @pytest.fixture
@@ -24,6 +23,7 @@ def account(db):
 def email_domain(db, account):
     """Create a verified email domain."""
     from apps.email.models import EmailDomain
+
     return EmailDomain.objects.create(
         account=account,
         domain="example.com",
@@ -147,11 +147,14 @@ class TestSystemMailSuppressionBoundary:
     honoured any tenant's UNSUBSCRIBE entry.
     """
 
-    @pytest.mark.parametrize("reason", [
-        SuppressionListEntry.Reason.UNSUBSCRIBE,
-        SuppressionListEntry.Reason.MANUAL,
-        SuppressionListEntry.Reason.INVALID,
-    ])
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            SuppressionListEntry.Reason.UNSUBSCRIBE,
+            SuppressionListEntry.Reason.MANUAL,
+            SuppressionListEntry.Reason.INVALID,
+        ],
+    )
     def test_tenant_consent_choices_do_not_block_system_mail(self, account, reason):
         SuppressionListEntry.objects.create(
             account=account, email="person@example.com", reason=reason
@@ -161,10 +164,13 @@ class TestSystemMailSuppressionBoundary:
         # ...but Akilent's account-critical mail goes through.
         assert not is_suppressed_globally("person@example.com")
 
-    @pytest.mark.parametrize("reason", [
-        SuppressionListEntry.Reason.BOUNCE,
-        SuppressionListEntry.Reason.COMPLAINT,
-    ])
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            SuppressionListEntry.Reason.BOUNCE,
+            SuppressionListEntry.Reason.COMPLAINT,
+        ],
+    )
     def test_tenant_hard_failures_do_block_system_mail(self, account, reason):
         SuppressionListEntry.objects.create(
             account=account, email="dead@example.com", reason=reason
@@ -183,7 +189,8 @@ class TestSystemMailSuppressionBoundary:
         from apps.email.types import SendResult
 
         SuppressionListEntry.objects.create(
-            account=account, email="sam@example.com",
+            account=account,
+            email="sam@example.com",
             reason=SuppressionListEntry.Reason.UNSUBSCRIBE,
         )
         sent = []
@@ -212,10 +219,13 @@ class TestGetSuppressedEmails:
 
     def test_all_valid(self, account):
         """All valid emails should return empty set."""
-        result = get_suppressed_emails(account, [
-            "user1@example.com",
-            "user2@example.com",
-        ])
+        result = get_suppressed_emails(
+            account,
+            [
+                "user1@example.com",
+                "user2@example.com",
+            ],
+        )
         assert result == set()
 
     def test_some_suppressed(self, account):
@@ -226,10 +236,13 @@ class TestGetSuppressedEmails:
             reason=SuppressionListEntry.Reason.BOUNCE,
         )
 
-        result = get_suppressed_emails(account, [
-            "suppressed@example.com",
-            "valid@example.com",
-        ])
+        result = get_suppressed_emails(
+            account,
+            [
+                "suppressed@example.com",
+                "valid@example.com",
+            ],
+        )
         assert result == {"suppressed@example.com"}
 
     def test_soft_bounce_not_included(self, account):
@@ -344,7 +357,7 @@ class TestRecordEvent:
 
     def test_unsubscribe_overwrites_previous(self, account):
         """Unsubscribe should overwrite previous reason."""
-        entry1 = record_event(
+        record_event(
             account=account,
             email="user@example.com",
             reason="bounce",
@@ -363,19 +376,21 @@ class TestRecordEvent:
         """Unique constraint on (account, email) should prevent true duplicates."""
         # Recording same event twice should not violate unique constraint
         # because we use get_or_create + update internally
-        entry1 = record_event(
+        record_event(
             account=account,
             email="user@example.com",
             reason="bounce",
         )
 
-        entry2 = record_event(
+        record_event(
             account=account,
             email="user@example.com",
             reason="bounce",
         )
 
-        assert SuppressionListEntry.objects.filter(
-            account=account,
-            email="user@example.com"
-        ).count() == 1  # Only one row
+        assert (
+            SuppressionListEntry.objects.filter(
+                account=account, email="user@example.com"
+            ).count()
+            == 1
+        )  # Only one row

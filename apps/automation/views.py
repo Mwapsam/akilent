@@ -1,4 +1,5 @@
 """Dashboard: lifecycle workflow list + visual/code builder (Phase 6 UI)."""
+
 from __future__ import annotations
 
 import json
@@ -11,21 +12,47 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
-from apps.core.htmx import full_page_load
 from apps.accounts.utils import get_current_account
 from apps.automation import api as automation_api
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
+from apps.core.htmx import full_page_load
 from apps.core.module_gate import module_required
 
 # Ordered WhatsApp first: the editor lists them in this order and the first is what "Add step" offers.
-_STEP_TYPES = ["reply_text", "send_buttons", "send_list", "wait_for_reply", "send_whatsapp",
-               "create_lead", "update_lead_status", "assign_conversation", "notify_team",
-               "add_tag", "remove_tag", "wait", "branch", "send_email", "webhook", "set_attribute", "stop"]
-_TRIGGER_TYPES = ["conversation.message_received", "contact.created", "lead.created",
-                  "lead.status_changed", "lead.qualified", "lead.lost", "contact.updated",
-                  "manual", "business_event", "email.opened", "email.clicked"]
+_STEP_TYPES = [
+    "reply_text",
+    "send_buttons",
+    "send_list",
+    "wait_for_reply",
+    "send_whatsapp",
+    "create_lead",
+    "update_lead_status",
+    "assign_conversation",
+    "notify_team",
+    "add_tag",
+    "remove_tag",
+    "wait",
+    "branch",
+    "send_email",
+    "webhook",
+    "set_attribute",
+    "stop",
+]
+_TRIGGER_TYPES = [
+    "conversation.message_received",
+    "contact.created",
+    "lead.created",
+    "lead.status_changed",
+    "lead.qualified",
+    "lead.lost",
+    "contact.updated",
+    "manual",
+    "business_event",
+    "email.opened",
+    "email.clicked",
+]
 
 
 @login_required
@@ -54,31 +81,40 @@ def workflow_list(request):
         # fallback) — crashed this page in production. See friendly_errors.py
         # note in apps.whatsapp for the same "translate once, in Python" rule.
         trigger = (wf.definition or {}).get("trigger") or {}
-        wf.trigger_label = trigger_label(trigger.get("type", ""), trigger.get("name", ""))
+        wf.trigger_label = trigger_label(
+            trigger.get("type", ""), trigger.get("name", "")
+        )
         wf.summary = explain.explain_definition(wf.definition)
     groups, engagement, approved_templates = _engagement_starters(account, workflows)
-    return render(request, "automation/workflow_list.html", {
-        "account": account,
-        "workflows": workflows,
-        "starters": list_templates(),
-        "engagement_starters": engagement,
-        "goal_groups": groups,
-        "approved_templates": approved_templates,
-        "blank_choices": wa_variables_choices(),
-        "template_data": {
-            "business": account.company_name or "Your business",
-            "templates": [
-                {"pk": t.pk, "content": t.content or "", "blanks": t.blanks} for t in approved_templates
-            ],
+    return render(
+        request,
+        "automation/workflow_list.html",
+        {
+            "account": account,
+            "workflows": workflows,
+            "starters": list_templates(),
+            "engagement_starters": engagement,
+            "goal_groups": groups,
+            "approved_templates": approved_templates,
+            "blank_choices": wa_variables_choices(),
+            "template_data": {
+                "business": account.company_name or "Your business",
+                "templates": [
+                    {"pk": t.pk, "content": t.content or "", "blanks": t.blanks}
+                    for t in approved_templates
+                ],
+            },
         },
-    })
+    )
 
 
 def _no_room_redirect(request, account, slug):
     """A redirect with the reason when turning this automation on would pass the plan's limit,
     else None."""
     try:
-        automation_api.ensure_room_to_turn_on(account, Workflow.objects.filter(account=account, slug=slug).first())
+        automation_api.ensure_room_to_turn_on(
+            account, Workflow.objects.filter(account=account, slug=slug).first()
+        )
     except automation_api.AutomationLimitReached as exc:
         messages.error(request, str(exc))
         return redirect("automation:list")
@@ -103,7 +139,8 @@ def _engagement_starters(account, workflows):
 
     approved = list(
         MessageTemplate.objects.filter(
-            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+            account=account,
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
         ).order_by("name")
     )
     from apps.automation import variables as wa_variables
@@ -111,20 +148,30 @@ def _engagement_starters(account, workflows):
     # Each blank of each template, with the safest way to fill it already chosen.
     for template in approved:
         template.blanks = [
-            {"name": name, "default": wa_variables.default_choice(name)} for name in (template.variables or [])
+            {"name": name, "default": wa_variables.default_choice(name)}
+            for name in (template.variables or [])
         ]
-    installed = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED}
+    installed = {
+        wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED
+    }
     paused = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.ARCHIVED}
     cards = {
-        starter["key"]: {**starter, "installed": installed.get(starter["key"]), "paused": paused.get(starter["key"])}
+        starter["key"]: {
+            **starter,
+            "installed": installed.get(starter["key"]),
+            "paused": paused.get(starter["key"]),
+        }
         for starter in ENGAGEMENT_STARTERS
     }
     from apps.automation import readiness
 
     for card in cards.values():
-        card["readiness"] = readiness.check(account, card, approved_template_count=len(approved))
+        card["readiness"] = readiness.check(
+            account, card, approved_template_count=len(approved)
+        )
     groups = [
-        {"title": title, "cards": [cards[key] for key in keys]} for title, keys in GOAL_GROUPS
+        {"title": title, "cards": [cards[key] for key in keys]}
+        for title, keys in GOAL_GROUPS
     ]
     return groups, list(cards.values()), approved
 
@@ -161,7 +208,8 @@ def starter_install(request):
         return _install_reply_starter(request, account, starter)
 
     template = MessageTemplate.objects.filter(
-        account=account, pk=request.POST.get("template_id") or 0,
+        account=account,
+        pk=request.POST.get("template_id") or 0,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     ).first()
     if template is None:
@@ -177,8 +225,10 @@ def starter_install(request):
     for var in template.variables or []:
         key = f"{template.pk}__{var}"
         source, fallback = wa_variables.entry_from_choice(
-            request.POST.get(f"var__{key}") or "", request.POST.get(f"lit__{key}") or "",
-            request.POST.get(f"fb__{key}") or "")
+            request.POST.get(f"var__{key}") or "",
+            request.POST.get(f"lit__{key}") or "",
+            request.POST.get(f"fb__{key}") or "",
+        )
         if source:
             variable_mapping[var] = source
             if fallback:
@@ -195,8 +245,10 @@ def starter_install(request):
         slug=starter["key"],
         name=starter["name"],
         definition=build_definition(
-            starter, template_name=template.whatsapp_template_name,
-            variable_mapping=variable_mapping, variable_fallbacks=variable_fallbacks,
+            starter,
+            template_name=template.whatsapp_template_name,
+            variable_mapping=variable_mapping,
+            variable_fallbacks=variable_fallbacks,
         ),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
@@ -222,9 +274,12 @@ def _install_team_starter(request, account, starter):
     if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
         return stop
     automation_api.upsert_published_workflow(
-        account, slug=starter["key"], name=starter["name"],
+        account,
+        slug=starter["key"],
+        name=starter["name"],
         definition=build_team_definition(
-            starter, text=text, notify=notify, assign=request.POST.get("assign") == "on"),
+            starter, text=text, notify=notify, assign=request.POST.get("assign") == "on"
+        ),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
     return redirect("automation:list")
@@ -243,10 +298,15 @@ def _install_menu_starter(request, account, starter):
         if not title and not reply:
             continue
         if not title or not reply:
-            messages.error(request, f"Option {n} needs both a button label and an answer.")
+            messages.error(
+                request, f"Option {n} needs both a button label and an answer."
+            )
             return redirect("automation:list")
         if len(reply) > _MAX_REPLY_LENGTH:
-            messages.error(request, f"Keep option {n}'s answer under {_MAX_REPLY_LENGTH} characters.")
+            messages.error(
+                request,
+                f"Keep option {n}'s answer under {_MAX_REPLY_LENGTH} characters.",
+            )
             return redirect("automation:list")
         options.append({"title": title, "reply": reply})
     if not options:
@@ -261,7 +321,9 @@ def _install_menu_starter(request, account, starter):
     if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
         return stop
     automation_api.upsert_published_workflow(
-        account, slug=starter["key"], name=starter["name"],
+        account,
+        slug=starter["key"],
+        name=starter["name"],
         definition=build_menu_definition(starter, question=question, options=options),
     )
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
@@ -300,9 +362,13 @@ def _install_reply_starter(request, account, starter):
     if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
         return stop
     automation_api.upsert_published_workflow(
-        account, slug=starter["key"], name=starter["name"],
+        account,
+        slug=starter["key"],
+        name=starter["name"],
         definition=build_reply_definition(
-            starter, text=text, keywords=keywords,
+            starter,
+            text=text,
+            keywords=keywords,
             tag=(request.POST.get("add_tag") == "on") if from_recipe else True,
             notify=request.POST.get("tell_team") == "on",
         ),
@@ -329,7 +395,7 @@ def _clean_keywords(raw: str) -> list[str]:
 @module_required("automations")
 @require_POST
 def starter_test(request):
-    """"Send test to me": the reply the owner is setting up, sent to their own WhatsApp.
+    """ "Send test to me": the reply the owner is setting up, sent to their own WhatsApp.
 
     Goes through the normal send path, so WhatsApp's rules apply: a normal message can only be
     sent to a number that wrote to the business in the last 24 hours. We say so plainly instead
@@ -343,14 +409,21 @@ def starter_test(request):
     if account is None:
         return redirect("dashboard")
     starter = STARTERS_BY_KEY.get(request.POST.get("starter", ""))
-    if starter is None or not starter.get("reply") or starter.get("menu") or starter.get("team"):
+    if (
+        starter is None
+        or not starter.get("reply")
+        or starter.get("menu")
+        or starter.get("team")
+    ):
         messages.error(request, "Test sending is available for the reply automations.")
         return redirect("automation:list")
     text = (request.POST.get("reply_text") or "").strip()
     if not text:
         messages.error(request, "Write the reply first, then send yourself a test.")
         return redirect("automation:list")
-    contact = whatsapp_api.find_contact_by_phone(account, request.POST.get("test_phone", ""))
+    contact = whatsapp_api.find_contact_by_phone(
+        account, request.POST.get("test_phone", "")
+    )
     if contact is None or not whatsapp_api.free_text_window_is_open(contact):
         messages.error(
             request,
@@ -361,7 +434,9 @@ def starter_test(request):
     first = contact.contact.first_name if contact.contact_id else ""
     from apps.automation.variables import merge_business_facts
 
-    whatsapp_api.send_message(account, contact, merge_business_facts(merge_first_name(text, first), account))
+    whatsapp_api.send_message(
+        account, contact, merge_business_facts(merge_first_name(text, first), account)
+    )
     messages.success(
         request,
         "Test sent to your WhatsApp. This is exactly the message Akilent will send when this automation runs.",
@@ -381,7 +456,9 @@ def workflow_create(request):
     name = (request.POST.get("name") or "").strip()
     # A new automation starts from a WhatsApp moment (a customer messages you), not a manual run.
     definition: dict = {
-        "trigger": {"type": "conversation.message_received"}, "steps": [{"id": "stop", "type": "stop"}]}
+        "trigger": {"type": "conversation.message_received"},
+        "steps": [{"id": "stop", "type": "stop"}],
+    }
     if starter and starter in STARTER_TEMPLATES:
         tpl = STARTER_TEMPLATES[starter]
         definition = tpl["definition"]
@@ -395,7 +472,9 @@ def workflow_create(request):
     while Workflow.objects.filter(account=account, slug=slug).exists():
         slug = f"{base}-{i}"
         i += 1
-    wf = Workflow.objects.create(account=account, name=name, slug=slug, definition=definition)
+    wf = Workflow.objects.create(
+        account=account, name=name, slug=slug, definition=definition
+    )
     return redirect("automation:editor", slug=wf.slug)
 
 
@@ -413,7 +492,9 @@ def workflow_editor(request, slug: str):
 
     email_templates = [
         {"slug": t.slug, "name": t.name, "subject": t.subject}
-        for t in EmailTemplate.objects.filter(account=account, is_active=True).order_by("name")
+        for t in EmailTemplate.objects.filter(account=account, is_active=True).order_by(
+            "name"
+        )
     ]
     whatsapp_templates = [
         {
@@ -429,16 +510,22 @@ def workflow_editor(request, slug: str):
         .order_by("name")
     ]
 
-    return render(request, "automation/workflow_editor.html", {
-        "account": account,
-        "wf": wf,
-        "definition_json": json.dumps(wf.definition or {}, indent=2),
-        "step_types": json.dumps(_STEP_TYPES),
-        "trigger_types": json.dumps(_TRIGGER_TYPES),
-        "validation_errors": json.dumps(validate_definition(wf.definition, account=account)),
-        "email_templates_json": json.dumps(email_templates),
-        "whatsapp_templates_json": json.dumps(whatsapp_templates),
-    })
+    return render(
+        request,
+        "automation/workflow_editor.html",
+        {
+            "account": account,
+            "wf": wf,
+            "definition_json": json.dumps(wf.definition or {}, indent=2),
+            "step_types": json.dumps(_STEP_TYPES),
+            "trigger_types": json.dumps(_TRIGGER_TYPES),
+            "validation_errors": json.dumps(
+                validate_definition(wf.definition, account=account)
+            ),
+            "email_templates_json": json.dumps(email_templates),
+            "whatsapp_templates_json": json.dumps(whatsapp_templates),
+        },
+    )
 
 
 @login_required
@@ -451,7 +538,9 @@ def workflow_stats(request, slug: str):
 
     run_counts = {
         row["status"]: row["count"]
-        for row in WorkflowRun.objects.filter(workflow=wf).values("status").annotate(count=Count("id"))
+        for row in WorkflowRun.objects.filter(workflow=wf)
+        .values("status")
+        .annotate(count=Count("id"))
     }
     total_enrolled = sum(run_counts.values())
 
@@ -463,9 +552,15 @@ def workflow_stats(request, slug: str):
     )
     steps_by_id: dict[str, dict] = {}
     for row in step_rows:
-        entry = steps_by_id.setdefault(row["step_id"], {
-            "step_id": row["step_id"], "step_type": row["step_type"], "ok": 0, "error": 0,
-        })
+        entry = steps_by_id.setdefault(
+            row["step_id"],
+            {
+                "step_id": row["step_id"],
+                "step_type": row["step_type"],
+                "ok": 0,
+                "error": 0,
+            },
+        )
         if row["status"] == "error":
             entry["error"] += row["count"]
         else:
@@ -481,13 +576,17 @@ def workflow_stats(request, slug: str):
             round(entry["error"] / entry["total"] * 100, 1) if entry["total"] else 0
         )
 
-    return render(request, "automation/workflow_stats.html", {
-        "account": account,
-        "wf": wf,
-        "total_enrolled": total_enrolled,
-        "run_counts": run_counts,
-        "step_breakdown": breakdown,
-    })
+    return render(
+        request,
+        "automation/workflow_stats.html",
+        {
+            "account": account,
+            "wf": wf,
+            "total_enrolled": total_enrolled,
+            "run_counts": run_counts,
+            "step_breakdown": breakdown,
+        },
+    )
 
 
 @login_required
@@ -508,12 +607,14 @@ def workflow_save(request, slug: str):
     if isinstance(body.get("definition"), dict):
         wf.definition = body["definition"]
     wf.save(update_fields=["name", "definition", "updated_at"])
-    return JsonResponse({
-        "ok": True,
-        "errors": validate_definition(wf.definition, account=account),
-        "status": wf.status,
-        "version": wf.version,
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "errors": validate_definition(wf.definition, account=account),
+            "status": wf.status,
+            "version": wf.version,
+        }
+    )
 
 
 @login_required
@@ -529,7 +630,8 @@ def workflow_publish(request, slug: str):
     if blocking:
         messages.error(
             request,
-            "Fix the workflow before publishing: " + "; ".join(e["message"] for e in blocking[:3]),
+            "Fix the workflow before publishing: "
+            + "; ".join(e["message"] for e in blocking[:3]),
         )
         return redirect("automation:editor", slug=wf.slug)
     try:
@@ -571,7 +673,10 @@ def workflow_pause(request, slug: str):
     if wf.status == Workflow.Status.PUBLISHED:
         wf.status = Workflow.Status.ARCHIVED
         wf.save(update_fields=["status", "updated_at"])
-    messages.success(request, f"{wf.name} is paused. Akilent won't run it until you turn it on again.")
+    messages.success(
+        request,
+        f"{wf.name} is paused. Akilent won't run it until you turn it on again.",
+    )
     return redirect("automation:list")
 
 
@@ -585,10 +690,15 @@ def workflow_resume(request, slug: str):
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
     if wf.status == Workflow.Status.ARCHIVED:
-        blocking = [e for e in validate_definition(wf.definition, account=account)
-                    if e.get("severity", "error") != "warning"]
+        blocking = [
+            e
+            for e in validate_definition(wf.definition, account=account)
+            if e.get("severity", "error") != "warning"
+        ]
         if blocking:
-            messages.error(request, f"{wf.name} can't be turned on yet: {blocking[0]['message']}")
+            messages.error(
+                request, f"{wf.name} can't be turned on yet: {blocking[0]['message']}"
+            )
             return redirect("automation:list")
         try:
             automation_api.ensure_room_to_turn_on(account, wf)
@@ -617,7 +727,7 @@ def workflow_delete(request, slug: str):
 @login_required
 @module_required("automations")
 def why_not(request):
-    """"Why didn't it reply?": what each automation did with a customer's latest message, in plain words.
+    """ "Why didn't it reply?": what each automation did with a customer's latest message, in plain words.
 
     Defaults to the most recent customer message in the business; ``?conversation=`` picks another.
     """
@@ -628,32 +738,57 @@ def why_not(request):
     from apps.automation import explain
     from apps.automation.workflow_engine import explain_enrollment
     from apps.conversations import attribution
-    from apps.conversations.models import Conversation, Message
+    from apps.conversations.models import Message
     from apps.whatsapp import api as whatsapp_api
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
-    inbound = Message.objects.filter(account=account, direction=Message.Direction.INBOUND)
+    inbound = Message.objects.filter(
+        account=account, direction=Message.Direction.INBOUND
+    )
     public_id = (request.GET.get("conversation") or "").strip()
     latest = None
     if public_id:
-        latest = inbound.filter(conversation__public_id=public_id).select_related("conversation__contact").order_by("-timestamp").first()
+        latest = (
+            inbound.filter(conversation__public_id=public_id)
+            .select_related("conversation__contact")
+            .order_by("-timestamp")
+            .first()
+        )
     if latest is None and not public_id:
-        latest = inbound.select_related("conversation__contact").order_by("-timestamp").first()
+        latest = (
+            inbound.select_related("conversation__contact")
+            .order_by("-timestamp")
+            .first()
+        )
 
     ctx = {
-        "account": account, "message": None, "verdicts": [], "notes": [],
+        "account": account,
+        "message": None,
+        "verdicts": [],
+        "notes": [],
         "choices": attribution.recent_choices(account),
     }
     if latest is not None:
         conversation, contact = latest.conversation, latest.conversation.contact
         reply = (latest.metadata or {}).get("reply") or {}
-        message = {"body": latest.body, "reply_id": reply.get("id", ""), "reply_title": reply.get("title", "")}
-        earlier = inbound.filter(conversation__contact=contact, timestamp__lt=latest.timestamp).exists()
+        message = {
+            "body": latest.body,
+            "reply_id": reply.get("id", ""),
+            "reply_title": reply.get("title", ""),
+        }
+        earlier = inbound.filter(
+            conversation__contact=contact, timestamp__lt=latest.timestamp
+        ).exists()
         verdicts = explain_enrollment(
-            account.id, contact, message=message, message_at=latest.timestamp, is_first_message=not earlier)
+            account.id,
+            contact,
+            message=message,
+            message_at=latest.timestamp,
+            is_first_message=not earlier,
+        )
         notes = []
         from apps.billing import api as billing_api
 
@@ -661,19 +796,29 @@ def why_not(request):
             notes.append(
                 "Automations are switched off for the whole site, so no customer message starts one, "
                 "however it is set up. This is a platform setting, not a mistake in your automation. "
-                "Ask your Akilent administrator to turn on \"automation events\"."
+                'Ask your Akilent administrator to turn on "automation events".'
             )
         if not billing_api.usable(account, "automations"):
             notes.append("Automations aren't included in your plan.")
         if getattr(contact, "whatsapp_opted_out", False):
-            notes.append("This customer has opted out of messages, so no automation will send to them.")
+            notes.append(
+                "This customer has opted out of messages, so no automation will send to them."
+            )
         if timezone.now() - latest.timestamp > timedelta(hours=24):
             notes.append(
-                "It has been more than 24 hours since this message, so only an approved message can be sent now.")
-        ctx.update({
-            "message": latest, "conversation": conversation, "contact": contact,
-            "verdicts": [explain.describe_verdict(v) for v in verdicts], "notes": notes,
-            # Customers ask this often and the team answers by hand: offer to automate it.
-            "automate_offer": automation_api.repeated_question_offer(account, latest.body),
-        })
+                "It has been more than 24 hours since this message, so only an approved message can be sent now."
+            )
+        ctx.update(
+            {
+                "message": latest,
+                "conversation": conversation,
+                "contact": contact,
+                "verdicts": [explain.describe_verdict(v) for v in verdicts],
+                "notes": notes,
+                # Customers ask this often and the team answers by hand: offer to automate it.
+                "automate_offer": automation_api.repeated_question_offer(
+                    account, latest.body
+                ),
+            }
+        )
     return render(request, "automation/why_not.html", ctx)

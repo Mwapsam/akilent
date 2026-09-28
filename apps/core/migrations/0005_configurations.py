@@ -4,22 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0004_sitesettings_automation_events_enabled'),
+        ("core", "0004_sitesettings_automation_events_enabled"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Configurations',
+            name="Configurations",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True)),
-                ('value', models.TextField()),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, unique=True)),
+                ("value", models.TextField()),
             ],
             options={
-                'verbose_name': 'Configuration',
-                'verbose_name_plural': 'Configurations',
+                "verbose_name": "Configuration",
+                "verbose_name_plural": "Configurations",
             },
         ),
     ]

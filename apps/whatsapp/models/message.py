@@ -5,7 +5,6 @@ from .conversation import Conversation
 
 
 class MessageLog(models.Model):
-
     class Direction(models.TextChoices):
         INBOUND = "in", "Inbound"
         OUTBOUND = "out", "Outbound"
@@ -13,13 +12,13 @@ class MessageLog(models.Model):
     class MessageType(models.TextChoices):
         TEXT = "text", "Text"
         IMAGE = "image", "Image"
-        AUDIO = "audio", "Audio"          
+        AUDIO = "audio", "Audio"
         VIDEO = "video", "Video"
         DOCUMENT = "document", "Document"
         STICKER = "sticker", "Sticker"
         LOCATION = "location", "Location"
         CONTACTS = "contacts", "Contacts"
-        TEMPLATE = "template", "Template" 
+        TEMPLATE = "template", "Template"
         UNKNOWN = "unknown", "Unknown"
 
     class Status(models.TextChoices):

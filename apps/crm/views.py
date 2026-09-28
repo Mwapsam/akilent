@@ -3,13 +3,14 @@ same UX rules as Inbox — one primary action per screen, plain language (the
 words on screen are "interested customers", not "leads" and "deals"),
 teaching empty states.
 """
+
 from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import Contact
@@ -27,7 +28,8 @@ def sales(request):
         return redirect("dashboard")
 
     leads = Lead.objects.filter(
-        account=account, status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        account=account,
+        status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
     ).select_related("contact")
 
     pipeline = Pipeline.objects.filter(account=account, is_default=True).first()
@@ -39,13 +41,17 @@ def sales(request):
             Deal.objects.filter(account=account, stage=stage).select_related("contact")
         )
 
-    return render(request, "crm/sales.html", {
-        "account": account,
-        "leads": leads,
-        "stages": stages,
-        "has_pipeline": pipeline is not None,
-        "recent_conversations": attribution.recent_choices(account),
-    })
+    return render(
+        request,
+        "crm/sales.html",
+        {
+            "account": account,
+            "leads": leads,
+            "stages": stages,
+            "has_pipeline": pipeline is not None,
+            "recent_conversations": attribution.recent_choices(account),
+        },
+    )
 
 
 @login_required
@@ -62,16 +68,24 @@ def create_lead_view(request):
         next_url = request.POST.get("next") or None
         # Only ever return to a page on this site, never an address a form was handed.
         if next_url and not url_has_allowed_host_and_scheme(
-                next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
             next_url = None
 
         query = (request.POST.get("contact") or "").strip()
-        contact = Contact.objects.filter(account=account).filter(
-            Q(phone=query) | Q(email__iexact=query)
-        ).first() if query else None
+        contact = (
+            Contact.objects.filter(account=account)
+            .filter(Q(phone=query) | Q(email__iexact=query))
+            .first()
+            if query
+            else None
+        )
         try:
             conversation, contact = attribution.picked_conversation(
-                account, contact, request.POST.get("conversation", ""))
+                account, contact, request.POST.get("conversation", "")
+            )
         except attribution.PickerError as exc:
             messages.error(request, str(exc))
             return redirect(next_url or "crm:sales")
@@ -85,7 +99,10 @@ def create_lead_view(request):
 
         try:
             result = run_action(
-                "create_lead", {"account": account}, account=account, contact=contact,
+                "create_lead",
+                {"account": account},
+                account=account,
+                contact=contact,
                 source=(request.POST.get("source") or "manual").strip(),
                 conversation_id=conversation.public_id if conversation else "",
             )
@@ -98,17 +115,26 @@ def create_lead_view(request):
             lead = Lead.objects.get(public_id=result["lead_id"])
             try:
                 deal_result = run_action(
-                    "create_deal", {"account": account}, lead=lead, value=value,
+                    "create_deal",
+                    {"account": account},
+                    lead=lead,
+                    value=value,
                 )
                 messages.success(request, "Lead created and moved into your pipeline.")
-                return redirect(next_url) if next_url else redirect(
-                    "crm:deal-detail", public_id=deal_result["deal_id"]
+                return (
+                    redirect(next_url)
+                    if next_url
+                    else redirect("crm:deal-detail", public_id=deal_result["deal_id"])
                 )
             except ActionError as exc:
                 messages.error(request, str(exc))
 
         messages.success(request, "Lead created.")
-        return redirect(next_url) if next_url else redirect("crm:lead-detail", public_id=result["lead_id"])
+        return (
+            redirect(next_url)
+            if next_url
+            else redirect("crm:lead-detail", public_id=result["lead_id"])
+        )
 
     return redirect("crm:sales")
 
@@ -126,14 +152,20 @@ def lead_detail(request, public_id: str):
         try:
             if action == "status":
                 result = run_action(
-                    "update_lead_status", {"account": account}, lead=lead,
+                    "update_lead_status",
+                    {"account": account},
+                    lead=lead,
                     status=request.POST.get("status", ""),
                 )
                 if result["changed"]:
-                    messages.success(request, f"Marked as {lead.get_status_display().lower()}.")
+                    messages.success(
+                        request, f"Marked as {lead.get_status_display().lower()}."
+                    )
             elif action == "convert":
                 result = run_action(
-                    "create_deal", {"account": account}, lead=lead,
+                    "create_deal",
+                    {"account": account},
+                    lead=lead,
                     title=request.POST.get("title") or None,
                     value=request.POST.get("value") or 0,
                 )
@@ -145,10 +177,15 @@ def lead_detail(request, public_id: str):
 
     from apps.crm.services import SETTABLE_LEAD_STATUSES
 
-    return render(request, "crm/lead_detail.html", {
-        "account": account, "lead": lead,
-        "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
-    })
+    return render(
+        request,
+        "crm/lead_detail.html",
+        {
+            "account": account,
+            "lead": lead,
+            "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
+        },
+    )
 
 
 @login_required
@@ -165,11 +202,19 @@ def deal_detail(request, public_id: str):
             stage_id = request.POST.get("stage_id")
             stage = get_object_or_404(deal.pipeline.stages, id=stage_id)
             try:
-                run_action("change_deal_stage", {"account": account}, deal=deal, stage=stage)
+                run_action(
+                    "change_deal_stage", {"account": account}, deal=deal, stage=stage
+                )
             except ActionError as exc:
                 messages.error(request, str(exc))
         return redirect("crm:deal-detail", public_id=public_id)
 
-    return render(request, "crm/deal_detail.html", {
-        "account": account, "deal": deal, "stages": deal.pipeline.stages.all(),
-    })
+    return render(
+        request,
+        "crm/deal_detail.html",
+        {
+            "account": account,
+            "deal": deal,
+            "stages": deal.pipeline.stages.all(),
+        },
+    )

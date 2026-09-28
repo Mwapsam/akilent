@@ -4,6 +4,7 @@ Orders and payments are out of the near-term product: day one is about
 conversations, so a new business never meets an Orders tab it has no use for.
 An account that already exists keeps whatever it has — nothing is taken away.
 """
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -37,7 +38,10 @@ def _payload(**overrides):
 @pytest.fixture
 def trial_plan(db):
     return Plan.objects.create(
-        slug=Plan.TRIAL, name="Trial", price_monthly=0, trial_days=14,
+        slug=Plan.TRIAL,
+        name="Trial",
+        price_monthly=0,
+        trial_days=14,
         service_type=Plan.SERVICE_BOTH,
     )
 

@@ -139,6 +139,7 @@ class WhatsAppBusinessNumber(models.Model):
 
 class TenantResolutionError(Exception):
     """Raised when a webhook event cannot be mapped to a tenant."""
+
     pass
 
 

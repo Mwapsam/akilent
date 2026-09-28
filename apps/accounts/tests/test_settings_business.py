@@ -1,4 +1,5 @@
 """Settings → Business: the mailing address printed in campaign footers."""
+
 import pytest
 from django.contrib.auth.models import User
 

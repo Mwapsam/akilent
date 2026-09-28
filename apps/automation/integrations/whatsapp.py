@@ -8,6 +8,7 @@ here, on the automation side of the boundary, so this module can be extended
 the same way for future channels (email/SMS/voice) without ``apps.whatsapp``
 (or any other channel app) ever importing automation models.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ def mark_outbound_message_failed(message) -> None:
         return
 
     step_run.status = "failed"
-    step_run.result = {**step_run.result, "error": message.last_error or "WhatsApp send failed"}
+    step_run.result = {
+        **step_run.result,
+        "error": message.last_error or "WhatsApp send failed",
+    }
     step_run.save(update_fields=["status", "result"])
 
     # The run may already show COMPLETED — the step recorded "ok" and the workflow
@@ -47,5 +51,6 @@ def mark_outbound_message_failed(message) -> None:
         run.save(update_fields=["status", "completed_at"])
         logger.info(
             "mark_outbound_message_failed: workflow run %s failed via outbound message %s",
-            run.pk, message.id,
+            run.pk,
+            message.id,
         )

@@ -18,7 +18,9 @@ def account(db):
 
 @pytest.fixture
 def active_subscription(db, account):
-    plan = Plan.objects.create(slug="starter", name="Starter", price_monthly=Decimal("19"))
+    plan = Plan.objects.create(
+        slug="starter", name="Starter", price_monthly=Decimal("19")
+    )
     return Subscription.objects.create(
         account=account,
         plan=plan,

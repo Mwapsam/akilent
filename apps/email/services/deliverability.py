@@ -5,6 +5,7 @@ Consumed by the dashboard card (``templates/email/insights.html``), the public
 ``GET /v1/deliverability`` endpoint, and the daily ``DeliverabilitySnapshot``
 task that powers trend lines and week-over-week deltas.
 """
+
 from __future__ import annotations
 
 import re
@@ -75,12 +76,19 @@ def _auth_checks(domains: list[EmailDomain]) -> list[Check]:
     """Auth is scored on the *weakest* verified domain (a bad one drags delivery)."""
     if not domains:
         return [
-            Check("domain_verified", "Verified sending domain", "fail",
-                  "No verified sending domain. Add and verify one to start sending.", 15),
+            Check(
+                "domain_verified",
+                "Verified sending domain",
+                "fail",
+                "No verified sending domain. Add and verify one to start sending.",
+                15,
+            ),
             Check("spf", "SPF", "na", "No domain to check.", 10),
             Check("dkim", "DKIM", "na", "No domain to check.", 15),
             Check("dmarc", "DMARC", "na", "No domain to check.", 10),
-            Check("dmarc_policy", "DMARC policy strength", "na", "No domain to check.", 5),
+            Check(
+                "dmarc_policy", "DMARC policy strength", "na", "No domain to check.", 5
+            ),
         ]
 
     spf_ok = all(d.spf_ok for d in domains)
@@ -90,25 +98,58 @@ def _auth_checks(domains: list[EmailDomain]) -> list[Check]:
     weakest_policy = None
     for p in policies:
         rank = {"none": 0, "quarantine": 1, "reject": 2}.get(p or "", -1)
-        if weakest_policy is None or rank < {"none": 0, "quarantine": 1, "reject": 2}.get(weakest_policy, 99):
+        if weakest_policy is None or rank < {
+            "none": 0,
+            "quarantine": 1,
+            "reject": 2,
+        }.get(weakest_policy, 99):
             weakest_policy = p
 
     if weakest_policy in ("quarantine", "reject"):
         policy_status, policy_detail = "ok", f"Enforcing (p={weakest_policy})."
     elif weakest_policy == "none":
-        policy_status, policy_detail = "warn", "p=none only monitors. Move to p=quarantine once your reports look clean."
+        policy_status, policy_detail = (
+            "warn",
+            "p=none only monitors. Move to p=quarantine once your reports look clean.",
+        )
     else:
         policy_status, policy_detail = "na", "DMARC not verified yet."
 
     return [
-        Check("domain_verified", "Verified sending domain", "ok",
-              f"{len(domains)} verified domain(s).", 15),
-        Check("spf", "SPF", "ok" if spf_ok else "fail",
-              "SPF passes on all domains." if spf_ok else "SPF is missing or failing on at least one domain.", 10),
-        Check("dkim", "DKIM", "ok" if dkim_ok else "fail",
-              "DKIM passes on all domains." if dkim_ok else "DKIM is missing or failing on at least one domain.", 15),
-        Check("dmarc", "DMARC", "ok" if dmarc_ok else "warn",
-              "DMARC record found on all domains." if dmarc_ok else "Add a DMARC record — Gmail/Yahoo require it for bulk senders.", 10),
+        Check(
+            "domain_verified",
+            "Verified sending domain",
+            "ok",
+            f"{len(domains)} verified domain(s).",
+            15,
+        ),
+        Check(
+            "spf",
+            "SPF",
+            "ok" if spf_ok else "fail",
+            "SPF passes on all domains."
+            if spf_ok
+            else "SPF is missing or failing on at least one domain.",
+            10,
+        ),
+        Check(
+            "dkim",
+            "DKIM",
+            "ok" if dkim_ok else "fail",
+            "DKIM passes on all domains."
+            if dkim_ok
+            else "DKIM is missing or failing on at least one domain.",
+            15,
+        ),
+        Check(
+            "dmarc",
+            "DMARC",
+            "ok" if dmarc_ok else "warn",
+            "DMARC record found on all domains."
+            if dmarc_ok
+            else "Add a DMARC record — Gmail/Yahoo require it for bulk senders.",
+            10,
+        ),
         Check("dmarc_policy", "DMARC policy strength", policy_status, policy_detail, 5),
     ]
 
@@ -132,14 +173,20 @@ def _rate_checks(account, domain) -> list[Check]:
     elif br < 0.05:
         b = ("warn", f"{br:.1%} — above the 2% comfort zone; clean your list.")
     else:
-        b = ("fail", f"{br:.1%} — over 5%. SES may pause sending. Remove invalid addresses now.")
+        b = (
+            "fail",
+            f"{br:.1%} — over 5%. SES may pause sending. Remove invalid addresses now.",
+        )
 
     if cr < 0.001:
         c = ("ok", f"{cr:.2%} — healthy (target < 0.1%).")
     elif cr < 0.003:
         c = ("warn", f"{cr:.2%} — approaching the 0.3% danger line.")
     else:
-        c = ("fail", f"{cr:.2%} — over 0.3%. Review consent and send only to engaged recipients.")
+        c = (
+            "fail",
+            f"{cr:.2%} — over 0.3%. Review consent and send only to engaged recipients.",
+        )
 
     if opr >= 0.15:
         e = ("ok", f"{opr:.0%} unique open rate.")
@@ -159,34 +206,68 @@ def _reputation_check(account) -> Check:
     rep = getattr(account, "send_reputation", None)
     state = getattr(rep, "state", "ok")
     if state == "halted":
-        return Check("sending_reputation", "Sending reputation", "fail",
-                     f"Sending is HALTED: {getattr(rep, 'halted_reason', '') or 'reputation threshold crossed'}.", 10)
+        return Check(
+            "sending_reputation",
+            "Sending reputation",
+            "fail",
+            f"Sending is HALTED: {getattr(rep, 'halted_reason', '') or 'reputation threshold crossed'}.",
+            10,
+        )
     if state == "warned":
-        return Check("sending_reputation", "Sending reputation", "warn",
-                     "Reputation is in a warning state — bounce/complaint volume is elevated.", 10)
-    return Check("sending_reputation", "Sending reputation", "ok", "No reputation alerts.", 10)
+        return Check(
+            "sending_reputation",
+            "Sending reputation",
+            "warn",
+            "Reputation is in a warning state — bounce/complaint volume is elevated.",
+            10,
+        )
+    return Check(
+        "sending_reputation", "Sending reputation", "ok", "No reputation alerts.", 10
+    )
 
 
 def _list_quality_check(account, domain) -> Check:
     week_ago = timezone.now() - timedelta(days=7)
-    supp = SuppressionListEntry.objects.filter(account=account, created_at__gte=week_ago)
+    supp = SuppressionListEntry.objects.filter(
+        account=account, created_at__gte=week_ago
+    )
     new_supp = supp.count()
     r = rates_for(account, domain=domain, since_days=7)
     sent_week = r["volume"]
 
     if sent_week < _MIN_VOLUME_FOR_RATES:
-        return Check("list_quality", "List quality", "na",
-                     "Not enough recent volume to assess list hygiene.", 5)
+        return Check(
+            "list_quality",
+            "List quality",
+            "na",
+            "Not enough recent volume to assess list hygiene.",
+            5,
+        )
 
     ratio = new_supp / sent_week if sent_week else 0.0
     if ratio < 0.01:
-        return Check("list_quality", "List quality", "ok",
-                     f"{new_supp} new suppressions this week ({ratio:.1%} of volume).", 5)
+        return Check(
+            "list_quality",
+            "List quality",
+            "ok",
+            f"{new_supp} new suppressions this week ({ratio:.1%} of volume).",
+            5,
+        )
     if ratio < 0.03:
-        return Check("list_quality", "List quality", "warn",
-                     f"{new_supp} new suppressions this week ({ratio:.1%}) — trending up.", 5)
-    return Check("list_quality", "List quality", "fail",
-                 f"{new_supp} new suppressions this week ({ratio:.1%}) — audit your most recent imports.", 5)
+        return Check(
+            "list_quality",
+            "List quality",
+            "warn",
+            f"{new_supp} new suppressions this week ({ratio:.1%}) — trending up.",
+            5,
+        )
+    return Check(
+        "list_quality",
+        "List quality",
+        "fail",
+        f"{new_supp} new suppressions this week ({ratio:.1%}) — audit your most recent imports.",
+        5,
+    )
 
 
 def _recommendations(checks: list[Check], account, domain) -> list[str]:
@@ -196,17 +277,29 @@ def _recommendations(checks: list[Check], account, domain) -> list[str]:
     for key in ("spf", "dkim", "dmarc"):
         c = by_key.get(key)
         if c and c.status == "fail":
-            recs.append(f"Fix {key.upper()}: {c.detail} See the domain's DNS records page.")
+            recs.append(
+                f"Fix {key.upper()}: {c.detail} See the domain's DNS records page."
+            )
     if (c := by_key.get("dmarc_policy")) and c.status == "warn":
-        recs.append("Tighten DMARC to p=quarantine once a week of aggregate reports looks clean.")
+        recs.append(
+            "Tighten DMARC to p=quarantine once a week of aggregate reports looks clean."
+        )
     if (c := by_key.get("bounce_rate")) and c.status in ("warn", "fail"):
-        recs.append("Clean your contact list: remove addresses that have hard-bounced and stop importing unverified lists.")
+        recs.append(
+            "Clean your contact list: remove addresses that have hard-bounced and stop importing unverified lists."
+        )
     if (c := by_key.get("complaint_rate")) and c.status in ("warn", "fail"):
-        recs.append("Only send to recipients who opted in recently, and make unsubscribe obvious in every email.")
+        recs.append(
+            "Only send to recipients who opted in recently, and make unsubscribe obvious in every email."
+        )
     if (c := by_key.get("list_quality")) and c.status in ("warn", "fail"):
-        recs.append("Review the contacts imported most recently — a spike in suppressions usually traces to one bad batch.")
+        recs.append(
+            "Review the contacts imported most recently — a spike in suppressions usually traces to one bad batch."
+        )
     if (c := by_key.get("sending_reputation")) and c.status == "fail":
-        recs.append("Sending is halted. Resolve the underlying bounce/complaint issue, then ask an operator to reset your reputation.")
+        recs.append(
+            "Sending is halted. Resolve the underlying bounce/complaint issue, then ask an operator to reset your reputation."
+        )
 
     # Week-over-week bounce delta from snapshots.
     prev = (
@@ -217,7 +310,11 @@ def _recommendations(checks: list[Check], account, domain) -> list[str]:
     )
     if prev:
         prev_bounce = next(
-            (c for c in prev.checks if c.get("key") == "bounce_rate" and c.get("status") != "na"),
+            (
+                c
+                for c in prev.checks
+                if c.get("key") == "bounce_rate" and c.get("status") != "na"
+            ),
             None,
         )
         cur_bounce = by_key.get("bounce_rate")
@@ -240,7 +337,9 @@ def compute_score(account, domain: EmailDomain | None = None) -> Score:
         domains = [domain] if domain.status == EmailDomain.Status.VERIFIED else []
     else:
         domains = list(
-            EmailDomain.objects.filter(account=account, status=EmailDomain.Status.VERIFIED)
+            EmailDomain.objects.filter(
+                account=account, status=EmailDomain.Status.VERIFIED
+            )
         )
 
     checks: list[Check] = []

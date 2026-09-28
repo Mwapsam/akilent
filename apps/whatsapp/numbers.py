@@ -15,8 +15,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_POST
 
-from apps.core.utils import is_operator
 from apps.accounts.utils import get_current_account, is_ajax
+from apps.core.utils import is_operator
 from apps.whatsapp.models import MessageLog
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 from apps.whatsapp.registration import register_number
@@ -59,9 +59,7 @@ def numbers_list(request):
     )
     embedded_enabled = bool(settings.WHATSAPP_APP_ID and settings.WHATSAPP_CONFIG_ID)
 
-    active_number = next(
-        (n for n in numbers if n.is_active and n.access_token), None
-    )
+    active_number = next((n for n in numbers if n.is_active and n.access_token), None)
     needs_registration = bool(active_number and not active_number.is_ready)
 
     from apps.billing import api as billing_api
@@ -102,7 +100,10 @@ def numbers_list(request):
             "console": console,
             "setup_error": get_setup_error(request),
             "onboarding_complete": bool(
-                numbers and console.required_complete and inbound_seen and module_enabled
+                numbers
+                and console.required_complete
+                and inbound_seen
+                and module_enabled
             ),
             "active_number": active_number,
             "needs_registration": needs_registration,
@@ -114,7 +115,9 @@ def numbers_list(request):
     )
 
 
-def finish_embedded_connection(request, account, token, phone_number_id, waba_id, business_id):
+def finish_embedded_connection(
+    request, account, token, phone_number_id, waba_id, business_id
+):
     """Shared tail of Embedded Signup: register the number and store it.
 
     Used by both the popup flow (``connect_complete``, which already has a
@@ -137,6 +140,7 @@ def finish_embedded_connection(request, account, token, phone_number_id, waba_id
 
     if existing is None:
         from apps.billing.limits import LimitChecker, PlanLimitExceeded
+
         try:
             LimitChecker(account).check_whatsapp_number()
         except PlanLimitExceeded as exc:
@@ -163,7 +167,8 @@ def finish_embedded_connection(request, account, token, phone_number_id, waba_id
     )
     logger.info(
         "finish_embedded_connection: connected number %s for account %s",
-        phone_number_id, account.pk,
+        phone_number_id,
+        account.pk,
     )
 
     # Register on the Cloud API so it can send (Tech Provider flow). The outcome
@@ -226,7 +231,9 @@ def connect_complete(request):
         token = exchange_code_for_token(code)
     except EmbeddedSignupError as exc:
         logger.error("connect_complete: token exchange failed: %s", exc)
-        return JsonResponse({"error": f"Could not complete onboarding: {exc}"}, status=502)
+        return JsonResponse(
+            {"error": f"Could not complete onboarding: {exc}"}, status=502
+        )
 
     ok, payload = finish_embedded_connection(
         request, account, token, phone_number_id, waba_id, business_id
@@ -257,7 +264,9 @@ def connect_redirect_start(request):
 
     clear_setup_error(request)  # a fresh attempt replaces any previous failure
     nonce = secrets.token_urlsafe(24)
-    redirect_uri = request.build_absolute_uri(reverse("whatsapp-connect-redirect-callback"))
+    redirect_uri = request.build_absolute_uri(
+        reverse("whatsapp-connect-redirect-callback")
+    )
     request.session["whatsapp_connect_state"] = nonce
     # Stored so the token exchange in connect_redirect_callback can send the
     # exact same redirect_uri Meta saw here — a mismatch (even in scheme,
@@ -322,7 +331,8 @@ def connect_redirect_callback(request):
     if not candidates:
         logger.error(
             "connect_redirect_callback: no candidates. waba_ids=%s phone_numbers_by_waba=%s",
-            waba_ids, phone_numbers_by_waba,
+            waba_ids,
+            phone_numbers_by_waba,
         )
         return redirect_with_setup_error(
             request, SetupError.NO_PHONE if waba_ids else SetupError.NO_WABA
@@ -435,11 +445,13 @@ def numbers_create(request):
         msg = f"Number {phone_number_id} added, but registration failed: {result.error}"
 
     if ajax:
-        return JsonResponse({
-            "ok": True,
-            "redirect": reverse("whatsapp-numbers"),
-            "message": msg,
-        })
+        return JsonResponse(
+            {
+                "ok": True,
+                "redirect": reverse("whatsapp-numbers"),
+                "message": msg,
+            }
+        )
 
     (messages.success if result and result.ok else messages.warning)(request, msg)
     return redirect("whatsapp-numbers")
@@ -486,8 +498,15 @@ def numbers_verify(request, pk):
     """Send a verification test message; JSON result for the setup card."""
     account = get_current_account(request)
     if account is None:
-        return JsonResponse({"ok": False, "error_code": "no_account", "action": "retry",
-                             "message": "No account."}, status=400)
+        return JsonResponse(
+            {
+                "ok": False,
+                "error_code": "no_account",
+                "action": "retry",
+                "message": "No account.",
+            },
+            status=400,
+        )
 
     from apps.whatsapp.verification import verify_connection
 

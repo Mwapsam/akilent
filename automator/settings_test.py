@@ -1,4 +1,3 @@
-
 import os
 
 from cryptography.fernet import Fernet
@@ -13,7 +12,7 @@ os.environ["WHATSAPP_ENABLED"] = "false"
 os.environ["WHATSAPP_VERIFY_TOKEN"] = "test_verify_token"
 os.environ["WHATSAPP_APP_SECRET"] = "test_app_secret"
 
-from automator.settings import *  # noqa: F401,F403,E402
+from automator.settings import *
 
 # Capture mail in django.core.mail.outbox instead of hitting SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

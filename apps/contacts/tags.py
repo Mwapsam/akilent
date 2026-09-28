@@ -8,6 +8,7 @@ Tags are created on first use. Names are trimmed and case-folded into a slug, so
 "vip" and " Vip " are one tag. Adding a tag a contact already has, or removing one they do
 not, is a quiet no-op: automations run more than once and must not error or duplicate.
 """
+
 from __future__ import annotations
 
 import re
@@ -48,7 +49,9 @@ def _get_or_create(account, name: str) -> Tag:
     if tag is not None:
         return tag
     if Tag.objects.filter(account=account).count() >= MAX_TAGS_PER_ACCOUNT:
-        raise TagError("You've reached the limit of tags. Remove ones you no longer use.")
+        raise TagError(
+            "You've reached the limit of tags. Remove ones you no longer use."
+        )
     try:
         with transaction.atomic():
             return Tag.objects.create(account=account, name=name, slug=slug)

@@ -14,7 +14,9 @@ def account(db):
 
 
 def _active_sub(account, **plan_kwargs):
-    defaults = dict(slug="p", name="P", price_monthly=Decimal("10"), max_emails_per_month=2)
+    defaults = dict(
+        slug="p", name="P", price_monthly=Decimal("10"), max_emails_per_month=2
+    )
     defaults.update(plan_kwargs)
     plan = Plan.objects.create(**defaults)  # its limits are seeded from these columns
     return Subscription.objects.create(
@@ -44,7 +46,9 @@ def test_email_quota_enforced(account):
 def test_the_same_email_is_never_counted_twice(account):
     _active_sub(account, max_emails_per_month=1)
     LimitChecker(account).check_email("email:a")
-    LimitChecker(account).check_email("email:a")  # a retry of the same message: no raise
+    LimitChecker(account).check_email(
+        "email:a"
+    )  # a retry of the same message: no raise
 
 
 @pytest.mark.django_db

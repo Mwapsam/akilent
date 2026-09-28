@@ -9,6 +9,7 @@ operator resets it. System mail (password resets, verification) is never blocked
 All functions are best-effort: a failure here must never crash a send or a
 webhook — reputation accounting degrades, delivery does not.
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,7 +62,9 @@ def record_send(account) -> None:
         _get_row(account, window_hours=th["window_hours"])
         SendReputation.objects.filter(account=account).update(sent=F("sent") + 1)
     except Exception:
-        logger.exception("record_send failed for account=%s", getattr(account, "pk", "?"))
+        logger.exception(
+            "record_send failed for account=%s", getattr(account, "pk", "?")
+        )
 
 
 def record_bounce(account, *, count: int = 1) -> None:
@@ -79,11 +82,17 @@ def _record_negative(account, *, field: str, count: int) -> None:
         th = _thresholds()
         with transaction.atomic():
             _get_row(account, window_hours=th["window_hours"])
-            SendReputation.objects.filter(account=account).update(**{field: F(field) + count})
+            SendReputation.objects.filter(account=account).update(
+                **{field: F(field) + count}
+            )
             rep = SendReputation.objects.select_for_update().get(account=account)
             _evaluate(rep, th)
     except Exception:
-        logger.exception("_record_negative(%s) failed for account=%s", field, getattr(account, "pk", "?"))
+        logger.exception(
+            "_record_negative(%s) failed for account=%s",
+            field,
+            getattr(account, "pk", "?"),
+        )
 
 
 def _evaluate(rep, th) -> None:
@@ -115,14 +124,20 @@ def _evaluate(rep, th) -> None:
             rep.save(update_fields=["state", "state_changed_at"])
             logger.warning(
                 "Account %s reputation WARNED: bounce rate %.2f%% over %d sends",
-                rep.account_id, b * 100, rep.sent,
+                rep.account_id,
+                b * 100,
+                rep.sent,
             )
 
 
 def _alert_halt(rep, reason: str) -> None:
     logger.error(
         "REPUTATION HALT: account=%s %s (sent=%d bounced=%d complained=%d)",
-        rep.account_id, reason, rep.sent, rep.bounced, rep.complained,
+        rep.account_id,
+        reason,
+        rep.sent,
+        rep.bounced,
+        rep.complained,
     )
     try:
         from apps.billing.slack import post_message
@@ -147,7 +162,10 @@ def check_can_send(account, *, system: bool = False) -> tuple[bool, str]:
         if rep is not None and rep.state == rep.State.HALTED:
             return False, rep.halted_reason or "sender reputation halt"
     except Exception:
-        logger.exception("check_can_send failed for account=%s; allowing send", getattr(account, "pk", "?"))
+        logger.exception(
+            "check_can_send failed for account=%s; allowing send",
+            getattr(account, "pk", "?"),
+        )
     return True, ""
 
 

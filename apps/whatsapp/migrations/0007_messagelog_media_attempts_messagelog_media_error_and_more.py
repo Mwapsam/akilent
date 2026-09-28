@@ -4,30 +4,31 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0006_whatsappcontact_opt_in_at_and_more'),
+        ("whatsapp", "0006_whatsappcontact_opt_in_at_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='messagelog',
-            name='media_attempts',
+            model_name="messagelog",
+            name="media_attempts",
             field=models.PositiveSmallIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='messagelog',
-            name='media_error',
-            field=models.CharField(blank=True, default='', max_length=500),
+            model_name="messagelog",
+            name="media_error",
+            field=models.CharField(blank=True, default="", max_length=500),
         ),
         migrations.AddField(
-            model_name='messagelog',
-            name='media_file',
-            field=models.FileField(blank=True, null=True, upload_to='whatsapp/media/%Y/%m/'),
+            model_name="messagelog",
+            name="media_file",
+            field=models.FileField(
+                blank=True, null=True, upload_to="whatsapp/media/%Y/%m/"
+            ),
         ),
         migrations.AddField(
-            model_name='messagelog',
-            name='media_size',
+            model_name="messagelog",
+            name="media_size",
             field=models.PositiveIntegerField(blank=True, null=True),
         ),
     ]

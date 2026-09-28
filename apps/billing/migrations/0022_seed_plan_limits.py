@@ -10,6 +10,7 @@
 
 Keys are written out here so this migration keeps meaning what it meant when it ran.
 """
+
 from django.db import migrations
 
 FROM_COLUMN = {
@@ -19,8 +20,14 @@ FROM_COLUMN = {
     "email_campaign_recipients": "max_bulk_recipients_per_campaign",
 }
 UNLIMITED = [
-    "whatsapp_marketing_msgs", "whatsapp_utility_msgs", "verification_codes_month",
-    "whatsapp_campaign_recipients", "emails_day", "ai_actions_day", "automation_rules", "contacts",
+    "whatsapp_marketing_msgs",
+    "whatsapp_utility_msgs",
+    "verification_codes_month",
+    "whatsapp_campaign_recipients",
+    "emails_day",
+    "ai_actions_day",
+    "automation_rules",
+    "contacts",
     "team_members",
 ]
 
@@ -33,15 +40,24 @@ def forwards(apps, schema_editor):
 
     for plan in Plan.objects.all():
         for key, column in FROM_COLUMN.items():
-            PlanLimit.objects.get_or_create(plan=plan, key=key, defaults={"value": getattr(plan, column)})
+            PlanLimit.objects.get_or_create(
+                plan=plan, key=key, defaults={"value": getattr(plan, column)}
+            )
         for key in UNLIMITED:
             PlanLimit.objects.get_or_create(plan=plan, key=key, defaults={"value": -1})
 
     for row in UsageSummary.objects.all():
-        for key, used in (("conversations_month", row.conversations_used), ("emails_month", row.emails_used)):
+        for key, used in (
+            ("conversations_month", row.conversations_used),
+            ("emails_month", row.emails_used),
+        ):
             if used:
-                UsageCounter.objects.get_or_create(account_id=row.account_id, key=key,
-                                                   period_start=row.period_start, defaults={"used": used})
+                UsageCounter.objects.get_or_create(
+                    account_id=row.account_id,
+                    key=key,
+                    period_start=row.period_start,
+                    defaults={"used": used},
+                )
 
 
 def backwards(apps, schema_editor):

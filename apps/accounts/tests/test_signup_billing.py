@@ -30,7 +30,10 @@ def _payload(**overrides):
 @pytest.fixture
 def trial_plan(db):
     return Plan.objects.create(
-        slug=Plan.TRIAL, name="Trial", price_monthly=0, trial_days=14,
+        slug=Plan.TRIAL,
+        name="Trial",
+        price_monthly=0,
+        trial_days=14,
         service_type=Plan.SERVICE_BOTH,
     )
 
@@ -38,8 +41,11 @@ def trial_plan(db):
 @pytest.fixture
 def paid_plan(db):
     return Plan.objects.create(
-        slug=Plan.STARTER, name="Starter", price_monthly=19,
-        service_type=Plan.SERVICE_EMAIL, trial_days=0,
+        slug=Plan.STARTER,
+        name="Starter",
+        price_monthly=19,
+        service_type=Plan.SERVICE_EMAIL,
+        trial_days=0,
     )
 
 
@@ -48,14 +54,19 @@ def paid_plan_with_long_trial(db):
     """Deliberately carries a generous trial_days — must be ignored: a paid
     plan chosen at signup is billed immediately, with no grace period."""
     return Plan.objects.create(
-        slug=Plan.STARTER, name="Starter", price_monthly=19,
-        service_type=Plan.SERVICE_EMAIL, trial_days=365,
+        slug=Plan.STARTER,
+        name="Starter",
+        price_monthly=19,
+        service_type=Plan.SERVICE_EMAIL,
+        trial_days=365,
     )
 
 
 @pytest.mark.django_db
 def test_free_plan_signup_skips_checkout(client, trial_plan):
-    resp = client.post(SIGNUP_URL, _payload(plan=Plan.TRIAL, selected_services=Account.Services.BOTH))
+    resp = client.post(
+        SIGNUP_URL, _payload(plan=Plan.TRIAL, selected_services=Account.Services.BOTH)
+    )
     assert resp.status_code == 302
     assert not resp.url.startswith("/billing/checkout/")
 
@@ -81,7 +92,9 @@ def test_paid_plan_signup_redirects_to_checkout(client, trial_plan, paid_plan):
 
 
 @pytest.mark.django_db
-def test_paid_plan_with_trial_days_still_bills_immediately(client, trial_plan, paid_plan_with_long_trial):
+def test_paid_plan_with_trial_days_still_bills_immediately(
+    client, trial_plan, paid_plan_with_long_trial
+):
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302
     assert resp.url.startswith("/billing/checkout/")

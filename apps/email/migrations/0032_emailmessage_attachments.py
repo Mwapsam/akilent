@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0031_emailtemplatelocale'),
+        ("email_service", "0031_emailtemplatelocale"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emailmessage',
-            name='attachments',
+            model_name="emailmessage",
+            name="attachments",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

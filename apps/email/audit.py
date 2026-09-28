@@ -8,6 +8,7 @@ the services layer.
 Best-effort: a DB write failure logs an error but never raises, so an audit
 failure never blocks the operation being audited.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,7 @@ def record(
     action: str,
     resource_type: str,
     resource_id: str,
-    actor: "AbstractBaseUser | None" = None,
+    actor: AbstractBaseUser | None = None,
     success: bool = True,
     error: str = "",
     metadata: dict[str, Any] | None = None,

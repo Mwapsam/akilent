@@ -19,6 +19,7 @@ Rhythm: at most one automatic reply per customer message, none within ``TEAM_QUI
 reply from the team (a person or an automation), and after ``MAX_IN_A_ROW`` automatic replies in a
 row a person takes over.
 """
+
 from __future__ import annotations
 
 import re
@@ -59,18 +60,25 @@ _LINK = re.compile(r"(?:https?://|www\.)\S+", re.I)
 @dataclass
 class Decision:
     send: bool
-    checks: list = field(default_factory=list)   # [{"name", "ok", "detail", "value"?}]
+    checks: list = field(default_factory=list)  # [{"name", "ok", "detail", "value"?}]
 
     @property
     def first_failure(self) -> dict | None:
         return next((c for c in self.checks if not c["ok"]), None)
 
     def as_dict(self) -> dict:
-        return {"send": self.send, "checks": self.checks, "decided_at": timezone.now().isoformat()}
+        return {
+            "send": self.send,
+            "checks": self.checks,
+            "decided_at": timezone.now().isoformat(),
+        }
 
 
 def confidence_label(threshold: float) -> str:
-    return next((label for value, label in CONFIDENCE_CHOICES if abs(value - threshold) < 1e-6), "Careful")
+    return next(
+        (label for value, label in CONFIDENCE_CHOICES if abs(value - threshold) < 1e-6),
+        "Careful",
+    )
 
 
 def locked_topics(account, facts: dict | None = None) -> dict:
@@ -114,22 +122,51 @@ def unsupported_facts(reply: str, facts: dict, extra_text: str = "") -> list[str
         if business_facts.minutes_of(m) not in times:
             problems.append(m.group(0).strip())
     rest = business_facts.TIME.sub(" ", rest)
-    written = "\n".join([business_facts.written_text(facts), extra_text or "",
-                         " ".join(f"{p.get('name')} {p.get('price')}" for p in facts.get("products", []))])
+    written = "\n".join(
+        [
+            business_facts.written_text(facts),
+            extra_text or "",
+            " ".join(
+                f"{p.get('name')} {p.get('price')}" for p in facts.get("products", [])
+            ),
+        ]
+    )
     known = _plain_numbers(written)
-    problems += [n for n in _NUMBER.findall(rest) if not all(p in known for p in _plain_numbers(n))]
+    problems += [
+        n
+        for n in _NUMBER.findall(rest)
+        if not all(p in known for p in _plain_numbers(n))
+    ]
     lowered = written.lower()
-    problems += [link for link in _LINK.findall(reply) if link.lower().rstrip(".,)") not in lowered]
+    problems += [
+        link
+        for link in _LINK.findall(reply)
+        if link.lower().rstrip(".,)") not in lowered
+    ]
     return problems
 
 
 def is_auto_mode(ai_settings) -> bool:
-    return bool(ai_settings and ai_settings.enabled and ai_settings.reply_mode == "auto"
-                and getattr(settings, "AI_AUTONOMY_ENABLED", True))
+    return bool(
+        ai_settings
+        and ai_settings.enabled
+        and ai_settings.reply_mode == "auto"
+        and getattr(settings, "AI_AUTONOMY_ENABLED", True)
+    )
 
 
-def evaluate(*, ai_settings, proposal: dict, conversation, automatic: bool, window_open: bool,
-             facts: dict, extra_text: str = "", trigger_message_id=None, now=None) -> Decision:
+def evaluate(
+    *,
+    ai_settings,
+    proposal: dict,
+    conversation,
+    automatic: bool,
+    window_open: bool,
+    facts: dict,
+    extra_text: str = "",
+    trigger_message_id=None,
+    now=None,
+) -> Decision:
     """Every check, in order, for sending ``proposal`` (the validated contract) without a person."""
     from apps.accounts import business_hours
     from apps.ai.models import AIProposal
@@ -146,11 +183,25 @@ def evaluate(*, ai_settings, proposal: dict, conversation, automatic: bool, wind
     confidence = proposal.get("confidence")
     threshold = ai_settings.auto_min_confidence if ai_settings else 1.0
     on = is_auto_mode(ai_settings)
-    check("switched_on", on, "Automatic replies are on." if on else "Automatic replies are off.")
-    check("automatic", automatic,
-          "Answering a customer's message." if automatic else "A teammate asked for this suggestion.")
-    check("plain_reply", proposal.get("action") == "reply",
-          "A normal reply." if proposal.get("action") == "reply" else "Templates and hand-offs always need a person.")
+    check(
+        "switched_on",
+        on,
+        "Automatic replies are on." if on else "Automatic replies are off.",
+    )
+    check(
+        "automatic",
+        automatic,
+        "Answering a customer's message."
+        if automatic
+        else "A teammate asked for this suggestion.",
+    )
+    check(
+        "plain_reply",
+        proposal.get("action") == "reply",
+        "A normal reply."
+        if proposal.get("action") == "reply"
+        else "Templates and hand-offs always need a person.",
+    )
     locked = locked_topics(conversation.account, facts)
     allowed = intent in topics and intent in TOPICS and intent not in locked
     if allowed:
@@ -161,36 +212,84 @@ def evaluate(*, ai_settings, proposal: dict, conversation, automatic: bool, wind
         topic_detail = f"About {TOPICS.get(intent, 'something you haven’t chosen').lower()}, which isn't on your list."
     check("allowed_topic", allowed, topic_detail, value=intent)
     sure = confidence is not None and confidence >= threshold
-    check("confident", sure,
-          "AI was sure enough." if sure else f"AI wasn't sure enough for “{confidence_label(threshold)}”.",
-          value={"confidence": confidence, "needed": threshold})
-    check("window_open", window_open,
-          "The 24-hour reply window is open." if window_open else "The 24-hour reply window has closed.")
-    check("not_assigned", conversation.assigned_to_id is None,
-          "Nobody on the team has taken this conversation." if conversation.assigned_to_id is None
-          else "A teammate has taken this conversation.")
+    check(
+        "confident",
+        sure,
+        "AI was sure enough."
+        if sure
+        else f"AI wasn't sure enough for “{confidence_label(threshold)}”.",
+        value={"confidence": confidence, "needed": threshold},
+    )
+    check(
+        "window_open",
+        window_open,
+        "The 24-hour reply window is open."
+        if window_open
+        else "The 24-hour reply window has closed.",
+    )
+    check(
+        "not_assigned",
+        conversation.assigned_to_id is None,
+        "Nobody on the team has taken this conversation."
+        if conversation.assigned_to_id is None
+        else "A teammate has taken this conversation.",
+    )
     team_at = last_team_reply_at(conversation)
     quiet = team_at is None or now - team_at >= timedelta(minutes=TEAM_QUIET_MINUTES)
-    check("team_quiet", quiet,
-          "Your team hasn't replied in the last few minutes." if quiet
-          else "Your team replied a few minutes ago, so AI stays out of it.")
+    check(
+        "team_quiet",
+        quiet,
+        "Your team hasn't replied in the last few minutes."
+        if quiet
+        else "Your team replied a few minutes ago, so AI stays out of it.",
+    )
     if ai_settings and ai_settings.auto_only_when_closed:
         open_now = business_hours.is_open(conversation.account, now)
-        check("closed_now", not open_now,
-              "You're closed, so AI answers." if not open_now else "You're open, so your team answers.")
-    auto = AIProposal.objects.filter(conversation=conversation, auto_sent_at__isnull=False)
-    already = bool(trigger_message_id) and auto.filter(trigger_message_id=trigger_message_id).exists()
-    check("one_per_message", not already,
-          "One reply to this message." if not already else "AI already answered this message.")
-    in_a_row = auto.filter(auto_sent_at__gt=team_at).count() if team_at else auto.count()
-    check("in_a_row", in_a_row < MAX_IN_A_ROW,
-          f"{in_a_row} automatic replies since your team last replied." if in_a_row < MAX_IN_A_ROW
-          else f"AI has answered {in_a_row} times in a row. Time for a person.", value=in_a_row)
-    missing = unsupported_facts((proposal.get("payload") or {}).get("text", ""), facts, extra_text)
-    check("facts", not missing,
-          "Every price, time, number and link checks out against your facts." if not missing
-          else "Mentions " + ", ".join(missing[:3]) + ", which couldn't be checked against your facts.",
-          value=missing[:10])
+        check(
+            "closed_now",
+            not open_now,
+            "You're closed, so AI answers."
+            if not open_now
+            else "You're open, so your team answers.",
+        )
+    auto = AIProposal.objects.filter(
+        conversation=conversation, auto_sent_at__isnull=False
+    )
+    already = (
+        bool(trigger_message_id)
+        and auto.filter(trigger_message_id=trigger_message_id).exists()
+    )
+    check(
+        "one_per_message",
+        not already,
+        "One reply to this message."
+        if not already
+        else "AI already answered this message.",
+    )
+    in_a_row = (
+        auto.filter(auto_sent_at__gt=team_at).count() if team_at else auto.count()
+    )
+    check(
+        "in_a_row",
+        in_a_row < MAX_IN_A_ROW,
+        f"{in_a_row} automatic replies since your team last replied."
+        if in_a_row < MAX_IN_A_ROW
+        else f"AI has answered {in_a_row} times in a row. Time for a person.",
+        value=in_a_row,
+    )
+    missing = unsupported_facts(
+        (proposal.get("payload") or {}).get("text", ""), facts, extra_text
+    )
+    check(
+        "facts",
+        not missing,
+        "Every price, time, number and link checks out against your facts."
+        if not missing
+        else "Mentions "
+        + ", ".join(missing[:3])
+        + ", which couldn't be checked against your facts.",
+        value=missing[:10],
+    )
     return Decision(send=all(c["ok"] for c in checks), checks=checks)
 
 

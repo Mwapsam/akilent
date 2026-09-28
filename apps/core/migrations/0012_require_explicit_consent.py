@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0011_mailprovidersettings_reputation_bounce_halt_and_more'),
+        ("core", "0011_mailprovidersettings_reputation_bounce_halt_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='require_explicit_consent',
-            field=models.BooleanField(default=False, help_text='Refuse campaign recipients whose Contact has no recorded opt-in. Opted-out contacts are always refused regardless of this setting. Leave off until imported lists carry a consent attestation, otherwise every pre-consent contact becomes unmailable.'),
+            model_name="mailprovidersettings",
+            name="require_explicit_consent",
+            field=models.BooleanField(
+                default=False,
+                help_text="Refuse campaign recipients whose Contact has no recorded opt-in. Opted-out contacts are always refused regardless of this setting. Leave off until imported lists carry a consent attestation, otherwise every pre-consent contact becomes unmailable.",
+            ),
         ),
     ]

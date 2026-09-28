@@ -5,28 +5,80 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0016_drop_mailbox_and_alias'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0016_drop_mailbox_and_alias"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SuppressionListEntry',
+            name="SuppressionListEntry",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('email', models.EmailField(max_length=254)),
-                ('reason', models.CharField(choices=[('bounce', 'Hard Bounce'), ('complaint', 'Complaint (Abuse Report)'), ('unsubscribe', 'Unsubscribed'), ('manual', 'Manually Suppressed')], default='bounce', max_length=20)),
-                ('bounce_type', models.CharField(blank=True, default='', help_text='SES bounce type: Permanent, Transient, or Undetermined', max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_suppressions', to='accounts.account')),
-                ('triggered_by_message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='suppression_entries', to='email_service.emailmessage')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("email", models.EmailField(max_length=254)),
+                (
+                    "reason",
+                    models.CharField(
+                        choices=[
+                            ("bounce", "Hard Bounce"),
+                            ("complaint", "Complaint (Abuse Report)"),
+                            ("unsubscribe", "Unsubscribed"),
+                            ("manual", "Manually Suppressed"),
+                        ],
+                        default="bounce",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "bounce_type",
+                    models.CharField(
+                        blank=True,
+                        default="",
+                        help_text="SES bounce type: Permanent, Transient, or Undetermined",
+                        max_length=20,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_suppressions",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "triggered_by_message",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="suppression_entries",
+                        to="email_service.emailmessage",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['account', 'email'], name='email_servi_account_4a49f1_idx'), models.Index(fields=['account', 'reason'], name='email_servi_account_e48176_idx')],
-                'unique_together': {('account', 'email')},
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["account", "email"],
+                        name="email_servi_account_4a49f1_idx",
+                    ),
+                    models.Index(
+                        fields=["account", "reason"],
+                        name="email_servi_account_e48176_idx",
+                    ),
+                ],
+                "unique_together": {("account", "email")},
             },
         ),
     ]

@@ -13,6 +13,7 @@ Built-in aliases:
 Custom providers — set MAIL_PROVIDER_BACKEND to a full dotted import path:
     MAIL_PROVIDER_BACKEND=myapp.mail.providers.MailcowProvider
 """
+
 import importlib
 import logging
 
@@ -20,14 +21,6 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-from .base import (
-    DkimResult,
-    EmailProvider,
-    MailProvider,
-    MailProviderError,
-    ProvisionResult,
-)
-from .send_base import EmailSendProvider
 from apps.email.exceptions import EmailProviderError
 from apps.email.types import (
     AliasInfo,
@@ -40,15 +33,24 @@ from apps.email.types import (
     SendResult,
 )
 
+from .base import (
+    DkimResult,
+    EmailProvider,
+    MailProvider,
+    MailProviderError,
+    ProvisionResult,
+)
+from .send_base import EmailSendProvider
+
 _ALIASES: dict[str, str] = {
     "stalwart": "apps.email.providers.stalwart.StalwartProvider",
-    "ses":      "apps.email.providers.ses.SesProvider",
-    "null":     "apps.email.providers.null.NullProvider",
+    "ses": "apps.email.providers.ses.SesProvider",
+    "null": "apps.email.providers.null.NullProvider",
 }
 
 _SEND_ALIASES: dict[str, str] = {
     "smtp": "apps.email.providers.smtp.SmtpSendProvider",
-    "ses":  "apps.email.providers.ses.SesSendProvider",
+    "ses": "apps.email.providers.ses.SesSendProvider",
     "null": "apps.email.providers.null.NullSendProvider",
     "sandbox": "apps.email.providers.sandbox.SandboxSendProvider",
 }
@@ -67,12 +69,15 @@ def get_mail_provider() -> EmailProvider:
     backend: str | None = None
     try:
         from apps.core.models import MailProviderSettings
+
         settings_obj = MailProviderSettings.load()
         backend = settings_obj.infra_backend
         logger.debug(f"Using mail provider backend from DB: {backend}")
     except Exception as e:
         # Fall back to env var if DB read fails (e.g., migrations not yet run)
-        logger.debug(f"Could not read MailProviderSettings from DB ({e}), falling back to env var")
+        logger.debug(
+            f"Could not read MailProviderSettings from DB ({e}), falling back to env var"
+        )
         backend = getattr(settings, "MAIL_PROVIDER_BACKEND", "stalwart")
 
     dotted = _ALIASES.get(backend, backend)
@@ -86,9 +91,7 @@ def get_mail_provider() -> EmailProvider:
         module = importlib.import_module(module_path)
         cls: type[EmailProvider] = getattr(module, class_name)
     except (ImportError, AttributeError) as exc:
-        raise ValueError(
-            f"Cannot load mail provider {dotted!r}: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot load mail provider {dotted!r}: {exc}") from exc
     return cls()
 
 
@@ -107,12 +110,15 @@ def get_send_provider(mode: str = "live") -> EmailSendProvider:
     backend: str | None = None
     try:
         from apps.core.models import MailProviderSettings
+
         settings_obj = MailProviderSettings.load()
         backend = settings_obj.send_backend
         logger.debug(f"Using send provider backend from DB: {backend}")
     except Exception as e:
         # Fall back to env var if DB read fails (e.g., migrations not yet run)
-        logger.debug(f"Could not read MailProviderSettings from DB ({e}), falling back to env var")
+        logger.debug(
+            f"Could not read MailProviderSettings from DB ({e}), falling back to env var"
+        )
         backend = getattr(settings, "EMAIL_SEND_PROVIDER_BACKEND", "smtp")
 
     dotted = _SEND_ALIASES.get(backend, backend)
@@ -126,9 +132,7 @@ def get_send_provider(mode: str = "live") -> EmailSendProvider:
         module = importlib.import_module(module_path)
         cls: type[EmailSendProvider] = getattr(module, class_name)
     except (ImportError, AttributeError) as exc:
-        raise ValueError(
-            f"Cannot load send provider {dotted!r}: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot load send provider {dotted!r}: {exc}") from exc
     return cls()
 
 
@@ -138,11 +142,11 @@ __all__ = [
     "get_send_provider",
     # Abstract interface
     "EmailProvider",
-    "MailProvider",          # backwards-compat alias
+    "MailProvider",  # backwards-compat alias
     "EmailSendProvider",
     # Exceptions
     "EmailProviderError",
-    "MailProviderError",     # backwards-compat alias
+    "MailProviderError",  # backwards-compat alias
     # Legacy result shims
     "ProvisionResult",
     "DkimResult",

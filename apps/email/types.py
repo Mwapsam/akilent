@@ -5,24 +5,25 @@ provider-specific dicts. This is the contract between the provider layer and
 Django business logic: swapping the mail server requires only a new provider
 class; services, views, and tasks remain unchanged.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class MailboxStatus(str, Enum):
-    ACTIVE    = "active"
+class MailboxStatus(StrEnum):
+    ACTIVE = "active"
     SUSPENDED = "suspended"
-    PENDING   = "pending"
+    PENDING = "pending"
 
 
-class DomainStatus(str, Enum):
-    ACTIVE   = "active"
+class DomainStatus(StrEnum):
+    ACTIVE = "active"
     DISABLED = "disabled"
-    PENDING  = "pending"
+    PENDING = "pending"
 
 
 @dataclass(frozen=True)
@@ -34,9 +35,9 @@ class DkimRecord:
     """
 
     selector: str
-    algorithm: str        # e.g. "rsa-sha256"
-    public_key_txt: str   # full DNS TXT value: "v=DKIM1; k=rsa; p=..."
-    record_name: str      # e.g. "dkim._domainkey.example.com"
+    algorithm: str  # e.g. "rsa-sha256"
+    public_key_txt: str  # full DNS TXT value: "v=DKIM1; k=rsa; p=..."
+    record_name: str  # e.g. "dkim._domainkey.example.com"
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ class QuotaInfo:
     """Mailbox storage quota details."""
 
     used_mb: float
-    limit_mb: int         # 0 = unlimited
+    limit_mb: int  # 0 = unlimited
 
     @property
     def used_percent(self) -> float:
@@ -163,7 +164,7 @@ class OutboundEmail:
     text_body: str = ""
     html_body: str = ""
     headers: dict[str, str] = field(default_factory=dict)
-    attachments: tuple["Attachment", ...] = ()
+    attachments: tuple[Attachment, ...] = ()
 
 
 @dataclass(frozen=True)

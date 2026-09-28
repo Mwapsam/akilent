@@ -1,5 +1,6 @@
 """Connect-flow error recovery: every failure branch stores a structured error
 and the numbers page renders it with a next action."""
+
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -16,14 +17,18 @@ EMB = "apps.whatsapp.embedded"
 
 @override_settings(
     ROOT_URLCONF="apps.whatsapp.tests.urls_enabled",
-    WHATSAPP_APP_ID="app", WHATSAPP_CONFIG_ID="cfg", WHATSAPP_GRAPH_VERSION="v21.0",
+    WHATSAPP_APP_ID="app",
+    WHATSAPP_CONFIG_ID="cfg",
+    WHATSAPP_GRAPH_VERSION="v21.0",
 )
 class ConnectCallbackErrorTest(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.user = User.objects.create_user("u", password="p")
         self.client.force_login(self.user)
-        p = patch("apps.whatsapp.numbers.get_current_account", return_value=self.account)
+        p = patch(
+            "apps.whatsapp.numbers.get_current_account", return_value=self.account
+        )
         p.start()
         self.addCleanup(p.stop)
 
@@ -32,10 +37,15 @@ class ConnectCallbackErrorTest(TestCase):
         from apps.billing.models import Plan, Subscription
 
         plan = Plan.objects.first() or Plan.objects.create(
-            name="Test Plan", slug="test-plan", price_monthly=0, max_whatsapp_numbers=5,
+            name="Test Plan",
+            slug="test-plan",
+            price_monthly=0,
+            max_whatsapp_numbers=5,
         )
         Subscription.objects.create(
-            account=self.account, plan=plan, status=Subscription.ACTIVE,
+            account=self.account,
+            plan=plan,
+            status=Subscription.ACTIVE,
             current_period_start=timezone.now(),
         )
 
@@ -73,7 +83,9 @@ class ConnectCallbackErrorTest(TestCase):
 
     def test_cancelled_shows_connect_cta_and_meta_detail(self):
         self._arm_state()
-        self.client.get(CALLBACK, {"state": "nonce", "error_description": "User denied"})
+        self.client.get(
+            CALLBACK, {"state": "nonce", "error_description": "User denied"}
+        )
         self.assertEqual(self._stored(), SetupError.CANCELLED)
         body = self._numbers_page()
         self.assertIn("WhatsApp setup wasn&#x27;t completed", body)
@@ -95,7 +107,10 @@ class ConnectCallbackErrorTest(TestCase):
 
     def test_token_exchange_failure_keeps_meta_message(self):
         self._arm_state()
-        with patch(f"{EMB}.exchange_code_for_token", side_effect=EmbeddedSignupError("bad code")):
+        with patch(
+            f"{EMB}.exchange_code_for_token",
+            side_effect=EmbeddedSignupError("bad code"),
+        ):
             self.client.get(CALLBACK, {"state": "nonce", "code": "c"})
         stored = self.client.session[SESSION_KEY]
         self.assertEqual(stored["code"], SetupError.TOKEN_EXCHANGE_FAILED)
@@ -106,13 +121,19 @@ class ConnectCallbackErrorTest(TestCase):
 
     def test_no_waba(self):
         self._arm_state()
-        with patch(f"{EMB}.exchange_code_for_token", return_value="T"), self._discover([], {}):
+        with (
+            patch(f"{EMB}.exchange_code_for_token", return_value="T"),
+            self._discover([], {}),
+        ):
             self.client.get(CALLBACK, {"state": "nonce", "code": "c"})
         self.assertEqual(self._stored(), SetupError.NO_WABA)
 
     def test_waba_without_phone(self):
         self._arm_state()
-        with patch(f"{EMB}.exchange_code_for_token", return_value="T"), self._discover(["W"], {}):
+        with (
+            patch(f"{EMB}.exchange_code_for_token", return_value="T"),
+            self._discover(["W"], {}),
+        ):
             self.client.get(CALLBACK, {"state": "nonce", "code": "c"})
         self.assertEqual(self._stored(), SetupError.NO_PHONE)
 
@@ -120,8 +141,9 @@ class ConnectCallbackErrorTest(TestCase):
         other = Account.objects.create(company_name="Other", slug="other")
         WhatsAppBusinessNumber.objects.create(account=other, phone_number_id="P1")
         self._arm_state()
-        with patch(f"{EMB}.exchange_code_for_token", return_value="T"), self._discover(
-            ["W"], {"W": [{"id": "P1"}]}
+        with (
+            patch(f"{EMB}.exchange_code_for_token", return_value="T"),
+            self._discover(["W"], {"W": [{"id": "P1"}]}),
         ):
             self.client.get(CALLBACK, {"state": "nonce", "code": "c"})
         stored = self.client.session[SESSION_KEY]
@@ -133,19 +155,24 @@ class ConnectCallbackErrorTest(TestCase):
         s[SESSION_KEY] = {"code": SetupError.CANCELLED, "detail": ""}
         s.save()
         self._arm_state()
-        with patch(f"{EMB}.exchange_code_for_token", return_value="T"), self._discover(
-            ["W"], {"W": [{"id": "P1"}]}
-        ), patch(f"{EMB}.subscribe_app_to_waba"), patch(
-            "apps.whatsapp.registration.register_phone_number"
+        with (
+            patch(f"{EMB}.exchange_code_for_token", return_value="T"),
+            self._discover(["W"], {"W": [{"id": "P1"}]}),
+            patch(f"{EMB}.subscribe_app_to_waba"),
+            patch("apps.whatsapp.registration.register_phone_number"),
         ):
             r = self.client.get(CALLBACK, {"state": "nonce", "code": "c"})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(r["Location"], "/whatsapp/numbers/")
         self.assertIsNone(self._stored())
-        self.assertTrue(WhatsAppBusinessNumber.objects.get(phone_number_id="P1").is_ready)
+        self.assertTrue(
+            WhatsAppBusinessNumber.objects.get(phone_number_id="P1").is_ready
+        )
 
     def test_select_expired(self):
-        r = self.client.post("/whatsapp/connect/redirect/select/", {"phone_number_id": "x"})
+        r = self.client.post(
+            "/whatsapp/connect/redirect/select/", {"phone_number_id": "x"}
+        )
         self.assertEqual(r.status_code, 302)
         self.assertEqual(self._stored(), SetupError.SELECTION_EXPIRED)
 

@@ -9,6 +9,7 @@ Duplicate detection runs before the new constraints are added. It never
 merges or deletes data automatically — an actual duplicate is a data problem
 that must be resolved by hand before this migration can proceed.
 """
+
 from __future__ import annotations
 
 from django.db import migrations, models
@@ -46,10 +47,16 @@ def _check_no_duplicates(apps, schema_editor):
     if dup_emails or dup_phones:
         lines = ["Cannot add canonical-identity constraints: duplicate Contacts found."]
         for row in dup_emails:
-            lines.append(f"  duplicate email: account={row['account_id']} email={row['email']!r} ({row['n']} contacts)")
+            lines.append(
+                f"  duplicate email: account={row['account_id']} email={row['email']!r} ({row['n']} contacts)"
+            )
         for row in dup_phones:
-            lines.append(f"  duplicate phone: account={row['account_id']} phone={row['phone']!r} ({row['n']} contacts)")
-        lines.append("Resolve these Contacts manually (merge or clear the field) before re-running this migration.")
+            lines.append(
+                f"  duplicate phone: account={row['account_id']} phone={row['phone']!r} ({row['n']} contacts)"
+            )
+        lines.append(
+            "Resolve these Contacts manually (merge or clear the field) before re-running this migration."
+        )
         raise RuntimeError("\n".join(lines))
 
 
@@ -58,7 +65,6 @@ def _noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("contacts", "0002_contact_phone_contact_contacts_co_account_dde65c_idx"),
     ]
@@ -67,9 +73,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="contact",
             name="email",
-            field=models.EmailField(blank=True, default=None, max_length=254, null=True),
+            field=models.EmailField(
+                blank=True, default=None, max_length=254, null=True
+            ),
         ),
-        migrations.RunPython(_normalize_blanks_to_null, _reverse_normalize_blanks_to_null),
+        migrations.RunPython(
+            _normalize_blanks_to_null, _reverse_normalize_blanks_to_null
+        ),
         migrations.RunPython(_check_no_duplicates, _noop_reverse),
         migrations.RemoveConstraint(
             model_name="contact",

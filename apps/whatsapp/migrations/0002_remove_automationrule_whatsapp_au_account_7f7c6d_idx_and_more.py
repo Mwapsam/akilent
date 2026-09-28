@@ -4,17 +4,16 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0001_initial'),
+        ("whatsapp", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='automationrule',
-            name='whatsapp_au_account_7f7c6d_idx',
+            model_name="automationrule",
+            name="whatsapp_au_account_7f7c6d_idx",
         ),
         migrations.DeleteModel(
-            name='AutomationRule',
+            name="AutomationRule",
         ),
     ]

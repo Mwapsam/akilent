@@ -4,6 +4,7 @@ The other webhook tests mock `_verify_sns_signature`; this one exercises the
 actual RSA/PKCS1v15 path with a self-signed cert so a regression in the
 canonical-string construction or the verify call is caught.
 """
+
 import base64
 import datetime as dt
 
@@ -22,15 +23,17 @@ CERT_URL = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc123
 @pytest.fixture
 def keypair():
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "sns.amazonaws.com")])
+    subject = issuer = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "sns.amazonaws.com")]
+    )
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1))
-        .not_valid_after(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1))
+        .not_valid_before(dt.datetime.now(dt.UTC) - dt.timedelta(days=1))
+        .not_valid_after(dt.datetime.now(dt.UTC) + dt.timedelta(days=1))
         .sign(key, hashes.SHA256())
     )
     pem = cert.public_bytes(serialization.Encoding.PEM).decode()
@@ -71,6 +74,7 @@ def _serve_cert(keypair, monkeypatch):
 
     class _Resp:
         text = pem
+
         def raise_for_status(self):
             pass
 
@@ -80,7 +84,10 @@ def _serve_cert(keypair, monkeypatch):
 @pytest.mark.parametrize("version", ["1", "2"])
 def test_valid_signature_passes(keypair, version):
     key, _ = keypair
-    assert ses_webhooks._verify_sns_signature(_signed_message(key, version=version)) is True
+    assert (
+        ses_webhooks._verify_sns_signature(_signed_message(key, version=version))
+        is True
+    )
 
 
 @pytest.mark.parametrize("version", ["1", "2"])

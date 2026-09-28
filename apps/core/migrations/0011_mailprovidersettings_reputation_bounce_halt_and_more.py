@@ -4,35 +4,49 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0010_mailprovidersettings_enable_recipient_validation_and_more'),
+        ("core", "0010_mailprovidersettings_enable_recipient_validation_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='reputation_bounce_halt',
-            field=models.FloatField(default=0.1, help_text="Bounce rate at which an account's non-system sends are halted — 0.10 = 10%"),
+            model_name="mailprovidersettings",
+            name="reputation_bounce_halt",
+            field=models.FloatField(
+                default=0.1,
+                help_text="Bounce rate at which an account's non-system sends are halted — 0.10 = 10%",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='reputation_bounce_warn',
-            field=models.FloatField(default=0.05, help_text='Bounce rate at which an account is flagged (warned) — 0.05 = 5%'),
+            model_name="mailprovidersettings",
+            name="reputation_bounce_warn",
+            field=models.FloatField(
+                default=0.05,
+                help_text="Bounce rate at which an account is flagged (warned) — 0.05 = 5%",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='reputation_complaint_halt',
-            field=models.FloatField(default=0.005, help_text="Complaint rate at which an account's non-system sends are halted — 0.005 = 0.5%"),
+            model_name="mailprovidersettings",
+            name="reputation_complaint_halt",
+            field=models.FloatField(
+                default=0.005,
+                help_text="Complaint rate at which an account's non-system sends are halted — 0.005 = 0.5%",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='reputation_min_volume',
-            field=models.PositiveIntegerField(default=100, help_text='Minimum sends in the window before the breaker can act (avoids tiny-sample noise)'),
+            model_name="mailprovidersettings",
+            name="reputation_min_volume",
+            field=models.PositiveIntegerField(
+                default=100,
+                help_text="Minimum sends in the window before the breaker can act (avoids tiny-sample noise)",
+            ),
         ),
         migrations.AddField(
-            model_name='mailprovidersettings',
-            name='reputation_window_hours',
-            field=models.PositiveIntegerField(default=24, help_text='Trailing window (hours) over which bounce/complaint rates are measured'),
+            model_name="mailprovidersettings",
+            name="reputation_window_hours",
+            field=models.PositiveIntegerField(
+                default=24,
+                help_text="Trailing window (hours) over which bounce/complaint rates are measured",
+            ),
         ),
     ]

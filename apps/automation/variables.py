@@ -14,6 +14,7 @@ A blank is described in a step's ``variable_mapping`` as one of:
 * anything else: fixed text, **identical for every customer**. Kept so existing automations keep
   working, but the setup screen only offers it as an explicit, warned choice.
 """
+
 from __future__ import annotations
 
 # What the setup screen offers, in order: (choice key, source, label, default fallback).
@@ -31,7 +32,15 @@ _BY_KEY = {key: (source, label, fallback) for key, source, label, fallback in CH
 
 _CONTACT_FIELDS = ("first_name", "last_name", "full_name", "phone", "email")
 _NAME_LIKE = ("name", "first", "customer", "client", "person")
-_BUSINESS_LIKE = ("company", "business", "shop", "store", "brand", "organisation", "organization")
+_BUSINESS_LIKE = (
+    "company",
+    "business",
+    "shop",
+    "store",
+    "brand",
+    "organisation",
+    "organization",
+)
 
 
 def merge_first_name(text: str, first_name: str) -> str:
@@ -40,8 +49,11 @@ def merge_first_name(text: str, first_name: str) -> str:
 
 
 BUSINESS_PLACEHOLDERS = {
-    "{location}": "location", "{payment_methods}": "payment_methods", "{website}": "website",
-    "{delivery}": "delivery", "{opening_hours}": "opening_hours",
+    "{location}": "location",
+    "{payment_methods}": "payment_methods",
+    "{website}": "website",
+    "{delivery}": "delivery",
+    "{opening_hours}": "opening_hours",
 }
 
 
@@ -99,7 +111,7 @@ def is_fixed_text(source) -> bool:
 def read_source(source: str, *, contact, account, context: dict):
     """The value of ``source`` for this customer, or None if they have none."""
     if source.startswith("contact."):
-        attr = source[len("contact."):]
+        attr = source[len("contact.") :]
         if attr in _CONTACT_FIELDS:
             value = getattr(contact, attr, None)
             if value:
@@ -107,28 +119,39 @@ def read_source(source: str, *, contact, account, context: dict):
         value = (contact.attributes or {}).get(attr)
         return None if value in (None, "") else str(value)
     if source.startswith("account."):
-        attr = source[len("account."):]
+        attr = source[len("account.") :]
         value = getattr(account, attr, None) if attr in ("company_name",) else None
         return str(value) if value else None
     if source.startswith("context."):
-        value = context.get(source[len("context."):])
+        value = context.get(source[len("context.") :])
         return None if value in (None, "") else str(value)
     if source.startswith("business."):
         from apps.accounts import api as accounts_api
 
-        return accounts_api.business_fact(account, source[len("business."):])
+        return accounts_api.business_fact(account, source[len("business.") :])
     return source
 
 
-def resolve(variables: list, mapping: dict, *, contact, account, context: dict,
-            fallbacks: dict | None = None) -> dict:
+def resolve(
+    variables: list,
+    mapping: dict,
+    *,
+    contact,
+    account,
+    context: dict,
+    fallbacks: dict | None = None,
+) -> dict:
     """The template params for one customer. Raises ``MissingValue`` naming the blank if one is empty."""
     params: dict = {}
     for var in variables or []:
         if var not in mapping:
             continue
         source = mapping[var]
-        value = read_source(source, contact=contact, account=account, context=context) if isinstance(source, str) else source
+        value = (
+            read_source(source, contact=contact, account=account, context=context)
+            if isinstance(source, str)
+            else source
+        )
         if value in (None, ""):
             value = (fallbacks or {}).get(var)
         if value in (None, ""):
@@ -141,5 +164,7 @@ class MissingValue(ValueError):
     """A blank has no value for this customer and no fallback, so the message must not be sent."""
 
     def __init__(self, variable: str):
-        super().__init__(f"this customer has no value for '{variable}' and no fallback is set")
+        super().__init__(
+            f"this customer has no value for '{variable}' and no fallback is set"
+        )
         self.variable = variable

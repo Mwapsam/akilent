@@ -42,7 +42,9 @@ def test_no_table_can_clip():
             if "table--cards" in tag:
                 continue
             before = source[max(0, match.start() - LOOKBEHIND) : match.start()]
-            if any(w in before for w in ("table-wrap", "table-scroll", "overflow-x-auto")):
+            if any(
+                w in before for w in ("table-wrap", "table-scroll", "overflow-x-auto")
+            ):
                 continue
             line = source[: match.start()].count("\n") + 1
             offenders.setdefault(rel, []).append(f"line {line}")

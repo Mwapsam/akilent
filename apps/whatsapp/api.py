@@ -1,16 +1,12 @@
 import logging
 import uuid
-from typing import Optional
-
-from django.core.exceptions import ObjectDoesNotExist
 
 from apps.accounts.models import Account
 from apps.whatsapp.models import (
-    MessageLog,
     OutboundMessage,
     WebhookEventLog,
-    WhatsAppContact,
     WhatsAppBusinessNumber,
+    WhatsAppContact,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,7 +24,7 @@ def get_contact(account: Account, contact_id: int) -> WhatsAppContact:
     return WhatsAppContact.objects.get(id=contact_id, account=account)
 
 
-def get_contact_by_phone(account: Account, phone_number: str) -> Optional[WhatsAppContact]:
+def get_contact_by_phone(account: Account, phone_number: str) -> WhatsAppContact | None:
     """Get a WhatsApp contact by phone number, or None if not found."""
     return WhatsAppContact.objects.filter(
         account=account, phone_number=phone_number
@@ -36,7 +32,7 @@ def get_contact_by_phone(account: Account, phone_number: str) -> Optional[WhatsA
 
 
 def get_or_create_contact(
-    account: Account, phone_number: str, display_name: Optional[str] = None
+    account: Account, phone_number: str, display_name: str | None = None
 ) -> WhatsAppContact:
     """Get or create a WhatsApp contact.
 
@@ -62,7 +58,7 @@ def send_message(
     text: str,
     message_type: str = "text",
     *,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> OutboundMessage:
     """Send a free-text WhatsApp message to a contact.
 
@@ -101,6 +97,7 @@ def send_message(
 
     # Enqueue for delivery
     from apps.whatsapp.tasks import drain_outbound_queue
+
     drain_outbound_queue.delay()
     return msg
 
@@ -110,7 +107,7 @@ def send_interactive(
     contact: WhatsAppContact,
     interactive: dict,
     *,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> OutboundMessage:
     """Queue reply buttons or a list for a contact.
 
@@ -139,6 +136,7 @@ def send_interactive(
         return msg
 
     from apps.whatsapp.tasks import drain_outbound_queue
+
     drain_outbound_queue.delay()
     return msg
 
@@ -146,7 +144,7 @@ def send_interactive(
 # --- Webhook event access---
 
 
-def get_webhook_event(event_id: int, source: Optional[str] = None) -> WebhookEventLog:
+def get_webhook_event(event_id: int, source: str | None = None) -> WebhookEventLog:
     filters = {"pk": event_id}
     if source:
         filters["source"] = source
@@ -166,7 +164,7 @@ def count_active_business_numbers(account: Account) -> int:
     ).count()
 
 
-def outbound_queue_depth(account: Optional[Account] = None) -> int:
+def outbound_queue_depth(account: Account | None = None) -> int:
     """Number of OutboundMessages still waiting to be sent.
 
     Platform-wide by default; pass an account to scope it. Cheap gauge for a
@@ -184,17 +182,18 @@ def count_conversations(account: Account) -> int:
     Used by billing to enforce plan limits on conversation capacity.
     """
     from apps.whatsapp.models import Conversation
-    return Conversation.objects.filter(
-        contact__account=account, is_open=True
-    ).count()
+
+    return Conversation.objects.filter(contact__account=account, is_open=True).count()
 
 
-def find_contact_by_phone(account: Account, phone: str) -> Optional[WhatsAppContact]:
+def find_contact_by_phone(account: Account, phone: str) -> WhatsAppContact | None:
     """The account's WhatsApp contact for ``phone``, ignoring "+", spaces and dashes."""
     digits = "".join(ch for ch in (phone or "") if ch.isdigit())
     if len(digits) < 7:
         return None
-    for contact in WhatsAppContact.objects.filter(account=account, phone_number__contains=digits[-7:]):
+    for contact in WhatsAppContact.objects.filter(
+        account=account, phone_number__contains=digits[-7:]
+    ):
         if "".join(ch for ch in contact.phone_number if ch.isdigit()) == digits:
             return contact
     return None
@@ -204,7 +203,11 @@ def free_text_window_is_open(contact: WhatsAppContact) -> bool:
     """Whether a normal (non-template) message may be sent to ``contact`` right now."""
     from apps.whatsapp.models import Conversation
 
-    conversation = Conversation.objects.filter(contact=contact).order_by("-last_message_at", "-id").first()
+    conversation = (
+        Conversation.objects.filter(contact=contact)
+        .order_by("-last_message_at", "-id")
+        .first()
+    )
     return bool(conversation and conversation.window_is_open)
 
 
@@ -225,7 +228,9 @@ def approved_template_by_name(account: Account, name: str):
     if not name:
         return None
     return MessageTemplate.objects.filter(
-        account=account, whatsapp_template_name=name, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        account=account,
+        whatsapp_template_name=name,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     ).first()
 
 
@@ -233,9 +238,15 @@ def first_approved_template(account: Account):
     """The account's first approved template by name (for a sensible default), or None."""
     from apps.whatsapp.models import MessageTemplate
 
-    return MessageTemplate.objects.filter(
-        account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-    ).exclude(whatsapp_template_name__isnull=True).order_by("name").first()
+    return (
+        MessageTemplate.objects.filter(
+            account=account,
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        )
+        .exclude(whatsapp_template_name__isnull=True)
+        .order_by("name")
+        .first()
+    )
 
 
 def template_counts(account: Account) -> dict:
@@ -244,10 +255,18 @@ def template_counts(account: Account) -> dict:
 
     from apps.whatsapp.models import MessageTemplate
 
-    rows = dict(MessageTemplate.objects.filter(account=account).values_list("approval_status")
-                .annotate(n=Count("id")).values_list("approval_status", "n"))
-    return {"total": sum(rows.values()), "approved": rows.get("approved", 0),
-            "pending": rows.get("pending", 0), "rejected": rows.get("rejected", 0)}
+    rows = dict(
+        MessageTemplate.objects.filter(account=account)
+        .values_list("approval_status")
+        .annotate(n=Count("id"))
+        .values_list("approval_status", "n")
+    )
+    return {
+        "total": sum(rows.values()),
+        "approved": rows.get("approved", 0),
+        "pending": rows.get("pending", 0),
+        "rejected": rows.get("rejected", 0),
+    }
 
 
 def validate_template_fields(**fields) -> str:
@@ -295,10 +314,16 @@ def connected_accounts() -> list[tuple]:
     from django.db.models import Min
 
     active = WhatsAppBusinessNumber.objects.filter(is_active=True).values("account")
-    rows = (WhatsAppBusinessNumber.objects.filter(account__in=active).values("account")
-            .annotate(since=Min("created_at")).order_by("since"))
+    rows = (
+        WhatsAppBusinessNumber.objects.filter(account__in=active)
+        .values("account")
+        .annotate(since=Min("created_at"))
+        .order_by("since")
+    )
     accounts = Account.objects.in_bulk([r["account"] for r in rows])
-    return [(accounts[r["account"]], r["since"]) for r in rows if r["account"] in accounts]
+    return [
+        (accounts[r["account"]], r["since"]) for r in rows if r["account"] in accounts
+    ]
 
 
 def ops_status() -> dict:
@@ -310,33 +335,56 @@ def ops_status() -> dict:
     now = timezone.now()
     events = WebhookEventLog.objects.filter(source=WebhookEventLog.Source.WHATSAPP)
     last = events.order_by("-created_at").values_list("created_at", flat=True).first()
-    oldest = (OutboundMessage.objects.filter(status=OutboundMessage.Status.QUEUED)
-              .order_by("created_at").values_list("created_at", flat=True).first())
+    oldest = (
+        OutboundMessage.objects.filter(status=OutboundMessage.Status.QUEUED)
+        .order_by("created_at")
+        .values_list("created_at", flat=True)
+        .first()
+    )
     return {
         "last_webhook_at": last,
         "unprocessed_webhooks": events.filter(processed=False).count(),
-        "queued": OutboundMessage.objects.filter(status=OutboundMessage.Status.QUEUED).count(),
-        "oldest_queued_minutes": int((now - oldest).total_seconds() // 60) if oldest else None,
+        "queued": OutboundMessage.objects.filter(
+            status=OutboundMessage.Status.QUEUED
+        ).count(),
+        "oldest_queued_minutes": int((now - oldest).total_seconds() // 60)
+        if oldest
+        else None,
         "failed_24h": OutboundMessage.objects.filter(
-            status=OutboundMessage.Status.FAILED, updated_at__gte=now - timedelta(hours=24)).count(),
+            status=OutboundMessage.Status.FAILED,
+            updated_at__gte=now - timedelta(hours=24),
+        ).count(),
     }
 
 
 # --- One-time codes (see verification_codes.py) ---
 
-from apps.whatsapp.verification_codes import VerificationCodeError  # noqa: E402  (public re-export)
 
-
-def send_verification_code(account: Account, *, phone: str, code: str, template_name: str = "",
-                           language: str = "", idempotency_key: str = "", dry_run: bool = False) -> dict:
+def send_verification_code(
+    account: Account,
+    *,
+    phone: str,
+    code: str,
+    template_name: str = "",
+    language: str = "",
+    idempotency_key: str = "",
+    dry_run: bool = False,
+) -> dict:
     """Deliver a one-time code another system made. Raises ``VerificationCodeError``."""
     from apps.whatsapp import verification_codes
 
-    return verification_codes.send_code(account, phone=phone, code=code, template_name=template_name,
-                                        language=language, idempotency_key=idempotency_key, dry_run=dry_run)
+    return verification_codes.send_code(
+        account,
+        phone=phone,
+        code=code,
+        template_name=template_name,
+        language=language,
+        idempotency_key=idempotency_key,
+        dry_run=dry_run,
+    )
 
 
-def verification_code_status(account: Account, message_id: str) -> Optional[dict]:
+def verification_code_status(account: Account, message_id: str) -> dict | None:
     """Where a code sent by ``send_verification_code`` is (queued, sent, delivered, read, failed), or None."""
     from apps.whatsapp import verification_codes
 

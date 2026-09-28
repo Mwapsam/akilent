@@ -3,14 +3,14 @@
 Handles bounce/complaint/delivery notifications from SES via SNS. Verifies SNS
 message signatures and updates the suppression list / email message status.
 """
+
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
-import os
-
 import logging
+import os
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -22,12 +22,13 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
+
 
 def _get_allowed_sns_topic_arns() -> set[str]:
     """Load allowed SNS topic ARNs from MailProviderSettings or env var.
@@ -42,6 +43,7 @@ def _get_allowed_sns_topic_arns() -> set[str]:
         # Check if DB is ready (avoid errors during migrations)
         if connections[DEFAULT_DB_ALIAS].ensure_connection() is not None:
             from apps.core.models import MailProviderSettings
+
             settings_obj = MailProviderSettings.load()
             if settings_obj.ses_sns_topic_arn:
                 return {settings_obj.ses_sns_topic_arn}
@@ -59,6 +61,7 @@ def _get_sns_topic_arn_if_allowed(topic_arn: str | None) -> bool:
         return False
     allowed = _get_allowed_sns_topic_arns()
     return topic_arn in allowed
+
 
 # AWS SNS signing certs and SubscribeURLs are always hosted on a
 # sns.<region>.amazonaws.com (or .amazonaws.com.cn) host.
@@ -111,7 +114,9 @@ def _verify_sns_signature(message: dict[str, Any]) -> bool:
             return False
 
         if not _is_valid_sns_url(cert_url, require_cert_path=True):
-            logger.warning("Rejecting SigningCertURL with untrusted host/path: %s", cert_url)
+            logger.warning(
+                "Rejecting SigningCertURL with untrusted host/path: %s", cert_url
+            )
             return False
 
         signature_version = str(message.get("SignatureVersion", "1"))
@@ -251,10 +256,18 @@ def ses_sns_webhook(request):
         else:
             allowed = _get_allowed_sns_topic_arns()
             if not allowed:
-                logger.error("No SNS topic ARNs configured in MailProviderSettings or SES_SNS_TOPIC_ARN env var")
+                logger.error(
+                    "No SNS topic ARNs configured in MailProviderSettings or SES_SNS_TOPIC_ARN env var"
+                )
             else:
-                logger.warning("Rejecting unexpected SNS TopicArn: %s (allowed: %s)", topic_arn, allowed)
-        return JsonResponse({"error": "Unexpected or unconfigured TopicArn"}, status=403)
+                logger.warning(
+                    "Rejecting unexpected SNS TopicArn: %s (allowed: %s)",
+                    topic_arn,
+                    allowed,
+                )
+        return JsonResponse(
+            {"error": "Unexpected or unconfigured TopicArn"}, status=403
+        )
 
     sns_message_id = message_data.get("MessageId") or ""
 
@@ -262,11 +275,16 @@ def ses_sns_webhook(request):
     if message_data.get("Type") == "SubscriptionConfirmation":
         subscribe_url = message_data.get("SubscribeURL")
         if not subscribe_url or not _is_valid_sns_url(subscribe_url):
-            logger.warning("Rejecting SubscribeURL with untrusted host: %s", subscribe_url)
+            logger.warning(
+                "Rejecting SubscribeURL with untrusted host: %s", subscribe_url
+            )
             return JsonResponse({"error": "Invalid SubscribeURL"}, status=400)
 
         if _already_processed(sns_message_id):
-            logger.info("Duplicate SubscriptionConfirmation MessageId=%s; ignoring", sns_message_id)
+            logger.info(
+                "Duplicate SubscriptionConfirmation MessageId=%s; ignoring",
+                sns_message_id,
+            )
             return HttpResponse("OK")
 
         logger.info("SNS SubscriptionConfirmation: %s", subscribe_url)
@@ -286,7 +304,9 @@ def ses_sns_webhook(request):
 
     # Durable-enough idempotency for notifications (cache; see note below for DB)
     if _already_processed(sns_message_id):
-        logger.info("Duplicate SNS Notification MessageId=%s; acknowledging", sns_message_id)
+        logger.info(
+            "Duplicate SNS Notification MessageId=%s; acknowledging", sns_message_id
+        )
         return HttpResponse("OK")
 
     try:
@@ -457,11 +477,13 @@ def _handle_complaint(ses_message: dict[str, Any], sns_message_id: str = "") -> 
             # Same reasoning as the bounce path: an unattributable complaint is
             # still a complaint against our SES account.
             for recipient in recipients:
-                complained = recipient.get("emailAddress") if isinstance(recipient, dict) else recipient
+                complained = (
+                    recipient.get("emailAddress")
+                    if isinstance(recipient, dict)
+                    else recipient
+                )
                 if complained:
-                    record_global_event(
-                        complained, "complaint", source="orphan_sns"
-                    )
+                    record_global_event(complained, "complaint", source="orphan_sns")
             logger.warning(
                 "SES complaint with no resolvable account (messageId=%s, sender=%s); "
                 "recorded platform-wide suppression",
@@ -514,19 +536,23 @@ def _handle_delivery(ses_message: dict[str, Any], sns_message_id: str = "") -> N
 
     # Don't resurrect a message a bounce/complaint/reject already marked FAILED —
     # out-of-order SNS delivery must not flip a hard failure back to DELIVERED.
-    updated = EmailMessage.objects.filter(
-        provider_message_id=message_id
-    ).exclude(
-        status__in=[
-            EmailMessage.Status.FAILED,
-            EmailMessage.Status.BOUNCED,
-            EmailMessage.Status.COMPLAINED,
-        ]
-    ).update(
-        status=EmailMessage.Status.DELIVERED,
+    updated = (
+        EmailMessage.objects.filter(provider_message_id=message_id)
+        .exclude(
+            status__in=[
+                EmailMessage.Status.FAILED,
+                EmailMessage.Status.BOUNCED,
+                EmailMessage.Status.COMPLAINED,
+            ]
+        )
+        .update(
+            status=EmailMessage.Status.DELIVERED,
+        )
     )
     if updated:
-        logger.info("Marked EmailMessage provider_message_id=%s as delivered", message_id)
+        logger.info(
+            "Marked EmailMessage provider_message_id=%s as delivered", message_id
+        )
     else:
         logger.warning(
             "No EmailMessage for SES messageId=%s (delivery to %s); acknowledging without update",
@@ -555,14 +581,18 @@ def _handle_reject(ses_message: dict[str, Any], sns_message_id: str = "") -> Non
         message_id, "rejected", data={"reason": reason}, sns_message_id=sns_message_id
     )
 
-    updated = EmailMessage.objects.filter(
-        provider_message_id=message_id
-    ).exclude(status=EmailMessage.Status.DELIVERED).update(
-        status=EmailMessage.Status.FAILED,
-        error=f"SES rejected: {reason}"[:5000],
+    updated = (
+        EmailMessage.objects.filter(provider_message_id=message_id)
+        .exclude(status=EmailMessage.Status.DELIVERED)
+        .update(
+            status=EmailMessage.Status.FAILED,
+            error=f"SES rejected: {reason}"[:5000],
+        )
     )
     if updated:
-        logger.info("Marked EmailMessage provider_message_id=%s FAILED (SES reject)", message_id)
+        logger.info(
+            "Marked EmailMessage provider_message_id=%s FAILED (SES reject)", message_id
+        )
 
 
 def _record_provider_events(
@@ -584,9 +614,7 @@ def _record_provider_events(
         from apps.email.models import EmailMessage
         from apps.logs.services import record_message_event
 
-        for msg in EmailMessage.objects.filter(
-            provider_message_id=provider_message_id
-        ):
+        for msg in EmailMessage.objects.filter(provider_message_id=provider_message_id):
             record_message_event(
                 msg,
                 event_type,
@@ -594,7 +622,7 @@ def _record_provider_events(
                 data=data or {},
                 provider_event_id=sns_message_id or None,
             )
-    except Exception:  # noqa: BLE001 - observability must not break the webhook
+    except Exception:
         logger.exception(
             "Failed to record MessageEvent %s for provider_message_id=%s",
             event_type,

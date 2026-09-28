@@ -21,6 +21,7 @@ a patched function may return a plain list, and ``[]`` then means "absent".
 
 The spec being checked comes from ``EmailDomain.dns_records()``.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -43,7 +44,13 @@ logger = logging.getLogger(__name__)
 _LIFETIME = 5.0
 _AUTH_LIFETIME = 3.0
 
-OK, NXDOMAIN, NOANSWER, TIMEOUT, SERVFAIL = "ok", "nxdomain", "noanswer", "timeout", "servfail"
+OK, NXDOMAIN, NOANSWER, TIMEOUT, SERVFAIL = (
+    "ok",
+    "nxdomain",
+    "noanswer",
+    "timeout",
+    "servfail",
+)
 _UNKNOWN = {TIMEOUT, SERVFAIL}  # we don't know -- never report as missing
 
 # The authoritative resolver for the zone being checked, if any.
@@ -67,6 +74,7 @@ def _status(ans) -> str:
 
 
 # ── Lookups ───────────────────────────────────────────────────────────────────
+
 
 def _run(resolver, name: str, rdtype: str) -> Answer:
     try:
@@ -149,6 +157,7 @@ def _resolve_ns(name: str) -> Answer:
 
 # ── Zone + authoritative context ──────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class ZoneInfo:
     zone: str
@@ -174,8 +183,16 @@ def detect_zone(domain: str) -> ZoneInfo:
         # SOA walk on every refresh; it's marked guessed, so it's never persisted.
         info = ZoneInfo(zone=dnshost.guess_zone(domain), guessed=True)
         ttl = 600
-    cache.set(key, {"zone": info.zone, "nameservers": info.nameservers,
-                    "host": info.host, "guessed": info.guessed}, ttl)
+    cache.set(
+        key,
+        {
+            "zone": info.zone,
+            "nameservers": info.nameservers,
+            "host": info.host,
+            "guessed": info.guessed,
+        },
+        ttl,
+    )
     return info
 
 
@@ -217,6 +234,7 @@ def authoritative(zone: str):
 
 
 # ── Diagnosis ─────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class Diag:
@@ -302,10 +320,11 @@ def _probe_misplaced(row: dict, zone: str, domain: str) -> Diag | None:
         found = _present_at(doubled, rtype)
         if found:
             return Diag(
-                False, "doubled",
+                False,
+                "doubled",
                 f"We found this record at {doubled} — your DNS host adds "
-                f"\"{zone}\" to the name automatically. Change the Name to "
-                f"\"{host}\".",
+                f'"{zone}" to the name automatically. Change the Name to '
+                f'"{host}".',
                 found,
             )
 
@@ -314,9 +333,10 @@ def _probe_misplaced(row: dict, zone: str, domain: str) -> Diag | None:
         found = _present_at(short, rtype)
         if found:
             return Diag(
-                False, "wrong_name",
+                False,
+                "wrong_name",
                 f"This was added as {short}, but it must be {name}. "
-                f"Change the Name to \"{host}\".",
+                f'Change the Name to "{host}".',
                 found,
             )
     return None
@@ -336,11 +356,13 @@ def _diagnose_spf(row: dict, zone: str, domain: str) -> Diag:
 
     if len(spfs) > 1:
         return Diag(
-            False, "multiple_spf",
+            False,
+            "multiple_spf",
             f"There are {len(spfs)} SPF records at {name}. A name may have only "
             "one: receivers treat two as an error and SPF fails for all mail. "
             "Replace them with the single combined record below.",
-            spfs, _merge_spf(spfs, required),
+            spfs,
+            _merge_spf(spfs, required),
         )
     if len(spfs) == 1:
         have = _norm(spfs[0])
@@ -348,10 +370,12 @@ def _diagnose_spf(row: dict, zone: str, domain: str) -> Diag:
         if not missing_inc:
             return Diag(True, "ok")
         return Diag(
-            False, "wrong_value",
+            False,
+            "wrong_value",
             f"Your SPF record is missing {' '.join(missing_inc)}. Edit the "
             "existing record rather than adding a second one.",
-            spfs, _merge_spf(spfs, required),
+            spfs,
+            _merge_spf(spfs, required),
         )
     if row.get("key") == "mfspf" and _resolve_cname(name):
         return _cname_conflict(name)
@@ -360,7 +384,8 @@ def _diagnose_spf(row: dict, zone: str, domain: str) -> Diag:
 
 def _cname_conflict(name: str) -> Diag:
     return Diag(
-        False, "cname_conflict",
+        False,
+        "cname_conflict",
         f"There's a CNAME record at {name}. A name with a CNAME can't have any "
         "other records, so remove the CNAME and add these instead.",
         list(_resolve_cname(name)),
@@ -380,14 +405,16 @@ def _diagnose_mx(row: dict, zone: str, domain: str) -> Diag:
         # "10 feedback-smtp…" typed into the server field.
         if any(re.sub(r"^\d+[\s.]+", "", h) == want for h in hosts):
             return Diag(
-                False, "wrong_value",
+                False,
+                "wrong_value",
                 f"The priority ended up in the mail server value. Put "
                 f"{row.get('priority') or 10} in the Priority field and only "
                 f"{want} as the mail server.",
                 found,
             )
         return Diag(
-            False, "mx_mismatch",
+            False,
+            "mx_mismatch",
             f"The MX record at {name} points somewhere else. It must point to {want}.",
             found,
         )
@@ -407,14 +434,16 @@ def _diagnose_cname(row: dict, zone: str, domain: str) -> Diag:
         if want in (_host(v) for v in cn):
             return Diag(True, "ok")
         return Diag(
-            False, "wrong_value",
+            False,
+            "wrong_value",
             f"This points to the wrong place. It must point to {want}.",
             list(cn),
         )
     txt = _resolve_txt(name)
     if txt:
         return Diag(
-            False, "wrong_type",
+            False,
+            "wrong_type",
             "This was added as a TXT record, but it must be a CNAME record. "
             "Delete it and add it again with Type CNAME.",
             list(txt),
@@ -422,7 +451,8 @@ def _diagnose_cname(row: dict, zone: str, domain: str) -> Diag:
     addrs = _resolve_a(name)
     if addrs:
         return Diag(
-            False, "proxied",
+            False,
+            "proxied",
             "Your DNS host is answering with an IP address instead of pointing "
             "to the value (proxying or CNAME flattening is on). Turn that off "
             "for this record so it resolves as a plain CNAME.",
@@ -450,7 +480,8 @@ def _diagnose_txt(row: dict, zone: str, domain: str) -> Diag:
         near = [v for v in txt if "verification" in v.lower()]
         if near:
             return Diag(
-                False, "wrong_value",
+                False,
+                "wrong_value",
                 "There's a verification record here, but not the current one. "
                 "Copy the Value again exactly as shown.",
                 near,
@@ -502,12 +533,14 @@ def check_root_spf(domain: str, zone: str = "") -> dict | None:
     if len(spfs) < 2:
         return None
     return Diag(
-        False, "multiple_spf",
+        False,
+        "multiple_spf",
         f"{domain} has {len(spfs)} SPF records. A domain may have only one: "
         "receivers treat two as an error, so SPF fails for everything you send. "
         "Akilent doesn't need an SPF record here any more — if one of these is "
-        "the \"include:amazonses.com\" record we asked for earlier, delete it.",
-        spfs, _merge_spf(spfs, []),
+        'the "include:amazonses.com" record we asked for earlier, delete it.',
+        spfs,
+        _merge_spf(spfs, []),
     ).as_dict()
 
 

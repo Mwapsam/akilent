@@ -25,7 +25,10 @@ class FlutterwaveGateway(PaymentGateway):
             # Ensure a recurring payment plan exists so the charge auto-renews monthly.
             if not plan.flutterwave_plan_id:
                 fp = fw.create_payment_plan(
-                    name=plan.name, amount=plan.price_monthly, interval="monthly", currency=currency
+                    name=plan.name,
+                    amount=plan.price_monthly,
+                    interval="monthly",
+                    currency=currency,
                 )
                 plan.flutterwave_plan_id = str(fp.get("id") or "")
                 plan.save(update_fields=["flutterwave_plan_id"])
@@ -33,14 +36,20 @@ class FlutterwaveGateway(PaymentGateway):
                 tx_ref=tx_ref,
                 amount=plan.price_monthly,
                 currency=currency,
-                customer_email=request.user.email or f"admin+{account.pk}@automator.local",
+                customer_email=request.user.email
+                or f"admin+{account.pk}@automator.local",
                 customer_name=account.company_name or request.user.username,
                 redirect_url=redirect_url,
                 payment_plan_id=plan.flutterwave_plan_id,
                 meta={"account_id": account.pk, "plan_slug": plan.slug},
             )
         except FlutterwaveError as exc:
-            logger.error("checkout: FW error for account=%s plan=%s: %s", account.pk, plan.slug, exc)
+            logger.error(
+                "checkout: FW error for account=%s plan=%s: %s",
+                account.pk,
+                plan.slug,
+                exc,
+            )
             messages.error(request, f"Payment initialization failed: {exc}")
             return redirect("/billing/plans/")
 

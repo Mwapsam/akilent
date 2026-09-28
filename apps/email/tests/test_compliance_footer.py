@@ -1,4 +1,5 @@
 """CAN-SPAM compliance footer (apps.email.services.compliance_footer)."""
+
 import pytest
 
 from apps.accounts.models import Account
@@ -78,8 +79,10 @@ def test_html_footer_appends_when_there_is_no_body_tag(account):
 def test_append_is_idempotent(account):
     """A retried send must not stack two footers."""
     text, html = append_footer(
-        "body", "<html><body><p>Hi</p></body></html>",
-        account=account, unsubscribe_url=URL,
+        "body",
+        "<html><body><p>Hi</p></body></html>",
+        account=account,
+        unsubscribe_url=URL,
     )
     text2, html2 = append_footer(text, html, account=account, unsubscribe_url=URL)
     assert html2 == html

@@ -1,12 +1,12 @@
-import pytest
 import json
-import requests
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, RequestFactory
-from apps.email.ses_webhooks import ses_sns_webhook
-from apps.email.models import SuppressionListEntry
-from apps.email.models import EmailMessage
+from unittest.mock import patch
+
+from django.test import RequestFactory, TestCase
+
 from apps.accounts.models import Account
+from apps.email.models import EmailMessage, SuppressionListEntry
+from apps.email.ses_webhooks import ses_sns_webhook
+
 
 class SesWebhookTests(TestCase):
     def setUp(self):
@@ -17,7 +17,7 @@ class SesWebhookTests(TestCase):
             provider_message_id="msg-123",
             subject="Test Subject",
             from_email="test@example.com",
-            to_email="recipient@example.com"
+            to_email="recipient@example.com",
         )
 
     def test_ses_sns_webhook_subscription_confirmation(self):
@@ -26,28 +26,45 @@ class SesWebhookTests(TestCase):
             "TopicArn": "arn:aws:sns:us-east-1:123456789:test-topic",
             "SubscribeURL": "http://example.com/confirm",
             "Signature": "valid-sig",
-            "SigningCertUrl": "http://example.com/cert"
+            "SigningCertUrl": "http://example.com/cert",
         }
 
         with patch("apps.email.ses_webhooks._verify_sns_signature", return_value=True):
-            with patch("apps.email.ses_webhooks._get_sns_topic_arn_if_allowed", return_value="arn:aws:sns:us-east-1:123456789:test-topic"):
-                with patch("apps.email.ses_webhooks._is_valid_sns_url", return_value=True):
+            with patch(
+                "apps.email.ses_webhooks._get_sns_topic_arn_if_allowed",
+                return_value="arn:aws:sns:us-east-1:123456789:test-topic",
+            ):
+                with patch(
+                    "apps.email.ses_webhooks._is_valid_sns_url", return_value=True
+                ):
                     with patch("requests.get") as mock_get:
-                        request = self.rf.post("/webhooks/ses/", data=json.dumps(payload), content_type="application/json")
+                        request = self.rf.post(
+                            "/webhooks/ses/",
+                            data=json.dumps(payload),
+                            content_type="application/json",
+                        )
                         response = ses_sns_webhook(request)
 
                         self.assertEqual(response.status_code, 200)
-                        mock_get.assert_called_once_with("http://example.com/confirm", timeout=5, allow_redirects=False)
+                        mock_get.assert_called_once_with(
+                            "http://example.com/confirm",
+                            timeout=5,
+                            allow_redirects=False,
+                        )
 
     def test_ses_sns_webhook_invalid_signature(self):
         payload = {
             "Type": "Notification",
             "Signature": "invalid-sig",
-            "SigningCertUrl": "http://example.com/cert"
+            "SigningCertUrl": "http://example.com/cert",
         }
 
         with patch("apps.email.ses_webhooks._verify_sns_signature", return_value=False):
-            request = self.rf.post("/webhooks/ses/", data=json.dumps(payload), content_type="application/json")
+            request = self.rf.post(
+                "/webhooks/ses/",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
             response = ses_sns_webhook(request)
 
             self.assertEqual(response.status_code, 403)
@@ -56,25 +73,38 @@ class SesWebhookTests(TestCase):
         payload = {
             "Type": "Notification",
             "TopicArn": "arn:aws:sns:us-east-1:123456789:test-topic",
-            "Message": json.dumps({
-                "eventType": "Bounce",
-                "bounce": {
-                    "bounceType": "Permanent",
-                    "bouncedRecipients": [{"emailAddress": "recipient@example.com"}]
-                },
-                "mail": {"messageId": "msg-123"}
-            }),
+            "Message": json.dumps(
+                {
+                    "eventType": "Bounce",
+                    "bounce": {
+                        "bounceType": "Permanent",
+                        "bouncedRecipients": [
+                            {"emailAddress": "recipient@example.com"}
+                        ],
+                    },
+                    "mail": {"messageId": "msg-123"},
+                }
+            ),
             "Signature": "valid-sig",
-            "SigningCertUrl": "http://example.com/cert"
+            "SigningCertUrl": "http://example.com/cert",
         }
 
         with patch("apps.email.ses_webhooks._verify_sns_signature", return_value=True):
-            with patch("apps.email.ses_webhooks._get_sns_topic_arn_if_allowed", return_value="arn:aws:sns:us-east-1:123456789:test-topic"):
-                request = self.rf.post("/webhooks/ses/", data=json.dumps(payload), content_type="application/json")
+            with patch(
+                "apps.email.ses_webhooks._get_sns_topic_arn_if_allowed",
+                return_value="arn:aws:sns:us-east-1:123456789:test-topic",
+            ):
+                request = self.rf.post(
+                    "/webhooks/ses/",
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
                 response = ses_sns_webhook(request)
 
                 self.assertEqual(response.status_code, 200)
-                suppression = SuppressionListEntry.objects.filter(email="recipient@example.com").first()
+                suppression = SuppressionListEntry.objects.filter(
+                    email="recipient@example.com"
+                ).first()
                 self.assertIsNotNone(suppression)
                 self.assertEqual(suppression.reason, SuppressionListEntry.Reason.BOUNCE)
 
@@ -82,26 +112,41 @@ class SesWebhookTests(TestCase):
         payload = {
             "Type": "Notification",
             "TopicArn": "arn:aws:sns:us-east-1:123456789:test-topic",
-            "Message": json.dumps({
-                "eventType": "Complaint",
-                "complaint": {
-                    "complainedRecipients": [{"emailAddress": "recipient@example.com"}]
-                },
-                "mail": {"messageId": "msg-123"}
-            }),
+            "Message": json.dumps(
+                {
+                    "eventType": "Complaint",
+                    "complaint": {
+                        "complainedRecipients": [
+                            {"emailAddress": "recipient@example.com"}
+                        ]
+                    },
+                    "mail": {"messageId": "msg-123"},
+                }
+            ),
             "Signature": "valid-sig",
-            "SigningCertUrl": "http://example.com/cert"
+            "SigningCertUrl": "http://example.com/cert",
         }
 
         with patch("apps.email.ses_webhooks._verify_sns_signature", return_value=True):
-            with patch("apps.email.ses_webhooks._get_sns_topic_arn_if_allowed", return_value="arn:aws:sns:us-east-1:123456789:test-topic"):
-                request = self.rf.post("/webhooks/ses/", data=json.dumps(payload), content_type="application/json")
+            with patch(
+                "apps.email.ses_webhooks._get_sns_topic_arn_if_allowed",
+                return_value="arn:aws:sns:us-east-1:123456789:test-topic",
+            ):
+                request = self.rf.post(
+                    "/webhooks/ses/",
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
                 response = ses_sns_webhook(request)
 
                 self.assertEqual(response.status_code, 200)
-                suppression = SuppressionListEntry.objects.filter(email="recipient@example.com").first()
+                suppression = SuppressionListEntry.objects.filter(
+                    email="recipient@example.com"
+                ).first()
                 self.assertIsNotNone(suppression)
-                self.assertEqual(suppression.reason, SuppressionListEntry.Reason.COMPLAINT)
+                self.assertEqual(
+                    suppression.reason, SuppressionListEntry.Reason.COMPLAINT
+                )
 
 
 class OrphanedSesEventTests(TestCase):
@@ -141,15 +186,17 @@ class OrphanedSesEventTests(TestCase):
     def test_unattributable_hard_bounce_suppresses_platform_wide(self):
         from apps.email.models import GlobalSuppression
 
-        response = self._post({
-            "eventType": "Bounce",
-            "bounce": {
-                "bounceType": "Permanent",
-                "bouncedRecipients": [{"emailAddress": "ghost@example.com"}],
-            },
-            # Neither the message id nor the sender domain resolves.
-            "mail": {"messageId": "unknown-msg", "source": "who@nowhere.invalid"},
-        })
+        response = self._post(
+            {
+                "eventType": "Bounce",
+                "bounce": {
+                    "bounceType": "Permanent",
+                    "bouncedRecipients": [{"emailAddress": "ghost@example.com"}],
+                },
+                # Neither the message id nor the sender domain resolves.
+                "mail": {"messageId": "unknown-msg", "source": "who@nowhere.invalid"},
+            }
+        )
 
         self.assertEqual(response.status_code, 200)
         entry = GlobalSuppression.objects.get(email="ghost@example.com")
@@ -166,13 +213,15 @@ class OrphanedSesEventTests(TestCase):
         from apps.email.models import GlobalSuppression
         from apps.email.services.suppression import is_suppressed
 
-        response = self._post({
-            "eventType": "Complaint",
-            "complaint": {
-                "complainedRecipients": [{"emailAddress": "angry@example.com"}],
-            },
-            "mail": {"messageId": "unknown-msg-2", "source": "who@nowhere.invalid"},
-        })
+        response = self._post(
+            {
+                "eventType": "Complaint",
+                "complaint": {
+                    "complainedRecipients": [{"emailAddress": "angry@example.com"}],
+                },
+                "mail": {"messageId": "unknown-msg-2", "source": "who@nowhere.invalid"},
+            }
+        )
 
         self.assertEqual(response.status_code, 200)
         entry = GlobalSuppression.objects.get(email="angry@example.com")
@@ -185,14 +234,16 @@ class OrphanedSesEventTests(TestCase):
         """A transient failure for one sender is no reason to block globally."""
         from apps.email.models import GlobalSuppression
 
-        response = self._post({
-            "eventType": "Bounce",
-            "bounce": {
-                "bounceType": "Transient",
-                "bouncedRecipients": [{"emailAddress": "busy@example.com"}],
-            },
-            "mail": {"messageId": "unknown-msg-3", "source": "who@nowhere.invalid"},
-        })
+        response = self._post(
+            {
+                "eventType": "Bounce",
+                "bounce": {
+                    "bounceType": "Transient",
+                    "bouncedRecipients": [{"emailAddress": "busy@example.com"}],
+                },
+                "mail": {"messageId": "unknown-msg-3", "source": "who@nowhere.invalid"},
+            }
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(
@@ -207,16 +258,20 @@ class OrphanedSesEventTests(TestCase):
         EmailMessage.objects.create(
             account=self.account,
             provider_message_id="msg-attributed",
-            subject="s", from_email="test@example.com", to_email="dead@example.com",
+            subject="s",
+            from_email="test@example.com",
+            to_email="dead@example.com",
         )
-        self._post({
-            "eventType": "Bounce",
-            "bounce": {
-                "bounceType": "Permanent",
-                "bouncedRecipients": [{"emailAddress": "dead@example.com"}],
-            },
-            "mail": {"messageId": "msg-attributed"},
-        })
+        self._post(
+            {
+                "eventType": "Bounce",
+                "bounce": {
+                    "bounceType": "Permanent",
+                    "bouncedRecipients": [{"emailAddress": "dead@example.com"}],
+                },
+                "mail": {"messageId": "msg-attributed"},
+            }
+        )
 
         self.assertTrue(
             GlobalSuppression.objects.filter(email="dead@example.com").exists()
@@ -229,7 +284,9 @@ class OrphanedSesEventTests(TestCase):
         from apps.email.models import GlobalSuppression
         from apps.email.services.suppression import is_suppressed, record_event
 
-        record_event(account=self.account, email="quiet@example.com", reason="unsubscribe")
+        record_event(
+            account=self.account, email="quiet@example.com", reason="unsubscribe"
+        )
 
         self.assertFalse(
             GlobalSuppression.objects.filter(email="quiet@example.com").exists()

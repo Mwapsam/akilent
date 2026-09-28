@@ -1,4 +1,5 @@
 """Pilot Command Center: staff only, one row per business on WhatsApp, late queues stand out."""
+
 from datetime import timedelta
 
 import pytest
@@ -37,8 +38,9 @@ def test_only_staff_can_open_it(client):
 def test_lists_only_businesses_with_whatsapp(staff):
     on = Account.objects.create(company_name="Mwamba Kitchen")
     Account.objects.create(company_name="Email Only Ltd")
-    WhatsAppBusinessNumber.objects.create(account=on, phone_number_id="PN1", waba_id="W", access_token="t",
-                                          is_active=True)
+    WhatsAppBusinessNumber.objects.create(
+        account=on, phone_number_id="PN1", waba_id="W", access_token="t", is_active=True
+    )
     html = staff.get(URL).content.decode()
     assert "Mwamba Kitchen" in html and "Email Only Ltd" not in html
     assert "Quiet" in html, "no customer messages yet counts as quiet"
@@ -49,7 +51,9 @@ def test_lists_only_businesses_with_whatsapp(staff):
 def test_a_queue_without_a_recent_heartbeat_is_late(staff, settings):
     settings.WORKER_QUEUES = ["celery", "scheduler"]
     heartbeat("celery")
-    cache.set(KEY.format("scheduler"), (timezone.now() - timedelta(minutes=9)).isoformat())
+    cache.set(
+        KEY.format("scheduler"), (timezone.now() - timedelta(minutes=9)).isoformat()
+    )
     html = staff.get(URL).content.decode()
     assert "Late · 9" in html and html.count("Late ·") == 1
 
@@ -58,13 +62,17 @@ def test_a_queue_without_a_recent_heartbeat_is_late(staff, settings):
 def test_heartbeats_go_through_every_queue(settings, monkeypatch):
     settings.WORKER_QUEUES = ["celery", "ai"]
     sent = []
-    monkeypatch.setattr(heartbeat, "apply_async", lambda args, queue, expires: sent.append(queue))
+    monkeypatch.setattr(
+        heartbeat, "apply_async", lambda args, queue, expires: sent.append(queue)
+    )
     send_heartbeats()
     assert sent == ["celery", "ai"]
 
 
 @pytest.mark.django_db
-def test_time_to_first_value_counts_from_the_first_number_and_ignores_earlier_runs(staff):
+def test_time_to_first_value_counts_from_the_first_number_and_ignores_earlier_runs(
+    staff,
+):
     from apps.automation.api import adoption
     from apps.automation.models import Workflow, WorkflowRun
     from apps.contacts.models import Contact
@@ -72,22 +80,42 @@ def test_time_to_first_value_counts_from_the_first_number_and_ignores_earlier_ru
 
     account = Account.objects.create(company_name="Mwamba Kitchen")
     now = timezone.now()
-    old = WhatsAppBusinessNumber.objects.create(account=account, phone_number_id="OLD", waba_id="W",
-                                                access_token="t", is_active=False)
-    new = WhatsAppBusinessNumber.objects.create(account=account, phone_number_id="NEW", waba_id="W",
-                                                access_token="t", is_active=True)
-    WhatsAppBusinessNumber.objects.filter(pk=old.pk).update(created_at=now - timedelta(days=20))
-    WhatsAppBusinessNumber.objects.filter(pk=new.pk).update(created_at=now - timedelta(days=5))
+    old = WhatsAppBusinessNumber.objects.create(
+        account=account,
+        phone_number_id="OLD",
+        waba_id="W",
+        access_token="t",
+        is_active=False,
+    )
+    new = WhatsAppBusinessNumber.objects.create(
+        account=account,
+        phone_number_id="NEW",
+        waba_id="W",
+        access_token="t",
+        is_active=True,
+    )
+    WhatsAppBusinessNumber.objects.filter(pk=old.pk).update(
+        created_at=now - timedelta(days=20)
+    )
+    WhatsAppBusinessNumber.objects.filter(pk=new.pk).update(
+        created_at=now - timedelta(days=5)
+    )
     connected = connected_since(account)
-    assert connected == now - timedelta(days=20), "a replaced number doesn't reset the connection date"
+    assert connected == now - timedelta(days=20), (
+        "a replaced number doesn't reset the connection date"
+    )
 
-    wf = Workflow.objects.create(account=account, name="Welcome", status=Workflow.Status.PUBLISHED)
+    wf = Workflow.objects.create(
+        account=account, name="Welcome", status=Workflow.Status.PUBLISHED
+    )
     contact = Contact.objects.create(account=account, phone="+260971234567")
     before = WorkflowRun.objects.create(workflow=wf, contact=contact, subject_key="a")
     after = WorkflowRun.objects.create(workflow=wf, contact=contact, subject_key="b")
     WorkflowRun.objects.filter(pk=before.pk).update(started_at=now - timedelta(days=30))
     WorkflowRun.objects.filter(pk=after.pk).update(started_at=now - timedelta(days=18))
-    assert adoption(account, since=connected)["first_run_at"] == now - timedelta(days=18)
+    assert adoption(account, since=connected)["first_run_at"] == now - timedelta(
+        days=18
+    )
 
     html = staff.get(URL).content.decode()
     assert "2 days after connecting" in html
@@ -101,8 +129,15 @@ def test_suggestions_count_only_what_the_model_produced():
     account = Account.objects.create(company_name="Acme")
     now = timezone.now()
     base = dict(account=account)
-    for status, ready in [("used", True), ("expired", True), ("expired", False), ("error", False)]:
-        AIProposal.objects.create(**base, status=status, ready_at=now if ready else None)
+    for status, ready in [
+        ("used", True),
+        ("expired", True),
+        ("expired", False),
+        ("error", False),
+    ]:
+        AIProposal.objects.create(
+            **base, status=status, ready_at=now if ready else None
+        )
     summary = usage_summary(account, since=now - timedelta(days=1))
     assert summary == {"suggested": 2, "used": 1, "errors": 1}
 

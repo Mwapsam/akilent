@@ -132,7 +132,9 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -228,15 +230,23 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
 # Emergency stop for AI sending on its own, for every business. Suggestions keep working.
-AI_AUTONOMY_ENABLED = os.getenv("AI_AUTONOMY_ENABLED", "true").lower() in ("1", "true", "yes")
+AI_AUTONOMY_ENABLED = os.getenv("AI_AUTONOMY_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "45"))
 AI_DAILY_CALL_LIMIT = int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
 
 # Site-wide emergency brakes on WhatsApp sends across every business (a buggy loop, a compromised
 # account, a runaway automation). Not plan limits and never shown to businesses: sends over the
 # brake wait and go out once it lifts. 0 turns a window off.
-WHATSAPP_PLATFORM_MAX_PER_MINUTE = int(os.getenv("WHATSAPP_PLATFORM_MAX_PER_MINUTE", "1200"))
-WHATSAPP_PLATFORM_MAX_PER_HOUR = int(os.getenv("WHATSAPP_PLATFORM_MAX_PER_HOUR", "30000"))
+WHATSAPP_PLATFORM_MAX_PER_MINUTE = int(
+    os.getenv("WHATSAPP_PLATFORM_MAX_PER_MINUTE", "1200")
+)
+WHATSAPP_PLATFORM_MAX_PER_HOUR = int(
+    os.getenv("WHATSAPP_PLATFORM_MAX_PER_HOUR", "30000")
+)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
@@ -246,8 +256,7 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 if not FIELD_ENCRYPTION_KEY:
     raise ValueError(
-        "FIELD_ENCRYPTION_KEY must be set. "
-        "Generate one using Fernet.generate_key()."
+        "FIELD_ENCRYPTION_KEY must be set. Generate one using Fernet.generate_key()."
     )
 FIELD_ENCRYPTION_KEYS = [FIELD_ENCRYPTION_KEY]
 
@@ -280,9 +289,7 @@ WHATSAPP_STOP_KEYWORDS = [
 ]
 WHATSAPP_START_KEYWORDS = [
     k.strip().upper()
-    for k in os.getenv(
-        "WHATSAPP_START_KEYWORDS", "START,UNSTOP,SUBSCRIBE"
-    ).split(",")
+    for k in os.getenv("WHATSAPP_START_KEYWORDS", "START,UNSTOP,SUBSCRIBE").split(",")
     if k.strip()
 ]
 WHATSAPP_OPT_OUT_CONFIRMATION = os.getenv(
@@ -293,10 +300,14 @@ WHATSAPP_OPT_OUT_CONFIRMATION = os.getenv(
 
 # Largest inbound media file we will pull from Meta and store (bytes).
 # Meta's own ceiling is 100 MB for documents; smaller by default.
-WHATSAPP_MAX_MEDIA_BYTES = int(os.getenv("WHATSAPP_MAX_MEDIA_BYTES", str(25 * 1024 * 1024)))
+WHATSAPP_MAX_MEDIA_BYTES = int(
+    os.getenv("WHATSAPP_MAX_MEDIA_BYTES", str(25 * 1024 * 1024))
+)
 
 # Send read receipts (blue ticks) for inbound messages.
-WHATSAPP_MARK_READ_ENABLED = os.getenv("WHATSAPP_MARK_READ_ENABLED", "True").lower() == "true"
+WHATSAPP_MARK_READ_ENABLED = (
+    os.getenv("WHATSAPP_MARK_READ_ENABLED", "True").lower() == "true"
+)
 
 if not DEBUG and WHATSAPP_ENABLED:
     if not WHATSAPP_VERIFY_TOKEN:
@@ -339,7 +350,9 @@ DNSCHECK_AUTHORITATIVE = os.getenv("DNSCHECK_AUTHORITATIVE", "1") != "0"
 _USING_SES = "ses" in (MAIL_PROVIDER_BACKEND, EMAIL_SEND_PROVIDER_BACKEND)
 
 # Public domain used to build absolute tracking URLs in outgoing emails.
-BASE_DOMAIN = os.getenv("BASE_DOMAIN", (ALLOWED_HOSTS[0] if ALLOWED_HOSTS else "localhost"))
+BASE_DOMAIN = os.getenv(
+    "BASE_DOMAIN", (ALLOWED_HOSTS[0] if ALLOWED_HOSTS else "localhost")
+)
 
 # SMTP submission credentials (Stalwart port 587) used to actually send mail.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -358,7 +371,9 @@ if not DEBUG:
         if not AWS_ACCESS_KEY_ID:
             raise ValueError("AWS_ACCESS_KEY_ID is required when using the SES backend")
         if not AWS_SECRET_ACCESS_KEY:
-            raise ValueError("AWS_SECRET_ACCESS_KEY is required when using the SES backend")
+            raise ValueError(
+                "AWS_SECRET_ACCESS_KEY is required when using the SES backend"
+            )
         if not AWS_REGION:
             raise ValueError("AWS_REGION is required when using the SES backend")
         # Bounce/complaint feedback is not optional. Without a configuration
@@ -460,6 +475,14 @@ REDIS_URL = os.getenv(
     "REDIS_URL",
     os.getenv("REDIS_CACHE_URL", CELERY_RESULT_BACKEND),
 )
+
+# Off by default: the SSE endpoint (apps/core/views_events.py) is meant to run behind a
+# *separate* ASGI process (docker-compose.yml's `events` service, routed by nginx at /events/),
+# not the main WSGI web tier — a WSGI worker holding a long-lived streaming response open per
+# browser tab would quietly shrink the pool available for ordinary requests. Flip this on only
+# once that service is actually deployed and reachable; until then static/js templates never
+# open the connection, and everything already works via polling regardless.
+REALTIME_SSE_ENABLED = os.getenv("REALTIME_SSE_ENABLED", "False").lower() == "true"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -593,7 +616,15 @@ CELERY_BEAT_SCHEDULE = {
 # Every queue a production worker consumes (docker-compose.yml). The Pilot Command Center sends a
 # heartbeat through each one, so a queue without a worker shows up as late.
 WORKER_QUEUES = [
-    "celery", "email", "outbound", "campaigns", "webhooks", "whatsapp", "automation", "scheduler", "ai",
+    "celery",
+    "email",
+    "outbound",
+    "campaigns",
+    "webhooks",
+    "whatsapp",
+    "automation",
+    "scheduler",
+    "ai",
 ]
 
 # Private bucket for nightly database dumps (docs/ops/backups.md); read by the Pilot Command Center.
@@ -605,33 +636,37 @@ BACKUP_S3_BUCKET = os.getenv("BACKUP_S3_BUCKET", "")
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "1") != "0"
 
 if WHATSAPP_ENABLED:
-    CELERY_TASK_ROUTES.update({
-        "apps.whatsapp.tasks.process_whatsapp_event": {"queue": "whatsapp"},
-        "apps.whatsapp.tasks.drain_outbound_queue": {"queue": "outbound"},
-        "apps.whatsapp.tasks.mark_read": {"queue": "whatsapp"},
-    })
-    CELERY_BEAT_SCHEDULE.update({
-        "close-expired-conversations": {
-            "task": "apps.whatsapp.tasks.close_expired_conversations",
-            "schedule": 3600.0,
-        },
-        "drain-outbound-queue": {
-            "task": "apps.whatsapp.tasks.drain_outbound_queue",
-            "schedule": 10.0,
-        },
-        "download-media": {
-            "task": "apps.whatsapp.tasks.download_media",
-            "schedule": 60.0,
-        },
-        "sync-whatsapp-templates": {
-            "task": "apps.whatsapp.tasks.sync_templates",
-            "schedule": 1800.0,  # every 30 min — pull Meta approval status
-        },
-        "alert-on-whatsapp-failure-spike": {
-            "task": "apps.whatsapp.tasks.alert_on_whatsapp_failure_spike",
-            "schedule": 900.0,  # every 15 min
-        },
-    })
+    CELERY_TASK_ROUTES.update(
+        {
+            "apps.whatsapp.tasks.process_whatsapp_event": {"queue": "whatsapp"},
+            "apps.whatsapp.tasks.drain_outbound_queue": {"queue": "outbound"},
+            "apps.whatsapp.tasks.mark_read": {"queue": "whatsapp"},
+        }
+    )
+    CELERY_BEAT_SCHEDULE.update(
+        {
+            "close-expired-conversations": {
+                "task": "apps.whatsapp.tasks.close_expired_conversations",
+                "schedule": 3600.0,
+            },
+            "drain-outbound-queue": {
+                "task": "apps.whatsapp.tasks.drain_outbound_queue",
+                "schedule": 10.0,
+            },
+            "download-media": {
+                "task": "apps.whatsapp.tasks.download_media",
+                "schedule": 60.0,
+            },
+            "sync-whatsapp-templates": {
+                "task": "apps.whatsapp.tasks.sync_templates",
+                "schedule": 1800.0,  # every 30 min — pull Meta approval status
+            },
+            "alert-on-whatsapp-failure-spike": {
+                "task": "apps.whatsapp.tasks.alert_on_whatsapp_failure_spike",
+                "schedule": 900.0,  # every 15 min
+            },
+        }
+    )
 
 # --- Logging ---
 

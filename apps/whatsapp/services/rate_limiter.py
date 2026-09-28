@@ -5,6 +5,7 @@ Reuses the token-bucket implementations from ``apps.email.services.rate_limiter`
 per-process fallback). One bucket per WhatsApp phone number id, so a fleet of
 Celery workers together stays under Meta's throughput tier for that number.
 """
+
 import logging
 
 from django.conf import settings

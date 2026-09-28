@@ -8,6 +8,7 @@ SmtpCredentialService owns:
 Credentials are stored locally and validated by a separate SMTP listener
 that hands off to SES for delivery.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -35,7 +36,7 @@ def _hash(secret: str) -> str:
 class SmtpCredentialService:
     """Manages SMTP relay credentials — no longer tied to mail provider."""
 
-    def __init__(self, account, *, actor: "AbstractBaseUser | None" = None) -> None:
+    def __init__(self, account, *, actor: AbstractBaseUser | None = None) -> None:
         self.account = account
         self.actor = actor
 

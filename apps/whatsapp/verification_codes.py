@@ -10,6 +10,7 @@ Rules that differ from other template sends:
 - It stays out of the inbox: it's a system message, not a conversation with the business.
 - At most ``MAX_PER_HOUR`` codes go to one number, so a leaked key can't be used to flood people.
 """
+
 from __future__ import annotations
 
 import re
@@ -68,7 +69,12 @@ def choose_template(account, name: str = "", language: str = ""):
     if template is not None:
         return template
     if name or language:
-        wanted = " ".join(filter(None, [repr(name) if name else "", f"in {language!r}" if language else ""]))
+        wanted = " ".join(
+            filter(
+                None,
+                [repr(name) if name else "", f"in {language!r}" if language else ""],
+            )
+        )
         raise VerificationCodeError(
             "template_not_found",
             f"There's no approved Authentication template {wanted}. "
@@ -92,31 +98,50 @@ def components(code: str) -> list[dict]:
     """Meta's send shape for an authentication template: the code fills the body and the button."""
     return [
         {"type": "body", "parameters": [{"type": "text", "text": code}]},
-        {"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": code}]},
+        {
+            "type": "button",
+            "sub_type": "url",
+            "index": "0",
+            "parameters": [{"type": "text", "text": code}],
+        },
     ]
 
 
 def _check(account, phone: str, code: str):
-    if not WhatsAppBusinessNumber.objects.filter(account=account, is_active=True).exists():
+    if not WhatsAppBusinessNumber.objects.filter(
+        account=account, is_active=True
+    ).exists():
         raise VerificationCodeError(
-            "whatsapp_not_connected", "This business has no connected WhatsApp number.", status=409,
+            "whatsapp_not_connected",
+            "This business has no connected WhatsApp number.",
+            status=409,
         )
     code = (code or "").strip()
     if not _CODE_RE.match(code):
         raise VerificationCodeError(
-            "invalid_code", "The code must be 4 to 15 letters or numbers, with no spaces.",
+            "invalid_code",
+            "The code must be 4 to 15 letters or numbers, with no spaces.",
         )
     try:
         phone = normalize_phone(phone or "")
     except ValidationError:
         raise VerificationCodeError(
-            "invalid_phone", "The phone number isn't valid. Send it with the country code, like +260971234567.",
+            "invalid_phone",
+            "The phone number isn't valid. Send it with the country code, like +260971234567.",
         )
     return phone, code
 
 
-def send_code(account, *, phone: str, code: str, template_name: str = "", language: str = "",
-              idempotency_key: str = "", dry_run: bool = False) -> dict:
+def send_code(
+    account,
+    *,
+    phone: str,
+    code: str,
+    template_name: str = "",
+    language: str = "",
+    idempotency_key: str = "",
+    dry_run: bool = False,
+) -> dict:
     """Queue ``code`` for ``phone``. Returns the same dict ``status_of`` does.
 
     ``dry_run`` checks everything (for test API keys) but sends nothing.
@@ -126,10 +151,14 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
     minutes = expiry_minutes(template)
     now = timezone.now()
 
-    contact = WhatsAppContact.objects.filter(account=account, phone_number=phone).first()
+    contact = WhatsAppContact.objects.filter(
+        account=account, phone_number=phone
+    ).first()
     if contact is not None:
         recent = OutboundMessage.objects.filter(
-            account=account, contact=contact, payload__kind=KIND,
+            account=account,
+            contact=contact,
+            payload__kind=KIND,
             created_at__gte=now - timedelta(hours=1),
         ).count()
         if recent >= MAX_PER_HOUR:
@@ -140,22 +169,37 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
             )
 
     if dry_run:
-        return {"id": None, "status": "test", "to": phone, "template": template.whatsapp_template_name,
-                "language": template.language_code, "expires_in_minutes": minutes, "test": True}
+        return {
+            "id": None,
+            "status": "test",
+            "to": phone,
+            "template": template.whatsapp_template_name,
+            "language": template.language_code,
+            "expires_in_minutes": minutes,
+            "test": True,
+        }
 
-    key = KEY_PREFIX + (idempotency_key.strip()[:200] if idempotency_key else uuid.uuid4().hex)
+    key = KEY_PREFIX + (
+        idempotency_key.strip()[:200] if idempotency_key else uuid.uuid4().hex
+    )
     if idempotency_key:
         # A retry of an already-sent code must return that code's status, never a fresh plan-limit
         # refusal: the unit was already spent (or never needed) the first time.
-        existing = OutboundMessage.objects.filter(account=account, idempotency_key=key) \
-            .select_related("contact", "message_log").first()
+        existing = (
+            OutboundMessage.objects.filter(account=account, idempotency_key=key)
+            .select_related("contact", "message_log")
+            .first()
+        )
         if existing is not None:
             return status_of(existing)
 
     from apps.billing import api as billing_api
 
     allowed = billing_api.limit(account, "verification_codes_month")
-    if allowed >= 0 and billing_api.used(account, "verification_codes_month") >= allowed:
+    if (
+        allowed >= 0
+        and billing_api.used(account, "verification_codes_month") >= allowed
+    ):
         # Said up front, so the caller's system can react now instead of polling a held code.
         raise VerificationCodeError(
             "plan_limit",
@@ -164,7 +208,9 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
         )
 
     if contact is None:
-        contact, _ = WhatsAppContact.objects.get_or_create(account=account, phone_number=phone)
+        contact, _ = WhatsAppContact.objects.get_or_create(
+            account=account, phone_number=phone
+        )
     msg, created = OutboundMessage.objects.get_or_create(
         account=account,
         idempotency_key=key,
@@ -184,6 +230,7 @@ def send_code(account, *, phone: str, code: str, template_name: str = "", langua
     )
     if created:
         from apps.whatsapp.tasks import drain_outbound_queue
+
         drain_outbound_queue.delay()
     return status_of(msg)
 
@@ -193,13 +240,17 @@ def is_expired(payload: dict) -> bool:
     if not raw:
         return False
     from django.utils.dateparse import parse_datetime
+
     expires = parse_datetime(raw)
     return expires is not None and timezone.now() > expires
 
 
 def forget_code(msg) -> None:
     """Blank the code once it no longer needs sending: nobody at the business should read it later."""
-    for owner, field in ((msg, "payload"), (getattr(msg, "message_log", None), "raw_payload")):
+    for owner, field in (
+        (msg, "payload"),
+        (getattr(msg, "message_log", None), "raw_payload"),
+    ):
         payload = getattr(owner, field, None) if owner is not None else None
         if not is_verification_code(payload):
             continue
@@ -225,15 +276,29 @@ def status_of(msg) -> dict:
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
     }
-    if msg.status in (OutboundMessage.Status.FAILED, OutboundMessage.Status.HELD, OutboundMessage.Status.UNCONFIRMED):
-        body["error"] = {"code": msg.error_code or (msg.last_error or "").split(":")[0],
-                         "message": friendly_send_error(msg.error_code or (msg.last_error or "").split(":")[0])}
+    if msg.status in (
+        OutboundMessage.Status.FAILED,
+        OutboundMessage.Status.HELD,
+        OutboundMessage.Status.UNCONFIRMED,
+    ):
+        body["error"] = {
+            "code": msg.error_code or (msg.last_error or "").split(":")[0],
+            "message": friendly_send_error(
+                msg.error_code or (msg.last_error or "").split(":")[0]
+            ),
+        }
     return body
 
 
 def get_message(account, message_id: str):
     if not str(message_id).isdigit():
         return None
-    return OutboundMessage.objects.filter(
-        account=account, pk=int(message_id), payload__kind=KIND,
-    ).select_related("contact", "message_log").first()
+    return (
+        OutboundMessage.objects.filter(
+            account=account,
+            pk=int(message_id),
+            payload__kind=KIND,
+        )
+        .select_related("contact", "message_log")
+        .first()
+    )

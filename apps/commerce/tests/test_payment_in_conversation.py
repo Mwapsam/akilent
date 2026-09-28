@@ -3,11 +3,11 @@
 "The conversation stays the customer's story" — the business shouldn't have to
 go and look somewhere else to find out the customer paid.
 """
+
 import pytest
 from django.utils import timezone
 
 from apps.accounts.models import Account
-from apps.commerce.models import Payment
 from apps.commerce.services import create_order, mark_paid, request_payment
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, Message
@@ -19,11 +19,14 @@ def paid_setup(db):
     account = Account.objects.create(company_name="Mwamba Kitchen", slug="mk")
     contact = Contact.objects.create(account=account, phone="+260971234567")
     conversation = Conversation.objects.create(
-        account=account, contact=contact, channel=Conversation.Channel.WHATSAPP,
+        account=account,
+        contact=contact,
+        channel=Conversation.Channel.WHATSAPP,
         last_message_at=timezone.now(),
     )
     order = create_order(
-        account, contact,
+        account,
+        contact,
         [{"name": "Blue dress", "unit_price": "250", "quantity": 1}],
         currency="ZMW",
     )
@@ -46,8 +49,11 @@ def test_a_system_line_does_not_change_who_is_waiting(paid_setup):
     account, contact, conversation, order = paid_setup
     # The customer is waiting on the business.
     Message.objects.create(
-        account=account, conversation=conversation, direction=Message.Direction.INBOUND,
-        body="Have you got my payment?", timestamp=timezone.now(),
+        account=account,
+        conversation=conversation,
+        direction=Message.Direction.INBOUND,
+        body="Have you got my payment?",
+        timestamp=timezone.now(),
     )
     assert conversation.pk in [c.pk for c in needs_attention(account, timezone.now())]
 
@@ -62,7 +68,9 @@ def test_a_system_line_does_not_change_who_is_waiting(paid_setup):
 def test_payment_without_a_conversation_is_not_an_error(db):
     account = Account.objects.create(company_name="No Chat", slug="nc")
     contact = Contact.objects.create(account=account, email="a@example.com")
-    order = create_order(account, contact, [{"name": "Thing", "unit_price": "10", "quantity": 1}])
+    order = create_order(
+        account, contact, [{"name": "Thing", "unit_price": "10", "quantity": 1}]
+    )
     payment = request_payment(order, redirect_url="https://example.com/thanks")
 
     mark_paid(payment, transaction_id="tx_1")

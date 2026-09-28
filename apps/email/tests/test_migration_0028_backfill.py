@@ -5,9 +5,10 @@ number=0; adding the (template, number) unique index failed until 0028 grew a
 RunPython backfill. This drives the migration backwards to 0027 and forwards
 again with duplicate rows present.
 """
+
 import pytest
-from django.db.migrations.executor import MigrationExecutor
 from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 
 _APP = "email_service"
 _BEFORE = "0027_templatecomponent"

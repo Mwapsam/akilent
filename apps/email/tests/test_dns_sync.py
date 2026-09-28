@@ -6,6 +6,7 @@ resync adds, updates and removes rows to match; an empty DKIM answer from the
 provider never deletes the DKIM rows; and a MAIL FROM failure never fails
 provisioning.
 """
+
 import pytest
 from django.core.cache import cache
 
@@ -31,7 +32,8 @@ class FakeSes:
     def get_dkim_records(self, domain):
         return [
             DkimRecord(
-                selector=t, algorithm="rsa-sha256",
+                selector=t,
+                algorithm="rsa-sha256",
                 public_key_txt=f"{t}.dkim.amazonses.com",
                 record_name=f"{t}._domainkey.{domain}",
             )
@@ -46,8 +48,10 @@ class FakeSes:
         if self.mail_from_error:
             raise self.mail_from_error
         return MailFromInfo(
-            mail_from_domain=f"{subdomain}.{domain}", status="PENDING",
-            behavior_on_mx_failure="USE_DEFAULT_VALUE", mx_value=MX,
+            mail_from_domain=f"{subdomain}.{domain}",
+            status="PENDING",
+            behavior_on_mx_failure="USE_DEFAULT_VALUE",
+            mx_value=MX,
         )
 
 
@@ -56,10 +60,13 @@ class NoMailFromProvider:
 
     def create_domain(self, domain, **kwargs):
         return DomainInfo(
-            domain=domain, status=DomainStatus.ACTIVE,
+            domain=domain,
+            status=DomainStatus.ACTIVE,
             dkim=DkimRecord(
-                selector="dkim", algorithm="rsa-sha256",
-                public_key_txt="v=DKIM1; p=ABC", record_name=f"dkim._domainkey.{domain}",
+                selector="dkim",
+                algorithm="rsa-sha256",
+                public_key_txt="v=DKIM1; p=ABC",
+                record_name=f"dkim._domainkey.{domain}",
             ),
         )
 
@@ -147,12 +154,18 @@ def test_provider_without_the_capability_is_a_no_op(account, domain, monkeypatch
 def test_resync_removes_stale_root_spf_and_rotated_dkim(account, domain, monkeypatch):
     # State from before this change: a root SPF row and a DKIM token SES dropped.
     EmailDnsRecord.objects.create(
-        domain=domain, key="spf", record_type="TXT",
-        name="mail.acme.com", value="v=spf1 include:amazonses.com ~all",
+        domain=domain,
+        key="spf",
+        record_type="TXT",
+        name="mail.acme.com",
+        value="v=spf1 include:amazonses.com ~all",
     )
     EmailDnsRecord.objects.create(
-        domain=domain, key="dkim", record_type="CNAME",
-        name="old._domainkey.mail.acme.com", value="old.dkim.amazonses.com",
+        domain=domain,
+        key="dkim",
+        record_type="CNAME",
+        name="old._domainkey.mail.acme.com",
+        value="old.dkim.amazonses.com",
     )
     domain.mail_from_domain = "bounce.mail.acme.com"
     domain.save(update_fields=["mail_from_domain"])
@@ -163,7 +176,8 @@ def test_resync_removes_stale_root_spf_and_rotated_dkim(account, domain, monkeyp
     assert ("spf", "mail.acme.com") not in rows
     assert ("dkim", "old._domainkey.mail.acme.com") not in rows
     assert {r.name for r in diff["remove"]} == {
-        "mail.acme.com", "old._domainkey.mail.acme.com",
+        "mail.acme.com",
+        "old._domainkey.mail.acme.com",
     }
     assert ("mfmx", "bounce.mail.acme.com") in rows
 
@@ -187,8 +201,13 @@ def test_changed_value_is_updated_and_reset_to_unchecked(account, domain, monkey
     domain.mail_from_domain = "bounce.mail.acme.com"
     domain.save(update_fields=["mail_from_domain"])
     EmailDnsRecord.objects.create(
-        domain=domain, key="mfmx", record_type="MX", name="bounce.mail.acme.com",
-        value="feedback-smtp.us-east-1.amazonses.com", priority=10, is_ok=True,
+        domain=domain,
+        key="mfmx",
+        record_type="MX",
+        name="bounce.mail.acme.com",
+        value="feedback-smtp.us-east-1.amazonses.com",
+        priority=10,
+        is_ok=True,
     )
 
     _service(account, FakeSes(), monkeypatch).sync_dns_records(domain)

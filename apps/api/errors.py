@@ -4,6 +4,7 @@ Wraps DRF's default exception handler so every error response — validation,
 auth, throttling, permission, and the billing PlanLimitExceeded exception
 that isn't a DRF exception at all — comes back in one predictable shape.
 """
+
 from __future__ import annotations
 
 from rest_framework import exceptions as drf_exceptions
@@ -59,7 +60,9 @@ def custom_exception_handler(exc, context):
         return _envelope(exc.limit_type, str(exc), status.HTTP_403_FORBIDDEN, context)
 
     if isinstance(exc, UnverifiedDomainError):
-        return _envelope("unverified_domain", str(exc), status.HTTP_403_FORBIDDEN, context)
+        return _envelope(
+            "unverified_domain", str(exc), status.HTTP_403_FORBIDDEN, context
+        )
 
     if isinstance(exc, MissingPostalAddressError):
         return _envelope(
@@ -75,12 +78,16 @@ def custom_exception_handler(exc, context):
         )
 
     if isinstance(exc, TemplateMissingContentError):
-        return _envelope("missing_content", str(exc), status.HTTP_400_BAD_REQUEST, context)
+        return _envelope(
+            "missing_content", str(exc), status.HTTP_400_BAD_REQUEST, context
+        )
 
     from apps.scheduler.api import SchedulingError
 
     if isinstance(exc, SchedulingError):
-        return _envelope("invalid_schedule", str(exc), status.HTTP_400_BAD_REQUEST, context)
+        return _envelope(
+            "invalid_schedule", str(exc), status.HTTP_400_BAD_REQUEST, context
+        )
 
     from apps.whatsapp.api import VerificationCodeError
 

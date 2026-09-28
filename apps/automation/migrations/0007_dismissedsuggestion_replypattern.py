@@ -5,42 +5,82 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0007_businessprofile'),
-        ('automation', '0006_workflowrun_subject_key'),
+        ("accounts", "0007_businessprofile"),
+        ("automation", "0006_workflowrun_subject_key"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='DismissedSuggestion',
+            name="DismissedSuggestion",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(max_length=80)),
-                ('until', models.DateTimeField()),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='+', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("key", models.CharField(max_length=80)),
+                ("until", models.DateTimeField()),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="+",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('account', 'key'), name='uniq_dismissed_suggestion')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("account", "key"), name="uniq_dismissed_suggestion"
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='ReplyPattern',
+            name="ReplyPattern",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(max_length=64)),
-                ('reply_text', models.TextField()),
-                ('count', models.PositiveIntegerField(default=0)),
-                ('message_ids', models.JSONField(default=list)),
-                ('question_keywords', models.JSONField(default=list)),
-                ('topic', models.CharField(blank=True, default='', max_length=60)),
-                ('covered_by', models.CharField(blank=True, default='', max_length=150)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='reply_patterns', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("key", models.CharField(max_length=64)),
+                ("reply_text", models.TextField()),
+                ("count", models.PositiveIntegerField(default=0)),
+                ("message_ids", models.JSONField(default=list)),
+                ("question_keywords", models.JSONField(default=list)),
+                ("topic", models.CharField(blank=True, default="", max_length=60)),
+                (
+                    "covered_by",
+                    models.CharField(blank=True, default="", max_length=150),
+                ),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="reply_patterns",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-count'],
-                'constraints': [models.UniqueConstraint(fields=('account', 'key'), name='uniq_reply_pattern_key')],
+                "ordering": ["-count"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("account", "key"), name="uniq_reply_pattern_key"
+                    )
+                ],
             },
         ),
     ]

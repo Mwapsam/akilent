@@ -1,4 +1,5 @@
 """CRM actions, registered into the shared Action Registry (``apps.core.actions``)."""
+
 from __future__ import annotations
 
 from apps.core.actions import Action, ActionError, register
@@ -10,15 +11,32 @@ class CreateLeadAction(Action):
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
-        return {"required": ["account", "contact"], "optional": ["source", "owner", "workflow_run", "conversation_id"]}
+        return {
+            "required": ["account", "contact"],
+            "optional": ["source", "owner", "workflow_run", "conversation_id"],
+        }
 
-    def execute(self, context: dict, *, account, contact, source: str = "", owner=None,
-                workflow_run=None, conversation_id: str = "") -> dict:
+    def execute(
+        self,
+        context: dict,
+        *,
+        account,
+        contact,
+        source: str = "",
+        owner=None,
+        workflow_run=None,
+        conversation_id: str = "",
+    ) -> dict:
         from apps.crm.services import create_lead
 
         lead = create_lead(
-            account, contact, source=source, owner=owner, workflow_run=workflow_run,
-            conversation_id=conversation_id)
+            account,
+            contact,
+            source=source,
+            owner=owner,
+            workflow_run=workflow_run,
+            conversation_id=conversation_id,
+        )
         return {"lead_id": lead.public_id}
 
 
@@ -42,28 +60,48 @@ class CaptureConversationLeadAction(Action):
             "optional": ["conversation_id", "signal", "owner"],
         }
 
-    def execute(self, context: dict, *, account, contact, conversation_id: str = "",
-                signal: str = "", owner=None) -> dict:
+    def execute(
+        self,
+        context: dict,
+        *,
+        account,
+        contact,
+        conversation_id: str = "",
+        signal: str = "",
+        owner=None,
+    ) -> dict:
         from apps.crm.models import Lead
         from apps.crm.services import create_lead
 
         existing = Lead.objects.filter(
-            account=account, contact=contact,
+            account=account,
+            contact=contact,
             status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
         ).first()
         if existing is not None:
             return {"lead_id": existing.public_id, "created": False}
 
         lead = create_lead(
-            account, contact, source="conversation", owner=owner, conversation_id=conversation_id)
+            account,
+            contact,
+            source="conversation",
+            owner=owner,
+            conversation_id=conversation_id,
+        )
         # Record what the customer said that opened this, on the timeline the
         # customer page already renders: an owner who sees an unexpected lead
         # has to be able to tell why it exists.
         from apps.contacts.services import record_contact_event
 
-        record_contact_event(contact, "lead.auto_created", data={
-            "signal": signal, "conversation_id": conversation_id, "lead_id": lead.public_id,
-        })
+        record_contact_event(
+            contact,
+            "lead.auto_created",
+            data={
+                "signal": signal,
+                "conversation_id": conversation_id,
+                "lead_id": lead.public_id,
+            },
+        )
         return {"lead_id": lead.public_id, "created": True}
 
 
@@ -95,7 +133,9 @@ class CreateDealAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["lead"], "optional": ["title", "value", "pipeline"]}
 
-    def execute(self, context: dict, *, lead, title: str | None = None, value=0, pipeline=None) -> dict:
+    def execute(
+        self, context: dict, *, lead, title: str | None = None, value=0, pipeline=None
+    ) -> dict:
         from apps.crm.services import convert_lead_to_deal
 
         deal = convert_lead_to_deal(lead, title=title, value=value, pipeline=pipeline)

@@ -6,6 +6,7 @@ and published to the in-process dispatcher so the automation engine (Phase 6)
 can react. This decouples "something happened in my product" from "send an
 email".
 """
+
 from __future__ import annotations
 
 import secrets

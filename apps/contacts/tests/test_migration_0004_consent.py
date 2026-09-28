@@ -4,6 +4,7 @@ Existing rows predate consent tracking. Marking them OPTED_IN would be a claim
 we couldn't back if AWS (or a recipient) asked, so they land as UNKNOWN. Only
 already-unsubscribed rows carry over unambiguously.
 """
+
 import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor

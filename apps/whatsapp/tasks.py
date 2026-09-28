@@ -1,17 +1,18 @@
 import logging
 import mimetypes
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
-from celery import shared_task
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.core.events import dispatcher, MessageReceived, MessageStatusChanged
+from apps.core.events import MessageReceived, MessageStatusChanged, dispatcher
+from apps.whatsapp import verification_codes
+from apps.whatsapp.interactive import extract_reply
 from apps.whatsapp.models import (
     Conversation,
     MessageLog,
@@ -20,15 +21,14 @@ from apps.whatsapp.models import (
     WebhookEventLog,
     WhatsAppContact,
 )
+from apps.whatsapp.models.contact import normalize_phone
 from apps.whatsapp.models.tenant import (
     TenantResolutionError,
     WhatsAppBusinessNumber,
     get_account_for_webhook,
     get_number_for_webhook,
 )
-from apps.whatsapp import verification_codes
-from apps.whatsapp.interactive import extract_reply
-from apps.whatsapp.models.contact import normalize_phone
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ def _automation_events_enabled() -> bool:
         return cached
 
     from apps.core.models import SiteSettings
+
     result = SiteSettings.objects.filter(automation_events_enabled=True).exists()
     cache.set(_AUTOMATION_EVENTS_CACHE_KEY, result, _AUTOMATION_EVENTS_CACHE_TTL)
     return result
@@ -107,7 +108,9 @@ def process_whatsapp_event(self, event_id: int):
         event.mark_failed(str(exc))
     except Exception as exc:
         event.mark_failed(str(exc))
-        logger.exception("process_whatsapp_event: unhandled error for event %s", event_id)
+        logger.exception(
+            "process_whatsapp_event: unhandled error for event %s", event_id
+        )
         raise self.retry(exc=exc)
 
 
@@ -159,11 +162,15 @@ def _auto_reply_during_setup(phone_number_id: str, contact) -> None:
     try:
         from apps.whatsapp.verification import AUTO_REPLY_BODY, maybe_auto_reply
 
-        result = maybe_auto_reply(get_number_for_webhook(phone_number_id), contact.phone_number)
+        result = maybe_auto_reply(
+            get_number_for_webhook(phone_number_id), contact.phone_number
+        )
         if result and result.get("ok") and result.get("message_id"):
             _log_setup_reply(contact, result["message_id"], AUTO_REPLY_BODY)
     except Exception as exc:
-        logger.warning("auto-reply during setup failed for %s: %s", phone_number_id, exc)
+        logger.warning(
+            "auto-reply during setup failed for %s: %s", phone_number_id, exc
+        )
 
 
 def _log_setup_reply(contact, message_id: str, body: str) -> None:
@@ -187,7 +194,9 @@ def _log_setup_reply(contact, message_id: str, body: str) -> None:
     project_outbound_to_inbox(log)
 
 
-def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *, enroll_workflows: bool):
+def project_to_inbox(
+    account, wa_contact, whatsapp_conversation, message_log, *, enroll_workflows: bool
+):
     """Put an inbound message in the Inbox (generic Conversation/Message spine).
 
     The Inbox is a core feature, so this never depends on the beta
@@ -201,13 +210,17 @@ def project_to_inbox(account, wa_contact, whatsapp_conversation, message_log, *,
 
         contact = _canonical_contact(account, wa_contact)
         record_inbound_whatsapp_message(
-            contact=contact, wa_contact=wa_contact,
-            whatsapp_conversation=whatsapp_conversation, message_log=message_log,
+            contact=contact,
+            wa_contact=wa_contact,
+            whatsapp_conversation=whatsapp_conversation,
+            message_log=message_log,
             enroll_workflows=enroll_workflows,
         )
     except Exception:
         logger.exception(
-            "project_to_inbox failed for account=%s message_id=%s", account.pk, message_log.message_id,
+            "project_to_inbox failed for account=%s message_id=%s",
+            account.pk,
+            message_log.message_id,
         )
 
 
@@ -217,7 +230,9 @@ def _canonical_contact(account, wa_contact):
 
     contact = wa_contact.contact
     if contact is None:
-        contact, created = upsert_contact_by_phone(account, wa_contact.phone_number, source="whatsapp")
+        contact, created = upsert_contact_by_phone(
+            account, wa_contact.phone_number, source="whatsapp"
+        )
         if created and wa_contact.display_name and not contact.first_name:
             contact.first_name = wa_contact.display_name[:150]
             contact.save(update_fields=["first_name", "updated_at"])
@@ -249,12 +264,20 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
         metadata = {"message_type": log.message_type}
         # An automatic AI reply (apps.ai.autonomy) is sent with an "ai-auto:" key, so the inbox
         # can label it "Sent by AI" without WhatsApp knowing anything about AI.
-        key = getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or ""
+        key = (
+            getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or ""
+        )
         if key.startswith("ai-auto:"):
             metadata["sent_by"] = "ai"
-        elif key.startswith("wf:"):  # an automation's reply_text step (apps.automation.workflow_engine)
+        elif key.startswith(
+            "wf:"
+        ):  # an automation's reply_text step (apps.automation.workflow_engine)
             metadata["sent_by"] = "automation"
-        if log.status in (MessageLog.Status.FAILED, MessageLog.Status.HELD, MessageLog.Status.UNCONFIRMED):
+        if log.status in (
+            MessageLog.Status.FAILED,
+            MessageLog.Status.HELD,
+            MessageLog.Status.UNCONFIRMED,
+        ):
             # OutboundMessage carries the error code; MessageLog doesn't. A
             # human/template/workflow reply that fails to send is the one place
             # an agent needs a *reason*, not just "Failed" — so it's translated
@@ -264,8 +287,12 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
             metadata["error_code"] = error_code
             metadata["failure_reason"] = friendly_send_error(error_code)
         record_outbound_message(
-            conversation=spine, body=log.content, timestamp=log.timestamp, status=log.status,
-            metadata=metadata, whatsapp_message=log,
+            conversation=spine,
+            body=log.content,
+            timestamp=log.timestamp,
+            status=log.status,
+            metadata=metadata,
+            whatsapp_message=log,
         )
     except Exception:
         metrics.incr("outbound_projection_failures")
@@ -311,7 +338,9 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
     )
 
 
-def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict) -> None:
+def _process_inbound_message(
+    event: WebhookEventLog, value: dict, message: dict
+) -> None:
     phone_number_id = value["metadata"]["phone_number_id"]
 
     account = get_account_for_webhook(phone_number_id)
@@ -338,11 +367,14 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
         contact.display_name = profile_name
         contact.save(update_fields=["display_name"])
 
-    msg_ts = datetime.fromtimestamp(int(message["timestamp"]), tz=dt_timezone.utc)
+    msg_ts = datetime.fromtimestamp(int(message["timestamp"]), tz=UTC)
     conversation = Conversation.get_or_open(contact)
     # A conversation is counted once per 24h customer-service window, not once per message. A
     # replayed webhook finds the window already open, so it isn't counted twice.
-    opens_window = conversation.window_expires_at is None or conversation.window_expires_at <= msg_ts
+    opens_window = (
+        conversation.window_expires_at is None
+        or conversation.window_expires_at <= msg_ts
+    )
     conversation.register_inbound(msg_ts)
 
     if opens_window:
@@ -351,7 +383,11 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
 
             billing_api.count_conversation(account)
         except Exception as exc:
-            logger.warning("_handle_inbound_message: conversation not counted for account %s: %s", account.pk, exc)
+            logger.warning(
+                "_handle_inbound_message: conversation not counted for account %s: %s",
+                account.pk,
+                exc,
+            )
 
     msg_type = message.get("type", "unknown")
     content = ""
@@ -383,8 +419,11 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
             "contact": contact,
             "direction": MessageLog.Direction.INBOUND,
             "message_type": (
-                MessageLog.MessageType.TEXT if reply is not None
-                else msg_type if msg_type in valid_types else MessageLog.MessageType.UNKNOWN
+                MessageLog.MessageType.TEXT
+                if reply is not None
+                else msg_type
+                if msg_type in valid_types
+                else MessageLog.MessageType.UNKNOWN
             ),
             "content": content,
             "media_id": media_id,
@@ -403,7 +442,9 @@ def _process_inbound_message(event: WebhookEventLog, value: dict, message: dict)
     except Exception:
         enroll = False
     # Regardless of `created`: idempotent, and a replay repairs an earlier failed projection.
-    project_to_inbox(account, contact, conversation, message_log, enroll_workflows=enroll)
+    project_to_inbox(
+        account, contact, conversation, message_log, enroll_workflows=enroll
+    )
 
     if created and msg_type == "text":
         _apply_consent_keyword(contact, conversation, content)
@@ -444,7 +485,9 @@ def _handle_status_update(event: WebhookEventLog) -> None:
     from apps.conversations import metrics
 
     def handle(value, status_obj):
-        metrics.incr("status_webhooks_received", status=status_obj.get("status") or "unknown")
+        metrics.incr(
+            "status_webhooks_received", status=status_obj.get("status") or "unknown"
+        )
         try:
             _process_status_update(value, status_obj)
         except TenantResolutionError:
@@ -461,8 +504,10 @@ def _record_status_lag(status_obj: dict) -> None:
     try:
         from apps.conversations import metrics
 
-        reported = datetime.fromtimestamp(int(status_obj["timestamp"]), tz=dt_timezone.utc)
-        metrics.incr("status_update_lag_seconds", (timezone.now() - reported).total_seconds())
+        reported = datetime.fromtimestamp(int(status_obj["timestamp"]), tz=UTC)
+        metrics.incr(
+            "status_update_lag_seconds", (timezone.now() - reported).total_seconds()
+        )
     except (KeyError, TypeError, ValueError):
         pass
 
@@ -519,7 +564,7 @@ def _get_provider_for_account(account):
 
     Returns None if the account has no usable (active, tokened) number.
     """
-    from apps.whatsapp.providers import get_whatsapp_provider, WhatsAppProviderError
+    from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 
     try:
         return get_whatsapp_provider(account)
@@ -594,7 +639,9 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
         elif msg_type == "interactive":
             result = provider.send_interactive(to, payload["interactive"])
         else:
-            result = provider.send_text(to, payload.get("body", payload.get("text", "")))
+            result = provider.send_text(
+                to, payload.get("body", payload.get("text", ""))
+            )
 
         if not result.success:
             err = WhatsAppProviderError(f"Send failed: {result.error}")
@@ -657,16 +704,23 @@ def _authorize_send(msg: OutboundMessage) -> None:
     if not msg.account.is_active:
         # Failed rather than held: a message released days later, when the business is
         # reactivated, would arrive out of context.
-        raise SendNotAuthorized("ACCOUNT_SUSPENDED", "The business's workspace is suspended.")
+        raise SendNotAuthorized(
+            "ACCOUNT_SUSPENDED", "The business's workspace is suspended."
+        )
 
     ptype = payload.get("type", "text")
     code_request = verification_codes.is_verification_code(payload)
 
     if code_request and verification_codes.is_expired(payload):
-        raise SendNotAuthorized("CODE_EXPIRED", "The one-time code expired before it could be sent.")
+        raise SendNotAuthorized(
+            "CODE_EXPIRED", "The one-time code expired before it could be sent."
+        )
 
     # A one-time code was asked for by the person themselves, so an earlier STOP doesn't block it.
-    if not code_request and msg.contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT:
+    if (
+        not code_request
+        and msg.contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_OUT
+    ):
         raise SendNotAuthorized(
             "CONTACT_OPTED_OUT",
             "Contact has opted out of WhatsApp messages.",
@@ -757,9 +811,9 @@ def _throttle_for_account(account, cache: dict) -> None:
         return
     from apps.whatsapp.services import get_whatsapp_rate_limiter
 
-    get_whatsapp_rate_limiter(
-        number.phone_number_id, number.send_rate_limit
-    ).wait_for(1)
+    get_whatsapp_rate_limiter(number.phone_number_id, number.send_rate_limit).wait_for(
+        1
+    )
 
 
 def _notify_terminal_failure(msg) -> None:
@@ -778,7 +832,10 @@ def _notify_terminal_failure(msg) -> None:
 
         mark_outbound_message_failed(msg)
     except Exception:
-        logger.exception("_notify_terminal_failure: reconciliation hook failed for message %s", msg.id)
+        logger.exception(
+            "_notify_terminal_failure: reconciliation hook failed for message %s",
+            msg.id,
+        )
 
 
 def _usage_limit_for(msg: OutboundMessage) -> str | None:
@@ -789,12 +846,23 @@ def _usage_limit_for(msg: OutboundMessage) -> str | None:
         return None
     from apps.billing import api as billing_api
 
-    category = (msg.template.category if msg.template_id and msg.template else "") or payload.get("category", "")
-    return billing_api.whatsapp_limit_for(category, verification_code=verification_codes.is_verification_code(payload))
+    category = (
+        msg.template.category if msg.template_id and msg.template else ""
+    ) or payload.get("category", "")
+    return billing_api.whatsapp_limit_for(
+        category, verification_code=verification_codes.is_verification_code(payload)
+    )
 
 
-def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_code: str = "",
-                   error: str = "", next_attempt_at=None) -> None:
+def _settle_status(
+    msg: OutboundMessage,
+    status: str,
+    log_status: str,
+    *,
+    error_code: str = "",
+    error: str = "",
+    next_attempt_at=None,
+) -> None:
     """Put a message (and its log mirror, and the inbox) into a non-sent state.
 
     ``next_attempt_at`` lets a caller keep it eligible for another attempt (HELD); left at the
@@ -810,9 +878,11 @@ def _settle_status(msg: OutboundMessage, status: str, log_status: str, *, error_
     project_outbound_to_inbox(log)
 
 
-_HELD_RETRY_MINUTES = 5  # a fixed backoff, deliberately not OutboundMessage.attempts (mark_failed's
-                        # retry budget): a message held many times over a slow month must not
-                        # arrive at MAX_ATTEMPTS and lose its normal retry budget on a later, real failure.
+_HELD_RETRY_MINUTES = (
+    5  # a fixed backoff, deliberately not OutboundMessage.attempts (mark_failed's
+)
+# retry budget): a message held many times over a slow month must not
+# arrive at MAX_ATTEMPTS and lose its normal retry budget on a later, real failure.
 
 
 def _hold(msg: OutboundMessage) -> None:
@@ -820,9 +890,14 @@ def _hold(msg: OutboundMessage) -> None:
     and drain_outbound_queue retries it (see the HELD branch there) once the limit has room
     again, exactly as the owner is told. The code (if any) is kept, not forgotten: forgetting it
     here would make a later successful retry send blanked-out dots instead of the real code."""
-    _settle_status(msg, OutboundMessage.Status.HELD, MessageLog.Status.HELD, error_code="PLAN_LIMIT",
-                   error="Held: the plan's WhatsApp message limit was reached.",
-                   next_attempt_at=timezone.now() + timedelta(minutes=_HELD_RETRY_MINUTES))
+    _settle_status(
+        msg,
+        OutboundMessage.Status.HELD,
+        MessageLog.Status.HELD,
+        error_code="PLAN_LIMIT",
+        error="Held: the plan's WhatsApp message limit was reached.",
+        next_attempt_at=timezone.now() + timedelta(minutes=_HELD_RETRY_MINUTES),
+    )
 
 
 def _unconfirmed(msg: OutboundMessage, reservation) -> None:
@@ -831,8 +906,13 @@ def _unconfirmed(msg: OutboundMessage, reservation) -> None:
     from apps.billing import api as billing_api
 
     billing_api.commit(reservation)
-    _settle_status(msg, OutboundMessage.Status.UNCONFIRMED, MessageLog.Status.UNCONFIRMED,
-                   error_code="UNCONFIRMED", error="No answer from WhatsApp; it may have been sent.")
+    _settle_status(
+        msg,
+        OutboundMessage.Status.UNCONFIRMED,
+        MessageLog.Status.UNCONFIRMED,
+        error_code="UNCONFIRMED",
+        error="No answer from WhatsApp; it may have been sent.",
+    )
     verification_codes.forget_code(msg)
 
 
@@ -844,7 +924,9 @@ def _platform_ceiling_reached(now) -> bool:
     automation). Not a plan limit and never shown to businesses. 0 turns a window off."""
     taken: list[str] = []
     for name, ttl, fmt in _PLATFORM_WINDOWS:
-        ceiling = int(getattr(settings, f"WHATSAPP_PLATFORM_MAX_PER_{name.upper()}", 0) or 0)
+        ceiling = int(
+            getattr(settings, f"WHATSAPP_PLATFORM_MAX_PER_{name.upper()}", 0) or 0
+        )
         if not ceiling:
             continue
         key = f"wa-platform-sends:{name}:{now.strftime(fmt)}"
@@ -871,10 +953,12 @@ def drain_outbound_queue():
     # Recover messages left mid-flight by a crashed/killed worker. The request may already have
     # reached Meta before the crash, whether or not the message is metered, so it's marked
     # unconfirmed rather than silently requeued and possibly delivered to the customer twice.
-    stale = list(OutboundMessage.objects.filter(
-        status=OutboundMessage.Status.SENDING,
-        updated_at__lt=now - _SENDING_STALE,
-    ).select_related("account", "contact", "template"))
+    stale = list(
+        OutboundMessage.objects.filter(
+            status=OutboundMessage.Status.SENDING,
+            updated_at__lt=now - _SENDING_STALE,
+        ).select_related("account", "contact", "template")
+    )
     for msg in stale:
         if _usage_limit_for(msg):
             from apps.billing import api as billing_api
@@ -920,13 +1004,19 @@ def drain_outbound_queue():
             # retry of the same message is never counted twice.
             limit_key = _usage_limit_for(msg)
             if limit_key:
-                reservation = billing_api.reserve(msg.account, limit_key, operation_id=f"wa-msg:{msg.pk}",
-                                                  renew_released=True)
+                reservation = billing_api.reserve(
+                    msg.account,
+                    limit_key,
+                    operation_id=f"wa-msg:{msg.pk}",
+                    renew_released=True,
+                )
                 if reservation is None:
                     _hold(msg)
                     held += 1
                     continue
-                if reservation.status == billing_api.UsageReservation.COMMITTED:  # an earlier attempt may already have sent it
+                if (
+                    reservation.status == billing_api.UsageReservation.COMMITTED
+                ):  # an earlier attempt may already have sent it
                     _unconfirmed(msg, reservation)
                     continue
 
@@ -935,8 +1025,11 @@ def drain_outbound_queue():
                 # Deferred, not failed or held: it goes out once the site-wide brake lifts.
                 billing_api.release(reservation)
                 OutboundMessage.objects.filter(pk=msg.pk).update(
-                    next_attempt_at=timezone.now() + timedelta(minutes=1))
-                logger.warning("drain_outbound_queue: platform send ceiling reached; deferring the rest")
+                    next_attempt_at=timezone.now() + timedelta(minutes=1)
+                )
+                logger.warning(
+                    "drain_outbound_queue: platform send ceiling reached; deferring the rest"
+                )
                 break
 
             log = _ensure_outbound_log(msg)
@@ -972,7 +1065,11 @@ def drain_outbound_queue():
             _notify_terminal_failure(msg)
             failed += 1
         except Exception as exc:
-            if limit_key and reservation is not None and getattr(exc, "ambiguous", False):
+            if (
+                limit_key
+                and reservation is not None
+                and getattr(exc, "ambiguous", False)
+            ):
                 _unconfirmed(msg, reservation)
                 failed += 1
                 continue
@@ -981,10 +1078,7 @@ def drain_outbound_queue():
             msg.mark_failed(str(exc), terminal=not retryable, error_code=code)
             if msg.status == OutboundMessage.Status.FAILED:
                 billing_api.release(reservation)  # Meta refused it: the unit comes back
-            if (
-                msg.message_log_id
-                and msg.status == OutboundMessage.Status.FAILED
-            ):
+            if msg.message_log_id and msg.status == OutboundMessage.Status.FAILED:
                 MessageLog.objects.filter(pk=msg.message_log_id).update(
                     status=MessageLog.Status.FAILED
                 )
@@ -995,7 +1089,9 @@ def drain_outbound_queue():
             failed += 1
 
     if sent or failed or held:
-        logger.info("drain_outbound_queue: sent=%s failed=%s held=%s", sent, failed, held)
+        logger.info(
+            "drain_outbound_queue: sent=%s failed=%s held=%s", sent, failed, held
+        )
 
 
 @shared_task
@@ -1019,7 +1115,7 @@ _MEDIA_MAX_ATTEMPTS = 5
 def _ext_for_mime(mime: str) -> str:
     if not mime:
         return ".bin"
-    return mimetypes.guess_extension(mime.split(";")[0].strip()) or ".bin"
+    return mimetypes.guess_extension(mime.split(";", maxsplit=1)[0].strip()) or ".bin"
 
 
 @shared_task
@@ -1030,17 +1126,13 @@ def download_media():
     short-lived provider URL. A row that keeps failing is retired after
     ``_MEDIA_MAX_ATTEMPTS`` so it stops being re-selected every run.
     """
-    from apps.whatsapp.providers import WhatsAppProviderError
 
-    pending = (
-        MessageLog.objects.filter(
-            direction=MessageLog.Direction.INBOUND,
-            media_id__isnull=False,
-            media_file="",
-            media_attempts__lt=_MEDIA_MAX_ATTEMPTS,
-        )
-        .select_related("account")[:_MEDIA_BATCH]
-    )
+    pending = MessageLog.objects.filter(
+        direction=MessageLog.Direction.INBOUND,
+        media_id__isnull=False,
+        media_file="",
+        media_attempts__lt=_MEDIA_MAX_ATTEMPTS,
+    ).select_related("account")[:_MEDIA_BATCH]
 
     downloaded = failed = 0
     providers: dict = {}
@@ -1054,10 +1146,7 @@ def download_media():
                 raise RuntimeError("No WhatsApp provider available for account.")
 
             meta = provider.get_media_url(log.media_id)
-            if (
-                meta.size_bytes
-                and meta.size_bytes > settings.WHATSAPP_MAX_MEDIA_BYTES
-            ):
+            if meta.size_bytes and meta.size_bytes > settings.WHATSAPP_MAX_MEDIA_BYTES:
                 raise RuntimeError(
                     f"Media {meta.size_bytes}B exceeds "
                     f"WHATSAPP_MAX_MEDIA_BYTES ({settings.WHATSAPP_MAX_MEDIA_BYTES})"
@@ -1077,10 +1166,16 @@ def download_media():
             log.media_size = len(content)
             log.media_error = ""
             log.media_attempts = log.media_attempts + 1
-            log.save(update_fields=[
-                "media_file", "media_url", "media_mime_type", "media_size",
-                "media_error", "media_attempts",
-            ])
+            log.save(
+                update_fields=[
+                    "media_file",
+                    "media_url",
+                    "media_mime_type",
+                    "media_size",
+                    "media_error",
+                    "media_attempts",
+                ]
+            )
             downloaded += 1
         except Exception as exc:
             log.media_attempts = log.media_attempts + 1
@@ -1088,14 +1183,14 @@ def download_media():
             log.save(update_fields=["media_attempts", "media_error"])
             logger.warning(
                 "download_media: failed for MessageLog pk=%s (attempt %s): %s",
-                log.pk, log.media_attempts, exc,
+                log.pk,
+                log.media_attempts,
+                exc,
             )
             failed += 1
 
     if downloaded or failed:
-        logger.info(
-            "download_media: downloaded=%s failed=%s", downloaded, failed
-        )
+        logger.info("download_media: downloaded=%s failed=%s", downloaded, failed)
 
 
 # --- Failure-spike alerting -------------------------------------------------
@@ -1122,7 +1217,12 @@ def alert_on_whatsapp_failure_spike() -> dict:
     total = terminal.count()
     failed = terminal.filter(status=OutboundMessage.Status.FAILED).count()
     rate = (failed / total) if total else 0.0
-    result = {"total": total, "failed": failed, "rate": round(rate, 4), "alerted": False}
+    result = {
+        "total": total,
+        "failed": failed,
+        "rate": round(rate, 4),
+        "alerted": False,
+    }
 
     if total < _WA_SPIKE_MIN_VOLUME or rate < _WA_SPIKE_THRESHOLD:
         return result
@@ -1134,7 +1234,10 @@ def alert_on_whatsapp_failure_spike() -> dict:
 
     logger.error(
         "WHATSAPP FAILURE SPIKE: %d/%d terminal sends FAILED (%.1f%%) in the last %d min",
-        failed, total, rate * 100, _WA_SPIKE_WINDOW_MINUTES,
+        failed,
+        total,
+        rate * 100,
+        _WA_SPIKE_WINDOW_MINUTES,
     )
     try:
         from apps.billing.slack import post_message
@@ -1192,8 +1295,13 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
 
     waba_id = entry.get("id")
     account_ids = (
-        list(WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list("account_id", flat=True))
-        if waba_id else []
+        list(
+            WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list(
+                "account_id", flat=True
+            )
+        )
+        if waba_id
+        else []
     )
     if not account_ids:
         raise TenantResolutionError(f"No WhatsApp account owns WABA id {waba_id!r}")
@@ -1241,7 +1349,7 @@ def sync_templates_for_account(account) -> dict:
     ``sync_templates`` (the periodic task, below) calls this per account
     instead of duplicating the Meta-API loop.
     """
-    from apps.whatsapp.providers import get_whatsapp_provider, WhatsAppProviderError
+    from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 
     numbers = (
         WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
@@ -1260,7 +1368,9 @@ def sync_templates_for_account(account) -> dict:
                 _upsert_meta_template(account, tpl)
                 synced += 1
         except (WhatsAppProviderError, NotImplementedError) as exc:
-            logger.warning("sync_templates_for_account: waba=%s failed: %s", number.waba_id, exc)
+            logger.warning(
+                "sync_templates_for_account: waba=%s failed: %s", number.waba_id, exc
+            )
             errors += 1
     return {"synced": synced, "errors": errors}
 

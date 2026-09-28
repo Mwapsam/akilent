@@ -22,6 +22,7 @@ def site_context(request):
         "site": site,
         "WHATSAPP_ENABLED": settings.WHATSAPP_ENABLED,
         "SIGNUPS_ENABLED": signups,
+        "REALTIME_SSE_ENABLED": settings.REALTIME_SSE_ENABLED,
     }
 
 

@@ -4,6 +4,7 @@ The architectural intent is Conversation -> Contact -> Lead: the opportunity
 originates from what the customer said, not from an agent remembering to press
 a button.
 """
+
 import pytest
 from django.utils import timezone
 
@@ -16,25 +17,31 @@ from apps.whatsapp.models import Conversation as WhatsAppConversation
 from apps.whatsapp.models import MessageLog, WhatsAppContact
 
 
-@pytest.mark.parametrize("body", [
-    "How much for the blue dress?",
-    "Do you have it in stock?",
-    "I want to buy 20 bags",
-    "Can I order 3 of these",
-    "whats the price",
-    "Do you deliver to Kitwe?",
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "How much for the blue dress?",
+        "Do you have it in stock?",
+        "I want to buy 20 bags",
+        "Can I order 3 of these",
+        "whats the price",
+        "Do you deliver to Kitwe?",
+    ],
+)
 def test_buying_intent_is_detected(body):
     assert detect_buying_intent(body) is not None
 
 
-@pytest.mark.parametrize("body", [
-    "Thanks!",
-    "Good morning",
-    "I called in order to confirm my appointment",
-    "Just looking for now",
-    "",
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Thanks!",
+        "Good morning",
+        "I called in order to confirm my appointment",
+        "Just looking for now",
+        "",
+    ],
+)
 def test_small_talk_is_not_buying_intent(body):
     assert detect_buying_intent(body) is None
 
@@ -44,20 +51,29 @@ def inbound(db):
     account = Account.objects.create(company_name="Mwamba Kitchen", slug="mk")
     contact = Contact.objects.create(account=account, phone="+260971234567")
     wa_contact = WhatsAppContact.objects.create(
-        account=account, phone_number="+260971234567", contact=contact,
+        account=account,
+        phone_number="+260971234567",
+        contact=contact,
     )
     wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
 
     def _receive(body: str, message_id: str):
         log = MessageLog.objects.create(
-            account=account, conversation=wa_conversation, contact=wa_contact,
-            message_id=message_id, direction=MessageLog.Direction.INBOUND,
-            message_type=MessageLog.MessageType.TEXT, content=body,
-            status=MessageLog.Status.DELIVERED, timestamp=timezone.now(),
+            account=account,
+            conversation=wa_conversation,
+            contact=wa_contact,
+            message_id=message_id,
+            direction=MessageLog.Direction.INBOUND,
+            message_type=MessageLog.MessageType.TEXT,
+            content=body,
+            status=MessageLog.Status.DELIVERED,
+            timestamp=timezone.now(),
         )
         return record_inbound_whatsapp_message(
-            contact=contact, wa_contact=wa_contact,
-            whatsapp_conversation=wa_conversation, message_log=log,
+            contact=contact,
+            wa_contact=wa_contact,
+            whatsapp_conversation=wa_conversation,
+            message_log=log,
         )
 
     return account, contact, _receive
@@ -119,7 +135,9 @@ def test_the_message_still_lands_if_lead_capture_fails(inbound):
     from unittest.mock import patch
 
     account, contact, receive = inbound
-    with patch("apps.conversations.services.run_action", side_effect=RuntimeError("boom")):
+    with patch(
+        "apps.conversations.services.run_action", side_effect=RuntimeError("boom")
+    ):
         conversation = receive("How much for the blue dress?", "wamid.1")
 
     assert conversation is not None

@@ -44,7 +44,14 @@ class SmtpCredentialAdmin(admin.ModelAdmin):
 
 @admin.register(EmailMessage)
 class EmailMessageAdmin(admin.ModelAdmin):
-    list_display = ("to_email", "from_email", "account", "status", "created_at", "sent_at")
+    list_display = (
+        "to_email",
+        "from_email",
+        "account",
+        "status",
+        "created_at",
+        "sent_at",
+    )
     list_filter = ("status",)
     search_fields = ("to_email", "from_email", "subject", "account__company_name")
     raw_id_fields = ("account", "domain")
@@ -65,7 +72,14 @@ class EmailTemplateVersionInline(admin.TabularInline):
 
 @admin.register(EmailTemplate)
 class EmailTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug", "account", "builder_mode", "is_active", "updated_at")
+    list_display = (
+        "name",
+        "slug",
+        "account",
+        "builder_mode",
+        "is_active",
+        "updated_at",
+    )
     list_filter = ("is_active", "builder_mode")
     search_fields = ("name", "slug", "account__company_name")
     raw_id_fields = ("account",)
@@ -92,30 +106,54 @@ class EmailTemplateAssetAdmin(admin.ModelAdmin):
 @admin.register(ProvisioningJob)
 class ProvisioningJobAdmin(admin.ModelAdmin):
     list_display = (
-        "job_type", "resource_id", "account", "status",
-        "attempts", "created_at", "completed_at",
+        "job_type",
+        "resource_id",
+        "account",
+        "status",
+        "attempts",
+        "created_at",
+        "completed_at",
     )
     list_filter = ("status", "job_type", "resource_type")
     search_fields = ("resource_id", "account__company_name", "celery_task_id")
     raw_id_fields = ("account",)
     readonly_fields = (
-        "created_at", "started_at", "completed_at", "celery_task_id", "attempts"
+        "created_at",
+        "started_at",
+        "completed_at",
+        "celery_task_id",
+        "attempts",
     )
 
 
 @admin.register(SendReputation)
 class SendReputationAdmin(admin.ModelAdmin):
     list_display = (
-        "account", "state", "sent", "bounced", "complained",
-        "bounce_rate", "complaint_rate", "window_started_at", "state_changed_at",
+        "account",
+        "state",
+        "sent",
+        "bounced",
+        "complained",
+        "bounce_rate",
+        "complaint_rate",
+        "window_started_at",
+        "state_changed_at",
     )
     list_filter = ("state",)
     search_fields = ("account__company_name",)
     raw_id_fields = ("account",)
     readonly_fields = (
-        "account", "window_started_at", "sent", "bounced", "complained",
-        "bounce_rate", "complaint_rate", "state", "state_changed_at",
-        "halted_reason", "updated_at",
+        "account",
+        "window_started_at",
+        "sent",
+        "bounced",
+        "complained",
+        "bounce_rate",
+        "complaint_rate",
+        "state",
+        "state_changed_at",
+        "halted_reason",
+        "updated_at",
     )
     actions = ["reset_breaker"]
 
@@ -134,7 +172,9 @@ class SendReputationAdmin(admin.ModelAdmin):
         for rep in queryset:
             reset(rep.account)
         self.message_user(
-            request, f"Reset reputation for {queryset.count()} account(s).", messages.SUCCESS
+            request,
+            f"Reset reputation for {queryset.count()} account(s).",
+            messages.SUCCESS,
         )
 
     def has_add_permission(self, request):
@@ -143,15 +183,20 @@ class SendReputationAdmin(admin.ModelAdmin):
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = (
-        "action", "resource_id", "account", "actor", "success", "timestamp"
-    )
+    list_display = ("action", "resource_id", "account", "actor", "success", "timestamp")
     list_filter = ("success", "action", "resource_type")
     search_fields = ("resource_id", "account__company_name", "action")
     raw_id_fields = ("account", "actor")
     readonly_fields = (
-        "timestamp", "account", "actor", "action", "resource_type",
-        "resource_id", "success", "error", "metadata",
+        "timestamp",
+        "account",
+        "actor",
+        "action",
+        "resource_type",
+        "resource_id",
+        "success",
+        "error",
+        "metadata",
     )
 
     def has_add_permission(self, request):

@@ -2,6 +2,7 @@
 enrolling Workflows — mirrors ``apps.conversations.services``'s pattern so
 CRM and the operational spine stay consistent.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,15 @@ logger = logging.getLogger(__name__)
 _OPEN_LEAD_STATUSES = [Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]
 
 
-def create_lead(account, contact, *, source: str = "", owner=None, conversation_id: str = "",
-                workflow_run=None) -> Lead:
+def create_lead(
+    account,
+    contact,
+    *,
+    source: str = "",
+    owner=None,
+    conversation_id: str = "",
+    workflow_run=None,
+) -> Lead:
     """Create a Lead for ``contact``, or return its existing open one.
 
     A contact should have at most one open opportunity being tracked at a
@@ -28,33 +36,54 @@ def create_lead(account, contact, *, source: str = "", owner=None, conversation_
     customer. Callers that genuinely need a second concurrent lead (rare)
     should create one directly via ``Lead.objects.create``.
     """
-    existing = Lead.objects.filter(account=account, contact=contact, status__in=_OPEN_LEAD_STATUSES).first()
+    existing = Lead.objects.filter(
+        account=account, contact=contact, status__in=_OPEN_LEAD_STATUSES
+    ).first()
     if existing is not None:
         return existing
 
     from apps.conversations import attribution
 
-    conversation, method = attribution.decide(account, contact, public_id=conversation_id)
+    conversation, method = attribution.decide(
+        account, contact, public_id=conversation_id
+    )
     lead = Lead.objects.create(
-        account=account, contact=contact, source=source, owner=owner, conversation=conversation)
+        account=account,
+        contact=contact,
+        source=source,
+        owner=owner,
+        conversation=conversation,
+    )
     attribution.record(lead, conversation, method, workflow_run=workflow_run)
 
     emit_event(
-        account=account, type="lead.created", occurred_at=lead.created_at,
-        source="crm", subject_type="lead", subject_id=lead.public_id,
+        account=account,
+        type="lead.created",
+        occurred_at=lead.created_at,
+        source="crm",
+        subject_type="lead",
+        subject_id=lead.public_id,
         payload={"contact_id": contact.public_id, "source": source},
     )
     _dispatch_legacy_lead_created(account, lead)
     # A lead opened from a conversation carries it, so a workflow can act in that thread
     # (assign it, tell the team) rather than guessing which conversation was meant.
-    context = {"lead_id": lead.public_id, **({"conversation_id": conversation_id} if conversation_id else {})}
+    context = {
+        "lead_id": lead.public_id,
+        **({"conversation_id": conversation_id} if conversation_id else {}),
+    }
     _enroll_workflows(account, "lead.created", contact, context)
     return lead
 
 
 # Statuses a person or automation can put a lead in. "converted" is reached only by turning the
 # lead into a deal (convert_lead_to_deal), which is what creates the deal it points at.
-SETTABLE_LEAD_STATUSES = (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED, Lead.Status.LOST)
+SETTABLE_LEAD_STATUSES = (
+    Lead.Status.NEW,
+    Lead.Status.CONTACTED,
+    Lead.Status.QUALIFIED,
+    Lead.Status.LOST,
+)
 
 
 def set_lead_status(lead: Lead, status: str) -> bool:
@@ -66,7 +95,9 @@ def set_lead_status(lead: Lead, status: str) -> bool:
     if status not in SETTABLE_LEAD_STATUSES:
         raise ValueError("Choose new, contacted, qualified or lost.")
     if lead.status == Lead.Status.CONVERTED:
-        raise ValueError("This customer is already in your pipeline. Move their deal instead.")
+        raise ValueError(
+            "This customer is already in your pipeline. Move their deal instead."
+        )
     if lead.status == status:
         return False
 
@@ -75,8 +106,12 @@ def set_lead_status(lead: Lead, status: str) -> bool:
     lead.save(update_fields=["status", "updated_at"])
 
     emit_event(
-        account=lead.account, type="lead.status_changed", occurred_at=timezone.now(),
-        source="crm", subject_type="lead", subject_id=lead.public_id,
+        account=lead.account,
+        type="lead.status_changed",
+        occurred_at=timezone.now(),
+        source="crm",
+        subject_type="lead",
+        subject_id=lead.public_id,
         payload={"contact_id": lead.contact.public_id, "from": previous, "to": status},
     )
     context = {"lead_id": lead.public_id, "status": status, "previous_status": previous}
@@ -88,8 +123,9 @@ def set_lead_status(lead: Lead, status: str) -> bool:
     return True
 
 
-def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
-                          pipeline: Pipeline | None = None) -> Deal:
+def convert_lead_to_deal(
+    lead: Lead, *, title: str | None = None, value=0, pipeline: Pipeline | None = None
+) -> Deal:
     """Convert a Lead into a Deal in its first (non-terminal) stage."""
     if lead.status == Lead.Status.CONVERTED:
         raise ValueError(f"lead {lead.pk} is already converted")
@@ -97,37 +133,61 @@ def convert_lead_to_deal(lead: Lead, *, title: str | None = None, value=0,
     from apps.conversations import attribution
 
     pipeline = pipeline or Pipeline.ensure_default(lead.account)
-    first_stage = pipeline.stages.filter(is_won=False, is_lost=False).order_by("order").first()
+    first_stage = (
+        pipeline.stages.filter(is_won=False, is_lost=False).order_by("order").first()
+    )
     if first_stage is None:
-        raise ValueError(f"pipeline {pipeline.pk} has no open stage to place a new deal in")
+        raise ValueError(
+            f"pipeline {pipeline.pk} has no open stage to place a new deal in"
+        )
 
     with transaction.atomic():
         deal = Deal.objects.create(
-            account=lead.account, contact=lead.contact, pipeline=pipeline, stage=first_stage,
-            title=title or f"{lead.contact}", value=value,
+            account=lead.account,
+            contact=lead.contact,
+            pipeline=pipeline,
+            stage=first_stage,
+            title=title or f"{lead.contact}",
+            value=value,
         )
         lead.status = Lead.Status.CONVERTED
         lead.converted_at = timezone.now()
         lead.converted_to_deal = deal
-        lead.save(update_fields=["status", "converted_at", "converted_to_deal", "updated_at"])
+        lead.save(
+            update_fields=["status", "converted_at", "converted_to_deal", "updated_at"]
+        )
 
     # The deal keeps the credit its lead earned (same conversation, method and workflow run);
     # a lead with none is looked at afresh.
     lead_attr = getattr(lead, "attribution", None)
     if lead_attr is not None:
         attribution.record(
-            deal, lead_attr.conversation, lead_attr.method, workflow_run=lead_attr.workflow_run,
-            metadata={"inherited_from_lead": lead.public_id})
+            deal,
+            lead_attr.conversation,
+            lead_attr.method,
+            workflow_run=lead_attr.workflow_run,
+            metadata={"inherited_from_lead": lead.public_id},
+        )
     else:
         conversation, method = attribution.decide(deal.account, deal.contact)
         attribution.record(deal, conversation, method)
 
     emit_event(
-        account=deal.account, type="deal.created", occurred_at=deal.created_at,
-        source="crm", subject_type="deal", subject_id=deal.public_id,
-        payload={"contact_id": deal.contact.public_id, "lead_id": lead.public_id, "stage": first_stage.name},
+        account=deal.account,
+        type="deal.created",
+        occurred_at=deal.created_at,
+        source="crm",
+        subject_type="deal",
+        subject_id=deal.public_id,
+        payload={
+            "contact_id": deal.contact.public_id,
+            "lead_id": lead.public_id,
+            "stage": first_stage.name,
+        },
     )
-    _enroll_workflows(deal.account, "deal.created", deal.contact, {"deal_id": deal.public_id})
+    _enroll_workflows(
+        deal.account, "deal.created", deal.contact, {"deal_id": deal.public_id}
+    )
     return deal
 
 
@@ -149,18 +209,30 @@ def move_deal_stage(deal: Deal, stage: Stage) -> Deal:
     deal.save(update_fields=["stage", "status", "closed_at", "updated_at"])
 
     emit_event(
-        account=deal.account, type="deal.stage_changed", occurred_at=timezone.now(),
-        source="crm", subject_type="deal", subject_id=deal.public_id,
+        account=deal.account,
+        type="deal.stage_changed",
+        occurred_at=timezone.now(),
+        source="crm",
+        subject_type="deal",
+        subject_id=deal.public_id,
         payload={
             "contact_id": deal.contact.public_id,
-            "from_stage": previous_stage.name, "to_stage": stage.name,
+            "from_stage": previous_stage.name,
+            "to_stage": stage.name,
             "status": deal.status,
         },
     )
     _dispatch_legacy_deal_stage_changed(deal.account, deal, stage)
-    _enroll_workflows(deal.account, "deal.stage_changed", deal.contact, {
-        "deal_id": deal.public_id, "stage": stage.name, "status": deal.status,
-    })
+    _enroll_workflows(
+        deal.account,
+        "deal.stage_changed",
+        deal.contact,
+        {
+            "deal_id": deal.public_id,
+            "stage": stage.name,
+            "status": deal.status,
+        },
+    )
     return deal
 
 
@@ -169,7 +241,9 @@ def _dispatch_legacy_lead_created(account, lead: Lead) -> None:
     try:
         from apps.automation.triggers import on_lead_created
 
-        on_lead_created(account.id, lead.public_id, {"contact_id": lead.contact.public_id})
+        on_lead_created(
+            account.id, lead.public_id, {"contact_id": lead.contact.public_id}
+        )
     except Exception:
         logger.exception("_dispatch_legacy_lead_created failed for lead=%s", lead.pk)
 
@@ -180,7 +254,9 @@ def _dispatch_legacy_deal_stage_changed(account, deal: Deal, stage: Stage) -> No
 
         on_deal_stage_changed(account.id, deal.public_id, stage.name)
     except Exception:
-        logger.exception("_dispatch_legacy_deal_stage_changed failed for deal=%s", deal.pk)
+        logger.exception(
+            "_dispatch_legacy_deal_stage_changed failed for deal=%s", deal.pk
+        )
 
 
 def _enroll_workflows(account, trigger_type: str, contact, context: dict) -> None:

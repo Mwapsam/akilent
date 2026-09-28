@@ -4,26 +4,80 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0002_sitesettings_payments_enabled'),
+        ("core", "0002_sitesettings_payments_enabled"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MailProviderSettings',
+            name="MailProviderSettings",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('infra_backend', models.CharField(choices=[('stalwart', 'Stalwart Mail Server'), ('ses', 'AWS SES'), ('null', 'Null (dev/test)')], default='stalwart', help_text='Mail server for domain/DKIM infrastructure', max_length=32)),
-                ('send_backend', models.CharField(choices=[('smtp', 'SMTP Relay'), ('ses', 'AWS SES API'), ('null', 'Null (dev/test)')], default='smtp', help_text='Provider for outbound message delivery', max_length=32)),
-                ('aws_region', models.CharField(default='us-east-1', help_text='AWS region for SES (e.g., us-east-1, eu-west-1). Credentials from AWS_ACCESS_KEY_ID env vars.', max_length=32)),
-                ('ses_configuration_set', models.CharField(blank=True, default='', help_text='SES configuration set name for tracking bounces/complaints (optional but recommended)', max_length=255)),
-                ('ses_sns_topic_arn', models.CharField(blank=True, default='', help_text='SNS topic ARN for receiving bounce/complaint notifications (required if configuration_set is used)', max_length=500)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "infra_backend",
+                    models.CharField(
+                        choices=[
+                            ("stalwart", "Stalwart Mail Server"),
+                            ("ses", "AWS SES"),
+                            ("null", "Null (dev/test)"),
+                        ],
+                        default="stalwart",
+                        help_text="Mail server for domain/DKIM infrastructure",
+                        max_length=32,
+                    ),
+                ),
+                (
+                    "send_backend",
+                    models.CharField(
+                        choices=[
+                            ("smtp", "SMTP Relay"),
+                            ("ses", "AWS SES API"),
+                            ("null", "Null (dev/test)"),
+                        ],
+                        default="smtp",
+                        help_text="Provider for outbound message delivery",
+                        max_length=32,
+                    ),
+                ),
+                (
+                    "aws_region",
+                    models.CharField(
+                        default="us-east-1",
+                        help_text="AWS region for SES (e.g., us-east-1, eu-west-1). Credentials from AWS_ACCESS_KEY_ID env vars.",
+                        max_length=32,
+                    ),
+                ),
+                (
+                    "ses_configuration_set",
+                    models.CharField(
+                        blank=True,
+                        default="",
+                        help_text="SES configuration set name for tracking bounces/complaints (optional but recommended)",
+                        max_length=255,
+                    ),
+                ),
+                (
+                    "ses_sns_topic_arn",
+                    models.CharField(
+                        blank=True,
+                        default="",
+                        help_text="SNS topic ARN for receiving bounce/complaint notifications (required if configuration_set is used)",
+                        max_length=500,
+                    ),
+                ),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Mail provider settings',
-                'verbose_name_plural': 'Mail provider settings',
+                "verbose_name": "Mail provider settings",
+                "verbose_name_plural": "Mail provider settings",
             },
         ),
     ]

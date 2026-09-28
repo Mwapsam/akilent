@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0003_remove_messagelog_bitrix_activity_id'),
+        ("whatsapp", "0003_remove_messagelog_bitrix_activity_id"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='webhookeventlog',
-            name='source',
-            field=models.CharField(choices=[('whatsapp', 'WhatsApp')], max_length=50),
+            model_name="webhookeventlog",
+            name="source",
+            field=models.CharField(choices=[("whatsapp", "WhatsApp")], max_length=50),
         ),
     ]

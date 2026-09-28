@@ -5,21 +5,32 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('conversations', '0003_alter_message_direction'),
-        ('crm', '0001_initial'),
+        ("conversations", "0003_alter_message_direction"),
+        ("crm", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='deal',
-            name='conversation',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='deals', to='conversations.conversation'),
+            model_name="deal",
+            name="conversation",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="deals",
+                to="conversations.conversation",
+            ),
         ),
         migrations.AddField(
-            model_name='lead',
-            name='conversation',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='leads', to='conversations.conversation'),
+            model_name="lead",
+            name="conversation",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="leads",
+                to="conversations.conversation",
+            ),
         ),
     ]

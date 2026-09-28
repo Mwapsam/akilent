@@ -31,8 +31,12 @@ def account(db):
 @pytest.fixture
 def contacts(account):
     return [
-        Contact.objects.create(account=account, email="ada@example.com", first_name="Ada"),
-        Contact.objects.create(account=account, email="grace@example.com", first_name="Grace"),
+        Contact.objects.create(
+            account=account, email="ada@example.com", first_name="Ada"
+        ),
+        Contact.objects.create(
+            account=account, email="grace@example.com", first_name="Grace"
+        ),
     ]
 
 
@@ -60,7 +64,7 @@ def test_the_fragment_re_renders_its_own_swap_target(client, account, contacts):
     the target itself - otherwise the second filter has nothing to swap."""
     client.force_login(account.owner)
     body = client.get("/contacts/", HTTP_HX_REQUEST="true").content.decode()
-    assert body.strip().startswith("<div id=\"contact-results\"")
+    assert body.strip().startswith('<div id="contact-results"')
 
 
 @pytest.mark.django_db

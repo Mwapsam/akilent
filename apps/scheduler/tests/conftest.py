@@ -21,12 +21,20 @@ def account(db):
     )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        max_emails_per_month=1000, email_apis=True, email_templates=True,
-        bulk_email=True, api_rate_per_min=0, max_bulk_recipients_per_campaign=-1,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=1000,
+        email_apis=True,
+        email_templates=True,
+        bulk_email=True,
+        api_rate_per_min=0,
+        max_bulk_recipients_per_campaign=-1,
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return acc
@@ -35,7 +43,9 @@ def account(db):
 @pytest.fixture
 def verified_domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 

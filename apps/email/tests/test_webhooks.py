@@ -24,11 +24,17 @@ def account(db):
     acc = Account.objects.create(company_name="Acme")
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        email_apis=True, outbound_webhooks=True, max_emails_per_month=-1,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        email_apis=True,
+        outbound_webhooks=True,
+        max_emails_per_month=-1,
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return acc
@@ -37,19 +43,25 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
 @pytest.fixture
 def message(account, domain):
     return EmailMessage.objects.create(
-        account=account, domain=domain,
-        from_email="hello@mail.acme.com", to_email="recipient@example.com", subject="Hi",
+        account=account,
+        domain=domain,
+        from_email="hello@mail.acme.com",
+        to_email="recipient@example.com",
+        subject="Hi",
     )
 
 
 # --- Signing -------------------------------------------------------------------
+
 
 def test_signature_round_trips():
     secret = "whsec_test"
@@ -83,25 +95,35 @@ def test_signature_rejects_malformed_header():
 
 # --- Fan-out ---------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_enqueue_event_fans_out_only_to_subscribed_active_endpoints(
     account, message, django_capture_on_commit_callbacks
 ):
     subscribed = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     WebhookEndpoint.objects.create(
-        account=account, url="https://b.example.com/hook", event_types=["message.failed"],
+        account=account,
+        url="https://b.example.com/hook",
+        event_types=["message.failed"],
     )
     WebhookEndpoint.objects.create(
-        account=account, url="https://c.example.com/hook",
-        event_types=["message.sent"], is_active=False,
+        account=account,
+        url="https://c.example.com/hook",
+        event_types=["message.sent"],
+        is_active=False,
     )
 
     with patch("apps.email.tasks.deliver_webhook.delay") as mock_delay:
         with django_capture_on_commit_callbacks(execute=True):
             ids = enqueue_event(
-                "message.sent", account=account, message=message, data={"id": message.pk}
+                "message.sent",
+                account=account,
+                message=message,
+                data={"id": message.pk},
             )
 
     assert len(ids) == 1
@@ -126,46 +148,63 @@ def test_enqueue_event_swallows_errors(account, message, monkeypatch):
 
 # --- Triggers --------------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_mark_sent_triggers_webhook_event(account, message):
     WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     with patch("apps.email.tasks.deliver_webhook.delay"):
         message.mark_sent("provider-msg-id")
 
-    assert WebhookDelivery.objects.filter(event_type="message.sent", message=message).exists()
+    assert WebhookDelivery.objects.filter(
+        event_type="message.sent", message=message
+    ).exists()
 
 
 @pytest.mark.django_db
 def test_mark_failed_triggers_webhook_event(account, message):
     WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.failed"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.failed"],
     )
     with patch("apps.email.tasks.deliver_webhook.delay"):
         message.mark_failed("smtp connection refused")
 
-    assert WebhookDelivery.objects.filter(event_type="message.failed", message=message).exists()
+    assert WebhookDelivery.objects.filter(
+        event_type="message.failed", message=message
+    ).exists()
 
 
 # --- Delivery task -----------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_deliver_webhook_marks_succeeded_on_2xx(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
         payload={"event": "message.sent", "data": {}},
     )
 
     class _FakeResponse:
         status_code = 200
+
         def raise_for_status(self):
             pass
 
-    with patch("apps.email.tasks.requests.post", return_value=_FakeResponse()) as mock_post:
+    with patch(
+        "apps.email.tasks.requests.post", return_value=_FakeResponse()
+    ) as mock_post:
         deliver_webhook(delivery.pk)
 
     delivery.refresh_from_db()
@@ -179,14 +218,20 @@ def test_deliver_webhook_marks_succeeded_on_2xx(account, message):
 @pytest.mark.django_db
 def test_deliver_webhook_retries_on_failure(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
         payload={"event": "message.sent", "data": {}},
     )
 
-    with patch("apps.email.tasks.requests.post", side_effect=ConnectionError("refused")):
+    with patch(
+        "apps.email.tasks.requests.post", side_effect=ConnectionError("refused")
+    ):
         with pytest.raises(Exception):
             deliver_webhook(delivery.pk)
 
@@ -198,16 +243,22 @@ def test_deliver_webhook_retries_on_failure(account, message):
 @pytest.mark.django_db
 def test_deliver_webhook_exhausts_after_max_retries(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
         payload={"event": "message.sent", "data": {}},
     )
 
     deliver_webhook.push_request(retries=6)  # == _WEBHOOK_MAX_RETRIES
     try:
-        with patch("apps.email.tasks.requests.post", side_effect=ConnectionError("refused")):
+        with patch(
+            "apps.email.tasks.requests.post", side_effect=ConnectionError("refused")
+        ):
             deliver_webhook(delivery.pk)
     finally:
         deliver_webhook.pop_request()
@@ -221,15 +272,21 @@ def test_deliver_webhook_exhausts_after_max_retries(account, message):
 @pytest.mark.django_db
 def test_exhausted_delivery_increments_consecutive_failures(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
         payload={"event": "message.sent", "data": {}},
     )
     deliver_webhook.push_request(retries=6)
     try:
-        with patch("apps.email.tasks.requests.post", side_effect=ConnectionError("refused")):
+        with patch(
+            "apps.email.tasks.requests.post", side_effect=ConnectionError("refused")
+        ):
             deliver_webhook(delivery.pk)
     finally:
         deliver_webhook.pop_request()
@@ -243,7 +300,9 @@ def test_exhausted_delivery_increments_consecutive_failures(account, message):
 @pytest.mark.django_db
 def test_endpoint_auto_disables_after_threshold(account):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
         consecutive_failures=WebhookEndpoint.AUTO_DISABLE_THRESHOLD - 1,
     )
     disabled = endpoint.record_failure("still down")
@@ -262,16 +321,22 @@ def test_endpoint_auto_disables_after_threshold(account):
 @pytest.mark.django_db
 def test_successful_delivery_resets_failure_counter(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
-        consecutive_failures=4, last_error="was failing",
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
+        consecutive_failures=4,
+        last_error="was failing",
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
         payload={"event": "message.sent", "data": {}},
     )
 
     class _Ok:
         status_code = 200
+
         def raise_for_status(self):
             pass
 
@@ -287,11 +352,16 @@ def test_successful_delivery_resets_failure_counter(account, message):
 @pytest.mark.django_db
 def test_deliver_webhook_skips_already_succeeded(account, message):
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
-        payload={}, status=WebhookDelivery.Status.SUCCEEDED,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
+        payload={},
+        status=WebhookDelivery.Status.SUCCEEDED,
     )
     with patch("apps.email.tasks.requests.post") as mock_post:
         deliver_webhook(delivery.pk)
@@ -300,9 +370,11 @@ def test_deliver_webhook_skips_already_succeeded(account, message):
 
 # --- Dashboard views ---------------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_webhook_create_requires_feature(client, account):
     from apps.billing.models import PlanFeature
+
     PlanFeature.objects.filter(plan=account.subscription.plan, key="webhooks").delete()
     client.force_login(account.owner)
     resp = client.post(
@@ -336,15 +408,22 @@ def test_webhook_redeliver_requeues_delivery(
 ):
     client.force_login(account.owner)
     endpoint = WebhookEndpoint.objects.create(
-        account=account, url="https://a.example.com/hook", event_types=["message.sent"],
+        account=account,
+        url="https://a.example.com/hook",
+        event_types=["message.sent"],
     )
     delivery = WebhookDelivery.objects.create(
-        endpoint=endpoint, event_type="message.sent", message=message,
-        payload={}, status=WebhookDelivery.Status.EXHAUSTED,
+        endpoint=endpoint,
+        event_type="message.sent",
+        message=message,
+        payload={},
+        status=WebhookDelivery.Status.EXHAUSTED,
     )
     with patch("apps.email.tasks.deliver_webhook.delay") as mock_delay:
         with django_capture_on_commit_callbacks(execute=True):
-            resp = client.post(f"/email/webhooks/deliveries/{delivery.pk}/resend/", follow=True)
+            resp = client.post(
+                f"/email/webhooks/deliveries/{delivery.pk}/resend/", follow=True
+            )
     assert resp.status_code == 200
     delivery.refresh_from_db()
     assert delivery.status == WebhookDelivery.Status.PENDING

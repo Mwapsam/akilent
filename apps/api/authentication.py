@@ -3,6 +3,7 @@
 Separate from the session-cookie auth used by the dashboard — this is the
 only authentication class wired into apps.api views.
 """
+
 from __future__ import annotations
 
 from django.core.cache import cache
@@ -74,7 +75,9 @@ class EmailApiKeyAuthentication(BaseAuthentication):
             _record_failed_attempt(request)
             raise exceptions.AuthenticationFailed("Invalid or missing API key")
         if not api_key.account.is_active:
-            raise exceptions.AuthenticationFailed("This account is suspended. Contact support.")
+            raise exceptions.AuthenticationFailed(
+                "This account is suspended. Contact support."
+            )
 
         return (api_key.account, api_key)
 

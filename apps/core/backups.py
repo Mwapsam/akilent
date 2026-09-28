@@ -3,6 +3,7 @@
 The ``backup`` service (docker/backup/backup.sh) writes ``db/YYYY-MM-DD.dump`` nightly and
 ``db/restore-check-latest.json`` weekly. This only lists and reads them; it never writes.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,24 +31,40 @@ def status() -> dict:
 
 
 def _read(bucket: str) -> dict:
-    result = {"configured": True, "latest": None, "latest_at": None, "size_mb": None,
-              "restore": None, "error": ""}
+    result = {
+        "configured": True,
+        "latest": None,
+        "latest_at": None,
+        "size_mb": None,
+        "restore": None,
+        "error": "",
+    }
     try:
         import boto3
 
         s3 = boto3.client("s3")
-        dumps = [o for o in s3.list_objects_v2(Bucket=bucket, Prefix="db/").get("Contents", [])
-                 if o["Key"].endswith(".dump")]
+        dumps = [
+            o
+            for o in s3.list_objects_v2(Bucket=bucket, Prefix="db/").get("Contents", [])
+            if o["Key"].endswith(".dump")
+        ]
         if dumps:
             newest = max(dumps, key=lambda o: o["LastModified"])
-            result.update(latest=newest["Key"].removeprefix("db/"), latest_at=newest["LastModified"],
-                          size_mb=round(newest["Size"] / 1_000_000, 1))
+            result.update(
+                latest=newest["Key"].removeprefix("db/"),
+                latest_at=newest["LastModified"],
+                size_mb=round(newest["Size"] / 1_000_000, 1),
+            )
         try:
-            body = s3.get_object(Bucket=bucket, Key="db/restore-check-latest.json")["Body"].read()
+            body = s3.get_object(Bucket=bucket, Key="db/restore-check-latest.json")[
+                "Body"
+            ].read()
             result["restore"] = json.loads(body)
         except s3.exceptions.NoSuchKey:
             pass
     except Exception as exc:  # the page must render even if S3 is unreachable
         logger.warning("backup status unavailable: %s", exc)
-        result["error"] = "Couldn't read the backup bucket. Check the web app's AWS access to it."
+        result["error"] = (
+            "Couldn't read the backup bucket. Check the web app's AWS access to it."
+        )
     return result

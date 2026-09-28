@@ -11,4 +11,6 @@ class AIConfig(AppConfig):
         from apps.ai.api import on_message_processed
         from apps.conversations.signals import conversation_message_processed
 
-        conversation_message_processed.connect(on_message_processed, dispatch_uid="ai-proposals")
+        conversation_message_processed.connect(
+            on_message_processed, dispatch_uid="ai-proposals"
+        )

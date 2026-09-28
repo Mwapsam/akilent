@@ -37,7 +37,9 @@ def account(db):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url", ["/dashboard/", "/dashboard/panels/", "/dashboard/work-queue/"])
+@pytest.mark.parametrize(
+    "url", ["/dashboard/", "/dashboard/panels/", "/dashboard/work-queue/"]
+)
 def test_no_comment_text_in_rendered_page(client, account, url):
     client.force_login(account.owner)
     body = client.get(url).content.decode()

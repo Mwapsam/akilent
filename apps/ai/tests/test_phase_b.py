@@ -1,6 +1,7 @@
 """Phase B: look-ups, conversation memory and one-click extras. AI still never sends or changes anything itself."""
+
 import json
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.contrib.auth.models import User
@@ -25,12 +26,21 @@ NOW = timezone.now()
 
 
 def reply(text="Happy to help.", **extra):
-    return json.dumps({"version": 1, "action": "reply", "confidence": 0.8, "reason": "r",
-                       "payload": {"text": text}, **extra})
+    return json.dumps(
+        {
+            "version": 1,
+            "action": "reply",
+            "confidence": 0.8,
+            "reason": "r",
+            "payload": {"text": text},
+            **extra,
+        }
+    )
 
 
 class ScriptedProvider(AIProvider):
     """Answers from a script, one entry per call, and remembers what it was sent."""
+
     script, calls = [], []
 
     def chat(self, messages, system="", max_tokens=1024, temperature=0.3, timeout=None):
@@ -41,8 +51,12 @@ class ScriptedProvider(AIProvider):
 @pytest.fixture(autouse=True)
 def scripted(settings, monkeypatch):
     settings.AI_PROVIDER_BACKEND = "ollama"
-    monkeypatch.setattr("apps.ai.agent.get_ai_provider", lambda *a, **k: ScriptedProvider())
-    monkeypatch.setattr("apps.ai.providers.get_ai_provider", lambda *a, **k: ScriptedProvider())
+    monkeypatch.setattr(
+        "apps.ai.agent.get_ai_provider", lambda *a, **k: ScriptedProvider()
+    )
+    monkeypatch.setattr(
+        "apps.ai.providers.get_ai_provider", lambda *a, **k: ScriptedProvider()
+    )
     ScriptedProvider.script, ScriptedProvider.calls = [], []
     cache.clear()
 
@@ -50,23 +64,34 @@ def scripted(settings, monkeypatch):
 @pytest.fixture
 def account(db):
     account = Account.objects.create(company_name="Sunrise Solar")
-    AISettings.objects.create(account=account, enabled=True, business_notes="3 kW from K18,000.")
+    AISettings.objects.create(
+        account=account, enabled=True, business_notes="3 kW from K18,000."
+    )
     return account
 
 
 def convo(account, phone="+260971000001"):
     contact = Contact.objects.create(account=account, phone=phone, first_name="Sam")
-    return Conversation.objects.create(account=account, contact=contact, channel="email", last_message_at=NOW)
+    return Conversation.objects.create(
+        account=account, contact=contact, channel="email", last_message_at=NOW
+    )
 
 
 def say(conversation, body, direction=Message.Direction.INBOUND, minutes_ago=0):
-    return Message.objects.create(account=conversation.account, conversation=conversation, direction=direction,
-                                  body=body, timestamp=NOW - timedelta(minutes=minutes_ago))
+    return Message.objects.create(
+        account=conversation.account,
+        conversation=conversation,
+        direction=direction,
+        body=body,
+        timestamp=NOW - timedelta(minutes=minutes_ago),
+    )
 
 
 def draft_for(conversation, body="Are you open now?"):
     m = say(conversation, body)
-    p = AIProposal.objects.create(account=conversation.account, conversation=conversation, trigger_message=m)
+    p = AIProposal.objects.create(
+        account=conversation.account, conversation=conversation, trigger_message=m
+    )
     draft_proposal.apply(args=(p.pk,))
     p.refresh_from_db()
     return p
@@ -75,12 +100,27 @@ def draft_for(conversation, body="Are you open now?"):
 # ---- look-ups (read-only registry actions) ----
 @pytest.mark.django_db
 def test_opening_hours_say_when_the_business_next_opens(account):
-    business_hours.save_hours(account, tz="Africa/Lusaka", schedule={
-        "mon": {"open": "08:00", "close": "17:00"}, "tue": {"open": "08:00", "close": "17:00"}})
-    monday_night = datetime(2026, 9, 21, 19, 0, tzinfo=dt_timezone.utc)  # 21:00 in Lusaka
+    business_hours.save_hours(
+        account,
+        tz="Africa/Lusaka",
+        schedule={
+            "mon": {"open": "08:00", "close": "17:00"},
+            "tue": {"open": "08:00", "close": "17:00"},
+        },
+    )
+    monday_night = datetime(2026, 9, 21, 19, 0, tzinfo=UTC)  # 21:00 in Lusaka
     info = business_hours.availability(account, monday_night)
-    assert info["open_now"] is False and info["next_open"] == "tomorrow at 08:00" and info["today"] == "08:00-17:00"
-    assert business_hours.availability(Account.objects.create(company_name="No hours"))["hours_set"] is False
+    assert (
+        info["open_now"] is False
+        and info["next_open"] == "tomorrow at 08:00"
+        and info["today"] == "08:00-17:00"
+    )
+    assert (
+        business_hours.availability(Account.objects.create(company_name="No hours"))[
+            "hours_set"
+        ]
+        is False
+    )
 
 
 @pytest.mark.django_db
@@ -90,24 +130,43 @@ def test_look_ups_only_ever_see_the_callers_own_business(account):
     with pytest.raises(ActionError):
         run_action("lookup_customer", {"account": account}, conversation=theirs)
     Product.objects.create(account=other, name="Solar panel", slug="panel", price=900)
-    Product.objects.create(account=account, name="Solar battery", slug="battery", price=4000, currency="ZMW")
-    found = run_action("lookup_products", {"account": account}, account=account, query="solar")
-    assert found == {"products": [{"name": "Solar battery", "price": "4000.00", "currency": "ZMW"}]}
+    Product.objects.create(
+        account=account,
+        name="Solar battery",
+        slug="battery",
+        price=4000,
+        currency="ZMW",
+    )
+    found = run_action(
+        "lookup_products", {"account": account}, account=account, query="solar"
+    )
+    assert found == {
+        "products": [{"name": "Solar battery", "price": "4000.00", "currency": "ZMW"}]
+    }
     billing_api.set_owner_switch(account, "orders", False)
     with pytest.raises(ActionError, match="orders"):
-        run_action("lookup_products", {"account": account}, account=account, query="solar")
+        run_action(
+            "lookup_products", {"account": account}, account=account, query="solar"
+        )
 
 
 @pytest.mark.django_db
 def test_the_model_can_look_something_up_before_proposing(account):
     c = convo(account)
-    ScriptedProvider.script = ['{"tool": "check_opening_hours", "args": {}}', reply("Yes, we're open until 17:00.")]
+    ScriptedProvider.script = [
+        '{"tool": "check_opening_hours", "args": {}}',
+        reply("Yes, we're open until 17:00."),
+    ]
     p = draft_for(c)
     assert p.status == "ready" and p.tools_used == ["check_opening_hours"]
     second = ScriptedProvider.calls[1]["messages"]
-    assert second[-1].role == "user" and second[-1].content.startswith("Result of check_opening_hours")
+    assert second[-1].role == "user" and second[-1].content.startswith(
+        "Result of check_opening_hours"
+    )
     assert "check_opening_hours" in ScriptedProvider.calls[0]["system"]
-    assert Message.objects.filter(direction="outbound").count() == 0, "AI must never send"
+    assert Message.objects.filter(direction="outbound").count() == 0, (
+        "AI must never send"
+    )
 
 
 @pytest.mark.django_db
@@ -115,7 +174,10 @@ def test_an_unknown_look_up_is_answered_with_an_error_not_a_crash(account):
     c = convo(account)
     ScriptedProvider.script = ['{"tool": "read_bank_balance"}', reply()]
     p = draft_for(c)
-    assert p.status == "ready" and "no look-up called" in ScriptedProvider.calls[1]["messages"][-1].content
+    assert (
+        p.status == "ready"
+        and "no look-up called" in ScriptedProvider.calls[1]["messages"][-1].content
+    )
 
 
 @pytest.mark.django_db
@@ -123,7 +185,11 @@ def test_endless_look_ups_are_cut_off(account):
     c = convo(account)
     ScriptedProvider.script = ['{"tool": "get_customer"}'] * 4
     p = draft_for(c)
-    assert p.status == "error" and "look-ups" in p.error and len(ScriptedProvider.calls) == 4
+    assert (
+        p.status == "error"
+        and "look-ups" in p.error
+        and len(ScriptedProvider.calls) == 4
+    )
 
 
 @pytest.mark.django_db
@@ -137,12 +203,23 @@ def test_products_look_up_is_not_offered_without_the_commerce_module(account):
 
 # ---- extras: suggested, never applied by AI ----
 def test_extras_keep_only_known_tags_sensible_follow_ups_and_at_most_three():
-    extras = proposals.clean_extras([
-        {"kind": "tag", "tag": "VIP"}, {"kind": "tag", "tag": "made-up"}, {"kind": "track_interest"},
-        {"kind": "follow_up", "in_days": 40}, {"kind": "follow_up", "in_days": "2", "note": "quote"},
-        {"kind": "delete_customer"}, {"kind": "tag", "tag": "vip"},
-    ], tags=["vip"], can_track=False)
-    assert extras == [{"kind": "tag", "tag": "vip"}, {"kind": "follow_up", "in_days": 2, "note": "quote"}]
+    extras = proposals.clean_extras(
+        [
+            {"kind": "tag", "tag": "VIP"},
+            {"kind": "tag", "tag": "made-up"},
+            {"kind": "track_interest"},
+            {"kind": "follow_up", "in_days": 40},
+            {"kind": "follow_up", "in_days": "2", "note": "quote"},
+            {"kind": "delete_customer"},
+            {"kind": "tag", "tag": "vip"},
+        ],
+        tags=["vip"],
+        can_track=False,
+    )
+    assert extras == [
+        {"kind": "tag", "tag": "vip"},
+        {"kind": "follow_up", "in_days": 2, "note": "quote"},
+    ]
 
 
 @pytest.fixture
@@ -157,16 +234,27 @@ def agent(client, account):
 def test_a_person_applies_extras_with_one_click(agent, account):
     Tag.objects.create(account=account, name="solar-quote", slug="solar-quote")
     c = convo(account)
-    ScriptedProvider.script = [reply(extras=[
-        {"kind": "tag", "tag": "solar-quote"}, {"kind": "track_interest"},
-        {"kind": "follow_up", "in_days": 2, "note": "Check they got the quote"}])]
+    ScriptedProvider.script = [
+        reply(
+            extras=[
+                {"kind": "tag", "tag": "solar-quote"},
+                {"kind": "track_interest"},
+                {"kind": "follow_up", "in_days": 2, "note": "Check they got the quote"},
+            ]
+        )
+    ]
     p = draft_for(c, "How much for 3 kW?")
     assert [e["kind"] for e in p.extras] == ["tag", "track_interest", "follow_up"]
-    assert not c.contact.tags.exists() and not FollowUp.objects.exists(), "nothing happens until a person clicks"
+    assert not c.contact.tags.exists() and not FollowUp.objects.exists(), (
+        "nothing happens until a person clicks"
+    )
 
     feed = agent.get(f"/inbox/{c.public_id}/messages/").json()["aiProposal"]
     assert [e["label"] for e in feed["extras"]] == [
-        "Tag “solar-quote”", "Track as interested", "Follow up in 2 days: Check they got the quote"]
+        "Tag “solar-quote”",
+        "Track as interested",
+        "Follow up in 2 days: Check they got the quote",
+    ]
 
     url = f"/inbox/{c.public_id}/ai/apply/"
     for i in range(3):
@@ -174,7 +262,10 @@ def test_a_person_applies_extras_with_one_click(agent, account):
     assert list(c.contact.tags.values_list("name", flat=True)) == ["solar-quote"]
     assert Lead.objects.filter(contact=c.contact).count() == 1
     assert FollowUp.objects.get().note == "Check they got the quote"
-    assert agent.post(url, {"proposal": p.pk, "index": 1}).json()["message"] == "Already done."
+    assert (
+        agent.post(url, {"proposal": p.pk, "index": 1}).json()["message"]
+        == "Already done."
+    )
     assert Lead.objects.filter(contact=c.contact).count() == 1
 
 
@@ -183,35 +274,63 @@ def test_extras_cant_be_applied_through_another_conversation(agent, account):
     c, other = convo(account), convo(account, "+260971000002")
     ScriptedProvider.script = [reply(extras=[{"kind": "follow_up", "in_days": 1}])]
     p = draft_for(c)
-    assert agent.post(f"/inbox/{other.public_id}/ai/apply/", {"proposal": p.pk, "index": 0}).status_code == 400
+    assert (
+        agent.post(
+            f"/inbox/{other.public_id}/ai/apply/", {"proposal": p.pk, "index": 0}
+        ).status_code
+        == 400
+    )
     assert not FollowUp.objects.exists()
 
 
 # ---- conversation memory ----
 def long_thread(c, n=20):
     for i in range(n):
-        say(c, f"Message {i}: call me on 0971234567" if i == 0 else f"Message {i}",
-            direction=Message.Direction.INBOUND if i % 2 == 0 else Message.Direction.OUTBOUND, minutes_ago=100 - i)
+        say(
+            c,
+            f"Message {i}: call me on 0971234567" if i == 0 else f"Message {i}",
+            direction=Message.Direction.INBOUND
+            if i % 2 == 0
+            else Message.Direction.OUTBOUND,
+            minutes_ago=100 - i,
+        )
 
 
 @pytest.mark.django_db
-def test_a_long_conversation_is_folded_into_memory_and_used_next_time(account, monkeypatch):
+def test_a_long_conversation_is_folded_into_memory_and_used_next_time(
+    account, monkeypatch
+):
     c = convo(account)
     long_thread(c)
     queued = []
-    monkeypatch.setattr(refresh_memory, "apply_async", lambda args, **kw: queued.append(args))
+    monkeypatch.setattr(
+        refresh_memory, "apply_async", lambda args, **kw: queued.append(args)
+    )
     ScriptedProvider.script = [reply()]
     draft_for(c)
-    assert queued == [(c.pk,)], "enough older messages: a refresh is queued after the draft"
+    assert queued == [(c.pk,)], (
+        "enough older messages: a refresh is queued after the draft"
+    )
 
-    ScriptedProvider.script = [json.dumps({"summary": "Wants a 3 kW system; ring 0971234567.",
-                                           "facts": {"wants": "3 kW system", "town": "Kitwe"}})]
+    ScriptedProvider.script = [
+        json.dumps(
+            {
+                "summary": "Wants a 3 kW system; ring 0971234567.",
+                "facts": {"wants": "3 kW system", "town": "Kitwe"},
+            }
+        )
+    ]
     assert refresh_memory.apply(args=(c.pk,)).result == "updated"
     sent = ScriptedProvider.calls[-1]["messages"][0].content
-    assert "Message 0" in sent and "0971234567" not in sent, "older messages only, masked"
+    assert "Message 0" in sent and "0971234567" not in sent, (
+        "older messages only, masked"
+    )
     assert "Message 19" not in sent, "the recent window is never summarised"
     mem = AIConversationMemory.objects.get(conversation=c)
-    assert "0971234567" not in mem.summary and mem.facts == {"wants": "3 kW system", "town": "Kitwe"}
+    assert "0971234567" not in mem.summary and mem.facts == {
+        "wants": "3 kW system",
+        "town": "Kitwe",
+    }
     assert not ai_memory.needs_refresh(c)
 
     ScriptedProvider.script = [reply()]

@@ -4,30 +4,40 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0018_add_unsubscribe_token'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0018_add_unsubscribe_token"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='suppressionlistentry',
-            name='bounce_count',
+            model_name="suppressionlistentry",
+            name="bounce_count",
             field=models.PositiveIntegerField(default=1),
         ),
         migrations.AddField(
-            model_name='suppressionlistentry',
-            name='updated_at',
+            model_name="suppressionlistentry",
+            name="updated_at",
             field=models.DateTimeField(auto_now=True),
         ),
         migrations.AlterField(
-            model_name='suppressionlistentry',
-            name='reason',
-            field=models.CharField(choices=[('bounce', 'Hard Bounce'), ('soft_bounce', 'Transient/Undetermined Bounce'), ('complaint', 'Complaint (Abuse Report)'), ('unsubscribe', 'Unsubscribed'), ('invalid', 'Failed Validation'), ('manual', 'Manually Suppressed')], default='bounce', max_length=20),
+            model_name="suppressionlistentry",
+            name="reason",
+            field=models.CharField(
+                choices=[
+                    ("bounce", "Hard Bounce"),
+                    ("soft_bounce", "Transient/Undetermined Bounce"),
+                    ("complaint", "Complaint (Abuse Report)"),
+                    ("unsubscribe", "Unsubscribed"),
+                    ("invalid", "Failed Validation"),
+                    ("manual", "Manually Suppressed"),
+                ],
+                default="bounce",
+                max_length=20,
+            ),
         ),
         migrations.AddIndex(
-            model_name='suppressionlistentry',
-            index=models.Index(fields=['email'], name='email_servi_email_7d94ea_idx'),
+            model_name="suppressionlistentry",
+            index=models.Index(fields=["email"], name="email_servi_email_7d94ea_idx"),
         ),
     ]

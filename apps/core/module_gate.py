@@ -1,4 +1,5 @@
 """View gate for plan features (see ``apps.billing.api.entitled`` / ``usable``)."""
+
 from functools import wraps
 
 from django.shortcuts import redirect
@@ -16,7 +17,9 @@ def module_required(feature: str):
     the owner, both land on ``/billing/locked/<key>/``, which explains which one it is. Apply
     below ``@login_required``. Requests with no current account fall through to the view.
     """
-    catalog.get(feature)  # an unknown key fails at import time, not on the first request
+    catalog.get(
+        feature
+    )  # an unknown key fails at import time, not on the first request
 
     def decorator(view):
         @wraps(view)
@@ -25,5 +28,7 @@ def module_required(feature: str):
             if account is not None and not billing_api.usable(account, feature):
                 return redirect(reverse("billing:locked", args=[feature]))
             return view(request, *args, **kwargs)
+
         return wrapper
+
     return decorator

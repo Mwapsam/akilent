@@ -5,6 +5,7 @@ tenant-authored template content only ever sees the variables dict passed at
 render time — never settings, the request, or app models. Never render with
 a RequestContext here.
 """
+
 from __future__ import annotations
 
 import re
@@ -38,8 +39,7 @@ def _account_components(template) -> dict:
     from apps.email.models import TemplateComponent
 
     return {
-        c.name: c.html
-        for c in TemplateComponent.objects.filter(account_id=account_id)
+        c.name: c.html for c in TemplateComponent.objects.filter(account_id=account_id)
     }
 
 

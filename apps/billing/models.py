@@ -37,7 +37,9 @@ class Plan(models.Model):
     service_type = models.CharField(
         max_length=10, choices=SERVICE_TYPE_CHOICES, default=SERVICE_EMAIL
     )
-    price_monthly = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    price_monthly = models.DecimalField(
+        max_digits=8, decimal_places=2, default=Decimal("0.00")
+    )
 
     max_conversations_per_month = models.IntegerField(default=100)
     max_emails_per_month = models.IntegerField(default=1000)
@@ -48,13 +50,19 @@ class Plan(models.Model):
     has_priority_support = models.BooleanField(default=False)
 
     # Email-platform capabilities — toggled/edited per package by admins.
-    email_apis = models.BooleanField(default=True)          # RESTful API + SMTP relay
-    inbound_email = models.BooleanField(default=False)      # inbound email processing
-    tracking_webhooks = models.BooleanField(default=False)  # tracking, analytics & webhooks
-    detailed_analytics = models.BooleanField(default=False) # detailed analytics & insights
-    outbound_webhooks = models.BooleanField(default=False)  # delivery/open/click callbacks
-    bulk_email = models.BooleanField(default=False)          # mass/campaign sending
-    email_templates = models.BooleanField(default=True)      # DB-backed reusable templates
+    email_apis = models.BooleanField(default=True)  # RESTful API + SMTP relay
+    inbound_email = models.BooleanField(default=False)  # inbound email processing
+    tracking_webhooks = models.BooleanField(
+        default=False
+    )  # tracking, analytics & webhooks
+    detailed_analytics = models.BooleanField(
+        default=False
+    )  # detailed analytics & insights
+    outbound_webhooks = models.BooleanField(
+        default=False
+    )  # delivery/open/click callbacks
+    bulk_email = models.BooleanField(default=False)  # mass/campaign sending
+    email_templates = models.BooleanField(default=True)  # DB-backed reusable templates
     # -1 = unlimited, same convention as the other max_* fields.
     max_bulk_recipients_per_campaign = models.IntegerField(default=500)
     log_retention_days = models.PositiveIntegerField(default=7)  # log retention window
@@ -108,7 +116,9 @@ class Subscription(models.Model):
         on_delete=models.CASCADE,
         related_name="subscription",
     )
-    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
+    plan = models.ForeignKey(
+        Plan, on_delete=models.PROTECT, related_name="subscriptions"
+    )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=TRIALING)
     billing_period = models.CharField(
@@ -187,9 +197,13 @@ class ManualPaymentRequest(models.Model):
     ]
 
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="manual_payment_requests"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="manual_payment_requests",
     )
-    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="manual_payment_requests")
+    plan = models.ForeignKey(
+        Plan, on_delete=models.PROTECT, related_name="manual_payment_requests"
+    )
     reference = models.CharField(max_length=255, blank=True, default="")
     proof = models.FileField(upload_to="manual_payments/", blank=True, null=True)
 
@@ -314,7 +328,9 @@ class UsageSummary(models.Model):
     def get_current_usage(cls, account):
         period_start = timezone.now().date().replace(day=1)
         try:
-            return cls.objects.get(account=account, period_start=period_start).conversations_used
+            return cls.objects.get(
+                account=account, period_start=period_start
+            ).conversations_used
         except cls.DoesNotExist:
             return 0
 
@@ -322,7 +338,9 @@ class UsageSummary(models.Model):
     def get_current_email_usage(cls, account):
         period_start = timezone.now().date().replace(day=1)
         try:
-            return cls.objects.get(account=account, period_start=period_start).emails_used
+            return cls.objects.get(
+                account=account, period_start=period_start
+            ).emails_used
         except cls.DoesNotExist:
             return 0
 
@@ -404,11 +422,15 @@ class AccountLimitOverride(models.Model):
     """An operator's exception for one business ("10,000 messages this month for this pilot").
     Wins over the plan until ``expires_at`` (if set)."""
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="limit_overrides")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="limit_overrides"
+    )
     key = models.CharField(max_length=50)
     value = models.IntegerField()
     note = models.CharField(max_length=255, blank=True, default="")
-    set_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    set_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -423,7 +445,9 @@ class AccountLimitOverride(models.Model):
 class UsageCounter(models.Model):
     """Units used of one metered limit in one period (a calendar month or day, UTC)."""
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="usage_counters")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="usage_counters"
+    )
     key = models.CharField(max_length=50)
     period_start = models.DateField()
     used = models.PositiveIntegerField(default=0)
@@ -447,10 +471,16 @@ class UsageReservation(models.Model):
     """
 
     RESERVED, COMMITTED, RELEASED = "reserved", "committed", "released"
-    STATUS_CHOICES = [(RESERVED, "Reserved"), (COMMITTED, "Committed"), (RELEASED, "Released")]
+    STATUS_CHOICES = [
+        (RESERVED, "Reserved"),
+        (COMMITTED, "Committed"),
+        (RELEASED, "Released"),
+    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="usage_reservations")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="usage_reservations"
+    )
     key = models.CharField(max_length=50)
     units = models.PositiveIntegerField(default=1)
     operation_id = models.CharField(max_length=120)
@@ -460,8 +490,11 @@ class UsageReservation(models.Model):
     settled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["account", "key", "operation_id"],
-                                               name="unique_usage_operation")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "key", "operation_id"], name="unique_usage_operation"
+            )
+        ]
         indexes = [models.Index(fields=["status", "created_at"])]
 
     def __str__(self):
@@ -474,7 +507,9 @@ class UnitCost(models.Model):
     business directly, so it's never here."""
 
     driver = models.CharField(max_length=30, unique=True)
-    cost_per_unit = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    cost_per_unit = models.DecimalField(
+        max_digits=12, decimal_places=6, default=Decimal("0")
+    )
     note = models.CharField(max_length=255, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -486,7 +521,9 @@ class CostSettings(models.Model):
     """Singleton: the fixed monthly cost of serving one business (hosting, support, the WhatsApp
     number's share of infrastructure) and the margin a paid plan should keep."""
 
-    fixed_monthly_cost_per_business = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    fixed_monthly_cost_per_business = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
     target_margin_pct = models.PositiveSmallIntegerField(default=50)
     updated_at = models.DateTimeField(auto_now=True)
 

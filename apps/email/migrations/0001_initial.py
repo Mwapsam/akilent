@@ -5,62 +5,147 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('accounts', '0001_initial'),
+        ("accounts", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='EmailApiKey',
+            name="EmailApiKey",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(default='default', max_length=100)),
-                ('key', models.CharField(db_index=True, max_length=64, unique=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('last_used_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_api_keys', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(default="default", max_length=100)),
+                ("key", models.CharField(db_index=True, max_length=64, unique=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("last_used_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_api_keys",
+                        to="accounts.account",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='EmailDomain',
+            name="EmailDomain",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('domain', models.CharField(max_length=255, unique=True)),
-                ('dkim_selector', models.CharField(default='dkim', max_length=63)),
-                ('dkim_public_key', models.TextField(blank=True, default='')),
-                ('status', models.CharField(choices=[('pending', 'Pending DNS / verification'), ('verified', 'Verified'), ('failed', 'Failed')], default='pending', max_length=20)),
-                ('spf_ok', models.BooleanField(default=False)),
-                ('dkim_ok', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('verified_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_domains', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("domain", models.CharField(max_length=255, unique=True)),
+                ("dkim_selector", models.CharField(default="dkim", max_length=63)),
+                ("dkim_public_key", models.TextField(blank=True, default="")),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending DNS / verification"),
+                            ("verified", "Verified"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("spf_ok", models.BooleanField(default=False)),
+                ("dkim_ok", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("verified_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_domains",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['domain'],
+                "ordering": ["domain"],
             },
         ),
         migrations.CreateModel(
-            name='EmailMessage',
+            name="EmailMessage",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('from_email', models.EmailField(max_length=254)),
-                ('to_email', models.EmailField(max_length=254)),
-                ('subject', models.CharField(blank=True, default='', max_length=998)),
-                ('status', models.CharField(choices=[('queued', 'Queued'), ('sent', 'Sent'), ('failed', 'Failed')], default='queued', max_length=20)),
-                ('provider_message_id', models.CharField(blank=True, max_length=255, null=True)),
-                ('error', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('sent_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_messages', to='accounts.account')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("from_email", models.EmailField(max_length=254)),
+                ("to_email", models.EmailField(max_length=254)),
+                ("subject", models.CharField(blank=True, default="", max_length=998)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("queued", "Queued"),
+                            ("sent", "Sent"),
+                            ("failed", "Failed"),
+                        ],
+                        default="queued",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "provider_message_id",
+                    models.CharField(blank=True, max_length=255, null=True),
+                ),
+                ("error", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("sent_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_messages",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['account', 'status'], name='email_servi_account_3438bd_idx'), models.Index(fields=['created_at'], name='email_servi_created_5fcc8d_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["account", "status"],
+                        name="email_servi_account_3438bd_idx",
+                    ),
+                    models.Index(
+                        fields=["created_at"], name="email_servi_created_5fcc8d_idx"
+                    ),
+                ],
             },
         ),
     ]

@@ -5,8 +5,8 @@ not raw dicts. This ensures type safety across provider implementations and
 makes adapters (dict → typed result) the provider's responsibility, not the
 business logic's.
 """
+
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -19,10 +19,10 @@ class SendResult:
     success: bool
     """Whether the message was accepted for delivery."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if success=False (e.g., 'invalid_recipient', 'rate_limit')."""
 
-    error_code: Optional[str] = None
+    error_code: str | None = None
     """Provider error code (e.g. Meta '131047') when success=False."""
 
     retryable: bool = True
@@ -49,7 +49,7 @@ class MediaUploadResult:
 
     success: bool = True
 
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -66,7 +66,7 @@ class MediaHandleResult:
 
     success: bool = True
 
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -79,7 +79,7 @@ class MediaUrlResult:
     media_type: str
     """MIME type (e.g., 'image/jpeg', 'video/mp4')."""
 
-    size_bytes: Optional[int] = None
+    size_bytes: int | None = None
     """File size in bytes if available from provider."""
 
 
@@ -90,5 +90,5 @@ class ReadReceiptResult:
     success: bool
     """Whether the read receipt was accepted."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if success=False."""

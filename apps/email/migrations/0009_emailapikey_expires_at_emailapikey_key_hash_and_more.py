@@ -4,45 +4,51 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0008_rename_email_servi_audit_account_ts_idx_email_servi_account_04304c_idx_and_more'),
+        (
+            "email_service",
+            "0008_rename_email_servi_audit_account_ts_idx_email_servi_account_04304c_idx_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emailapikey',
-            name='expires_at',
+            model_name="emailapikey",
+            name="expires_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='emailapikey',
-            name='key_hash',
-            field=models.CharField(blank=True, db_index=True, max_length=64, null=True, unique=True),
+            model_name="emailapikey",
+            name="key_hash",
+            field=models.CharField(
+                blank=True, db_index=True, max_length=64, null=True, unique=True
+            ),
         ),
         migrations.AddField(
-            model_name='emailapikey',
-            name='key_prefix',
-            field=models.CharField(default='ak_live_', max_length=12),
+            model_name="emailapikey",
+            name="key_prefix",
+            field=models.CharField(default="ak_live_", max_length=12),
         ),
         migrations.AddField(
-            model_name='emailapikey',
-            name='last4',
-            field=models.CharField(blank=True, default='', max_length=4),
+            model_name="emailapikey",
+            name="last4",
+            field=models.CharField(blank=True, default="", max_length=4),
         ),
         migrations.AddField(
-            model_name='emailapikey',
-            name='rate_per_min',
+            model_name="emailapikey",
+            name="rate_per_min",
             field=models.PositiveIntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='emailapikey',
-            name='scopes',
+            model_name="emailapikey",
+            name="scopes",
             field=models.JSONField(default=list),
         ),
         migrations.AlterField(
-            model_name='emailapikey',
-            name='key',
-            field=models.CharField(blank=True, db_index=True, max_length=64, null=True, unique=True),
+            model_name="emailapikey",
+            name="key",
+            field=models.CharField(
+                blank=True, db_index=True, max_length=64, null=True, unique=True
+            ),
         ),
     ]

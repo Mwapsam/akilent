@@ -6,6 +6,7 @@
 * An inbound "START" opts the contact back in.
 * Marketing templates require an explicit opt-in even when approved.
 """
+
 import hashlib
 import hmac
 import json
@@ -110,11 +111,15 @@ class ConsentKeywordTest(TestCase):
             is_active=True,
         )
         plan = Plan.objects.first() or Plan.objects.create(
-            name="Test Plan", slug="test-plan", price_monthly=0,
+            name="Test Plan",
+            slug="test-plan",
+            price_monthly=0,
             max_conversations_per_month=-1,
         )
         Subscription.objects.create(
-            account=self.account, plan=plan, status=Subscription.ACTIVE,
+            account=self.account,
+            plan=plan,
+            status=Subscription.ACTIVE,
             current_period_start=timezone.now(),
         )
         self.provider = _FakeProvider()
@@ -189,8 +194,12 @@ class ConsentKeywordTest(TestCase):
             contact=contact,
             template=template,
             idempotency_key="m1",
-            payload={"type": "template", "template_name": "promo", "language": "en",
-                     "components": []},
+            payload={
+                "type": "template",
+                "template_name": "promo",
+                "language": "en",
+                "components": [],
+            },
         )
         drain_outbound_queue()
         msg.refresh_from_db()

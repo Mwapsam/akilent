@@ -10,6 +10,7 @@ Meta would reject fails when it is saved, not when a customer is waiting.
 Interactive messages are free-form session messages: like plain text they can only be sent
 inside the 24-hour customer-service window.
 """
+
 from __future__ import annotations
 
 from django.utils.text import slugify
@@ -38,10 +39,18 @@ def extract_reply(message: dict) -> dict | None:
         subtype = block.get("type")
         if subtype in ("button_reply", "list_reply"):
             reply = block.get(subtype) or {}
-            return {"id": reply.get("id") or "", "title": reply.get("title") or "", "kind": subtype}
+            return {
+                "id": reply.get("id") or "",
+                "title": reply.get("title") or "",
+                "kind": subtype,
+            }
     elif kind == "button":  # a quick-reply button on a template the business sent
         button = message.get("button") or {}
-        return {"id": button.get("payload") or "", "title": button.get("text") or "", "kind": "template_button"}
+        return {
+            "id": button.get("payload") or "",
+            "title": button.get("text") or "",
+            "kind": "template_button",
+        }
     return None
 
 
@@ -67,7 +76,9 @@ def _text(value, label: str, limit: int, *, required: bool = True) -> str:
     if required and not value:
         raise InteractiveError(f"{label} can't be empty.")
     if len(value) > limit:
-        raise InteractiveError(f"{label} can be at most {limit} characters (this is {len(value)}).")
+        raise InteractiveError(
+            f"{label} can be at most {limit} characters (this is {len(value)})."
+        )
     return value
 
 
@@ -89,7 +100,9 @@ def build_buttons(text: str, buttons: list) -> dict:
         title = _text(option.get("title"), "A button label", MAX_BUTTON_TITLE)
         option_id = _option_id(option, title)
         if option_id.casefold() in seen:
-            raise InteractiveError(f"Two buttons share the name “{option_id}”. Make the labels different.")
+            raise InteractiveError(
+                f"Two buttons share the name “{option_id}”. Make the labels different."
+            )
         seen.add(option_id.casefold())
         built.append({"type": "reply", "reply": {"id": option_id, "title": title}})
     return {"type": "button", "body": {"text": body}, "action": {"buttons": built}}
@@ -107,15 +120,23 @@ def build_list(text: str, button_label: str, rows: list) -> dict:
         title = _text(row.get("title"), "A choice", MAX_ROW_TITLE)
         row_id = _option_id(row, title)
         if row_id.casefold() in seen:
-            raise InteractiveError(f"Two choices share the name “{row_id}”. Make the titles different.")
+            raise InteractiveError(
+                f"Two choices share the name “{row_id}”. Make the titles different."
+            )
         seen.add(row_id.casefold())
         entry = {"id": row_id, "title": title}
-        description = _text(row.get("description"), "A choice's description", MAX_ROW_DESCRIPTION, required=False)
+        description = _text(
+            row.get("description"),
+            "A choice's description",
+            MAX_ROW_DESCRIPTION,
+            required=False,
+        )
         if description:
             entry["description"] = description
         built.append(entry)
     return {
-        "type": "list", "body": {"text": body},
+        "type": "list",
+        "body": {"text": body},
         "action": {"button": label, "sections": [{"title": "Options", "rows": built}]},
     }
 

@@ -11,6 +11,7 @@ Design invariants (see docs/plans — "Locked Implementation Decisions"):
     them via nullable one-to-one references. The existing WhatsApp
     implementation is preserved, not rewritten.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -67,7 +68,9 @@ class Conversation(models.Model):
         related_name="generic_conversation",
     )
 
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.OPEN
+    )
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -99,7 +102,7 @@ class Conversation(models.Model):
         return f"{self.get_channel_display()} conversation with {self.contact}"
 
     @classmethod
-    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> "Conversation":
+    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> Conversation:
         """Idempotently get/create the generic wrapper for a whatsapp.Conversation.
 
         ``whatsapp_conversation.contact.contact`` (the linked ``apps.contacts.Contact``)
@@ -126,7 +129,9 @@ class Conversation(models.Model):
         self.last_message_at = at
         self.status = self.Status.OPEN
         self.is_unread = True
-        self.save(update_fields=["last_message_at", "status", "is_unread", "updated_at"])
+        self.save(
+            update_fields=["last_message_at", "status", "is_unread", "updated_at"]
+        )
 
     def register_outbound(self, at) -> None:
         """Advance ``last_message_at`` for a business message. Unlike an inbound message it
@@ -168,7 +173,9 @@ class Message(models.Model):
         SYSTEM = "system", "System"
 
     account = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="conversation_messages"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="conversation_messages",
     )
     conversation = models.ForeignKey(
         Conversation, on_delete=models.CASCADE, related_name="messages"
@@ -242,7 +249,9 @@ class Event(models.Model):
     public_id = models.CharField(
         max_length=40, unique=True, default=_event_public_id, editable=False
     )
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="events")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="events"
+    )
     type = models.CharField(max_length=100, db_index=True)
     occurred_at = models.DateTimeField()
 
@@ -301,10 +310,18 @@ class FollowUp(models.Model):
     general task system — creation is limited to "remind me in 1h / tomorrow /
     pick a time" from a conversation, per the plan's UX guardrail."""
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="followups")
-    contact = models.ForeignKey("contacts.Contact", on_delete=models.CASCADE, related_name="followups")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="followups"
+    )
+    contact = models.ForeignKey(
+        "contacts.Contact", on_delete=models.CASCADE, related_name="followups"
+    )
     conversation = models.ForeignKey(
-        Conversation, on_delete=models.CASCADE, related_name="followups", null=True, blank=True
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="followups",
+        null=True,
+        blank=True,
     )
     due_at = models.DateTimeField()
     note = models.CharField(max_length=255, blank=True, default="")
@@ -341,20 +358,47 @@ class ConversationAttribution(models.Model):
     """
 
     class Method(models.TextChoices):
-        EXPLICIT = "explicit", "Explicit"                      # a person or workflow named the conversation
-        RECENT_CONVERSATION = "recent_conversation", "Recent conversation"  # customer's latest chat, 30 days
+        EXPLICIT = "explicit", "Explicit"  # a person or workflow named the conversation
+        RECENT_CONVERSATION = (
+            "recent_conversation",
+            "Recent conversation",
+        )  # customer's latest chat, 30 days
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="attributions")
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="attributions")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="attributions"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="attributions"
+    )
     channel = models.CharField(max_length=20, choices=Conversation.Channel.choices)
     lead = models.OneToOneField(
-        "crm.Lead", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+        "crm.Lead",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attribution",
+    )
     deal = models.OneToOneField(
-        "crm.Deal", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+        "crm.Deal",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attribution",
+    )
     order = models.OneToOneField(
-        "commerce.Order", on_delete=models.CASCADE, null=True, blank=True, related_name="attribution")
+        "commerce.Order",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attribution",
+    )
     workflow_run = models.ForeignKey(
-        "automation.WorkflowRun", on_delete=models.SET_NULL, null=True, blank=True, related_name="attributions")
+        "automation.WorkflowRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
     method = models.CharField(max_length=24, choices=Method.choices)
     attributed_at = models.DateTimeField(auto_now_add=True)
     metadata = models.JSONField(default=dict, blank=True)
@@ -366,15 +410,21 @@ class ConversationAttribution(models.Model):
                 name="attribution_exactly_one_subject",
                 condition=(
                     models.Q(lead__isnull=False, deal__isnull=True, order__isnull=True)
-                    | models.Q(lead__isnull=True, deal__isnull=False, order__isnull=True)
-                    | models.Q(lead__isnull=True, deal__isnull=True, order__isnull=False)
+                    | models.Q(
+                        lead__isnull=True, deal__isnull=False, order__isnull=True
+                    )
+                    | models.Q(
+                        lead__isnull=True, deal__isnull=True, order__isnull=False
+                    )
                 ),
             ),
         ]
 
     def save(self, *args, **kwargs):
         if self.pk is not None:
-            raise ValueError("An attribution is a historical record and cannot be changed.")
+            raise ValueError(
+                "An attribution is a historical record and cannot be changed."
+            )
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -392,7 +442,9 @@ class Benchmark(models.Model):
         STARTING = "starting", "Starting week"
         DAY30 = "day30", "Day 30"
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="benchmarks")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="benchmarks"
+    )
     kind = models.CharField(max_length=12, choices=Kind.choices)
     window_start = models.DateTimeField()
     window_end = models.DateTimeField()
@@ -400,4 +452,8 @@ class Benchmark(models.Model):
     captured_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["account", "kind"], name="uniq_benchmark_account_kind")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "kind"], name="uniq_benchmark_account_kind"
+            )
+        ]

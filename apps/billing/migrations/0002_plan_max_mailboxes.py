@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0001_initial'),
+        ("billing", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='max_mailboxes',
+            model_name="plan",
+            name="max_mailboxes",
             field=models.IntegerField(default=1),
         ),
     ]

@@ -1,4 +1,5 @@
 """drf-spectacular hooks for the custom API-key auth."""
+
 import re
 
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
@@ -11,7 +12,9 @@ def only_public_api(endpoints, **kwargs):
     kept = [
         (path, path_regex, method, callback)
         for (path, path_regex, method, callback) in endpoints
-        if path.startswith("/api/") and "schema" not in path and "docs" not in path
+        if path.startswith("/api/")
+        and "schema" not in path
+        and "docs" not in path
         and "reference" not in path
     ]
     return kept

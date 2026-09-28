@@ -2,12 +2,12 @@ import logging
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -63,12 +63,15 @@ class PasswordResetView(auth_views.PasswordResetView):
 
     def get_form_class(self):
         from apps.accounts.forms import PasswordResetForm
+
         return PasswordResetForm
 
     def form_valid(self, form):
         from apps.core.models import SiteSettings
 
-        self.extra_email_context = {"site_name": SiteSettings.load().app_name or "Automator"}
+        self.extra_email_context = {
+            "site_name": SiteSettings.load().app_name or "Automator"
+        }
         return super().form_valid(form)
 
 
@@ -107,9 +110,17 @@ def _mark_email_verified(user):
 
 
 _ACCOUNT_PROFILE_FIELDS = (
-    "legal_name", "website", "industry", "company_size", "phone",
-    "address_line1", "address_line2", "city", "state_region",
-    "postal_code", "country",
+    "legal_name",
+    "website",
+    "industry",
+    "company_size",
+    "phone",
+    "address_line1",
+    "address_line2",
+    "city",
+    "state_region",
+    "postal_code",
+    "country",
 )
 
 
@@ -119,12 +130,15 @@ def _plan_feature_bullets(plan) -> list:
     wizard's JSON config."""
     from apps.billing import api as billing_api
 
-    card = billing_api.plan_card(plan, whatsapp=plan.service_type in ("whatsapp", "both"))
+    card = billing_api.plan_card(
+        plan, whatsapp=plan.service_type in ("whatsapp", "both")
+    )
     return card["limits"] + card["feature_names"]
 
 
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
+
     from apps.billing.models import Plan
 
     plans = [
@@ -140,7 +154,9 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         for p in Plan.objects.filter(is_active=True).order_by("price_monthly")
     ]
 
-    whatsapp_enabled = bool(settings.WHATSAPP_ENABLED)  # the server setting, as everywhere else
+    whatsapp_enabled = bool(
+        settings.WHATSAPP_ENABLED
+    )  # the server setting, as everywhere else
 
     # Figure out where the wizard should open.
     services = (form_data or {}).get("selected_services", "")
@@ -148,7 +164,11 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     if not services and not plan_slug:
         req_plan = request.GET.get("plan", "").strip()
         req_services = request.GET.get("services", "").strip()
-        matched = next((p for p in plans if p["slug"] == req_plan), None) if req_plan else None
+        matched = (
+            next((p for p in plans if p["slug"] == req_plan), None)
+            if req_plan
+            else None
+        )
         if matched:
             services, plan_slug = matched["serviceType"], matched["slug"]
             start_step = 2
@@ -191,8 +211,12 @@ def signup(request):
         return redirect("dashboard")
 
     from apps.core.models import SiteSettings
+
     if not SiteSettings.load().signups_enabled:
-        messages.error(request, "Public sign-ups are currently disabled. Contact us if you need access.")
+        messages.error(
+            request,
+            "Public sign-ups are currently disabled. Contact us if you need access.",
+        )
         return redirect(f"{reverse('landing')}#pricing")
 
     if request.method == "POST":
@@ -228,7 +252,9 @@ def signup(request):
             _send_verification_email(request, user)
             logger.info(
                 "signup: created account %s (%s) for user %s",
-                account.pk, account.selected_services, user.pk,
+                account.pk,
+                account.selected_services,
+                user.pk,
             )
 
             from apps.billing.models import Subscription
@@ -239,7 +265,9 @@ def signup(request):
                     request,
                     f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
                 )
-                return redirect(f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly")
+                return redirect(
+                    f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
+                )
 
             messages.success(
                 request,
@@ -267,11 +295,18 @@ def signup(request):
             },
             errors=form.errors.get_json_data(escape_html=True),
         )
-        return render(request, "accounts/signup.html", {"form": form, "wizard_config": config}, status=400)
+        return render(
+            request,
+            "accounts/signup.html",
+            {"form": form, "wizard_config": config},
+            status=400,
+        )
 
     form = SignupForm()
     config = _build_signup_wizard_config(request)
-    return render(request, "accounts/signup.html", {"form": form, "wizard_config": config})
+    return render(
+        request, "accounts/signup.html", {"form": form, "wizard_config": config}
+    )
 
 
 def _set_default_modules(account):
@@ -346,17 +381,24 @@ def verify_email(request, uidb64, token):
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
-    already_verified = user is not None and not Account.objects.filter(
-        memberships__user=user,
-        memberships__role=Membership.Role.OWNER,
-        email_verified=False,
-    ).exists()
+    already_verified = (
+        user is not None
+        and not Account.objects.filter(
+            memberships__user=user,
+            memberships__role=Membership.Role.OWNER,
+            email_verified=False,
+        ).exists()
+    )
 
-    if user is not None and (already_verified or email_verification_token.check_token(user, token)):
+    if user is not None and (
+        already_verified or email_verification_token.check_token(user, token)
+    ):
         _mark_email_verified(user)
         if not request.user.is_authenticated and user.is_active:
             login(request, user, backend="apps.accounts.backends.EmailBackend")
-            membership = Membership.objects.filter(user=user).select_related("account").first()
+            membership = (
+                Membership.objects.filter(user=user).select_related("account").first()
+            )
             if membership is not None:
                 set_current_account(request, membership.account)
         logger.info("verify_email: confirmed email for user %s", user.pk)
@@ -375,6 +417,7 @@ def resend_verification(request):
     showing the same "check your email" outcome. A signed-in owner whose email
     is still unverified can trigger it straight from the onboarding step.
     """
+
     def _owner_account(user):
         return (
             Account.objects.filter(
@@ -392,9 +435,13 @@ def resend_verification(request):
         if request.method == "POST":
             _send_verification_email(request, request.user)
             logger.info("resend_verification: resent link to user %s", request.user.pk)
-            messages.success(request, "Sent — check your inbox for the confirmation link.")
+            messages.success(
+                request, "Sent — check your inbox for the confirmation link."
+            )
             return redirect("onboarding")
-        return render(request, "accounts/resend_verification.html", {"email": request.user.email})
+        return render(
+            request, "accounts/resend_verification.html", {"email": request.user.email}
+        )
 
     if request.method == "POST":
         email = request.POST.get("email", "").strip()
@@ -402,15 +449,21 @@ def resend_verification(request):
         if user is not None:
             account = _owner_account(user)
             if account is not None and account.email_verified and user.is_active:
-                messages.info(request, "That account is already verified — sign in below.")
+                messages.info(
+                    request, "That account is already verified — sign in below."
+                )
                 return redirect("login")
             _send_verification_email(request, user)
             logger.info("resend_verification: resent link to user %s", user.pk)
         return render(request, "accounts/verify_email_sent.html", {"email": email})
 
-    return render(request, "accounts/resend_verification.html", {
-        "email": request.GET.get("email", ""),
-    })
+    return render(
+        request,
+        "accounts/resend_verification.html",
+        {
+            "email": request.GET.get("email", ""),
+        },
+    )
 
 
 def landing(request):
@@ -419,12 +472,21 @@ def landing(request):
     from apps.billing.models import Plan
 
     plans = Plan.objects.filter(is_active=True).order_by("price_monthly")
-    cards = [billing_api.plan_card(p, whatsapp=bool(settings.WHATSAPP_ENABLED)) for p in plans]
+    cards = [
+        billing_api.plan_card(p, whatsapp=bool(settings.WHATSAPP_ENABLED))
+        for p in plans
+    ]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
-    return render(request, "accounts/landing.html", {
-        "plans": plans, "cards": cards, "trial_days": trial_days,
-    })
+    return render(
+        request,
+        "accounts/landing.html",
+        {
+            "plans": plans,
+            "cards": cards,
+            "trial_days": trial_days,
+        },
+    )
 
 
 @login_required
@@ -438,10 +500,14 @@ def onboarding(request):
     # Keep the persisted resume-state in step with reality on each visit.
     ob.advance_onboarding(account)
     state = ob.get_state(account)
-    return render(request, "accounts/onboarding.html", {
-        "account": account,
-        **state,
-    })
+    return render(
+        request,
+        "accounts/onboarding.html",
+        {
+            "account": account,
+            **state,
+        },
+    )
 
 
 @login_required
@@ -459,7 +525,13 @@ def dashboard(request):
     from apps.accounts import onboarding as ob
 
     hour = timezone.localtime().hour
-    greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
+    greeting = (
+        "Good morning"
+        if hour < 12
+        else "Good afternoon"
+        if hour < 18
+        else "Good evening"
+    )
 
     state = ob.get_state(account)
 
@@ -493,9 +565,7 @@ def dashboard_work_queue(request):
     account = get_current_account(request)
     if account is None:
         return HttpResponseForbidden("no account")
-    return render(
-        request, "accounts/_dashboard_work_queue.html", _work_queue(account)
-    )
+    return render(request, "accounts/_dashboard_work_queue.html", _work_queue(account))
 
 
 @login_required
@@ -553,7 +623,7 @@ def dashboard_panels(request):
 
 
 def _work_queue(account):
-    """"What should I do right now?" — the dashboard's primary question.
+    """ "What should I do right now?" — the dashboard's primary question.
 
     Built from the same derived conversation state the inbox uses
     (apps.conversations.state), never from MessageLog or a stored flag, so this
@@ -604,25 +674,33 @@ def channels(request):
         from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
         numbers = list(
-            WhatsAppBusinessNumber.objects.filter(account=account).order_by("phone_number_id")
+            WhatsAppBusinessNumber.objects.filter(account=account).order_by(
+                "phone_number_id"
+            )
         )
 
     email_domains = []
     try:
         from apps.email.models import EmailDomain
 
-        email_domains = list(EmailDomain.objects.filter(account=account).order_by("domain"))
+        email_domains = list(
+            EmailDomain.objects.filter(account=account).order_by("domain")
+        )
     except Exception:
         pass
 
-    return render(request, "accounts/channels.html", {
-        "account": account,
-        "email_domains": email_domains,
-        "email_connected": any(d.status == "verified" for d in email_domains),
-        "whatsapp_enabled": settings.WHATSAPP_ENABLED,
-        "whatsapp_numbers": numbers,
-        "whatsapp_connected": bool(numbers),
-    })
+    return render(
+        request,
+        "accounts/channels.html",
+        {
+            "account": account,
+            "email_domains": email_domains,
+            "email_connected": any(d.status == "verified" for d in email_domains),
+            "whatsapp_enabled": settings.WHATSAPP_ENABLED,
+            "whatsapp_numbers": numbers,
+            "whatsapp_connected": bool(numbers),
+        },
+    )
 
 
 def _upcoming_sends(account, limit=5):
@@ -648,7 +726,9 @@ def _upcoming_sends(account, limit=5):
             label = getattr(job.target_campaign, "name", "") or ""
         if not label:
             payload = job.template_payload or {}
-            label = payload.get("subject") or payload.get("name") or job.get_kind_display()
+            label = (
+                payload.get("subject") or payload.get("name") or job.get_kind_display()
+            )
         rows.append({"when": job.fire_at, "label": label, "channel": channel})
 
     return {"scheduled_count": qs.count(), "upcoming_sends": rows}
@@ -662,32 +742,42 @@ def _attention_items(account, stats, numbers, email_domains, subscription):
     verified = stats.get("domains_verified") or 0
     total_domains = len(email_domains)
     if total_domains == 0:
-        items.append({"text": "Add and verify a sending domain", "url": "/email/domains/"})
+        items.append(
+            {"text": "Add and verify a sending domain", "url": "/email/domains/"}
+        )
     elif verified < total_domains:
         pending = total_domains - verified
-        items.append({
-            "text": f"{pending} domain{'s' if pending != 1 else ''} awaiting DNS verification",
-            "url": "/email/domains/",
-        })
+        items.append(
+            {
+                "text": f"{pending} domain{'s' if pending != 1 else ''} awaiting DNS verification",
+                "url": "/email/domains/",
+            }
+        )
 
     if settings.WHATSAPP_ENABLED and not list(numbers):
         items.append({"text": "Connect a WhatsApp number", "url": "/whatsapp/numbers/"})
 
     usage_pct = stats.get("usage_pct")
     if usage_pct is not None and usage_pct >= 80:
-        items.append({
-            "text": f"You've used {usage_pct}% of this month's email quota",
-            "url": "/billing/plans/",
-        })
+        items.append(
+            {
+                "text": f"You've used {usage_pct}% of this month's email quota",
+                "url": "/billing/plans/",
+            }
+        )
 
     if (stats.get("failed_month") or 0) > 0:
-        items.append({
-            "text": f"{stats['failed_month']} message{'s' if stats['failed_month'] != 1 else ''} failed this month",
-            "url": "/logs/messages/",
-        })
+        items.append(
+            {
+                "text": f"{stats['failed_month']} message{'s' if stats['failed_month'] != 1 else ''} failed this month",
+                "url": "/logs/messages/",
+            }
+        )
 
     if subscription and getattr(subscription, "status", "") == "past_due":
-        items.append({"text": "Your subscription payment is past due", "url": "/billing/plans/"})
+        items.append(
+            {"text": "Your subscription payment is past due", "url": "/billing/plans/"}
+        )
 
     return items
 
@@ -699,7 +789,9 @@ def _email_stats(account, subscription):
 
     from apps.email.models import EmailDomain, EmailMessage
 
-    month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_start = timezone.now().replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
 
     msgs = EmailMessage.objects.filter(account=account)
     month = msgs.filter(created_at__gte=month_start).aggregate(

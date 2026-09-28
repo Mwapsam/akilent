@@ -4,14 +4,16 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0002_remove_automationrule_whatsapp_au_account_7f7c6d_idx_and_more'),
+        (
+            "whatsapp",
+            "0002_remove_automationrule_whatsapp_au_account_7f7c6d_idx_and_more",
+        ),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='messagelog',
-            name='bitrix_activity_id',
+            model_name="messagelog",
+            name="bitrix_activity_id",
         ),
     ]

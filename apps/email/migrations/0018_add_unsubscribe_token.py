@@ -5,32 +5,72 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0017_add_suppression_list'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0017_add_suppression_list"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='emailmessage',
-            name='status',
-            field=models.CharField(choices=[('queued', 'Queued'), ('sent', 'Sent'), ('delivered', 'Delivered'), ('failed', 'Failed')], default='queued', max_length=20),
+            model_name="emailmessage",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("queued", "Queued"),
+                    ("sent", "Sent"),
+                    ("delivered", "Delivered"),
+                    ("failed", "Failed"),
+                ],
+                default="queued",
+                max_length=20,
+            ),
         ),
         migrations.CreateModel(
-            name='UnsubscribeToken',
+            name="UnsubscribeToken",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('token', models.CharField(db_index=True, max_length=64, unique=True)),
-                ('email', models.EmailField(max_length=254)),
-                ('is_used', models.BooleanField(default=False)),
-                ('used_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='unsubscribe_tokens', to='accounts.account')),
-                ('campaign', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='unsubscribe_tokens', to='email_service.bulkemailcampaign')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("token", models.CharField(db_index=True, max_length=64, unique=True)),
+                ("email", models.EmailField(max_length=254)),
+                ("is_used", models.BooleanField(default=False)),
+                ("used_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="unsubscribe_tokens",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "campaign",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="unsubscribe_tokens",
+                        to="email_service.bulkemailcampaign",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['account', 'email'], name='email_servi_account_1648e3_idx'), models.Index(fields=['created_at'], name='email_servi_created_8f1b73_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["account", "email"],
+                        name="email_servi_account_1648e3_idx",
+                    ),
+                    models.Index(
+                        fields=["created_at"], name="email_servi_created_8f1b73_idx"
+                    ),
+                ],
             },
         ),
     ]

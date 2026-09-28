@@ -10,6 +10,7 @@ guess.
 Tests that exercise the lookup machinery itself use the ``real_dns_query``
 fixture to get the original ``_query`` back.
 """
+
 import pytest
 
 from apps.email import dnscheck, dnshost
@@ -22,11 +23,13 @@ _REAL_DETECT_ZONE = dnscheck.detect_zone
 def _offline_dns(monkeypatch, settings):
     settings.DNSCHECK_AUTHORITATIVE = False
     monkeypatch.setattr(
-        dnscheck, "_query",
+        dnscheck,
+        "_query",
         lambda name, rdtype: dnscheck.Answer((), dnscheck.NXDOMAIN),
     )
     monkeypatch.setattr(
-        dnscheck, "detect_zone",
+        dnscheck,
+        "detect_zone",
         lambda domain: dnscheck.ZoneInfo(zone=dnshost.guess_zone(domain), guessed=True),
     )
 

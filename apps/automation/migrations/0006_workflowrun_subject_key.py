@@ -4,24 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('automation', '0005_workflowsteprun_outbound_message'),
-        ('contacts', '0003_contact_optional_email_and_phone_identity'),
+        ("automation", "0005_workflowsteprun_outbound_message"),
+        ("contacts", "0003_contact_optional_email_and_phone_identity"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='workflowrun',
-            name='uniq_active_run_per_contact',
+            model_name="workflowrun",
+            name="uniq_active_run_per_contact",
         ),
         migrations.AddField(
-            model_name='workflowrun',
-            name='subject_key',
-            field=models.CharField(blank=True, default='', max_length=80),
+            model_name="workflowrun",
+            name="subject_key",
+            field=models.CharField(blank=True, default="", max_length=80),
         ),
         migrations.AddConstraint(
-            model_name='workflowrun',
-            constraint=models.UniqueConstraint(condition=models.Q(('status__in', ['active', 'waiting'])), fields=('workflow', 'contact', 'subject_key'), name='uniq_active_run_per_contact'),
+            model_name="workflowrun",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status__in", ["active", "waiting"])),
+                fields=("workflow", "contact", "subject_key"),
+                name="uniq_active_run_per_contact",
+            ),
         ),
     ]

@@ -1,4 +1,5 @@
 """The optional "which conversation led to this?" picker on manual lead and order forms."""
+
 from datetime import timedelta
 
 import pytest
@@ -9,7 +10,8 @@ from apps.accounts.models import Account, Membership
 from apps.commerce.models import Order
 from apps.contacts.models import Contact
 from apps.conversations import attribution
-from apps.conversations.models import Conversation, ConversationAttribution as CA, Message
+from apps.conversations.models import Conversation, Message
+from apps.conversations.models import ConversationAttribution as CA
 from apps.crm.models import Lead
 
 NOW = timezone.now()
@@ -25,12 +27,22 @@ def logged_in(client, db):
 
 
 def chat(account, phone, *, days_ago=1, inbound=True):
-    contact = Contact.objects.create(account=account, phone=phone, first_name=f"Cust {phone[-3:]}")
+    contact = Contact.objects.create(
+        account=account, phone=phone, first_name=f"Cust {phone[-3:]}"
+    )
     c = Conversation.objects.create(
-        account=account, contact=contact, channel="whatsapp", last_message_at=NOW - timedelta(days=days_ago))
+        account=account,
+        contact=contact,
+        channel="whatsapp",
+        last_message_at=NOW - timedelta(days=days_ago),
+    )
     Message.objects.create(
-        account=account, conversation=c, timestamp=NOW - timedelta(days=days_ago), body="hi",
-        direction=Message.Direction.INBOUND if inbound else Message.Direction.OUTBOUND)
+        account=account,
+        conversation=c,
+        timestamp=NOW - timedelta(days=days_ago),
+        body="hi",
+        direction=Message.Direction.INBOUND if inbound else Message.Direction.OUTBOUND,
+    )
     return c
 
 
@@ -41,7 +53,9 @@ def test_picker_offers_only_conversations_the_customer_wrote_in(logged_in):
     chat(account, "+260971000102", inbound=False)
     other = Account.objects.create(company_name="Other")
     chat(other, "+260971000103")
-    assert [c["public_id"] for c in attribution.recent_choices(account)] == [spoke.public_id]
+    assert [c["public_id"] for c in attribution.recent_choices(account)] == [
+        spoke.public_id
+    ]
 
 
 @pytest.mark.django_db
@@ -56,7 +70,9 @@ def test_forms_show_the_picker(logged_in):
 @pytest.mark.django_db
 def test_lead_from_the_picker_is_explicit_and_needs_no_contact_text(logged_in):
     client, account = logged_in
-    old = chat(account, "+260971000105", days_ago=50)  # too old for the fallback; the pick still counts
+    old = chat(
+        account, "+260971000105", days_ago=50
+    )  # too old for the fallback; the pick still counts
     client.post("/sales/leads/create/", {"conversation": old.public_id})
     lead = Lead.objects.get(account=account)
     assert lead.contact == old.contact and lead.conversation == old
@@ -68,14 +84,29 @@ def test_order_from_the_picker_is_explicit(logged_in):
     client, account = logged_in
     older, newer = chat(account, "+260971000106", days_ago=5), None
     newer = Conversation.objects.create(
-        account=account, contact=older.contact, channel="whatsapp", last_message_at=NOW)
-    Message.objects.create(account=account, conversation=newer, timestamp=NOW, body="x",
-                           direction=Message.Direction.INBOUND)
-    client.post("/orders/create/", {
-        "contact": older.contact.phone, "conversation": older.public_id,
-        "name": "Thing", "unit_price": "10", "quantity": "1"})
+        account=account, contact=older.contact, channel="whatsapp", last_message_at=NOW
+    )
+    Message.objects.create(
+        account=account,
+        conversation=newer,
+        timestamp=NOW,
+        body="x",
+        direction=Message.Direction.INBOUND,
+    )
+    client.post(
+        "/orders/create/",
+        {
+            "contact": older.contact.phone,
+            "conversation": older.public_id,
+            "name": "Thing",
+            "unit_price": "10",
+            "quantity": "1",
+        },
+    )
     order = Order.objects.get(account=account)
-    assert order.conversation == older and order.attribution.method == CA.Method.EXPLICIT
+    assert (
+        order.conversation == older and order.attribution.method == CA.Method.EXPLICIT
+    )
 
 
 @pytest.mark.django_db
@@ -83,7 +114,10 @@ def test_no_pick_keeps_the_recent_fallback(logged_in):
     client, account = logged_in
     c = chat(account, "+260971000107")
     client.post("/sales/leads/create/", {"contact": c.contact.phone})
-    assert Lead.objects.get(account=account).attribution.method == CA.Method.RECENT_CONVERSATION
+    assert (
+        Lead.objects.get(account=account).attribution.method
+        == CA.Method.RECENT_CONVERSATION
+    )
 
 
 @pytest.mark.django_db
@@ -91,7 +125,10 @@ def test_a_conversation_of_a_different_customer_is_refused(logged_in):
     client, account = logged_in
     theirs = chat(account, "+260971000108")
     mine = Contact.objects.create(account=account, phone="+260971000109")
-    client.post("/sales/leads/create/", {"contact": mine.phone, "conversation": theirs.public_id})
+    client.post(
+        "/sales/leads/create/",
+        {"contact": mine.phone, "conversation": theirs.public_id},
+    )
     assert not Lead.objects.filter(account=account).exists()
 
 
@@ -114,9 +151,17 @@ def test_nothing_chosen_and_no_contact_is_an_error(logged_in):
 def test_forms_never_redirect_to_another_site(logged_in):
     client, account = logged_in
     c = chat(account, "+260971000111")
-    for url, data in (("/sales/leads/create/", {"contact": c.contact.phone}),
-                      ("/orders/create/", {"contact": c.contact.phone, "name": "T", "unit_price": "1"})):
+    for url, data in (
+        ("/sales/leads/create/", {"contact": c.contact.phone}),
+        (
+            "/orders/create/",
+            {"contact": c.contact.phone, "name": "T", "unit_price": "1"},
+        ),
+    ):
         for bad in ("https://evil.example/", "//evil.example/"):
             response = client.post(url, {**data, "next": bad})
-            assert response.status_code == 302 and "evil.example" not in response["Location"]
+            assert (
+                response.status_code == 302
+                and "evil.example" not in response["Location"]
+            )
         assert client.post(url, {**data, "next": "/inbox/"})["Location"] == "/inbox/"

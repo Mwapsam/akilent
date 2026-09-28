@@ -6,28 +6,64 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0002_account_progstack_token'),
+        ("accounts", "0002_account_progstack_token"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Invitation',
+            name="Invitation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('email', models.EmailField(max_length=254)),
-                ('role', models.CharField(choices=[('member', 'Member'), ('admin', 'Admin')], default='member', max_length=20)),
-                ('token', models.CharField(db_index=True, max_length=64, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('accepted_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='invitations', to='accounts.account')),
-                ('invited_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='sent_invitations', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("email", models.EmailField(max_length=254)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("member", "Member"), ("admin", "Admin")],
+                        default="member",
+                        max_length=20,
+                    ),
+                ),
+                ("token", models.CharField(db_index=True, max_length=64, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("accepted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="invitations",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "invited_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="sent_invitations",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('accepted_at__isnull', True)), fields=('account', 'email'), name='uniq_pending_invite_per_account_email')],
+                "ordering": ["-created_at"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("accepted_at__isnull", True)),
+                        fields=("account", "email"),
+                        name="uniq_pending_invite_per_account_email",
+                    )
+                ],
             },
         ),
     ]

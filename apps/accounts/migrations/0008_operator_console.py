@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0007_businessprofile'),
+        ("accounts", "0007_businessprofile"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='account',
-            name='scheduled_deletion_at',
+            model_name="account",
+            name="scheduled_deletion_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]

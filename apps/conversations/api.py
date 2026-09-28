@@ -5,6 +5,7 @@ Everything is derived from the links fixed at creation (``Lead/Deal/Order.conver
 hand; an open deal's value is a forecast and a won deal usually has an order behind it, so adding
 them would count the same sale twice. Money is never summed across currencies.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -30,22 +31,40 @@ def funnel(account, *, days: int = DEFAULT_DAYS, now: datetime | None = None) ->
     """
     since = (now or timezone.now()) - timedelta(days=days)
     wrote_in = (
-        Message.objects.filter(account=account, direction=Message.Direction.INBOUND, timestamp__gte=since)
-        .values("conversation__contact").distinct().count()
+        Message.objects.filter(
+            account=account, direction=Message.Direction.INBOUND, timestamp__gte=since
+        )
+        .values("conversation__contact")
+        .distinct()
+        .count()
     )
     return {
         "days": days,
         "wrote_in": wrote_in,
-        "leads": Lead.objects.filter(account=account, conversation__isnull=False, created_at__gte=since).count(),
-        "deals": Deal.objects.filter(account=account, conversation__isnull=False, created_at__gte=since).count(),
+        "leads": Lead.objects.filter(
+            account=account, conversation__isnull=False, created_at__gte=since
+        ).count(),
+        "deals": Deal.objects.filter(
+            account=account, conversation__isnull=False, created_at__gte=since
+        ).count(),
         "won": Deal.objects.filter(
-            account=account, conversation__isnull=False, status=Deal.Status.WON, closed_at__gte=since).count(),
+            account=account,
+            conversation__isnull=False,
+            status=Deal.Status.WON,
+            closed_at__gte=since,
+        ).count(),
         "paid": Order.objects.filter(
-            account=account, conversation__isnull=False, status=Order.Status.PAID, paid_at__gte=since).count(),
+            account=account,
+            conversation__isnull=False,
+            status=Order.Status.PAID,
+            paid_at__gte=since,
+        ).count(),
     }
 
 
-def revenue_by_channel(account, *, days: int = DEFAULT_DAYS, now: datetime | None = None) -> list[dict]:
+def revenue_by_channel(
+    account, *, days: int = DEFAULT_DAYS, now: datetime | None = None
+) -> list[dict]:
     """Paid orders in the last ``days``, grouped by the channel that led to them and currency.
 
     Orders with no conversation behind them appear as their own "not from a conversation" rows,
@@ -53,7 +72,9 @@ def revenue_by_channel(account, *, days: int = DEFAULT_DAYS, now: datetime | Non
     """
     since = (now or timezone.now()) - timedelta(days=days)
     rows = (
-        Order.objects.filter(account=account, status=Order.Status.PAID, paid_at__gte=since)
+        Order.objects.filter(
+            account=account, status=Order.Status.PAID, paid_at__gte=since
+        )
         .values("conversation__channel", "currency")
         .annotate(orders=Count("id"), total=Sum("total"))
         .order_by("currency", "-total")
@@ -62,14 +83,16 @@ def revenue_by_channel(account, *, days: int = DEFAULT_DAYS, now: datetime | Non
     result = []
     for row in rows:
         channel = row["conversation__channel"] or UNATTRIBUTED
-        result.append({
-            "channel": channel,
-            "label": labels.get(channel, "Not from a conversation"),
-            "currency": row["currency"],
-            "orders": row["orders"],
-            "total": row["total"] or Decimal("0"),
-            "attributed": channel != UNATTRIBUTED,
-        })
+        result.append(
+            {
+                "channel": channel,
+                "label": labels.get(channel, "Not from a conversation"),
+                "currency": row["currency"],
+                "orders": row["orders"],
+                "total": row["total"] or Decimal("0"),
+                "attributed": channel != UNATTRIBUTED,
+            }
+        )
     return result
 
 
@@ -88,32 +111,53 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
     account = conversation.account
     contact = conversation.contact
     thread = list(
-        conversation.messages.filter(direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND])
-        .exclude(body="").order_by("-timestamp", "-id").values("id", "direction", "body")[:recent]
+        conversation.messages.filter(
+            direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND]
+        )
+        .exclude(body="")
+        .order_by("-timestamp", "-id")
+        .values("id", "direction", "body")[:recent]
     )[::-1]
     window_open = True
     if conversation.channel == Conversation.Channel.WHATSAPP:
         wa = conversation.whatsapp_conversation
         window_open = bool(wa and wa.window_is_open)
-    templates = [
-        {"name": t.whatsapp_template_name, "body": t.content or "", "blanks": list(t.variables or [])}
-        for t in MessageTemplate.objects.filter(
-            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED).order_by("name")
-        if t.whatsapp_template_name
-    ] if conversation.channel == Conversation.Channel.WHATSAPP else []
+    templates = (
+        [
+            {
+                "name": t.whatsapp_template_name,
+                "body": t.content or "",
+                "blanks": list(t.variables or []),
+            }
+            for t in MessageTemplate.objects.filter(
+                account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED
+            ).order_by("name")
+            if t.whatsapp_template_name
+        ]
+        if conversation.channel == Conversation.Channel.WHATSAPP
+        else []
+    )
     hours = business_hours.get_hours(account)
     hours_text = ""
     if hours and hours.schedule:
-        hours_text = "; ".join(
-            f"{day.title()} {slot.get('open')}-{slot.get('close')}" for day, slot in hours.schedule.items()
-        ) + f" ({hours.timezone})"
+        hours_text = (
+            "; ".join(
+                f"{day.title()} {slot.get('open')}-{slot.get('close')}"
+                for day, slot in hours.schedule.items()
+            )
+            + f" ({hours.timezone})"
+        )
     from apps.contacts.models import Tag
 
     return {
         "business_name": account.company_name or "",
         "hours_text": hours_text,
         # The business's own tags: AI may suggest one of these, never invent a new one.
-        "business_tags": list(Tag.objects.filter(account=account).order_by("name").values_list("name", flat=True)[:40]),
+        "business_tags": list(
+            Tag.objects.filter(account=account)
+            .order_by("name")
+            .values_list("name", flat=True)[:40]
+        ),
         "thread": thread,
         "window_open": window_open,
         "templates": templates,
@@ -121,37 +165,58 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
             "first_name": (contact.first_name or "").strip(),
             "tags": list(contact.tags.values_list("name", flat=True)[:10]),
             "interested": Lead.objects.filter(
-                account=account, contact=contact,
-                status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]).exists(),
+                account=account,
+                contact=contact,
+                status__in=[
+                    Lead.Status.NEW,
+                    Lead.Status.CONTACTED,
+                    Lead.Status.QUALIFIED,
+                ],
+            ).exists(),
         },
     }
 
 
 def get_conversation_by_id(conversation_id):
     """The conversation with this primary key (account preloaded), or None. For background tasks."""
-    return Conversation.objects.select_related("account", "contact").filter(pk=conversation_id).first()
+    return (
+        Conversation.objects.select_related("account", "contact")
+        .filter(pk=conversation_id)
+        .first()
+    )
 
 
-def earlier_messages(conversation, *, keep_recent: int, after_id: int = 0, limit: int = 40) -> list[dict]:
+def earlier_messages(
+    conversation, *, keep_recent: int, after_id: int = 0, limit: int = 40
+) -> list[dict]:
     """Customer and business messages older than the last ``keep_recent``, oldest first.
 
     Only those with an id above ``after_id`` (what a summary already covers), at most ``limit``.
     System lines and internal notes are never included. ``[{"id", "direction", "body"}]``.
     """
     talk = conversation.messages.filter(
-        direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND]).exclude(body="")
-    recent_ids = list(talk.order_by("-timestamp", "-id").values_list("id", flat=True)[:keep_recent])
+        direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND]
+    ).exclude(body="")
+    recent_ids = list(
+        talk.order_by("-timestamp", "-id").values_list("id", flat=True)[:keep_recent]
+    )
     return list(
-        talk.exclude(id__in=recent_ids).filter(id__gt=after_id)
-        .order_by("timestamp", "id").values("id", "direction", "body")[:limit]
+        talk.exclude(id__in=recent_ids)
+        .filter(id__gt=after_id)
+        .order_by("timestamp", "id")
+        .values("id", "direction", "body")[:limit]
     )
 
 
 def recent_customer_messages(account, *, since, limit: int = 3000) -> list[dict]:
     """Customers' messages since ``since``, newest first: ``[{"conversation_id", "body", "timestamp"}]``."""
     return list(
-        Message.objects.filter(account=account, direction=Message.Direction.INBOUND, timestamp__gte=since)
-        .exclude(body="").order_by("-timestamp").values("conversation_id", "body", "timestamp")[:limit]
+        Message.objects.filter(
+            account=account, direction=Message.Direction.INBOUND, timestamp__gte=since
+        )
+        .exclude(body="")
+        .order_by("-timestamp")
+        .values("conversation_id", "body", "timestamp")[:limit]
     )
 
 
@@ -160,15 +225,24 @@ def first_reply_waits(account, *, since, now=None) -> list[float | None]:
     replied (by anyone or anything), or None if it still hasn't."""
     now = now or timezone.now()
     starts = (
-        Conversation.objects.filter(account=account, messages__direction=Message.Direction.INBOUND)
-        .values("id").annotate(first_in=models_min("messages__timestamp")).filter(first_in__gte=since)
+        Conversation.objects.filter(
+            account=account, messages__direction=Message.Direction.INBOUND
+        )
+        .values("id")
+        .annotate(first_in=models_min("messages__timestamp"))
+        .filter(first_in__gte=since)
     )
     waits = []
     for row in starts[:1000]:
         first_out = (
-            Message.objects.filter(conversation_id=row["id"], direction=Message.Direction.OUTBOUND,
-                                   timestamp__gte=row["first_in"])
-            .order_by("timestamp").values_list("timestamp", flat=True).first()
+            Message.objects.filter(
+                conversation_id=row["id"],
+                direction=Message.Direction.OUTBOUND,
+                timestamp__gte=row["first_in"],
+            )
+            .order_by("timestamp")
+            .values_list("timestamp", flat=True)
+            .first()
         )
         if first_out is None:
             waits.append(None if now - row["first_in"] > timedelta(minutes=5) else 0.0)
@@ -187,44 +261,73 @@ def window_metrics(account, start, end) -> dict:
     from statistics import median
 
     starts = (
-        Conversation.objects.filter(account=account, messages__direction=Message.Direction.INBOUND)
-        .values("id").annotate(first_in=models_min("messages__timestamp"))
+        Conversation.objects.filter(
+            account=account, messages__direction=Message.Direction.INBOUND
+        )
+        .values("id")
+        .annotate(first_in=models_min("messages__timestamp"))
         .filter(first_in__gte=start, first_in__lt=end)
     )
     waits, unanswered, count = [], 0, 0
     for row in starts[:5000]:
         count += 1
         first_out = (
-            Message.objects.filter(conversation_id=row["id"], direction=Message.Direction.OUTBOUND,
-                                   timestamp__gte=row["first_in"])
-            .order_by("timestamp").values_list("timestamp", flat=True).first()
+            Message.objects.filter(
+                conversation_id=row["id"],
+                direction=Message.Direction.OUTBOUND,
+                timestamp__gte=row["first_in"],
+            )
+            .order_by("timestamp")
+            .values_list("timestamp", flat=True)
+            .first()
         )
         if first_out is None or first_out - row["first_in"] > timedelta(hours=24):
             unanswered += 1
         if first_out is not None:
             waits.append((first_out - row["first_in"]).total_seconds() / 60)
     paid = (
-        Order.objects.filter(account=account, conversation__isnull=False, status=Order.Status.PAID,
-                             paid_at__gte=start, paid_at__lt=end)
-        .values("currency").annotate(orders=Count("id"), total=Sum("total")).order_by("currency")
+        Order.objects.filter(
+            account=account,
+            conversation__isnull=False,
+            status=Order.Status.PAID,
+            paid_at__gte=start,
+            paid_at__lt=end,
+        )
+        .values("currency")
+        .annotate(orders=Count("id"), total=Sum("total"))
+        .order_by("currency")
     )
     return {
         "conversations": count,
         "median_first_reply_minutes": round(median(waits)) if waits else None,
         "unanswered": unanswered,
-        "interested": Lead.objects.filter(account=account, conversation__isnull=False,
-                                          created_at__gte=start, created_at__lt=end).count(),
+        "interested": Lead.objects.filter(
+            account=account,
+            conversation__isnull=False,
+            created_at__gte=start,
+            created_at__lt=end,
+        ).count(),
         "paid_orders": sum(r["orders"] for r in paid),
-        "revenue": [{"currency": r["currency"], "total": str(r["total"] or Decimal("0"))} for r in paid],
+        "revenue": [
+            {"currency": r["currency"], "total": str(r["total"] or Decimal("0"))}
+            for r in paid
+        ],
     }
 
 
 def activity(account, *, since) -> dict:
     """``{"conversations", "last_customer_message_at"}``: is this business still being written to?"""
-    inbound = Message.objects.filter(account=account, direction=Message.Direction.INBOUND)
+    inbound = Message.objects.filter(
+        account=account, direction=Message.Direction.INBOUND
+    )
     return {
-        "conversations": inbound.filter(timestamp__gte=since).values("conversation").distinct().count(),
-        "last_customer_message_at": inbound.order_by("-timestamp").values_list("timestamp", flat=True).first(),
+        "conversations": inbound.filter(timestamp__gte=since)
+        .values("conversation")
+        .distinct()
+        .count(),
+        "last_customer_message_at": inbound.order_by("-timestamp")
+        .values_list("timestamp", flat=True)
+        .first(),
     }
 
 
@@ -244,9 +347,13 @@ def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
     AI, not an automation, not a template or buttons).
     """
     messages = (
-        Message.objects.filter(account=account, timestamp__gte=since,
-                               direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND])
-        .exclude(body="").order_by("conversation_id", "timestamp", "id")
+        Message.objects.filter(
+            account=account,
+            timestamp__gte=since,
+            direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND],
+        )
+        .exclude(body="")
+        .order_by("conversation_id", "timestamp", "id")
         .values("id", "conversation_id", "direction", "body", "metadata")[:limit]
     )
     pairs, asked, current = [], [], None
@@ -257,10 +364,19 @@ def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
             asked.append(m["body"])
             continue
         meta = m["metadata"] or {}
-        by_person = meta.get("sent_by") not in ("ai", "automation") and meta.get("message_type", "text") == "text"
+        by_person = (
+            meta.get("sent_by") not in ("ai", "automation")
+            and meta.get("message_type", "text") == "text"
+        )
         if asked and by_person:
-            pairs.append({"conversation_id": current, "question": " ".join(asked)[:500],
-                          "reply": m["body"], "reply_id": m["id"]})
+            pairs.append(
+                {
+                    "conversation_id": current,
+                    "question": " ".join(asked)[:500],
+                    "reply": m["body"],
+                    "reply_id": m["id"],
+                }
+            )
         asked = []
     return pairs
 
@@ -273,12 +389,21 @@ def last_team_reply_at(conversation):
     # would also drop every message without "sent_by", i.e. every human reply.
     not_ai = Q(metadata__sent_by__isnull=True) | ~Q(metadata__sent_by="ai")
     return (
-        conversation.messages.filter(direction=Message.Direction.OUTBOUND).filter(not_ai)
-        .order_by("-timestamp").values_list("timestamp", flat=True).first()
+        conversation.messages.filter(direction=Message.Direction.OUTBOUND)
+        .filter(not_ai)
+        .order_by("-timestamp")
+        .values_list("timestamp", flat=True)
+        .first()
     )
 
 
 def newest_message_ids(conversation) -> tuple[int | None, int | None]:
     """``(newest inbound id, newest outbound id)`` in this conversation, by arrival order."""
-    newest = lambda d: conversation.messages.filter(direction=d).order_by("-id").values_list("id", flat=True).first()  # noqa: E731
+    def newest(d):
+        return (
+            conversation.messages.filter(direction=d)
+            .order_by("-id")
+            .values_list("id", flat=True)
+            .first()
+        )
     return newest(Message.Direction.INBOUND), newest(Message.Direction.OUTBOUND)

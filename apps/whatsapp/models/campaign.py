@@ -29,7 +29,9 @@ class WhatsAppCampaign(models.Model):
     )
     name = models.CharField(max_length=150)
     contact_list = models.ForeignKey(
-        "contacts.ContactList", on_delete=models.PROTECT, related_name="whatsapp_campaigns"
+        "contacts.ContactList",
+        on_delete=models.PROTECT,
+        related_name="whatsapp_campaigns",
     )
     template = models.ForeignKey(
         "whatsapp.MessageTemplate", on_delete=models.PROTECT, related_name="campaigns"
@@ -39,7 +41,9 @@ class WhatsAppCampaign(models.Model):
     # "context.<key>" form (a campaign has no workflow run context).
     variable_mapping = models.JSONField(default=dict, blank=True)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
     recipient_count = models.PositiveIntegerField(default=0)
     queued_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
@@ -66,7 +70,9 @@ class WhatsAppCampaign(models.Model):
         self.queued_count = queued
         self.skipped_count = skipped
         self.completed_at = timezone.now()
-        self.save(update_fields=["status", "queued_count", "skipped_count", "completed_at"])
+        self.save(
+            update_fields=["status", "queued_count", "skipped_count", "completed_at"]
+        )
 
     def mark_failed(self, error: str) -> None:
         self.status = self.Status.FAILED

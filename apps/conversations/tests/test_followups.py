@@ -1,10 +1,10 @@
 import pytest
+from django.contrib.auth.models import User
 from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, FollowUp
-from django.contrib.auth.models import User
 
 
 @pytest.fixture
@@ -20,15 +20,22 @@ def logged_in(client, db):
 def conversation(logged_in):
     _, account, _ = logged_in
     contact = Contact.objects.create(account=account, phone="+260971234567")
-    return Conversation.objects.create(account=account, contact=contact, channel=Conversation.Channel.WHATSAPP)
+    return Conversation.objects.create(
+        account=account, contact=contact, channel=Conversation.Channel.WHATSAPP
+    )
 
 
 @pytest.mark.django_db
 def test_create_followup_from_conversation_1h(logged_in, conversation):
     client, account, user = logged_in
-    resp = client.post(f"/inbox/{conversation.public_id}/", {
-        "action": "create_followup", "when": "1h", "note": "Check on order",
-    })
+    resp = client.post(
+        f"/inbox/{conversation.public_id}/",
+        {
+            "action": "create_followup",
+            "when": "1h",
+            "note": "Check on order",
+        },
+    )
     assert resp.status_code == 302
     followup = FollowUp.objects.get(account=account, conversation=conversation)
     assert followup.note == "Check on order"
@@ -39,7 +46,11 @@ def test_create_followup_from_conversation_1h(logged_in, conversation):
 @pytest.mark.django_db
 def test_create_followup_requires_valid_choice(logged_in, conversation):
     client, _, _ = logged_in
-    resp = client.post(f"/inbox/{conversation.public_id}/", {"action": "create_followup", "when": ""}, follow=True)
+    resp = client.post(
+        f"/inbox/{conversation.public_id}/",
+        {"action": "create_followup", "when": ""},
+        follow=True,
+    )
     assert resp.status_code == 200
     assert FollowUp.objects.count() == 0
 
@@ -49,22 +60,28 @@ def test_followups_due_lists_only_due_and_open(logged_in, conversation):
     client, account, user = logged_in
     now = timezone.now()
     due = FollowUp.objects.create(
-        account=account, contact=conversation.contact, conversation=conversation,
+        account=account,
+        contact=conversation.contact,
+        conversation=conversation,
         due_at=now - timezone.timedelta(minutes=5),
     )
     FollowUp.objects.create(
-        account=account, contact=conversation.contact, conversation=conversation,
+        account=account,
+        contact=conversation.contact,
+        conversation=conversation,
         due_at=now + timezone.timedelta(days=1),
     )
     done = FollowUp.objects.create(
-        account=account, contact=conversation.contact, conversation=conversation,
+        account=account,
+        contact=conversation.contact,
+        conversation=conversation,
         due_at=now - timezone.timedelta(hours=1),
     )
     done.mark_done()
 
     resp = client.get("/inbox/followups/")
     assert resp.status_code == 200
-    body = resp.content.decode()
+    resp.content.decode()
     due_ids = [f.pk for f in resp.context["due"]]
     assert due_ids == [due.pk]
     assert len(resp.context["upcoming"]) == 1
@@ -74,7 +91,9 @@ def test_followups_due_lists_only_due_and_open(logged_in, conversation):
 def test_followup_complete_marks_done(logged_in, conversation):
     client, account, _ = logged_in
     followup = FollowUp.objects.create(
-        account=account, contact=conversation.contact, conversation=conversation,
+        account=account,
+        contact=conversation.contact,
+        conversation=conversation,
         due_at=timezone.now(),
     )
     resp = client.post(f"/inbox/followups/{followup.pk}/complete/")
@@ -88,7 +107,9 @@ def test_followups_scoped_to_account(logged_in, conversation):
     client, account, _ = logged_in
     other = Account.objects.create(company_name="Other Co")
     other_contact = Contact.objects.create(account=other, phone="+260970000000")
-    other_followup = FollowUp.objects.create(account=other, contact=other_contact, due_at=timezone.now())
+    other_followup = FollowUp.objects.create(
+        account=other, contact=other_contact, due_at=timezone.now()
+    )
 
     resp = client.post(f"/inbox/followups/{other_followup.pk}/complete/")
     assert resp.status_code == 404

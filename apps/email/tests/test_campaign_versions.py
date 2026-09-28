@@ -1,15 +1,18 @@
 """BulkEmailCampaignVersion snapshot + rollback."""
+
 from decimal import Decimal
 
 import pytest
 from django.contrib.auth.models import User
-from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
-from apps.billing.models import Plan, Subscription
-from apps.email.models import BulkEmailCampaign, BulkEmailCampaignVersion, EmailDomain
+from apps.billing.models import Plan
+from apps.email.models import BulkEmailCampaign, EmailDomain
 from apps.email.services.bulk import create_campaign
-from apps.email.services.campaign_versions import restore_campaign_version, snapshot_campaign
+from apps.email.services.campaign_versions import (
+    restore_campaign_version,
+    snapshot_campaign,
+)
 
 
 @pytest.fixture
@@ -29,7 +32,9 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
@@ -37,8 +42,10 @@ def domain(account):
 def test_create_campaign_takes_an_initial_snapshot(account, domain):
     # snapshot is synchronous inside create_campaign; the dispatch is on_commit
     campaign = create_campaign(
-        account=account, from_email="hi@mail.acme.com",
-        subject_override="Hello", text_override="body",
+        account=account,
+        from_email="hi@mail.acme.com",
+        subject_override="Hello",
+        text_override="body",
         recipients=[{"to": "a@x.com", "variables": {}}],
     )
     versions = list(campaign.versions.all())
@@ -52,7 +59,9 @@ def test_create_campaign_takes_an_initial_snapshot(account, domain):
 @pytest.mark.django_db
 def test_snapshot_numbers_increment(account, domain):
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain, from_email="hi@mail.acme.com",
+        account=account,
+        domain=domain,
+        from_email="hi@mail.acme.com",
         subject_override="v1",
     )
     v1 = snapshot_campaign(campaign)
@@ -65,8 +74,11 @@ def test_snapshot_numbers_increment(account, domain):
 @pytest.mark.django_db
 def test_restore_is_draft_only(account, domain):
     campaign = BulkEmailCampaign.objects.create(
-        account=account, domain=domain, from_email="hi@mail.acme.com",
-        subject_override="original", status=BulkEmailCampaign.Status.DRAFT,
+        account=account,
+        domain=domain,
+        from_email="hi@mail.acme.com",
+        subject_override="original",
+        status=BulkEmailCampaign.Status.DRAFT,
     )
     snapshot_campaign(campaign)
     campaign.subject_override = "changed"

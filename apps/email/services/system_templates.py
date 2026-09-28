@@ -6,6 +6,7 @@ original file-based render_to_string(...) template if no active row exists,
 so callers get identical behavior whether or not the DB row has been seeded
 yet (or was deliberately deactivated/deleted).
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,7 +42,8 @@ def render_system_email(
 
     logger.warning(
         "render_system_email: no active SystemEmailTemplate for key=%s, "
-        "falling back to file template", key,
+        "falling back to file template",
+        key,
     )
     subject = render_to_string(fallback_subject_template, variables).strip()
     body = render_to_string(fallback_body_template, variables)

@@ -13,6 +13,14 @@ class AISettingsAdmin(ReadOnlyAdmin):
 
 @admin.register(AIProposal)
 class AIProposalAdmin(ReadOnlyAdmin):
-    list_display = ("created_at", "account", "status", "intent", "model", "latency_ms", "error")
+    list_display = (
+        "created_at",
+        "account",
+        "status",
+        "intent",
+        "model",
+        "latency_ms",
+        "error",
+    )
     list_filter = ("status",)
     search_fields = ("account__company_name", "error")

@@ -1,4 +1,5 @@
 """Verify inbound Akilent webhook signatures (Stripe-style scheme)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +13,13 @@ class SignatureVerificationError(Exception):
     pass
 
 
-def verify(payload: bytes | str, header: str, secret: str, *, tolerance: int = _TOLERANCE_SECONDS) -> bool:
+def verify(
+    payload: bytes | str,
+    header: str,
+    secret: str,
+    *,
+    tolerance: int = _TOLERANCE_SECONDS,
+) -> bool:
     """Return True if ``header`` (``t=<unix>,v1=<hex>``) matches ``payload``.
 
     Raises :class:`SignatureVerificationError` on a malformed header or a

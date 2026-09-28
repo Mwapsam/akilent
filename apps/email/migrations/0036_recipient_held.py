@@ -4,15 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0035_globalsuppression'),
+        ("email_service", "0035_globalsuppression"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='bulkemailrecipient',
-            name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('queued', 'Queued'), ('sent', 'Sent'), ('failed', 'Failed'), ('held', 'Held (plan limit)')], default='pending', max_length=20),
+            model_name="bulkemailrecipient",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending"),
+                    ("queued", "Queued"),
+                    ("sent", "Sent"),
+                    ("failed", "Failed"),
+                    ("held", "Held (plan limit)"),
+                ],
+                default="pending",
+                max_length=20,
+            ),
         ),
     ]

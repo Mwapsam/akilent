@@ -8,6 +8,7 @@ DELETE /v1/scheduled-jobs/{id}       — cancel
 All account-scoped, scope ``messages:send``, via BaseApiView (idempotency +
 request logging inherited).
 """
+
 from __future__ import annotations
 
 from django.utils.dateparse import parse_datetime
@@ -51,8 +52,11 @@ def _job_dict(job: ScheduledJob, *, detail: bool = False) -> dict:
                 "recipient_count": camp.recipient_count,
             }
         elif job.target_outbound_id:
-            target = {"type": "whatsapp", "id": job.target_outbound_id,
-                      "status": job.target_outbound.status}
+            target = {
+                "type": "whatsapp",
+                "id": job.target_outbound_id,
+                "status": job.target_outbound.status,
+            }
         body["target"] = target
         body["result"] = job.result or {}
     return body
@@ -64,7 +68,9 @@ class ScheduledJobCollectionView(BaseApiView):
 
     @extend_schema(
         operation_id="scheduled_jobs_list",
-        responses=OpenApiResponse(OpenApiTypes.OBJECT, "Paginated list of scheduled jobs."),
+        responses=OpenApiResponse(
+            OpenApiTypes.OBJECT, "Paginated list of scheduled jobs."
+        ),
         tags=["Scheduler"],
     )
     def get(self, request, *args, **kwargs):
@@ -84,14 +90,16 @@ class ScheduledJobCollectionView(BaseApiView):
         except (TypeError, ValueError):
             offset = 0
         total = qs.count()
-        rows = list(qs[offset:offset + limit])
+        rows = list(qs[offset : offset + limit])
         request.auth.touch()
-        return Response({
-            "data": [_job_dict(j) for j in rows],
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-        })
+        return Response(
+            {
+                "data": [_job_dict(j) for j in rows],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
 
 class ScheduledJobDetailView(BaseApiView):
@@ -103,34 +111,57 @@ class ScheduledJobDetailView(BaseApiView):
             "target_message", "target_campaign", "target_outbound"
         ).get(account=request.user, public_id=public_id, parent__isnull=True)
 
-    @extend_schema(operation_id="scheduled_job_detail", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Scheduler"])
+    @extend_schema(
+        operation_id="scheduled_job_detail",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Scheduler"],
+    )
     def get(self, request, public_id, *args, **kwargs):
         job = self._get(request, public_id)
         request.auth.touch()
         return Response(_job_dict(job, detail=True))
 
-    @extend_schema(operation_id="scheduled_job_reschedule", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Scheduler"])
+    @extend_schema(
+        operation_id="scheduled_job_reschedule",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Scheduler"],
+    )
     def patch(self, request, public_id, *args, **kwargs):
         job = self._get(request, public_id)
         scheduled_at = parse_datetime(str(request.data.get("scheduled_at") or ""))
         if scheduled_at is None:
             return Response(
-                {"error": {"code": "invalid_schedule",
-                           "message": "scheduled_at (ISO 8601) is required"}},
+                {
+                    "error": {
+                        "code": "invalid_schedule",
+                        "message": "scheduled_at (ISO 8601) is required",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            reschedule_job(job, scheduled_at=scheduled_at,
-                           tz=request.data.get("timezone") or "")
+            reschedule_job(
+                job, scheduled_at=scheduled_at, tz=request.data.get("timezone") or ""
+            )
         except SchedulingError as exc:
-            code = status.HTTP_409_CONFLICT if job.status != ScheduledJob.Status.SCHEDULED else status.HTTP_400_BAD_REQUEST
+            code = (
+                status.HTTP_409_CONFLICT
+                if job.status != ScheduledJob.Status.SCHEDULED
+                else status.HTTP_400_BAD_REQUEST
+            )
             return Response(
-                {"error": {"code": "invalid_schedule", "message": str(exc)}}, status=code
+                {"error": {"code": "invalid_schedule", "message": str(exc)}},
+                status=code,
             )
         request.auth.touch()
         return Response(_job_dict(job, detail=True))
 
-    @extend_schema(operation_id="scheduled_job_cancel", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Scheduler"])
+    @extend_schema(
+        operation_id="scheduled_job_cancel",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Scheduler"],
+    )
     def delete(self, request, public_id, *args, **kwargs):
         job = self._get(request, public_id)
         try:

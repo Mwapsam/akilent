@@ -1,10 +1,11 @@
 """Platform-wide send-failure-spike alerting."""
+
 import pytest
 from django.core.cache import cache
 
 from apps.accounts.models import Account
 from apps.email.models import EmailMessage
-from apps.email.tasks import alert_on_failure_spike, _FAILURE_SPIKE_MIN_VOLUME
+from apps.email.tasks import _FAILURE_SPIKE_MIN_VOLUME, alert_on_failure_spike
 
 
 @pytest.fixture
@@ -20,11 +21,18 @@ def _clear_cooldown():
 
 
 def _make(account, status, n):
-    EmailMessage.objects.bulk_create([
-        EmailMessage(account=account, from_email="s@a.com", to_email=f"r{i}@x.com",
-                     subject="Hi", status=status)
-        for i in range(n)
-    ])
+    EmailMessage.objects.bulk_create(
+        [
+            EmailMessage(
+                account=account,
+                from_email="s@a.com",
+                to_email=f"r{i}@x.com",
+                subject="Hi",
+                status=status,
+            )
+            for i in range(n)
+        ]
+    )
 
 
 @pytest.mark.django_db
@@ -68,12 +76,14 @@ def test_alert_fires_once_then_cools_down(account, monkeypatch):
 @pytest.mark.django_db
 def test_old_failures_outside_window_are_ignored(account, monkeypatch):
     from datetime import timedelta
+
     from django.utils import timezone
 
     monkeypatch.setattr("apps.billing.slack.post_message", lambda t: None)
     _make(account, EmailMessage.Status.FAILED, _FAILURE_SPIKE_MIN_VOLUME + 10)
     EmailMessage.objects.update(
-        created_at=timezone.now() - timedelta(hours=3)  # push all outside the 60-min window
+        created_at=timezone.now()
+        - timedelta(hours=3)  # push all outside the 60-min window
     )
     out = alert_on_failure_spike()
     assert out["total"] == 0

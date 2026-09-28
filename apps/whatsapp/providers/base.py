@@ -8,6 +8,7 @@ Design principle: every method returns a typed dataclass from apps.whatsapp.type
 never a raw dict. Adapters belong in the provider, not scattered across the
 service layer.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -154,7 +155,9 @@ class WhatsAppProvider(ABC):
             f"{type(self).__name__} does not support template creation"
         )
 
-    def upload_media(self, content: bytes, mime_type: str, filename: str = "upload") -> MediaUploadResult:
+    def upload_media(
+        self, content: bytes, mime_type: str, filename: str = "upload"
+    ) -> MediaUploadResult:
         """Upload a local media file and return a reusable provider media id.
 
         Optional capability — providers that cannot upload raise

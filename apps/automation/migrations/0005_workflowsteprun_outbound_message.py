@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('automation', '0004_workflowwebhookdelivery'),
-        ('whatsapp', '0009_whatsappbusinessnumber_verification_pin'),
+        ("automation", "0004_workflowwebhookdelivery"),
+        ("whatsapp", "0009_whatsappbusinessnumber_verification_pin"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='workflowsteprun',
-            name='outbound_message',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='workflow_step_runs', to='whatsapp.outboundmessage'),
+            model_name="workflowsteprun",
+            name="outbound_message",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="workflow_step_runs",
+                to="whatsapp.outboundmessage",
+            ),
         ),
     ]

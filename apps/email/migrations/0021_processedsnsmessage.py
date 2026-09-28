@@ -4,21 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0020_emaildnsrecord'),
+        ("email_service", "0020_emaildnsrecord"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ProcessedSnsMessage',
+            name="ProcessedSnsMessage",
             fields=[
-                ('message_id', models.CharField(max_length=255, primary_key=True, serialize=False)),
-                ('event_type', models.CharField(blank=True, default='', max_length=40)),
-                ('received_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "message_id",
+                    models.CharField(max_length=255, primary_key=True, serialize=False),
+                ),
+                ("event_type", models.CharField(blank=True, default="", max_length=40)),
+                ("received_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'indexes': [models.Index(fields=['received_at'], name='email_servi_receive_84a28f_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["received_at"], name="email_servi_receive_84a28f_idx"
+                    )
+                ],
             },
         ),
     ]

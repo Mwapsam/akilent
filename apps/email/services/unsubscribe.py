@@ -1,4 +1,5 @@
 """Unsubscribe token generation and RFC 8058 List-Unsubscribe headers."""
+
 from __future__ import annotations
 
 import logging
@@ -16,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 def create_unsubscribe_token(
-    account: "Account",
+    account: Account,
     email: str,
-    campaign: "BulkEmailCampaign | None" = None,
+    campaign: BulkEmailCampaign | None = None,
 ) -> str:
     """Create a one-time unsubscribe token for a recipient and return it.
 
@@ -65,10 +66,10 @@ def get_unsubscribe_header(token: str, request=None) -> str:
 
 
 def build_unsubscribe_context(
-    account: "Account",
+    account: Account,
     email: str,
     *,
-    campaign: "BulkEmailCampaign | None" = None,
+    campaign: BulkEmailCampaign | None = None,
     campaign_id: int | None = None,
 ) -> dict:
     """Mint one token and return everything a send needs from it.
@@ -96,10 +97,10 @@ def build_unsubscribe_context(
 
 
 def build_list_unsubscribe_headers(
-    account: "Account",
+    account: Account,
     email: str,
     *,
-    campaign: "BulkEmailCampaign | None" = None,
+    campaign: BulkEmailCampaign | None = None,
     campaign_id: int | None = None,
 ) -> dict[str, str]:
     """Mint a token and return the RFC 8058 one-click unsubscribe headers.
@@ -119,9 +120,9 @@ def build_list_unsubscribe_headers(
 
 def apply_unsubscribe(
     *,
-    account: "Account",
+    account: Account,
     email: str,
-    campaign: "BulkEmailCampaign | None" = None,
+    campaign: BulkEmailCampaign | None = None,
     source: str = "link",
 ) -> None:
     """Honor an unsubscribe everywhere it needs to be visible.

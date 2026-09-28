@@ -5,9 +5,10 @@ wall-clock local time in an IANA zone to a UTC instant, and walk an RFC-5545
 RRULE to the next occurrence in a DST-safe way (recompute "Mon 09:00 local" per
 occurrence, never add a fixed number of hours).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone as _timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, available_timezones
 
 # Sentinel accepted by the API in place of a concrete IANA zone: resolve the
@@ -39,9 +40,9 @@ def to_utc(dt: datetime, tz: str) -> datetime:
     ignored — this is the "ISO-8601 string with offset" path.
     """
     if dt.tzinfo is not None:
-        return dt.astimezone(_timezone.utc)
+        return dt.astimezone(UTC)
     validate_iana(tz)
-    return dt.replace(tzinfo=ZoneInfo(tz)).astimezone(_timezone.utc)
+    return dt.replace(tzinfo=ZoneInfo(tz)).astimezone(UTC)
 
 
 def local_time_next(tz: str, hhmm: str, *, after: datetime | None = None) -> datetime:
@@ -51,13 +52,13 @@ def local_time_next(tz: str, hhmm: str, *, after: datetime | None = None) -> dat
     """
     validate_iana(tz)
     zone = ZoneInfo(tz)
-    ref = (after or datetime.now(_timezone.utc)).astimezone(zone)
+    ref = (after or datetime.now(UTC)).astimezone(zone)
     hh, mm = (int(x) for x in hhmm.split(":"))
     candidate = ref.replace(hour=hh, minute=mm, second=0, microsecond=0)
     if candidate <= ref:
         candidate = candidate + timedelta(days=1)
         candidate = candidate.replace(hour=hh, minute=mm, second=0, microsecond=0)
-    return candidate.astimezone(_timezone.utc)
+    return candidate.astimezone(UTC)
 
 
 def next_occurrence(rrule: str, *, after: datetime, tz: str) -> datetime | None:
@@ -79,7 +80,7 @@ def next_occurrence(rrule: str, *, after: datetime, tz: str) -> datetime | None:
         return None
     if nxt.tzinfo is None:
         nxt = nxt.replace(tzinfo=zone)
-    return nxt.astimezone(_timezone.utc)
+    return nxt.astimezone(UTC)
 
 
 def validate_rrule(rrule: str, *, min_interval_secs: int = 3600) -> str:
@@ -89,7 +90,7 @@ def validate_rrule(rrule: str, *, min_interval_secs: int = 3600) -> str:
     """
     from dateutil.rrule import rrulestr
 
-    now = datetime.now(_timezone.utc)
+    now = datetime.now(UTC)
     try:
         rule = rrulestr(rrule, dtstart=now)
     except (ValueError, TypeError) as exc:

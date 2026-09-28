@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0006_configurations_is_secret_alter_configurations_value'),
+        ("core", "0006_configurations_is_secret_alter_configurations_value"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='configurations',
-            name='is_secret',
+            model_name="configurations",
+            name="is_secret",
             field=models.BooleanField(default=True),
         ),
     ]

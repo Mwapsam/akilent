@@ -4,15 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ai', '0004_ai_draft'),
+        ("ai", "0004_ai_draft"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='aidraft',
-            name='kind',
-            field=models.CharField(choices=[('automation', 'Automation'), ('template', 'Template'), ('template_edit', 'Template edit'), ('email_template', 'Email template'), ('email_edit', 'Email edit')], max_length=20),
+            model_name="aidraft",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("automation", "Automation"),
+                    ("template", "Template"),
+                    ("template_edit", "Template edit"),
+                    ("email_template", "Email template"),
+                    ("email_edit", "Email edit"),
+                ],
+                max_length=20,
+            ),
         ),
     ]

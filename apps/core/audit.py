@@ -3,6 +3,7 @@
 Every console POST calls ``audit``; "View as" start and stop are recorded too. Failures to record
 are logged, never raised, so an audit hiccup can't block fixing a customer's problem.
 """
+
 from __future__ import annotations
 
 import logging
@@ -72,7 +73,10 @@ def audit(request, action: str, account=None, target: str = "", **detail) -> Non
     try:
         AdminAction.objects.create(
             actor=request.user if request.user.is_authenticated else None,
-            account=account, action=action, target=str(target)[:200], detail=detail,
+            account=account,
+            action=action,
+            target=str(target)[:200],
+            detail=detail,
         )
     except Exception:
         logger.exception("audit: couldn't record %s", action)

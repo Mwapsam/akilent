@@ -18,6 +18,7 @@ Background requests (``hx-get``/``hx-post`` without boosting) are untouched: use
 ``is_background`` for "should I return a partial?", never a bare ``HX-Request`` check, because
 boosted navigations send ``HX-Request`` too.
 """
+
 from __future__ import annotations
 
 import re
@@ -55,6 +56,7 @@ def full_page_load(view):
 
     For pages whose scripts can't yet cope with being swapped in (rich editors).
     """
+
     @wraps(view)
     def wrapper(request, *args, **kwargs):
         if is_shell_swap(request):
@@ -107,7 +109,9 @@ class ShellMiddleware:
         content = response.content
         marker = _MARKER.search(content[:2048])
         if marker is None or content.lstrip()[:15].lower().startswith(b"<!doctype"):
-            return self._reload(request)  # a whole document, not a fragment of this shell
+            return self._reload(
+                request
+            )  # a whole document, not a fragment of this shell
         if marker.group(1).decode() != request.headers.get(SHELL_HEADER):
             return self._reload(request)
         if _needs_full_load(content):

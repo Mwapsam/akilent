@@ -22,13 +22,19 @@ def account(db):
 
 def _subscribe(account, **plan_kwargs):
     defaults = dict(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        max_emails_per_month=2, email_apis=True, api_rate_per_min=0,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=2,
+        email_apis=True,
+        api_rate_per_min=0,
     )
     defaults.update(plan_kwargs)
     plan = Plan.objects.create(**defaults)
     return Subscription.objects.create(
-        account=account, plan=plan, status=Subscription.ACTIVE,
+        account=account,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
 
@@ -36,7 +42,9 @@ def _subscribe(account, **plan_kwargs):
 @pytest.fixture
 def verified_domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
@@ -69,7 +77,9 @@ def _post(client, api_key, **payload_overrides):
 
 @pytest.mark.django_db
 def test_missing_key_returns_401_with_error_envelope(client):
-    resp = client.post(MESSAGES_URL, data=json.dumps(_payload()), content_type="application/json")
+    resp = client.post(
+        MESSAGES_URL, data=json.dumps(_payload()), content_type="application/json"
+    )
     assert resp.status_code == 401
     body = resp.json()
     assert body["error"]["code"] == "authentication_failed"
@@ -84,7 +94,9 @@ def test_invalid_key_returns_401(client, account, api_key):
 @pytest.mark.django_db
 def test_legacy_key_format_authenticates(client, account, verified_domain):
     _subscribe(account)
-    legacy = EmailApiKey.objects.create(account=account, name="legacy", key="ek_legacyplaintextkey")
+    legacy = EmailApiKey.objects.create(
+        account=account, name="legacy", key="ek_legacyplaintextkey"
+    )
     resp = _post(client, legacy.key)
     assert resp.status_code == 202
 

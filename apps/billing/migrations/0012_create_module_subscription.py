@@ -5,30 +5,85 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('billing', '0011_remove_mailbox_billing_fields'),
+        ("accounts", "0003_invitation"),
+        ("billing", "0011_remove_mailbox_billing_fields"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ModuleSubscription',
+            name="ModuleSubscription",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('module', models.CharField(choices=[('whatsapp', 'WhatsApp'), ('email', 'Email'), ('automation', 'Automation'), ('payments', 'Payments'), ('ai', 'AI')], max_length=20)),
-                ('enabled', models.BooleanField(default=False)),
-                ('configuration', models.JSONField(blank=True, default=dict)),
-                ('limits', models.JSONField(blank=True, default=dict)),
-                ('billing_status', models.CharField(choices=[('active', 'Active'), ('past_due', 'Past Due'), ('suspended', 'Suspended')], default='active', max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='module_subscriptions', to='accounts.account')),
-                ('subscription', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='module_subscriptions', to='billing.subscription')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "module",
+                    models.CharField(
+                        choices=[
+                            ("whatsapp", "WhatsApp"),
+                            ("email", "Email"),
+                            ("automation", "Automation"),
+                            ("payments", "Payments"),
+                            ("ai", "AI"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("enabled", models.BooleanField(default=False)),
+                ("configuration", models.JSONField(blank=True, default=dict)),
+                ("limits", models.JSONField(blank=True, default=dict)),
+                (
+                    "billing_status",
+                    models.CharField(
+                        choices=[
+                            ("active", "Active"),
+                            ("past_due", "Past Due"),
+                            ("suspended", "Suspended"),
+                        ],
+                        default="active",
+                        max_length=20,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="module_subscriptions",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "subscription",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="module_subscriptions",
+                        to="billing.subscription",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['account', 'enabled'], name='billing_mod_account_95c7a1_idx'), models.Index(fields=['module', 'enabled'], name='billing_mod_module_4fbdc9_idx')],
-                'unique_together': {('account', 'module')},
+                "indexes": [
+                    models.Index(
+                        fields=["account", "enabled"],
+                        name="billing_mod_account_95c7a1_idx",
+                    ),
+                    models.Index(
+                        fields=["module", "enabled"],
+                        name="billing_mod_module_4fbdc9_idx",
+                    ),
+                ],
+                "unique_together": {("account", "module")},
             },
         ),
     ]

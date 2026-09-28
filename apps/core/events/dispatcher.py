@@ -11,9 +11,10 @@ KEY INVARIANT: Publisher exceptions must NEVER propagate to subscribers.
 If a subscriber fails, it must not break the event-publishing call.
 This is what makes "delete all subscribers, core still works" literally true.
 """
+
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Type
+from collections.abc import Callable
 
 from django.dispatch import Signal
 
@@ -43,7 +44,7 @@ class EventDispatcher(ABC):
         pass
 
     @abstractmethod
-    def subscribe(self, event_type: Type[DomainEvent], handler: Callable) -> None:
+    def subscribe(self, event_type: type[DomainEvent], handler: Callable) -> None:
         """Subscribe to a domain event type.
 
         Args:
@@ -67,9 +68,9 @@ class DjangoSignalDispatcher(EventDispatcher):
 
     def __init__(self):
         """Initialize the dispatcher with a signal per event type."""
-        self._signals: dict[Type[DomainEvent], Signal] = {}
+        self._signals: dict[type[DomainEvent], Signal] = {}
 
-    def _get_signal(self, event_type: Type[DomainEvent]) -> Signal:
+    def _get_signal(self, event_type: type[DomainEvent]) -> Signal:
         """Get or create the signal for an event type."""
         if event_type not in self._signals:
             self._signals[event_type] = Signal()
@@ -101,7 +102,7 @@ class DjangoSignalDispatcher(EventDispatcher):
                 # Call the handler with the event as the only positional argument
                 # The handler signature is handler(event, **kwargs) due to Django signal requirements
                 handler_func(event)
-            except Exception as exc:
+            except Exception:
                 handler_name = (
                     handler_func.__name__
                     if hasattr(handler_func, "__name__")
@@ -114,7 +115,7 @@ class DjangoSignalDispatcher(EventDispatcher):
                 )
                 # Do NOT re-raise — exception is logged and other subscribers still run.
 
-    def subscribe(self, event_type: Type[DomainEvent], handler: Callable) -> None:
+    def subscribe(self, event_type: type[DomainEvent], handler: Callable) -> None:
         """Subscribe to events of a given type.
 
         The handler will be called with the event instance as its only argument.

@@ -4,15 +4,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0013_seed_module_subscriptions'),
+        ("billing", "0013_seed_module_subscriptions"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='service_type',
-            field=models.CharField(choices=[('email', 'Email'), ('whatsapp', 'WhatsApp'), ('both', 'Email & WhatsApp')], default='email', max_length=10),
+            model_name="plan",
+            name="service_type",
+            field=models.CharField(
+                choices=[
+                    ("email", "Email"),
+                    ("whatsapp", "WhatsApp"),
+                    ("both", "Email & WhatsApp"),
+                ],
+                default="email",
+                max_length=10,
+            ),
         ),
     ]

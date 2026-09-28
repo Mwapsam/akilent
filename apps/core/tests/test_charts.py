@@ -27,12 +27,19 @@ class TestScaling:
         assert (points[1].x, points[1].y) == (100, 0)
 
     def test_points_are_evenly_spaced_across_the_width(self):
-        xs = [p.x for p in charts.scale_series([1, 2, 3, 4, 5], width=100, height=10, low=0, high=5)]
+        xs = [
+            p.x
+            for p in charts.scale_series(
+                [1, 2, 3, 4, 5], width=100, height=10, low=0, high=5
+            )
+        ]
         gaps = {round(b - a, 6) for a, b in zip(xs, xs[1:])}
         assert gaps == {25.0}, "uneven spacing distorts the shape of the trend"
 
     def test_padding_insets_both_ends(self):
-        points = charts.scale_series([0, 10], width=100, height=100, low=0, high=10, pad=10)
+        points = charts.scale_series(
+            [0, 10], width=100, height=100, low=0, high=10, pad=10
+        )
         assert points[0].x == 10
         assert points[-1].x == 90
 
@@ -51,13 +58,20 @@ class TestExtent:
         four times every day is flat, and must draw as a straight line."""
         low, high = charts._extent([4, 4, 4], baseline_at_zero=False)
         assert high > low
-        ys = {p.y for p in charts.scale_series([4, 4, 4], width=10, height=100, low=low, high=high)}
+        ys = {
+            p.y
+            for p in charts.scale_series(
+                [4, 4, 4], width=10, height=100, low=low, high=high
+            )
+        }
         assert len(ys) == 1, "a flat series must be a flat line"
 
     def test_an_all_zero_series_puts_zero_on_the_floor(self):
-        """"Nothing happened" belongs at the bottom, not floating mid-chart."""
+        """ "Nothing happened" belongs at the bottom, not floating mid-chart."""
         low, high = charts._extent([0, 0, 0], baseline_at_zero=True)
-        points = charts.scale_series([0, 0, 0], width=10, height=100, low=low, high=high)
+        points = charts.scale_series(
+            [0, 0, 0], width=10, height=100, low=low, high=high
+        )
         assert {p.y for p in points} == {100}
 
     def test_a_zero_baseline_is_included_even_when_no_value_reaches_it(self):
@@ -72,7 +86,9 @@ class TestExtent:
 
 
 class TestTicks:
-    @pytest.mark.parametrize("low,high", [(0, 10), (0, 100), (0, 7), (0, 1), (0, 250), (0, 93)])
+    @pytest.mark.parametrize(
+        "low,high", [(0, 10), (0, 100), (0, 7), (0, 1), (0, 250), (0, 93)]
+    )
     def test_ticks_step_by_a_round_interval(self, low, high):
         """0 / 3.33 / 6.67 / 10 is arithmetically fine and reads as noise.
 
@@ -130,7 +146,9 @@ class TestLineChart:
             [("v", list(range(40)))], [f"d{i}" for i in range(40)], width=300
         )
         assert len(chart.x_ticks) < 40
-        assert chart.x_ticks[-1]["label"] == "d39", "the most recent day must stay labelled"
+        assert chart.x_ticks[-1]["label"] == "d39", (
+            "the most recent day must stay labelled"
+        )
 
     def test_hover_columns_cover_every_reading(self):
         chart = self._chart()

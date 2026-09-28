@@ -5,6 +5,7 @@ automation ever tells a customer "we're closed" by accident. One window per day 
 before close, no overnight windows): simple to explain, and enough for the shops, clinics
 and restaurants this is built for. A night-shift business can leave the day open all day.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, time
@@ -14,8 +15,13 @@ from django.utils import timezone
 
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DAY_LABELS = {
-    "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
-    "fri": "Friday", "sat": "Saturday", "sun": "Sunday",
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday",
 }
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_WINDOW = {"open": "09:00", "close": "17:00"}
@@ -50,20 +56,34 @@ def clean_schedule(raw: dict | None) -> dict:
             continue
         opens, closes = parse_time(window.get("open")), parse_time(window.get("close"))
         if closes <= opens:
-            raise HoursError(f"{DAY_LABELS[day]}: closing time must be after opening time.")
-        clean[day] = {"open": opens.strftime("%H:%M"), "close": closes.strftime("%H:%M")}
+            raise HoursError(
+                f"{DAY_LABELS[day]}: closing time must be after opening time."
+            )
+        clean[day] = {
+            "open": opens.strftime("%H:%M"),
+            "close": closes.strftime("%H:%M"),
+        }
     return clean
 
 
 COMMON_TIMEZONES = [
-    "Africa/Lusaka", "Africa/Harare", "Africa/Johannesburg", "Africa/Nairobi", "Africa/Lagos",
-    "Africa/Accra", "Africa/Cairo", "Europe/London", "UTC",
+    "Africa/Lusaka",
+    "Africa/Harare",
+    "Africa/Johannesburg",
+    "Africa/Nairobi",
+    "Africa/Lagos",
+    "Africa/Accra",
+    "Africa/Cairo",
+    "Europe/London",
+    "UTC",
 ]
 
 
 def timezone_choices() -> list[str]:
     """Common African zones first, then every other zone."""
-    return COMMON_TIMEZONES + sorted(z for z in available_timezones() if z not in COMMON_TIMEZONES)
+    return COMMON_TIMEZONES + sorted(
+        z for z in available_timezones() if z not in COMMON_TIMEZONES
+    )
 
 
 def form_rows(hours) -> list[dict]:
@@ -72,11 +92,22 @@ def form_rows(hours) -> list[dict]:
     saved = hours.schedule if hours and hours.schedule else None
     rows = []
     for day in DAYS:
-        window = (saved or {}).get(day) if saved else (DEFAULT_WINDOW if day not in ("sat", "sun") else None)
+        window = (
+            (saved or {}).get(day)
+            if saved
+            else (DEFAULT_WINDOW if day not in ("sat", "sun") else None)
+        )
         window = window or DEFAULT_WINDOW
         is_open = bool((saved or {}).get(day)) if saved else day not in ("sat", "sun")
-        rows.append({"key": day, "label": DAY_LABELS[day], "open": is_open,
-                     "from": window["open"], "to": window["close"]})
+        rows.append(
+            {
+                "key": day,
+                "label": DAY_LABELS[day],
+                "open": is_open,
+                "from": window["open"],
+                "to": window["close"],
+            }
+        )
     return rows
 
 
@@ -84,7 +115,8 @@ def schedule_from_form(data) -> dict:
     """The schedule from the hours form (``<day>_open`` / ``<day>_from`` / ``<day>_to`` fields)."""
     return {
         day: {"open": data.get(f"{day}_from", ""), "close": data.get(f"{day}_to", "")}
-        for day in DAYS if data.get(f"{day}_open") == "on"
+        for day in DAYS
+        if data.get(f"{day}_open") == "on"
     }
 
 
@@ -120,7 +152,11 @@ def describe(account) -> str:
     for day in DAYS:
         window = hours.schedule.get(day)
         key = f"{window['open']}-{window['close']}" if window else None
-        if runs and runs[-1][2] == key and DAYS.index(runs[-1][1]) == DAYS.index(day) - 1:
+        if (
+            runs
+            and runs[-1][2] == key
+            and DAYS.index(runs[-1][1]) == DAYS.index(day) - 1
+        ):
             runs[-1][1] = day
         else:
             runs.append([day, day, key])
@@ -128,20 +164,31 @@ def describe(account) -> str:
     for first, last, key in runs:
         if key is None:
             continue
-        days = DAY_LABELS[first] if first == last else f"{DAY_LABELS[first]} to {DAY_LABELS[last]}"
+        days = (
+            DAY_LABELS[first]
+            if first == last
+            else f"{DAY_LABELS[first]} to {DAY_LABELS[last]}"
+        )
         parts.append(f"{days} {key}")
     return ", ".join(parts)
 
 
 def availability(account, at: datetime | None = None) -> dict:
-    """"Are we open now, and if not, when?" in words a reply can repeat.
+    """ "Are we open now, and if not, when?" in words a reply can repeat.
 
     ``{"hours_set", "open_now", "local_time", "today", "next_open", "timezone"}``. With no hours set
     the business counts as open (see ``is_open``) and the rest is empty.
     """
     hours = get_hours(account)
     if hours is None or not hours.schedule:
-        return {"hours_set": False, "open_now": True, "local_time": "", "today": "", "next_open": "", "timezone": ""}
+        return {
+            "hours_set": False,
+            "open_now": True,
+            "local_time": "",
+            "today": "",
+            "next_open": "",
+            "timezone": "",
+        }
     try:
         zone = ZoneInfo(hours.timezone)
     except Exception:
@@ -154,15 +201,24 @@ def availability(account, at: datetime | None = None) -> dict:
         for ahead in range(8):
             day = DAYS[(local.weekday() + ahead) % 7]
             window = hours.schedule.get(day)
-            if not window or (ahead == 0 and local.time() >= parse_time(window["open"])):
+            if not window or (
+                ahead == 0 and local.time() >= parse_time(window["open"])
+            ):
                 continue
-            when = "today" if ahead == 0 else ("tomorrow" if ahead == 1 else DAY_LABELS[day])
+            when = (
+                "today"
+                if ahead == 0
+                else ("tomorrow" if ahead == 1 else DAY_LABELS[day])
+            )
             next_open = f"{when} at {window['open']}"
             break
     return {
-        "hours_set": True, "open_now": open_now, "local_time": local.strftime("%A %H:%M"),
+        "hours_set": True,
+        "open_now": open_now,
+        "local_time": local.strftime("%A %H:%M"),
         "today": f"{today['open']}-{today['close']}" if today else "closed",
-        "next_open": next_open, "timezone": hours.timezone,
+        "next_open": next_open,
+        "timezone": hours.timezone,
     }
 
 

@@ -1,4 +1,5 @@
 """Commerce actions, registered into the shared Action Registry (``apps.core.actions``)."""
+
 from __future__ import annotations
 
 from apps.core.actions import Action, ActionError, register
@@ -10,15 +11,28 @@ class CreateOrderAction(Action):
     scope_kwarg = "account"
 
     def input_schema(self) -> dict:
-        return {"required": ["account", "contact", "items"], "optional": ["currency", "conversation_id"]}
+        return {
+            "required": ["account", "contact", "items"],
+            "optional": ["currency", "conversation_id"],
+        }
 
-    def execute(self, context: dict, *, account, contact, items: list, currency: str = "USD",
-                conversation_id: str = "") -> dict:
+    def execute(
+        self,
+        context: dict,
+        *,
+        account,
+        contact,
+        items: list,
+        currency: str = "USD",
+        conversation_id: str = "",
+    ) -> dict:
         from apps.commerce.services import create_order
 
         if not items:
             raise ActionError("create_order requires at least one item")
-        order = create_order(account, contact, items, currency=currency, conversation_id=conversation_id)
+        order = create_order(
+            account, contact, items, currency=currency, conversation_id=conversation_id
+        )
         return {"order_id": order.public_id, "total": str(order.total)}
 
 
@@ -53,7 +67,9 @@ class LookupProductsAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["account", "query"], "optional": ["limit"]}
 
-    def execute(self, context: dict, *, account, query: str, limit: int | None = None) -> dict:
+    def execute(
+        self, context: dict, *, account, query: str, limit: int | None = None
+    ) -> dict:
         from django.db.models import Q
 
         from apps.commerce.models import Product
@@ -61,8 +77,12 @@ class LookupProductsAction(Action):
         active = Product.objects.filter(account=account, is_active=True)
         if str(query).strip() == "*":
             size = max(1, min(int(limit or self.MAX_LIMIT), self.MAX_LIMIT))
-            return {"products": [{"name": p.name, "price": str(p.price), "currency": p.currency}
-                                 for p in active[:size]]}
+            return {
+                "products": [
+                    {"name": p.name, "price": str(p.price), "currency": p.currency}
+                    for p in active[:size]
+                ]
+            }
         words = [w for w in str(query or "").split() if len(w) > 1][:6]
         if not words:
             return {"products": []}
@@ -70,7 +90,12 @@ class LookupProductsAction(Action):
         for word in words:
             match |= Q(name__icontains=word)
         products = active.filter(match)[: self.LIMIT]
-        return {"products": [{"name": p.name, "price": str(p.price), "currency": p.currency} for p in products]}
+        return {
+            "products": [
+                {"name": p.name, "price": str(p.price), "currency": p.currency}
+                for p in products
+            ]
+        }
 
 
 register(CreateOrderAction())

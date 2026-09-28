@@ -8,12 +8,13 @@ Provider-neutral protocol: the model answers ``{"tool": "<name>", "args": {...}}
 and hands back the result, then the model answers with its proposal. Any model that can write JSON
 can use it, so switching to Anthropic or OpenAI later changes nothing here.
 """
+
 from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -24,21 +25,36 @@ MAX_RESULT_CHARS = 1500
 class Tool:
     name: str
     description: str
-    args: str                                   # how to call it, shown to the model
-    action: str                                 # the Action Registry action behind it
-    kwargs: Callable                            # (conversation, args) -> run_action kwargs
-    module: str | None = None                   # catalog feature key; hidden when not usable
+    args: str  # how to call it, shown to the model
+    action: str  # the Action Registry action behind it
+    kwargs: Callable  # (conversation, args) -> run_action kwargs
+    module: str | None = None  # catalog feature key; hidden when not usable
 
 
 TOOLS = (
     # Availability first: the model can't know what time it is where the business is.
-    Tool("check_opening_hours", "Whether the business is open right now and, if not, when it next opens.",
-         "{}", "lookup_business_hours", lambda c, a: {"account": c.account}),
-    Tool("search_products", "Look up products and their prices in the business's catalogue.",
-         '{"query": "<words the customer used>"}', "lookup_products",
-         lambda c, a: {"account": c.account, "query": str(a.get("query") or "")[:100]}, module="orders"),
-    Tool("get_customer", "This customer's open follow-up, interest status and last few orders.",
-         "{}", "lookup_customer", lambda c, a: {"conversation": c}),
+    Tool(
+        "check_opening_hours",
+        "Whether the business is open right now and, if not, when it next opens.",
+        "{}",
+        "lookup_business_hours",
+        lambda c, a: {"account": c.account},
+    ),
+    Tool(
+        "search_products",
+        "Look up products and their prices in the business's catalogue.",
+        '{"query": "<words the customer used>"}',
+        "lookup_products",
+        lambda c, a: {"account": c.account, "query": str(a.get("query") or "")[:100]},
+        module="orders",
+    ),
+    Tool(
+        "get_customer",
+        "This customer's open follow-up, interest status and last few orders.",
+        "{}",
+        "lookup_customer",
+        lambda c, a: {"conversation": c},
+    ),
 )
 _BY_NAME = {t.name: t for t in TOOLS}
 
@@ -58,9 +74,11 @@ def describe(tools: list[Tool]) -> str:
     """The prompt section that tells the model which look-ups exist."""
     if not tools:
         return ""
-    lines = ["## Look-ups you can ask for",
-             'Before proposing, you may ask for ONE look-up by answering only {"tool": "<name>", '
-             '"args": {...}}. You will get the result, then answer. Use a look-up instead of guessing.']
+    lines = [
+        "## Look-ups you can ask for",
+        'Before proposing, you may ask for ONE look-up by answering only {"tool": "<name>", '
+        '"args": {...}}. You will get the result, then answer. Use a look-up instead of guessing.',
+    ]
     lines += [f"- {t.name} {t.args}: {t.description}" for t in tools]
     return "\n".join(lines)
 
@@ -73,12 +91,17 @@ def call(name: str, args, conversation, allowed: list[Tool]) -> dict:
     if tool is None or tool not in allowed:
         return {"error": f"There is no look-up called {name!r}."}
     try:
-        return run_action(tool.action, {"account": conversation.account},
-                          **tool.kwargs(conversation, args if isinstance(args, dict) else {}))
+        return run_action(
+            tool.action,
+            {"account": conversation.account},
+            **tool.kwargs(conversation, args if isinstance(args, dict) else {}),
+        )
     except ActionError as exc:
         return {"error": str(exc)}
-    except Exception:  # noqa: BLE001 - a broken look-up must not sink the proposal
-        logger.exception("AI look-up %s failed for conversation=%s", name, conversation.pk)
+    except Exception:
+        logger.exception(
+            "AI look-up %s failed for conversation=%s", name, conversation.pk
+        )
         return {"error": "That look-up failed."}
 
 

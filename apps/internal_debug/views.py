@@ -5,6 +5,7 @@ when the flag is on) and InternalDebugTokenAuthentication. Responses never
 include secret fields (access_token, verification_pin) — only booleans about
 whether they're set.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,7 +29,9 @@ class _InternalDebugView(APIView):
         super().initial(request, *args, **kwargs)
         logger.info(
             "internal_debug: %s %s params=%s",
-            request.method, request.path, request.query_params.dict(),
+            request.method,
+            request.path,
+            request.query_params.dict(),
         )
 
 
@@ -42,7 +45,9 @@ class WhatsAppNumbersView(_InternalDebugView):
                 {"error": "account_id is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        numbers = WhatsAppBusinessNumber.objects.filter(account_id=account_id).order_by("-created_at")
+        numbers = WhatsAppBusinessNumber.objects.filter(account_id=account_id).order_by(
+            "-created_at"
+        )
         data = [
             {
                 "id": n.pk,
@@ -70,7 +75,9 @@ class WebhookEventsView(_InternalDebugView):
 
         phone_number_id = request.query_params.get("phone_number_id")
         if phone_number_id:
-            qs = qs.filter(payload__entry__0__changes__0__value__metadata__phone_number_id=phone_number_id)
+            qs = qs.filter(
+                payload__entry__0__changes__0__value__metadata__phone_number_id=phone_number_id
+            )
 
         processed = request.query_params.get("processed")
         if processed is not None:

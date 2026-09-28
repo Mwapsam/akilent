@@ -25,14 +25,20 @@ def logged_in(client, db):
 @pytest.fixture
 def two_messages(logged_in):
     _, acc = logged_in
-    EmailMessage.objects.create(account=acc, from_email="a@acme.test",
-                                to_email="ada@example.com", subject="One")
-    EmailMessage.objects.create(account=acc, from_email="a@acme.test",
-                                to_email="grace@example.com", subject="Two")
+    EmailMessage.objects.create(
+        account=acc, from_email="a@acme.test", to_email="ada@example.com", subject="One"
+    )
+    EmailMessage.objects.create(
+        account=acc,
+        from_email="a@acme.test",
+        to_email="grace@example.com",
+        subject="Two",
+    )
     return acc
 
 
 # --- Activity log ---------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_message_log_full_page_has_the_shell(logged_in, two_messages):
@@ -62,7 +68,9 @@ def test_message_log_filter_narrows_the_fragment(logged_in, two_messages):
 @pytest.mark.django_db
 def test_message_log_distinguishes_no_results_from_no_data(logged_in, two_messages):
     client, _ = logged_in
-    filtered = client.get("/logs/messages/?q=nobody", HTTP_HX_REQUEST="true").content.decode()
+    filtered = client.get(
+        "/logs/messages/?q=nobody", HTTP_HX_REQUEST="true"
+    ).content.decode()
     assert "No messages match those filters" in filtered
     assert "Clear filters" in filtered
 
@@ -76,11 +84,17 @@ def test_message_log_empty_account_keeps_its_own_empty_state(logged_in):
 
 # --- API request log ------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_request_log_htmx_returns_only_the_results(logged_in):
     client, acc = logged_in
-    ApiRequest.objects.create(account=acc, method="POST", path="/api/v1/messages",
-                              status_code=202, latency_ms=12)
+    ApiRequest.objects.create(
+        account=acc,
+        method="POST",
+        path="/api/v1/messages",
+        status_code=202,
+        latency_ms=12,
+    )
     body = client.get("/logs/requests/", HTTP_HX_REQUEST="true").content.decode()
     assert "<html" not in body
     assert body.strip().startswith('<div id="request-results"')
@@ -90,11 +104,19 @@ def test_request_log_htmx_returns_only_the_results(logged_in):
 @pytest.mark.django_db
 def test_request_log_filter_narrows_the_fragment(logged_in):
     client, acc = logged_in
-    ApiRequest.objects.create(account=acc, method="POST", path="/api/v1/messages",
-                              status_code=202, latency_ms=12)
-    ApiRequest.objects.create(account=acc, method="GET", path="/api/v1/domains",
-                              status_code=200, latency_ms=8)
-    body = client.get("/logs/requests/?path=domains", HTTP_HX_REQUEST="true").content.decode()
+    ApiRequest.objects.create(
+        account=acc,
+        method="POST",
+        path="/api/v1/messages",
+        status_code=202,
+        latency_ms=12,
+    )
+    ApiRequest.objects.create(
+        account=acc, method="GET", path="/api/v1/domains", status_code=200, latency_ms=8
+    )
+    body = client.get(
+        "/logs/requests/?path=domains", HTTP_HX_REQUEST="true"
+    ).content.decode()
     assert "/api/v1/domains" in body
     assert "/api/v1/messages" not in body
 

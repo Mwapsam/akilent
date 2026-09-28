@@ -4,6 +4,7 @@ AutomationRule defines WHEN/IF/THEN automation workflows: when a trigger event
 occurs with matching conditions, execute the specified action (send message,
 create contact, etc.).
 """
+
 from django.db import models
 from django.utils import timezone
 
@@ -68,7 +69,9 @@ class Workflow(models.Model):
     )
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=160)
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT
+    )
     version = models.PositiveIntegerField(default=1)
     definition = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -108,7 +111,9 @@ class WorkflowRun(models.Model):
     contact = models.ForeignKey(
         "contacts.Contact", on_delete=models.CASCADE, related_name="workflow_runs"
     )
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ACTIVE
+    )
     context = models.JSONField(default=dict, blank=True)
     # What this run is about, e.g. "order:ord_ab12". Empty for contact-level triggers,
     # which keep one active run per (workflow, contact); a subject lets one contact have
@@ -151,8 +156,11 @@ class WorkflowStepRun(models.Model):
     # showing "completed" while the message never actually sent. See
     # apps.automation.integrations.whatsapp.mark_outbound_message_failed.
     outbound_message = models.ForeignKey(
-        "whatsapp.OutboundMessage", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="workflow_step_runs",
+        "whatsapp.OutboundMessage",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="workflow_step_runs",
     )
 
     class Meta:
@@ -192,7 +200,9 @@ class WorkflowWebhookDelivery(models.Model):
     headers = models.JSONField(default=dict, blank=True)
     body = models.JSONField(default=dict, blank=True)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     attempt_count = models.PositiveSmallIntegerField(default=0)
     response_code = models.PositiveSmallIntegerField(blank=True, null=True)
     last_error = models.TextField(blank=True, default="")
@@ -208,17 +218,32 @@ class WorkflowWebhookDelivery(models.Model):
         self.response_code = response_code
         self.attempt_count += 1
         self.last_attempt_at = timezone.now()
-        self.save(update_fields=["status", "response_code", "attempt_count", "last_attempt_at"])
+        self.save(
+            update_fields=[
+                "status",
+                "response_code",
+                "attempt_count",
+                "last_attempt_at",
+            ]
+        )
 
-    def mark_failed(self, response_code: int | None, error: str = "", *, exhausted: bool = False) -> None:
+    def mark_failed(
+        self, response_code: int | None, error: str = "", *, exhausted: bool = False
+    ) -> None:
         self.status = self.Status.EXHAUSTED if exhausted else self.Status.FAILED
         self.response_code = response_code
         self.last_error = error[:2000]
         self.attempt_count += 1
         self.last_attempt_at = timezone.now()
-        self.save(update_fields=[
-            "status", "response_code", "last_error", "attempt_count", "last_attempt_at",
-        ])
+        self.save(
+            update_fields=[
+                "status",
+                "response_code",
+                "last_error",
+                "attempt_count",
+                "last_attempt_at",
+            ]
+        )
 
     def __str__(self):
         return f"{self.run_id}/{self.step_id} -> {self.url} [{self.status}]"
@@ -232,18 +257,26 @@ class ReplyPattern(models.Model):
     deleting every row loses nothing but the offers.
     """
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="reply_patterns")
-    key = models.CharField(max_length=64)            # stable hash of the typical reply's words
-    reply_text = models.TextField()                  # the most typical of the team's replies
-    count = models.PositiveIntegerField(default=0)   # replies in the cluster
-    message_ids = models.JSONField(default=list)     # the team's outbound Message ids
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="reply_patterns"
+    )
+    key = models.CharField(max_length=64)  # stable hash of the typical reply's words
+    reply_text = models.TextField()  # the most typical of the team's replies
+    count = models.PositiveIntegerField(default=0)  # replies in the cluster
+    message_ids = models.JSONField(default=list)  # the team's outbound Message ids
     question_keywords = models.JSONField(default=list)
     topic = models.CharField(max_length=60, blank=True, default="")
-    covered_by = models.CharField(max_length=150, blank=True, default="")  # a live automation's name
+    covered_by = models.CharField(
+        max_length=150, blank=True, default=""
+    )  # a live automation's name
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["account", "key"], name="uniq_reply_pattern_key")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "key"], name="uniq_reply_pattern_key"
+            )
+        ]
         ordering = ["-count"]
 
     def __str__(self):
@@ -253,12 +286,18 @@ class ReplyPattern(models.Model):
 class DismissedSuggestion(models.Model):
     """An owner said "not now" to a Build recommendation or a reply pattern; hidden until ``until``."""
 
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="+")
-    key = models.CharField(max_length=80)             # "intent:answer_pricing", "pattern:<key>"
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="+"
+    )
+    key = models.CharField(max_length=80)  # "intent:answer_pricing", "pattern:<key>"
     until = models.DateTimeField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["account", "key"], name="uniq_dismissed_suggestion")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "key"], name="uniq_dismissed_suggestion"
+            )
+        ]
 
     def __str__(self):
         return f"{self.key} dismissed until {self.until:%Y-%m-%d} ({self.account_id})"

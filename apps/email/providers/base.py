@@ -8,6 +8,7 @@ Design principle: every method returns a typed dataclass from apps.email.types,
 never a raw dict. Adapters belong in the provider, not scattered across the
 service layer.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -21,7 +22,6 @@ from apps.email.types import (
     OperationResult,
 )
 
-
 # ── Backwards-compatible shims ────────────────────────────────────────────────
 # Existing code imported MailProviderError, DkimResult, ProvisionResult from
 # here. Keeping them so no view or task import breaks during the migration.
@@ -34,7 +34,7 @@ class DkimResult:
     """Legacy wrapper — new code should use DkimRecord from apps.email.types."""
 
     selector: str
-    dkim_txt: str   # full TXT value ready for DNS: "v=DKIM1; k=rsa; p=..."
+    dkim_txt: str  # full TXT value ready for DNS: "v=DKIM1; k=rsa; p=..."
 
 
 @dataclass
@@ -108,9 +108,7 @@ class EmailProvider(ABC):
 
     def set_domain_active(self, domain: str, *, active: bool) -> OperationResult:
         """Enable or disable a domain without deleting it."""
-        raise EmailProviderError(
-            "set_domain_active is not supported by this provider"
-        )
+        raise EmailProviderError("set_domain_active is not supported by this provider")
 
     # ── DKIM management ───────────────────────────────────────────────────
 
@@ -168,9 +166,7 @@ class EmailProvider(ABC):
     # Concrete implementations of the old 8-method interface so existing
     # views and tasks continue to work unchanged while the migration proceeds.
 
-    def provision_domain(
-        self, domain: str, selector: str = "dkim"
-    ) -> ProvisionResult:
+    def provision_domain(self, domain: str, selector: str = "dkim") -> ProvisionResult:
         """Legacy shim: wraps create_domain() in the old ProvisionResult shape."""
         info = self.create_domain(domain)
         dkim = info.dkim

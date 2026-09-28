@@ -31,7 +31,9 @@ def _verified_domain(account, **kw):
     return EmailDomain.objects.create(account=account, **defaults)
 
 
-def _stats(account, domain, *, sent, delivered=0, bounced=0, complained=0, opened=0, days_ago=1):
+def _stats(
+    account, domain, *, sent, delivered=0, bounced=0, complained=0, opened=0, days_ago=1
+):
     MessageStatsDaily.objects.create(
         account=account,
         domain=domain,
@@ -95,7 +97,9 @@ def test_halted_reputation_fails_check(account):
     d = _verified_domain(account)
     _stats(account, d, sent=500, delivered=480, bounced=5)
     SendReputation.objects.create(
-        account=account, state=SendReputation.State.HALTED, halted_reason="bounce rate 7%"
+        account=account,
+        state=SendReputation.State.HALTED,
+        halted_reason="bounce rate 7%",
     )
     result = compute_score(account, d)
     rep = next(c for c in result.checks if c.key == "sending_reputation")
@@ -119,9 +123,18 @@ def test_week_over_week_bounce_spike_recommendation(account):
     d = _verified_domain(account)
     # last week's snapshot recorded a 1.0% bounce rate
     DeliverabilitySnapshot.objects.create(
-        account=account, domain=d, day=(timezone.now() - timedelta(days=7)).date(),
-        score=80, grade="Good",
-        checks=[{"key": "bounce_rate", "status": "warn", "detail": "1.0% — above the 2% comfort zone"}],
+        account=account,
+        domain=d,
+        day=(timezone.now() - timedelta(days=7)).date(),
+        score=80,
+        grade="Good",
+        checks=[
+            {
+                "key": "bounce_rate",
+                "status": "warn",
+                "detail": "1.0% — above the 2% comfort zone",
+            }
+        ],
     )
     _stats(account, d, sent=1000, delivered=960, bounced=35)  # 3.5%
     result = compute_score(account, d)
@@ -135,7 +148,9 @@ def test_new_suppressions_hurt_list_quality(account):
     _stats(account, d, sent=500, delivered=480, days_ago=3)
     for i in range(60):
         SuppressionListEntry.objects.create(
-            account=account, email=f"b{i}@x.com", reason=SuppressionListEntry.Reason.BOUNCE
+            account=account,
+            email=f"b{i}@x.com",
+            reason=SuppressionListEntry.Reason.BOUNCE,
         )
     result = compute_score(account, d)
     lq = next(c for c in result.checks if c.key == "list_quality")

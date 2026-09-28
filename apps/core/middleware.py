@@ -1,4 +1,5 @@
 """Cross-cutting HTTP middleware."""
+
 from __future__ import annotations
 
 from apps.core.request_context import (
@@ -14,8 +15,17 @@ _RESPONSE_HEADER = "X-Request-Id"
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Paths that keep working for a suspended member or while viewing as a business.
 _ALWAYS_OPEN = (
-    "/auth/logout/", "/static/", "/media/", "/healthz", "/privacy/", "/terms/", "/data-deletion/",
-    "/help/", "/docs/", "/manage/", "/api/",
+    "/auth/logout/",
+    "/static/",
+    "/media/",
+    "/healthz",
+    "/privacy/",
+    "/terms/",
+    "/data-deletion/",
+    "/help/",
+    "/docs/",
+    "/manage/",
+    "/api/",
 )
 
 
@@ -26,7 +36,10 @@ def _open(path: str) -> bool:
 def _wants_json(request) -> bool:
     return (
         request.headers.get("x-requested-with") == "XMLHttpRequest"
-        or (request.headers.get("hx-request") == "true" and request.headers.get("hx-boosted") != "true")
+        or (
+            request.headers.get("hx-request") == "true"
+            and request.headers.get("hx-boosted") != "true"
+        )
         or "application/json" in request.headers.get("accept", "")
     )
 
@@ -46,12 +59,19 @@ class SuspendedAccountMiddleware:
         from apps.accounts.utils import is_suspended_member
         from apps.core.utils import is_operator
 
-        if not _open(request.path) and not is_operator(request.user) and is_suspended_member(request):
+        if (
+            not _open(request.path)
+            and not is_operator(request.user)
+            and is_suspended_member(request)
+        ):
             from django.http import JsonResponse
             from django.shortcuts import render
 
             if _wants_json(request):
-                return JsonResponse({"error": "This workspace is suspended. Contact support."}, status=403)
+                return JsonResponse(
+                    {"error": "This workspace is suspended. Contact support."},
+                    status=403,
+                )
             return render(request, "accounts/suspended.html", status=403)
         return self.get_response(request)
 
@@ -78,7 +98,9 @@ class ViewAsReadOnlyMiddleware:
                 message = f"Read-only: you're viewing {viewed.company_name} as support. Nothing was changed."
                 if _wants_json(request):
                     return JsonResponse({"error": message}, status=403)
-                return HttpResponse(message, status=403, content_type="text/plain; charset=utf-8")
+                return HttpResponse(
+                    message, status=403, content_type="text/plain; charset=utf-8"
+                )
         return self.get_response(request)
 
 

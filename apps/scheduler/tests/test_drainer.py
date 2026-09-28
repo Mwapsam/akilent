@@ -5,10 +5,10 @@ import pytest
 from django.utils import timezone
 
 from apps.api.services import create_and_queue_campaign, create_and_queue_message
+from apps.email.models import BulkEmailCampaign, EmailMessage
 from apps.scheduler.api import SchedulingError, cancel_job, reschedule_job
 from apps.scheduler.drainer import drain
 from apps.scheduler.models import ScheduledJob
-from apps.email.models import BulkEmailCampaign, EmailMessage
 
 
 def _msg_payload(**over):
@@ -23,6 +23,7 @@ def _msg_payload(**over):
 
 
 # --- scheduling (no send now) -------------------------------------------
+
 
 @pytest.mark.django_db
 def test_future_message_creates_job_not_message(account, verified_domain, future):
@@ -55,7 +56,8 @@ def test_past_time_rejected(account, verified_domain):
         create_and_queue_message(
             account=account,
             scheduled_at=timezone.now() - timedelta(minutes=5),
-            tz="UTC", **_msg_payload()
+            tz="UTC",
+            **_msg_payload(),
         )
 
 
@@ -65,7 +67,8 @@ def test_within_min_lead_rejected(account, verified_domain):
         create_and_queue_message(
             account=account,
             scheduled_at=timezone.now() + timedelta(seconds=10),
-            tz="UTC", **_msg_payload()
+            tz="UTC",
+            **_msg_payload(),
         )
 
 
@@ -81,6 +84,7 @@ def test_unverified_domain_rejected_at_schedule_time(account, future):
 
 
 # --- drain -> send ----------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_drain_fires_due_message(account, verified_domain, future):
@@ -133,15 +137,20 @@ def test_too_stale_job_is_failed_not_sent(account, verified_domain, future):
 
 # --- campaigns -------------------------------------------------------
 
+
 @pytest.mark.django_db
-def test_future_campaign_is_scheduled_with_audience_visible(account, verified_domain, future):
+def test_future_campaign_is_scheduled_with_audience_visible(
+    account, verified_domain, future
+):
     with patch("apps.email.tasks.dispatch_campaign.delay") as dispatch:
         job = create_and_queue_campaign(
             account=account,
             from_email="hello@mail.acme.com",
-            subject="s", text_body="t",
+            subject="s",
+            text_body="t",
             recipients=[{"to": "a@example.com"}, {"to": "b@example.com"}],
-            scheduled_at=future(hours=3), tz="UTC",
+            scheduled_at=future(hours=3),
+            tz="UTC",
         )
     assert isinstance(job, ScheduledJob)
     camp = job.target_campaign
@@ -152,14 +161,18 @@ def test_future_campaign_is_scheduled_with_audience_visible(account, verified_do
 
 
 @pytest.mark.django_db
-def test_drain_flips_campaign_to_queued_and_dispatches(account, verified_domain, future):
+def test_drain_flips_campaign_to_queued_and_dispatches(
+    account, verified_domain, future
+):
     with patch("apps.email.tasks.dispatch_campaign.delay") as dispatch:
         job = create_and_queue_campaign(
             account=account,
             from_email="hello@mail.acme.com",
-            subject="s", text_body="t",
+            subject="s",
+            text_body="t",
             recipients=[{"to": "a@example.com"}],
-            scheduled_at=future(hours=1), tz="UTC",
+            scheduled_at=future(hours=1),
+            tz="UTC",
         )
         job.fire_at = timezone.now() - timedelta(seconds=1)
         job.save(update_fields=["fire_at"])
@@ -174,12 +187,18 @@ def test_drain_flips_campaign_to_queued_and_dispatches(account, verified_domain,
 
 # --- cancel / reschedule -------------------------------------------
 
+
 @pytest.mark.django_db
 def test_cancel_while_scheduled_cascades_to_campaign(account, verified_domain, future):
     with patch("apps.email.tasks.dispatch_campaign.delay"):
         job = create_and_queue_campaign(
-            account=account, from_email="hello@mail.acme.com", subject="s", text_body="t",
-            recipients=[{"to": "a@example.com"}], scheduled_at=future(hours=2), tz="UTC",
+            account=account,
+            from_email="hello@mail.acme.com",
+            subject="s",
+            text_body="t",
+            recipients=[{"to": "a@example.com"}],
+            scheduled_at=future(hours=2),
+            tz="UTC",
         )
     cancel_job(job)
     job.refresh_from_db()
@@ -218,14 +237,18 @@ def test_reschedule_moves_fire_at_and_resets_attempts(account, verified_domain, 
 
 # --- recurrence ----------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_recurring_job_rearms_after_fire(account, verified_domain, future):
     # No BYHOUR/BYMINUTE: the rule inherits its time-of-day from whatever
     # instant it's walked forward from, so re-arming lands exactly one day
     # after the fire_at used below — regardless of what time the suite runs.
     job = create_and_queue_message(
-        account=account, scheduled_at=future(hours=1), tz="UTC",
-        recurrence="FREQ=DAILY", **_msg_payload()
+        account=account,
+        scheduled_at=future(hours=1),
+        tz="UTC",
+        recurrence="FREQ=DAILY",
+        **_msg_payload(),
     )
     first_fire = job.fire_at
     job.fire_at = timezone.now() - timedelta(seconds=1)
@@ -244,8 +267,11 @@ def test_recurring_job_rearms_after_fire(account, verified_domain, future):
 def test_sub_hour_recurrence_rejected(account, verified_domain, future):
     with pytest.raises(SchedulingError):
         create_and_queue_message(
-            account=account, scheduled_at=future(hours=1), tz="UTC",
-            recurrence="FREQ=MINUTELY;INTERVAL=10", **_msg_payload()
+            account=account,
+            scheduled_at=future(hours=1),
+            tz="UTC",
+            recurrence="FREQ=MINUTELY;INTERVAL=10",
+            **_msg_payload(),
         )
 
 
@@ -259,7 +285,9 @@ def test_fire_whatsapp_resolves_unconfirmed_and_keeps_polling_held():
 
     acc = Account.objects.create(company_name="Sched WA", slug="sched-wa")
     contact = WhatsAppContact.objects.create(account=acc, phone_number="+260971234567")
-    job = ScheduledJob(account=acc, kind=ScheduledJob.Kind.WHATSAPP, fire_at=timezone.now())
+    job = ScheduledJob(
+        account=acc, kind=ScheduledJob.Kind.WHATSAPP, fire_at=timezone.now()
+    )
 
     for status, expected_running in [
         (OutboundMessage.Status.SENT, False),
@@ -267,7 +295,9 @@ def test_fire_whatsapp_resolves_unconfirmed_and_keeps_polling_held():
         (OutboundMessage.Status.HELD, True),
         (OutboundMessage.Status.QUEUED, True),
     ]:
-        ob = OutboundMessage.objects.create(account=acc, contact=contact, status=status, payload={})
+        ob = OutboundMessage.objects.create(
+            account=acc, contact=contact, status=status, payload={}
+        )
         job.target_outbound = ob
         result, running = _fire_whatsapp(job)
         assert running is expected_running, status

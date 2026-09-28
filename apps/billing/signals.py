@@ -20,8 +20,9 @@ def seed_new_plan_features(sender, instance, created, raw=False, **kwargs):
 
     keys = {key for flag, key in LEGACY_FLAGS.items() if getattr(instance, flag, False)}
     keys |= MODULE_FEATURES
-    PlanFeature.objects.bulk_create([PlanFeature(plan=instance, key=k) for k in sorted(keys)],
-                                    ignore_conflicts=True)
+    PlanFeature.objects.bulk_create(
+        [PlanFeature(plan=instance, key=k) for k in sorted(keys)], ignore_conflicts=True
+    )
 
     # Limits, the same way migration 0022 set up existing plans: the old max_* column where one
     # was enforced, otherwise unlimited.
@@ -29,10 +30,18 @@ def seed_new_plan_features(sender, instance, created, raw=False, **kwargs):
     from apps.billing.models import PlanLimit
 
     PlanLimit.objects.bulk_create(
-        [PlanLimit(plan=instance, key=lim.key,
-                   value=getattr(instance, lim.legacy_column) if lim.legacy_column else UNLIMITED)
-         for lim in LIMITS],
-        ignore_conflicts=True)
+        [
+            PlanLimit(
+                plan=instance,
+                key=lim.key,
+                value=getattr(instance, lim.legacy_column)
+                if lim.legacy_column
+                else UNLIMITED,
+            )
+            for lim in LIMITS
+        ],
+        ignore_conflicts=True,
+    )
 
 
 @receiver(post_save, sender="accounts.Account")
@@ -52,7 +61,9 @@ def auto_create_trial(sender, instance, created, **kwargs):
             defaults={
                 "plan": plan,
                 "status": Subscription.TRIALING if trial_days else Subscription.ACTIVE,
-                "trial_ends_at": now + timedelta(days=trial_days) if trial_days else None,
+                "trial_ends_at": now + timedelta(days=trial_days)
+                if trial_days
+                else None,
                 "current_period_start": now,
             },
         )

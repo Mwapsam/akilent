@@ -47,7 +47,9 @@ class HasWhatsAppModule(BasePermission):
 class HasBulkEmailFeature(BasePermission):
     """Gate on the account's plan including bulk/campaign sending."""
 
-    message = "Your plan does not include bulk email sending. Upgrade to send campaigns."
+    message = (
+        "Your plan does not include bulk email sending. Upgrade to send campaigns."
+    )
 
     def has_permission(self, request, view) -> bool:
         account = request.user

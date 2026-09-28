@@ -1,4 +1,5 @@
 """Missed-conversation recovery: one internal follow-up per unanswered WhatsApp enquiry."""
+
 from datetime import timedelta
 
 import pytest
@@ -22,11 +23,18 @@ def account(db):
 def convo(account, *messages, status=Conversation.Status.OPEN, channel="whatsapp"):
     n = Conversation.objects.count()
     contact = Contact.objects.create(account=account, phone=f"+26097{3000000 + n}")
-    c = Conversation.objects.create(account=account, contact=contact, channel=channel, status=status)
+    c = Conversation.objects.create(
+        account=account, contact=contact, channel=channel, status=status
+    )
     for direction, minutes_ago, st in messages:
         Message.objects.create(
-            account=account, conversation=c, direction=direction, body="x",
-            timestamp=NOW - timedelta(minutes=minutes_ago), status=st)
+            account=account,
+            conversation=c,
+            direction=direction,
+            body="x",
+            timestamp=NOW - timedelta(minutes=minutes_ago),
+            status=st,
+        )
     return c
 
 
@@ -59,24 +67,41 @@ def test_completed_followup_is_not_recreated_for_the_same_message(account):
 def test_customer_writing_again_and_being_missed_again_is_reminded_again(account):
     c = convo(account, (IN, 60 * HOUR, "delivered"))
     create_missed_followups(NOW - timedelta(hours=30))
-    FollowUp.objects.update(created_at=NOW - timedelta(hours=30))  # auto_now_add uses real time
+    FollowUp.objects.update(
+        created_at=NOW - timedelta(hours=30)
+    )  # auto_now_add uses real time
     FollowUp.objects.get().mark_done()
     Message.objects.create(
-        account=account, conversation=c, direction=IN, body="hello?",
-        timestamp=NOW - timedelta(hours=25), status="delivered")
+        account=account,
+        conversation=c,
+        direction=IN,
+        body="hello?",
+        timestamp=NOW - timedelta(hours=25),
+        status="delivered",
+    )
     assert create_missed_followups(NOW) == 1
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("messages", [
-    [(IN, 5 * HOUR, "delivered")],                                   # not missed yet (<24h)
-    [(IN, 30 * HOUR, "delivered"), (OUT, 29 * HOUR, "delivered")],   # answered
-    [(IN, 30 * HOUR, "delivered"), (OUT, 29 * HOUR, "failed")],      # failed reply is not a response
-    [(IN, 30 * 24 * HOUR, "delivered")],                             # older than the 7-day window
-])
+@pytest.mark.parametrize(
+    "messages",
+    [
+        [(IN, 5 * HOUR, "delivered")],  # not missed yet (<24h)
+        [(IN, 30 * HOUR, "delivered"), (OUT, 29 * HOUR, "delivered")],  # answered
+        [
+            (IN, 30 * HOUR, "delivered"),
+            (OUT, 29 * HOUR, "failed"),
+        ],  # failed reply is not a response
+        [(IN, 30 * 24 * HOUR, "delivered")],  # older than the 7-day window
+    ],
+)
 def test_only_recent_unanswered_conversations_are_reminded(account, messages):
     convo(account, *messages)
-    expected = 1 if messages == [(IN, 30 * HOUR, "delivered"), (OUT, 29 * HOUR, "failed")] else 0
+    expected = (
+        1
+        if messages == [(IN, 30 * HOUR, "delivered"), (OUT, 29 * HOUR, "failed")]
+        else 0
+    )
     assert create_missed_followups(NOW) == expected
 
 

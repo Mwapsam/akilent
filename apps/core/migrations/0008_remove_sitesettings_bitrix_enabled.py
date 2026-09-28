@@ -4,14 +4,13 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0007_alter_configurations_is_secret'),
+        ("core", "0007_alter_configurations_is_secret"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='sitesettings',
-            name='bitrix_enabled',
+            model_name="sitesettings",
+            name="bitrix_enabled",
         ),
     ]

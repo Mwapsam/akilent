@@ -5,23 +5,37 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0013_emailtemplate_builder_mode_and_more'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0013_emailtemplate_builder_mode_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='EmailTemplateAsset',
+            name="EmailTemplateAsset",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('file', models.ImageField(upload_to='email_assets/%Y/%m/')),
-                ('uploaded_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_template_assets', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("file", models.ImageField(upload_to="email_assets/%Y/%m/")),
+                ("uploaded_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_template_assets",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-uploaded_at'],
+                "ordering": ["-uploaded_at"],
             },
         ),
     ]

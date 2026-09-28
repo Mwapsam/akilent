@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0002_mailbox_emailalias'),
+        ("email_service", "0002_mailbox_emailalias"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emaildomain',
-            name='is_active',
+            model_name="emaildomain",
+            name="is_active",
             field=models.BooleanField(default=True),
         ),
     ]

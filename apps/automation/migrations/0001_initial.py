@@ -5,30 +5,62 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('whatsapp', '0002_remove_automationrule_whatsapp_au_account_7f7c6d_idx_and_more'),
+        ("accounts", "0003_invitation"),
+        (
+            "whatsapp",
+            "0002_remove_automationrule_whatsapp_au_account_7f7c6d_idx_and_more",
+        ),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='AutomationRule',
+            name="AutomationRule",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('trigger_event', models.CharField(choices=[('message_received', 'Message received'), ('message_sent', 'Message sent'), ('lead_created', 'Lead created'), ('deal_stage_changed', 'Deal stage changed')], max_length=50)),
-                ('conditions', models.JSONField(default=dict)),
-                ('action', models.JSONField(default=dict)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                (
+                    "trigger_event",
+                    models.CharField(
+                        choices=[
+                            ("message_received", "Message received"),
+                            ("message_sent", "Message sent"),
+                            ("lead_created", "Lead created"),
+                            ("deal_stage_changed", "Deal stage changed"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("conditions", models.JSONField(default=dict)),
+                ("action", models.JSONField(default=dict)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'whatsapp_automationrule',
-                'indexes': [models.Index(fields=['account', 'trigger_event', 'is_active'], name='whatsapp_au_account_7f7c6d_idx')],
+                "db_table": "whatsapp_automationrule",
+                "indexes": [
+                    models.Index(
+                        fields=["account", "trigger_event", "is_active"],
+                        name="whatsapp_au_account_7f7c6d_idx",
+                    )
+                ],
             },
         ),
     ]

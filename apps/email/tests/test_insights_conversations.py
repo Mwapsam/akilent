@@ -1,5 +1,6 @@
 """R1.5b: Insights leads with a "Conversations" section (reusing the same
 derived state the inbox uses) before any email-specific content."""
+
 from datetime import timedelta
 
 import pytest
@@ -24,12 +25,20 @@ def logged_in(client, db):
 
 
 def _convo(account, *messages):
-    contact = Contact.objects.create(account=account, phone=f"+2609700{Conversation.objects.count():05d}")
-    c = Conversation.objects.create(account=account, contact=contact, channel="whatsapp")
+    contact = Contact.objects.create(
+        account=account, phone=f"+2609700{Conversation.objects.count():05d}"
+    )
+    c = Conversation.objects.create(
+        account=account, contact=contact, channel="whatsapp"
+    )
     for direction, minutes_ago, status in messages:
         Message.objects.create(
-            account=account, conversation=c, direction=direction, body="x",
-            timestamp=NOW - timedelta(minutes=minutes_ago), status=status,
+            account=account,
+            conversation=c,
+            direction=direction,
+            body="x",
+            timestamp=NOW - timedelta(minutes=minutes_ago),
+            status=status,
         )
     return c
 
@@ -46,7 +55,9 @@ def test_insights_shows_conversations_section_before_email(logged_in):
     assert ">1<" in body  # the waiting count
     assert "customer waiting for you" in body  # singular, not "customers"
     # Conversations section renders before the Email section, not after.
-    assert body.index("Conversations") < body.index("<h2 class=\"text-lg font-semibold text-ink pb-2\">Email</h2>")
+    assert body.index("Conversations") < body.index(
+        '<h2 class="text-lg font-semibold text-ink pb-2">Email</h2>'
+    )
 
 
 @pytest.mark.django_db

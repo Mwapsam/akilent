@@ -4,6 +4,7 @@ Distinct from and complementary to apps.billing.limits.LimitChecker.check_email
 (a monthly *volume* cap): this is a requests/minute *rate* limit, resolved
 from the key's own override or its account's plan (Plan.api_rate_per_min).
 """
+
 from __future__ import annotations
 
 import time

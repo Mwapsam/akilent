@@ -7,6 +7,7 @@ AliasService owns:
 
 Views import this service — never the provider directly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 class AliasService:
     """Orchestrates alias CRUD between Django and the mail provider."""
 
-    def __init__(self, account, *, actor: "AbstractBaseUser | None" = None) -> None:
+    def __init__(self, account, *, actor: AbstractBaseUser | None = None) -> None:
         self.account = account
         self.actor = actor
         self._provider = get_mail_provider()

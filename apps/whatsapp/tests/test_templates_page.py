@@ -2,6 +2,7 @@
 one channel-neutral "Templates" page, same pattern as Campaigns (R1.5c
 follow-up). Meta is the source of truth; the only write path here is
 "Sync from WhatsApp"."""
+
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +13,9 @@ from apps.accounts.models import Account, Membership
 from apps.whatsapp.models import MessageTemplate
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
-_wa_urls = override_settings(ROOT_URLCONF="apps.whatsapp.tests.urls_enabled", WHATSAPP_ENABLED=True)
+_wa_urls = override_settings(
+    ROOT_URLCONF="apps.whatsapp.tests.urls_enabled", WHATSAPP_ENABLED=True
+)
 
 
 @pytest.fixture
@@ -29,8 +32,11 @@ def logged_in(client, db):
 def test_whatsapp_tab_shows_synced_templates_not_shown_on_email_tab(logged_in):
     client, account = logged_in
     MessageTemplate.objects.create(
-        account=account, name="Order update", whatsapp_template_name="order_update",
-        language_code="en", approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        account=account,
+        name="Order update",
+        whatsapp_template_name="order_update",
+        language_code="en",
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
 
     resp = client.get("/email/templates/?channel=whatsapp")
@@ -47,7 +53,9 @@ def test_whatsapp_templates_scoped_to_account(logged_in):
     client, account = logged_in
     other = Account.objects.create(company_name="Other Co")
     MessageTemplate.objects.create(
-        account=other, name="Other's template", whatsapp_template_name="other",
+        account=other,
+        name="Other's template",
+        whatsapp_template_name="other",
         language_code="en",
     )
     resp = client.get("/email/templates/?channel=whatsapp")
@@ -59,20 +67,34 @@ def test_whatsapp_templates_scoped_to_account(logged_in):
 def test_sync_button_pulls_from_meta_and_redirects_to_whatsapp_tab(logged_in):
     client, account = logged_in
     WhatsAppBusinessNumber.objects.create(
-        account=account, phone_number_id="PNID", waba_id="WABA1",
-        access_token="tok", is_active=True,
+        account=account,
+        phone_number_id="PNID",
+        waba_id="WABA1",
+        access_token="tok",
+        is_active=True,
     )
 
     class _Provider:
         def list_templates(self, waba_id):
-            return [{"name": "promo", "language": "en", "category": "MARKETING", "status": "APPROVED"}]
+            return [
+                {
+                    "name": "promo",
+                    "language": "en",
+                    "category": "MARKETING",
+                    "status": "APPROVED",
+                }
+            ]
 
-    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=_Provider()):
+    with patch(
+        "apps.whatsapp.providers.get_whatsapp_provider", return_value=_Provider()
+    ):
         resp = client.post("/whatsapp/templates/sync/")
 
     assert resp.status_code == 302
     assert resp["Location"] == "/email/templates/?channel=whatsapp"
-    assert MessageTemplate.objects.filter(account=account, whatsapp_template_name="promo").exists()
+    assert MessageTemplate.objects.filter(
+        account=account, whatsapp_template_name="promo"
+    ).exists()
 
 
 @_wa_urls

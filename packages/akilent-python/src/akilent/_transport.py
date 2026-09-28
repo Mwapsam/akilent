@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import httpx
 
@@ -23,7 +24,7 @@ class Transport:
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = 30.0,
         max_retries: int = 2,
-        client: Optional[httpx.Client] = None,
+        client: httpx.Client | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("api_key is required")
@@ -40,9 +41,9 @@ class Transport:
         method: str,
         path: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
+        params: Mapping[str, Any] | None = None,
         json: Any = None,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         url = f"{self._base_url}{path}"
         headers = {

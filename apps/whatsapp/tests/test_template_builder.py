@@ -1,7 +1,7 @@
 """In-Akilent WhatsApp template creation (R1.5c follow-up amendment)."""
+
 from unittest.mock import patch
 
-import pytest
 from django.test import TestCase
 
 from apps.accounts.models import Account
@@ -32,98 +32,159 @@ class ValidateFieldsTest(TestCase):
     def test_rejects_bad_name(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="Payment Reminder", category="utility", language="en",
-                body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
+                name="Payment Reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}",
+                variable_labels=["name"],
+                variable_examples=["Ada"],
             )
 
     def test_rejects_non_sequential_variables(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
-                body="Hi {{2}}", variable_labels=["name"], variable_examples=["Ada"],
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Hi {{2}}",
+                variable_labels=["name"],
+                variable_examples=["Ada"],
             )
 
     def test_rejects_mismatched_label_count(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
-                body="Hi {{1}}, order {{2}}", variable_labels=["name"], variable_examples=["Ada", "1029"],
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}, order {{2}}",
+                variable_labels=["name"],
+                variable_examples=["Ada", "1029"],
             )
 
     def test_rejects_mismatched_example_count(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
-                body="Hi {{1}}, order {{2}}", variable_labels=["name", "order"], variable_examples=["Ada"],
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}, order {{2}}",
+                variable_labels=["name", "order"],
+                variable_examples=["Ada"],
             )
 
     def test_rejects_blank_example(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
-                body="Hi {{1}}", variable_labels=["name"], variable_examples=["  "],
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}",
+                variable_labels=["name"],
+                variable_examples=["  "],
             )
 
     def test_accepts_valid_fields(self):
         validate_fields(
-            name="payment_reminder", category="utility", language="en",
+            name="payment_reminder",
+            category="utility",
+            language="en",
             body="Hi {{1}}, order {{2}} is unpaid.",
-            variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
+            variable_labels=["name", "order"],
+            variable_examples=["Ada", "1029"],
         )
 
     def test_accepts_no_variables(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome to our store!", variable_labels=[], variable_examples=[],
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome to our store!",
+            variable_labels=[],
+            variable_examples=[],
         )
 
     def test_rejects_button_text_too_long(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[{"text": "x" * 26, "url": "https://example.com"}],
             )
 
     def test_rejects_button_url_without_scheme(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[{"text": "Visit", "url": "example.com"}],
             )
 
     def test_rejects_dynamic_button_url_without_example(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
+                name="reminder",
+                category="utility",
+                language="en",
                 body="Hi {{1}}, order {{2}} is unpaid.",
-                variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
+                variable_labels=["name", "order"],
+                variable_examples=["Ada", "1029"],
                 buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}"}],
             )
 
     def test_rejects_button_url_referencing_variable_not_in_body(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
-                body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
-                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1"}],
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}",
+                variable_labels=["name"],
+                variable_examples=["Ada"],
+                buttons=[
+                    {
+                        "text": "Pay now",
+                        "url": "https://pay.example.com/{{2}}",
+                        "example": "https://pay.example.com/1",
+                    }
+                ],
             )
 
     def test_rejects_button_url_with_more_than_one_placeholder(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="reminder", category="utility", language="en",
+                name="reminder",
+                category="utility",
+                language="en",
                 body="Hi {{1}}, order {{2}} is unpaid.",
-                variable_labels=["name", "order"], variable_examples=["Ada", "1029"],
-                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{1}}/{{2}}", "example": "https://pay.example.com/1"}],
+                variable_labels=["name", "order"],
+                variable_examples=["Ada", "1029"],
+                buttons=[
+                    {
+                        "text": "Pay now",
+                        "url": "https://pay.example.com/{{1}}/{{2}}",
+                        "example": "https://pay.example.com/1",
+                    }
+                ],
             )
 
     def test_rejects_more_than_one_button(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[
                     {"text": "One", "url": "https://example.com"},
                     {"text": "Two", "url": "https://example.com"},
@@ -132,93 +193,167 @@ class ValidateFieldsTest(TestCase):
 
     def test_accepts_static_button(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[], variable_examples=[],
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_labels=[],
+            variable_examples=[],
             buttons=[{"text": "Learn more", "url": "https://example.com"}],
         )
 
     def test_accepts_button_sharing_a_body_variable(self):
         validate_fields(
-            name="reminder", category="utility", language="en",
+            name="reminder",
+            category="utility",
+            language="en",
             body="Hi {{1}}, order {{2}} is unpaid.",
-            variable_labels=["Customer name", "Order number"], variable_examples=["Ada", "1029"],
-            buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"}],
+            variable_labels=["Customer name", "Order number"],
+            variable_examples=["Ada", "1029"],
+            buttons=[
+                {
+                    "text": "Pay now",
+                    "url": "https://pay.example.com/{{2}}",
+                    "example": "https://pay.example.com/1029",
+                }
+            ],
         )
 
     def test_accepts_phone_number_button(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[], variable_examples=[],
-            buttons=[{"type": "phone_number", "text": "Call us", "phone_number": "+15551234567"}],
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_labels=[],
+            variable_examples=[],
+            buttons=[
+                {
+                    "type": "phone_number",
+                    "text": "Call us",
+                    "phone_number": "+15551234567",
+                }
+            ],
         )
 
     def test_rejects_phone_number_button_with_bad_format(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
-                buttons=[{"type": "phone_number", "text": "Call us", "phone_number": "555-1234"}],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
+                buttons=[
+                    {
+                        "type": "phone_number",
+                        "text": "Call us",
+                        "phone_number": "555-1234",
+                    }
+                ],
             )
 
     def test_rejects_phone_number_button_missing_number(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[{"type": "phone_number", "text": "Call us"}],
             )
 
     def test_accepts_voice_call_button(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[], variable_examples=[],
-            buttons=[{"type": "voice_call", "text": "Call on WhatsApp", "phone_number": "+15551234567"}],
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_labels=[],
+            variable_examples=[],
+            buttons=[
+                {
+                    "type": "voice_call",
+                    "text": "Call on WhatsApp",
+                    "phone_number": "+15551234567",
+                }
+            ],
         )
 
     def test_accepts_copy_code_button(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[], variable_examples=[],
-            buttons=[{"type": "copy_code", "text": "Copy offer code", "example": "SAVE20"}],
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_labels=[],
+            variable_examples=[],
+            buttons=[
+                {"type": "copy_code", "text": "Copy offer code", "example": "SAVE20"}
+            ],
         )
 
     def test_rejects_copy_code_button_without_example(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[{"type": "copy_code", "text": "Copy offer code"}],
             )
 
     def test_rejects_unsupported_button_type(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
                 buttons=[{"type": "share_contact", "text": "Share contact"}],
             )
 
     def test_rejects_image_header_without_handle(self):
         with self.assertRaises(TemplateBuilderError):
             validate_fields(
-                name="welcome", category="utility", language="en",
-                body="Welcome!", variable_labels=[], variable_examples=[],
-                header_format="image", header_media_handle="",
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
+                header_format="image",
+                header_media_handle="",
             )
 
     def test_accepts_image_header_with_handle(self):
         validate_fields(
-            name="welcome", category="utility", language="en",
-            body="Welcome!", variable_labels=[], variable_examples=[],
-            header_format="image", header_media_handle="handle123",
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_labels=[],
+            variable_examples=[],
+            header_format="image",
+            header_media_handle="handle123",
         )
 
 
 class BuildMetaPayloadTest(TestCase):
     def test_includes_body_and_examples(self):
         payload = build_meta_payload(
-            name="payment_reminder", category="utility", language="en",
-            body="Hi {{1}}", variable_examples=["Ada"],
+            name="payment_reminder",
+            category="utility",
+            language="en",
+            body="Hi {{1}}",
+            variable_examples=["Ada"],
         )
         self.assertEqual(payload["name"], "payment_reminder")
         self.assertEqual(payload["category"], "UTILITY")
@@ -227,15 +362,23 @@ class BuildMetaPayloadTest(TestCase):
 
     def test_header_and_footer_optional(self):
         payload = build_meta_payload(
-            name="welcome", category="utility", language="en", body="Welcome!",
-            variable_examples=[], header="Hello", footer="Thanks",
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_examples=[],
+            header="Hello",
+            footer="Thanks",
         )
         types = [c["type"] for c in payload["components"]]
         self.assertEqual(types, ["HEADER", "BODY", "FOOTER"])
 
     def test_no_buttons_component_when_none_given(self):
         payload = build_meta_payload(
-            name="welcome", category="utility", language="en", body="Welcome!",
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
             variable_examples=[],
         )
         types = [c["type"] for c in payload["components"]]
@@ -243,38 +386,69 @@ class BuildMetaPayloadTest(TestCase):
 
     def test_includes_buttons_component_when_given(self):
         payload = build_meta_payload(
-            name="welcome", category="utility", language="en", body="Welcome!",
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
             variable_examples=[],
-            buttons=[{"type": "URL", "text": "Learn more", "url": "https://example.com"}],
+            buttons=[
+                {"type": "URL", "text": "Learn more", "url": "https://example.com"}
+            ],
         )
-        buttons_component = next(c for c in payload["components"] if c["type"] == "BUTTONS")
-        self.assertEqual(buttons_component["buttons"], [{"type": "URL", "text": "Learn more", "url": "https://example.com"}])
+        buttons_component = next(
+            c for c in payload["components"] if c["type"] == "BUTTONS"
+        )
+        self.assertEqual(
+            buttons_component["buttons"],
+            [{"type": "URL", "text": "Learn more", "url": "https://example.com"}],
+        )
 
     def test_media_header_uses_handle_and_ignores_text_header(self):
         payload = build_meta_payload(
-            name="welcome", category="utility", language="en", body="Welcome!",
-            variable_examples=[], header="ignored when media is set",
-            header_format="image", header_media_handle="handle123",
+            name="welcome",
+            category="utility",
+            language="en",
+            body="Welcome!",
+            variable_examples=[],
+            header="ignored when media is set",
+            header_format="image",
+            header_media_handle="handle123",
         )
-        header_component = next(c for c in payload["components"] if c["type"] == "HEADER")
-        self.assertEqual(header_component, {
-            "type": "HEADER", "format": "IMAGE", "example": {"header_handle": ["handle123"]},
-        })
+        header_component = next(
+            c for c in payload["components"] if c["type"] == "HEADER"
+        )
+        self.assertEqual(
+            header_component,
+            {
+                "type": "HEADER",
+                "format": "IMAGE",
+                "example": {"header_handle": ["handle123"]},
+            },
+        )
 
 
 class CreateAndSubmitTemplateTest(TestCase):
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         WhatsAppBusinessNumber.objects.create(
-            account=self.account, phone_number_id="PNID",
-            waba_id="WABA1", access_token="tok", is_active=True,
+            account=self.account,
+            phone_number_id="PNID",
+            waba_id="WABA1",
+            access_token="tok",
+            is_active=True,
         )
 
     def test_creates_pending_template_after_meta_accepts(self):
         provider = _FakeProvider()
-        with patch("apps.whatsapp.template_builder.get_whatsapp_provider", return_value=provider):
+        with patch(
+            "apps.whatsapp.template_builder.get_whatsapp_provider",
+            return_value=provider,
+        ):
             tpl = create_and_submit_template(
-                self.account, name="payment_reminder", category="utility", language="en",
+                self.account,
+                name="payment_reminder",
+                category="utility",
+                language="en",
                 body="Hi {{1}}, order {{2}} is unpaid.",
                 variable_labels=["Customer name", "Order number"],
                 variable_examples=["Ada", "1029"],
@@ -285,45 +459,85 @@ class CreateAndSubmitTemplateTest(TestCase):
 
     def test_persists_header_footer_buttons_and_examples(self):
         provider = _FakeProvider()
-        with patch("apps.whatsapp.template_builder.get_whatsapp_provider", return_value=provider):
+        with patch(
+            "apps.whatsapp.template_builder.get_whatsapp_provider",
+            return_value=provider,
+        ):
             tpl = create_and_submit_template(
-                self.account, name="payment_reminder", category="utility", language="en",
+                self.account,
+                name="payment_reminder",
+                category="utility",
+                language="en",
                 body="Hi {{1}}, order {{2}} is unpaid.",
                 variable_labels=["Customer name", "Order number"],
                 variable_examples=["Ada", "1029"],
-                header="Order update", footer="Thanks for your business",
-                buttons=[{"text": "Pay now", "url": "https://pay.example.com/{{2}}", "example": "https://pay.example.com/1029"}],
+                header="Order update",
+                footer="Thanks for your business",
+                buttons=[
+                    {
+                        "text": "Pay now",
+                        "url": "https://pay.example.com/{{2}}",
+                        "example": "https://pay.example.com/1029",
+                    }
+                ],
             )
         self.assertEqual(tpl.header, "Order update")
         self.assertEqual(tpl.footer, "Thanks for your business")
         self.assertEqual(tpl.variable_examples, ["Ada", "1029"])
-        self.assertEqual(tpl.buttons, [{
-            "type": "URL", "text": "Pay now", "url": "https://pay.example.com/{{2}}",
-            "example": ["https://pay.example.com/1029"],
-        }])
+        self.assertEqual(
+            tpl.buttons,
+            [
+                {
+                    "type": "URL",
+                    "text": "Pay now",
+                    "url": "https://pay.example.com/{{2}}",
+                    "example": ["https://pay.example.com/1029"],
+                }
+            ],
+        )
         # regression guard: campaigns.py::_resolve_campaign_variables treats
         # `variables` as a plain list of label strings used as mapping keys.
         self.assertEqual(tpl.variables, ["Customer name", "Order number"])
 
     def test_meta_rejection_raises_and_does_not_create_row(self):
         provider = _FakeProvider(fail=WhatsAppProviderError("bad template"))
-        with patch("apps.whatsapp.template_builder.get_whatsapp_provider", return_value=provider):
+        with patch(
+            "apps.whatsapp.template_builder.get_whatsapp_provider",
+            return_value=provider,
+        ):
             with self.assertRaises(TemplateBuilderError):
                 create_and_submit_template(
-                    self.account, name="payment_reminder", category="utility", language="en",
-                    body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
+                    self.account,
+                    name="payment_reminder",
+                    category="utility",
+                    language="en",
+                    body="Hi {{1}}",
+                    variable_labels=["name"],
+                    variable_examples=["Ada"],
                 )
-        self.assertFalse(MessageTemplate.objects.filter(whatsapp_template_name="payment_reminder").exists())
+        self.assertFalse(
+            MessageTemplate.objects.filter(
+                whatsapp_template_name="payment_reminder"
+            ).exists()
+        )
 
     def test_rejects_duplicate_name_and_language(self):
         MessageTemplate.objects.create(
-            account=self.account, name="payment_reminder", whatsapp_template_name="payment_reminder",
-            language_code="en", content="x",
+            account=self.account,
+            name="payment_reminder",
+            whatsapp_template_name="payment_reminder",
+            language_code="en",
+            content="x",
         )
         with self.assertRaises(TemplateBuilderError):
             create_and_submit_template(
-                self.account, name="payment_reminder", category="utility", language="en",
-                body="Hi {{1}}", variable_labels=["name"], variable_examples=["Ada"],
+                self.account,
+                name="payment_reminder",
+                category="utility",
+                language="en",
+                body="Hi {{1}}",
+                variable_labels=["name"],
+                variable_examples=["Ada"],
             )
 
     def test_persists_image_header_media(self):
@@ -333,26 +547,45 @@ class CreateAndSubmitTemplateTest(TestCase):
 
         asset = MessageTemplateAsset.objects.create(
             account=self.account,
-            file=SimpleUploadedFile("logo.png", b"fake-bytes", content_type="image/png"),
-            content_type="image/png", meta_handle="handle123",
+            file=SimpleUploadedFile(
+                "logo.png", b"fake-bytes", content_type="image/png"
+            ),
+            content_type="image/png",
+            meta_handle="handle123",
         )
         provider = _FakeProvider()
-        with patch("apps.whatsapp.template_builder.get_whatsapp_provider", return_value=provider):
+        with patch(
+            "apps.whatsapp.template_builder.get_whatsapp_provider",
+            return_value=provider,
+        ):
             tpl = create_and_submit_template(
-                self.account, name="promo", category="marketing", language="en",
-                body="Big sale!", variable_labels=[], variable_examples=[],
-                header_format="image", header_media=asset,
+                self.account,
+                name="promo",
+                category="marketing",
+                language="en",
+                body="Big sale!",
+                variable_labels=[],
+                variable_examples=[],
+                header_format="image",
+                header_media=asset,
             )
         self.assertEqual(tpl.header_format, "image")
         self.assertEqual(tpl.header_media_id, asset.id)
         self.assertEqual(tpl.header, "")
-        header_component = next(c for c in provider.calls[0][1]["components"] if c["type"] == "HEADER")
+        header_component = next(
+            c for c in provider.calls[0][1]["components"] if c["type"] == "HEADER"
+        )
         self.assertEqual(header_component["example"]["header_handle"], ["handle123"])
 
     def test_requires_a_connected_number(self):
         WhatsAppBusinessNumber.objects.all().delete()
         with self.assertRaises(TemplateBuilderError):
             create_and_submit_template(
-                self.account, name="welcome", category="utility", language="en",
-                body="Hi there", variable_labels=[], variable_examples=[],
+                self.account,
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Hi there",
+                variable_labels=[],
+                variable_examples=[],
             )

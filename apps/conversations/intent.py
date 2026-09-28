@@ -9,6 +9,7 @@ rest of the system consumes the *signal*, not the way it was derived.
 Deliberately conservative. A false positive creates a lead a human then has to
 dismiss, so the phrases here are ones that rarely appear in small talk.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,15 +17,39 @@ import re
 # Grouped only for readability — all are treated the same.
 _INTENT_PHRASES = [
     # Price
-    "how much", "how much is", "what is the price", "what's the price", "price",
-    "cost", "how many kwacha", "quote", "quotation", "discount",
+    "how much",
+    "how much is",
+    "what is the price",
+    "what's the price",
+    "price",
+    "cost",
+    "how many kwacha",
+    "quote",
+    "quotation",
+    "discount",
     # Availability
-    "do you have", "is it available", "in stock", "still available", "available",
+    "do you have",
+    "is it available",
+    "in stock",
+    "still available",
+    "available",
     # Purchase
-    "i want to buy", "i want", "i need", "can i order", "i would like to order",
-    "i'd like to order", "order", "buy", "purchase", "book", "reserve",
+    "i want to buy",
+    "i want",
+    "i need",
+    "can i order",
+    "i would like to order",
+    "i'd like to order",
+    "order",
+    "buy",
+    "purchase",
+    "book",
+    "reserve",
     # Fulfilment (asked before buying, not after)
-    "do you deliver", "delivery", "how soon can", "when can i get",
+    "do you deliver",
+    "delivery",
+    "how soon can",
+    "when can i get",
 ]
 
 # Word-boundary match so "order" doesn't fire on "in order to" — checked below —

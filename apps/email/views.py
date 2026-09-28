@@ -12,10 +12,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from apps.core.htmx import full_page_load
 from apps.accounts.utils import ajax_redirect, get_current_account, hx_toast, is_ajax
-from apps.email import dnscheck
-from apps.email.verification import refresh_domain
+from apps.core.htmx import full_page_load
 from apps.email.models import (
     EmailApiKey,
     EmailDomain,
@@ -23,13 +21,13 @@ from apps.email.models import (
     EmailTrackingEvent,
     EmailTrackingToken,
     SmtpCredential,
-    SuppressionListEntry,
     UnsubscribeToken,
     WebhookDelivery,
     WebhookEndpoint,
 )
 from apps.email.providers import MailProviderError
 from apps.email.services import DomainService, SmtpCredentialService
+from apps.email.verification import refresh_domain
 
 logger = logging.getLogger(__name__)
 
@@ -51,18 +49,28 @@ def _ajax_error(message: str, status: int = 400):
 
 def _domain_card(request, record):
     from django.conf import settings
-    return render(request, "email/_domain_card.html", {
-        "d": record,
-        "email_apis_enabled": _require_email_apis(request, record.account),
-        "smtp_relay_host": settings.SMTP_RELAY_HOST,
-        "smtp_relay_port": settings.SMTP_RELAY_PORT,
-    })
+
+    return render(
+        request,
+        "email/_domain_card.html",
+        {
+            "d": record,
+            "email_apis_enabled": _require_email_apis(request, record.account),
+            "smtp_relay_host": settings.SMTP_RELAY_HOST,
+            "smtp_relay_port": settings.SMTP_RELAY_PORT,
+        },
+    )
 
 
-_MSG_LEVEL = {"success": messages.SUCCESS, "warning": messages.WARNING, "danger": messages.ERROR}
+_MSG_LEVEL = {
+    "success": messages.SUCCESS,
+    "warning": messages.WARNING,
+    "danger": messages.ERROR,
+}
 
 
 # --- Dashboard ----------------------------------------------------------------
+
 
 @login_required
 def domains_list(request):
@@ -88,7 +96,9 @@ def domains_list(request):
         if account
         else None
     )
-    new_api_key_plaintext = request.session.pop("new_api_key", None) if account else None
+    new_api_key_plaintext = (
+        request.session.pop("new_api_key", None) if account else None
+    )
     new_smtp_secret = request.session.pop("new_smtp_secret", None) if account else None
     from apps.billing.limits import LimitChecker
 
@@ -96,17 +106,21 @@ def domains_list(request):
 
     from django.conf import settings
 
-    return render(request, "email/domains.html", {
-        "account": account,
-        "domains": domains,
-        "api_key": api_key,
-        "new_api_key_plaintext": new_api_key_plaintext,
-        "new_smtp_secret": new_smtp_secret,
-        "recent": recent,
-        "email_apis_enabled": email_apis_enabled,
-        "smtp_relay_host": settings.SMTP_RELAY_HOST,
-        "smtp_relay_port": settings.SMTP_RELAY_PORT,
-    })
+    return render(
+        request,
+        "email/domains.html",
+        {
+            "account": account,
+            "domains": domains,
+            "api_key": api_key,
+            "new_api_key_plaintext": new_api_key_plaintext,
+            "new_smtp_secret": new_smtp_secret,
+            "recent": recent,
+            "email_apis_enabled": email_apis_enabled,
+            "smtp_relay_host": settings.SMTP_RELAY_HOST,
+            "smtp_relay_port": settings.SMTP_RELAY_PORT,
+        },
+    )
 
 
 @login_required
@@ -122,14 +136,18 @@ def domain_detail(request, pk):
     record = get_object_or_404(
         _scoped(EmailDomain.objects, request, account).select_related("account"), pk=pk
     )
-    return render(request, "email/domain_detail.html", {
-        "d": record,
-        "account": account,
-        "email_apis_enabled": _require_email_apis(request, record.account),
-        "new_smtp_secret": request.session.pop("new_smtp_secret", None),
-        "smtp_relay_host": settings.SMTP_RELAY_HOST,
-        "smtp_relay_port": settings.SMTP_RELAY_PORT,
-    })
+    return render(
+        request,
+        "email/domain_detail.html",
+        {
+            "d": record,
+            "account": account,
+            "email_apis_enabled": _require_email_apis(request, record.account),
+            "new_smtp_secret": request.session.pop("new_smtp_secret", None),
+            "smtp_relay_host": settings.SMTP_RELAY_HOST,
+            "smtp_relay_port": settings.SMTP_RELAY_PORT,
+        },
+    )
 
 
 @login_required
@@ -158,16 +176,22 @@ def domain_create(request):
     record.ensure_verification_token()
     record.save(update_fields=["verify_record_name", "verify_record_value"])
 
-    kind, message = "success", f"{domain} added — add the DNS records on this page, then run the DNS check."
+    kind, message = (
+        "success",
+        f"{domain} added — add the DNS records on this page, then run the DNS check.",
+    )
     try:
         DomainService(account, actor=request.user).provision(record)
     except MailProviderError as exc:
         record.status = EmailDomain.Status.FAILED
         record.save(update_fields=["status"])
         logger.error("domain_create: mail server error for %s: %s", domain, exc)
-        kind, message = "danger", (
-            f"We couldn't finish setting up {domain} — our team has been "
-            "notified. You can retry from this page."
+        kind, message = (
+            "danger",
+            (
+                f"We couldn't finish setting up {domain} — our team has been "
+                "notified. You can retry from this page."
+            ),
         )
 
     # Adding the first sending domain clears the "domain_setup" onboarding
@@ -198,26 +222,41 @@ def domain_verify(request, pk):
     newly_verified = record.is_verified and not was_verified
 
     if record.is_verified:
-        missing = [r["label"] for r in record.dns_records() if r["required"] and not r["ok"]]
+        missing = [
+            r["label"] for r in record.dns_records() if r["required"] and not r["ok"]
+        ]
         if newly_verified:
-            kind, message = "success", f"{record.domain} verified — you're ready to send."
+            kind, message = (
+                "success",
+                f"{record.domain} verified — you're ready to send.",
+            )
         elif missing:
-            kind, message = "warning", f"Ownership confirmed, but {', '.join(missing)} isn't live in DNS yet."
+            kind, message = (
+                "warning",
+                f"Ownership confirmed, but {', '.join(missing)} isn't live in DNS yet.",
+            )
         else:
             kind, message = "success", f"{record.domain}: all records look good."
     elif not results["verify"]:
         # Say *why* when we know (e.g. added under a doubled name), not just
         # "couldn't find it" -- the same diagnosis the card shows.
         diag = next(
-            (r["diag"] for r in record.dns_records() if r["key"] == "verify" and r["diag"]),
+            (
+                r["diag"]
+                for r in record.dns_records()
+                if r["key"] == "verify" and r["diag"]
+            ),
             None,
         )
         if diag and diag.get("code") not in (None, "missing"):
             kind, message = "warning", f"Verification record: {diag['message']}"
         else:
-            kind, message = "warning", (
-                "We couldn't find your verification record yet. Add it using the "
-                "Host and Value shown — we'll keep checking automatically."
+            kind, message = (
+                "warning",
+                (
+                    "We couldn't find your verification record yet. Add it using the "
+                    "Host and Value shown — we'll keep checking automatically."
+                ),
             )
     else:
         kind, message = "success", "DNS status updated."
@@ -291,13 +330,18 @@ def key_create(request):
     EmailApiKey.objects.filter(account=account).update(is_active=False)
     _, raw_key = EmailApiKey.create_for_account(account, name="default")
     request.session["new_api_key"] = raw_key
-    messages.success(request, "New API key generated — copy it now, it won't be shown again.")
+    messages.success(
+        request, "New API key generated — copy it now, it won't be shown again."
+    )
     return redirect("email-domains")
+
 
 # --- SMTP relay credentials (now SES-backed) -----------------------------------
 
+
 def _require_email_apis(request, account) -> bool:
     from apps.billing.limits import LimitChecker
+
     return LimitChecker(account).has_feature("email_apis")
 
 
@@ -311,23 +355,39 @@ def smtp_create(request, pk):
     domain = get_object_or_404(_scoped(EmailDomain.objects, request, account), pk=pk)
     _back = redirect("email-domain-detail", pk=domain.pk)
     if not domain.is_verified:
-        messages.error(request, f"{domain.domain} must be verified before creating an SMTP relay credential.")
+        messages.error(
+            request,
+            f"{domain.domain} must be verified before creating an SMTP relay credential.",
+        )
         return _back
     if not _require_email_apis(request, domain.account):
-        messages.error(request, "Your plan does not include the email API & SMTP relay. Upgrade to enable it.")
+        messages.error(
+            request,
+            "Your plan does not include the email API & SMTP relay. Upgrade to enable it.",
+        )
         return _back
     if domain.smtp_credentials.filter(is_active=True).exists():
-        messages.error(request, f"{domain.domain} already has an active SMTP relay credential.")
+        messages.error(
+            request, f"{domain.domain} already has an active SMTP relay credential."
+        )
         return _back
 
     try:
-        credential, secret = SmtpCredentialService(domain.account, actor=request.user).provision(domain)
+        credential, secret = SmtpCredentialService(
+            domain.account, actor=request.user
+        ).provision(domain)
     except Exception as exc:
         messages.error(request, f"Could not create SMTP relay credential: {exc}")
         return _back
 
-    request.session["new_smtp_secret"] = {"credential_id": credential.pk, "secret": secret}
-    messages.success(request, "SMTP relay credential created — copy the password now, it won't be shown again.")
+    request.session["new_smtp_secret"] = {
+        "credential_id": credential.pk,
+        "secret": secret,
+    }
+    messages.success(
+        request,
+        "SMTP relay credential created — copy the password now, it won't be shown again.",
+    )
     return _back
 
 
@@ -338,15 +398,25 @@ def smtp_rotate(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    credential = get_object_or_404(_scoped(SmtpCredential.objects, request, account), pk=pk)
+    credential = get_object_or_404(
+        _scoped(SmtpCredential.objects, request, account), pk=pk
+    )
     detail_url = reverse("email-domain-detail", args=[credential.domain_id])
     try:
-        secret = SmtpCredentialService(credential.account, actor=request.user).rotate(credential)
+        secret = SmtpCredentialService(credential.account, actor=request.user).rotate(
+            credential
+        )
     except Exception as exc:
         messages.error(request, f"Could not rotate SMTP relay credential: {exc}")
     else:
-        request.session["new_smtp_secret"] = {"credential_id": credential.pk, "secret": secret}
-        messages.success(request, "SMTP relay password rotated — copy it now, it won't be shown again.")
+        request.session["new_smtp_secret"] = {
+            "credential_id": credential.pk,
+            "secret": secret,
+        }
+        messages.success(
+            request,
+            "SMTP relay password rotated — copy it now, it won't be shown again.",
+        )
 
     if is_ajax(request):
         return ajax_redirect(detail_url)
@@ -360,11 +430,15 @@ def smtp_revoke(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    credential = get_object_or_404(_scoped(SmtpCredential.objects, request, account), pk=pk)
+    credential = get_object_or_404(
+        _scoped(SmtpCredential.objects, request, account), pk=pk
+    )
     detail_url = reverse("email-domain-detail", args=[credential.domain_id])
     try:
         SmtpCredentialService(credential.account, actor=request.user).revoke(credential)
-        messages.success(request, f"SMTP relay credential for {credential.username} revoked.")
+        messages.success(
+            request, f"SMTP relay credential for {credential.username} revoked."
+        )
     except Exception as exc:
         messages.error(request, f"Could not revoke SMTP relay credential: {exc}")
 
@@ -375,6 +449,7 @@ def smtp_revoke(request, pk):
 
 # --- Webhooks -------------------------------------------------------------------
 
+
 @login_required
 def webhooks_list(request):
     account = get_current_account(request)
@@ -382,20 +457,24 @@ def webhooks_list(request):
         return redirect("dashboard")
 
     endpoints = _scoped(WebhookEndpoint.objects, request, account)
-    deliveries = WebhookDelivery.objects.filter(
-        endpoint__in=endpoints
-    ).select_related("endpoint")[:50]
+    deliveries = WebhookDelivery.objects.filter(endpoint__in=endpoints).select_related(
+        "endpoint"
+    )[:50]
     from apps.billing.limits import LimitChecker
 
     webhooks_enabled = LimitChecker(account).has_feature("outbound_webhooks")
 
-    return render(request, "email/webhooks.html", {
-        "account": account,
-        "endpoints": endpoints,
-        "deliveries": deliveries,
-        "webhooks_enabled": webhooks_enabled,
-        "event_choices": WebhookEndpoint.EVENT_CHOICES,
-    })
+    return render(
+        request,
+        "email/webhooks.html",
+        {
+            "account": account,
+            "endpoints": endpoints,
+            "deliveries": deliveries,
+            "webhooks_enabled": webhooks_enabled,
+            "event_choices": WebhookEndpoint.EVENT_CHOICES,
+        },
+    )
 
 
 @login_required
@@ -406,8 +485,12 @@ def webhook_create(request):
         return redirect("dashboard")
 
     from apps.billing.limits import LimitChecker
+
     if not LimitChecker(account).has_feature("outbound_webhooks"):
-        messages.error(request, "Your plan does not include outbound webhooks. Upgrade to enable them.")
+        messages.error(
+            request,
+            "Your plan does not include outbound webhooks. Upgrade to enable them.",
+        )
         return redirect("email-webhooks")
 
     url = (request.POST.get("url") or "").strip()
@@ -433,7 +516,9 @@ def webhook_delete(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    endpoint = get_object_or_404(_scoped(WebhookEndpoint.objects, request, account), pk=pk)
+    endpoint = get_object_or_404(
+        _scoped(WebhookEndpoint.objects, request, account), pk=pk
+    )
     endpoint.delete()
     messages.success(request, "Webhook endpoint deleted.")
     return redirect("email-webhooks")
@@ -446,7 +531,9 @@ def webhook_reactivate(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    endpoint = get_object_or_404(_scoped(WebhookEndpoint.objects, request, account), pk=pk)
+    endpoint = get_object_or_404(
+        _scoped(WebhookEndpoint.objects, request, account), pk=pk
+    )
     endpoint.reactivate()
     messages.success(request, "Webhook endpoint re-enabled.")
     return redirect("email-webhooks")
@@ -462,7 +549,9 @@ def webhook_redeliver(request, pk):
         return redirect("dashboard")
 
     delivery = get_object_or_404(
-        WebhookDelivery.objects.filter(endpoint__in=_scoped(WebhookEndpoint.objects, request, account)),
+        WebhookDelivery.objects.filter(
+            endpoint__in=_scoped(WebhookEndpoint.objects, request, account)
+        ),
         pk=pk,
     )
     delivery.status = WebhookDelivery.Status.PENDING
@@ -477,14 +566,14 @@ def webhook_redeliver(request, pk):
 
 # --- Insights -----------------------------------------------------------------
 
+
 def _build_engagement_stats(domain_name: str) -> list[dict]:
     """Return per-day open/click counts for a verified domain."""
     from django.db.models import Count
     from django.db.models.functions import TruncDate
 
     rows = (
-        EmailTrackingEvent.objects
-        .filter(message__domain__domain=domain_name)
+        EmailTrackingEvent.objects.filter(message__domain__domain=domain_name)
         .annotate(day=TruncDate("occurred_at"))
         .values("day", "kind")
         .annotate(count=Count("id"))
@@ -512,9 +601,13 @@ def _conversation_insights(account):
     """
     if account is None:
         return None
-    from apps.conversations.performance import followup_completion, team_performance
     from apps.conversations.api import funnel, revenue_by_channel
-    from apps.conversations.state import average_first_response_seconds, missed, needs_attention
+    from apps.conversations.performance import followup_completion, team_performance
+    from apps.conversations.state import (
+        average_first_response_seconds,
+        missed,
+        needs_attention,
+    )
 
     now = timezone.now()
     avg_seconds = average_first_response_seconds(account)
@@ -525,7 +618,9 @@ def _conversation_insights(account):
         "revenue": revenue_by_channel(account, now=now),
         "waiting_count": needs_attention(account, now).count(),
         "missed_count": missed(account, now).count(),
-        "avg_first_response_minutes": round(avg_seconds / 60) if avg_seconds is not None else None,
+        "avg_first_response_minutes": round(avg_seconds / 60)
+        if avg_seconds is not None
+        else None,
     }
 
 
@@ -574,20 +669,24 @@ def insights(request):
         ("Clicks", [row["clicks"] for row in stats]),
     ]
 
-    return render(request, "email/insights.html", {
-        "account": account,
-        "has_analytics": has_analytics,
-        "engagement_days": engagement_days,
-        "engagement_series": engagement_series,
-        "conversation_stats": conversation_stats,
-        "starting_point": starting_point,
-        "domains": domains,
-        "selected": selected,
-        "logs": logs,
-        "stats": stats,
-        "error": error,
-        "deliverability": deliverability,
-    })
+    return render(
+        request,
+        "email/insights.html",
+        {
+            "account": account,
+            "has_analytics": has_analytics,
+            "engagement_days": engagement_days,
+            "engagement_series": engagement_series,
+            "conversation_stats": conversation_stats,
+            "starting_point": starting_point,
+            "domains": domains,
+            "selected": selected,
+            "logs": logs,
+            "stats": stats,
+            "error": error,
+            "deliverability": deliverability,
+        },
+    )
 
 
 # --- Open / click tracking endpoints ------------------------------------------
@@ -724,6 +823,7 @@ def unsubscribe(request, token: str):
 
 # --- Transactional send API ---------------------------------------------------
 
+
 def _authenticate(request):
     header = request.headers.get("X-Api-Key") or ""
     if not header:
@@ -809,7 +909,9 @@ def templates_list(request):
     channel = request.GET.get("channel") or "email"
 
     templates_enabled = LimitChecker(account).has_feature("email_templates")
-    templates = list(_scoped(EmailTemplate.objects, request, account).filter(is_active=True))
+    templates = list(
+        _scoped(EmailTemplate.objects, request, account).filter(is_active=True)
+    )
     for t in templates:
         t.sample_variables_json = json.dumps(t.sample_variables or {})
 
@@ -827,11 +929,27 @@ def templates_list(request):
 
     ai_on = templates_enabled and ai_api.is_available(account)
     ai_draft = None
-    draft = ai_api.get_draft(account, request.GET.get("draft"), kind="email_template") if request.GET.get("draft") else None
-    if templates_enabled and draft is not None and draft.status in ("ready", "used") and draft.result.get("fields"):
-        ai_draft = {"id": draft.pk, "fields": draft.result["fields"], "parts": draft.result.get("parts") or {},
-                    "reasons": draft.result.get("reasons") or [], "warnings": draft.warnings or [],
-                    "sample_variables_json": json.dumps(draft.result["fields"].get("sample_variables") or {})}
+    draft = (
+        ai_api.get_draft(account, request.GET.get("draft"), kind="email_template")
+        if request.GET.get("draft")
+        else None
+    )
+    if (
+        templates_enabled
+        and draft is not None
+        and draft.status in ("ready", "used")
+        and draft.result.get("fields")
+    ):
+        ai_draft = {
+            "id": draft.pk,
+            "fields": draft.result["fields"],
+            "parts": draft.result.get("parts") or {},
+            "reasons": draft.result.get("reasons") or [],
+            "warnings": draft.warnings or [],
+            "sample_variables_json": json.dumps(
+                draft.result["fields"].get("sample_variables") or {}
+            ),
+        }
 
     whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
     whatsapp_templates = []
@@ -839,19 +957,26 @@ def templates_list(request):
         from apps.whatsapp.models import MessageTemplate
 
         whatsapp_templates = list(
-            MessageTemplate.objects.filter(account=account).order_by("name", "language_code"))
+            MessageTemplate.objects.filter(account=account).order_by(
+                "name", "language_code"
+            )
+        )
 
-    return render(request, "email/templates.html", {
-        "account": account,
-        "channel": channel,
-        "templates": templates,
-        "templates_enabled": templates_enabled,
-        "starter_templates_json": json.dumps(starters),
-        "ai_on": ai_on,
-        "ai_draft": ai_draft,
-        "whatsapp_enabled": whatsapp_enabled,
-        "whatsapp_templates": whatsapp_templates,
-    })
+    return render(
+        request,
+        "email/templates.html",
+        {
+            "account": account,
+            "channel": channel,
+            "templates": templates,
+            "templates_enabled": templates_enabled,
+            "starter_templates_json": json.dumps(starters),
+            "ai_on": ai_on,
+            "ai_draft": ai_draft,
+            "whatsapp_enabled": whatsapp_enabled,
+            "whatsapp_templates": whatsapp_templates,
+        },
+    )
 
 
 @login_required
@@ -867,7 +992,10 @@ def template_create(request):
         return redirect("dashboard")
 
     if not LimitChecker(account).has_feature("email_templates"):
-        messages.error(request, "Your plan does not include email templates. Upgrade to enable them.")
+        messages.error(
+            request,
+            "Your plan does not include email templates. Upgrade to enable them.",
+        )
         return redirect("email-templates")
 
     name = (request.POST.get("name") or "").strip()
@@ -901,7 +1029,9 @@ def template_create(request):
     if request.POST.get("draft"):
         from apps.ai import api as ai_api
 
-        ai_api.mark_draft_used(ai_api.get_draft(account, request.POST["draft"], kind="email_template"))
+        ai_api.mark_draft_used(
+            ai_api.get_draft(account, request.POST["draft"], kind="email_template")
+        )
     messages.success(request, "Template created.")
     return redirect("email-templates")
 
@@ -918,7 +1048,9 @@ def template_edit_form(request, pk):
     from apps.ai import api as ai_api
     from apps.email.services import flatten_variable_paths
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
     mode = request.GET.get("mode") or template.builder_mode
     if mode not in (EmailTemplate.BuilderMode.RAW, EmailTemplate.BuilderMode.BLOCKS):
         mode = EmailTemplate.BuilderMode.RAW
@@ -926,33 +1058,45 @@ def template_edit_form(request, pk):
     if mode == EmailTemplate.BuilderMode.BLOCKS:
         return _block_editor(request, account, template, ai_api)
 
-    merge_tag_paths = flatten_variable_paths(template.sample_variables) if template.sample_variables else []
+    merge_tag_paths = (
+        flatten_variable_paths(template.sample_variables)
+        if template.sample_variables
+        else []
+    )
 
-    builder_config = json.dumps({
-        "html": template.html_body,
-        "projectData": template.content_blocks or {},
-        "mergeTags": merge_tag_paths,
-        "saveUrl": f"/email/templates/{template.pk}/edit/",
-        "previewUrl": f"/email/templates/{template.pk}/preview/",
-        "sendTestUrl": f"/email/templates/{template.pk}/send-test/",
-        "uploadUrl": "/email/templates/assets/upload/",
-        "csrfToken": get_token(request),
-        "name": template.name,
-        "subject": template.subject,
-        "sampleVariables": template.sample_variables or {},
-        "updatedAt": template.updated_at.isoformat(),
-        "mode": mode,
-    })
+    builder_config = json.dumps(
+        {
+            "html": template.html_body,
+            "projectData": template.content_blocks or {},
+            "mergeTags": merge_tag_paths,
+            "saveUrl": f"/email/templates/{template.pk}/edit/",
+            "previewUrl": f"/email/templates/{template.pk}/preview/",
+            "sendTestUrl": f"/email/templates/{template.pk}/send-test/",
+            "uploadUrl": "/email/templates/assets/upload/",
+            "csrfToken": get_token(request),
+            "name": template.name,
+            "subject": template.subject,
+            "sampleVariables": template.sample_variables or {},
+            "updatedAt": template.updated_at.isoformat(),
+            "mode": mode,
+        }
+    )
 
-    return render(request, "email/template_edit.html", {
-        "account": account,
-        "template": template,
-        "mode": mode,
-        "builder_config": builder_config,
-        "merge_tag_paths_json": json.dumps(merge_tag_paths),
-        "sample_variables_json": json.dumps(template.sample_variables or {}, indent=2),
-        "ai_on": ai_api.is_available(account),
-    })
+    return render(
+        request,
+        "email/template_edit.html",
+        {
+            "account": account,
+            "template": template,
+            "mode": mode,
+            "builder_config": builder_config,
+            "merge_tag_paths_json": json.dumps(merge_tag_paths),
+            "sample_variables_json": json.dumps(
+                template.sample_variables or {}, indent=2
+            ),
+            "ai_on": ai_api.is_available(account),
+        },
+    )
 
 
 def _block_editor(request, account, template, ai_api):
@@ -976,14 +1120,18 @@ def _block_editor(request, account, template, ai_api):
         "companyName": account.company_name or "",
         "csrfToken": get_token(request),
     }
-    return render(request, "email/template_blocks.html", {
-        "account": account,
-        "template": template,
-        "mode": "blocks",
-        "editor_config": config,
-        "imported": doc.get("imported", ""),
-        "ai_on": ai_api.is_available(account),
-    })
+    return render(
+        request,
+        "email/template_blocks.html",
+        {
+            "account": account,
+            "template": template,
+            "mode": "blocks",
+            "editor_config": config,
+            "imported": doc.get("imported", ""),
+            "ai_on": ai_api.is_available(account),
+        },
+    )
 
 
 def _render_blocks(request, raw):
@@ -1000,20 +1148,26 @@ def _render_blocks(request, raw):
 def template_edit(request, pk):
     import json as json_module
 
-    from apps.email.models import EmailTemplate, EmailTemplateVersion
+    from apps.email.models import EmailTemplate
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
 
     autosave = request.POST.get("autosave") == "1" or is_ajax(request)
     # The block editor saves in the background either way; its Save button asks for a version.
-    snapshot = request.POST.get("autosave") != "1" and (not is_ajax(request) or request.POST.get("snapshot") == "1")
+    snapshot = request.POST.get("autosave") != "1" and (
+        not is_ajax(request) or request.POST.get("snapshot") == "1"
+    )
 
     blocks_html = None
-    if request.POST.get("builder_mode") == EmailTemplate.BuilderMode.BLOCKS and request.POST.get("content_blocks"):
+    if request.POST.get(
+        "builder_mode"
+    ) == EmailTemplate.BuilderMode.BLOCKS and request.POST.get("content_blocks"):
         from apps.email import blocks
 
         try:
@@ -1038,7 +1192,9 @@ def template_edit(request, pk):
     template.subject = request.POST.get("subject") or ""
     template.text_body = request.POST.get("text_body") or ""
     template.html_body = request.POST.get("html_body") or ""
-    if blocks_html is not None:  # built here from the sections, never taken from the browser
+    if (
+        blocks_html is not None
+    ):  # built here from the sections, never taken from the browser
         template.html_body, template.text_body, clean_doc = blocks_html
 
     update_fields = ["name", "subject", "text_body", "html_body", "updated_at"]
@@ -1065,14 +1221,19 @@ def template_edit(request, pk):
             update_fields.append("sample_variables")
 
     builder_mode = request.POST.get("builder_mode")
-    if builder_mode in (EmailTemplate.BuilderMode.RAW, EmailTemplate.BuilderMode.BLOCKS):
+    if builder_mode in (
+        EmailTemplate.BuilderMode.RAW,
+        EmailTemplate.BuilderMode.BLOCKS,
+    ):
         template.builder_mode = builder_mode
         update_fields.append("builder_mode")
 
     template.save(update_fields=update_fields)
 
     if autosave:
-        return JsonResponse({"saved": True, "updated_at": template.updated_at.isoformat()})
+        return JsonResponse(
+            {"saved": True, "updated_at": template.updated_at.isoformat()}
+        )
 
     messages.success(request, "Template updated.")
     return redirect("email-templates")
@@ -1087,7 +1248,9 @@ def template_version_restore(request, pk, version_pk):
     if account is None:
         return redirect("dashboard")
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
     version = get_object_or_404(EmailTemplateVersion, pk=version_pk, template=template)
 
     # Snapshot the current state before overwriting so restoring is itself
@@ -1102,7 +1265,15 @@ def template_version_restore(request, pk, version_pk):
     template.text_body = version.text_body
     template.html_body = version.html_body
     template.content_blocks = version.content_blocks
-    template.save(update_fields=["subject", "text_body", "html_body", "content_blocks", "updated_at"])
+    template.save(
+        update_fields=[
+            "subject",
+            "text_body",
+            "html_body",
+            "content_blocks",
+            "updated_at",
+        ]
+    )
 
     messages.success(request, "Version restored.")
     mode = request.POST.get("mode") or template.builder_mode
@@ -1122,10 +1293,15 @@ def template_clone(request, pk):
         return redirect("dashboard")
 
     if not LimitChecker(account).has_feature("email_templates"):
-        messages.error(request, "Your plan does not include email templates. Upgrade to enable them.")
+        messages.error(
+            request,
+            "Your plan does not include email templates. Upgrade to enable them.",
+        )
         return redirect("email-templates")
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
 
     base_slug = slugify(f"{template.slug}-copy")
     slug = base_slug
@@ -1158,7 +1334,9 @@ def template_delete(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
     template.is_active = False
     template.save(update_fields=["is_active"])
     messages.success(request, "Template deleted.")
@@ -1176,7 +1354,9 @@ def template_preview(request, pk):
     if account is None:
         return JsonResponse({"error": "Not found"}, status=404)
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
 
     if request.method == "POST":
         # Draft preview: render unsaved in-editor content (not the saved DB
@@ -1190,11 +1370,15 @@ def template_preview(request, pk):
             text_body=payload.get("text_body", template.text_body),
             html_body=payload.get("html_body", template.html_body),
         )
-        if payload.get("blocks") is not None:  # the block editor sends sections, not HTML
+        if (
+            payload.get("blocks") is not None
+        ):  # the block editor sends sections, not HTML
             from apps.email.blocks import BlocksError
 
             try:
-                draft.html_body, draft.text_body, _ = _render_blocks(request, payload["blocks"])
+                draft.html_body, draft.text_body, _ = _render_blocks(
+                    request, payload["blocks"]
+                )
             except BlocksError as exc:
                 return JsonResponse({"error": str(exc)}, status=400)
         variables = payload.get("variables") or template.sample_variables
@@ -1209,12 +1393,14 @@ def template_preview(request, pk):
         subject, text_body, html_body = render_template(template, variables)
         missing_variables = validate_variables(template, variables)
 
-    return JsonResponse({
-        "subject": subject,
-        "text": text_body,
-        "html": html_body,
-        "missing_variables": missing_variables,
-    })
+    return JsonResponse(
+        {
+            "subject": subject,
+            "text": text_body,
+            "html": html_body,
+            "missing_variables": missing_variables,
+        }
+    )
 
 
 @login_required
@@ -1242,14 +1428,22 @@ def template_send_test(request, pk):
     if account is None:
         return JsonResponse({"error": "Select an account first."}, status=400)
 
-    template = get_object_or_404(_scoped(EmailTemplate.objects, request, account), pk=pk)
+    template = get_object_or_404(
+        _scoped(EmailTemplate.objects, request, account), pk=pk
+    )
 
     if not request.user.email:
-        return JsonResponse({"error": "Your account has no email address to send a test to."}, status=400)
+        return JsonResponse(
+            {"error": "Your account has no email address to send a test to."},
+            status=400,
+        )
 
     cooldown_key = f"send_test_cooldown:{request.user.id}:{template.pk}"
     if cache.get(cooldown_key):
-        return JsonResponse({"error": "Please wait a few seconds before sending another test."}, status=429)
+        return JsonResponse(
+            {"error": "Please wait a few seconds before sending another test."},
+            status=429,
+        )
 
     try:
         payload = json.loads(request.body or "{}")
@@ -1264,13 +1458,17 @@ def template_send_test(request, pk):
         from apps.email.blocks import BlocksError
 
         try:
-            draft.html_body, draft.text_body, _ = _render_blocks(request, payload["blocks"])
+            draft.html_body, draft.text_body, _ = _render_blocks(
+                request, payload["blocks"]
+            )
         except BlocksError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
     variables = payload.get("variables") or template.sample_variables
     subject, text_body, html_body = render_template(draft, variables)
 
-    domain = EmailDomain.objects.filter(account=account, status=EmailDomain.Status.VERIFIED).first()
+    domain = EmailDomain.objects.filter(
+        account=account, status=EmailDomain.Status.VERIFIED
+    ).first()
     if domain is None:
         return JsonResponse({"error": "Verify a sending domain first."}, status=400)
 
@@ -1311,7 +1509,9 @@ def template_asset_upload(request):
         return JsonResponse({"error": "Not found"}, status=404)
 
     if not LimitChecker(account).has_feature("email_templates"):
-        return JsonResponse({"error": "Your plan does not include email templates."}, status=403)
+        return JsonResponse(
+            {"error": "Your plan does not include email templates."}, status=403
+        )
 
     uploaded = (
         request.FILES.getlist("files[]")
@@ -1330,7 +1530,9 @@ def template_asset_upload(request):
             Image.open(f).verify()
             f.seek(0)
         except Exception:
-            return JsonResponse({"error": f"{f.name} is not a valid image."}, status=400)
+            return JsonResponse(
+                {"error": f"{f.name} is not a valid image."}, status=400
+            )
 
         asset = EmailTemplateAsset.objects.create(account=account, file=f)
         urls.append(asset.file.url)
@@ -1353,15 +1555,24 @@ def asset_library(request):
         assets = assets.filter(file__icontains=query)
 
     if request.GET.get("format") == "json":  # the block editor's image picker
-        return JsonResponse({"assets": [
-            {"url": a.file.url, "name": a.file.name.rsplit("/", 1)[-1]} for a in assets[:200]
-        ]})
+        return JsonResponse(
+            {
+                "assets": [
+                    {"url": a.file.url, "name": a.file.name.rsplit("/", 1)[-1]}
+                    for a in assets[:200]
+                ]
+            }
+        )
 
-    return render(request, "email/assets.html", {
-        "account": account,
-        "assets": assets,
-        "query": query,
-    })
+    return render(
+        request,
+        "email/assets.html",
+        {
+            "account": account,
+            "assets": assets,
+            "query": query,
+        },
+    )
 
 
 @login_required
@@ -1373,7 +1584,9 @@ def asset_delete(request, pk):
     if account is None:
         return redirect("dashboard")
 
-    asset = get_object_or_404(_scoped(EmailTemplateAsset.objects, request, account), pk=pk)
+    asset = get_object_or_404(
+        _scoped(EmailTemplateAsset.objects, request, account), pk=pk
+    )
     asset.file.delete(save=False)
     asset.delete()
     messages.success(request, "Image deleted.")
@@ -1395,7 +1608,9 @@ def _parse_recipients_csv(uploaded_file) -> list[dict]:
         to_email = (row.pop("to", None) or row.pop("email", None) or "").strip()
         if not to_email:
             continue
-        recipients.append({"to": to_email, "variables": {k: v for k, v in row.items() if k}})
+        recipients.append(
+            {"to": to_email, "variables": {k: v for k, v in row.items() if k}}
+        )
     return recipients
 
 
@@ -1449,14 +1664,19 @@ def _render_composer(request, account, *, form_data=None, errors=None, status=20
         "errors": errors or {},
     }
 
-    return render(request, "email/campaign_compose.html", {
-        "account": account,
-        "templates": templates,
-        "verified_domains": verified_domains,
-        "bulk_enabled": bulk_enabled,
-        "errors": errors or {},
-        "wizard_config": wizard_config,
-    }, status=status)
+    return render(
+        request,
+        "email/campaign_compose.html",
+        {
+            "account": account,
+            "templates": templates,
+            "verified_domains": verified_domains,
+            "bulk_enabled": bulk_enabled,
+            "errors": errors or {},
+            "wizard_config": wizard_config,
+        },
+        status=status,
+    )
 
 
 @login_required
@@ -1494,25 +1714,32 @@ def campaigns_list(request):
     if whatsapp_enabled:
         from apps.whatsapp.models import WhatsAppCampaign
 
-        whatsapp_campaigns = list(WhatsAppCampaign.objects.filter(account=account)
-                                  .select_related("template", "contact_list")[:50])
+        whatsapp_campaigns = list(
+            WhatsAppCampaign.objects.filter(account=account).select_related(
+                "template", "contact_list"
+            )[:50]
+        )
 
-    return render(request, "email/campaigns.html", {
-        "account": account,
-        "channel": channel,
-        "campaigns": campaigns,
-        "bulk_enabled": bulk_enabled,
-        "status_filter": status,
-        "status_tabs": [
-            ("all", "All"),
-            ("draft", "Draft"),
-            ("scheduled", "Scheduled"),
-            ("sending", "Sending"),
-            ("completed", "Completed"),
-        ],
-        "whatsapp_enabled": whatsapp_enabled,
-        "whatsapp_campaigns": whatsapp_campaigns,
-    })
+    return render(
+        request,
+        "email/campaigns.html",
+        {
+            "account": account,
+            "channel": channel,
+            "campaigns": campaigns,
+            "bulk_enabled": bulk_enabled,
+            "status_filter": status,
+            "status_tabs": [
+                ("all", "All"),
+                ("draft", "Draft"),
+                ("scheduled", "Scheduled"),
+                ("sending", "Sending"),
+                ("completed", "Completed"),
+            ],
+            "whatsapp_enabled": whatsapp_enabled,
+            "whatsapp_campaigns": whatsapp_campaigns,
+        },
+    )
 
 
 @login_required
@@ -1598,7 +1825,9 @@ def campaign_create(request):
     if request.POST.get("schedule_enabled"):
         scheduled_at = parse_datetime((request.POST.get("scheduled_at") or "").strip())
         if scheduled_at is None:
-            errors["scheduled_at"] = "Pick a valid date and time to schedule this campaign."
+            errors["scheduled_at"] = (
+                "Pick a valid date and time to schedule this campaign."
+            )
     form_data["schedule_enabled"] = bool(request.POST.get("schedule_enabled"))
     form_data["scheduled_at"] = request.POST.get("scheduled_at") or ""
     form_data["schedule_timezone"] = schedule_tz
@@ -1623,7 +1852,11 @@ def campaign_create(request):
             errors["form"] = str(exc)
         except SchedulingError as exc:
             errors["scheduled_at"] = str(exc)
-        except (PlanLimitExceeded, RecipientCapExceededError, TemplateMissingContentError) as exc:
+        except (
+            PlanLimitExceeded,
+            RecipientCapExceededError,
+            TemplateMissingContentError,
+        ) as exc:
             errors["form"] = str(exc)
         else:
             messages.success(
@@ -1665,7 +1898,9 @@ def campaign_send_test(request):
 
     cooldown_key = f"campaign_send_test_cooldown:{request.user.id}"
     if cache.get(cooldown_key):
-        return _ajax_error("Please wait a few seconds before sending another test.", status=429)
+        return _ajax_error(
+            "Please wait a few seconds before sending another test.", status=429
+        )
 
     try:
         payload = json.loads(request.body or "{}")
@@ -1678,7 +1913,9 @@ def campaign_send_test(request):
 
     if template_id:
         try:
-            template = _scoped(EmailTemplate.objects, request, account).get(pk=int(template_id))
+            template = _scoped(EmailTemplate.objects, request, account).get(
+                pk=int(template_id)
+            )
         except (EmailTemplate.DoesNotExist, ValueError, TypeError):
             return _ajax_error("Pick a valid template first.")
         variables = variables or template.sample_variables
@@ -1724,33 +1961,43 @@ def campaign_sample_csv(request):
     """A tiny example recipients file the wizard links to as 'Download sample CSV'."""
     sample = "to,first_name\nada@example.com,Ada\ngrace@example.com,Grace\n"
     response = HttpResponse(sample, content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="campaign-recipients-sample.csv"'
+    response["Content-Disposition"] = (
+        'attachment; filename="campaign-recipients-sample.csv"'
+    )
     return response
 
 
 @login_required
 def campaign_detail(request, pk):
-    from apps.email.models import BulkEmailCampaign, BulkEmailRecipient
+    from apps.email.models import BulkEmailCampaign
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
-    campaign = get_object_or_404(_scoped(BulkEmailCampaign.objects, request, account), pk=pk)
+    campaign = get_object_or_404(
+        _scoped(BulkEmailCampaign.objects, request, account), pk=pk
+    )
     recipients = campaign.recipients.select_related("message")[:200]
 
     if is_ajax(request):
-        return JsonResponse({
-            "status": campaign.status,
-            "recipient_count": campaign.recipient_count,
-            "queued_count": campaign.queued_count,
-            "sent_count": campaign.sent_count,
-            "failed_count": campaign.failed_count,
-            "held_count": campaign.held_count,
-        })
+        return JsonResponse(
+            {
+                "status": campaign.status,
+                "recipient_count": campaign.recipient_count,
+                "queued_count": campaign.queued_count,
+                "sent_count": campaign.sent_count,
+                "failed_count": campaign.failed_count,
+                "held_count": campaign.held_count,
+            }
+        )
 
-    return render(request, "email/campaign_detail.html", {
-        "account": account,
-        "campaign": campaign,
-        "recipients": recipients,
-    })
+    return render(
+        request,
+        "email/campaign_detail.html",
+        {
+            "account": account,
+            "campaign": campaign,
+            "recipients": recipients,
+        },
+    )

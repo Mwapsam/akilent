@@ -44,14 +44,16 @@ def main():
 
     from collections import Counter
 
-    missing = Counter(built) - Counter(committed)   # rebuild has it, commit doesn't
-    extra = Counter(committed) - Counter(built)     # commit has it, rebuild doesn't
+    missing = Counter(built) - Counter(committed)  # rebuild has it, commit doesn't
+    extra = Counter(committed) - Counter(built)  # commit has it, rebuild doesn't
 
     print("::error file=static/css/app.css::Compiled CSS is out of date. Run:")
     print("  tools/tailwindcss -i assets/app.css -o static/css/app.css --minify")
     print("")
-    for label, bag in (("MISSING from the committed CSS", missing),
-                       ("STALE in the committed CSS", extra)):
+    for label, bag in (
+        ("MISSING from the committed CSS", missing),
+        ("STALE in the committed CSS", extra),
+    ):
         if not bag:
             continue
         print("%s (%d rule(s)):" % (label, sum(bag.values())))

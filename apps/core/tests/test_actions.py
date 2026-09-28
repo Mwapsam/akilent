@@ -1,8 +1,15 @@
 """Phase 4: Action Registry input validation and account-scoped permissions."""
+
 import pytest
 
 from apps.accounts.models import Account
-from apps.core.actions import Action, ActionError, available_actions, register, run_action
+from apps.core.actions import (
+    Action,
+    ActionError,
+    available_actions,
+    register,
+    run_action,
+)
 
 
 class _EchoAction(Action):
@@ -57,7 +64,9 @@ def test_run_action_permits_when_no_account_in_context(account):
 
 @pytest.mark.django_db
 def test_run_action_permits_when_context_account_matches_target(account):
-    result = run_action("test_echo", {"account": account}, account=account, message="hi")
+    result = run_action(
+        "test_echo", {"account": account}, account=account, message="hi"
+    )
     assert result == {"message": "hi"}
 
 

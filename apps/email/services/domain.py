@@ -8,6 +8,7 @@ DomainService is the authoritative place for:
 
 Views and tasks import this service — never the provider directly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -71,8 +72,10 @@ def desired_dns_records(
 
     rows = [
         DesiredRecord(
-            R.Key.VERIFY, R.RecordType.TXT,
-            record.verify_record_name or record.domain, record.verify_record_value,
+            R.Key.VERIFY,
+            R.RecordType.TXT,
+            record.verify_record_name or record.domain,
+            record.verify_record_value,
         ),
     ]
     rows += [
@@ -82,17 +85,25 @@ def desired_dns_records(
     if mail_from and mail_from.mail_from_domain:
         rows += [
             DesiredRecord(
-                R.Key.MAIL_FROM_MX, R.RecordType.MX, mail_from.mail_from_domain,
-                mail_from.mx_value, mail_from.mx_priority,
+                R.Key.MAIL_FROM_MX,
+                R.RecordType.MX,
+                mail_from.mail_from_domain,
+                mail_from.mx_value,
+                mail_from.mx_priority,
             ),
             DesiredRecord(
-                R.Key.MAIL_FROM_SPF, R.RecordType.TXT, mail_from.mail_from_domain,
+                R.Key.MAIL_FROM_SPF,
+                R.RecordType.TXT,
+                mail_from.mail_from_domain,
                 mail_from.spf_value,
             ),
         ]
     rows.append(
         DesiredRecord(
-            R.Key.DMARC, R.RecordType.TXT, record.dmarc_record_name, record.dmarc_value,
+            R.Key.DMARC,
+            R.RecordType.TXT,
+            record.dmarc_record_name,
+            record.dmarc_value,
         )
     )
     return rows
@@ -110,7 +121,11 @@ def diff_dns_records(existing: dict, desired: list[DesiredRecord]) -> dict:
         row = existing.get(ident)
         if row is None:
             add.append(d)
-        elif (row.record_type, row.value, row.priority) != (d.type, d.value, d.priority):
+        elif (row.record_type, row.value, row.priority) != (
+            d.type,
+            d.value,
+            d.priority,
+        ):
             update.append(d)
     remove = [row for ident, row in existing.items() if ident not in wanted]
     return {"add": add, "update": update, "remove": remove}
@@ -119,7 +134,9 @@ def diff_dns_records(existing: dict, desired: list[DesiredRecord]) -> dict:
 class DomainService:
     """Orchestrates domain provisioning between Django and the mail provider."""
 
-    def __init__(self, account, *, actor: "AbstractBaseUser | None" = None, provider=None) -> None:
+    def __init__(
+        self, account, *, actor: AbstractBaseUser | None = None, provider=None
+    ) -> None:
         self.account = account
         self.actor = actor
         self._provider = provider if provider is not None else get_mail_provider()
@@ -258,7 +275,10 @@ class DomainService:
             action="domain.rotate_dkim",
             resource_type="domain",
             resource_id=domain_record.domain,
-            metadata={"old_selector": domain_record.dkim_selector, "new_selector": new_selector},
+            metadata={
+                "old_selector": domain_record.dkim_selector,
+                "new_selector": new_selector,
+            },
         )
         return record
 
@@ -283,9 +303,13 @@ class DomainService:
             logger.exception("ensure_mail_from failed for %s", domain_record.domain)
             domain_record.save(update_fields=["mail_from_attempted_at"])
             audit(
-                account=self.account, actor=self.actor,
-                action="domain.mail_from", resource_type="domain",
-                resource_id=domain_record.domain, success=False, error=str(exc)[:500],
+                account=self.account,
+                actor=self.actor,
+                action="domain.mail_from",
+                resource_type="domain",
+                resource_id=domain_record.domain,
+                success=False,
+                error=str(exc)[:500],
             )
             return None
         if info is None:  # the provider doesn't support it
@@ -293,12 +317,18 @@ class DomainService:
             return None
         domain_record.mail_from_domain = info.mail_from_domain
         domain_record.mail_from_status = info.status or domain_record.mail_from_status
-        domain_record.save(update_fields=[
-            "mail_from_domain", "mail_from_status", "mail_from_attempted_at",
-        ])
+        domain_record.save(
+            update_fields=[
+                "mail_from_domain",
+                "mail_from_status",
+                "mail_from_attempted_at",
+            ]
+        )
         audit(
-            account=self.account, actor=self.actor,
-            action="domain.mail_from", resource_type="domain",
+            account=self.account,
+            actor=self.actor,
+            action="domain.mail_from",
+            resource_type="domain",
             resource_id=domain_record.domain,
             metadata={"mail_from_domain": info.mail_from_domain},
         )
@@ -340,12 +370,11 @@ class DomainService:
 
         dkim_records = self._provider.get_dkim_records(domain_record.domain)
         desired = desired_dns_records(
-            domain_record, dkim_records,
+            domain_record,
+            dkim_records,
             self._mail_from_spec(domain_record, mail_from_domain),
         )
-        existing = {
-            (r.key, r.name): r for r in domain_record.dns_record_rows.all()
-        }
+        existing = {(r.key, r.name): r for r in domain_record.dns_record_rows.all()}
         if not dkim_records:
             carried = [
                 DesiredRecord(r.key, r.record_type, r.name, r.value, r.priority)
@@ -374,15 +403,22 @@ class DomainService:
         with transaction.atomic():
             for d in diff["add"]:
                 EmailDnsRecord.objects.create(
-                    domain=domain_record, key=d.key, name=d.name,
-                    record_type=d.type, value=d.value, priority=d.priority,
+                    domain=domain_record,
+                    key=d.key,
+                    name=d.name,
+                    record_type=d.type,
+                    value=d.value,
+                    priority=d.priority,
                 )
             for d in diff["update"]:
                 EmailDnsRecord.objects.filter(
                     domain=domain_record, key=d.key, name=d.name
                 ).update(
-                    record_type=d.type, value=d.value, priority=d.priority,
-                    is_ok=False, checked_at=None,
+                    record_type=d.type,
+                    value=d.value,
+                    priority=d.priority,
+                    is_ok=False,
+                    checked_at=None,
                 )
             if diff["remove"]:
                 EmailDnsRecord.objects.filter(
@@ -427,12 +463,12 @@ class DomainService:
 
     # ── Private helpers ───────────────────────────────────────────────────
 
-    def _toggle(
-        self, domain_record: EmailDomain, *, active: bool
-    ) -> OperationResult:
+    def _toggle(self, domain_record: EmailDomain, *, active: bool) -> OperationResult:
         action = "domain.enable" if active else "domain.disable"
         try:
-            result = self._provider.set_domain_active(domain_record.domain, active=active)
+            result = self._provider.set_domain_active(
+                domain_record.domain, active=active
+            )
         except EmailProviderError:
             audit(
                 account=self.account,

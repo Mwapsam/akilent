@@ -1,8 +1,15 @@
 from django.contrib import admin
 
 from .models import (
-    AccountFeatureOverride, ComingSoonFeature, ManualPaymentRequest, ModuleSubscription, PaymentMethod, Plan,
-    PlanFeature, Subscription, UsageSummary,
+    AccountFeatureOverride,
+    ComingSoonFeature,
+    ManualPaymentRequest,
+    ModuleSubscription,
+    PaymentMethod,
+    Plan,
+    PlanFeature,
+    Subscription,
+    UsageSummary,
 )
 
 
@@ -26,9 +33,17 @@ class ComingSoonFeatureAdmin(admin.ModelAdmin):
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
     list_display = [
-        "name", "slug", "price_monthly",
-        "max_conversations_per_month", "max_emails_per_month", "max_automation_rules",
-        "max_whatsapp_numbers", "trial_days", "has_priority_support", "bulk_email", "is_active",
+        "name",
+        "slug",
+        "price_monthly",
+        "max_conversations_per_month",
+        "max_emails_per_month",
+        "max_automation_rules",
+        "max_whatsapp_numbers",
+        "trial_days",
+        "has_priority_support",
+        "bulk_email",
+        "is_active",
     ]
     list_filter = ["is_active", "has_priority_support"]
     search_fields = ["name", "slug"]
@@ -37,9 +52,14 @@ class PlanAdmin(admin.ModelAdmin):
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = [
-        "account", "plan", "status",
-        "trial_ends_at", "current_period_start", "current_period_end",
-        "fw_subscription_id", "created_at",
+        "account",
+        "plan",
+        "status",
+        "trial_ends_at",
+        "current_period_start",
+        "current_period_end",
+        "fw_subscription_id",
+        "created_at",
     ]
     list_filter = ["status", "plan"]
     search_fields = ["account__company_name", "account__slug", "fw_customer_email"]
@@ -64,7 +84,14 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 
 @admin.register(ManualPaymentRequest)
 class ManualPaymentRequestAdmin(admin.ModelAdmin):
-    list_display = ["account", "plan", "status", "reference", "reviewed_by", "created_at"]
+    list_display = [
+        "account",
+        "plan",
+        "status",
+        "reference",
+        "reviewed_by",
+        "created_at",
+    ]
     list_filter = ["status", "plan"]
     search_fields = ["account__company_name", "reference"]
     raw_id_fields = ["account"]

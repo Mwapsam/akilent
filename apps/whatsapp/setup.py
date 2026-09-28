@@ -4,6 +4,7 @@ Templates render this; they never inspect tokens, PINs or registration state
 themselves. Setup progress is sequential: the first incomplete required step is
 ``current`` and is the only one that carries a primary action.
 """
+
 import time
 from dataclasses import dataclass, field
 
@@ -50,7 +51,9 @@ def pick_setup_number(numbers):
     return numbers[0] if numbers else None
 
 
-def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) -> SetupConsole:
+def build_setup_console(
+    numbers, *, embedded_enabled: bool, inbound_seen: bool
+) -> SetupConsole:
     number = pick_setup_number(numbers)
     connect = (
         {"label": "Connect with WhatsApp", "url": CONNECT_URL, "method": "get"}
@@ -95,8 +98,11 @@ def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) 
     message_action = None
     if ready:
         message_action = {
-            "kind": "guide", "label": "Open WhatsApp",
-            "url": f"https://wa.me/{_digits(display)}?text=Hi" if _digits(display) else "",
+            "kind": "guide",
+            "label": "Open WhatsApp",
+            "url": f"https://wa.me/{_digits(display)}?text=Hi"
+            if _digits(display)
+            else "",
             "number": display,
             "status_url": f"/whatsapp/numbers/{number.pk}/status/",
             "since": int(time.time()),
@@ -106,39 +112,55 @@ def build_setup_console(numbers, *, embedded_enabled: bool, inbound_seen: bool) 
 
     steps = [
         Step(
-            "connected", "WhatsApp connected",
+            "connected",
+            "WhatsApp connected",
             "Use “Connect with WhatsApp” below, or add a number manually.",
-            done=number is not None, action=connect,
+            done=number is not None,
+            action=connect,
         ),
         Step(
-            "credentials", "Credentials valid",
+            "credentials",
+            "Credentials valid",
             "We need an access token and WhatsApp Business Account for this number.",
-            done=has_creds, action=connect,
+            done=has_creds,
+            action=connect,
         ),
         Step(
-            "registered", "Number registered",
+            "registered",
+            "Number registered",
             "Registered on the Cloud API so it can send messages.",
-            done=bool(number and number.is_ready), action=register,
+            done=bool(number and number.is_ready),
+            action=register,
         ),
         Step(
-            "message_first", "Message this number from your phone", message_hint,
-            done=tested or inbound is not None, action=message_action,
+            "message_first",
+            "Message this number from your phone",
+            message_hint,
+            done=tested or inbound is not None,
+            action=message_action,
         ),
         Step(
-            "test", "Send a test message",
+            "test",
+            "Send a test message",
             "Confirm that messages can be sent from this number.",
             done=tested,
             action=(
                 {
-                    "label": "Send test message", "kind": "verify",
-                    "url": f"/whatsapp/numbers/{number.pk}/verify/", "method": "post",
-                    "prefill": inbound.contact.phone_number if inbound is not None else "",
+                    "label": "Send test message",
+                    "kind": "verify",
+                    "url": f"/whatsapp/numbers/{number.pk}/verify/",
+                    "method": "post",
+                    "prefill": inbound.contact.phone_number
+                    if inbound is not None
+                    else "",
                 }
-                if ready else None
+                if ready
+                else None
             ),
         ),
         Step(
-            "incoming", "Confirm incoming messages",
+            "incoming",
+            "Confirm incoming messages",
             "Reply to the test message from your phone to confirm inbound works.",
             done=inbound_seen or bool(number and number.has_received_test_reply()),
             required=False,

@@ -17,8 +17,8 @@ TEMPLATES = ROOT / "templates"
 
 
 def _layer(name):
-    m = re.search(r"--z-%s:\s*(\d+)" % re.escape(name), CSS)
-    assert m, "no --z-%s in the token layer" % name
+    m = re.search(rf"--z-{re.escape(name)}:\s*(\d+)", CSS)
+    assert m, f"no --z-{name} in the token layer"
     return int(m.group(1))
 
 
@@ -65,8 +65,7 @@ def test_dropdowns_do_not_lock_body_scroll(template):
         if "x-trap.noscroll" in line and "drawerOpen" not in line
     ]
     assert not offenders, (
-        "%s locks body scroll for a dropdown, which shifts the layout: %s"
-        % (template, offenders)
+        f"{template} locks body scroll for a dropdown, which shifts the layout: {offenders}"
     )
 
 
@@ -74,4 +73,4 @@ def test_the_drawer_does_still_lock_scroll():
     """Guards the exemption above — the drawer is a real overlay and should
     keep the page still underneath it."""
     source = (TEMPLATES / "base.html").read_text(encoding="utf-8")
-    assert "x-trap.noscroll=\"$store.ui.drawerOpen\"" in source
+    assert 'x-trap.noscroll="$store.ui.drawerOpen"' in source

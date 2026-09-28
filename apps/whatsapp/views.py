@@ -19,11 +19,19 @@ from apps.accounts.utils import get_current_account
 from apps.contacts.models import ContactList, CustomAttributeDef
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
-from apps.whatsapp.models import MessageTemplate, MessageTemplateAsset, WebhookEventLog, WhatsAppCampaign
+from apps.whatsapp.models import (
+    MessageTemplate,
+    MessageTemplateAsset,
+    WebhookEventLog,
+    WhatsAppCampaign,
+)
 from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 from apps.whatsapp.starter_templates import STARTER_CATEGORIES
 from apps.whatsapp.tasks import process_whatsapp_event, sync_templates_for_account
-from apps.whatsapp.template_builder import TemplateBuilderError, create_and_submit_template
+from apps.whatsapp.template_builder import (
+    TemplateBuilderError,
+    create_and_submit_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +44,7 @@ logger = logging.getLogger(__name__)
 # no evidence yet that a pilot needs it in-app). The list itself lives on the
 # WhatsApp tab of /email/templates/ (apps.email.views.templates_list) — one
 # "Templates" page, two channels, same pattern as Campaigns. -------------
+
 
 @login_required
 @require_POST
@@ -50,13 +59,16 @@ def templates_sync(request):
             "Couldn't reach WhatsApp for one or more numbers — check your connection under Connections.",
         )
     else:
-        messages.success(request, f"Synced {result['synced']} template(s) from WhatsApp.")
+        messages.success(
+            request, f"Synced {result['synced']} template(s) from WhatsApp."
+        )
     return redirect("/email/templates/?channel=whatsapp")
 
 
 # --- One-time codes sent by the business's own app (apps.whatsapp.verification_codes). The page
 # gives a WhatsApp-only business what it needs to connect: an approved Authentication template,
 # an API key and a filled-in example. ------------------------------------------------------------
+
 
 @login_required
 @module_required("verification_codes")
@@ -69,16 +81,29 @@ def codes_setup(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    recent = (OutboundMessage.objects.filter(account=account, payload__kind=verification_codes.KIND)
-              .select_related("contact", "message_log").order_by("-created_at")[:20])
-    return render(request, "whatsapp/codes.html", {
-        "templates": verification_codes.approved_templates(account),
-        "api_key": EmailApiKey.objects.filter(account=account, is_active=True).first(),
-        "new_key": request.session.pop("new_api_key", None),
-        "can_manage_key": is_account_admin(request.user, account),
-        "endpoint": request.build_absolute_uri("/api/v1/whatsapp/verification-codes"),
-        "recent": [verification_codes.status_of(m) for m in recent],
-    })
+    recent = (
+        OutboundMessage.objects.filter(
+            account=account, payload__kind=verification_codes.KIND
+        )
+        .select_related("contact", "message_log")
+        .order_by("-created_at")[:20]
+    )
+    return render(
+        request,
+        "whatsapp/codes.html",
+        {
+            "templates": verification_codes.approved_templates(account),
+            "api_key": EmailApiKey.objects.filter(
+                account=account, is_active=True
+            ).first(),
+            "new_key": request.session.pop("new_api_key", None),
+            "can_manage_key": is_account_admin(request.user, account),
+            "endpoint": request.build_absolute_uri(
+                "/api/v1/whatsapp/verification-codes"
+            ),
+            "recent": [verification_codes.status_of(m) for m in recent],
+        },
+    )
 
 
 @login_required
@@ -98,7 +123,9 @@ def codes_key_create(request):
     EmailApiKey.objects.filter(account=account).update(is_active=False)
     _, raw_key = EmailApiKey.create_for_account(account, name="default")
     request.session["new_api_key"] = raw_key
-    messages.success(request, "New API key created. Copy it now: it won't be shown again.")
+    messages.success(
+        request, "New API key created. Copy it now: it won't be shown again."
+    )
     return redirect("whatsapp-codes")
 
 
@@ -106,6 +133,7 @@ def codes_key_create(request):
 # UI is too complex for a non-technical owner, so Akilent offers a simplified
 # builder in front of it. Akilent validates and submits to Meta; Meta stays
 # the approval source of truth (apps.whatsapp.template_builder). ------------
+
 
 def _data_fields_json(account) -> str:
     """Akilent data-field picker ("insert Contact/Order/Payment field") data
@@ -135,25 +163,49 @@ def _data_fields_json(account) -> str:
         {"key": a.key, "label": a.label or a.key, "sample": a.sample_value}
         for a in CustomAttributeDef.objects.filter(account=account).order_by("key")
     ]
-    return json.dumps({
-        "groups": [
-            {"key": "contact", "label": "Contact", "icon": "user", "fields": built_in_contact_fields},
-            {
-                "key": "contact_custom", "label": "Contact → Custom fields", "icon": "sliders",
-                "prefix": "contact", "fields": custom_contact_fields,
-            },
-            {"key": "order", "label": "Order", "icon": "building", "fields": [
-                {"key": "number", "label": "Order number", "sample": "1029"},
-                {"key": "total", "label": "Order total", "sample": "49.99"},
-            ]},
-            {"key": "payment", "label": "Payment", "icon": "card", "fields": [
-                {"key": "link", "label": "Payment link", "sample": "https://pay.example.com/1029"},
-                {"key": "amount", "label": "Payment amount", "sample": "49.99"},
-            ]},
-        ],
-        "create_custom_field_url": reverse("contacts:create_custom_field"),
-        "custom_field_types": list(CustomAttributeDef.Type.choices),
-    })
+    return json.dumps(
+        {
+            "groups": [
+                {
+                    "key": "contact",
+                    "label": "Contact",
+                    "icon": "user",
+                    "fields": built_in_contact_fields,
+                },
+                {
+                    "key": "contact_custom",
+                    "label": "Contact → Custom fields",
+                    "icon": "sliders",
+                    "prefix": "contact",
+                    "fields": custom_contact_fields,
+                },
+                {
+                    "key": "order",
+                    "label": "Order",
+                    "icon": "building",
+                    "fields": [
+                        {"key": "number", "label": "Order number", "sample": "1029"},
+                        {"key": "total", "label": "Order total", "sample": "49.99"},
+                    ],
+                },
+                {
+                    "key": "payment",
+                    "label": "Payment",
+                    "icon": "card",
+                    "fields": [
+                        {
+                            "key": "link",
+                            "label": "Payment link",
+                            "sample": "https://pay.example.com/1029",
+                        },
+                        {"key": "amount", "label": "Payment amount", "sample": "49.99"},
+                    ],
+                },
+            ],
+            "create_custom_field_url": reverse("contacts:create_custom_field"),
+            "custom_field_types": list(CustomAttributeDef.Type.choices),
+        }
+    )
 
 
 _HEADER_MEDIA_LIMITS = {
@@ -179,31 +231,48 @@ def template_media_upload(request):
     header_format = request.POST.get("header_format", "")
     limits = _HEADER_MEDIA_LIMITS.get(header_format)
     if limits is None:
-        return JsonResponse({"error": "Choose a header type of image, video or document."}, status=400)
+        return JsonResponse(
+            {"error": "Choose a header type of image, video or document."}, status=400
+        )
     allowed_types, max_bytes = limits
 
     f = request.FILES.get("file")
     if f is None:
         return JsonResponse({"error": "No file provided."}, status=400)
     if f.content_type not in allowed_types:
-        return JsonResponse({"error": f"\"{f.content_type}\" isn't a supported {header_format} type."}, status=400)
+        return JsonResponse(
+            {"error": f'"{f.content_type}" isn\'t a supported {header_format} type.'},
+            status=400,
+        )
     if f.size > max_bytes:
-        return JsonResponse({"error": f"File is too large for a {header_format} header."}, status=400)
+        return JsonResponse(
+            {"error": f"File is too large for a {header_format} header."}, status=400
+        )
 
-    asset = MessageTemplateAsset.objects.create(account=account, file=f, content_type=f.content_type)
+    asset = MessageTemplateAsset.objects.create(
+        account=account, file=f, content_type=f.content_type
+    )
     try:
         provider = get_whatsapp_provider(account)
-        result = provider.upload_template_media(f.read(), f.content_type, filename=f.name)
+        result = provider.upload_template_media(
+            f.read(), f.content_type, filename=f.name
+        )
     except (WhatsAppProviderError, NotImplementedError) as exc:
         asset.delete()
-        return JsonResponse({"error": f"Couldn't upload to WhatsApp: {exc}"}, status=400)
+        return JsonResponse(
+            {"error": f"Couldn't upload to WhatsApp: {exc}"}, status=400
+        )
 
     asset.meta_handle = result.handle
     asset.save(update_fields=["meta_handle"])
-    return JsonResponse({
-        "asset_id": asset.id, "url": asset.file.url, "handle": asset.meta_handle,
-        "content_type": asset.content_type,
-    })
+    return JsonResponse(
+        {
+            "asset_id": asset.id,
+            "url": asset.file.url,
+            "handle": asset.meta_handle,
+            "content_type": asset.content_type,
+        }
+    )
 
 
 @login_required
@@ -213,44 +282,65 @@ def template_create(request):
         return redirect("dashboard")
 
     if request.method == "POST":
-        labels = [v.strip() for v in request.POST.getlist("variable_label") if v.strip()]
-        examples = [v.strip() for v in request.POST.getlist("variable_example") if v.strip()]
+        labels = [
+            v.strip() for v in request.POST.getlist("variable_label") if v.strip()
+        ]
+        examples = [
+            v.strip() for v in request.POST.getlist("variable_example") if v.strip()
+        ]
 
         button_type = request.POST.get("button_type", "url").strip().lower()
         button_text = request.POST.get("button_text", "").strip()
         buttons = []
-        if button_text or request.POST.get("button_url") or request.POST.get("button_phone_number"):
+        if (
+            button_text
+            or request.POST.get("button_url")
+            or request.POST.get("button_phone_number")
+        ):
             button = {"type": button_type, "text": button_text}
             if button_type == "url":
                 button["url"] = request.POST.get("button_url", "").strip()
                 button["example"] = request.POST.get("button_url_example", "").strip()
             elif button_type in ("phone_number", "voice_call"):
-                button["phone_number"] = request.POST.get("button_phone_number", "").strip()
+                button["phone_number"] = request.POST.get(
+                    "button_phone_number", ""
+                ).strip()
             elif button_type == "copy_code":
                 button["example"] = request.POST.get("button_code_example", "").strip()
             buttons = [button]
 
         header = request.POST.get("header", "")
-        header_format = request.POST.get("header_format", "text").strip().lower() or "text"
-        if header_format == "none":  # the form's "None" option: a text header left empty
+        header_format = (
+            request.POST.get("header_format", "text").strip().lower() or "text"
+        )
+        if (
+            header_format == "none"
+        ):  # the form's "None" option: a text header left empty
             header_format, header = "text", ""
         header_media = None
         asset_id = request.POST.get("header_media_asset_id", "").strip()
         if header_format != "text" and asset_id.isdigit():
-            header_media = MessageTemplateAsset.objects.filter(account=account, pk=int(asset_id)).first()
+            header_media = MessageTemplateAsset.objects.filter(
+                account=account, pk=int(asset_id)
+            ).first()
 
         try:
             if request.POST.get("category") == "authentication":
-                from apps.whatsapp.template_builder import create_and_submit_auth_template
+                from apps.whatsapp.template_builder import (
+                    create_and_submit_auth_template,
+                )
 
                 create_and_submit_auth_template(
-                    account, name=request.POST.get("name", "").strip().lower(),
+                    account,
+                    name=request.POST.get("name", "").strip().lower(),
                     language=request.POST.get("language", "en"),
                     security_recommendation=request.POST.get("auth_security") == "on",
                     expiry_minutes=request.POST.get("auth_expiry", "").strip(),
                     button_text=request.POST.get("auth_button_text", ""),
                 )
-                messages.success(request, "Template submitted to WhatsApp for approval.")
+                messages.success(
+                    request, "Template submitted to WhatsApp for approval."
+                )
                 return redirect("/email/templates/?channel=whatsapp")
             create_and_submit_template(
                 account,
@@ -270,43 +360,79 @@ def template_create(request):
             messages.error(request, str(exc))
             from apps.ai import api as ai_api
 
-            return render(request, "whatsapp/template_create.html", {
-                "account": account, "categories": MessageTemplate.Category.choices,
-                "languages": _languages(request.POST.get("language")), "ai_on": ai_api.is_available(account),
-                "form": request.POST, "starters_json": json.dumps(STARTER_CATEGORIES),
-                "initial_variables_json": json.dumps(list(zip(labels, examples))),
-                "data_fields_json": _data_fields_json(account),
-                "custom_field_types": CustomAttributeDef.Type.choices,
-                "media_upload_url": reverse("whatsapp-template-media-upload"),
-            })
+            return render(
+                request,
+                "whatsapp/template_create.html",
+                {
+                    "account": account,
+                    "categories": MessageTemplate.Category.choices,
+                    "languages": _languages(request.POST.get("language")),
+                    "ai_on": ai_api.is_available(account),
+                    "form": request.POST,
+                    "starters_json": json.dumps(STARTER_CATEGORIES),
+                    "initial_variables_json": json.dumps(list(zip(labels, examples))),
+                    "data_fields_json": _data_fields_json(account),
+                    "custom_field_types": CustomAttributeDef.Type.choices,
+                    "media_upload_url": reverse("whatsapp-template-media-upload"),
+                },
+            )
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
 
     from apps.ai import api as ai_api
 
     form, variables, ai_draft = {}, [], None
-    draft = ai_api.get_draft(account, request.GET.get("draft"), kind="template") if request.GET.get("draft") else None
+    draft = (
+        ai_api.get_draft(account, request.GET.get("draft"), kind="template")
+        if request.GET.get("draft")
+        else None
+    )
     if draft is not None and draft.status in ("ready", "used"):
         fields = draft.result or {}
-        form = {k: fields.get(k, "") for k in ("name", "category", "language", "header", "body", "footer")}
+        form = {
+            k: fields.get(k, "")
+            for k in ("name", "category", "language", "header", "body", "footer")
+        }
         form["header_format"] = "text" if form["header"] else "none"
-        variables = [[v.get("label", ""), v.get("example", "")] for v in fields.get("variables") or []]
-        ai_draft = {"reasons": fields.get("reasons") or [], "warnings": draft.warnings or []}
+        variables = [
+            [v.get("label", ""), v.get("example", "")]
+            for v in fields.get("variables") or []
+        ]
+        ai_draft = {
+            "reasons": fields.get("reasons") or [],
+            "warnings": draft.warnings or [],
+        }
         ai_api.mark_draft_used(draft)
     elif request.GET.get("category") in MessageTemplate.Category.values:
-        form = {"category": request.GET["category"]}  # e.g. from the One-time codes page
-    return render(request, "whatsapp/template_create.html", {
-        "account": account, "categories": MessageTemplate.Category.choices, "form": form,
-        "starters_json": json.dumps(STARTER_CATEGORIES),
-        "initial_variables_json": json.dumps(variables),
-        "data_fields_json": _data_fields_json(account),
-        "custom_field_types": CustomAttributeDef.Type.choices,
-        "media_upload_url": reverse("whatsapp-template-media-upload"),
-        "languages": _languages(form.get("language")), "ai_on": ai_api.is_available(account), "ai_draft": ai_draft,
-    })
+        form = {
+            "category": request.GET["category"]
+        }  # e.g. from the One-time codes page
+    return render(
+        request,
+        "whatsapp/template_create.html",
+        {
+            "account": account,
+            "categories": MessageTemplate.Category.choices,
+            "form": form,
+            "starters_json": json.dumps(STARTER_CATEGORIES),
+            "initial_variables_json": json.dumps(variables),
+            "data_fields_json": _data_fields_json(account),
+            "custom_field_types": CustomAttributeDef.Type.choices,
+            "media_upload_url": reverse("whatsapp-template-media-upload"),
+            "languages": _languages(form.get("language")),
+            "ai_on": ai_api.is_available(account),
+            "ai_draft": ai_draft,
+        },
+    )
 
 
-_LANGUAGES = [("en", "English"), ("es", "Spanish"), ("fr", "French"), ("pt_PT", "Portuguese"), ("sw", "Swahili")]
+_LANGUAGES = [
+    ("en", "English"),
+    ("es", "Spanish"),
+    ("fr", "French"),
+    ("pt_PT", "Portuguese"),
+    ("sw", "Swahili"),
+]
 
 
 def _languages(current: str | None) -> list:
@@ -325,9 +451,13 @@ def template_lint(request):
     """Live "Meta may reject this" warnings for the template form. JSON."""
     from apps.whatsapp.template_lint import lint
 
-    warnings = lint(category=request.POST.get("category", ""), language=request.POST.get("language", ""),
-                    body=request.POST.get("body", ""), header=request.POST.get("header", ""),
-                    footer=request.POST.get("footer", ""))
+    warnings = lint(
+        category=request.POST.get("category", ""),
+        language=request.POST.get("language", ""),
+        body=request.POST.get("body", ""),
+        header=request.POST.get("header", ""),
+        footer=request.POST.get("footer", ""),
+    )
     return JsonResponse({"ok": True, "warnings": warnings})
 
 
@@ -336,6 +466,7 @@ def template_lint(request):
 # apps.whatsapp.tasks (sending). This file is the module boundary rule's
 # exempted "views.py", so the ContactList import above is allowed here and
 # nowhere else in this app. ------------------------------------------------
+
 
 @login_required
 @module_required("whatsapp_campaigns")
@@ -353,8 +484,10 @@ def campaign_new(request):
             return redirect("whatsapp-campaign-new")
         try:
             campaign = create_and_queue_campaign(
-                account=account, name=request.POST.get("name") or "",
-                contact_list=contact_list, template_id=request.POST.get("template_id"),
+                account=account,
+                name=request.POST.get("name") or "",
+                contact_list=contact_list,
+                template_id=request.POST.get("template_id"),
                 created_by=request.user,
             )
         except CampaignError as exc:
@@ -363,13 +496,20 @@ def campaign_new(request):
         messages.success(request, "Campaign queued — it's sending now.")
         return redirect("whatsapp-campaign-detail", pk=campaign.pk)
 
-    return render(request, "whatsapp/campaign_new.html", {
-        "account": account,
-        "contact_lists": ContactList.objects.filter(account=account).order_by("name"),
-        "templates": MessageTemplate.objects.filter(
-            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        ).order_by("name"),
-    })
+    return render(
+        request,
+        "whatsapp/campaign_new.html",
+        {
+            "account": account,
+            "contact_lists": ContactList.objects.filter(account=account).order_by(
+                "name"
+            ),
+            "templates": MessageTemplate.objects.filter(
+                account=account,
+                approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+            ).order_by("name"),
+        },
+    )
 
 
 @login_required
@@ -379,9 +519,14 @@ def campaign_detail(request, pk: int):
     if account is None:
         return redirect("dashboard")
     campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
-    return render(request, "whatsapp/campaign_detail.html", {
-        "account": account, "campaign": campaign,
-    })
+    return render(
+        request,
+        "whatsapp/campaign_detail.html",
+        {
+            "account": account,
+            "campaign": campaign,
+        },
+    )
 
 
 def _verify_meta_signature(request) -> bool:
@@ -392,7 +537,7 @@ def _verify_meta_signature(request) -> bool:
 
     expected = hmac.new(
         key=settings.WHATSAPP_APP_SECRET.encode(),
-        msg=request.body,  
+        msg=request.body,
         digestmod=hashlib.sha256,
     ).hexdigest()
 
@@ -416,7 +561,6 @@ def _classify_event(payload: dict) -> str:
 
 @method_decorator(csrf_exempt, name="dispatch")
 class WhatsAppWebhookView(View):
-
     def get(self, request):
         """Meta webhook verification handshake."""
         mode = request.GET.get("hub.mode")
@@ -431,8 +575,10 @@ class WhatsAppWebhookView(View):
 
     def post(self, request):
         if not _verify_meta_signature(request):
-            logger.warning("WhatsApp webhook: bad signature from %s",
-                           request.META.get("REMOTE_ADDR"))
+            logger.warning(
+                "WhatsApp webhook: bad signature from %s",
+                request.META.get("REMOTE_ADDR"),
+            )
             return HttpResponse(status=403)
 
         try:

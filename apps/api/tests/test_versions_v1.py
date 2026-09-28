@@ -1,4 +1,3 @@
-import json
 from decimal import Decimal
 
 import pytest
@@ -16,11 +15,21 @@ def api_key(db):
     user = User.objects.create_user("o", "o@example.com", "pw")
     acc = Account.objects.create(company_name="Acme")
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
-    plan = Plan.objects.create(slug="p", name="P", price_monthly=Decimal("10"),
-                               max_emails_per_month=100, email_apis=True, email_templates=True,
-                               api_rate_per_min=0)
-    Subscription.objects.create(account=acc, plan=plan, status=Subscription.ACTIVE,
-                                current_period_start=timezone.now())
+    plan = Plan.objects.create(
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=100,
+        email_apis=True,
+        email_templates=True,
+        api_rate_per_min=0,
+    )
+    Subscription.objects.create(
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
+        current_period_start=timezone.now(),
+    )
     k, raw = EmailApiKey.create_for_account(acc, name="k")
     k.scopes = ["messages:send", "templates:manage"]
     k.save(update_fields=["scopes"])
@@ -36,7 +45,10 @@ def test_snapshot_numbers_increment_and_activate_rolls_back(api_key):
     t.save()
     v2 = snapshot_version(t)
     assert (v1.number, v2.number) == (1, 2)
-    assert v2.is_active and not EmailTemplate.objects.get(pk=t.pk).versions.get(number=1).is_active
+    assert (
+        v2.is_active
+        and not EmailTemplate.objects.get(pk=t.pk).versions.get(number=1).is_active
+    )
 
     activate_version(t, 1)
     t.refresh_from_db()
@@ -63,7 +75,9 @@ def test_versions_list_and_activate_endpoints(client, api_key):
     assert act.status_code == 200
     assert act.json()["subject"] == "first"
 
-    missing = client.post("/api/v1/templates/t/versions/99/activate", HTTP_X_API_KEY=key)
+    missing = client.post(
+        "/api/v1/templates/t/versions/99/activate", HTTP_X_API_KEY=key
+    )
     assert missing.status_code == 404
 
 

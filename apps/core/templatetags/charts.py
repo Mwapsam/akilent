@@ -72,8 +72,11 @@ def sparkline(values, label=""):
 @register.inclusion_tag("components/charts/_meter.html")
 def meter(value, maximum=100, label="", tone="brand"):
     """A single value against its limit. Not a two-slice pie."""
-    return {"meter": geometry.meter(float(value or 0), float(maximum or 100)),
-            "label": label, "tone": tone}
+    return {
+        "meter": geometry.meter(float(value or 0), float(maximum or 100)),
+        "label": label,
+        "tone": tone,
+    }
 
 
 @register.inclusion_tag("components/charts/_stacked_bar.html")

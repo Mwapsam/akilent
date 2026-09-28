@@ -3,7 +3,6 @@ from django.utils import timezone
 
 
 class WebhookEventLog(models.Model):
-
     class Source(models.TextChoices):
         WHATSAPP = "whatsapp", "WhatsApp"
 
@@ -21,7 +20,7 @@ class WebhookEventLog(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["processed", "created_at"]),   # retry worker
+            models.Index(fields=["processed", "created_at"]),  # retry worker
             models.Index(fields=["source", "event_type"]),
         ]
 
@@ -36,4 +35,6 @@ class WebhookEventLog(models.Model):
         self.save(update_fields=["attempts", "error_message"])
 
     def __str__(self):
-        return f"{self.source}:{self.event_type} ({'ok' if self.processed else 'pending'})"
+        return (
+            f"{self.source}:{self.event_type} ({'ok' if self.processed else 'pending'})"
+        )

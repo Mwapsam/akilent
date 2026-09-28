@@ -9,11 +9,10 @@ and tasks.py with a single source of truth. Handles:
 """
 
 import logging
-from typing import Optional
 
 from django.db import transaction
 
-from apps.email.models import GlobalSuppression, SuppressionListEntry, EmailMessage
+from apps.email.models import EmailMessage, GlobalSuppression, SuppressionListEntry
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +156,7 @@ def record_event(
     email: str,
     reason: str,
     bounce_type: str = "",
-    message: Optional[EmailMessage] = None,
+    message: EmailMessage | None = None,
 ) -> SuppressionListEntry:
     """Record a suppression event (bounce, complaint, unsubscribe, validation failure, etc).
 

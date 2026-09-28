@@ -9,6 +9,7 @@ Locks down the repaired outbound pipeline:
 * duplicate idempotency keys are cancelled, not re-sent.
 * a message stuck in SENDING past the stale window is recovered.
 """
+
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -103,7 +104,7 @@ class OutboundSendTest(TestCase):
         self.assertEqual(log.content, "hi")
 
     def test_status_webhook_reconciles_against_outbound_log(self):
-        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        whatsapp_api.send_message(self.account, self.contact, "hi")
         self._drain_with(_FakeProvider())
         log = MessageLog.objects.get(message_id="wamid.OUT1")
 
@@ -117,10 +118,8 @@ class OutboundSendTest(TestCase):
         self.assertFalse(fetched.apply_status_update("sent"))  # monotonic
 
     def test_successful_send_does_not_extend_24h_window(self):
-        window_before = Conversation.objects.get(
-            contact=self.contact
-        ).window_expires_at
-        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        window_before = Conversation.objects.get(contact=self.contact).window_expires_at
+        whatsapp_api.send_message(self.account, self.contact, "hi")
         self._drain_with(_FakeProvider())
         convo = Conversation.objects.get(contact=self.contact)
         # last_message_at advances, but the window itself is untouched by an
@@ -206,8 +205,11 @@ class OutboundSendTest(TestCase):
     def test_non_retryable_provider_error_fails_immediately(self):
         msg = whatsapp_api.send_message(self.account, self.contact, "hi")
         bad = SendResult(
-            message_id="", success=False, error="Template error",
-            error_code="132001", retryable=False,
+            message_id="",
+            success=False,
+            error="Template error",
+            error_code="132001",
+            retryable=False,
         )
         self._drain_with(_FakeProvider(result=bad))
 
@@ -220,8 +222,11 @@ class OutboundSendTest(TestCase):
     def test_retryable_provider_error_requeues(self):
         msg = whatsapp_api.send_message(self.account, self.contact, "hi")
         bad = SendResult(
-            message_id="", success=False, error="Rate limited",
-            error_code="130429", retryable=True,
+            message_id="",
+            success=False,
+            error="Rate limited",
+            error_code="130429",
+            retryable=True,
         )
         self._drain_with(_FakeProvider(result=bad))
 

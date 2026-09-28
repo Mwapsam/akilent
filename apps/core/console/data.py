@@ -3,6 +3,7 @@
 These back the promises on /data-deletion/. Deletion is permanent, so the console asks the
 operator to type a confirmation first; each function only touches the given business's rows.
 """
+
 from __future__ import annotations
 
 import csv
@@ -13,8 +14,17 @@ from django.db import transaction
 from django.utils import timezone
 
 CLOSE_AFTER = timedelta(days=30)
-EXPORT_FIELDS = ["first_name", "last_name", "email", "phone", "status", "consent_status",
-                 "tags", "first_seen", "last_engaged_at"]
+EXPORT_FIELDS = [
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "status",
+    "consent_status",
+    "tags",
+    "first_seen",
+    "last_engaged_at",
+]
 
 
 def contacts_csv(account) -> str:
@@ -23,13 +33,25 @@ def contacts_csv(account) -> str:
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(EXPORT_FIELDS)
-    for c in Contact.objects.filter(account=account).prefetch_related("tags").order_by("first_seen").iterator(chunk_size=500):
-        writer.writerow([
-            c.first_name, c.last_name, c.email or "", c.phone or "", c.status, c.consent_status,
-            ";".join(t.name for t in c.tags.all()),
-            c.first_seen.isoformat() if c.first_seen else "",
-            c.last_engaged_at.isoformat() if c.last_engaged_at else "",
-        ])
+    for c in (
+        Contact.objects.filter(account=account)
+        .prefetch_related("tags")
+        .order_by("first_seen")
+        .iterator(chunk_size=500)
+    ):
+        writer.writerow(
+            [
+                c.first_name,
+                c.last_name,
+                c.email or "",
+                c.phone or "",
+                c.status,
+                c.consent_status,
+                ";".join(t.name for t in c.tags.all()),
+                c.first_seen.isoformat() if c.first_seen else "",
+                c.last_engaged_at.isoformat() if c.last_engaged_at else "",
+            ]
+        )
     return out.getvalue()
 
 
@@ -54,7 +76,8 @@ def find_customer(account, who: str):
         return [], []
     wa = list(WhatsAppContact.objects.filter(account=account, phone_number=phone))
     contacts = list(Contact.objects.filter(account=account, phone=phone)) + [
-        w.contact for w in wa if w.contact_id]
+        w.contact for w in wa if w.contact_id
+    ]
     return list({c.pk: c for c in contacts}.values()), wa
 
 

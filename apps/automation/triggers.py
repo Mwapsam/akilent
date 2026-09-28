@@ -1,15 +1,15 @@
 import logging
 
-from apps.core.events import MessageReceived, MessageStatusChanged
+from apps.core.events import MessageReceived
 from apps.whatsapp import api as whatsapp_api
 
 logger = logging.getLogger(__name__)
 
 
 def on_message_received(event: MessageReceived, **kwargs) -> None:
-    from apps.automation.tasks import evaluate_rules_for_message
-    from apps.automation.models import AutomationRule
     from apps.accounts import api as accounts_api
+    from apps.automation.models import AutomationRule
+    from apps.automation.tasks import evaluate_rules_for_message
 
     # Get the contact details for context
     try:
@@ -44,7 +44,8 @@ def on_message_received(event: MessageReceived, **kwargs) -> None:
     except Exception:
         logger.exception(
             "on_message_received: _enroll_workflows_for_reply failed for account=%s contact=%s",
-            event.account_id, event.contact_id,
+            event.account_id,
+            event.contact_id,
         )
 
 
@@ -69,26 +70,37 @@ def _enroll_workflows_for_reply(event: MessageReceived, wa_contact) -> None:
     contact = wa_contact.contact
     if contact is None:
         normalized = normalize_phone(wa_contact.phone_number)
-        contact = Contact.objects.filter(account_id=event.account_id, phone=normalized).first()
+        contact = Contact.objects.filter(
+            account_id=event.account_id, phone=normalized
+        ).first()
         if contact is None:
             contact, _ = upsert_contact_by_phone(
-                wa_contact.account, normalized, source="whatsapp",
+                wa_contact.account,
+                normalized,
+                source="whatsapp",
             )
         wa_contact.contact = contact
         wa_contact.save(update_fields=["contact"])
 
-    enroll_for_trigger(event.account_id, "whatsapp.received", contact, context={
-        "message": {
-            "body": event.body,
-            "type": event.message_type,
-            "message_id": event.message_id,
+    enroll_for_trigger(
+        event.account_id,
+        "whatsapp.received",
+        contact,
+        context={
+            "message": {
+                "body": event.body,
+                "type": event.message_type,
+                "message_id": event.message_id,
+            },
         },
-    })
+    )
 
     _project_onto_operational_spine(event, wa_contact, contact)
 
 
-def _project_onto_operational_spine(event: MessageReceived, wa_contact, contact) -> None:
+def _project_onto_operational_spine(
+    event: MessageReceived, wa_contact, contact
+) -> None:
     """Feed the Phase 1 generic Conversation/Message/Event spine.
 
     Looks up the already-created ``whatsapp.Conversation``/``MessageLog`` by
@@ -99,11 +111,13 @@ def _project_onto_operational_spine(event: MessageReceived, wa_contact, contact)
     above, which has already run by this point.
     """
     from apps.conversations.services import record_inbound_whatsapp_message
-    from apps.whatsapp.models import Conversation as WhatsAppConversation, MessageLog
+    from apps.whatsapp.models import Conversation as WhatsAppConversation
+    from apps.whatsapp.models import MessageLog
 
     try:
         message_log = MessageLog.objects.get(
-            account_id=event.account_id, message_id=event.message_id,
+            account_id=event.account_id,
+            message_id=event.message_id,
         )
         whatsapp_conversation = (
             WhatsAppConversation.objects.filter(contact=wa_contact, is_open=True)
@@ -116,17 +130,21 @@ def _project_onto_operational_spine(event: MessageReceived, wa_contact, contact)
         if whatsapp_conversation is None:
             logger.warning(
                 "_project_onto_operational_spine: no whatsapp.Conversation found for "
-                "wa_contact=%s", wa_contact.pk,
+                "wa_contact=%s",
+                wa_contact.pk,
             )
             return
         record_inbound_whatsapp_message(
-            contact=contact, wa_contact=wa_contact,
-            whatsapp_conversation=whatsapp_conversation, message_log=message_log,
+            contact=contact,
+            wa_contact=wa_contact,
+            whatsapp_conversation=whatsapp_conversation,
+            message_log=message_log,
         )
     except Exception:
         logger.exception(
             "_project_onto_operational_spine failed for account=%s message_id=%s",
-            event.account_id, event.message_id,
+            event.account_id,
+            event.message_id,
         )
 
 
@@ -143,14 +161,19 @@ def on_message_sent(message_log) -> None:
 def on_lead_created(account_id: int, lead_id: str, fields: dict) -> None:
     from apps.automation.models import AutomationRule
 
-    _dispatch(account_id, AutomationRule.TriggerEvent.LEAD_CREATED, {"lead_id": lead_id, **fields})
+    _dispatch(
+        account_id,
+        AutomationRule.TriggerEvent.LEAD_CREATED,
+        {"lead_id": lead_id, **fields},
+    )
 
 
 def on_deal_stage_changed(account_id: int, deal_id: str, stage_id: str) -> None:
     from apps.automation.models import AutomationRule
 
     _dispatch(
-        account_id, AutomationRule.TriggerEvent.DEAL_STAGE_CHANGED,
+        account_id,
+        AutomationRule.TriggerEvent.DEAL_STAGE_CHANGED,
         {"deal_id": deal_id, "stage_id": stage_id},
     )
 

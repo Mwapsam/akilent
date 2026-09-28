@@ -6,6 +6,7 @@ older messages pile up beyond that window, a background task folds them into
 Incremental and cheap: each message is summarised once. Same privacy rules as drafting: phone
 numbers and emails masked, no system lines, no notes, nothing from other conversations.
 """
+
 from __future__ import annotations
 
 import json
@@ -44,11 +45,15 @@ def pending_messages(conversation, memory=None) -> list[dict]:
     from apps.conversations.api import earlier_messages
 
     after = memory.covered_until_id if memory else 0
-    return earlier_messages(conversation, keep_recent=prompts.RECENT_MESSAGES, after_id=after, limit=BATCH)
+    return earlier_messages(
+        conversation, keep_recent=prompts.RECENT_MESSAGES, after_id=after, limit=BATCH
+    )
 
 
 def needs_refresh(conversation) -> bool:
-    return len(pending_messages(conversation, memory_for(conversation))) >= REFRESH_AFTER
+    return (
+        len(pending_messages(conversation, memory_for(conversation))) >= REFRESH_AFTER
+    )
 
 
 def _clean(data: dict, old_facts: dict) -> tuple[str, dict]:
@@ -75,15 +80,32 @@ def refresh(conversation, provider) -> bool:
     batch = pending_messages(conversation, memory)
     if not batch:
         return False
-    old = {"summary": memory.summary if memory else "", "facts": memory.facts if memory else {}}
-    lines = [f"{'Customer' if m['direction'] == 'inbound' else 'Business'}: {prompts.mask(m['body']).strip()}"
-             for m in batch]
-    prompt = "Notes so far:\n" + json.dumps(old, ensure_ascii=False) + "\n\nNext messages:\n" + "\n".join(lines)
-    result = provider.chat([ChatMessage("user", prompt)], system=SYSTEM, max_tokens=1200, temperature=0.1)
+    old = {
+        "summary": memory.summary if memory else "",
+        "facts": memory.facts if memory else {},
+    }
+    lines = [
+        f"{'Customer' if m['direction'] == 'inbound' else 'Business'}: {prompts.mask(m['body']).strip()}"
+        for m in batch
+    ]
+    prompt = (
+        "Notes so far:\n"
+        + json.dumps(old, ensure_ascii=False)
+        + "\n\nNext messages:\n"
+        + "\n".join(lines)
+    )
+    result = provider.chat(
+        [ChatMessage("user", prompt)], system=SYSTEM, max_tokens=1200, temperature=0.1
+    )
     summary, facts = _clean(extract_json(result.text), old["facts"] or {})
     AIConversationMemory.objects.update_or_create(
         conversation=conversation,
-        defaults={"account": conversation.account, "summary": summary, "facts": facts,
-                  "covered_until_id": batch[-1]["id"], "model": (result.model or "")[:80]},
+        defaults={
+            "account": conversation.account,
+            "summary": summary,
+            "facts": facts,
+            "covered_until_id": batch[-1]["id"],
+            "model": (result.model or "")[:80],
+        },
     )
     return True

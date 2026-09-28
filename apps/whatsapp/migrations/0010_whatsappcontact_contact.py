@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('contacts', '0002_contact_phone_contact_contacts_co_account_dde65c_idx'),
-        ('whatsapp', '0009_whatsappbusinessnumber_verification_pin'),
+        ("contacts", "0002_contact_phone_contact_contacts_co_account_dde65c_idx"),
+        ("whatsapp", "0009_whatsappbusinessnumber_verification_pin"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='contact',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='whatsapp_contacts', to='contacts.contact'),
+            model_name="whatsappcontact",
+            name="contact",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="whatsapp_contacts",
+                to="contacts.contact",
+            ),
         ),
     ]

@@ -6,8 +6,8 @@ The implementation of these functions can change internally without affecting ca
 Direct imports of apps.automation.* are not allowed outside of automation.
 Direct imports of automation rules/workflows should go through this API.
 """
+
 import logging
-from typing import Optional
 
 from apps.accounts.models import Account
 
@@ -40,8 +40,12 @@ def count_active_rules(account: Account) -> int:
     """
     from apps.automation.models import AutomationRule, Workflow
 
-    return (Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).count()
-            + AutomationRule.objects.filter(account=account, is_active=True).count())
+    return (
+        Workflow.objects.filter(
+            account=account, status=Workflow.Status.PUBLISHED
+        ).count()
+        + AutomationRule.objects.filter(account=account, is_active=True).count()
+    )
 
 
 class AutomationLimitReached(ValueError):
@@ -54,13 +58,18 @@ def ensure_room_to_turn_on(account, workflow=None) -> None:
     from apps.automation.models import Workflow
     from apps.billing import api as billing_api
 
-    if workflow is not None and workflow.pk and workflow.status == Workflow.Status.PUBLISHED:
+    if (
+        workflow is not None
+        and workflow.pk
+        and workflow.status == Workflow.Status.PUBLISHED
+    ):
         return
     try:
         billing_api.require_room(account, "automation_rules")
     except billing_api.LimitReached as exc:
         raise AutomationLimitReached(
-            f"{exc} Turn another automation off first, or upgrade your plan.") from exc
+            f"{exc} Turn another automation off first, or upgrade your plan."
+        ) from exc
 
 
 def evaluate_conditions(rule, context: dict) -> bool:
@@ -109,10 +118,17 @@ def upsert_published_workflow(account, *, slug: str, name: str, definition: dict
     """
     from apps.automation.models import Workflow
 
-    ensure_room_to_turn_on(account, Workflow.objects.filter(account=account, slug=slug).first())
+    ensure_room_to_turn_on(
+        account, Workflow.objects.filter(account=account, slug=slug).first()
+    )
     workflow, _ = Workflow.objects.update_or_create(
-        account=account, slug=slug,
-        defaults={"name": name, "definition": definition, "status": Workflow.Status.PUBLISHED},
+        account=account,
+        slug=slug,
+        defaults={
+            "name": name,
+            "definition": definition,
+            "status": Workflow.Status.PUBLISHED,
+        },
     )
     return workflow
 
@@ -121,7 +137,9 @@ class WorkflowNotReady(ValueError):
     """The workflow has errors that must be fixed before it can be turned on."""
 
 
-def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn_on: bool = False):
+def save_built_workflow(
+    account, *, slug: str, name: str, definition: dict, turn_on: bool = False
+):
     """Save a drafted workflow (from Build: a recommendation, an AI request, a repeated reply).
 
     ``turn_on=False`` saves a DRAFT and never touches a live automation: if one with this slug is
@@ -135,17 +153,32 @@ def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn
     if not turn_on:
         if existing is not None and existing.status == Workflow.Status.PUBLISHED:
             n = 2
-            while Workflow.objects.filter(account=account, slug=f"{slug}-draft-{n}"[:50]).exists():
+            while Workflow.objects.filter(
+                account=account, slug=f"{slug}-draft-{n}"[:50]
+            ).exists():
                 n += 1
             slug, existing = f"{slug}-draft-{n}"[:50], None
         if existing is None:
-            return Workflow.objects.create(account=account, slug=slug, name=name, definition=definition,
-                                           status=Workflow.Status.DRAFT)
-        existing.name, existing.definition, existing.status = name, definition, Workflow.Status.DRAFT
+            return Workflow.objects.create(
+                account=account,
+                slug=slug,
+                name=name,
+                definition=definition,
+                status=Workflow.Status.DRAFT,
+            )
+        existing.name, existing.definition, existing.status = (
+            name,
+            definition,
+            Workflow.Status.DRAFT,
+        )
         existing.save(update_fields=["name", "definition", "status", "updated_at"])
         return existing
 
-    blocking = [e for e in validate_definition(definition, account=account) if e.get("severity", "error") != "warning"]
+    blocking = [
+        e
+        for e in validate_definition(definition, account=account)
+        if e.get("severity", "error") != "warning"
+    ]
     if blocking:
         raise WorkflowNotReady(blocking[0]["message"])
     workflow = existing or Workflow(account=account, slug=slug)
@@ -155,7 +188,11 @@ def save_built_workflow(account, *, slug: str, name: str, definition: dict, turn
         raise WorkflowNotReady(str(exc)) from exc
     if workflow.pk and workflow.status != Workflow.Status.PUBLISHED:
         workflow.version += 1
-    workflow.name, workflow.definition, workflow.status = name, definition, Workflow.Status.PUBLISHED
+    workflow.name, workflow.definition, workflow.status = (
+        name,
+        definition,
+        Workflow.Status.PUBLISHED,
+    )
     workflow.save()
     return workflow
 
@@ -168,8 +205,10 @@ def automate_offers(account, message_ids) -> dict:
     from apps.automation import patterns
 
     base = reverse("build:review")
-    return {mid: {"count": o["count"], "url": f"{base}?pattern={o['key']}"}
-            for mid, o in patterns.offers_for_messages(account, message_ids).items()}
+    return {
+        mid: {"count": o["count"], "url": f"{base}?pattern={o['key']}"}
+        for mid, o in patterns.offers_for_messages(account, message_ids).items()
+    }
 
 
 def repeated_question_offer(account, text: str) -> dict | None:
@@ -179,8 +218,13 @@ def repeated_question_offer(account, text: str) -> dict | None:
     from apps.automation import keywords, patterns
 
     for pattern in patterns.open_patterns(account):
-        if keywords.matches({"mode": "contains", "any": pattern.question_keywords}, text or ""):
-            return {"count": pattern.count, "url": f"{reverse('build:review')}?pattern={pattern.key}"}
+        if keywords.matches(
+            {"mode": "contains", "any": pattern.question_keywords}, text or ""
+        ):
+            return {
+                "count": pattern.count,
+                "url": f"{reverse('build:review')}?pattern={pattern.key}",
+            }
     return None
 
 
@@ -189,7 +233,9 @@ def published_trigger_matches(account) -> list[dict]:
     from apps.automation.models import Workflow
 
     out = []
-    for wf in Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED):
+    for wf in Workflow.objects.filter(
+        account=account, status=Workflow.Status.PUBLISHED
+    ):
         trigger = (wf.definition or {}).get("trigger") or {}
         if trigger.get("match"):
             out.append({"slug": wf.slug, "name": wf.name, "match": trigger["match"]})
@@ -211,7 +257,9 @@ def adoption(account, *, since=None) -> dict:
     if since is not None:
         runs = runs.filter(started_at__gte=since)
     return {
-        "on": Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).count(),
+        "on": Workflow.objects.filter(
+            account=account, status=Workflow.Status.PUBLISHED
+        ).count(),
         "first_run_at": runs.aggregate(first=Min("started_at"))["first"],
     }
 
@@ -220,26 +268,36 @@ def recent_failed_runs(limit: int = 5) -> list[dict]:
     """The latest failed automation runs across all businesses, for staff."""
     from apps.automation.models import WorkflowRun
 
-    runs = (WorkflowRun.objects.filter(status=WorkflowRun.Status.FAILED)
-            .select_related("workflow__account").prefetch_related("step_runs")
-            .order_by("-completed_at", "-started_at")[:limit])
+    runs = (
+        WorkflowRun.objects.filter(status=WorkflowRun.Status.FAILED)
+        .select_related("workflow__account")
+        .prefetch_related("step_runs")
+        .order_by("-completed_at", "-started_at")[:limit]
+    )
     out = []
     for run in runs:
         failed = [s for s in run.step_runs.all() if s.status != "ok"]
         step = failed[-1] if failed else None
-        out.append({
-            "account": run.workflow.account, "workflow": run.workflow.name,
-            "at": run.completed_at or run.started_at,
-            "step": step.step_type if step else "",
-            "error": str((step.result or {}).get("error", "")) if step else "",
-        })
+        out.append(
+            {
+                "account": run.workflow.account,
+                "workflow": run.workflow.name,
+                "at": run.completed_at or run.started_at,
+                "step": step.step_type if step else "",
+                "error": str((step.result or {}).get("error", "")) if step else "",
+            }
+        )
     return out
 
 
 def published_slugs(account) -> set:
     from apps.automation.models import Workflow
 
-    return set(Workflow.objects.filter(account=account, status=Workflow.Status.PUBLISHED).values_list("slug", flat=True))
+    return set(
+        Workflow.objects.filter(
+            account=account, status=Workflow.Status.PUBLISHED
+        ).values_list("slug", flat=True)
+    )
 
 
 # Re-export for Phase 2 compatibility (triggers still imports from here internally)
@@ -261,18 +319,28 @@ def activity_for_contact(account: Account, contact, *, limit: int = 8) -> list[d
 
     runs = (
         WorkflowRun.objects.filter(workflow__account=account, contact=contact)
-        .select_related("workflow").prefetch_related("step_runs").order_by("-started_at")[:limit]
+        .select_related("workflow")
+        .prefetch_related("step_runs")
+        .order_by("-started_at")[:limit]
     )
     items = []
     for run in runs:
-        steps = {s.get("id"): s for s in (run.workflow.definition or {}).get("steps", [])}
+        steps = {
+            s.get("id"): s for s in (run.workflow.definition or {}).get("steps", [])
+        }
         lines = [
-            explain.describe_step(sr.step_type, sr.status, sr.result, steps.get(sr.step_id))
+            explain.describe_step(
+                sr.step_type, sr.status, sr.result, steps.get(sr.step_id)
+            )
             for sr in sorted(run.step_runs.all(), key=lambda sr: sr.executed_at)
             if sr.step_type not in ("branch", "stop")
         ]
-        items.append({
-            "when": run.started_at, "automation": run.workflow.name, "lines": lines,
-            "problem": any(not line["ok"] for line in lines),
-        })
+        items.append(
+            {
+                "when": run.started_at,
+                "automation": run.workflow.name,
+                "lines": lines,
+                "problem": any(not line["ok"] for line in lines),
+            }
+        )
     return items

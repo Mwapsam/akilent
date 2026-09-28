@@ -1,7 +1,9 @@
 """Resource namespaces exposed on the client (`client.messages`, …)."""
+
 from __future__ import annotations
 
-from typing import Any, Iterator, List, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from ._transport import Transport
 
@@ -18,13 +20,13 @@ class Messages(_Base):
         from_: str,
         to: str,
         subject: str = "",
-        text: Optional[str] = None,
-        html: Optional[str] = None,
-        template: Optional[str] = None,
-        variables: Optional[dict] = None,
-        locale: Optional[str] = None,
-        attachments: Optional[list] = None,
-        idempotency_key: Optional[str] = None,
+        text: str | None = None,
+        html: str | None = None,
+        template: str | None = None,
+        variables: dict | None = None,
+        locale: str | None = None,
+        attachments: list | None = None,
+        idempotency_key: str | None = None,
     ) -> dict:
         payload: dict[str, Any] = {"from": from_, "to": to}
         if subject:
@@ -58,9 +60,8 @@ class Messages(_Base):
         offset = 0
         while True:
             page = self.list(limit=page_size, offset=offset, **filters)
-            rows: List[dict] = page.get("data", [])
-            for row in rows:
-                yield row
+            rows: list[dict] = page.get("data", [])
+            yield from rows
             offset += len(rows)
             if not rows or offset >= page.get("total", 0):
                 return
@@ -82,9 +83,11 @@ class Templates(_Base):
     def delete(self, slug: str) -> None:
         self._t.request("DELETE", f"/api/v1/templates/{slug}")
 
-    def preview(self, slug: str, *, variables: Optional[dict] = None) -> dict:
+    def preview(self, slug: str, *, variables: dict | None = None) -> dict:
         return self._t.request(
-            "POST", f"/api/v1/templates/{slug}/preview", json={"variables": variables or {}}
+            "POST",
+            f"/api/v1/templates/{slug}/preview",
+            json={"variables": variables or {}},
         )
 
     def clone(self, slug: str) -> dict:

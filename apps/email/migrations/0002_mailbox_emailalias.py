@@ -5,43 +5,97 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0001_initial'),
-        ('email_service', '0001_initial'),
+        ("accounts", "0001_initial"),
+        ("email_service", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Mailbox',
+            name="Mailbox",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('email', models.EmailField(max_length=254, unique=True)),
-                ('name', models.CharField(blank=True, default='', max_length=255)),
-                ('quota_mb', models.PositiveIntegerField(default=1024)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('active', 'Active'), ('failed', 'Failed')], default='pending', max_length=20)),
-                ('error', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mailboxes', to='accounts.account')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mailboxes', to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("email", models.EmailField(max_length=254, unique=True)),
+                ("name", models.CharField(blank=True, default="", max_length=255)),
+                ("quota_mb", models.PositiveIntegerField(default=1024)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("active", "Active"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("error", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="mailboxes",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="mailboxes",
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['email'],
+                "ordering": ["email"],
             },
         ),
         migrations.CreateModel(
-            name='EmailAlias',
+            name="EmailAlias",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('address', models.EmailField(max_length=254)),
-                ('goto', models.EmailField(max_length=254)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='email_aliases', to='accounts.account')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='aliases', to='email_service.emaildomain')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("address", models.EmailField(max_length=254)),
+                ("goto", models.EmailField(max_length=254)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="email_aliases",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="aliases",
+                        to="email_service.emaildomain",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['address'],
-                'unique_together': {('address', 'goto')},
+                "ordering": ["address"],
+                "unique_together": {("address", "goto")},
             },
         ),
     ]

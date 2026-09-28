@@ -4,35 +4,42 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0005_outboundmessage_updated_at'),
+        ("whatsapp", "0005_outboundmessage_updated_at"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='opt_in_at',
+            model_name="whatsappcontact",
+            name="opt_in_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='opt_in_source',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="whatsappcontact",
+            name="opt_in_source",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='opt_in_status',
-            field=models.CharField(choices=[('unknown', 'Unknown'), ('opted_in', 'Opted in'), ('opted_out', 'Opted out')], default='unknown', max_length=20),
+            model_name="whatsappcontact",
+            name="opt_in_status",
+            field=models.CharField(
+                choices=[
+                    ("unknown", "Unknown"),
+                    ("opted_in", "Opted in"),
+                    ("opted_out", "Opted out"),
+                ],
+                default="unknown",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='opt_out_at',
+            model_name="whatsappcontact",
+            name="opt_out_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='whatsappcontact',
-            name='opt_out_reason',
-            field=models.CharField(blank=True, default='', max_length=255),
+            model_name="whatsappcontact",
+            name="opt_out_reason",
+            field=models.CharField(blank=True, default="", max_length=255),
         ),
     ]

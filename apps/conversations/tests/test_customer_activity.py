@@ -5,6 +5,7 @@ the message shows up on the customer's own history, and the customer counts as
 recently engaged — which is what any "hasn't been in touch for N days" rule
 reads. And a reminder to chase someone is closed when they write back.
 """
+
 import pytest
 from django.utils import timezone
 
@@ -27,18 +28,27 @@ def _inbound(account, body, message_id, contact=None):
     wa_contact = WhatsAppContact.objects.filter(
         account=account, phone_number="+260971234567"
     ).first() or WhatsAppContact.objects.create(
-        account=account, phone_number="+260971234567", contact=contact,
+        account=account,
+        phone_number="+260971234567",
+        contact=contact,
     )
     wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
     log = MessageLog.objects.create(
-        account=account, conversation=wa_conversation, contact=wa_contact,
-        message_id=message_id, direction=MessageLog.Direction.INBOUND,
-        message_type=MessageLog.MessageType.TEXT, content=body,
-        status=MessageLog.Status.DELIVERED, timestamp=timezone.now(),
+        account=account,
+        conversation=wa_conversation,
+        contact=wa_contact,
+        message_id=message_id,
+        direction=MessageLog.Direction.INBOUND,
+        message_type=MessageLog.MessageType.TEXT,
+        content=body,
+        status=MessageLog.Status.DELIVERED,
+        timestamp=timezone.now(),
     )
     conversation = record_inbound_whatsapp_message(
-        contact=contact, wa_contact=wa_contact,
-        whatsapp_conversation=wa_conversation, message_log=log,
+        contact=contact,
+        wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation,
+        message_log=log,
     )
     return conversation, contact
 
@@ -65,8 +75,11 @@ def test_a_reply_closes_the_reminder_to_chase_them(account):
     contact = Contact.objects.create(account=account, phone="+260971234567")
     conversation, _ = _inbound(account, "Hello", "wamid.ACT3", contact=contact)
     followup = FollowUp.objects.create(
-        account=account, contact=contact, conversation=conversation,
-        due_at=timezone.now() + timezone.timedelta(days=1), note="Chase the quote",
+        account=account,
+        contact=contact,
+        conversation=conversation,
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        note="Chase the quote",
     )
 
     _inbound(account, "Any update?", "wamid.ACT4", contact=contact)
@@ -80,8 +93,11 @@ def test_a_reply_does_not_reopen_a_reminder_already_done(account):
     contact = Contact.objects.create(account=account, phone="+260971234567")
     conversation, _ = _inbound(account, "Hello", "wamid.ACT5", contact=contact)
     followup = FollowUp.objects.create(
-        account=account, contact=contact, conversation=conversation,
-        due_at=timezone.now(), note="Already handled",
+        account=account,
+        contact=contact,
+        conversation=conversation,
+        due_at=timezone.now(),
+        note="Already handled",
     )
     followup.mark_done()
     done_at = followup.done_at

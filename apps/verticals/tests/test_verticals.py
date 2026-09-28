@@ -1,7 +1,7 @@
 import pytest
 
 from apps.accounts.models import Account
-from apps.automation.models import Workflow, WorkflowRun
+from apps.automation.models import Workflow
 from apps.billing.models import ModuleSubscription
 from apps.contacts.models import Contact
 from apps.crm.models import Lead
@@ -30,7 +30,9 @@ def test_registry_lists_both_starter_verticals():
 def test_activate_vertical_enables_modules_and_publishes_workflows(account):
     activate_vertical(account, "restaurant")
 
-    assert ModuleSubscription.objects.filter(account=account, module="commerce", enabled=True).exists()
+    assert ModuleSubscription.objects.filter(
+        account=account, module="commerce", enabled=True
+    ).exists()
     workflows = Workflow.objects.filter(account=account, slug__startswith="restaurant-")
     assert workflows.count() == 2
     assert all(wf.status == Workflow.Status.PUBLISHED for wf in workflows)
@@ -41,8 +43,14 @@ def test_activate_vertical_is_idempotent(account):
     activate_vertical(account, "restaurant")
     activate_vertical(account, "restaurant")
 
-    assert Workflow.objects.filter(account=account, slug__startswith="restaurant-").count() == 2
-    assert VerticalActivation.objects.filter(account=account, key="restaurant").count() == 1
+    assert (
+        Workflow.objects.filter(account=account, slug__startswith="restaurant-").count()
+        == 2
+    )
+    assert (
+        VerticalActivation.objects.filter(account=account, key="restaurant").count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
@@ -64,6 +72,7 @@ def test_real_estate_capture_enquiry_workflow_creates_lead_on_message(account):
     contact = Contact.objects.create(account=account, phone="+260971111111")
 
     from apps.automation.workflow_engine import enroll_for_trigger
+
     enroll_for_trigger(account.id, "conversation.message_received", contact)
 
     lead = Lead.objects.get(account=account, contact=contact)
@@ -78,6 +87,7 @@ def test_real_estate_capture_enquiry_does_not_duplicate_lead_on_repeat_message(a
     contact = Contact.objects.create(account=account, phone="+260971111111")
 
     from apps.automation.workflow_engine import enroll_for_trigger
+
     enroll_for_trigger(account.id, "conversation.message_received", contact)
     enroll_for_trigger(account.id, "conversation.message_received", contact)
     enroll_for_trigger(account.id, "conversation.message_received", contact)
@@ -108,24 +118,40 @@ def test_create_lead_creates_new_after_previous_converted(account):
 
 
 @pytest.mark.django_db
-def test_activate_vertical_rolls_back_entirely_when_the_automation_limit_is_hit(account):
+def test_activate_vertical_rolls_back_entirely_when_the_automation_limit_is_hit(
+    account,
+):
     from decimal import Decimal
 
     from apps.automation.api import AutomationLimitReached
     from apps.billing.models import Plan, PlanLimit, Subscription
 
-    plan = Plan.objects.create(slug="vert-plan", name="Vert Plan", price_monthly=Decimal("5"))
-    PlanLimit.objects.update_or_create(plan=plan, key="automation_rules", defaults={"value": 1})
+    plan = Plan.objects.create(
+        slug="vert-plan", name="Vert Plan", price_monthly=Decimal("5")
+    )
+    PlanLimit.objects.update_or_create(
+        plan=plan, key="automation_rules", defaults={"value": 1}
+    )
     from django.utils import timezone
 
-    Subscription.objects.create(account=account, plan=plan, status=Subscription.ACTIVE,
-                                current_period_start=timezone.now())
+    Subscription.objects.create(
+        account=account,
+        plan=plan,
+        status=Subscription.ACTIVE,
+        current_period_start=timezone.now(),
+    )
 
     with pytest.raises(AutomationLimitReached):
         activate_vertical(account, "restaurant")
 
     # Nothing from the half-installed pack survives: no workflow, no switched-on module, no
     # VerticalActivation record — the operator's next "Activate" click starts clean.
-    assert not Workflow.objects.filter(account=account, slug__startswith="restaurant-").exists()
-    assert not ModuleSubscription.objects.filter(account=account, module="commerce", enabled=True).exists()
-    assert not VerticalActivation.objects.filter(account=account, key="restaurant").exists()
+    assert not Workflow.objects.filter(
+        account=account, slug__startswith="restaurant-"
+    ).exists()
+    assert not ModuleSubscription.objects.filter(
+        account=account, module="commerce", enabled=True
+    ).exists()
+    assert not VerticalActivation.objects.filter(
+        account=account, key="restaurant"
+    ).exists()

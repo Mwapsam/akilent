@@ -8,6 +8,7 @@ outbound lands in the same conversations. Safe to re-run; never starts Workflows
 
     python manage.py backfill_inbox [--account <id>]
 """
+
 from django.core.management.base import BaseCommand
 
 from apps.whatsapp.models import MessageLog
@@ -23,9 +24,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from apps.conversations.models import Message
 
-        logs = MessageLog.objects.filter(direction=MessageLog.Direction.INBOUND).select_related(
-            "account", "contact", "conversation"
-        ).order_by("timestamp")
+        logs = (
+            MessageLog.objects.filter(direction=MessageLog.Direction.INBOUND)
+            .select_related("account", "contact", "conversation")
+            .order_by("timestamp")
+        )
         if options.get("account"):
             logs = logs.filter(account_id=options["account"])
 
@@ -35,21 +38,27 @@ class Command(BaseCommand):
             if Message.objects.filter(whatsapp_message=log).exists():
                 skipped += 1
                 continue
-            project_to_inbox(log.account, log.contact, log.conversation, log, enroll_workflows=False)
+            project_to_inbox(
+                log.account, log.contact, log.conversation, log, enroll_workflows=False
+            )
             done += 1
         out_done, out_skipped = self._backfill_outbound(options.get("account"))
-        self.stdout.write(self.style.SUCCESS(
-            f"Backfilled {done} message(s); {skipped} already in the Inbox. "
-            f"Outbound: backfilled {out_done}; {out_skipped} already in the Inbox. "
-            f"Linked {contacts} WhatsApp contact(s) to Contacts."
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Backfilled {done} message(s); {skipped} already in the Inbox. "
+                f"Outbound: backfilled {out_done}; {out_skipped} already in the Inbox. "
+                f"Linked {contacts} WhatsApp contact(s) to Contacts."
+            )
+        )
 
     def _backfill_outbound(self, account_id) -> tuple[int, int]:
         from apps.conversations.models import Message
 
-        logs = MessageLog.objects.filter(direction=MessageLog.Direction.OUTBOUND).select_related(
-            "account", "contact", "conversation"
-        ).order_by("timestamp")
+        logs = (
+            MessageLog.objects.filter(direction=MessageLog.Direction.OUTBOUND)
+            .select_related("account", "contact", "conversation")
+            .order_by("timestamp")
+        )
         if account_id:
             logs = logs.filter(account_id=account_id)
         done = skipped = 0
@@ -66,13 +75,17 @@ class Command(BaseCommand):
         from apps.contacts.services import upsert_contact_by_phone
         from apps.whatsapp.models import WhatsAppContact
 
-        qs = WhatsAppContact.objects.filter(contact__isnull=True).select_related("account")
+        qs = WhatsAppContact.objects.filter(contact__isnull=True).select_related(
+            "account"
+        )
         if account_id:
             qs = qs.filter(account_id=account_id)
         linked = 0
         for wa in qs:
             try:
-                contact, created = upsert_contact_by_phone(wa.account, wa.phone_number, source="whatsapp")
+                contact, created = upsert_contact_by_phone(
+                    wa.account, wa.phone_number, source="whatsapp"
+                )
             except Exception as exc:
                 self.stderr.write(f"Skipped {wa.phone_number}: {exc}")
                 continue

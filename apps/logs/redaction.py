@@ -1,4 +1,5 @@
 """Best-effort redaction for request/response snapshots stored in ApiRequest."""
+
 from __future__ import annotations
 
 import re

@@ -1,4 +1,5 @@
 """Typed values shared by every AI provider and by the code that uses them."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

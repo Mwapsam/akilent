@@ -13,6 +13,7 @@ step of Phase 1 to check that who-spoke-last can be relied on:
 A third counter, ``conversations_with_missing_outbound``, needs provider knowledge and is
 computed by the channel adapter (see ``apps.whatsapp``'s ``conversation_quality`` command).
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -41,8 +42,10 @@ def spine_quality(account, now=None) -> dict:
         .values_list("conversation_id", "timestamp")
     )
     for _cid, group in groupby(rows.iterator(), key=lambda r: r[0]):
-        stamps = [ts for _c, ts in group]           # oldest-recorded first
-        if max(stamps) - stamps[-1] > ORDERING_TOLERANCE:   # newest-recorded isn't the latest-stamped
+        stamps = [ts for _c, ts in group]  # oldest-recorded first
+        if (
+            max(stamps) - stamps[-1] > ORDERING_TOLERANCE
+        ):  # newest-recorded isn't the latest-stamped
             invalid += 1
 
     return {

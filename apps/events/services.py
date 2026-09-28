@@ -1,4 +1,5 @@
 """Ingest a business event: store it, link/append contact activity, publish."""
+
 from __future__ import annotations
 
 import logging
@@ -61,17 +62,23 @@ def ingest_event(
                 contact, name, occurred_at=event.occurred_at, data=event.data
             )
         except Exception:
-            logger.exception("ingest_event: contact activity append failed for %s", event.pk)
+            logger.exception(
+                "ingest_event: contact activity append failed for %s", event.pk
+            )
 
     try:
         from apps.email.webhooks import notify
 
-        notify(account, "event.received", {
-            "id": event.public_id,
-            "event": name,
-            "contact": contact.public_id if contact else None,
-            "data": event.data,
-        })
+        notify(
+            account,
+            "event.received",
+            {
+                "id": event.public_id,
+                "event": name,
+                "contact": contact.public_id if contact else None,
+                "data": event.data,
+            },
+        )
     except Exception:
         logger.exception("ingest_event: webhook notify failed for %s", event.pk)
 

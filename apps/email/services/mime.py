@@ -1,4 +1,5 @@
 """Build a raw RFC 5322 message from an OutboundEmail (used for attachment sends)."""
+
 from __future__ import annotations
 
 from email.message import EmailMessage as _MimeMessage
@@ -26,7 +27,9 @@ def build_mime(message: OutboundEmail) -> bytes:
         mime.set_content(text)
 
     for att in message.attachments or ():
-        maintype, _, subtype = (att.content_type or "application/octet-stream").partition("/")
+        maintype, _, subtype = (
+            att.content_type or "application/octet-stream"
+        ).partition("/")
         mime.add_attachment(
             att.content,
             maintype=maintype or "application",

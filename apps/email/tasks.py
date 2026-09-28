@@ -1,4 +1,4 @@
-﻿"""Celery tasks for email provisioning and maintenance.
+"""Celery tasks for email provisioning and maintenance.
 
 All heavy provider calls are handled here rather than in Django views, so HTTP
 requests return immediately and retries happen transparently.
@@ -13,13 +13,13 @@ Queues:
 ProvisioningJob is created by the caller before dispatching the task, then
 updated here as the task runs (PENDING â†’ RUNNING â†’ SUCCESS | FAILED | RETRYING).
 """
+
 from __future__ import annotations
 
 import json
 import logging
 
 import requests
-from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
@@ -31,10 +31,11 @@ from apps.email.models import (
     ProvisioningJob,
     WebhookDelivery,
 )
-from apps.email.providers import get_mail_provider, get_send_provider
+from apps.email.providers import get_send_provider
 from apps.email.services import render_template, validate_variables
 from apps.email.types import OutboundEmail
 from apps.email.webhooks import EVENT_HEADER, SIGNATURE_HEADER, build_signature_header
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,11 @@ _FAILURE_SPIKE_THRESHOLD = 0.20  # 20% of terminal sends FAILED
 _FAILURE_SPIKE_ALERT_COOLDOWN_SECONDS = 3600
 
 
-def _exponential_backoff_delay(retry_count: int, base: int = _RETRY_DELAY_BASE, multiplier: int = _RETRY_DELAY_MULTIPLIER) -> int:
+def _exponential_backoff_delay(
+    retry_count: int,
+    base: int = _RETRY_DELAY_BASE,
+    multiplier: int = _RETRY_DELAY_MULTIPLIER,
+) -> int:
     """Calculate exponential backoff delay: base * (multiplier ** retry_count).
 
     Examples:
@@ -65,7 +70,7 @@ def _exponential_backoff_delay(retry_count: int, base: int = _RETRY_DELAY_BASE, 
       retry 1 -> 4 sec
       retry 2 -> 8 sec
     """
-    return base * (multiplier ** retry_count)
+    return base * (multiplier**retry_count)
 
 
 # â”€â”€ Domain provisioning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -116,14 +121,16 @@ def _send_sandbox_message(msg: EmailMessage, text_body: str, html_body: str) -> 
     from apps.email.providers.sandbox import SandboxSendProvider, followup_events
     from apps.logs.services import record_message_event
 
-    result = SandboxSendProvider().send(OutboundEmail(
-        from_email=msg.from_email,
-        to_email=msg.to_email,
-        subject=msg.subject,
-        text_body=text_body,
-        html_body=html_body,
-        headers={},
-    ))
+    result = SandboxSendProvider().send(
+        OutboundEmail(
+            from_email=msg.from_email,
+            to_email=msg.to_email,
+            subject=msg.subject,
+            text_body=text_body,
+            html_body=html_body,
+            headers={},
+        )
+    )
     if not result.success:
         msg.mark_failed(result.error or "sandbox failure")
         return
@@ -138,7 +145,11 @@ def _quota_operation(msg: EmailMessage) -> str:
     campaign recipient for a campaign (stable across a re-dispatched chunk), per message for an
     API send."""
     if msg.campaign_id:
-        recipient_id = BulkEmailRecipient.objects.filter(message=msg).values_list("pk", flat=True).first()
+        recipient_id = (
+            BulkEmailRecipient.objects.filter(message=msg)
+            .values_list("pk", flat=True)
+            .first()
+        )
         if recipient_id:
             return f"email-recipient:{recipient_id}"
     return f"email:{msg.public_id}"
@@ -153,7 +164,9 @@ def _settle_quota(msg: EmailMessage, *, ok: bool) -> None:
 
         LimitChecker(msg.account).settle_email(_quota_operation(msg), ok=ok)
     except Exception:
-        logger.exception("_settle_quota: couldn't settle quota for EmailMessage %s", msg.pk)
+        logger.exception(
+            "_settle_quota: couldn't settle quota for EmailMessage %s", msg.pk
+        )
 
 
 def _drop_message(msg: EmailMessage, reason: str) -> None:
@@ -180,8 +193,8 @@ def _send_email_message(
 
     ``task`` is the bound Celery task instance (for retry/request.retries).
     """
-    from apps.email.services.suppression import is_suppressed
     from apps.email.services.reputation import check_can_send
+    from apps.email.services.suppression import is_suppressed
 
     att_objs = ()
     if attachments:
@@ -207,7 +220,9 @@ def _send_email_message(
     # Retrying won't help, so mark failed and return without raising.
     allowed, reason = check_can_send(msg.account)
     if not allowed:
-        logger.warning("Reputation halt: dropping send for account=%s (%s)", msg.account_id, reason)
+        logger.warning(
+            "Reputation halt: dropping send for account=%s (%s)", msg.account_id, reason
+        )
         _drop_message(msg, f"Sender reputation halt: {reason}")
         return
 
@@ -261,15 +276,17 @@ def _send_email_message(
             return
 
     try:
-        result = get_send_provider().send(OutboundEmail(
-            from_email=msg.from_email,
-            to_email=msg.to_email,
-            subject=msg.subject,
-            text_body=text_body,
-            html_body=html_body,
-            headers=headers,
-            attachments=att_objs,
-        ))
+        result = get_send_provider().send(
+            OutboundEmail(
+                from_email=msg.from_email,
+                to_email=msg.to_email,
+                subject=msg.subject,
+                text_body=text_body,
+                html_body=html_body,
+                headers=headers,
+                attachments=att_objs,
+            )
+        )
     except Exception as exc:
         msg.mark_failed(str(exc))
         logger.exception("_send_email_message: failed for EmailMessage %s", msg.pk)
@@ -307,14 +324,16 @@ def _send_email_message(
 # Statuses that can only exist once the provider has accepted the message.
 # FAILED is deliberately absent: it is also the between-retries state for a
 # message the provider never accepted.
-_ACCEPTED_STATUSES = frozenset({
-    EmailMessage.Status.SENT,
-    EmailMessage.Status.DELIVERED,
-    EmailMessage.Status.BOUNCED,
-    EmailMessage.Status.COMPLAINED,
-    EmailMessage.Status.OPENED,
-    EmailMessage.Status.CLICKED,
-})
+_ACCEPTED_STATUSES = frozenset(
+    {
+        EmailMessage.Status.SENT,
+        EmailMessage.Status.DELIVERED,
+        EmailMessage.Status.BOUNCED,
+        EmailMessage.Status.COMPLAINED,
+        EmailMessage.Status.OPENED,
+        EmailMessage.Status.CLICKED,
+    }
+)
 
 
 def _already_accepted(msg: EmailMessage) -> bool:
@@ -344,7 +363,9 @@ def _after_send(msg: EmailMessage, result) -> None:
         # what _already_accepted uses to refuse a duplicate send.
         logger.critical(
             "_after_send: mark_sent failed for EmailMessage %s (provider id %s)",
-            msg.pk, provider_message_id, exc_info=True,
+            msg.pk,
+            provider_message_id,
+            exc_info=True,
         )
         try:
             EmailMessage.objects.filter(pk=msg.pk).update(
@@ -380,7 +401,9 @@ def _after_send(msg: EmailMessage, result) -> None:
         try:
             _maybe_complete_campaign(msg.campaign)
         except Exception:
-            logger.exception("_after_send: campaign completion check failed for %s", msg.pk)
+            logger.exception(
+                "_after_send: campaign completion check failed for %s", msg.pk
+            )
 
 
 def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
@@ -393,7 +416,10 @@ def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
     """
     still_open = BulkEmailRecipient.objects.filter(
         campaign=campaign,
-        status__in=[BulkEmailRecipient.Status.PENDING, BulkEmailRecipient.Status.QUEUED],
+        status__in=[
+            BulkEmailRecipient.Status.PENDING,
+            BulkEmailRecipient.Status.QUEUED,
+        ],
     ).exists()
     if not still_open:
         campaign.mark_completed()
@@ -406,7 +432,10 @@ def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
     queue="outbound",
 )
 def send_email(
-    self, email_message_id: int, text_body: str = "", html_body: str = "",
+    self,
+    email_message_id: int,
+    text_body: str = "",
+    html_body: str = "",
     attachments=None,
 ) -> None:
     """Send a queued EmailMessage and record the outcome."""
@@ -459,7 +488,9 @@ def send_bulk_recipient_email(self, email_message_id: int) -> None:
         if missing:
             logger.warning(
                 "send_bulk_recipient_email: template %s missing variables %s for recipient %s",
-                msg.template_id, missing, msg.to_email,
+                msg.template_id,
+                missing,
+                msg.to_email,
             )
         subject, text_body, html_body = render_template(msg.template, variables)
     else:
@@ -477,7 +508,9 @@ def send_bulk_recipient_email(self, email_message_id: int) -> None:
     msg.rendered_subject = subject
     msg.rendered_text = text_body
     msg.rendered_html = html_body
-    msg.save(update_fields=["subject", "rendered_subject", "rendered_text", "rendered_html"])
+    msg.save(
+        update_fields=["subject", "rendered_subject", "rendered_text", "rendered_html"]
+    )
 
     _send_email_message(self, msg, text_body, html_body)
 
@@ -504,9 +537,9 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     proceeds.
     """
     try:
-        campaign = BulkEmailCampaign.objects.select_related("account", "domain", "template").get(
-            pk=campaign_id
-        )
+        campaign = BulkEmailCampaign.objects.select_related(
+            "account", "domain", "template"
+        ).get(pk=campaign_id)
     except BulkEmailCampaign.DoesNotExist:
         logger.error("dispatch_campaign: BulkEmailCampaign %s not found", campaign_id)
         return
@@ -540,7 +573,10 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     if not chunk:
         remaining = BulkEmailRecipient.objects.filter(
             campaign=campaign,
-            status__in=[BulkEmailRecipient.Status.PENDING, BulkEmailRecipient.Status.QUEUED],
+            status__in=[
+                BulkEmailRecipient.Status.PENDING,
+                BulkEmailRecipient.Status.QUEUED,
+            ],
         ).exists()
         if not remaining:
             campaign.mark_completed()
@@ -573,11 +609,17 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     to_process, failed_recipients = [], []
     for r in chunk:
         if r.to_email in suppressed_emails:
-            failed_recipients.append((r, "Recipient is suppressed (bounce, complaint, or unsubscribe)."))
+            failed_recipients.append(
+                (r, "Recipient is suppressed (bounce, complaint, or unsubscribe).")
+            )
         elif r.to_email.lower() in blocked_consent:
-            failed_recipients.append((r, "Recipient has not consented to receive this email."))
+            failed_recipients.append(
+                (r, "Recipient has not consented to receive this email.")
+            )
         elif not validate_recipient(r.to_email):
-            failed_recipients.append((r, "Recipient failed validation (invalid syntax or no MX record)."))
+            failed_recipients.append(
+                (r, "Recipient failed validation (invalid syntax or no MX record).")
+            )
         else:
             to_process.append(r)
 
@@ -602,13 +644,13 @@ def dispatch_campaign(self, campaign_id: int) -> None:
 
     to_send, to_hold = [], []
     for r in to_process:
-        taken = billing_api.reserve_all(campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}")
+        taken = billing_api.reserve_all(
+            campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}"
+        )
         (to_send if taken is not None else to_hold).append(r)
 
     if to_hold:
-        BulkEmailRecipient.objects.filter(
-            pk__in=[r.pk for r in to_hold]
-        ).update(
+        BulkEmailRecipient.objects.filter(pk__in=[r.pk for r in to_hold]).update(
             status=BulkEmailRecipient.Status.HELD,
             error="Held: your plan's email limit was reached. Not sent; nothing was lost.",
         )
@@ -641,7 +683,9 @@ def _queue_recipients(campaign, recipients: list) -> None:
             campaign=campaign,
             from_email=campaign.from_email,
             to_email=r.to_email,
-            subject=campaign.template.subject if campaign.template else campaign.subject_override,
+            subject=campaign.template.subject
+            if campaign.template
+            else campaign.subject_override,
         )
         for r in recipients
     ]
@@ -670,13 +714,17 @@ def retry_held_email_recipients() -> dict:
     from apps.billing import api as billing_api
     from apps.billing.limits import EMAIL_LIMITS
 
-    held = list(BulkEmailRecipient.objects.filter(status=BulkEmailRecipient.Status.HELD)
-                .select_related("campaign", "campaign__account", "campaign__template")
-                .order_by("pk")[:_HELD_RECIPIENT_RETRY_BATCH])
+    held = list(
+        BulkEmailRecipient.objects.filter(status=BulkEmailRecipient.Status.HELD)
+        .select_related("campaign", "campaign__account", "campaign__template")
+        .order_by("pk")[:_HELD_RECIPIENT_RETRY_BATCH]
+    )
     queued = still_held = 0
     by_campaign: dict = {}
     for r in held:
-        taken = billing_api.reserve_all(r.campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}")
+        taken = billing_api.reserve_all(
+            r.campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}"
+        )
         if taken is None:
             still_held += 1
             continue
@@ -688,9 +736,12 @@ def retry_held_email_recipients() -> dict:
             # Reopen briefly so the newly-queued rows' sends can close it out again, the same
             # way an in-progress campaign's last chunk does.
             BulkEmailCampaign.objects.filter(pk=campaign.pk).update(
-                status=BulkEmailCampaign.Status.SENDING)
+                status=BulkEmailCampaign.Status.SENDING
+            )
     if held:
-        logger.info("retry_held_email_recipients: queued=%s still_held=%s", queued, still_held)
+        logger.info(
+            "retry_held_email_recipients: queued=%s still_held=%s", queued, still_held
+        )
     return {"queued": queued, "still_held": still_held}
 
 
@@ -705,7 +756,9 @@ def retry_held_email_recipients() -> dict:
 def deliver_webhook(self, delivery_id: int) -> None:
     """POST a signed event payload to a WebhookEndpoint, with exponential backoff."""
     try:
-        delivery = WebhookDelivery.objects.select_related("endpoint").get(pk=delivery_id)
+        delivery = WebhookDelivery.objects.select_related("endpoint").get(
+            pk=delivery_id
+        )
     except WebhookDelivery.DoesNotExist:
         logger.error("deliver_webhook: WebhookDelivery %s not found", delivery_id)
         return
@@ -743,7 +796,9 @@ def deliver_webhook(self, delivery_id: int) -> None:
             disabled = endpoint.record_failure(str(exc))
             logger.error(
                 "deliver_webhook: exhausted retries for delivery %s (%s): %s",
-                delivery_id, delivery.event_type, exc,
+                delivery_id,
+                delivery.event_type,
+                exc,
             )
             if disabled:
                 try:
@@ -755,9 +810,15 @@ def deliver_webhook(self, delivery_id: int) -> None:
                         f"{endpoint.consecutive_failures} consecutive failures: {exc}"
                     )
                 except Exception:
-                    logger.exception("webhook auto-disable Slack alert failed for %s", endpoint.pk)
+                    logger.exception(
+                        "webhook auto-disable Slack alert failed for %s", endpoint.pk
+                    )
             return
-        countdown = _exponential_backoff_delay(self.request.retries, base=_WEBHOOK_RETRY_DELAY_BASE, multiplier=_RETRY_DELAY_MULTIPLIER)
+        countdown = _exponential_backoff_delay(
+            self.request.retries,
+            base=_WEBHOOK_RETRY_DELAY_BASE,
+            multiplier=_RETRY_DELAY_MULTIPLIER,
+        )
         raise self.retry(exc=exc, countdown=countdown)
 
 
@@ -825,7 +886,12 @@ def alert_on_failure_spike() -> dict:
     total = terminal.count()
     failed = terminal.filter(status=EmailMessage.Status.FAILED).count()
     rate = (failed / total) if total else 0.0
-    result = {"total": total, "failed": failed, "rate": round(rate, 4), "alerted": False}
+    result = {
+        "total": total,
+        "failed": failed,
+        "rate": round(rate, 4),
+        "alerted": False,
+    }
 
     if total < _FAILURE_SPIKE_MIN_VOLUME or rate < _FAILURE_SPIKE_THRESHOLD:
         return result
@@ -837,7 +903,10 @@ def alert_on_failure_spike() -> dict:
 
     logger.error(
         "EMAIL FAILURE SPIKE: %d/%d terminal sends FAILED (%.1f%%) in the last %d min",
-        failed, total, rate * 100, _FAILURE_SPIKE_WINDOW_MINUTES,
+        failed,
+        total,
+        rate * 100,
+        _FAILURE_SPIKE_WINDOW_MINUTES,
     )
     try:
         from apps.billing.slack import post_message
@@ -956,12 +1025,11 @@ def snapshot_deliverability() -> int:
                 snapshot(account, domain)
                 written += 1
         except Exception:
-            logger.exception("snapshot_deliverability failed for account %s", account.id)
+            logger.exception(
+                "snapshot_deliverability failed for account %s", account.id
+            )
     logger.info("snapshot_deliverability: wrote %d snapshots", written)
     return written
-
-
-
 
 
 # â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -975,5 +1043,3 @@ def _get_job(job_id: int | None) -> ProvisioningJob | None:
     except ProvisioningJob.DoesNotExist:
         logger.warning("_get_job: ProvisioningJob %s not found", job_id)
         return None
-
-

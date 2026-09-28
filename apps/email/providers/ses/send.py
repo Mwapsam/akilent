@@ -3,6 +3,7 @@
 This implementation sends through AWS Simple Email Service (SES) API,
 configured to use a configuration set for tracking bounces/complaints.
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,7 +46,9 @@ class SesSendProvider(EmailSendProvider):
             sns_topic_arn = settings.ses_sns_topic_arn or ""
             is_active_backend = settings.send_backend == "ses"
         except Exception:
-            logger.exception("Failed to load MailProviderSettings; falling back to env/defaults")
+            logger.exception(
+                "Failed to load MailProviderSettings; falling back to env/defaults"
+            )
             region = os.getenv("AWS_REGION", "us-east-1")
 
         # Fail closed. Without a configuration set and its SNS event
@@ -65,7 +68,6 @@ class SesSendProvider(EmailSendProvider):
         if self.configuration_set:
             self._ensure_configuration_set()
 
-
     def _ensure_configuration_set(self) -> None:
         """Confirm the configured set exists, or refuse to send.
 
@@ -75,7 +77,9 @@ class SesSendProvider(EmailSendProvider):
         about — so it now fails closed instead.
         """
         try:
-            self.client.get_configuration_set(ConfigurationSetName=self.configuration_set)
+            self.client.get_configuration_set(
+                ConfigurationSetName=self.configuration_set
+            )
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
             if code == "NotFoundException":
@@ -134,7 +138,9 @@ class SesSendProvider(EmailSendProvider):
                     raise EmailProviderError("SES returned no MessageId")
                 logger.info(
                     "SES raw send successful: to=%s, message_id=%s, attachments=%d",
-                    message.to_email, message_id, len(message.attachments),
+                    message.to_email,
+                    message_id,
+                    len(message.attachments),
                 )
                 return SendResult(success=True, provider_message_id=message_id)
 

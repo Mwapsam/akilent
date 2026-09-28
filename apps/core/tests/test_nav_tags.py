@@ -49,6 +49,4 @@ class NavActiveTests(SimpleTestCase):
         self.assertEqual(
             _render("/logs/messages/", "{% is_nav_active 'logs' %}"), "True"
         )
-        self.assertEqual(
-            _render("/contacts/", "{% is_nav_active 'logs' %}"), "False"
-        )
+        self.assertEqual(_render("/contacts/", "{% is_nav_active 'logs' %}"), "False")

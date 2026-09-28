@@ -4,15 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0022_alter_bulkemailcampaign_status_sendreputation'),
+        ("email_service", "0022_alter_bulkemailcampaign_status_sendreputation"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='emailmessage',
-            name='status',
-            field=models.CharField(choices=[('queued', 'Queued'), ('sent', 'Sent'), ('delivered', 'Delivered'), ('failed', 'Failed'), ('bounced', 'Bounced'), ('complained', 'Complained'), ('opened', 'Opened'), ('clicked', 'Clicked')], default='queued', max_length=20),
+            model_name="emailmessage",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("queued", "Queued"),
+                    ("sent", "Sent"),
+                    ("delivered", "Delivered"),
+                    ("failed", "Failed"),
+                    ("bounced", "Bounced"),
+                    ("complained", "Complained"),
+                    ("opened", "Opened"),
+                    ("clicked", "Clicked"),
+                ],
+                default="queued",
+                max_length=20,
+            ),
         ),
     ]

@@ -4,6 +4,7 @@ These are contract tests about the markup, not about any one screen. They exist
 because the migration is the kind that half-lands: a form keeps working in the
 browser while quietly losing its no-JavaScript fallback, and nothing fails.
 """
+
 import re
 from pathlib import Path
 
@@ -24,10 +25,12 @@ def test_the_retired_data_ajax_engine_has_no_callers_left():
     offenders = [
         str(p.relative_to(TEMPLATES))
         for p in _templates()
-        if re.search(r"\bdata-(ajax|swap|append|remove|reset)\b", p.read_text(encoding="utf-8"))
+        if re.search(
+            r"\bdata-(ajax|swap|append|remove|reset)\b", p.read_text(encoding="utf-8")
+        )
     ]
     assert not offenders, (
-        "these templates still use the removed data-ajax engine: %s" % offenders
+        f"these templates still use the removed data-ajax engine: {offenders}"
     )
 
 
@@ -44,9 +47,9 @@ def test_every_hx_post_form_still_works_without_javascript():
             if "hx-post=" not in tag:
                 continue
             if 'method="post"' not in tag.lower() or "action=" not in tag:
-                offenders.append("%s: %s" % (p.relative_to(TEMPLATES), tag[:90]))
+                offenders.append(f"{p.relative_to(TEMPLATES)}: {tag[:90]}")
     assert not offenders, (
-        "hx-post forms missing a plain method/action fallback: %s" % offenders
+        f"hx-post forms missing a plain method/action fallback: {offenders}"
     )
 
 
@@ -60,10 +63,9 @@ def test_hx_post_targets_the_same_url_the_plain_form_posts_to():
             action = re.search(r'action="([^"]*)"', tag)
             if hx and action and hx.group(1) != action.group(1):
                 offenders.append(
-                    "%s: action=%r hx-post=%r"
-                    % (p.relative_to(TEMPLATES), action.group(1), hx.group(1))
+                    f"{p.relative_to(TEMPLATES)}: action={action.group(1)!r} hx-post={hx.group(1)!r}"
                 )
-    assert not offenders, "hx-post disagrees with action: %s" % offenders
+    assert not offenders, f"hx-post disagrees with action: {offenders}"
 
 
 def test_download_links_opt_out_of_boosting():
@@ -78,8 +80,10 @@ def test_download_links_opt_out_of_boosting():
     for p in _templates():
         for tag in ANCHOR_TAG.findall(p.read_text(encoding="utf-8")):
             if DOWNLOAD_ATTR.search(tag) and 'hx-boost="false"' not in tag:
-                offenders.append("%s: %s" % (p.relative_to(TEMPLATES), tag[:90]))
-    assert not offenders, "download links that could be boosted instead of downloaded: %s" % offenders
+                offenders.append(f"{p.relative_to(TEMPLATES)}: {tag[:90]}")
+    assert not offenders, (
+        f"download links that could be boosted instead of downloaded: {offenders}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -93,5 +97,5 @@ def test_confirm_modifiers_only_appear_beside_hx_confirm(attribute):
     for p in _templates():
         for tag in FORM_TAG.findall(p.read_text(encoding="utf-8")):
             if attribute in tag and "hx-confirm=" not in tag:
-                offenders.append("%s: %s" % (p.relative_to(TEMPLATES), tag[:90]))
-    assert not offenders, "%s without hx-confirm: %s" % (attribute, offenders)
+                offenders.append(f"{p.relative_to(TEMPLATES)}: {tag[:90]}")
+    assert not offenders, f"{attribute} without hx-confirm: {offenders}"

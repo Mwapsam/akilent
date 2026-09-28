@@ -11,7 +11,14 @@ from apps.billing.models import Plan, Subscription
 SUCCESS_URL = "/billing/stripe/success/"
 
 
-def _session(*, account, plan_slug="starter", billing_period="monthly", paid=True, customer="cus_123"):
+def _session(
+    *,
+    account,
+    plan_slug="starter",
+    billing_period="monthly",
+    paid=True,
+    customer="cus_123",
+):
     return {
         "mode": "subscription",
         "payment_status": "paid" if paid else "open",
@@ -29,7 +36,9 @@ def _login_owner(client, account, *, username):
     """Log in a fresh user who owns (only) ``account`` — get_current_account
     resolves to it via the owner-membership fallback, no session pinning
     needed."""
-    user = User.objects.create_user(username=username, email=username, password="pw12345!")
+    user = User.objects.create_user(
+        username=username, email=username, password="pw12345!"
+    )
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     client.force_login(user)
     return user
@@ -38,7 +47,9 @@ def _login_owner(client, account, *, username):
 @pytest.fixture
 def paid_plan(db):
     return Plan.objects.create(
-        slug="starter", name="Starter", price_monthly=Decimal("19.00"),
+        slug="starter",
+        name="Starter",
+        price_monthly=Decimal("19.00"),
     )
 
 
@@ -55,7 +66,9 @@ def account_b(db):
 @pytest.fixture
 def incomplete_subscription_a(db, account_a, paid_plan):
     return Subscription.objects.create(
-        account=account_a, plan=paid_plan, status=Subscription.INCOMPLETE,
+        account=account_a,
+        plan=paid_plan,
+        status=Subscription.INCOMPLETE,
         current_period_start=timezone.now(),
     )
 
@@ -63,7 +76,9 @@ def incomplete_subscription_a(db, account_a, paid_plan):
 @pytest.fixture
 def incomplete_subscription_b(db, account_b, paid_plan):
     return Subscription.objects.create(
-        account=account_b, plan=paid_plan, status=Subscription.INCOMPLETE,
+        account=account_b,
+        plan=paid_plan,
+        status=Subscription.INCOMPLETE,
         current_period_start=timezone.now(),
     )
 
@@ -76,7 +91,9 @@ def test_unauthenticated_request_is_redirected(client, incomplete_subscription_a
 
 
 @pytest.mark.django_db
-def test_matching_account_activates_and_redirects(client, account_a, incomplete_subscription_a, settings):
+def test_matching_account_activates_and_redirects(
+    client, account_a, incomplete_subscription_a, settings
+):
     _login_owner(client, account_a, username="ownera@example.com")
 
     with patch("apps.billing.views.stripe.checkout.Session.retrieve") as retrieve:
@@ -123,7 +140,9 @@ def test_unpaid_session_does_not_activate(client, account_a, incomplete_subscrip
 
 
 @pytest.mark.django_db
-def test_missing_session_id_shows_pending_page(client, account_a, incomplete_subscription_a):
+def test_missing_session_id_shows_pending_page(
+    client, account_a, incomplete_subscription_a
+):
     _login_owner(client, account_a, username="ownera4@example.com")
 
     resp = client.get(SUCCESS_URL)
@@ -133,7 +152,9 @@ def test_missing_session_id_shows_pending_page(client, account_a, incomplete_sub
 
 
 @pytest.mark.django_db
-def test_non_dict_stripe_session_object_is_handled(client, account_a, incomplete_subscription_a):
+def test_non_dict_stripe_session_object_is_handled(
+    client, account_a, incomplete_subscription_a
+):
     class _StripeLikeObject:
         def __init__(self, data):
             self._data = data

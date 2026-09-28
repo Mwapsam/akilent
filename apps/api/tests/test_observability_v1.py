@@ -19,15 +19,23 @@ def account(db):
     acc = Account.objects.create(company_name="Acme")
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
-        max_emails_per_month=100, email_apis=True, api_rate_per_min=0,
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
+        max_emails_per_month=100,
+        email_apis=True,
+        api_rate_per_min=0,
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     EmailDomain.objects.create(
-        account=acc, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=acc,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
     return acc
 
@@ -39,7 +47,12 @@ def api_key(account):
 
 
 def _payload(**overrides):
-    body = {"from": "hello@mail.acme.com", "to": "r@example.com", "subject": "Hi", "text": "yo"}
+    body = {
+        "from": "hello@mail.acme.com",
+        "to": "r@example.com",
+        "subject": "Hi",
+        "text": "yo",
+    }
     body.update(overrides)
     return body
 
@@ -170,12 +183,18 @@ def test_unknown_message_returns_404_envelope(client, account, api_key):
 
 @pytest.mark.django_db
 def test_deliverability_endpoint(client, account, api_key):
-    from apps.logs.models import MessageStatsDaily
     from django.utils import timezone
 
+    from apps.logs.models import MessageStatsDaily
+
     MessageStatsDaily.objects.create(
-        account=account, domain=None, day=timezone.now().date(), key_mode="live",
-        sent=200, delivered=195, bounced=2,
+        account=account,
+        domain=None,
+        day=timezone.now().date(),
+        key_mode="live",
+        sent=200,
+        delivered=195,
+        bounced=2,
     )
     resp = client.get("/api/v1/deliverability", HTTP_X_API_KEY=api_key)
     assert resp.status_code == 200
@@ -188,5 +207,7 @@ def test_deliverability_endpoint(client, account, api_key):
 
 @pytest.mark.django_db
 def test_deliverability_unknown_domain_404(client, account, api_key):
-    resp = client.get("/api/v1/deliverability?domain=nope.example", HTTP_X_API_KEY=api_key)
+    resp = client.get(
+        "/api/v1/deliverability?domain=nope.example", HTTP_X_API_KEY=api_key
+    )
     assert resp.status_code == 404

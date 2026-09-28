@@ -1,4 +1,5 @@
 """Derived rate metrics from the MessageStatsDaily rollup (Epic P0.4)."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -8,12 +9,25 @@ from django.utils import timezone
 
 from apps.logs.models import MessageStatsDaily
 
-_MEASURES = ("sent", "delivered", "bounced", "complained", "opened", "clicked", "unique_opens", "unique_clicks")
+_MEASURES = (
+    "sent",
+    "delivered",
+    "bounced",
+    "complained",
+    "opened",
+    "clicked",
+    "unique_opens",
+    "unique_clicks",
+)
 
 
-def totals_for(account, *, domain=None, since_days: int = 30, key_mode: str = "live") -> dict:
+def totals_for(
+    account, *, domain=None, since_days: int = 30, key_mode: str = "live"
+) -> dict:
     since = (timezone.now() - timedelta(days=since_days)).date()
-    qs = MessageStatsDaily.objects.filter(account=account, day__gte=since, key_mode=key_mode)
+    qs = MessageStatsDaily.objects.filter(
+        account=account, day__gte=since, key_mode=key_mode
+    )
     if domain is not None:
         qs = qs.filter(domain=domain)
     agg = qs.aggregate(**{m: Sum(m) for m in _MEASURES})

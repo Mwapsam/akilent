@@ -3,6 +3,7 @@
 The mailbox/alias tests that used to live here were removed with the Mailbox
 and EmailAlias models; the product now provisions sending domains only.
 """
+
 from decimal import Decimal
 
 import pytest
@@ -22,10 +23,14 @@ def account(db):
     acc = Account.objects.create(company_name="Acme")
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(
-        slug="p", name="P", price_monthly=Decimal("10"),
+        slug="p",
+        name="P",
+        price_monthly=Decimal("10"),
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return acc
@@ -34,7 +39,9 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 

@@ -1,11 +1,13 @@
 """Maintenance jobs for the observability stores."""
+
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
 
-from celery import shared_task
 from django.utils import timezone
+
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,9 @@ def prune_message_events() -> int:
     for account in Account.objects.all().only("id"):
         days = _retention_days_for(account)
         cutoff = timezone.now() - timedelta(days=days)
-        n, _ = MessageEvent.objects.filter(account=account, occurred_at__lt=cutoff).delete()
+        n, _ = MessageEvent.objects.filter(
+            account=account, occurred_at__lt=cutoff
+        ).delete()
         deleted += n
     if deleted:
         logger.info("prune_message_events: deleted %s rows", deleted)
@@ -33,8 +37,11 @@ def prune_message_events() -> int:
 
 def _retention_days_for(account) -> int:
     try:
-        return int(account.subscription.plan.log_retention_days) or _DEFAULT_EVENT_RETENTION_DAYS
-    except Exception:  # noqa: BLE001
+        return (
+            int(account.subscription.plan.log_retention_days)
+            or _DEFAULT_EVENT_RETENTION_DAYS
+        )
+    except Exception:
         return _DEFAULT_EVENT_RETENTION_DAYS
 
 

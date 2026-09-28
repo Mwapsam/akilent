@@ -54,9 +54,16 @@ class FlutterwaveClient:
 
         return data["data"]["link"]
 
-    def create_payment_plan(self, *, name: str, amount, interval: str = "monthly", currency: str = "USD") -> dict:
+    def create_payment_plan(
+        self, *, name: str, amount, interval: str = "monthly", currency: str = "USD"
+    ) -> dict:
         """Create a recurring payment plan on Flutterwave; returns its data (incl. id)."""
-        payload = {"amount": str(amount), "name": name, "interval": interval, "currency": currency}
+        payload = {
+            "amount": str(amount),
+            "name": name,
+            "interval": interval,
+            "currency": currency,
+        }
         r = self._session.post(f"{BASE_URL}/payment-plans", json=payload, timeout=15)
         try:
             data = r.json()
@@ -85,7 +92,9 @@ class FlutterwaveClient:
         return data.get("data") or []
 
     def verify_transaction(self, transaction_id) -> dict:
-        r = self._session.get(f"{BASE_URL}/transactions/{transaction_id}/verify", timeout=15)
+        r = self._session.get(
+            f"{BASE_URL}/transactions/{transaction_id}/verify", timeout=15
+        )
         try:
             data = r.json()
         except Exception:
@@ -93,7 +102,9 @@ class FlutterwaveClient:
             raise FlutterwaveError("Invalid JSON response from Flutterwave")
 
         if r.status_code != 200 or data.get("status") != "success":
-            raise FlutterwaveError(data.get("message", "Transaction verification failed"))
+            raise FlutterwaveError(
+                data.get("message", "Transaction verification failed")
+            )
 
         return data["data"]
 
@@ -108,7 +119,9 @@ class FlutterwaveClient:
             raise FlutterwaveError("Invalid JSON response from Flutterwave")
 
         if r.status_code not in (200, 204):
-            raise FlutterwaveError(data.get("message", "Subscription cancellation failed"))
+            raise FlutterwaveError(
+                data.get("message", "Subscription cancellation failed")
+            )
 
         return data
 

@@ -1,4 +1,5 @@
 """Public API for business-event ingestion (Phase 5)."""
+
 from __future__ import annotations
 
 from django.db.models import Count, Max
@@ -18,9 +19,15 @@ class EventCollectionView(BaseApiView):
     permission_classes = [HasEmailApiFeature]
     idempotency_endpoint = "POST /v1/events"
 
-    @extend_schema(operation_id="events_list", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Events"])
+    @extend_schema(
+        operation_id="events_list",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Events"],
+    )
     def get(self, request, *args, **kwargs):
-        qs = BusinessEvent.objects.filter(account=request.user).select_related("contact")
+        qs = BusinessEvent.objects.filter(account=request.user).select_related(
+            "contact"
+        )
         if request.query_params.get("name"):
             qs = qs.filter(name=request.query_params["name"])
         try:
@@ -28,26 +35,42 @@ class EventCollectionView(BaseApiView):
         except (TypeError, ValueError):
             limit = 50
         rows = qs[:limit]
-        return Response({"data": [
+        return Response(
             {
-                "id": e.public_id,
-                "event": e.name,
-                "customer": e.contact.public_id if e.contact_id else (e.customer_ref or None),
-                "data": e.data,
-                "occurred_at": e.occurred_at,
-                "received_at": e.received_at,
+                "data": [
+                    {
+                        "id": e.public_id,
+                        "event": e.name,
+                        "customer": e.contact.public_id
+                        if e.contact_id
+                        else (e.customer_ref or None),
+                        "data": e.data,
+                        "occurred_at": e.occurred_at,
+                        "received_at": e.received_at,
+                    }
+                    for e in rows
+                ]
             }
-            for e in rows
-        ]})
+        )
 
-    @extend_schema(operation_id="events_create", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Events"])
+    @extend_schema(
+        operation_id="events_create",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Events"],
+    )
     def post(self, request, *args, **kwargs):
         idem = self.begin_idempotency(request)
         d = request.data if isinstance(request.data, dict) else {}
         name = d.get("event")
         if not name:
             return Response(
-                {"error": {"code": "validation_error", "message": "`event` is required"}},
+                {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "`event` is required",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         occurred_at = parse_datetime(d["occurred_at"]) if d.get("occurred_at") else None
@@ -84,7 +107,11 @@ class EventCatalogView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="events_catalog", responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Events"])
+    @extend_schema(
+        operation_id="events_catalog",
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Events"],
+    )
     def get(self, request, *args, **kwargs):
         rows = (
             BusinessEvent.objects.filter(account=request.user)
@@ -100,12 +127,14 @@ class EventCatalogView(BaseApiView):
                 .values_list("data", flat=True)
                 .first()
             )
-            catalog.append({
-                "name": r["name"],
-                "count": r["count"],
-                "last_seen": r["last_seen"],
-                "sample_payload": sample,
-            })
+            catalog.append(
+                {
+                    "name": r["name"],
+                    "count": r["count"],
+                    "last_seen": r["last_seen"],
+                    "sample_payload": sample,
+                }
+            )
         return Response({"data": catalog})
 
 
@@ -118,7 +147,12 @@ class WebhookTestView(BaseApiView):
 
     permission_classes = [HasEmailApiFeature]
 
-    @extend_schema(operation_id="webhooks_test", request=None, responses=OpenApiResponse(OpenApiTypes.OBJECT), tags=["Webhooks"])
+    @extend_schema(
+        operation_id="webhooks_test",
+        request=None,
+        responses=OpenApiResponse(OpenApiTypes.OBJECT),
+        tags=["Webhooks"],
+    )
     def post(self, request, *args, **kwargs):
         from apps.email.models import WebhookEndpoint
         from apps.email.webhooks import notify
@@ -128,8 +162,12 @@ class WebhookTestView(BaseApiView):
         valid = {c[0] for c in WebhookEndpoint.EVENT_CHOICES} | {"webhook.test"}
         if event_type not in valid:
             return Response(
-                {"error": {"code": "validation_error",
-                           "message": f"unknown event type {event_type!r}"}},
+                {
+                    "error": {
+                        "code": "validation_error",
+                        "message": f"unknown event type {event_type!r}",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         payload = d.get("data") or {"ping": True}

@@ -40,6 +40,7 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
     )
     try:
         from apps.email.services.send import send_system_email
+
         send_system_email(
             to_email=user.email,
             subject=subject,

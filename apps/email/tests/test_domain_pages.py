@@ -1,4 +1,5 @@
 """Domains list is a list; domain management lives on a detail page."""
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -18,7 +19,9 @@ def account(db):
 @pytest.fixture
 def domain(account):
     return EmailDomain.objects.create(
-        account=account, domain="mail.acme.com", status=EmailDomain.Status.VERIFIED,
+        account=account,
+        domain="mail.acme.com",
+        status=EmailDomain.Status.VERIFIED,
     )
 
 
@@ -27,12 +30,17 @@ def _fake_provider(monkeypatch):
     class _P:
         def create_domain(self, d, **kw):
             return DomainInfo(domain=d, status=DomainStatus.PENDING)
+
         def set_domain_active(self, d, *, active):
             from apps.email.types import OperationResult
+
             return OperationResult(success=True)
+
         def delete_domain(self, d):
             from apps.email.types import OperationResult
+
             return OperationResult(success=True)
+
     monkeypatch.setattr("apps.email.services.domain.get_mail_provider", lambda: _P())
 
 
@@ -61,7 +69,9 @@ def test_detail_page_renders_management_card(client, account, domain):
 def test_detail_is_account_scoped(client, domain):
     other_user = User.objects.create_user("intruder", "x@x.com", "pw")
     other_acc = Account.objects.create(company_name="Other")
-    Membership.objects.create(user=other_user, account=other_acc, role=Membership.Role.OWNER)
+    Membership.objects.create(
+        user=other_user, account=other_acc, role=Membership.Role.OWNER
+    )
     client.force_login(other_user)
     resp = client.get(f"/email/domains/{domain.pk}/")
     assert resp.status_code == 404

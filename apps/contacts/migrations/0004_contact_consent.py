@@ -27,51 +27,61 @@ def unbackfill_consent(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('contacts', '0003_contact_optional_email_and_phone_identity'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("contacts", "0003_contact_optional_email_and_phone_identity"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='contact',
-            name='consent_at',
+            model_name="contact",
+            name="consent_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='consent_evidence',
+            model_name="contact",
+            name="consent_evidence",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='consent_ip',
+            model_name="contact",
+            name="consent_ip",
             field=models.GenericIPAddressField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='consent_source',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="contact",
+            name="consent_source",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='consent_status',
-            field=models.CharField(choices=[('unknown', 'Unknown'), ('opted_in', 'Opted in'), ('opted_out', 'Opted out')], default='unknown', max_length=20),
+            model_name="contact",
+            name="consent_status",
+            field=models.CharField(
+                choices=[
+                    ("unknown", "Unknown"),
+                    ("opted_in", "Opted in"),
+                    ("opted_out", "Opted out"),
+                ],
+                default="unknown",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='opt_out_at',
+            model_name="contact",
+            name="opt_out_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='contact',
-            name='opt_out_reason',
-            field=models.CharField(blank=True, default='', max_length=255),
+            model_name="contact",
+            name="opt_out_reason",
+            field=models.CharField(blank=True, default="", max_length=255),
         ),
         migrations.AddIndex(
-            model_name='contact',
-            index=models.Index(fields=['account', 'consent_status'], name='contacts_co_account_2ac9c5_idx'),
+            model_name="contact",
+            index=models.Index(
+                fields=["account", "consent_status"],
+                name="contacts_co_account_2ac9c5_idx",
+            ),
         ),
         migrations.RunPython(backfill_consent, unbackfill_consent),
     ]

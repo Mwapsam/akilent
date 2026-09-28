@@ -4,25 +4,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0015_alter_modulesubscription_module'),
+        ("billing", "0015_alter_modulesubscription_module"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='subscription',
-            name='billing_period',
-            field=models.CharField(choices=[('monthly', 'Monthly'), ('quarterly', 'Quarterly'), ('annually', 'Annually'), ('biennial', 'Every 2 years')], default='monthly', max_length=12),
+            model_name="subscription",
+            name="billing_period",
+            field=models.CharField(
+                choices=[
+                    ("monthly", "Monthly"),
+                    ("quarterly", "Quarterly"),
+                    ("annually", "Annually"),
+                    ("biennial", "Every 2 years"),
+                ],
+                default="monthly",
+                max_length=12,
+            ),
         ),
         migrations.AddField(
-            model_name='subscription',
-            name='stripe_customer_id',
+            model_name="subscription",
+            name="stripe_customer_id",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='subscription',
-            name='stripe_subscription_id',
+            model_name="subscription",
+            name="stripe_subscription_id",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
     ]

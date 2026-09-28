@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('whatsapp', '0004_alter_webhookeventlog_source'),
+        ("whatsapp", "0004_alter_webhookeventlog_source"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='outboundmessage',
-            name='updated_at',
+            model_name="outboundmessage",
+            name="updated_at",
             field=models.DateTimeField(auto_now=True, null=True),
         ),
     ]

@@ -4,25 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('billing', '0004_plan_detailed_analytics_plan_email_apis_and_more'),
+        ("billing", "0004_plan_detailed_analytics_plan_email_apis_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='plan',
-            name='mailbox_storage_gb',
+            model_name="plan",
+            name="mailbox_storage_gb",
             field=models.PositiveIntegerField(default=10),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='max_aliases',
+            model_name="plan",
+            name="max_aliases",
             field=models.IntegerField(default=10),
         ),
         migrations.AddField(
-            model_name='plan',
-            name='max_forwarding_rules',
+            model_name="plan",
+            name="max_forwarding_rules",
             field=models.IntegerField(default=10),
         ),
     ]

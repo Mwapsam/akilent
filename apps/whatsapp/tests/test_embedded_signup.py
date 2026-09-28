@@ -5,6 +5,7 @@ usable on the Cloud API until the Tech Provider (1) subscribes its app to the
 WABA and (2) registers the phone number. `connect_complete` must do both and
 persist the number with its access token + verification PIN.
 """
+
 import json
 from unittest.mock import patch
 
@@ -26,7 +27,8 @@ class RegisterPhoneNumberTest(TestCase):
         responses.add(
             responses.POST,
             "https://graph.facebook.com/v21.0/PNID/register",
-            json={"success": True}, status=200,
+            json={"success": True},
+            status=200,
         )
         register_phone_number("PNID", "tok", "123456")
         body = json.loads(responses.calls[0].request.body)
@@ -37,14 +39,16 @@ class RegisterPhoneNumberTest(TestCase):
         responses.add(
             responses.POST,
             "https://graph.facebook.com/v21.0/PNID/register",
-            json={"error": {"message": "PIN required"}}, status=400,
+            json={"error": {"message": "PIN required"}},
+            status=400,
         )
         with self.assertRaises(EmbeddedSignupError):
             register_phone_number("PNID", "tok", "123456")
 
 
 @override_settings(
-    WHATSAPP_APP_ID="app", WHATSAPP_APP_SECRET="secret",
+    WHATSAPP_APP_ID="app",
+    WHATSAPP_APP_SECRET="secret",
 )
 class ConnectCompleteTest(TestCase):
     def setUp(self):
@@ -54,11 +58,15 @@ class ConnectCompleteTest(TestCase):
 
         self.account = Account.objects.create(company_name="Co", slug="co")
         plan = Plan.objects.first() or Plan.objects.create(
-            name="Test Plan", slug="test-plan", price_monthly=0,
+            name="Test Plan",
+            slug="test-plan",
+            price_monthly=0,
             max_whatsapp_numbers=5,
         )
         Subscription.objects.create(
-            account=self.account, plan=plan, status=Subscription.ACTIVE,
+            account=self.account,
+            plan=plan,
+            status=Subscription.ACTIVE,
             current_period_start=timezone.now(),
         )
         self.user = User.objects.create_user("owner", "o@example.com", "pw")
@@ -81,15 +89,16 @@ class ConnectCompleteTest(TestCase):
 
     def _post(self, payload):
         request = self._request(payload)
-        with patch(
-            "apps.whatsapp.numbers.get_current_account", return_value=self.account
-        ), patch(
-            "apps.whatsapp.embedded.exchange_code_for_token", return_value="TOKEN"
-        ) as ex, patch(
-            "apps.whatsapp.embedded.subscribe_app_to_waba"
-        ) as sub, patch(
-            "apps.whatsapp.registration.register_phone_number"
-        ) as reg:
+        with (
+            patch(
+                "apps.whatsapp.numbers.get_current_account", return_value=self.account
+            ),
+            patch(
+                "apps.whatsapp.embedded.exchange_code_for_token", return_value="TOKEN"
+            ) as ex,
+            patch("apps.whatsapp.embedded.subscribe_app_to_waba") as sub,
+            patch("apps.whatsapp.registration.register_phone_number") as reg,
+        ):
             response = numbers_views.connect_complete(request)
         return response, ex, sub, reg
 
@@ -114,15 +123,18 @@ class ConnectCompleteTest(TestCase):
         self.assertEqual(response.content.decode().count("/whatsapp/numbers/"), 1)
 
     def test_registration_failure_still_connects_without_pin(self):
-        with patch(
-            "apps.whatsapp.numbers.get_current_account", return_value=self.account
-        ), patch(
-            "apps.whatsapp.embedded.exchange_code_for_token", return_value="TOKEN"
-        ), patch(
-            "apps.whatsapp.embedded.subscribe_app_to_waba"
-        ), patch(
-            "apps.whatsapp.registration.register_phone_number",
-            side_effect=EmbeddedSignupError("nope"),
+        with (
+            patch(
+                "apps.whatsapp.numbers.get_current_account", return_value=self.account
+            ),
+            patch(
+                "apps.whatsapp.embedded.exchange_code_for_token", return_value="TOKEN"
+            ),
+            patch("apps.whatsapp.embedded.subscribe_app_to_waba"),
+            patch(
+                "apps.whatsapp.registration.register_phone_number",
+                side_effect=EmbeddedSignupError("nope"),
+            ),
         ):
             response = numbers_views.connect_complete(
                 self._request({"code": "abc", "phone_number_id": "PNID2"})

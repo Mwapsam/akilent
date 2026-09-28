@@ -3,6 +3,7 @@
 These give non-technical owners a front door for "user management" and
 "security setup" without touching the Django admin or contacting support.
 """
+
 import logging
 
 from django.contrib import messages
@@ -58,7 +59,12 @@ def _send_invitation_email(request, invite):
     link = request.build_absolute_uri(
         reverse("accept-invitation", kwargs={"token": invite.token})
     )
-    ctx = {"invite": invite, "site_name": site_name, "link": link, "inviter": invite.invited_by}
+    ctx = {
+        "invite": invite,
+        "site_name": site_name,
+        "link": link,
+        "inviter": invite.invited_by,
+    }
     subject, body = render_system_email(
         "accounts.invite",
         ctx,
@@ -74,6 +80,7 @@ def _send_invitation_email(request, invite):
 
 # --- Profile ------------------------------------------------------------------
 
+
 @login_required
 def settings_profile(request):
     account = get_current_account(request)
@@ -85,12 +92,19 @@ def settings_profile(request):
             return redirect("settings-profile")
     else:
         form = ProfileForm(instance=request.user)
-    return render(request, "accounts/settings_profile.html", {
-        "form": form, "account": account, "active_tab": "profile",
-    })
+    return render(
+        request,
+        "accounts/settings_profile.html",
+        {
+            "form": form,
+            "account": account,
+            "active_tab": "profile",
+        },
+    )
 
 
 # --- Business -----------------------------------------------------------------
+
 
 @login_required
 def settings_business(request):
@@ -104,7 +118,9 @@ def settings_business(request):
 
     if request.method == "POST":
         if not can_edit:
-            messages.error(request, "Only an owner or admin can change business details.")
+            messages.error(
+                request, "Only an owner or admin can change business details."
+            )
             return redirect("settings-business")
         form = BusinessAddressForm(request.POST, instance=account)
         if form.is_valid():
@@ -114,18 +130,23 @@ def settings_business(request):
     else:
         form = BusinessAddressForm(instance=account)
 
-    return render(request, "accounts/settings_business.html", {
-        "form": form,
-        "account": account,
-        "active_tab": "business",
-        "can_edit": can_edit,
-        "has_address": account.has_postal_address,
-        "footer_name": account.legal_name or account.company_name,
-        "footer_address": format_postal_address(account),
-    })
+    return render(
+        request,
+        "accounts/settings_business.html",
+        {
+            "form": form,
+            "account": account,
+            "active_tab": "business",
+            "can_edit": can_edit,
+            "has_address": account.has_postal_address,
+            "footer_name": account.legal_name or account.company_name,
+            "footer_address": format_postal_address(account),
+        },
+    )
 
 
 # --- Security -----------------------------------------------------------------
+
 
 @login_required
 def settings_security(request):
@@ -148,9 +169,15 @@ def settings_security(request):
             return redirect("settings-security")
     else:
         form = PasswordChangeForm(request.user)
-    return render(request, "accounts/settings_security.html", {
-        "form": form, "account": account, "active_tab": "security",
-    })
+    return render(
+        request,
+        "accounts/settings_security.html",
+        {
+            "form": form,
+            "account": account,
+            "active_tab": "security",
+        },
+    )
 
 
 # --- Optional tools -----------------------------------------------------------
@@ -160,11 +187,17 @@ def settings_security(request):
 # doesn't include isn't listed. Framed as opt-OUT: no stored switch means on, so this page must
 # not silently turn anything off on first render (see R1.5a).
 OPTIONAL_TOOLS = [
-    ("sales", "Track potential sales",
-     "See customers who are considering buying, and where each one stands."),
-    ("orders", "Create orders and collect payments",
-     "Off unless you turn it on. Adds an Orders section for recording what a "
-     "customer bought and sending them a payment link."),
+    (
+        "sales",
+        "Track potential sales",
+        "See customers who are considering buying, and where each one stands.",
+    ),
+    (
+        "orders",
+        "Create orders and collect payments",
+        "Off unless you turn it on. Adds an Orders section for recording what a "
+        "customer bought and sending them a payment link.",
+    ),
 ]
 
 
@@ -185,15 +218,27 @@ def settings_tools(request):
         return redirect("settings-tools")
 
     tools = [
-        {"feature": f, "label": label, "hint": hint, "enabled": billing_api.usable(account, f)}
+        {
+            "feature": f,
+            "label": label,
+            "hint": hint,
+            "enabled": billing_api.usable(account, f),
+        }
         for f, label, hint in offered
     ]
-    return render(request, "accounts/settings_tools.html", {
-        "account": account, "active_tab": "tools", "tools": tools,
-    })
+    return render(
+        request,
+        "accounts/settings_tools.html",
+        {
+            "account": account,
+            "active_tab": "tools",
+            "tools": tools,
+        },
+    )
 
 
 # --- Opening hours ------------------------------------------------------------
+
 
 def _hours_rows(hours):
     from apps.accounts import business_hours as bh
@@ -216,26 +261,40 @@ def settings_hours(request):
             messages.error(request, "Only an owner or admin can change opening hours.")
             return redirect("settings-hours")
         try:
-            saved = bh.save_hours(account, tz=request.POST.get("timezone", ""), schedule=bh.schedule_from_form(request.POST))
+            saved = bh.save_hours(
+                account,
+                tz=request.POST.get("timezone", ""),
+                schedule=bh.schedule_from_form(request.POST),
+            )
         except bh.HoursError as exc:
             messages.error(request, str(exc))
             return redirect("settings-hours")
         messages.success(
             request,
-            "Opening hours saved." if saved.schedule
+            "Opening hours saved."
+            if saved.schedule
             else "Opening hours cleared. You'll be treated as always open.",
         )
         return redirect("settings-hours")
 
-    return render(request, "accounts/settings_hours.html", {
-        "account": account, "active_tab": "hours", "rows": _hours_rows(hours),
-        "timezones": bh.timezone_choices(), "current_tz": hours.timezone if hours else "Africa/Lusaka",
-        "can_edit": can_edit,
-        "configured": bh.is_configured(account), "open_now": bh.is_open(account),
-    })
+    return render(
+        request,
+        "accounts/settings_hours.html",
+        {
+            "account": account,
+            "active_tab": "hours",
+            "rows": _hours_rows(hours),
+            "timezones": bh.timezone_choices(),
+            "current_tz": hours.timezone if hours else "Africa/Lusaka",
+            "can_edit": can_edit,
+            "configured": bh.is_configured(account),
+            "open_now": bh.is_open(account),
+        },
+    )
 
 
 # --- Team ---------------------------------------------------------------------
+
 
 @login_required
 def settings_team(request):
@@ -248,14 +307,18 @@ def settings_team(request):
         .order_by("role", "user__username")
     )
     invitations = Invitation.objects.filter(account=account, accepted_at__isnull=True)
-    return render(request, "accounts/settings_team.html", {
-        "account": account,
-        "membership": membership,
-        "can_manage": _can_manage_team(membership),
-        "members": members,
-        "invitations": invitations,
-        "active_tab": "team",
-    })
+    return render(
+        request,
+        "accounts/settings_team.html",
+        {
+            "account": account,
+            "membership": membership,
+            "can_manage": _can_manage_team(membership),
+            "members": members,
+            "invitations": invitations,
+            "active_tab": "team",
+        },
+    )
 
 
 @login_required
@@ -382,6 +445,7 @@ def member_remove(request, pk):
 
 # --- Accept invitation (works logged in or out) -------------------------------
 
+
 def accept_invitation(request, token):
     invite = (
         Invitation.objects.select_related("account", "invited_by")
@@ -389,13 +453,16 @@ def accept_invitation(request, token):
         .first()
     )
     if invite is None or invite.is_accepted or invite.is_expired:
-        return render(request, "accounts/accept_invitation.html", {"invalid": True}, status=400)
+        return render(
+            request, "accounts/accept_invitation.html", {"invalid": True}, status=400
+        )
 
     # Already signed in: confirm, then join the workspace as this user.
     if request.user.is_authenticated:
         if request.method == "POST":
             Membership.objects.get_or_create(
-                user=request.user, account=invite.account,
+                user=request.user,
+                account=invite.account,
                 defaults={"role": invite.role},
             )
             invite.accepted_at = timezone.now()
@@ -403,14 +470,24 @@ def accept_invitation(request, token):
             set_current_account(request, invite.account)
             messages.success(request, f"You've joined {invite.account.company_name}.")
             return redirect("dashboard")
-        return render(request, "accounts/accept_invitation.html", {"invite": invite, "mode": "join"})
+        return render(
+            request,
+            "accounts/accept_invitation.html",
+            {"invite": invite, "mode": "join"},
+        )
 
     # Logged out, but an account already exists for this email: send to sign in.
     if User.objects.filter(email__iexact=invite.email).exists():
         login_url = f"{reverse('login')}?next={reverse('accept-invitation', kwargs={'token': token})}"
-        return render(request, "accounts/accept_invitation.html", {
-            "invite": invite, "mode": "signin", "login_url": login_url,
-        })
+        return render(
+            request,
+            "accounts/accept_invitation.html",
+            {
+                "invite": invite,
+                "mode": "signin",
+                "login_url": login_url,
+            },
+        )
 
     # Brand-new user: register them (the invite itself proves the email).
     if request.method == "POST":
@@ -432,6 +509,12 @@ def accept_invitation(request, token):
             return redirect("dashboard")
     else:
         form = AcceptInvitationForm()
-    return render(request, "accounts/accept_invitation.html", {
-        "invite": invite, "mode": "register", "form": form,
-    })
+    return render(
+        request,
+        "accounts/accept_invitation.html",
+        {
+            "invite": invite,
+            "mode": "register",
+            "form": form,
+        },
+    )

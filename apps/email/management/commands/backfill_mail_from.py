@@ -17,6 +17,7 @@ Usage::
 After each real run the command re-reads the identity from SES and exits
 non-zero if the provider state doesn't match what was requested.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,10 +25,10 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.email import verification
 from apps.email.models import EmailDomain
 from apps.email.providers import get_mail_provider
 from apps.email.services.domain import DomainService
-from apps.email import dnscheck, verification
 
 
 class Command(BaseCommand):
@@ -177,7 +178,7 @@ class Command(BaseCommand):
             # Carry on to refresh and read-back even if sync had issues.
 
         try:
-            result = verification.refresh_domain(record, provider=provider)
+            verification.refresh_domain(record, provider=provider)
             self.stdout.write("  ✓ Domain refreshed")
             self._print_record_table(record)
         except Exception as exc:
@@ -242,15 +243,15 @@ class Command(BaseCommand):
         self.stdout.write(f"    Status   : {info.status}")
         self.stdout.write(f"    Behavior : {info.behavior_on_mx_failure}")
         if info.mx_value:
-            self.stdout.write(
-                f"    MX target: {info.mx_priority} {info.mx_value}"
-            )
+            self.stdout.write(f"    MX target: {info.mx_priority} {info.mx_value}")
 
     def _print_diff(self, diff: dict) -> None:
         # diff values are DesiredRecord dataclass objects; use attribute access.
-        for action, rows in (("ADD", diff.get("add", [])),
-                              ("UPDATE", diff.get("update", [])),
-                              ("REMOVE", diff.get("remove", []))):
+        for action, rows in (
+            ("ADD", diff.get("add", [])),
+            ("UPDATE", diff.get("update", [])),
+            ("REMOVE", diff.get("remove", [])),
+        ):
             for row in rows:
                 key = row.key
                 rtype = row.type
@@ -258,16 +259,16 @@ class Command(BaseCommand):
                 value = row.value
                 priority = row.priority
                 p_str = f" pri={priority}" if priority is not None else ""
-                self.stdout.write(f"  {action:6s}  {rtype:5s}  {key:6s}  {name}  {value[:60]}{p_str}")
+                self.stdout.write(
+                    f"  {action:6s}  {rtype:5s}  {key:6s}  {name}  {value[:60]}{p_str}"
+                )
 
     def _print_record_table(self, record: EmailDomain) -> None:
         rows = record.dns_records()
         if not rows:
             return
         self.stdout.write("")
-        self.stdout.write(
-            f"  {'Type':<5}  {'Host':<30}  {'Prio':>4}  Value"
-        )
+        self.stdout.write(f"  {'Type':<5}  {'Host':<30}  {'Prio':>4}  Value")
         self.stdout.write("  " + "-" * 80)
         for row in rows:
             host = (row.get("host") or "@")[:30]

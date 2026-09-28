@@ -13,8 +13,8 @@ def dedupe_step_runs(apps, schema_editor):
     WorkflowStepRun = apps.get_model("automation", "WorkflowStepRun")
     seen: set = set()
     dup_ids: list = []
-    for pk, run_id, step_id in (
-        WorkflowStepRun.objects.order_by("pk").values_list("pk", "run_id", "step_id")
+    for pk, run_id, step_id in WorkflowStepRun.objects.order_by("pk").values_list(
+        "pk", "run_id", "step_id"
     ):
         key = (run_id, step_id)
         if key in seen:
@@ -26,15 +26,16 @@ def dedupe_step_runs(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('automation', '0002_workflow_workflowrun_workflowsteprun_and_more'),
+        ("automation", "0002_workflow_workflowrun_workflowsteprun_and_more"),
     ]
 
     operations = [
         migrations.RunPython(dedupe_step_runs, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='workflowsteprun',
-            constraint=models.UniqueConstraint(fields=('run', 'step_id'), name='uniq_workflowsteprun_run_step'),
+            model_name="workflowsteprun",
+            constraint=models.UniqueConstraint(
+                fields=("run", "step_id"), name="uniq_workflowsteprun_run_step"
+            ),
         ),
     ]

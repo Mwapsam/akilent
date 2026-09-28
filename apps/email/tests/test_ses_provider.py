@@ -5,12 +5,14 @@ try:
 except ImportError:
     pytest.skip(allow_module_level=True, reason="moto not installed")
 
+from unittest.mock import patch
+
 import boto3
 from django.test import TestCase
+
 from apps.email.exceptions import EmailProviderError
 from apps.email.providers.ses.provider import SesProvider
 from apps.email.types import DomainInfo, DomainStatus
-from unittest.mock import patch
 
 
 class SesProviderTests(TestCase):
@@ -70,9 +72,7 @@ class SesProviderTests(TestCase):
 
         with patch("botocore.client.BaseClient._make_api_call") as mock_call:
             # SESv2 API returns VerificationStatus at top level
-            mock_call.return_value = {
-                "VerificationStatus": "SUCCESS"
-            }
+            mock_call.return_value = {"VerificationStatus": "SUCCESS"}
             result = self.provider.verify_domain(domain)
             self.assertTrue(result.success)
 
@@ -82,9 +82,7 @@ class SesProviderTests(TestCase):
 
         with patch("botocore.client.BaseClient._make_api_call") as mock_call:
             # SESv2 API returns VerificationStatus at top level
-            mock_call.return_value = {
-                "VerificationStatus": "FAILED"
-            }
+            mock_call.return_value = {"VerificationStatus": "FAILED"}
             result = self.provider.verify_domain(domain)
             self.assertFalse(result.success)
 
@@ -201,15 +199,20 @@ class SesMailFromTests(TestCase):
         with patch("botocore.client.BaseClient._make_api_call", _fake):
             info = self.provider.configure_mail_from("acme.com")
 
-        self.assertEqual(calls, [(
-            "PutEmailIdentityMailFromAttributes",
-            {
-                "EmailIdentity": "acme.com",
-                "MailFromDomain": "bounce.acme.com",
-                # Never let a broken MX record stop the tenant's mail.
-                "BehaviorOnMxFailure": "USE_DEFAULT_VALUE",
-            },
-        )])
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "PutEmailIdentityMailFromAttributes",
+                    {
+                        "EmailIdentity": "acme.com",
+                        "MailFromDomain": "bounce.acme.com",
+                        # Never let a broken MX record stop the tenant's mail.
+                        "BehaviorOnMxFailure": "USE_DEFAULT_VALUE",
+                    },
+                )
+            ],
+        )
         self.assertEqual(info.mail_from_domain, "bounce.acme.com")
         self.assertEqual(info.mx_value, "feedback-smtp.eu-west-1.amazonses.com")
         self.assertEqual(info.mx_priority, 10)
@@ -218,19 +221,23 @@ class SesMailFromTests(TestCase):
     def test_configure_failure_raises_provider_error(self):
         from botocore.exceptions import ClientError
 
-        err = ClientError({"Error": {"Code": "BadRequestException", "Message": "x"}},
-                          "PutEmailIdentityMailFromAttributes")
+        err = ClientError(
+            {"Error": {"Code": "BadRequestException", "Message": "x"}},
+            "PutEmailIdentityMailFromAttributes",
+        )
         with patch("botocore.client.BaseClient._make_api_call", side_effect=err):
             with self.assertRaises(EmailProviderError):
                 self.provider.configure_mail_from("acme.com")
 
     def test_get_mail_from_reads_provider_state(self):
         with patch("botocore.client.BaseClient._make_api_call") as call:
-            call.return_value = {"MailFromAttributes": {
-                "MailFromDomain": "bounce.acme.com",
-                "MailFromDomainStatus": "PENDING",
-                "BehaviorOnMxFailure": "USE_DEFAULT_VALUE",
-            }}
+            call.return_value = {
+                "MailFromAttributes": {
+                    "MailFromDomain": "bounce.acme.com",
+                    "MailFromDomainStatus": "PENDING",
+                    "BehaviorOnMxFailure": "USE_DEFAULT_VALUE",
+                }
+            }
             info = self.provider.get_mail_from("acme.com")
 
         self.assertEqual(info.mail_from_domain, "bounce.acme.com")
@@ -244,8 +251,9 @@ class SesMailFromTests(TestCase):
             call.return_value = {"MailFromAttributes": {}}
             self.assertIsNone(self.provider.get_mail_from("acme.com"))
 
-        err = ClientError({"Error": {"Code": "NotFoundException", "Message": "x"}},
-                          "GetEmailIdentity")
+        err = ClientError(
+            {"Error": {"Code": "NotFoundException", "Message": "x"}}, "GetEmailIdentity"
+        )
         with patch("botocore.client.BaseClient._make_api_call", side_effect=err):
             self.assertIsNone(self.provider.get_mail_from("acme.com"))
 

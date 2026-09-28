@@ -6,37 +6,63 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0012_emailmessage_rendered_html_and_more'),
+        ("email_service", "0012_emailmessage_rendered_html_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emailtemplate',
-            name='builder_mode',
-            field=models.CharField(choices=[('raw', 'Raw HTML'), ('blocks', 'Drag-and-drop')], default='raw', max_length=10),
+            model_name="emailtemplate",
+            name="builder_mode",
+            field=models.CharField(
+                choices=[("raw", "Raw HTML"), ("blocks", "Drag-and-drop")],
+                default="raw",
+                max_length=10,
+            ),
         ),
         migrations.AddField(
-            model_name='emailtemplate',
-            name='content_blocks',
+            model_name="emailtemplate",
+            name="content_blocks",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.CreateModel(
-            name='EmailTemplateVersion',
+            name="EmailTemplateVersion",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('subject', models.CharField(blank=True, default='', max_length=998)),
-                ('text_body', models.TextField(blank=True, default='')),
-                ('html_body', models.TextField(blank=True, default='')),
-                ('content_blocks', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='versions', to='email_service.emailtemplate')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("subject", models.CharField(blank=True, default="", max_length=998)),
+                ("text_body", models.TextField(blank=True, default="")),
+                ("html_body", models.TextField(blank=True, default="")),
+                ("content_blocks", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "template",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="versions",
+                        to="email_service.emailtemplate",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

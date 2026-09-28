@@ -13,8 +13,12 @@ class ManualGateway(PaymentGateway):
 
     def start_checkout(self, request, account, plan):
         method = PaymentMethod.objects.filter(code=self.code).first()
-        return render(request, "billing/manual_checkout.html", {
-            "plan": plan,
-            "account": account,
-            "instructions": method.instructions if method else "",
-        })
+        return render(
+            request,
+            "billing/manual_checkout.html",
+            {
+                "plan": plan,
+                "account": account,
+                "instructions": method.instructions if method else "",
+            },
+        )

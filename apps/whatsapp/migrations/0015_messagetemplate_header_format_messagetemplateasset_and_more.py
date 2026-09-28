@@ -5,35 +5,70 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('whatsapp', '0014_messagetemplate_buttons_messagetemplate_footer_and_more'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("whatsapp", "0014_messagetemplate_buttons_messagetemplate_footer_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='messagetemplate',
-            name='header_format',
-            field=models.CharField(choices=[('text', 'Text'), ('image', 'Image'), ('video', 'Video'), ('document', 'Document')], default='text', max_length=10),
+            model_name="messagetemplate",
+            name="header_format",
+            field=models.CharField(
+                choices=[
+                    ("text", "Text"),
+                    ("image", "Image"),
+                    ("video", "Video"),
+                    ("document", "Document"),
+                ],
+                default="text",
+                max_length=10,
+            ),
         ),
         migrations.CreateModel(
-            name='MessageTemplateAsset',
+            name="MessageTemplateAsset",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('file', models.FileField(upload_to='whatsapp_headers/%Y/%m/')),
-                ('content_type', models.CharField(blank=True, default='', max_length=100)),
-                ('meta_handle', models.CharField(blank=True, default='', max_length=512)),
-                ('uploaded_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='whatsapp_template_assets', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("file", models.FileField(upload_to="whatsapp_headers/%Y/%m/")),
+                (
+                    "content_type",
+                    models.CharField(blank=True, default="", max_length=100),
+                ),
+                (
+                    "meta_handle",
+                    models.CharField(blank=True, default="", max_length=512),
+                ),
+                ("uploaded_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="whatsapp_template_assets",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-uploaded_at'],
+                "ordering": ["-uploaded_at"],
             },
         ),
         migrations.AddField(
-            model_name='messagetemplate',
-            name='header_media',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='whatsapp.messagetemplateasset'),
+            model_name="messagetemplate",
+            name="header_media",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="whatsapp.messagetemplateasset",
+            ),
         ),
     ]

@@ -25,12 +25,21 @@ def account(db):
 
 # --- Checklist state --------------------------------------------------------
 
+
 @pytest.mark.django_db
 def test_fresh_email_account_steps(account):
     state = ob.get_state(account)
     assert state["complete"] is False
     keys = [s["key"] for s in state["steps"]]
-    assert keys == ["account", "verify_email", "domain", "verify", "use", "team", "security"]
+    assert keys == [
+        "account",
+        "verify_email",
+        "domain",
+        "verify",
+        "use",
+        "team",
+        "security",
+    ]
     assert state["next_step"]["key"] == "domain"  # email already verified in fixture
 
 
@@ -53,7 +62,17 @@ def test_both_account_has_whatsapp_and_email_steps(db, settings):
     settings.WHATSAPP_ENABLED = True
     acc = _make_account(Account.Services.BOTH)
     keys = [s["key"] for s in ob.get_state(acc)["steps"]]
-    assert keys == ["account", "verify_email", "whatsapp", "build", "domain", "verify", "use", "team", "security"]
+    assert keys == [
+        "account",
+        "verify_email",
+        "whatsapp",
+        "build",
+        "domain",
+        "verify",
+        "use",
+        "team",
+        "security",
+    ]
 
 
 @pytest.mark.django_db
@@ -69,7 +88,9 @@ def test_next_step_advances_as_setup_progresses(account):
     EmailDomain.objects.create(account=account, domain="mail.acme.com")
     assert ob.get_state(account)["next_step"]["key"] == "verify"
 
-    EmailDomain.objects.filter(account=account).update(status=EmailDomain.Status.VERIFIED)
+    EmailDomain.objects.filter(account=account).update(
+        status=EmailDomain.Status.VERIFIED
+    )
     assert ob.get_state(account)["next_step"]["key"] == "use"
 
 
@@ -97,6 +118,7 @@ def test_team_step_done_with_pending_invite(account):
 
 # --- Resumable state machine ----------------------------------------------
 
+
 @pytest.mark.django_db
 def test_advance_onboarding_email_only(account):
     assert account.onboarding_state == Account.Onboarding.ACCOUNT_CREATED
@@ -120,6 +142,7 @@ def test_advance_onboarding_both_does_whatsapp_first(db, settings):
 
 
 # --- Context processor + widget rendering --------------------------------
+
 
 @pytest.mark.django_db
 def test_widget_and_tour_render_when_incomplete(client, account):
@@ -151,6 +174,7 @@ def test_widget_not_shown_on_onboarding_page(client, account):
 
 
 # --- WhatsApp step follows the setup console -----------------------------
+
 
 def _wa_account(settings, services=Account.Services.WHATSAPP):
     settings.WHATSAPP_ENABLED = True

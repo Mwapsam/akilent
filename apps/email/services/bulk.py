@@ -6,6 +6,7 @@ in batches and the actual per-recipient send fan-out is chunked inside the
 dispatch_campaign Celery task rather than done inline here, so this stays
 fast regardless of recipient count.
 """
+
 from __future__ import annotations
 
 from django.db import transaction
@@ -49,7 +50,7 @@ def create_campaign(
     if not account.has_postal_address:
         raise MissingPostalAddressError()
 
-    scheduled =initial_status == BulkEmailCampaign.Status.SCHEDULED
+    scheduled = initial_status == BulkEmailCampaign.Status.SCHEDULED
     campaign = BulkEmailCampaign.objects.create(
         account=account,
         domain=domain,

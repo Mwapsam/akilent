@@ -6,37 +6,91 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_account_security_reviewed_at'),
-        ('contacts', '0003_contact_optional_email_and_phone_identity'),
-        ('whatsapp', '0012_connectiontest'),
+        ("accounts", "0005_account_security_reviewed_at"),
+        ("contacts", "0003_contact_optional_email_and_phone_identity"),
+        ("whatsapp", "0012_connectiontest"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='WhatsAppCampaign',
+            name="WhatsAppCampaign",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=150)),
-                ('variable_mapping', models.JSONField(blank=True, default=dict)),
-                ('status', models.CharField(choices=[('draft', 'Draft'), ('queued', 'Queued'), ('sending', 'Sending'), ('completed', 'Completed'), ('failed', 'Failed')], default='draft', max_length=20)),
-                ('recipient_count', models.PositiveIntegerField(default=0)),
-                ('queued_count', models.PositiveIntegerField(default=0)),
-                ('skipped_count', models.PositiveIntegerField(default=0)),
-                ('error', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('started_at', models.DateTimeField(blank=True, null=True)),
-                ('completed_at', models.DateTimeField(blank=True, null=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='whatsapp_campaigns', to='accounts.account')),
-                ('contact_list', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='whatsapp_campaigns', to='contacts.contactlist')),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('template', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='campaigns', to='whatsapp.messagetemplate')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=150)),
+                ("variable_mapping", models.JSONField(blank=True, default=dict)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("draft", "Draft"),
+                            ("queued", "Queued"),
+                            ("sending", "Sending"),
+                            ("completed", "Completed"),
+                            ("failed", "Failed"),
+                        ],
+                        default="draft",
+                        max_length=20,
+                    ),
+                ),
+                ("recipient_count", models.PositiveIntegerField(default=0)),
+                ("queued_count", models.PositiveIntegerField(default=0)),
+                ("skipped_count", models.PositiveIntegerField(default=0)),
+                ("error", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("started_at", models.DateTimeField(blank=True, null=True)),
+                ("completed_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="whatsapp_campaigns",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "contact_list",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="whatsapp_campaigns",
+                        to="contacts.contactlist",
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "template",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="campaigns",
+                        to="whatsapp.messagetemplate",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['account', 'status'], name='whatsapp_wh_account_a05217_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["account", "status"],
+                        name="whatsapp_wh_account_a05217_idx",
+                    )
+                ],
             },
         ),
     ]

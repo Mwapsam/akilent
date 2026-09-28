@@ -5,6 +5,7 @@ an automatic reply against them. A price is accepted because it *is* a catalogue
 amount the owner wrote in the notes), a time because it *is* an opening or closing time, not
 because the same digits happen to appear somewhere.
 """
+
 from __future__ import annotations
 
 import re
@@ -20,7 +21,9 @@ MONEY = re.compile(
     re.I,
 )
 # "08:00", "8am", "5 pm", "17:30"
-TIME = re.compile(r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s?(am|pm)\b|(?<!\d)(\d{1,2}):(\d{2})(?!\d)", re.I)
+TIME = re.compile(
+    r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s?(am|pm)\b|(?<!\d)(\d{1,2}):(\d{2})(?!\d)", re.I
+)
 
 
 def amount(text: str) -> Decimal | None:
@@ -31,7 +34,11 @@ def amount(text: str) -> Decimal | None:
 
 
 def amounts_in(text: str) -> set:
-    return {a for m in MONEY.finditer(text or "") if (a := amount(m.group(1) or m.group(2))) is not None}
+    return {
+        a
+        for m in MONEY.finditer(text or "")
+        if (a := amount(m.group(1) or m.group(2))) is not None
+    }
 
 
 def minutes_of(match) -> int | None:
@@ -66,8 +73,13 @@ def build(account, *, business_notes: str = "") -> dict:
         from apps.core.actions import ActionError, run_action
 
         try:
-            products = run_action("lookup_products", {"account": account}, account=account, query="*",
-                                  limit=MAX_PRODUCTS).get("products", [])
+            products = run_action(
+                "lookup_products",
+                {"account": account},
+                account=account,
+                query="*",
+                limit=MAX_PRODUCTS,
+            ).get("products", [])
         except ActionError:
             products = []
     return {
@@ -81,14 +93,34 @@ def build(account, *, business_notes: str = "") -> dict:
 
 def written_text(facts: dict) -> str:
     """Everything the owner wrote themselves (notes and profile answers), for text-level checks."""
-    return "\n".join([facts.get("notes", ""), *[str(v) for v in (facts.get("business") or {}).values()]])
+    return "\n".join(
+        [
+            facts.get("notes", ""),
+            *[str(v) for v in (facts.get("business") or {}).values()],
+        ]
+    )
 
 
 def allowed_amounts(facts: dict, extra_text: str = "") -> set:
     """Prices a reply may quote: catalogue prices, amounts in the owner's notes or a look-up."""
-    out = {a for p in facts.get("products", []) if (a := amount(str(p.get("price", "")))) is not None}
-    return out | amounts_in(written_text(facts)) | amounts_in(extra_text) | {
-        a for a in (amount(v) for v in re.findall(r'"price":\s*"([\d.]+)"', extra_text or "")) if a is not None}
+    out = {
+        a
+        for p in facts.get("products", [])
+        if (a := amount(str(p.get("price", "")))) is not None
+    }
+    return (
+        out
+        | amounts_in(written_text(facts))
+        | amounts_in(extra_text)
+        | {
+            a
+            for a in (
+                amount(v)
+                for v in re.findall(r'"price":\s*"([\d.]+)"', extra_text or "")
+            )
+            if a is not None
+        }
+    )
 
 
 def allowed_times(facts: dict, extra_text: str = "") -> set:

@@ -21,6 +21,7 @@ Responsibilities:
 No business logic lives here — only the mechanics of talking to the API.
 Instantiate StalwartApiClient.from_settings() to get a ready-to-use client.
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,8 +46,8 @@ from apps.email.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-_CONNECT_TIMEOUT = 5      # seconds to establish TCP connection
-_READ_TIMEOUT = 15        # seconds to receive server response
+_CONNECT_TIMEOUT = 5  # seconds to establish TCP connection
+_READ_TIMEOUT = 15  # seconds to receive server response
 
 _CAPABILITIES = [
     "urn:ietf:params:jmap:core",
@@ -68,10 +69,10 @@ def _build_session() -> requests.Session:
     """Build a requests.Session with retry adapter and connection pooling."""
     retry = Retry(
         total=3,
-        backoff_factor=0.4,            # delays: 0.4s, 0.8s, 1.6s
+        backoff_factor=0.4,  # delays: 0.4s, 0.8s, 1.6s
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET", "POST"],
-        raise_on_status=False,         # we map status codes to exceptions below
+        raise_on_status=False,  # we map status codes to exceptions below
     )
     adapter = HTTPAdapter(
         max_retries=retry,
@@ -100,7 +101,7 @@ class StalwartApiClient:
         self._session = _build_session()
 
     @classmethod
-    def from_settings(cls) -> "StalwartApiClient":
+    def from_settings(cls) -> StalwartApiClient:
         """Construct from Django settings / environment variables.
 
         Stalwart authenticates Management API requests with a static,
@@ -160,9 +161,7 @@ class StalwartApiClient:
         self._raise_for_status(resp, method)
         return self._extract_response(resp, method)
 
-    def _extract_response(
-        self, resp: requests.Response, method: str
-    ) -> dict[str, Any]:
+    def _extract_response(self, resp: requests.Response, method: str) -> dict[str, Any]:
         data = self._parse(resp)
         responses = data.get("methodResponses") or []
         if not responses:

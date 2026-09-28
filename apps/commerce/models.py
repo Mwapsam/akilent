@@ -5,6 +5,7 @@ tax rules yet. ``OrderItem`` snapshots ``name``/``unit_price`` at order time
 so a later Product price change never rewrites history. Every object carries
 an explicit ``account`` FK and links to the canonical ``apps.contacts.Contact``.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -21,7 +22,9 @@ def _payment_public_id() -> str:
 
 
 class Product(models.Model):
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="products")
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="products"
+    )
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220)
     price = models.DecimalField(max_digits=12, decimal_places=2)
@@ -31,7 +34,9 @@ class Product(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["account", "slug"], name="unique_product_slug_per_account"),
+            models.UniqueConstraint(
+                fields=["account", "slug"], name="unique_product_slug_per_account"
+            ),
         ]
         ordering = ["name"]
 
@@ -48,17 +53,29 @@ class Order(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         REFUNDED = "refunded", "Refunded"
 
-    public_id = models.CharField(max_length=40, unique=True, default=_order_public_id, editable=False)
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="orders")
-    contact = models.ForeignKey("contacts.Contact", on_delete=models.CASCADE, related_name="orders")
+    public_id = models.CharField(
+        max_length=40, unique=True, default=_order_public_id, editable=False
+    )
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="orders"
+    )
+    contact = models.ForeignKey(
+        "contacts.Contact", on_delete=models.CASCADE, related_name="orders"
+    )
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=8, default="USD")
     # The conversation this came from, fixed when it was created so a later reply never
     # rewrites history. Null when nothing in the inbox led here (walk-in, manual entry).
     conversation = models.ForeignKey(
-        "conversations.Conversation", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -82,7 +99,13 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, related_name="order_items")
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+    )
 
     # Snapshotted at order time — a later Product price/name change must
     # never rewrite an already-placed order's history.
@@ -104,8 +127,12 @@ class Payment(models.Model):
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
 
-    public_id = models.CharField(max_length=40, unique=True, default=_payment_public_id, editable=False)
-    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE, related_name="payments")
+    public_id = models.CharField(
+        max_length=40, unique=True, default=_payment_public_id, editable=False
+    )
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="payments"
+    )
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="payments")
 
     provider = models.CharField(max_length=30, default="flutterwave")
@@ -113,7 +140,9 @@ class Payment(models.Model):
     checkout_url = models.URLField(blank=True, default="")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=8, default="USD")
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     raw_payload = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

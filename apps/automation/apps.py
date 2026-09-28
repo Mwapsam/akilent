@@ -2,7 +2,7 @@ from django.apps import AppConfig
 
 
 class AutomationConfig(AppConfig):
-    name = 'apps.automation'
+    name = "apps.automation"
 
     def ready(self):
         """Register automation rules as subscribers to domain events.
@@ -11,8 +11,8 @@ class AutomationConfig(AppConfig):
         the automation rule engine to domain events published by
         communication modules (WhatsApp, Email, etc.).
         """
-        from apps.core.events import BusinessEventReceived, dispatcher, MessageReceived
         from apps.automation import triggers
+        from apps.core.events import BusinessEventReceived, MessageReceived, dispatcher
 
         # Subscribe to message received events — this is the entry point
         # for the automation WHEN/IF/THEN engine

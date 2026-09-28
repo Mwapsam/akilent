@@ -16,6 +16,7 @@ adding event publishing without changing this current behavior.
 These MUST pass before and after Phase 1 — they are the safety net
 proving we haven't broken inbound WhatsApp's webhook receipt and logging.
 """
+
 import hashlib
 import hmac
 import json
@@ -218,7 +219,7 @@ class WhatsAppWebhookLoggingTest(TestCase):
         """Test invalid JSON in webhook body is logged as invalid_json event."""
         body = b"not valid json{{"
         signature = hmac.new(
-            key="test_app_secret".encode(),
+            key=b"test_app_secret",
             msg=body,
             digestmod=hashlib.sha256,
         ).hexdigest()
@@ -246,7 +247,7 @@ class WhatsAppWebhookLoggingTest(TestCase):
 
     def test_webhook_logs_unknown_event_type(self):
         """Test webhook with unknown change type is logged."""
-        ts = int(timezone.now().timestamp())
+        int(timezone.now().timestamp())
         payload = {
             "entry": [
                 {
@@ -327,11 +328,12 @@ class WhatsAppWebhookReplayTest(TestCase):
         settings.save()
         # The flag is cached process-wide for 60s; don't inherit another test's stale value.
         from django.core.cache import cache
+
         cache.clear()
 
     def test_replay_message_webhook_does_not_duplicate_events(self):
         """Test that replaying a message webhook doesn't publish the event twice."""
-        from apps.core.events import dispatcher, MessageReceived
+        from apps.core.events import MessageReceived, dispatcher
         from apps.whatsapp.models import MessageLog, WebhookEventLog
         from apps.whatsapp.tasks import process_whatsapp_event
 
@@ -401,7 +403,9 @@ class WhatsAppWebhookReplayTest(TestCase):
         process_whatsapp_event(replay_event.id)
 
         # Message log should still exist (duplicate not created)
-        logs_after_replay = MessageLog.objects.filter(message_id="wamid_replay_test_123")
+        logs_after_replay = MessageLog.objects.filter(
+            message_id="wamid_replay_test_123"
+        )
         self.assertEqual(logs_after_replay.count(), 1)
 
         # Event should NOT have been published again (same number of events)

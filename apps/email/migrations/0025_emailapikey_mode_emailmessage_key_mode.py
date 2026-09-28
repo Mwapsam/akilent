@@ -4,20 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('email_service', '0024_emailmessage_public_id'),
+        ("email_service", "0024_emailmessage_public_id"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='emailapikey',
-            name='mode',
-            field=models.CharField(choices=[('live', 'Live'), ('test', 'Test')], default='live', max_length=4),
+            model_name="emailapikey",
+            name="mode",
+            field=models.CharField(
+                choices=[("live", "Live"), ("test", "Test")],
+                default="live",
+                max_length=4,
+            ),
         ),
         migrations.AddField(
-            model_name='emailmessage',
-            name='key_mode',
-            field=models.CharField(default='live', max_length=4),
+            model_name="emailmessage",
+            name="key_mode",
+            field=models.CharField(default="live", max_length=4),
         ),
     ]

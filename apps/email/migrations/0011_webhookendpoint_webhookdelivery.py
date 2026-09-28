@@ -5,46 +5,103 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_invitation'),
-        ('email_service', '0010_smtpcredential'),
+        ("accounts", "0003_invitation"),
+        ("email_service", "0010_smtpcredential"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='WebhookEndpoint',
+            name="WebhookEndpoint",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('url', models.URLField(max_length=500)),
-                ('signing_secret', models.CharField(blank=True, max_length=64)),
-                ('event_types', models.JSONField(default=list)),
-                ('is_active', models.BooleanField(default=True)),
-                ('last_error', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='webhook_endpoints', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("url", models.URLField(max_length=500)),
+                ("signing_secret", models.CharField(blank=True, max_length=64)),
+                ("event_types", models.JSONField(default=list)),
+                ("is_active", models.BooleanField(default=True)),
+                ("last_error", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="webhook_endpoints",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='WebhookDelivery',
+            name="WebhookDelivery",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('event_type', models.CharField(max_length=50)),
-                ('payload', models.JSONField(default=dict)),
-                ('attempt_count', models.PositiveSmallIntegerField(default=0)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('succeeded', 'Succeeded'), ('failed', 'Failed'), ('exhausted', 'Exhausted')], default='pending', max_length=20)),
-                ('response_code', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('last_attempt_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='email_service.emailmessage')),
-                ('endpoint', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='deliveries', to='email_service.webhookendpoint')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("event_type", models.CharField(max_length=50)),
+                ("payload", models.JSONField(default=dict)),
+                ("attempt_count", models.PositiveSmallIntegerField(default=0)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("succeeded", "Succeeded"),
+                            ("failed", "Failed"),
+                            ("exhausted", "Exhausted"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "response_code",
+                    models.PositiveSmallIntegerField(blank=True, null=True),
+                ),
+                ("last_attempt_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "message",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="email_service.emailmessage",
+                    ),
+                ),
+                (
+                    "endpoint",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="deliveries",
+                        to="email_service.webhookendpoint",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['endpoint', 'status'], name='email_servi_endpoin_40259a_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["endpoint", "status"],
+                        name="email_servi_endpoin_40259a_idx",
+                    )
+                ],
             },
         ),
     ]

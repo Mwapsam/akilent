@@ -10,6 +10,7 @@ key (e.g. ``{{ order.total }}`` where ``order`` is the source key). Fetches are:
 * cached per URL for the source's TTL,
 * best-effort — any failure yields ``{}`` for that key and never breaks a send.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -45,14 +46,20 @@ def _assert_public_https(url: str) -> str:
     for family, _, _, _, sockaddr in infos:
         ip = ipaddress.ip_address(sockaddr[0])
         if (
-            ip.is_private or ip.is_loopback or ip.is_link_local
-            or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
         ):
             raise DataFetchError(f"{host} resolves to a non-public address")
     return host
 
 
-def fetch_json(url: str, *, headers: dict | None = None, ttl_seconds: int = 300) -> dict:
+def fetch_json(
+    url: str, *, headers: dict | None = None, ttl_seconds: int = 300
+) -> dict:
     """Fetch and JSON-decode ``url``. Cached by URL for ``ttl_seconds``.
 
     Returns a dict (a non-object JSON body is wrapped as ``{"value": <body>}``).
@@ -106,6 +113,8 @@ def resolve_data_sources(template) -> dict:
                 src.url, headers=src.headers or None, ttl_seconds=src.ttl_seconds
             )
         except DataFetchError as exc:
-            logger.warning("template %s data source %s failed: %s", template.pk, src.key, exc)
+            logger.warning(
+                "template %s data source %s failed: %s", template.pk, src.key, exc
+            )
             out[src.key] = {}
     return out

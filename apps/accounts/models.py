@@ -122,15 +122,11 @@ class Membership(models.Model):
         ADMIN = "admin", "Admin"
         MEMBER = "member", "Member"
 
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="memberships"
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name="memberships"
     )
-    role = models.CharField(
-        max_length=20, choices=Role.choices, default=Role.OWNER
-    )
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.OWNER)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -169,7 +165,10 @@ class Invitation(models.Model):
     )
     token = models.CharField(max_length=64, unique=True, db_index=True)
     invited_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True,
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="sent_invitations",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -198,7 +197,11 @@ class Invitation(models.Model):
 
     @property
     def expires_at(self):
-        return self.created_at + timedelta(days=self.EXPIRY_DAYS) if self.created_at else None
+        return (
+            self.created_at + timedelta(days=self.EXPIRY_DAYS)
+            if self.created_at
+            else None
+        )
 
     @property
     def is_expired(self) -> bool:
@@ -216,7 +219,9 @@ class BusinessHours(models.Model):
     always open.
     """
 
-    account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="business_hours")
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name="business_hours"
+    )
     timezone = models.CharField(max_length=64, default="UTC")
     schedule = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -232,10 +237,12 @@ class BusinessProfile(models.Model):
     (``business.location``...), and AI treats it as checked facts. Every field is optional.
     """
 
-    account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="business_profile")
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name="business_profile"
+    )
     what_you_sell = models.CharField(max_length=300, blank=True, default="")
     location = models.CharField(max_length=300, blank=True, default="")
-    delivers = models.BooleanField(null=True, blank=True)      # None = not answered
+    delivers = models.BooleanField(null=True, blank=True)  # None = not answered
     delivery_notes = models.CharField(max_length=300, blank=True, default="")
     # Keys of apps.accounts.profile.PAYMENT_METHODS, plus free text in payment_other.
     payment_methods = models.JSONField(default=list, blank=True)

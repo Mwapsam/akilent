@@ -1,4 +1,5 @@
 """Registration lifecycle: one idempotent path for OAuth, manual and retry."""
+
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -8,8 +9,8 @@ from django.test import RequestFactory, TestCase, override_settings
 
 from apps.accounts.models import Account
 from apps.whatsapp.embedded import EmbeddedSignupError
-from apps.whatsapp.numbers import numbers_register
 from apps.whatsapp.models.tenant import WhatsAppBusinessNumber as N
+from apps.whatsapp.numbers import numbers_register
 from apps.whatsapp.registration import register_number
 
 R = N.RegistrationStatus
@@ -99,7 +100,6 @@ class RegisterNumberTest(TestCase):
 
 @override_settings(ROOT_URLCONF="apps.whatsapp.tests.urls_enabled")
 class RetryEndpointTest(TestCase):
-
     def setUp(self):
         self.account = Account.objects.create(company_name="Co", slug="co")
         self.other = Account.objects.create(company_name="Other", slug="other")
@@ -111,7 +111,9 @@ class RetryEndpointTest(TestCase):
         request.user = self.user
         request.session = {}
         request._messages = FallbackStorage(request)
-        with patch("apps.whatsapp.numbers.get_current_account", return_value=self.account):
+        with patch(
+            "apps.whatsapp.numbers.get_current_account", return_value=self.account
+        ):
             return numbers_register(request, pk)
 
     def test_retry_registers_and_second_click_is_noop(self):
@@ -169,6 +171,8 @@ class SetupConsoleTest(TestCase):
         self.assertEqual([s.state for s in c.steps][-1], "optional")
 
     def test_picks_non_ready_number(self):
-        ready = make(self.account, phone_number_id="A", registration_status=R.REGISTERED)
+        ready = make(
+            self.account, phone_number_id="A", registration_status=R.REGISTERED
+        )
         broken = make(self.account, phone_number_id="B", registration_status=R.FAILED)
         self.assertEqual(self._build([ready, broken]).number.pk, broken.pk)
