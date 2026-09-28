@@ -55,6 +55,16 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
   </form>
 </div>
 
+{% if channel %}
+{% comment %}A channel filter carries across tabs (the ch fragment above), so switching tabs
+can silently keep narrowing the list to one channel with only the small dot on the filter icon
+as a hint. Spell it out, with a one-click way back to every channel.{% endcomment %}
+<p class="inbox-filter-note">
+  Showing {% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %} only ·
+  <a href="?view={{ view }}">Clear filter</a>
+</p>
+{% endif %}
+
 {% if page and page.object_list %}
 <ul class="inbox-list">
   {% for c in page %}

@@ -343,6 +343,31 @@ def test_the_picker_lists_teammates(logged_in, open_conversation, teammate):
 
 
 @pytest.mark.django_db
+def test_the_assign_picker_is_a_single_select(logged_in, open_conversation, teammate):
+    """The header used to carry a one-click "assign to me" button *and* a separate
+    "assign to a teammate" select, doing overlapping jobs. One merged select now covers
+    both, and — since it no longer needs a teammate to be worth showing — a solo account
+    gets it too."""
+    client, _, _ = logged_in
+    body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+    assert body.count('name="assignee"') == 1
+    assert "Assign to me" in body
+    assert 'value="none"' in body  # Unassigned is always reachable, even solo
+
+
+@pytest.mark.django_db
+def test_the_assign_picker_works_for_a_solo_account(logged_in, open_conversation):
+    """No teammate fixture here: previously the teammate <select> only rendered when
+    ``team_members`` had more than one person, so a solo owner had no explicit way to
+    unassign without picking a teammate first."""
+    client, _, _ = logged_in
+    body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+    assert 'name="assignee"' in body
+    assert "Assign to me" in body
+    assert 'value="none"' in body
+
+
+@pytest.mark.django_db
 def test_a_customer_given_a_value_shows_as_tracked_in_the_pipeline(logged_in, conversation_without_a_lead):
     """Adding an estimated value turns the lead straight into a deal, which leaves no open
     lead. The panel used to read that as "Not tracked yet" and offer to track them again."""

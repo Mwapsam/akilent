@@ -106,8 +106,14 @@
   .cv-ticks svg { width: 16px; height: 16px; }
   .cv-ticks.is-read { color: var(--cv-tick-read); }
   .cv-automate { display: inline-block; margin-top: .25rem; font-size: .75rem; color: var(--cv-accent); text-decoration: underline;
-                 text-underline-offset: 2px; }
+                 text-underline-offset: 2px; opacity: 0; transition: opacity .15s linear; }
   .cv-automate:hover { text-decoration: none; }
+  /* Muted until the message it's attached to has attention — a touch device has no hover, so it
+     stays visible there (matches the `coarse` pointer check already used in static/js/chat.js). */
+  .cv-msg:hover .cv-automate, .cv-msg:focus-within .cv-automate, .cv-automate:focus-visible { opacity: 1; }
+  @media (pointer: coarse) {
+    .cv-automate { opacity: 1; }
+  }
   .cv-fail { display: flex; align-items: center; gap: .25rem; margin-top: .25rem; font-size: .75rem; color: var(--color-coral-600); }
 
   /* Composer */
@@ -154,6 +160,9 @@
   .cv-tpl > summary:focus-visible { outline: 2px solid var(--cv-accent); border-radius: .75rem; }
   .cv-tpl[open] > summary { border-bottom: 1px solid var(--cv-line); }
   .cv-tpl[open] .cv-chev { transform: rotate(180deg); }
+  /* Force-opened when the window is closed (see x-effect below); once the AI/window banner
+     above no longer competes with it, this is the one thing to do — an accent border says so. */
+  .cv-tpl--required { border-color: var(--cv-accent); }
   .cv-badge { padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; color: var(--cv-warn-fg); background: var(--cv-warn-bg); }
   .cv-closed { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .875rem 1rem; font-size: .875rem; color: var(--cv-ink-muted);
                border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); }
@@ -165,6 +174,9 @@
   .cv-h { margin-bottom: .625rem; font-size: .8125rem; font-weight: 600; color: var(--cv-ink); }
   .cv-field { display: flex; align-items: center; gap: .5rem; min-height: 2rem; font-size: .875rem; }
   .cv-field-label { width: 3.5rem; flex-shrink: 0; color: var(--cv-ink-subtle); }
+  .cv-followup-more > summary { cursor: pointer; list-style: none; }
+  .cv-followup-more > summary::-webkit-details-marker { display: none; }
+  .cv-followup-more > summary:hover, .cv-followup-more > summary:focus-visible { color: var(--cv-ink); text-decoration: underline; }
   .cv-pills { display: flex; flex-wrap: wrap; gap: .375rem; }
   .cv-pills label { position: relative; padding: .3rem .7rem; border: 1px solid var(--color-border-strong); border-radius: 999px; font-size: .8125rem; color: var(--cv-ink-muted); cursor: pointer; }
   .cv-pills label:has(input:checked) { border-color: var(--cv-accent); color: var(--cv-accent); background: color-mix(in srgb, var(--cv-accent) 8%, var(--cv-surface)); font-weight: 500; }
@@ -218,29 +230,20 @@
       <div class="cv-h-status" x-html="statusHtml"></div>
 
       <div class="cv-h-actions flex items-center gap-1 shrink-0">
-        <form method="post">
+        <form method="post" class="cv-assign flex items-center gap-1">
           {% csrf_token %}
           <input type="hidden" name="action" value="assign" />
-          <button class="btn btn-ghost btn-sm" {% if conversation.assigned_to_id == request.user.id %}disabled{% endif %}
-                  title="{% if conversation.assigned_to_id == request.user.id %}Assigned to you{% elif conversation.assigned_to %}Take over from {{ conversation.assigned_to }}{% else %}Assign to me{% endif %}">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
-            <span class="hidden md:inline">{% if conversation.assigned_to_id == request.user.id %}Assigned to you{% elif conversation.assigned_to %}Take over{% else %}Assign to me{% endif %}</span>
-          </button>
-        </form>
-        {% if team_members|length > 1 %}
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="assign" />
-          <label class="sr-only" for="assignee">Assign to a teammate</label>
-          <select id="assignee" name="assignee" class="select" onchange="this.form.submit()">
-            <option value="" disabled {% if not conversation.assigned_to_id %}selected{% endif %}>Assign toâ€¦</option>
+          <svg class="w-4 h-4 text-gray-400 shrink-0 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+          <label class="sr-only" for="assignee">Assign conversation</label>
+          <select id="assignee" name="assignee" class="select select-sm" onchange="this.form.submit()">
             {% for member in team_members %}
-            <option value="{{ member.pk }}" {% if member.pk == conversation.assigned_to_id %}selected{% endif %}>{{ member.get_full_name|default:member.username }}</option>
+            <option value="{{ member.pk }}" {% if member.pk == conversation.assigned_to_id %}selected{% endif %}>
+              {% if member.pk == request.user.id %}{% if member.pk == conversation.assigned_to_id %}Assigned to you{% else %}Assign to me{% endif %}{% else %}{{ member.get_full_name|default:member.username }}{% endif %}
+            </option>
             {% endfor %}
-            <option value="none">Unassigned</option>
+            <option value="none" {% if not conversation.assigned_to_id %}selected{% endif %}>Unassigned</option>
           </select>
         </form>
-        {% endif %}
         {# Driven by the live `open` flag, so it reappears if the customer writes again while the page is open. #}
         <form method="post" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %}>
           {% csrf_token %}
@@ -322,7 +325,11 @@
 
     <template x-if="open">
       <div class="cv-footer">
-        <div class="cv-window" x-show="!windowOpen" x-cloak role="status">
+        {# The AI panel's own send_template card (below) says the same thing this banner does,
+           with more context (the actual template name) — showing both would repeat the message
+           in two boxes stacked on top of each other, so the banner steps aside when that card
+           is the one on screen. #}
+        <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <div class="flex-1">
             <p class="font-medium">The 24-hour reply window has closed.</p>
@@ -336,9 +343,11 @@
         {% comment %}
           AI proposals (apps.ai). AI never sends: a person reviews, edits and sends through the
           normal composer, so the 24-hour window, opt-out and template checks still apply.
-          Hidden entirely when AI is off.
+          Hidden entirely when AI is off, and also while the window is closed unless the proposal
+          is the one action still useful then (send_template) — a plain-reply/handoff suggestion
+          the person can't act on yet would just be one more box stacked above the input.
         {% endcomment %}
-        <div class="cv-ai" x-show="ai.enabled" x-cloak>
+        <div class="cv-ai" x-show="ai.enabled && (windowOpen || (ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template'))" x-cloak aria-live="polite">
           <template x-if="ai.proposal && ai.proposal.status === 'pending'">
             <p class="text-xs text-gray-500 flex items-center gap-2" role="status">
               <svg class="w-4 h-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
@@ -449,7 +458,6 @@
           actions that already exist; the panel keeps the record of each.
         {% endcomment %}
         <div class="cv-next">
-          <span>Next:</span>
           {% if open_followup %}
           <span class="cv-next-done">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -487,7 +495,7 @@
         </div>
 
         {% if approved_templates %}
-        <details class="cv-tpl" x-ref="tplPicker" x-effect="if (!windowOpen) $el.open = true">
+        <details class="cv-tpl" :class="{ 'cv-tpl--required': !windowOpen }" x-ref="tplPicker" x-effect="if (!windowOpen) $el.open = true">
           <summary>
             <svg class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
             Send a template
@@ -650,7 +658,7 @@
           <span class="font-medium text-accent">{{ open_deal.stage.name }}</span>
         </a>
         {% else %}
-        <p class="text-sm text-gray-500">Not tracked yet. Use <span class="text-ink">Track as interested</span> under the message box when they ask about buying.</p>
+        <p class="text-sm text-gray-500">Not tracked yet.</p>
         {% endif %}
       </div>
       {% endif %}
@@ -672,19 +680,26 @@
           <button class="btn btn-ghost btn-sm w-full">Mark done</button>
         </form>
         {% else %}
-        <form method="post" class="space-y-2" x-data="{ when: '1h' }">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="create_followup" />
-          <div class="cv-pills" role="radiogroup" aria-label="Remind me">
-            <label><input type="radio" name="when" value="1h" x-model="when" />In 1 hour</label>
-            <label><input type="radio" name="when" value="tomorrow" x-model="when" />Tomorrow morning</label>
-            <label><input type="radio" name="when" value="custom" x-model="when" />Pick a time</label>
-          </div>
-          <input type="datetime-local" name="custom_due_at" class="input" aria-label="Reminder time"
-                 x-show="when === 'custom'" x-cloak :required="when === 'custom'" />
-          <input type="text" name="note" placeholder="Note (optional)" class="input" aria-label="Reminder note" />
-          <button class="btn btn-ghost btn-sm w-full">Set reminder</button>
-        </form>
+        {# The composer's own "Remind me tomorrow" (below the message box) covers the common
+           case with one click; this form offers the same action with more control (1h / custom
+           time / a note), so it's tucked behind a disclosure instead of always taking up panel
+           space for the less common path. #}
+        <details class="cv-followup-more">
+          <summary class="text-sm text-gray-500 cursor-pointer">Set a custom reminder</summary>
+          <form method="post" class="space-y-2 mt-2" x-data="{ when: '1h' }">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_followup" />
+            <div class="cv-pills" role="radiogroup" aria-label="Remind me">
+              <label><input type="radio" name="when" value="1h" x-model="when" />In 1 hour</label>
+              <label><input type="radio" name="when" value="tomorrow" x-model="when" />Tomorrow morning</label>
+              <label><input type="radio" name="when" value="custom" x-model="when" />Pick a time</label>
+            </div>
+            <input type="datetime-local" name="custom_due_at" class="input" aria-label="Reminder time"
+                   x-show="when === 'custom'" x-cloak :required="when === 'custom'" />
+            <input type="text" name="note" placeholder="Note (optional)" class="input" aria-label="Reminder note" />
+            <button class="btn btn-ghost btn-sm w-full">Set reminder</button>
+          </form>
+        </details>
         {% endif %}
       </div>
 
