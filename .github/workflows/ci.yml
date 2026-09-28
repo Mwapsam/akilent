@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +19,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: "poetry"          # caches the Poetry virtualenv
 
       - name: Install Poetry
         run: pipx install poetry
@@ -22,6 +27,23 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-root --with dev
 
+      # ------------------------------------------------------------------
+      # Quality gates (run early so we fail fast)
+      # ------------------------------------------------------------------
+      - name: Ruff (lint)
+        run: poetry run ruff check .
+
+      - name: Ruff (format check)
+        run: poetry run ruff format --check .
+
+      - name: mypy
+        run: poetry run mypy .
+        # If you prefer only the apps/ package:
+        # run: poetry run mypy apps/
+
+      # ------------------------------------------------------------------
+      # Your existing steps (unchanged logic)
+      # ------------------------------------------------------------------
       # static/css/app.css is committed and is exactly what deploy.yml ships to
       # production - nothing rebuilds it on the server. Tailwind's build is
       # purge-scanned, so a template using a class no other template uses will
@@ -53,3 +75,5 @@ jobs:
 
       - name: Run tests
         run: poetry run pytest
+        env:
+          DJANGO_SETTINGS_MODULE: automator.settings_test
