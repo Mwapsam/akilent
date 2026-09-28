@@ -1,0 +1,129 @@
+{% comment %}
+The Email tab: domain picker, deliverability score, engagement chart, delivery logs. Built by
+apps.email.views.email_analytics_context, gated on ``has_analytics`` (the plan's
+detailed-analytics feature — same flag as ``has_history`` above, named for this tab's own
+context dict).
+{% endcomment %}
+{% load charts %}
+<section class="space-y-4" aria-labelledby="email-h">
+  <div class="border-b border-border flex items-center justify-between flex-wrap gap-3 pb-2">
+    <h2 id="email-h" class="text-lg font-semibold text-ink">Email</h2>
+    {% if has_analytics and domains %}
+    <form method="get" class="flex items-center gap-2">
+      {% if request.GET.period %}<input type="hidden" name="period" value="{{ request.GET.period }}">{% endif %}
+      <label class="sr-only" for="domain">Domain</label>
+      <select id="domain" name="domain" class="select sm:w-56" onchange="this.form.submit()">
+        {% for d in domains %}
+          <option value="{{ d.domain }}" {% if d.domain == selected %}selected{% endif %}>{{ d.domain }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if not has_analytics %}
+    <div class="card card-pad text-center max-w-lg mx-auto">
+      <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand">
+        {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
+      </span>
+      <h3 class="mt-4 font-semibold">Detailed analytics &amp; insights</h3>
+      <p class="text-sm text-gray-500 mt-1">Delivery logs, open and click tracking are available on higher plans.</p>
+      <a href="/billing/plans/" class="btn btn-primary btn-sm mt-4">Upgrade your plan</a>
+    </div>
+
+  {% elif not domains %}
+    {% include "components/empty_state.html" with icon="globe" title="No verified domains" message="Verify a sending domain to see delivery logs and analytics." %}
+
+  {% else %}
+    {% if error %}
+      <div class="alert alert-danger" role="alert">
+        {% include "components/icon.html" with name="alert" %}
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    {% if deliverability %}
+    <div class="card overflow-hidden">
+      <div class="px-5 sm:px-6 py-4 border-b border-border flex items-center justify-between">
+        <h3 class="font-semibold">Deliverability score — {{ selected }}</h3>
+        <span class="text-2xl font-bold tabular-nums">{{ deliverability.score }}<span class="text-sm text-gray-400"> / 100</span></span>
+      </div>
+      <div class="px-5 sm:px-6 py-4">
+        <div class="mb-4">
+          <p class="text-sm mb-2">
+            <span class="badge {% if deliverability.score >= 90 %}badge-success{% elif deliverability.score >= 75 %}badge-info{% elif deliverability.score >= 60 %}badge-warning{% else %}badge-danger{% endif %}">{{ deliverability.grade }}</span>
+          </p>
+          {% if deliverability.score >= 90 %}{% meter deliverability.score 100 label="Deliverability score" tone="good" %}
+          {% elif deliverability.score >= 75 %}{% meter deliverability.score 100 label="Deliverability score" tone="brand" %}
+          {% elif deliverability.score >= 60 %}{% meter deliverability.score 100 label="Deliverability score" tone="warning" %}
+          {% else %}{% meter deliverability.score 100 label="Deliverability score" tone="critical" %}{% endif %}
+        </div>
+        <ul class="space-y-1.5 text-sm">
+          {% for c in deliverability.checks %}
+          <li class="flex items-start gap-2">
+            <span class="mt-0.5">
+              {% if c.status == 'ok' %}✓{% elif c.status == 'warn' %}⚠{% elif c.status == 'fail' %}✗{% else %}–{% endif %}
+            </span>
+            <span><span class="font-medium">{{ c.label }}</span> <span class="text-gray-500">— {{ c.detail }}</span></span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if deliverability.recommendations %}
+        <div class="mt-4 rounded-xl tone-brand-bg border tone-brand-border p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-accent-strong mb-2">What to do next</p>
+          <ul class="list-disc list-inside space-y-1 text-sm text-brand-800">
+            {% for r in deliverability.recommendations %}<li>{{ r }}</li>{% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+      <div class="px-5 sm:px-6 py-4 border-b border-border">
+        <h3 class="font-semibold">Engagement — {{ selected }}</h3>
+      </div>
+      {% if stats %}
+        <div class="px-5 sm:px-6 py-5">
+          {% line_chart engagement_series engagement_days unit="Day" %}
+        </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="check-circle" title="No engagement yet" message="Open & click events appear here once tracked emails are opened." %}
+      {% endif %}
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-5 sm:px-6 py-4 border-b border-border">
+        <h3 class="font-semibold">Delivery logs</h3>
+      </div>
+      {% if logs %}
+          <div class="table-scroll">
+            <table class="table table--cards">
+              <thead><tr>
+                <th>Time</th><th>Sender</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Error</th>
+              </tr></thead>
+              <tbody>
+                {% for row in logs %}
+                  <tr>
+                    <td data-label="Time" class="text-gray-400 whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
+                    <td data-label="Sender">{{ row.from_email|default:"—" }}</td>
+                    <td data-label="Recipient" class="font-medium text-ink">{{ row.to_email|default:"—" }}</td>
+                    <td data-label="Subject" class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
+                    <td data-label="Status">
+                      {% if row.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
+                      {% elif row.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
+                      {% else %}<span class="badge badge-neutral">{{ row.get_status_display }}</span>{% endif %}
+                    </td>
+                    <td data-label="Error" class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="inbox" title="No delivery logs" message="Logs from the mail server appear here as you send." %}
+      {% endif %}
+    </div>
+  {% endif %}
+</section>

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Insights — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex items-start justify-between flex-wrap gap-3">
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
+    <p class="mt-1 text-sm text-gray-600">What Akilent is doing for your business.</p>
+  </div>
+  <form method="get" class="flex items-center gap-2">
+    <label class="sr-only" for="period">Period</label>
+    <select id="period" name="period" class="select" onchange="this.form.submit()">
+      {% for choice in period_choices %}
+        <option value="{{ choice }}" {% if choice == days %}selected{% endif %}>
+          Last {{ choice }} days{% if choice == 90 and period_locked %} (upgrade){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+</header>
+
+{% if period_locked %}
+<div class="alert alert-info mb-6" role="status">
+  {% include "components/icon.html" with name="lock" %}
+  <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="/billing/plans/" class="underline">Upgrade</a></span>
+</div>
+{% endif %}
+
+<div class="space-y-6 mb-8">
+  {% include "insights/_proof.html" %}
+  {% include "insights/_at_risk.html" %}
+</div>
+
+{% if starting_point %}<div class="mb-8">{% include "conversations/_starting_point.html" %}</div>{% endif %}
+
+<div class="space-y-10">
+  {% include "insights/_response.html" %}
+  {% include "insights/_sales.html" %}
+  {% include "insights/_automation.html" %}
+  {% include "insights/_channels.html" %}
+</div>
+
+<div class="mt-10">
+  {% include "insights/_email.html" %}
+</div>
+{% endblock %}

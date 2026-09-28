@@ -592,50 +592,13 @@ def _build_engagement_stats(domain_name: str) -> list[dict]:
     return list(pivot.values())
 
 
-def _conversation_insights(account):
-    """Account-wide conversation numbers for the Insights landing section
-    (R1.5b) — reuses the same derived queries the inbox uses, so Insights can
-    never disagree with what "Needs attention"/"Missed" show. ``None`` account
-    (staff viewing platform-wide) skips this section rather than aggregating
-    across tenants.
+def email_analytics_context(account, request) -> dict:
+    """The Email tab of Insights: domain picker, deliverability, engagement chart, delivery logs.
+
+    Shared by the Insights page (``apps.conversations.insights_views``) and this module's own
+    redirect, so there is exactly one place that builds it.
     """
-    if account is None:
-        return None
-    from apps.conversations.api import funnel, revenue_by_channel
-    from apps.conversations.performance import followup_completion, team_performance
-    from apps.conversations.state import (
-        average_first_response_seconds,
-        missed,
-        needs_attention,
-    )
-
-    now = timezone.now()
-    avg_seconds = average_first_response_seconds(account)
-    return {
-        "followups": followup_completion(account, now=now),
-        "team": team_performance(account, now=now),
-        "funnel": funnel(account, now=now),
-        "revenue": revenue_by_channel(account, now=now),
-        "waiting_count": needs_attention(account, now).count(),
-        "missed_count": missed(account, now).count(),
-        "avg_first_response_minutes": round(avg_seconds / 60)
-        if avg_seconds is not None
-        else None,
-    }
-
-
-@login_required
-def insights(request):
     from apps.billing.limits import LimitChecker
-
-    account = get_current_account(request)
-    if account is None:
-        return redirect("dashboard")
-
-    conversation_stats = _conversation_insights(account)
-    from apps.conversations import api as conversations_api
-
-    starting_point = conversations_api.starting_point(account) if account else None
 
     has_analytics = LimitChecker(account).has_feature("detailed_analytics")
     domains = list(
@@ -669,24 +632,24 @@ def insights(request):
         ("Clicks", [row["clicks"] for row in stats]),
     ]
 
-    return render(
-        request,
-        "email/insights.html",
-        {
-            "account": account,
-            "has_analytics": has_analytics,
-            "engagement_days": engagement_days,
-            "engagement_series": engagement_series,
-            "conversation_stats": conversation_stats,
-            "starting_point": starting_point,
-            "domains": domains,
-            "selected": selected,
-            "logs": logs,
-            "stats": stats,
-            "error": error,
-            "deliverability": deliverability,
-        },
-    )
+    return {
+        "has_analytics": has_analytics,
+        "engagement_days": engagement_days,
+        "engagement_series": engagement_series,
+        "domains": domains,
+        "selected": selected,
+        "logs": logs,
+        "stats": stats,
+        "error": error,
+        "deliverability": deliverability,
+    }
+
+
+@login_required
+def insights(request):
+    """Insights moved to ``/insights/`` (Business Health). Keeps ``?domain=`` on the redirect."""
+    query = request.GET.urlencode()
+    return redirect(f"/insights/?{query}" if query else "/insights/")
 
 
 # --- Open / click tracking endpoints ------------------------------------------

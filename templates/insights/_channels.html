@@ -1,0 +1,34 @@
+{% comment %}
+Pillar: channel performance. ``channels`` from apps.conversations.reporting.channels. Outcomes
+only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-analytics feature).
+{% endcomment %}
+<section class="space-y-4" aria-labelledby="channels-h">
+  <h2 id="channels-h" class="text-lg font-semibold text-ink">Channel performance</h2>
+  <p class="text-sm text-gray-600">Which channel are customers writing in from?</p>
+
+  {% if not has_history %}
+  <div class="card card-pad text-center">
+    <p class="text-sm text-gray-500">Channel performance is available on higher plans.</p>
+    <a href="/billing/plans/" class="btn btn-primary btn-sm mt-3">Upgrade your plan</a>
+  </div>
+  {% elif channels %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Channel</th><th>Conversations</th><th>Leads</th><th>Paid orders</th><th>Revenue</th></tr></thead>
+      <tbody>
+        {% for c in channels %}
+        <tr>
+          <td data-label="Channel">{{ c.label }}</td>
+          <td data-label="Conversations">{{ c.conversations }}</td>
+          <td data-label="Leads">{{ c.leads }}</td>
+          <td data-label="Paid orders">{{ c.paid_orders }}</td>
+          <td data-label="Revenue">{% for r in c.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-600">No channel activity yet this period.</p>
+  {% endif %}
+</section>

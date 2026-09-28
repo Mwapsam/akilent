@@ -1,5 +1,5 @@
-"""R1.5b: Insights leads with a "Conversations" section (reusing the same
-derived state the inbox uses) before any email-specific content."""
+"""The Insights (Business Health) page at /insights/: renders before Email, and is scoped to
+the account. See apps.conversations.insights_views and apps.conversations.reporting."""
 
 from datetime import timedelta
 
@@ -44,28 +44,33 @@ def _convo(account, *messages):
 
 
 @pytest.mark.django_db
-def test_insights_shows_conversations_section_before_email(logged_in):
+def test_insights_renders_at_the_new_url(logged_in):
+    client, account = logged_in
+    resp = client.get("/insights/")
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_opportunities_at_risk_renders_before_email(logged_in):
     client, account = logged_in
     _convo(account, (IN, 30, "delivered"))  # waiting for a reply
 
-    resp = client.get("/email/insights/")
-    assert resp.status_code == 200
-    body = resp.content.decode()
-    assert "Conversations" in body
-    assert ">1<" in body  # the waiting count
-    assert "customer waiting for you" in body  # singular, not "customers"
-    # Conversations section renders before the Email section, not after.
-    assert body.index("Conversations") < body.index(
-        '<h2 class="text-lg font-semibold text-ink pb-2">Email</h2>'
+    body = client.get("/insights/").content.decode()
+    assert "customer is waiting for a reply" in body
+    # Conversation content renders before the Email section, not after.
+    assert body.index("Opportunities at risk") < body.index(
+        '<h2 id="email-h" class="text-lg font-semibold text-ink">Email</h2>'
     )
 
 
 @pytest.mark.django_db
-def test_insights_conversations_scoped_to_account(logged_in):
+def test_insights_is_scoped_to_the_account(logged_in):
     client, account = logged_in
     other = Account.objects.create(company_name="Other Co")
     _convo(other, (IN, 30, "delivered"))
 
-    body = client.get("/email/insights/").content.decode()
-    assert ">0<" in body
-    assert "customers waiting for you" in body  # plural for zero
+    body = client.get("/insights/").content.decode()
+    # The other account's waiting customer must not leak; setup nudges (hours, automations)
+    # still show for a fresh account with no data of its own, so the section isn't empty.
+    assert "customer is waiting for a reply" not in body
+    assert "0 customer" not in body

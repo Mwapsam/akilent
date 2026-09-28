@@ -1,7 +1,7 @@
 """Deliverability Score — a 0-100 composite of authentication, list hygiene, and
 sending reputation, with actionable recommendations.
 
-Consumed by the dashboard card (``templates/email/insights.html``), the public
+Consumed by the Insights page's Email tab (``templates/insights/_email.html``), the public
 ``GET /v1/deliverability`` endpoint, and the daily ``DeliverabilitySnapshot``
 task that powers trend lines and week-over-week deltas.
 """

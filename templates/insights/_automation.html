@@ -1,0 +1,58 @@
+{% comment %}
+Pillar: automation & AI impact. ``automation`` from apps.conversations.reporting.automation_impact.
+No composite score; the one estimate (time saved) always shows its formula.
+{% endcomment %}
+{% load insights_tags %}
+<section class="space-y-4" aria-labelledby="automation-h">
+  <h2 id="automation-h" class="text-lg font-semibold text-ink">Automation &amp; AI impact</h2>
+  <p class="text-sm text-gray-600">How much work did Akilent handle?</p>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ automation.first_replies_automatic }}</p>
+      <p class="text-sm text-gray-600">first replies handled automatically{% if automation.enquiries %} of {{ automation.enquiries }}{% endif %}</p>
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      {% if automation.out_of_hours %}
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ automation.out_of_hours.reached }}</p>
+      <p class="text-sm text-gray-600">out-of-hours customers reached of {{ automation.out_of_hours.closed_enquiries }}</p>
+      {% else %}
+      <p class="text-2xl font-semibold text-ink tabular-nums">—</p>
+      <p class="text-sm text-gray-600"><a href="/settings/hours/" class="text-accent hover:text-accent-strong">Set your hours</a> to measure this</p>
+      {% endif %}
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      {% if automation.ai %}
+      <p class="text-2xl font-semibold text-ink tabular-nums">{% if automation.ai.used_pct is not None %}{{ automation.ai.used_pct }}%{% else %}—{% endif %}</p>
+      <p class="text-sm text-gray-600">AI suggestions used{% if automation.ai.suggested %} ({{ automation.ai.used }} of {{ automation.ai.suggested }}){% endif %}</p>
+      {% else %}
+      <p class="text-2xl font-semibold text-ink tabular-nums">—</p>
+      <p class="text-sm text-gray-600">AI isn't turned on</p>
+      {% endif %}
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ automation.minutes_saved|duration_minutes }}</p>
+      <p class="text-sm text-gray-600">estimated time saved</p>
+      <p class="text-xs text-gray-500 mt-1">Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min</p>
+    </div>
+  </div>
+
+  {% if automation.workflows %}
+  <h3 class="text-base font-semibold text-ink">Automations that led to sales</h3>
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Automation</th><th>Leads</th><th>Paid orders</th><th>Revenue</th></tr></thead>
+      <tbody>
+        {% for wf in automation.workflows %}
+        <tr>
+          <td data-label="Automation"><a href="/automations/{{ wf.slug }}/stats/" class="text-accent hover:text-accent-strong">{{ wf.name }}</a></td>
+          <td data-label="Leads">{{ wf.leads }}</td>
+          <td data-label="Paid orders">{{ wf.paid_orders }}</td>
+          <td data-label="Revenue">{% for r in wf.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>

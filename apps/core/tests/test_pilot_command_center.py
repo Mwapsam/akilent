@@ -139,7 +139,14 @@ def test_suggestions_count_only_what_the_model_produced():
             **base, status=status, ready_at=now if ready else None
         )
     summary = usage_summary(account, since=now - timedelta(days=1))
-    assert summary == {"suggested": 2, "used": 1, "errors": 1}
+    assert summary == {
+        "suggested": 2,
+        "used": 1,
+        "used_unedited": 0,
+        "dismissed": 0,
+        "auto_sent": 0,
+        "errors": 1,
+    }
 
 
 @pytest.mark.django_db

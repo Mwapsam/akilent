@@ -143,6 +143,6 @@ def test_insights_page_shows_followup_and_team_sections(client, account):
     client.force_login(owner)
     followup(account, due_days_ago=2, done=True)
     convo(account, owner, (IN, 45, "delivered"))
-    body = client.get("/email/insights/").content.decode()
+    body = client.get("/insights/").content.decode()
     assert "of follow-ups completed" in body
     assert "Team member" in body and "owner" in body

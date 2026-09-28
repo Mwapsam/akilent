@@ -72,6 +72,7 @@ urlpatterns = [
     path("logs/", include("apps.logs.urls", namespace="logs")),
     path("contacts/", include("apps.contacts.urls", namespace="contacts")),
     path("inbox/", include("apps.conversations.urls", namespace="conversations")),
+    path("insights/", include("apps.conversations.insights_urls")),
     path("sales/", include("apps.crm.urls", namespace="crm")),
     path("orders/", include("apps.commerce.urls", namespace="commerce")),
     path(

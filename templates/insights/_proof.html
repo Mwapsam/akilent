@@ -1,0 +1,44 @@
+{% comment %}
+The proof bar: this week against last week, in one sentence and three tiles. ``proof`` comes from
+apps.conversations.reporting.proof. Counts only, never causes, per the messaging truth rule.
+{% endcomment %}
+{% load insights_tags %}
+<section class="card card-pad space-y-4" aria-labelledby="proof-h">
+  {% if proof.active %}
+    <div>
+      <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
+      {% if proof.sentence %}
+      <p class="mt-1 text-sm text-gray-700">{{ proof.sentence }}.</p>
+      {% endif %}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="rounded-xl border border-border p-4">
+        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.median.seconds|duration }}</p>
+        <p class="text-sm text-gray-600">median first reply</p>
+        {% if proof.median.change is not None %}
+        <p class="text-xs mt-1 {% if proof.median.change < 0 %}text-emerald-600{% elif proof.median.change > 0 %}text-amber-600{% else %}text-gray-400{% endif %}">
+          {% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %} {{ proof.median.change|duration }} vs last week
+        </p>
+        {% endif %}
+      </div>
+      <div class="rounded-xl border border-border p-4">
+        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.recovered.recovered }}</p>
+        <p class="text-sm text-gray-600">missed conversation{{ proof.recovered.recovered|pluralize }} recovered</p>
+        {% if proof.recovered.became_leads %}
+        <p class="text-xs text-gray-500 mt-1">{{ proof.recovered.became_leads }} became lead{{ proof.recovered.became_leads|pluralize }}</p>
+        {% endif %}
+      </div>
+      <div class="rounded-xl border border-border p-4">
+        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.paid.orders }}</p>
+        <p class="text-sm text-gray-600">paid order{{ proof.paid.orders|pluralize }} from conversations</p>
+        {% if proof.paid.revenue %}
+        <p class="text-xs text-gray-500 mt-1">{% for r in proof.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        {% endif %}
+      </div>
+    </div>
+    <p class="text-xs text-gray-500">Every number comes from recorded conversations, follow-ups and orders.</p>
+  {% else %}
+    <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
+    <p class="text-sm text-gray-600">No customer activity yet this week. Once WhatsApp messages start coming in, this page fills in automatically.</p>
+  {% endif %}
+</section>

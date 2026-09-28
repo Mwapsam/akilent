@@ -1,0 +1,40 @@
+{% comment %}
+Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sales.
+{% endcomment %}
+<section class="space-y-4" aria-labelledby="sales-h">
+  <h2 id="sales-h" class="text-lg font-semibold text-ink">Sales from conversations</h2>
+  <p class="text-sm text-gray-600">Did conversations turn into money?</p>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">
+        {% if sales.revenue %}{% for r in sales.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}—{% endif %}
+      </p>
+      <p class="text-sm text-gray-600">revenue from conversations</p>
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.leads }}</p>
+      <p class="text-sm text-gray-600">leads created</p>
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.paid_orders }}</p>
+      <p class="text-sm text-gray-600">paid orders</p>
+    </div>
+    <div class="rounded-xl border border-border p-4">
+      <p class="text-2xl font-semibold text-ink tabular-nums">{% if sales.lead_to_sale_pct is not None %}{{ sales.lead_to_sale_pct }}%{% else %}—{% endif %}</p>
+      <p class="text-sm text-gray-600">lead-to-sale conversion</p>
+    </div>
+  </div>
+
+  <h3 class="text-base font-semibold text-ink">From conversation to sale</h3>
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.funnel.wrote_in }}</p><p class="text-sm text-gray-600">wrote in</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.funnel.leads }}</p><p class="text-sm text-gray-600">tracked as interested</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.funnel.deals }}</p><p class="text-sm text-gray-600">in your pipeline</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.funnel.won }}</p><p class="text-sm text-gray-600">deals won</p></div>
+    <div class="rounded-xl border border-border p-4"><p class="text-2xl font-semibold text-ink tabular-nums">{{ sales.funnel.paid }}</p><p class="text-sm text-gray-600">paid orders</p></div>
+  </div>
+  {% if sales.named or sales.recent %}
+  <p class="text-xs text-gray-500">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
+  {% endif %}
+</section>

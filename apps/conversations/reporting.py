@@ -800,8 +800,9 @@ def customers_replied(account, period: Period) -> int:
 def proof(account, week: Period | None = None, now: datetime | None = None) -> dict:
     """This week against last week, for the proof bar and the weekly report.
 
-    ``{"week", "replied", "recovered", "paid", "median", "sentence_parts", "active"}``. Clauses
-    with a zero are left out of the sentence; ``active`` is False when nothing at all happened.
+    ``{"week", "replied", "recovered", "paid", "median", "sentence_parts", "sentence", "active"}``.
+    Clauses with a zero are left out of the sentence; ``active`` is False when nothing at all
+    happened.
     """
     now = now or timezone.now()
     week = week or Period(now - timedelta(days=7), now)
@@ -845,8 +846,21 @@ def proof(account, week: Period | None = None, now: datetime | None = None) -> d
             "revenue": money_now,
         },
         "sentence_parts": parts,
+        "sentence": oxford_join(parts),
         "active": bool(rows_now or replied_now or paid_now or rec["missed"]),
     }
+
+
+def oxford_join(parts: list[str]) -> str:
+    """ "a" / "a and b" / "a, b, and c" — never built in a template, where the comma logic would
+    be one more thing to get wrong per clause count."""
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return ", ".join(parts[:-1]) + f", and {parts[-1]}"
 
 
 # ---- snapshots -------------------------------------------------------------------------------

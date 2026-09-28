@@ -159,5 +159,5 @@ def test_insights_shows_the_card(client, account):
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     client.force_login(user)
     _connect(account, days_ago=3)
-    html = client.get("/email/insights/").content.decode()
+    html = client.get("/insights/").content.decode()
     assert "Your starting point" in html and "day 4 of 7" in html

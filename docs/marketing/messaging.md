@@ -86,7 +86,7 @@ Evidence is `path::text`: the file must exist and contain the text.
 | campaigns | Capability | Send an approved WhatsApp message or an email to a list of customers | apps/whatsapp/campaigns.py::def |
 | payments | Capability | Record an order and send a link to pay online | apps/commerce/services.py::def request_payment |
 | ai | Capability | AI suggests replies; answers simple questions on its own only if allowed; off by default | apps/ai/models.py::enabled = models.BooleanField(default=False) |
-| insights | Capability | See how messages and campaigns perform | apps/conversations/performance.py::def |
+| insights | Capability | See what your conversations turned into: replies, follow-ups and sales | apps/conversations/reporting.py::def proof |
 | email-sending | Capability | Email customers from your own business address | apps/email/models.py::class EmailDomain( |
 | own-number | Mechanism | Connect your own WhatsApp business number through Meta's guided setup | apps/whatsapp/embedded.py::def |
 | roles | Capability | Team roles: Owner, Admin, Member | apps/accounts/models.py::MEMBER = "member", "Member" |

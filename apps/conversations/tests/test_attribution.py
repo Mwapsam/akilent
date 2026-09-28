@@ -207,7 +207,7 @@ def test_insights_shows_revenue_by_channel(client, account):
     wa = chat(account)
     pay(create_order(account, wa.contact, item("42")))
     client.force_login(user)
-    response = client.get("/email/insights/")
+    response = client.get("/insights/")
     assert response.status_code == 200
     assert b"42.00" in response.content
 

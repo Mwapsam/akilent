@@ -1,0 +1,28 @@
+{% comment %}
+Opportunities at risk: "Do these first." ``at_risk`` is apps.conversations.reporting.at_risk.
+Rows with nothing to act on are already left out by the view layer.
+{% endcomment %}
+<section class="card card-pad space-y-3" aria-labelledby="at-risk-h">
+  <div class="flex items-center justify-between gap-3">
+    <h2 id="at-risk-h" class="font-semibold text-ink">Opportunities at risk</h2>
+    {% if at_risk.actions %}
+    <span class="text-xs text-gray-500">{{ at_risk.actions|length }} action{{ at_risk.actions|length|pluralize }}</span>
+    {% endif %}
+  </div>
+  {% if at_risk.actions %}
+  <p class="text-sm text-gray-600">Do these first to protect revenue and customer experience.</p>
+  <ul class="rounded-xl border border-border divide-y divide-border">
+    {% for a in at_risk.actions %}
+    <li class="flex items-center justify-between gap-3 p-3">
+      <span class="text-sm text-ink">
+        {% if a.count is not None %}<strong class="tabular-nums">{{ a.count }}</strong>{% endif %}
+        {{ a.text }}
+      </span>
+      <a href="{{ a.url }}" class="btn btn-ghost btn-sm shrink-0">{{ a.cta }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-gray-600">Nothing at risk right now.</p>
+  {% endif %}
+</section>
