@@ -28,6 +28,11 @@ from apps.billing import limit_catalog
 # Unit economics live in costs.py; re-exported for the Operator Console.
 from apps.billing.costs import (
     DRIVERS as COST_DRIVERS,
+    actual_cost,  # noqa: F401
+    businesses_by_margin,  # noqa: F401
+    loss_reasons,  # noqa: F401
+    plan_economics,  # noqa: F401
+    unit_costs,  # noqa: F401
 )
 
 # Limits and usage live in metering.py; re-exported here because other apps only import billing.api.
@@ -46,6 +51,7 @@ from apps.billing.metering import (  # noqa: F401
     settle_operation,
     usage_report,
     used,
+    warnings as usage_warnings,
 )
 from apps.billing.models import (
     AccountFeatureOverride,
@@ -54,6 +60,7 @@ from apps.billing.models import (
     Plan,
     PlanFeature,
     Subscription,
+    UsageReservation,  # noqa: F401
     UsageSummary,
 )
 
