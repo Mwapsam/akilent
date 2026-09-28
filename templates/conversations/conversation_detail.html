@@ -71,6 +71,11 @@
        borders cost 34px of a 360px screen, in the header and in every bubble. */
     .cv { margin-inline: -1rem; }
     .cv-pane { border-radius: 0; border-left-width: 0; border-right-width: 0; }
+    /* .cv-footer has no cap by default, so on a short screen a closed WhatsApp window (banner +
+       force-opened template picker, and possibly an AI card too) can grow tall enough to squeeze
+       .cv-thread — a flex-1 min-h-0 sibling — down to almost nothing. Capping the footer and
+       letting it scroll internally keeps a guaranteed minimum of thread visible either way. */
+    .cv-footer { max-height: min(60vh, calc(100% - 6rem)); overflow-y: auto; }
   }
   .cv-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 999px; font-weight: 600;
                color: var(--cv-accent); background: color-mix(in srgb, var(--cv-accent) 12%, var(--cv-surface)); }
@@ -331,15 +336,17 @@
           in two boxes stacked on top of each other, so the banner steps aside when that card
           is the one on screen.
         {% endcomment %}
+        {% comment %}
+          One line, no button: the template picker below already force-opens whenever the
+          window is closed (x-effect on .cv-tpl), so a "Use a template" button here would only
+          ever point at something already open — pure height with no function of its own.
+        {% endcomment %}
         <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <div class="flex-1">
-            <p class="font-medium">The 24-hour reply window has closed.</p>
-            <p>WhatsApp may reject a plain reply. Send an approved template to restart the conversation.</p>
-          </div>
-          {% if approved_templates %}
-          <button type="button" class="btn btn-secondary btn-sm shrink-0" @click="$refs.tplPicker.open = true; $nextTick(() => $refs.tplPicker.querySelector('select').focus())">Use a template</button>
-          {% endif %}
+          <p class="flex-1">
+            {% if approved_templates %}The 24-hour window is closed — send an approved template below.
+            {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
+          </p>
         </div>
 
         {% comment %}
