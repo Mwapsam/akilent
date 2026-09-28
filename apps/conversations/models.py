@@ -308,7 +308,15 @@ class SavedReply(models.Model):
 class FollowUp(models.Model):
     """A due-date reminder to return to a customer (R2.2). Deliberately not a
     general task system — creation is limited to "remind me in 1h / tomorrow /
-    pick a time" from a conversation, per the plan's UX guardrail."""
+    pick a time" from a conversation, per the plan's UX guardrail.
+
+    ``source`` says who asked for it: a person, or missed-conversation recovery
+    (``recovery``). Insights uses it to measure how many missed conversations were
+    picked back up."""
+
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Set by a person"
+        MISSED = "missed", "Missed conversation"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="followups"
@@ -325,6 +333,9 @@ class FollowUp(models.Model):
     )
     due_at = models.DateTimeField()
     note = models.CharField(max_length=255, blank=True, default="")
+    source = models.CharField(
+        max_length=12, choices=Source.choices, default=Source.MANUAL
+    )
     done_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
@@ -334,6 +345,10 @@ class FollowUp(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["account", "done_at", "due_at"]),
+            models.Index(
+                fields=["account", "source", "created_at"],
+                name="followup_account_source_idx",
+            ),
         ]
         ordering = ["due_at"]
 
@@ -457,3 +472,19 @@ class Benchmark(models.Model):
                 fields=["account", "kind"], name="uniq_benchmark_account_kind"
             )
         ]
+
+
+class InsightSettings(models.Model):
+    """A business's Insights preferences. No row means the defaults."""
+
+    account = models.OneToOneField(
+        "accounts.Account", on_delete=models.CASCADE, related_name="insight_settings"
+    )
+    # The assumption behind "estimated time saved": minutes a person would spend on one reply.
+    # Shown next to the estimate, and the owner can change it.
+    minutes_per_reply = models.PositiveSmallIntegerField(default=2)
+    weekly_report = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Insight settings for {self.account_id}"

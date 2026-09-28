@@ -87,7 +87,7 @@ services:
 
   celery_worker:
     build: .
-    command: celery -A automator worker -l info -Q celery,email,outbound,campaigns,webhooks,whatsapp,automation,scheduler
+    command: celery -A automator worker -l info -Q celery,email,outbound,campaigns,webhooks,whatsapp,automation,scheduler --concurrency 2
     restart: unless-stopped
     volumes:
       - .:/app
@@ -101,7 +101,7 @@ services:
   # AI calls can take many seconds; a worker of their own means they never delay WhatsApp sends.
   celery_ai:
     build: .
-    command: celery -A automator worker -l info -Q ai --concurrency 2 -n ai@%h
+    command: celery -A automator worker -l info -Q ai --concurrency 1 -n ai@%h
     restart: unless-stopped
     volumes:
       - .:/app

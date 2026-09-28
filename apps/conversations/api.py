@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
-from django.db.models import Min as models_min  # noqa: N813
 from django.utils import timezone
 
 from apps.commerce.models import Order
@@ -223,97 +222,30 @@ def recent_customer_messages(account, *, since, limit: int = 3000) -> list[dict]
 
 def first_reply_waits(account, *, since, now=None) -> list[float | None]:
     """For each conversation that *started* since ``since``: minutes until the business first
-    replied (by anyone or anything), or None if it still hasn't."""
+    really replied (by anyone or anything), or None if it still hasn't. A reply not yet due
+    (under 5 minutes old) counts as 0."""
+    from apps.conversations import reporting
+
     now = now or timezone.now()
-    starts = (
-        Conversation.objects.filter(
-            account=account, messages__direction=Message.Direction.INBOUND
-        )
-        .values("id")
-        .annotate(first_in=models_min("messages__timestamp"))
-        .filter(first_in__gte=since)
-    )
-    waits = []
-    for row in starts[:1000]:
-        first_out = (
-            Message.objects.filter(
-                conversation_id=row["id"],
-                direction=Message.Direction.OUTBOUND,
-                timestamp__gte=row["first_in"],
-            )
-            .order_by("timestamp")
-            .values_list("timestamp", flat=True)
-            .first()
-        )
-        if first_out is None:
+    waits: list[float | None] = []
+    for row in reporting.first_replies(account, since, now + timedelta(seconds=1)):
+        if row["first_reply"] is None:
             waits.append(None if now - row["first_in"] > timedelta(minutes=5) else 0.0)
         else:
-            waits.append((first_out - row["first_in"]).total_seconds() / 60)
+            waits.append((row["first_reply"] - row["first_in"]).total_seconds() / 60)
     return waits
 
 
 def window_metrics(account, start, end) -> dict:
     """One business's numbers for conversations that *started* in ``[start, end)``.
 
-    JSON-safe (stored in ``Benchmark.metrics``): conversations started, median minutes to the first
-    business reply, enquiries with no reply within 24 hours, interested customers (leads from
-    conversations), and paid orders and revenue from conversations per currency.
+    JSON-safe (stored in ``Benchmark.metrics``). The Starting point's keys (conversations,
+    median_first_reply_minutes, unanswered, interested, paid_orders, revenue) plus the rest of
+    ``reporting.period_metrics``.
     """
-    from statistics import median
+    from apps.conversations import reporting
 
-    starts = (
-        Conversation.objects.filter(
-            account=account, messages__direction=Message.Direction.INBOUND
-        )
-        .values("id")
-        .annotate(first_in=models_min("messages__timestamp"))
-        .filter(first_in__gte=start, first_in__lt=end)
-    )
-    waits, unanswered, count = [], 0, 0
-    for row in starts[:5000]:
-        count += 1
-        first_out = (
-            Message.objects.filter(
-                conversation_id=row["id"],
-                direction=Message.Direction.OUTBOUND,
-                timestamp__gte=row["first_in"],
-            )
-            .order_by("timestamp")
-            .values_list("timestamp", flat=True)
-            .first()
-        )
-        if first_out is None or first_out - row["first_in"] > timedelta(hours=24):
-            unanswered += 1
-        if first_out is not None:
-            waits.append((first_out - row["first_in"]).total_seconds() / 60)
-    paid = (
-        Order.objects.filter(
-            account=account,
-            conversation__isnull=False,
-            status=Order.Status.PAID,
-            paid_at__gte=start,
-            paid_at__lt=end,
-        )
-        .values("currency")
-        .annotate(orders=Count("id"), total=Sum("total"))
-        .order_by("currency")
-    )
-    return {
-        "conversations": count,
-        "median_first_reply_minutes": round(median(waits)) if waits else None,
-        "unanswered": unanswered,
-        "interested": Lead.objects.filter(
-            account=account,
-            conversation__isnull=False,
-            created_at__gte=start,
-            created_at__lt=end,
-        ).count(),
-        "paid_orders": sum(r["orders"] for r in paid),
-        "revenue": [
-            {"currency": r["currency"], "total": str(r["total"] or Decimal("0"))}
-            for r in paid
-        ],
-    }
+    return reporting.period_metrics(account, start, end)
 
 
 def activity(account, *, since) -> dict:
@@ -368,8 +300,7 @@ def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
             continue
         meta = m["metadata"] or {}
         by_person = (
-            meta.get("sent_by") not in ("ai", "automation")
-            and meta.get("message_type", "text") == "text"
+            not meta.get("sent_by") and meta.get("message_type", "text") == "text"
         )
         if asked and by_person:
             pairs.append(
@@ -412,3 +343,12 @@ def newest_message_ids(conversation) -> tuple[int | None, int | None]:
         )
 
     return newest(Message.Direction.INBOUND), newest(Message.Direction.OUTBOUND)
+
+
+# Business Health (Insights) reads through here, like every other app's use of this app.
+from apps.conversations.reporting import (  # noqa: E402, F401
+    Period,
+    at_risk,
+    last_days,
+    proof,
+)

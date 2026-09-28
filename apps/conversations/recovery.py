@@ -55,6 +55,7 @@ def create_missed_followups(
             conversation=c,
             due_at=now,
             note=NOTE,
+            source=FollowUp.Source.MISSED,
         )
         for c in missed
         if latest_reminder.get(c.pk) is None or latest_reminder[c.pk] < c.last_in

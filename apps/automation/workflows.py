@@ -69,6 +69,7 @@ def send_whatsapp_message(
     auto_create_contact: bool = False,
     link_contact=None,
     conversation=None,
+    sent_by: str = "",
 ) -> OutboundMessage:
     """Queue a WhatsApp template message to ``phone`` on ``account``.
 
@@ -93,6 +94,9 @@ def send_whatsapp_message(
     ``WhatsAppContact`` and ``auto_create_contact`` is not set, or
     ``MessageTemplate.DoesNotExist`` if the template can't be resolved for this
     account.
+
+    ``sent_by`` ("automation" for workflows and rules) is carried to the inbox so Insights can
+    tell an automatic send from a person's.
     """
     from apps.whatsapp.models import MessageTemplate
     from apps.whatsapp.send_components import build_send_components
@@ -117,6 +121,8 @@ def send_whatsapp_message(
     }
     if conversation is not None:
         payload["_conversation_id"] = conversation.pk
+    if sent_by:
+        payload["_sent_by"] = sent_by
 
     return OutboundMessage.objects.create(
         account=account,
@@ -149,6 +155,7 @@ def _send_whatsapp_message(rule: AutomationRule, action: dict, context: dict) ->
             phone=phone,
             template_id=template_id,
             params=action.get("params", {}),
+            sent_by="automation",
         )
     except (ValueError, MessageTemplate.DoesNotExist) as exc:
         logger.error("_send_whatsapp_message: %s", exc)

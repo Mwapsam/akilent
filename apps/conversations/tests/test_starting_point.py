@@ -28,7 +28,7 @@ def _connect(account, days_ago):
     return at
 
 
-def _enquiry(account, at, reply_after=None, phone="+260971234567"):
+def _enquiry(account, at, reply_after=None, phone="+260971234567", status="sent"):
     contact = Contact.objects.create(account=account, phone=phone)
     conv = Conversation.objects.create(
         account=account, contact=contact, channel="whatsapp"
@@ -47,8 +47,22 @@ def _enquiry(account, at, reply_after=None, phone="+260971234567"):
             direction="outbound",
             body="K50",
             timestamp=at + reply_after,
+            status=status,
         )
     return conv
+
+
+@pytest.mark.django_db
+def test_a_failed_or_queued_send_is_not_a_reply(account):
+    """The inbox's rule: only a message that was actually sent answers the customer."""
+    start = timezone.now() - timedelta(days=20)
+    _enquiry(account, start, timedelta(minutes=5), "+260971000011", status="failed")
+    _enquiry(account, start, timedelta(minutes=5), "+260971000012", status="queued")
+    _enquiry(account, start, timedelta(minutes=5), "+260971000013", status="delivered")
+    m = conversations_api.window_metrics(account, start, start + timedelta(days=7))
+    assert m["conversations"] == 3
+    assert m["unanswered"] == 2
+    assert m["median_first_reply_minutes"] == 5
 
 
 @pytest.fixture

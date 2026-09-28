@@ -11,7 +11,7 @@ if [ "$DJANGO_ENV" = "production" ]; then
     exec gunicorn automator.asgi:application \
         -k uvicorn_worker.UvicornWorker \
         --bind 0.0.0.0:8001 \
-        --workers "${EVENTS_WORKERS:-2}" \
+        --workers "${EVENTS_WORKERS:-1}" \
         --timeout "${GUNICORN_TIMEOUT:-120}" \
         --graceful-timeout 30 \
         --log-level info \

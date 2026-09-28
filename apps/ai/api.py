@@ -558,25 +558,36 @@ def recent_auto_replies(account, limit: int = 20) -> list[dict]:
     ]
 
 
-def usage_summary(account=None, *, since) -> dict:
-    """``{"suggested", "used", "errors"}`` since ``since``: does the team trust the suggestions?
+def usage_summary(account=None, *, since, until=None) -> dict:
+    """What happened to AI suggestions made from ``since`` (to ``until``): does the team trust them?
 
+    ``{"suggested", "used", "used_unedited", "dismissed", "auto_sent", "errors"}``.
     ``account=None`` covers every business (the staff view). "Suggested" counts proposals the model
     actually produced (``ready_at`` set), whatever happened next. An EXPIRED status alone isn't
     enough: a proposal overtaken while still waiting on the model is expired too, never shown.
-    "Used" is the team sending one.
+    "Used" is the team sending one; "used_unedited" those sent exactly as suggested; "auto_sent"
+    the ones autopilot sent on its own.
     """
+    from django.db.models import Count, Q
+
     from apps.ai.models import AIProposal
 
     rows = AIProposal.objects.filter(created_at__gte=since)
+    if until is not None:
+        rows = rows.filter(created_at__lt=until)
     if account is not None:
         rows = rows.filter(account=account)
     status = AIProposal.Status
-    return {
-        "suggested": rows.filter(ready_at__isnull=False).count(),
-        "used": rows.filter(status=status.USED).count(),
-        "errors": rows.filter(status=status.ERROR).count(),
-    }
+    return rows.aggregate(
+        suggested=Count("id", filter=Q(ready_at__isnull=False)),
+        used=Count("id", filter=Q(status=status.USED)),
+        used_unedited=Count(
+            "id", filter=Q(status=status.USED, edited_before_send=False)
+        ),
+        dismissed=Count("id", filter=Q(status=status.DISMISSED)),
+        auto_sent=Count("id", filter=Q(auto_sent_at__isnull=False)),
+        errors=Count("id", filter=Q(status=status.ERROR)),
+    )
 
 
 def test_connection() -> dict:

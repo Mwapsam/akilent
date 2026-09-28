@@ -191,7 +191,9 @@ def _log_setup_reply(contact, message_id: str, body: str) -> None:
         status=MessageLog.Status.SENT,
         timestamp=timezone.now(),
     )
-    project_outbound_to_inbox(log)
+    # The setup confirmation answers the owner's own test message, not a customer, so Insights
+    # must not credit it as work Akilent did.
+    project_outbound_to_inbox(log, sent_by="system")
 
 
 def project_to_inbox(
@@ -241,7 +243,30 @@ def _canonical_contact(account, wa_contact):
     return contact
 
 
-def project_outbound_to_inbox(log: MessageLog) -> None:
+def _sender_of(outbound) -> str:
+    """Who sent an outbound message when it wasn't a person: "ai", "automation", "system" or "".
+
+    Insights credits replies by sender, so every automatic send must say so. A sender can mark
+    the payload (``_sent_by``); the older paths are recognised by their idempotency key: an
+    automatic AI reply (apps.ai.autonomy) uses "ai-auto:", an automation step "wf:". A STOP
+    confirmation is the system talking, not the business answering.
+    """
+    if outbound is None:
+        return ""
+    payload = outbound.payload or {}
+    if payload.get("_sent_by"):
+        return str(payload["_sent_by"])
+    if payload.get("_consent_ack"):
+        return "system"
+    key = outbound.idempotency_key or ""
+    if key.startswith("ai-auto:"):
+        return "ai"
+    if key.startswith("wf:"):
+        return "automation"
+    return ""
+
+
+def project_outbound_to_inbox(log: MessageLog, *, sent_by: str = "") -> None:
     """Mirror a business message (human reply, template or workflow send) onto the spine.
 
     Called wherever the provider log for an outbound message is created or changes, so the
@@ -262,17 +287,9 @@ def project_outbound_to_inbox(log: MessageLog) -> None:
         _canonical_contact(log.account, log.contact)
         spine = SpineConversation.get_or_create_for_whatsapp(log.conversation)
         metadata = {"message_type": log.message_type}
-        # An automatic AI reply (apps.ai.autonomy) is sent with an "ai-auto:" key, so the inbox
-        # can label it "Sent by AI" without WhatsApp knowing anything about AI.
-        key = (
-            getattr(getattr(log, "outbound_source", None), "idempotency_key", "") or ""
-        )
-        if key.startswith("ai-auto:"):
-            metadata["sent_by"] = "ai"
-        elif key.startswith(
-            "wf:"
-        ):  # an automation's reply_text step (apps.automation.workflow_engine)
-            metadata["sent_by"] = "automation"
+        who = sent_by or _sender_of(getattr(log, "outbound_source", None))
+        if who:
+            metadata["sent_by"] = who
         if log.status in (
             MessageLog.Status.FAILED,
             MessageLog.Status.HELD,

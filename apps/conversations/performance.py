@@ -18,9 +18,10 @@ from django.utils import timezone
 from apps.conversations.models import Conversation, FollowUp
 from apps.conversations.state import (
     ConversationState,
-    calculate_response_time,
+    response_seconds_of,
     snapshot_of,
     with_activity,
+    with_first_response,
 )
 
 DEFAULT_DAYS = 30
@@ -61,13 +62,15 @@ def team_performance(
     customers waiting, so the row that needs attention is first.
     """
     now = now or timezone.now()
-    conversations = with_activity(
-        Conversation.objects.filter(
-            account=account,
-            assigned_to__isnull=False,
-            last_message_at__gte=now - timedelta(days=days),
-        ).select_related("assigned_to")
-    ).order_by("-last_message_at")[:TEAM_SAMPLE_LIMIT]
+    conversations = with_first_response(
+        with_activity(
+            Conversation.objects.filter(
+                account=account,
+                assigned_to__isnull=False,
+                last_message_at__gte=now - timedelta(days=days),
+            ).select_related("assigned_to")
+        ).order_by("-last_message_at")
+    )[:TEAM_SAMPLE_LIMIT]
     rows: dict[int, dict] = {}
     for conversation in conversations:
         user = conversation.assigned_to
@@ -84,7 +87,7 @@ def team_performance(
         row["conversations"] += 1
         if snapshot_of(conversation, now).state is ConversationState.WAITING_FOR_AGENT:
             row["waiting"] += 1
-        seconds = calculate_response_time(conversation)
+        seconds = response_seconds_of(conversation)
         if seconds is not None:
             row["_response_seconds"].append(seconds)
 

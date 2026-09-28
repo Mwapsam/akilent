@@ -674,6 +674,7 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
         scheduled_at=send_at,
         auto_create_contact=bool(step.get("auto_create_contact")),
         link_contact=contact,
+        sent_by="automation",
     )
     return {"outbound_message_id": msg.id}
 
@@ -750,7 +751,10 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
     except wa_interactive.InteractiveError as exc:
         raise ValueError(f"{step['type']} step {step.get('id')!r}: {exc}") from exc
     msg = whatsapp_api.send_interactive(
-        run.workflow.account, conversation.whatsapp_conversation.contact, interactive
+        run.workflow.account,
+        conversation.whatsapp_conversation.contact,
+        interactive,
+        idempotency_key=f"wf:{run.pk}:{step.get('id')}",
     )
     conversation.whatsapp_conversation.register_outbound(msg.created_at)
     return {"outbound_message_id": msg.id}

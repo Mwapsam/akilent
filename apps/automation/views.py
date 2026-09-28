@@ -435,7 +435,10 @@ def starter_test(request):
     from apps.automation.variables import merge_business_facts
 
     whatsapp_api.send_message(
-        account, contact, merge_business_facts(merge_first_name(text, first), account)
+        account,
+        contact,
+        merge_business_facts(merge_first_name(text, first), account),
+        sent_by="system",  # a test to the owner's own phone, not a reply to a customer
     )
     messages.success(
         request,

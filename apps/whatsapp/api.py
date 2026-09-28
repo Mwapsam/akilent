@@ -59,6 +59,7 @@ def send_message(
     message_type: str = "text",
     *,
     idempotency_key: str | None = None,
+    sent_by: str = "",
 ) -> OutboundMessage:
     """Send a free-text WhatsApp message to a contact.
 
@@ -74,6 +75,8 @@ def send_message(
         idempotency_key: Optional caller-supplied dedupe key. When omitted a
             random key is generated so the ``unique_outbound_idempotency``
             constraint always has a value to enforce.
+        sent_by: "automation", "ai" or "system" when no person wrote it, so the inbox and
+            Insights credit the reply correctly. Empty for a person's message.
 
     Returns:
         The created OutboundMessage instance
@@ -82,13 +85,13 @@ def send_message(
         Account.DoesNotExist: if account is not valid
     """
     key = idempotency_key or uuid.uuid4().hex
+    payload = {"type": message_type, "body": text}
+    if sent_by:
+        payload["_sent_by"] = sent_by
     msg, created = OutboundMessage.objects.get_or_create(
         account=account,
         idempotency_key=key,
-        defaults={
-            "contact": contact,
-            "payload": {"type": message_type, "body": text},
-        },
+        defaults={"contact": contact, "payload": payload},
     )
     if not created:
         # A message with this idempotency key already exists — return it

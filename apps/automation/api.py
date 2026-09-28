@@ -290,6 +290,21 @@ def recent_failed_runs(limit: int = 5) -> list[dict]:
     return out
 
 
+def out_of_hours_reply_on(account) -> bool:
+    """Whether a live automation answers differently when the business is closed (it branches on
+    ``within_business_hours``, as the "Reply when you're closed" starter does)."""
+    import json
+
+    from apps.automation.models import Workflow
+
+    return any(
+        "within_business_hours" in json.dumps(definition or {})
+        for definition in Workflow.objects.filter(
+            account=account, status=Workflow.Status.PUBLISHED
+        ).values_list("definition", flat=True)
+    )
+
+
 def published_slugs(account) -> set:
     from apps.automation.models import Workflow
 

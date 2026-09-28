@@ -227,6 +227,32 @@ def is_open(account, at: datetime | None = None) -> bool:
     return open_in(get_hours(account), at)
 
 
+def next_opening(hours, at: datetime) -> datetime | None:
+    """When the business next opens after ``at`` (aware), or None if no hours are set or it never
+    opens. For an already-loaded ``BusinessHours``; no query. If open at ``at``, returns ``at``."""
+    from datetime import timedelta
+
+    if hours is None or not hours.schedule:
+        return None
+    if open_in(hours, at):
+        return at
+    try:
+        zone = ZoneInfo(hours.timezone)
+    except Exception:
+        zone = ZoneInfo(DEFAULT_TIMEZONE)
+    local = at.astimezone(zone)
+    for ahead in range(8):
+        day_local = local + timedelta(days=ahead)
+        window = hours.schedule.get(DAYS[day_local.weekday()])
+        if not window:
+            continue
+        opens = parse_time(window["open"])
+        candidate = datetime.combine(day_local.date(), opens, tzinfo=zone)
+        if candidate > local:
+            return candidate
+    return None
+
+
 def open_in(hours, at: datetime | None = None) -> bool:
     """``is_open`` for an already-loaded ``BusinessHours`` (or None): no query, for loops."""
     if hours is None or not hours.schedule:

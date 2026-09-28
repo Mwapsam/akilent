@@ -214,21 +214,52 @@ def needs_attention(account, now: datetime | None = None):
     )
 
 
+def with_first_response(qs):
+    """Annotate ``first_in`` and ``first_reply`` (the facts behind ``calculate_response_time``) in
+    the same query, so a list of conversations never costs a query each."""
+    from django.db.models import OuterRef, Subquery
+
+    first_in = (
+        Message.objects.filter(
+            conversation=OuterRef("pk"), direction=Message.Direction.INBOUND
+        )
+        .order_by("timestamp", "id")
+        .values("timestamp")[:1]
+    )
+    reply = (
+        Message.objects.filter(
+            _response_filter(),
+            conversation=OuterRef("pk"),
+            timestamp__gte=OuterRef("first_in"),
+        )
+        .order_by("timestamp", "id")
+        .values("timestamp")[:1]
+    )
+    return qs.annotate(first_in=Subquery(first_in)).annotate(
+        first_reply=Subquery(reply)
+    )
+
+
+def response_seconds_of(annotated) -> float | None:
+    """``calculate_response_time`` for a conversation from :func:`with_first_response`."""
+    if annotated.first_in is None or annotated.first_reply is None:  # type: ignore[attr-defined]
+        return None
+    return (annotated.first_reply - annotated.first_in).total_seconds()  # type: ignore[attr-defined]
+
+
 def average_first_response_seconds(account, *, limit: int = 100) -> float | None:
     """Average first-response time (seconds) over the most recently active
-    answered conversations — the one account-wide number Insights needs
-    (R1.5b) that didn't already exist. Deliberately not a stored/cached
-    metric: computed on demand from the same ``calculate_response_time``
-    the acceptance test and the composer status line already rely on, so
-    there's exactly one definition of "first response time" in the codebase.
+    answered conversations. Deliberately not a stored/cached metric: the same
+    definition as ``calculate_response_time`` (the acceptance test and the
+    composer status line rely on it), computed for all of them in one query.
     ``None`` when there's no determinate sample yet (never invented).
     """
-    candidates = (
+    candidates = with_first_response(
         with_activity(Conversation.objects.filter(account=account))
         .filter(last_in__isnull=False, last_out__isnull=False)
-        .order_by("-last_any")[:limit]
-    )
-    samples = [s for c in candidates if (s := calculate_response_time(c)) is not None]
+        .order_by("-last_any")
+    )[:limit]
+    samples = [s for c in candidates if (s := response_seconds_of(c)) is not None]
     if not samples:
         return None
     return sum(samples) / len(samples)
