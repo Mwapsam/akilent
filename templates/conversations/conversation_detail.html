@@ -325,10 +325,12 @@
 
     <template x-if="open">
       <div class="cv-footer">
-        {# The AI panel's own send_template card (below) says the same thing this banner does,
-           with more context (the actual template name) — showing both would repeat the message
-           in two boxes stacked on top of each other, so the banner steps aside when that card
-           is the one on screen. #}
+        {% comment %}
+          The AI panel's own send_template card (below) says the same thing this banner does,
+          with more context (the actual template name) — showing both would repeat the message
+          in two boxes stacked on top of each other, so the banner steps aside when that card
+          is the one on screen.
+        {% endcomment %}
         <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <div class="flex-1">
@@ -680,10 +682,12 @@
           <button class="btn btn-ghost btn-sm w-full">Mark done</button>
         </form>
         {% else %}
-        {# The composer's own "Remind me tomorrow" (below the message box) covers the common
-           case with one click; this form offers the same action with more control (1h / custom
-           time / a note), so it's tucked behind a disclosure instead of always taking up panel
-           space for the less common path. #}
+        {% comment %}
+          The composer's own "Remind me tomorrow" (below the message box) covers the common
+          case with one click; this form offers the same action with more control (1h / custom
+          time / a note), so it's tucked behind a disclosure instead of always taking up panel
+          space for the less common path.
+        {% endcomment %}
         <details class="cv-followup-more">
           <summary class="text-sm text-gray-500 cursor-pointer">Set a custom reminder</summary>
           <form method="post" class="space-y-2 mt-2" x-data="{ when: '1h' }">
