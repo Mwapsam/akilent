@@ -276,7 +276,8 @@ def _host(name: str) -> str:
 
 def _merge_spf(records: list[str], required: list[str]) -> str:
     """One SPF record combining every mechanism from ``records`` + ``required``."""
-    mechanisms, all_term = [], ""
+    mechanisms: list[str] = []
+    all_term = ""
     for rec in records:
         for term in rec.split()[1:]:
             if term.lower().endswith("all"):
@@ -393,7 +394,7 @@ def _cname_conflict(name: str) -> Diag:
 
 
 def _diagnose_mx(row: dict, zone: str, domain: str) -> Diag:
-    name, want = row["name"], _host(row.get("value"))
+    name, want = row["name"], _host(row.get("value") or "")
     mx = _resolve_mx(name)
     if _status(mx) in _UNKNOWN:
         return _timeout()
@@ -424,7 +425,7 @@ def _diagnose_mx(row: dict, zone: str, domain: str) -> Diag:
 
 
 def _diagnose_cname(row: dict, zone: str, domain: str) -> Diag:
-    name, want = row["name"], _host(row.get("value"))
+    name, want = row["name"], _host(row.get("value") or "")
     if not want:
         return Diag(False, "missing", _MISSING_MSG)
     cn = _resolve_cname(name)

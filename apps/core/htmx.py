@@ -63,7 +63,7 @@ def full_page_load(view):
             return _hx_redirect(request.get_full_path())
         return view(request, *args, **kwargs)
 
-    wrapper.full_page_load = True
+    wrapper.full_page_load = True  # type: ignore[attr-defined]
     return wrapper
 
 

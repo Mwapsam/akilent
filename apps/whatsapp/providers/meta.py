@@ -259,7 +259,7 @@ class MetaCloudAPIProvider(WhatsAppProvider):
     def list_templates(self, waba_id: str) -> list:
         """Fetch all message templates for a WABA (follows paging)."""
         url = self._url(f"{waba_id}/message_templates")
-        params = {"limit": 200}
+        params: dict | None = {"limit": 200}
         out: list = []
         try:
             while url:
@@ -326,7 +326,7 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         try:
             start = requests.post(
                 f"{_graph_api_base()}/{self._app_id}/uploads",
-                params={
+                params={  # type: ignore[arg-type]
                     "file_length": len(content),
                     "file_type": mime_type,
                     "access_token": self._access_token,

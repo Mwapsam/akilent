@@ -84,6 +84,8 @@ class SignupForm(UserCreationForm):
 
     def clean(self):
         cleaned = super().clean()
+        if cleaned is None:
+            return cleaned
         services = cleaned.get("selected_services")
         plan_slug = (cleaned.get("plan") or "").strip()
         if not plan_slug:
@@ -126,7 +128,7 @@ class LoginForm(AuthenticationForm):
         super().__init__(*args, **kwargs)
         # AuthenticationForm.__init__ clamps this to User.username's
         # max_length (150); restore the normal email length limit.
-        self.fields["username"].max_length = 254
+        self.fields["username"].max_length = 254  # type: ignore[attr-defined]
         self.fields["username"].widget.attrs["maxlength"] = 254
 
 
@@ -172,7 +174,7 @@ class AcceptInvitationForm(UserCreationForm):
         fields = ("username", "password1", "password2")
 
 
-class PasswordResetForm(PasswordResetForm):
+class PasswordResetForm(PasswordResetForm):  # type: ignore[no-redef]
     """Password reset form that sends via the configured email provider (SES/SMTP).
 
     Overrides Django's default send_mail to use send_system_email instead,
@@ -246,6 +248,8 @@ class BusinessAddressForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if cleaned is None:
+            return cleaned
         # Whitespace-only values would pass `required` but render an empty footer.
         for name, value in list(cleaned.items()):
             if isinstance(value, str):

@@ -38,7 +38,7 @@ class SendWhatsAppAction(Action):
             "optional": ["params", "scheduled_at", "conversation"],
         }
 
-    def execute(
+    def execute(  # type: ignore[override]
         self,
         context: dict,
         *,
@@ -93,7 +93,7 @@ class ReplyAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation", "body"], "optional": ["idempotency_key"]}
 
-    def execute(
+    def execute(  # type: ignore[override]
         self,
         context: dict,
         *,
@@ -135,7 +135,7 @@ class AssignConversationAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation", "user"]}
 
-    def execute(self, context: dict, *, conversation, user) -> dict:
+    def execute(self, context: dict, *, conversation, user) -> dict:  # type: ignore[override]
         from apps.accounts.models import Membership
 
         if (
@@ -167,7 +167,7 @@ class AutoAssignConversationAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation"], "optional": ["email", "force"]}
 
-    def execute(
+    def execute(  # type: ignore[override]
         self, context: dict, *, conversation, email: str = "", force: bool = False
     ) -> dict:
         from django.db.models import Count
@@ -233,7 +233,7 @@ class AddInternalNoteAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation", "body"], "optional": ["author"]}
 
-    def execute(self, context: dict, *, conversation, body: str, author=None) -> dict:
+    def execute(self, context: dict, *, conversation, body: str, author=None) -> dict:  # type: ignore[override]
         from apps.conversations.models import ConversationNote
 
         if not body:
@@ -259,7 +259,7 @@ class CreateFollowUpAction(Action):
             "optional": ["note", "created_by"],
         }
 
-    def execute(
+    def execute(  # type: ignore[override]
         self, context: dict, *, conversation, due_at, note: str = "", created_by=None
     ) -> dict:
         from apps.conversations.models import FollowUp
@@ -284,7 +284,7 @@ class CompleteFollowUpAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["followup"]}
 
-    def execute(self, context: dict, *, followup) -> dict:
+    def execute(self, context: dict, *, followup) -> dict:  # type: ignore[override]
         followup.mark_done()
         return {"followup_id": followup.id}
 
@@ -301,7 +301,7 @@ class LookupCustomerAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["conversation"]}
 
-    def execute(self, context: dict, *, conversation) -> dict:
+    def execute(self, context: dict, *, conversation) -> dict:  # type: ignore[override]
         from apps.commerce.models import Order
         from apps.conversations.models import FollowUp
         from apps.crm.models import Lead

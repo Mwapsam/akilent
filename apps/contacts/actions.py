@@ -14,7 +14,7 @@ class _TagAction(Action):
     def _change(self, contact, tag):  # pragma: no cover - overridden
         raise NotImplementedError
 
-    def execute(self, context: dict, *, contact, tag: str) -> dict:
+    def execute(self, context: dict, *, contact, tag: str) -> dict:  # type: ignore[override]
         from apps.contacts.tags import TagError
 
         try:

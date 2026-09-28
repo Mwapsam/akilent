@@ -34,7 +34,7 @@ class ChargeResult:
     error: str | None = None
     """Error message if success=False."""
 
-    metadata: dict = None
+    metadata: dict[str, object] | None = None
     """Extra data from the provider (e.g., receipt URL, risk score)."""
 
     def __post_init__(self):
@@ -93,7 +93,7 @@ class PaymentProvider(ABC):
         currency: str,
         idempotency_key: str,
         description: str = "",
-        metadata: dict = None,
+        metadata: dict[str, object] | None = None,
     ) -> ChargeResult:
         """Charge a payment method.
 
@@ -112,7 +112,7 @@ class PaymentProvider(ABC):
         """
 
     @abstractmethod
-    def refund(self, transaction_id: str, amount_cents: int = None) -> RefundResult:
+    def refund(self, transaction_id: str, amount_cents: int | None = None) -> RefundResult:
         """Refund a previous charge.
 
         Args:

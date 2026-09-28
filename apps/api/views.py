@@ -375,11 +375,8 @@ class CampaignCreateView(BaseApiView):
 
         if isinstance(result, ScheduledJob):
             body = _scheduled_job_body(result)
-            body["recipient_count"] = (
-                result.target_campaign.recipient_count
-                if result.target_campaign_id
-                else 0
-            )
+            camp = result.target_campaign if result.target_campaign_id else None
+            body["recipient_count"] = camp.recipient_count if camp is not None else 0
         else:
             body = {
                 "id": result.id,
@@ -437,7 +434,7 @@ class CampaignVersionsView(BaseApiView):
                         "label": v.label,
                         "from_email": v.from_email,
                         "subject": v.subject_override,
-                        "template": v.template.slug if v.template_id else None,
+                        "template": v.template.slug if v.template_id and v.template else None,
                         "template_version": v.template_version_number,
                         "recipient_count": v.recipient_count,
                         "status_at_snapshot": v.status_at_snapshot,
@@ -883,7 +880,7 @@ class ApiVersionView(BaseApiView):
             {
                 "version": getattr(request, "version", "v1") or "v1",
                 "supported": list(
-                    dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS", ["v1"])
+                    dj_settings.REST_FRAMEWORK.get("ALLOWED_VERSIONS") or ["v1"]
                 ),
                 "sunset": None,
                 "changelog": "https://akilent.com/docs/changelog",

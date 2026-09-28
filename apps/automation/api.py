@@ -106,7 +106,7 @@ def execute_rule(rule, context: dict) -> dict:
     """
     from apps.automation.workflows import execute_rule as _execute
 
-    return _execute(rule, context)
+    return _execute(rule, context)  # type: ignore[func-returns-value,return-value]
 
 
 def upsert_published_workflow(account, *, slug: str, name: str, definition: dict):

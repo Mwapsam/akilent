@@ -16,7 +16,7 @@ class CreateOrderAction(Action):
             "optional": ["currency", "conversation_id"],
         }
 
-    def execute(
+    def execute(  # type: ignore[override]
         self,
         context: dict,
         *,
@@ -44,7 +44,7 @@ class RequestPaymentAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["order", "redirect_url"]}
 
-    def execute(self, context: dict, *, order, redirect_url: str) -> dict:
+    def execute(self, context: dict, *, order, redirect_url: str) -> dict:  # type: ignore[override]
         from apps.commerce.services import request_payment
 
         payment = request_payment(order, redirect_url=redirect_url)
@@ -67,7 +67,7 @@ class LookupProductsAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["account", "query"], "optional": ["limit"]}
 
-    def execute(
+    def execute(  # type: ignore[override]
         self, context: dict, *, account, query: str, limit: int | None = None
     ) -> dict:
         from django.db.models import Q

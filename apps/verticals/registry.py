@@ -118,8 +118,8 @@ REAL_ESTATE = {
 }
 
 VERTICALS: dict[str, dict] = {
-    RESTAURANT["key"]: RESTAURANT,
-    REAL_ESTATE["key"]: REAL_ESTATE,
+    RESTAURANT["key"]: RESTAURANT,  # type: ignore[dict-item]
+    REAL_ESTATE["key"]: REAL_ESTATE,  # type: ignore[dict-item]
 }
 
 

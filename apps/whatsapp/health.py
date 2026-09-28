@@ -36,6 +36,7 @@ def is_degraded(account) -> bool:
     return (
         len(recent) == DEGRADED_STREAK
         and all(status == OutboundMessage.Status.FAILED for status, _ in recent)
+        and recent[0][1] is not None
         and timezone.now() - recent[0][1] <= DEGRADED_WINDOW
     )
 

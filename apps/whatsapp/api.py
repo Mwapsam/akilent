@@ -145,7 +145,7 @@ def send_interactive(
 
 
 def get_webhook_event(event_id: int, source: str | None = None) -> WebhookEventLog:
-    filters = {"pk": event_id}
+    filters: dict = {"pk": event_id}
     if source:
         filters["source"] = source
     return WebhookEventLog.objects.get(**filters)

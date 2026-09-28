@@ -806,9 +806,10 @@ def _activate_stripe_session(session: dict, *, account=None):
       the request is rejected — otherwise anyone who learns/guesses a
       session_id could activate billing for an account that isn't theirs.
     """
-    session = _verify_stripe_session(session)
-    if session is None:
+    verified = _verify_stripe_session(session)
+    if verified is None:
         return None
+    session = verified
 
     meta = session["metadata"]
     if account is not None and str(account.pk) != str(meta["account_id"]):

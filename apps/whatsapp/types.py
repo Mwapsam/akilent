@@ -28,7 +28,7 @@ class SendResult:
     retryable: bool = True
     """Whether re-attempting the send could succeed. False for policy/permanent errors."""
 
-    metadata: dict = None
+    metadata: dict[str, object] | None = None
     """Extra data from the provider (e.g., timestamp, cost, etc.)."""
 
     ambiguous: bool = False

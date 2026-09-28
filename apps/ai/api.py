@@ -486,7 +486,7 @@ def autopilot_report(account, *, days: int = 1, limit: int = 50) -> dict:
     )
     sent = held = reviewed = 0
     reasons: dict[str, int] = {}
-    rows = []
+    rows: list = []
     for p in decided:
         decision = p.auto_decision or {}
         failed = next((c for c in decision.get("checks", []) if not c.get("ok")), None)
@@ -498,7 +498,7 @@ def autopilot_report(account, *, days: int = 1, limit: int = 50) -> dict:
             reason = (
                 decision.get("error")
                 and "Sending failed"
-                or autonomy.HELD_REASONS.get((failed or {}).get("name"), "Other")
+                or autonomy.HELD_REASONS.get((failed or {}).get("name") or "", "Other")
             )
             reasons[reason] = reasons.get(reason, 0) + 1
             if p.status == AIProposal.Status.USED:

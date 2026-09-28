@@ -37,7 +37,7 @@ def sales(request):
     for stage in stages:
         # Attached here (rather than a template dict-lookup filter) so the
         # template can just do {% for deal in stage.deals_in_stage %}.
-        stage.deals_in_stage = list(
+        stage.deals_in_stage = list(  # type: ignore[attr-defined]
             Deal.objects.filter(account=account, stage=stage).select_related("contact")
         )
 

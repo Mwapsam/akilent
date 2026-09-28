@@ -146,7 +146,7 @@ class Command(BaseCommand):
                     logger.info(
                         f"SMTP auth successful: {username} (account={cred.account_id})"
                     )
-                    return AuthResult(success=True, identity=username)
+                    return AuthResult(success=True, identity=username)  # type: ignore[call-arg]
             except SmtpCredential.DoesNotExist:
                 logger.warning(f"SMTP auth failed: credential not found for {username}")
                 return AuthResult(success=False)
@@ -176,7 +176,7 @@ class Command(BaseCommand):
             auth_callback=auth_callback,
         )
 
-        with controller:
+        with controller:  # type: ignore[attr-defined]
             self.stdout.write("Press Ctrl+C to stop")
             try:
                 asyncio.run(asyncio.sleep(float("inf")))

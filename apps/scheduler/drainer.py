@@ -63,7 +63,7 @@ def _claim_due(now) -> list[int]:
     )
     with transaction.atomic():
         rows = (
-            ScheduledJob.objects.select_for_update(**lock_kwargs)
+            ScheduledJob.objects.select_for_update(**lock_kwargs)  # type: ignore[arg-type]
             .filter(status=ScheduledJob.Status.SCHEDULED, fire_at__lte=now)
             .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
             .order_by("fire_at", "id")[:BATCH]

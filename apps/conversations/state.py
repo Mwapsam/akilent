@@ -187,9 +187,9 @@ def snapshot_of(
     """Snapshot for a conversation produced by :func:`with_activity`."""
     return derive_state(
         status=annotated.status,
-        last_in=annotated.last_in,
-        last_out=annotated.last_out,
-        last_any=annotated.last_any,
+        last_in=annotated.last_in,  # type: ignore[attr-defined]
+        last_out=annotated.last_out,  # type: ignore[attr-defined]
+        last_any=annotated.last_any,  # type: ignore[attr-defined]
         now=now or timezone.now(),
     )
 

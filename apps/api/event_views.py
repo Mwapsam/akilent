@@ -42,7 +42,7 @@ class EventCollectionView(BaseApiView):
                         "id": e.public_id,
                         "event": e.name,
                         "customer": e.contact.public_id
-                        if e.contact_id
+                        if e.contact_id and e.contact
                         else (e.customer_ref or None),
                         "data": e.data,
                         "occurred_at": e.occurred_at,
@@ -94,7 +94,7 @@ class EventCollectionView(BaseApiView):
                 {
                     "id": ev.public_id,
                     "event": ev.name,
-                    "contact": ev.contact.public_id if ev.contact_id else None,
+                    "contact": ev.contact.public_id if ev.contact_id and ev.contact else None,
                     "received_at": ev.received_at,
                 },
                 status=status.HTTP_202_ACCEPTED,

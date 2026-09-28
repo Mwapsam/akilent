@@ -79,7 +79,7 @@ def numbers_list(request):
     from apps.whatsapp.setup import build_setup_console
 
     for n in numbers:
-        n.health = number_health(n, embedded_enabled=embedded_enabled)
+        n.health = number_health(n, embedded_enabled=embedded_enabled)  # type: ignore[attr-defined]
 
     _ensure_display_number(numbers)
 

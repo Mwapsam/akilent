@@ -61,7 +61,7 @@ def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
     if not (isinstance(cls, type) and issubclass(cls, AIProvider)):
         raise AIProviderError(f"AI backend {name!r} is not an AIProvider.")
     model = model_for(tier)
-    return cls(model=model) if model else cls()
+    return cls(model=model) if model else cls()  # type: ignore[call-arg]
 
 
 __all__ = [

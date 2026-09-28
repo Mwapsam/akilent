@@ -202,7 +202,9 @@ def _snake(name: str) -> str:
 def check_template(data: dict) -> tuple[dict, list[str]]:
     from apps.whatsapp.api import lint_template, validate_template_fields
 
-    fields = {
+    from typing import Any
+
+    fields: dict[str, Any] = {
         "category": str(data.get("category") or "utility").lower(),
         "name": _snake(str(data.get("name") or "")) or "new_message",
         "language": str(data.get("language") or "en"),
@@ -243,7 +245,7 @@ def template_reasons(fields: dict, warnings: list[str]) -> list[str]:
     """ "Why I built it this way", from fixed rules about the draft, never the model's own words."""
     from apps.automation.variables import looks_like_name
 
-    reasons = [CATEGORY_REASONS.get(fields.get("category"), "")]
+    reasons = [CATEGORY_REASONS.get(fields.get("category") or "", "")]
     if fields.get("category") == "authentication":
         return [r for r in reasons if r] + [
             "WhatsApp writes the wording for codes, so choose the security line, expiry and button below."

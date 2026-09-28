@@ -81,10 +81,10 @@ def workflow_list(request):
         # fallback) — crashed this page in production. See friendly_errors.py
         # note in apps.whatsapp for the same "translate once, in Python" rule.
         trigger = (wf.definition or {}).get("trigger") or {}
-        wf.trigger_label = trigger_label(
+        wf.trigger_label = trigger_label(  # type: ignore[attr-defined]
             trigger.get("type", ""), trigger.get("name", "")
         )
-        wf.summary = explain.explain_definition(wf.definition)
+        wf.summary = explain.explain_definition(wf.definition)  # type: ignore[attr-defined]
     groups, engagement, approved_templates = _engagement_starters(account, workflows)
     return render(
         request,
@@ -147,7 +147,7 @@ def _engagement_starters(account, workflows):
 
     # Each blank of each template, with the safest way to fill it already chosen.
     for template in approved:
-        template.blanks = [
+        template.blanks = [  # type: ignore[attr-defined]
             {"name": name, "default": wa_variables.default_choice(name)}
             for name in (template.variables or [])
         ]
@@ -246,7 +246,7 @@ def starter_install(request):
         name=starter["name"],
         definition=build_definition(
             starter,
-            template_name=template.whatsapp_template_name,
+            template_name=template.whatsapp_template_name or "",
             variable_mapping=variable_mapping,
             variable_fallbacks=variable_fallbacks,
         ),
@@ -431,7 +431,7 @@ def starter_test(request):
             "phone in the last 24 hours. Send it a quick message from your phone, then try again.",
         )
         return redirect("automation:list")
-    first = contact.contact.first_name if contact.contact_id else ""
+    first = contact.contact.first_name if contact.contact_id and contact.contact else ""
     from apps.automation.variables import merge_business_facts
 
     whatsapp_api.send_message(

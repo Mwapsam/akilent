@@ -54,7 +54,9 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
     from apps.email.services.send import send_system_email
 
     account = Account.objects.filter(pk=account_id).first()
-    owner = account.owner if account else None
+    if account is None:
+        return
+    owner = account.owner
     if owner is None or not owner.email:
         return
     lim = limit_catalog.get(key)

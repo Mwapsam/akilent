@@ -51,7 +51,7 @@ class Command(BaseCommand):
         else:
             ref = options["account"]
             accounts = list(
-                Account.objects.filter(id=int(ref) if ref.isdigit() else None)
+                Account.objects.filter(id=int(ref) if ref.isdigit() else -1)
                 or Account.objects.filter(slug=ref)
             )
             if not accounts:

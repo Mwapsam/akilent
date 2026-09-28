@@ -82,7 +82,7 @@ def enqueue_event(
             )
             delivery_ids.append(delivery.pk)
             transaction.on_commit(
-                lambda delivery_id=delivery.pk: deliver_webhook.delay(delivery_id)
+                lambda delivery_id=delivery.pk: deliver_webhook.delay(delivery_id)  # type: ignore[misc]
             )
     except Exception:
         logger.exception("enqueue_event: failed to fan out event %s", event_type)

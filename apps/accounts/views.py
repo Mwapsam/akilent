@@ -37,7 +37,7 @@ class _RestoreSiteBrandingMixin:
     def get_context_data(self, **kwargs):
         from apps.core.models import SiteSettings
 
-        context = super().get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)  # type: ignore[misc]
         context["site"] = SiteSettings.load()
         return context
 
@@ -581,13 +581,15 @@ def dashboard_panels(request):
 
     from django.conf import settings
 
-    numbers = []
+    from typing import Any
+
+    numbers: list[Any] = []
     if settings.WHATSAPP_ENABLED:
         from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
-        numbers = WhatsAppBusinessNumber.objects.filter(account=account).order_by(
+        numbers = list(WhatsAppBusinessNumber.objects.filter(account=account).order_by(
             "phone_number_id"
-        )
+        ))
 
     email_domains = []
     try:

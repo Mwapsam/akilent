@@ -31,7 +31,8 @@ def _workflow_dict(w: Workflow, *, with_definition: bool = False) -> dict:
 
 
 def _run_dict(r: WorkflowRun, *, with_steps: bool = False) -> dict:
-    d = {
+    from typing import Any
+    d: dict[str, Any] = {
         "id": r.public_id,
         "workflow": r.workflow.slug,
         "contact": r.contact.public_id,

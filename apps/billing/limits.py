@@ -90,7 +90,7 @@ class LimitChecker:
                 if blocked == "emails_day"
                 else "Monthly email limit"
             )
-            limit_value = billing_api.limit(self.account, blocked)
+            limit_value = billing_api.limit(self.account, blocked or "")
             raise PlanLimitExceeded(
                 f"{which} of {limit_value} reached. Please upgrade your plan.", "emails"
             )

@@ -89,7 +89,7 @@ def custom_exception_handler(exc, context):
             "invalid_schedule", str(exc), status.HTTP_400_BAD_REQUEST, context
         )
 
-    from apps.whatsapp.api import VerificationCodeError
+    from apps.whatsapp.verification_codes import VerificationCodeError
 
     if isinstance(exc, VerificationCodeError):
         return _envelope(exc.code, str(exc), exc.status, context)

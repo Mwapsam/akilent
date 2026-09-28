@@ -471,7 +471,7 @@ def _wanted_matrix(post) -> dict:
     """{plan_id: set(keys)} from the matrix form: one checkbox per cell named ``f:<plan>:<key>``."""
     from apps.billing import features as catalog
 
-    wanted = {p.pk: set() for p in Plan.objects.all()}
+    wanted: dict[int, set] = {p.pk: set() for p in Plan.objects.all()}
     keys = {f.key for f in catalog.matrix_features()}
     for name in post:
         parts = name.split(":")

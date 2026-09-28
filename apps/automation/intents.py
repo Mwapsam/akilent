@@ -11,6 +11,8 @@ Works with AI off: recommendations and the "you've answered this N times" button
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.utils.text import slugify
 
 from apps.automation import keywords as kw
@@ -27,7 +29,7 @@ MAX_REPLY = 1000
 # key -> how to build it. "starter" is the engagement starter it reuses (its key is the workflow
 # slug, so the goal gallery shows it as installed). "reply" is the text used when nobody supplied
 # one: placeholders like {location} are filled from the owner's profile at send time.
-INTENTS = {
+INTENTS: dict[str, dict[str, Any]] = {
     "answer_pricing": {
         "label": "Answer pricing questions",
         "starter": "answer-pricing-questions",
@@ -311,7 +313,7 @@ def build_from_intent(
             else "answer-a-common-question"
         )
     else:
-        name, slug = intent["label"], intent.get("starter") or intent.get("slug")
+        name, slug = intent["label"], intent.get("starter") or intent.get("slug") or intent_key
     tag = slugify(str(tag))[:40] if tag else None
 
     if intent_key == "welcome_new":
@@ -320,12 +322,12 @@ def build_from_intent(
             "Answers a customer's first message once; the tag “welcomed” makes sure it's never repeated."
         )
     elif intent_key == "reply_when_closed":
-        definition = build_reply_definition(starter, text=reply)
+        definition = build_reply_definition(starter or {}, text=reply)
         reasons.append(
             "Only replies outside the opening hours you set, at most once every 8 hours per customer."
         )
     elif intent_key == "hand_interested_to_team":
-        definition = build_team_definition(starter, text=reply)
+        definition = build_team_definition(starter or {}, text=reply)
         reasons.append(
             "Gives each new interested customer to your least busy teammate and emails them."
         )
@@ -334,7 +336,7 @@ def build_from_intent(
         question = str(
             entities.get("question") or "Hi {first_name}! What can we help you with?"
         )[:1024]
-        definition = build_menu_definition(starter, question=question, options=options)
+        definition = build_menu_definition(starter or {}, question=question, options=options)
         reply = question
         reasons.append(
             "Offers "
@@ -361,7 +363,7 @@ def build_from_intent(
             )
             mapping[var], fallbacks[var] = source, fallback
         definition = build_definition(
-            starter,
+            starter or {},
             template_name=template.whatsapp_template_name,
             variable_mapping=mapping,
             variable_fallbacks=fallbacks,
@@ -402,7 +404,7 @@ def build_from_intent(
                 + ": it isn't in your notes, hours or answers, "
                 "so make sure it's right before turning this on."
             )
-    errors = []
+    errors: list[str] = []
     for item in validate_definition(definition, account=account):
         (warnings if item.get("severity") == "warning" else errors).append(
             item["message"]

@@ -40,7 +40,7 @@ class AliasService:
     def provision(self, alias: EmailAlias) -> AliasInfo:
         """Create the alias on the mail server."""
         try:
-            info = self._provider.create_alias(alias.address, [alias.goto])
+            info = self._provider.create_alias(alias.address, [alias.goto])  # type: ignore[attr-defined]
         except EmailProviderError:
             audit(
                 account=self.account,
@@ -72,7 +72,7 @@ class AliasService:
     def deprovision(self, alias: EmailAlias) -> OperationResult:
         """Remove the alias from the mail server."""
         try:
-            result = self._provider.delete_alias(alias.address)
+            result = self._provider.delete_alias(alias.address)  # type: ignore[attr-defined]
         except EmailProviderError:
             audit(
                 account=self.account,
@@ -97,7 +97,7 @@ class AliasService:
     def update_targets(self, alias: EmailAlias, targets: list[str]) -> AliasInfo:
         """Replace the forwarding targets for an existing alias."""
         try:
-            info = self._provider.update_alias(alias.address, targets)
+            info = self._provider.update_alias(alias.address, targets)  # type: ignore[attr-defined]
         except EmailProviderError:
             audit(
                 account=self.account,

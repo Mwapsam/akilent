@@ -42,7 +42,7 @@ def _dims(event: MessageEvent) -> dict:
 
 
 def apply_event(event: MessageEvent) -> None:
-    measure = _MEASURE_FOR_TYPE.get(event.type)
+    measure = _MEASURE_FOR_TYPE.get(event.type)  # type: ignore[call-overload]
     if not measure:
         return
 
@@ -79,7 +79,7 @@ def reconcile(day) -> int:
         .order_by("occurred_at", "id")
     )
     for event in events.iterator():
-        measure = _MEASURE_FOR_TYPE.get(event.type)
+        measure = _MEASURE_FOR_TYPE.get(event.type)  # type: ignore[call-overload]
         if not measure:
             continue
         msg = event.message

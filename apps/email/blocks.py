@@ -190,9 +190,9 @@ def _text(value, cap: int) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")[:cap]
 
 
-def _colour(value, fallback: str) -> str:
+def _colour(value: object, fallback: object = "") -> str:
     value = str(value or "").strip()
-    return value.upper() if _HEX.match(value) else fallback
+    return value.upper() if _HEX.match(value) else str(fallback or "")
 
 
 def _choice(value, options, fallback):
@@ -207,7 +207,8 @@ def _url(value, *, label: str, required: bool = False) -> str:
             raise BlocksError(f"{label} needs a link.")
         return ""
     if _ONLY_TAG.match(value):
-        return "{{ " + _TAG.match(value).group(1) + " }}"
+        m = _TAG.match(value)
+        return "{{ " + (m.group(1) if m else "") + " }}"
     if value.startswith("/") and not value.startswith("//"):
         return value
     if value.lower().startswith("www."):
@@ -291,7 +292,8 @@ def _block(data: dict) -> dict:
             height = 24
         block.update(height=min(120, max(8, height)))
     elif kind == "columns":
-        columns = data.get("columns") if isinstance(data.get("columns"), list) else []
+        raw_cols = data.get("columns")
+        columns: list[object] = raw_cols if isinstance(raw_cols, list) else []
         block.update(columns=[_column(c) for c in (columns + [{}, {}])[:2]])
     elif kind == "footer":
         block.update(

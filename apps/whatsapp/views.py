@@ -530,13 +530,16 @@ def campaign_detail(request, pk: int):
 
 
 def _verify_meta_signature(request) -> bool:
+    secret = settings.WHATSAPP_APP_SECRET
+    if not secret:
+        return False
     header = request.headers.get("X-Hub-Signature-256", "")
     if not header.startswith("sha256="):
         return False
     their_digest = header.removeprefix("sha256=")
 
     expected = hmac.new(
-        key=settings.WHATSAPP_APP_SECRET.encode(),
+        key=secret.encode(),
         msg=request.body,
         digestmod=hashlib.sha256,
     ).hexdigest()
@@ -567,8 +570,12 @@ class WhatsAppWebhookView(View):
         token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge", "")
 
-        if mode == "subscribe" and hmac.compare_digest(
-            token or "", settings.WHATSAPP_VERIFY_TOKEN
+        verify_token = settings.WHATSAPP_VERIFY_TOKEN
+        if (
+            mode == "subscribe"
+            and verify_token
+            and token
+            and hmac.compare_digest(token, verify_token)
         ):
             return HttpResponse(challenge, content_type="text/plain")
         return HttpResponse(status=403)

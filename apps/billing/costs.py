@@ -97,7 +97,11 @@ def plan_economics(
     settings = CostSettings.load()
     costs = unit_costs()
     limits = _plan_limits(plan, limit_overrides)
-    lines, uncapped, total = [], [], settings.fixed_monthly_cost_per_business
+    from typing import Any
+
+    lines: list[dict[str, Any]] = []
+    uncapped: list[str] = []
+    total = settings.fixed_monthly_cost_per_business
     for d in DRIVERS:
         units = max_units(d, limits)
         if units is None:
@@ -166,7 +170,7 @@ def _meter_key(driver: Driver) -> str:
     return driver.month_limit or driver.day_limit
 
 
-def _month_usage(driver: Driver, *, account=None, month_start) -> dict:
+def _month_usage(driver: Driver, *, account=None, month_start):  # type: ignore[return]
     qs = UsageCounter.objects.filter(key=_meter_key(driver))
     qs = qs.filter(account=account) if account is not None else qs
     qs = (

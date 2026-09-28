@@ -368,7 +368,7 @@ class DomainService:
         """
         from apps.email.models import EmailDnsRecord
 
-        dkim_records = self._provider.get_dkim_records(domain_record.domain)
+        dkim_records = self._provider.get_dkim_records(domain_record.domain)  # type: ignore[union-attr]
         desired = desired_dns_records(
             domain_record,
             dkim_records,

@@ -14,7 +14,7 @@ class LookupBusinessHoursAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["account"]}
 
-    def execute(self, context: dict, *, account) -> dict:
+    def execute(self, context: dict, *, account) -> dict:  # type: ignore[override]
         from apps.accounts.business_hours import availability
 
         return availability(account)

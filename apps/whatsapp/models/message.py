@@ -86,8 +86,8 @@ class MessageLog(models.Model):
         ]
 
     def apply_status_update(self, new_status: str) -> bool:
-        current = self._STATUS_RANK.get(self.status, 0)
-        incoming = self._STATUS_RANK.get(new_status)
+        current = self._STATUS_RANK.get(self.status, 0)  # type: ignore[call-overload]
+        incoming = self._STATUS_RANK.get(new_status)  # type: ignore[call-overload]
         if incoming is None or incoming <= current:
             return False
         self.status = new_status

@@ -739,13 +739,13 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
         raise ValueError(
             f"{step['type']} step {step.get('id')!r}: buttons and lists are WhatsApp-only"
         )
-    text = _first_name_merge(run, step.get("text"))
+    text = _first_name_merge(run, step.get("text") or "")
     try:
         if step["type"] == "send_buttons":
-            interactive = wa_interactive.build_buttons(text, step.get("buttons"))
+            interactive = wa_interactive.build_buttons(text, step.get("buttons") or [])
         else:
             interactive = wa_interactive.build_list(
-                text, step.get("button"), step.get("rows")
+                text, step.get("button") or "", step.get("rows") or []
             )
     except wa_interactive.InteractiveError as exc:
         raise ValueError(f"{step['type']} step {step.get('id')!r}: {exc}") from exc
@@ -833,7 +833,7 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
     from apps.core.actions import ActionError, run_action
 
     conversation = _conversation_for_run(run, step)
-    text = _first_name_merge(run, step.get("text"))
+    text = _first_name_merge(run, step.get("text") or "")
     try:
         # A fixed key per run and step: a retried step returns the first message instead of sending
         # a second, and the inbox can tell this reply came from an automation, not a person.
@@ -942,7 +942,7 @@ def _run_notify_team(run: WorkflowRun, step: dict) -> dict:
         conversation = None  # a notification about a customer needs no conversation
     contact = run.contact
     who = contact.full_name or contact.phone or contact.email or "A customer"
-    text = _first_name_merge(run, step.get("text")).replace("{contact}", who)
+    text = _first_name_merge(run, step.get("text") or "").replace("{contact}", who)
     path = (
         reverse("conversations:detail", args=[conversation.public_id])
         if conversation is not None
@@ -1082,8 +1082,10 @@ def _build_action_kwargs(run: WorkflowRun, step: dict) -> dict:
 
     action = get_action(step["action"])
     schema = action.input_schema()
+    from typing import Any
+
     params = step.get("params") or {}
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     for field_name in [*schema.get("required", []), *schema.get("optional", [])]:
         if field_name == "contact":
@@ -1548,7 +1550,7 @@ def run_due() -> int:
     n = 0
     with transaction.atomic():
         due = (
-            WorkflowRun.objects.select_for_update(**lock_kwargs)
+            WorkflowRun.objects.select_for_update(**lock_kwargs)  # type: ignore[arg-type]
             .filter(
                 status=WorkflowRun.Status.WAITING,
                 next_due_at__lte=timezone.now(),

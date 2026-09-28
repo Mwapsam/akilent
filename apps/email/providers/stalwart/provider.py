@@ -217,7 +217,7 @@ class StalwartProvider(EmailProvider):
         all_sigs = self._get_objects("x:DkimSignature", all_sig_ids)
         sigs_by_domain_id: dict[str, list[dict[str, Any]]] = {}
         for sig in all_sigs:
-            sigs_by_domain_id.setdefault(sig.get("domainId"), []).append(sig)
+            sigs_by_domain_id.setdefault(sig.get("domainId") or "", []).append(sig)
 
         results = []
         for d in domain_objs:

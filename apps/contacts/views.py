@@ -89,8 +89,8 @@ def contact_detail(request, public_id: str):
 
     events = list(contact.events.all()[:100])
     for e in events:
-        e.label = event_label(e.type)
-        e.detail = event_detail(e.type, e.data)
+        e.label = event_label(e.type)  # type: ignore[attr-defined]
+        e.detail = event_detail(e.type, e.data)  # type: ignore[attr-defined]
 
     messages_to = EmailMessage.objects.filter(
         account=account, to_email__iexact=contact.email
@@ -209,10 +209,10 @@ def contact_create(request):
     # that's all we were given.
     if phone:
         contact, created = upsert_contact_by_phone(
-            account, phone, email=email or None, **fields
+            account, phone, email=email or None, **fields  # type: ignore[arg-type]
         )
     else:
-        contact, created = upsert_contact(account, email, **fields)
+        contact, created = upsert_contact(account, email, **fields)  # type: ignore[arg-type]
 
     label = contact.full_name or str(contact)
     messages.success(

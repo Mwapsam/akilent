@@ -157,7 +157,7 @@ class Command(BaseCommand):
         else:
             ref = options["account"]
             accounts = list(
-                Account.objects.filter(id=int(ref) if ref.isdigit() else None)
+                Account.objects.filter(id=int(ref) if ref.isdigit() else -1)
                 or Account.objects.filter(slug=ref)
             )
             if not accounts:
@@ -201,6 +201,7 @@ class Command(BaseCommand):
                 "output_sha256": hashlib.sha256(body).hexdigest(),
                 "operator": options["operator"],
             }
+            assert record_path is not None
             with open(record_path, "x") as fh:
                 json.dump(record, fh, indent=2, sort_keys=True)
             self.stdout.write(

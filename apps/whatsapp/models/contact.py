@@ -106,7 +106,8 @@ class WhatsAppContact(models.Model):
             return
         from apps.contacts.services import record_contact_event
 
-        record_contact_event(self.contact, event_type, data=data)
+        if self.contact is not None:
+            record_contact_event(self.contact, event_type, data=data)
 
     @property
     def primary_binding(self):

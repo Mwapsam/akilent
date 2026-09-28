@@ -16,7 +16,7 @@ class CreateLeadAction(Action):
             "optional": ["source", "owner", "workflow_run", "conversation_id"],
         }
 
-    def execute(
+    def execute(  # type: ignore[override]
         self,
         context: dict,
         *,
@@ -60,7 +60,7 @@ class CaptureConversationLeadAction(Action):
             "optional": ["conversation_id", "signal", "owner"],
         }
 
-    def execute(
+    def execute(  # type: ignore[override]
         self,
         context: dict,
         *,
@@ -115,7 +115,7 @@ class UpdateLeadStatusAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["lead", "status"]}
 
-    def execute(self, context: dict, *, lead, status: str) -> dict:
+    def execute(self, context: dict, *, lead, status: str) -> dict:  # type: ignore[override]
         from apps.crm.services import set_lead_status
 
         try:
@@ -133,7 +133,7 @@ class CreateDealAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["lead"], "optional": ["title", "value", "pipeline"]}
 
-    def execute(
+    def execute(  # type: ignore[override]
         self, context: dict, *, lead, title: str | None = None, value=0, pipeline=None
     ) -> dict:
         from apps.crm.services import convert_lead_to_deal
@@ -150,7 +150,7 @@ class ChangeDealStageAction(Action):
     def input_schema(self) -> dict:
         return {"required": ["deal", "stage"]}
 
-    def execute(self, context: dict, *, deal, stage) -> dict:
+    def execute(self, context: dict, *, deal, stage) -> dict:  # type: ignore[override]
         from apps.crm.services import move_deal_stage
 
         if stage.pipeline_id != deal.pipeline_id:

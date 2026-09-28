@@ -185,7 +185,7 @@ def _when(trigger: dict) -> str:
     words = _words(match.get("any") or [])
     if kind == "conversation.message_received":
         how = {"starts_with": "starts with", "exact": "is exactly"}.get(
-            match.get("mode"), "mentions"
+            match.get("mode") or "", "mentions"
         )
         return (
             f"a customer's message {how} {words}"

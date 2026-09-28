@@ -62,6 +62,8 @@ def _clean(data: dict, old_facts: dict) -> tuple[str, dict]:
         raise ProposalError("The AI returned an empty summary.")
     facts = {}
     raw = data.get("facts") if isinstance(data.get("facts"), dict) else old_facts
+    if raw is None:
+        raw = {}
     for key, value in list(raw.items())[:MAX_FACTS]:
         key, value = str(key).strip()[:40], prompts.mask(str(value)).strip()[:120]
         if key and value:

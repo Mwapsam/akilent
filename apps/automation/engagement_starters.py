@@ -27,9 +27,11 @@ sent and only the owner knows which of theirs fits.
 
 from __future__ import annotations
 
+from typing import Any
+
 _DAY = 86400
 
-ENGAGEMENT_STARTERS = [
+ENGAGEMENT_STARTERS: list[dict[str, Any]] = [
     {
         "key": "welcome-new-enquiry",
         "name": "Welcome every new enquiry",
@@ -86,7 +88,7 @@ ENGAGEMENT_STARTERS = [
 # Keyword auto-replies. Unlike the follow-ups above these need no approved template: the
 # customer has just written, so a plain message is allowed (WhatsApp's 24-hour window). The
 # owner supplies the answer; the keywords are a starting point they can edit afterwards.
-_REPLY_STARTERS = [
+_REPLY_STARTERS: list[dict[str, Any]] = [
     {
         "key": "answer-pricing-questions",
         "name": "Answer pricing questions",
@@ -295,7 +297,7 @@ def build_menu_definition(starter: dict, *, question: str, options: list[dict]) 
     """
     from django.utils.text import slugify
 
-    steps = [
+    steps: list[dict[str, Any]] = [
         {
             "id": "ask",
             "type": "send_buttons",

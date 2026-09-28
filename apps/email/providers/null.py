@@ -252,4 +252,4 @@ class NullSendProvider:
         logger.debug(
             "NullSendProvider.send() to %s (silently discarded)", message.to_email
         )
-        return SendResult(success=True, provider_message_id=f"null-{id(message)}")
+        return SendResult(success=True, provider_message_id=f"null-{id(message)}")  # type: ignore[return-value]

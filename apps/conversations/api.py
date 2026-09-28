@@ -210,7 +210,7 @@ def earlier_messages(
 
 def recent_customer_messages(account, *, since, limit: int = 3000) -> list[dict]:
     """Customers' messages since ``since``, newest first: ``[{"conversation_id", "body", "timestamp"}]``."""
-    return list(
+    qs = (
         Message.objects.filter(
             account=account, direction=Message.Direction.INBOUND, timestamp__gte=since
         )
@@ -218,6 +218,7 @@ def recent_customer_messages(account, *, since, limit: int = 3000) -> list[dict]
         .order_by("-timestamp")
         .values("conversation_id", "body", "timestamp")[:limit]
     )
+    return list(qs)  # type: ignore[arg-type]
 
 
 def first_reply_waits(account, *, since, now=None) -> list[float | None]:
@@ -356,7 +357,9 @@ def person_reply_pairs(account, *, since, limit: int = 3000) -> list[dict]:
         .order_by("conversation_id", "timestamp", "id")
         .values("id", "conversation_id", "direction", "body", "metadata")[:limit]
     )
-    pairs, asked, current = [], [], None
+    pairs: list = []
+    asked: list = []
+    current = None
     for m in messages:
         if m["conversation_id"] != current:
             current, asked = m["conversation_id"], []

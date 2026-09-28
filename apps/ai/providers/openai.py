@@ -82,7 +82,7 @@ class OpenAIProvider(AIProvider):
             text=text,
             model=data.get("model") or self.model,
             usage={
-                "input_tokens": usage.get("prompt_tokens"),
-                "output_tokens": usage.get("completion_tokens"),
+                "input_tokens": usage.get("prompt_tokens") or 0,
+                "output_tokens": usage.get("completion_tokens") or 0,
             },
         )

@@ -119,7 +119,7 @@ class Command(BaseCommand):
         Account = apps.get_model("accounts", "Account")
         ref = options["account"]
         account = (
-            Account.objects.filter(id=int(ref) if ref.isdigit() else None).first()
+            Account.objects.filter(id=int(ref) if ref.isdigit() else -1).first()
             or Account.objects.filter(slug=ref).first()
         )
         if account is None:

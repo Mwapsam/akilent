@@ -40,23 +40,30 @@ def _job_dict(job: ScheduledJob, *, detail: bool = False) -> dict:
         "fired_at": job.fired_at,
     }
     if detail:
-        target = None
+        from typing import Any
+
+        target: dict[str, Any] | None = None
         if job.target_message_id:
-            target = {"type": "message", "id": job.target_message.public_id}
+            msg = job.target_message
+            if msg is not None:
+                target = {"type": "message", "id": msg.public_id}
         elif job.target_campaign_id:
             camp = job.target_campaign
-            target = {
-                "type": "campaign",
-                "id": camp.id,
-                "status": camp.status,
-                "recipient_count": camp.recipient_count,
-            }
+            if camp is not None:
+                target = {
+                    "type": "campaign",
+                    "id": camp.id,
+                    "status": camp.status,
+                    "recipient_count": camp.recipient_count,
+                }
         elif job.target_outbound_id:
-            target = {
-                "type": "whatsapp",
-                "id": job.target_outbound_id,
-                "status": job.target_outbound.status,
-            }
+            outbound = job.target_outbound
+            if outbound is not None:
+                target = {
+                    "type": "whatsapp",
+                    "id": job.target_outbound_id,
+                    "status": outbound.status,
+                }
         body["target"] = target
         body["result"] = job.result or {}
     return body

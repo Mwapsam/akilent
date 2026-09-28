@@ -234,7 +234,7 @@ def create_and_submit_auth_template(
         button_text=button_text,
     )
     try:
-        get_whatsapp_provider(account).create_template(number.waba_id, payload)
+        get_whatsapp_provider(account).create_template(number.waba_id or "", payload)
     except (WhatsAppProviderError, NotImplementedError) as exc:
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
     body, footer = auth_content(
@@ -319,7 +319,9 @@ def _build_button(
 ) -> dict:
     text = text.strip()
     if type == "url":
-        btn = {"type": "URL", "text": text, "url": url.strip()}
+        from typing import Any
+
+        btn: dict[str, Any] = {"type": "URL", "text": text, "url": url.strip()}
         if example.strip():
             btn["example"] = [example.strip()]
         return btn
@@ -354,7 +356,9 @@ def build_meta_payload(
     buttons: list[dict] | None = None,
 ) -> dict:
     """Meta's template-creation schema — the only place this shape is built."""
-    components = []
+    from typing import Any
+
+    components: list[dict[str, Any]] = []
     if header_format != "text" and header_media_handle:
         components.append(
             {
@@ -366,7 +370,9 @@ def build_meta_payload(
     elif header.strip():
         components.append({"type": "HEADER", "format": "TEXT", "text": header.strip()})
 
-    body_component = {"type": "BODY", "text": body.strip()}
+    from typing import Any as _Any
+
+    body_component: dict[str, _Any] = {"type": "BODY", "text": body.strip()}
     if variable_examples:
         body_component["example"] = {"body_text": [variable_examples]}
     components.append(body_component)
@@ -456,7 +462,7 @@ def create_and_submit_template(
     )
     try:
         provider = get_whatsapp_provider(account)
-        provider.create_template(number.waba_id, payload)
+        provider.create_template(number.waba_id or "", payload)
     except (WhatsAppProviderError, NotImplementedError) as exc:
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
 

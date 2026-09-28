@@ -191,11 +191,12 @@ def _nice_ticks(low: float, high: float, count: int = 4) -> list[float]:
     # above every gridline with nothing to read it against.
     start = math.floor(low / step) * step
     end = math.ceil(high / step) * step
-    ticks, value = [], start
+    ticks: list[float] = []
+    value: float = float(start)
     while value <= end + step * 0.001:
         ticks.append(round(value, 6))
         value += step
-    return ticks or [low, high]
+    return ticks or [float(low), float(high)]
 
 
 def line_chart(

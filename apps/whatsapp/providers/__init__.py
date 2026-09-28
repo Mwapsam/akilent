@@ -39,7 +39,7 @@ def get_whatsapp_provider(account) -> WhatsAppProvider:
             "account %s has %d active WhatsApp numbers; sending from %s",
             account.slug,
             len(numbers),
-            number.phone_number_id,
+            number.phone_number_id if number else None,
         )
 
     if not number:

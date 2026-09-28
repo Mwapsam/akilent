@@ -170,7 +170,7 @@ def verify_connection(
             FIX_NUMBER,
         )
 
-    provider = MetaCloudAPIProvider(number.access_token, number.phone_number_id)
+    provider = MetaCloudAPIProvider(number.access_token or "", number.phone_number_id)
     if _window_open(number, recipient):
         # The recipient messaged us in the last 24h, so free text is allowed and
         # works on any number (no template needed).

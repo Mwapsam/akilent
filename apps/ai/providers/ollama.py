@@ -72,7 +72,7 @@ class OllamaProvider(AIProvider):
             text=text,
             model=data.get("model") or self.model,
             usage={
-                "input_tokens": data.get("prompt_eval_count"),
-                "output_tokens": data.get("eval_count"),
+                "input_tokens": data.get("prompt_eval_count") or 0,
+                "output_tokens": data.get("eval_count") or 0,
             },
         )

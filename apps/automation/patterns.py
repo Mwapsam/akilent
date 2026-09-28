@@ -182,7 +182,7 @@ def _typical(group: list[dict]) -> dict:
 
 
 def _question_keywords(group: list[dict]) -> list[str]:
-    counts = Counter()
+    counts: Counter[str] = Counter()
     for pair in group:
         counts.update(set(_words(pair["question"])))
     need = max(2, int(len(group) * KEYWORD_SHARE + 0.999))

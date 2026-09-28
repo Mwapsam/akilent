@@ -107,7 +107,7 @@ def stop_view_as(request):
     state = request.session.pop(VIEW_AS_KEY, None) or {}
     if hasattr(request, _CACHE_ATTR):
         delattr(request, _CACHE_ATTR)
-    return Account.objects.filter(pk=state.get("account")).first() if state else None
+    return Account.objects.filter(pk=state.get("account") or -1).first() if state else None
 
 
 def is_suspended_member(request) -> bool:

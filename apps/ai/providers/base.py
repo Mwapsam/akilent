@@ -24,7 +24,7 @@ class CompletionResult:
     model: str
     """Model that generated it."""
 
-    usage: dict = None
+    usage: dict[str, int] | None = None
     """Token usage: {'input_tokens': N, 'output_tokens': M} when the provider reports it."""
 
     error: str | None = None

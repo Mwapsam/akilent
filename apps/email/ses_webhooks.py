@@ -31,28 +31,30 @@ logger = logging.getLogger(__name__)
 
 
 def _get_allowed_sns_topic_arns() -> set[str]:
-    """Load allowed SNS topic ARNs from MailProviderSettings or env var.
+    """Load allowed SNS topic ARNs from both MailProviderSettings and SES_SNS_TOPIC_ARN.
 
-    MailProviderSettings takes precedence; env var is the fallback.
-    Returns a set of ARNs, or empty set if not configured.
+    Both sources are accepted simultaneously so deployments that configure one or
+    the other (or both) continue to work without disruption.
     """
     from django.db import DEFAULT_DB_ALIAS, connections
 
-    # Try DB first (MailProviderSettings.ses_sns_topic_arn)
-    try:
-        # Check if DB is ready (avoid errors during migrations)
-        if connections[DEFAULT_DB_ALIAS].ensure_connection() is not None:
-            from apps.core.models import MailProviderSettings
+    arns: set[str] = set()
 
-            settings_obj = MailProviderSettings.load()
-            if settings_obj.ses_sns_topic_arn:
-                return {settings_obj.ses_sns_topic_arn}
+    env_arn = os.getenv("SES_SNS_TOPIC_ARN", "").strip()
+    if env_arn:
+        arns.add(env_arn)
+
+    try:
+        connections[DEFAULT_DB_ALIAS].ensure_connection()
+        from apps.core.models import MailProviderSettings
+
+        settings_obj = MailProviderSettings.load()
+        if settings_obj.ses_sns_topic_arn:
+            arns.add(settings_obj.ses_sns_topic_arn)
     except Exception as e:
         logger.debug("Failed to load MailProviderSettings (DB may not be ready): %s", e)
 
-    # Fallback to environment variable
-    env_arn = os.getenv("SES_SNS_TOPIC_ARN", "").strip()
-    return {env_arn} if env_arn else set()
+    return arns
 
 
 def _get_sns_topic_arn_if_allowed(topic_arn: str | None) -> bool:
@@ -178,10 +180,10 @@ def _verify_sns_signature(message: dict[str, Any]) -> bool:
             public_key = cert_obj.public_key()
             signature_bytes = base64.b64decode(signature)
 
-            public_key.verify(
+            public_key.verify(  # type: ignore[union-attr,call-arg]
                 signature_bytes,
                 string_to_sign.encode("utf-8"),
-                asym_padding.PKCS1v15(),
+                asym_padding.PKCS1v15(),  # type: ignore[arg-type]
                 hash_algo,
             )
             return True

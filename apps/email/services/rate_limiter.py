@@ -198,11 +198,11 @@ def get_ses_rate_limiter():
     inst = getattr(get_ses_rate_limiter, "_instance", None)
     if inst is None:
         inst = _make_redis_bucket(rate) or TokenBucket(rate=rate)
-        get_ses_rate_limiter._instance = inst
+        get_ses_rate_limiter._instance = inst  # type: ignore[attr-defined]
     elif inst.rate != rate:
         inst.rate = rate
         if isinstance(inst, TokenBucket):
             inst.capacity = rate
         logger.debug("Updated SES rate limit to %.1f/sec", rate)
 
-    return get_ses_rate_limiter._instance
+    return get_ses_rate_limiter._instance  # type: ignore[attr-defined]

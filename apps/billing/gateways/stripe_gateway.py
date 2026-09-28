@@ -45,7 +45,7 @@ class StripeGateway(PaymentGateway):
                         "quantity": 1,
                     }
                 ],
-                customer_email=request.user.email or None,
+                customer_email=request.user.email or None,  # type: ignore[arg-type]
                 success_url=request.build_absolute_uri(
                     reverse("billing:stripe-success")
                 )
@@ -68,4 +68,4 @@ class StripeGateway(PaymentGateway):
             messages.error(request, f"Payment initialization failed: {exc}")
             return redirect("/billing/plans/")
 
-        return redirect(session.url)
+        return redirect(session.url or "/billing/plans/")

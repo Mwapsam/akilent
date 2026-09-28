@@ -73,7 +73,8 @@ def reconcile_message_stats(day_iso: str | None = None) -> int:
     from apps.logs.stats import reconcile
 
     if day_iso:
-        day = timezone.datetime.fromisoformat(day_iso).date()
+        from datetime import datetime as _dt
+        day = _dt.fromisoformat(day_iso).date()
     else:
         day = (timezone.now() - timedelta(days=1)).date()
     written = reconcile(day)

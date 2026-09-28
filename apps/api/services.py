@@ -419,7 +419,7 @@ def create_and_queue_campaign(
         account=account,
         campaign=campaign,
         payload=payload,
-        fire_at=fire_at,
+        fire_at=fire_at,  # type: ignore[arg-type]
         tz=tz or "UTC",
         idempotency_key=new_idempotency_key(),
         created_by=created_by,

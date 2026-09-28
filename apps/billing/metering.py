@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+from typing import cast
 
 from django.db import IntegrityError, transaction
 from django.db.models import F
@@ -141,8 +142,10 @@ def used(account, key: str) -> int:
         return _live_total(account, key)
     if lim.period == limits_catalog.PER_USE:
         return 0
+    start = period_start(key)
+    assert start is not None
     row = UsageCounter.objects.filter(
-        account=account, key=key, period_start=period_start(key)
+        account=account, key=key, period_start=start
     ).first()
     return row.used if row else 0
 
@@ -159,8 +162,8 @@ def usage_report(account, *, metered_only: bool = False) -> list[dict]:
         if sub
         else {}
     )
-    starts = {
-        lim.key: period_start(lim.key)
+    starts: dict[str, date] = {
+        lim.key: cast(date, period_start(lim.key))
         for lim in limits_catalog.LIMITS
         if lim.period in (limits_catalog.MONTH, limits_catalog.DAY)
     }
@@ -296,7 +299,12 @@ def _after_use(account, key: str, start: date, allowed: int) -> None:
 
 def count(account, key: str, units: int = 1) -> None:
     """Count use of a SOFT limit (never blocks: customer conversations). Warns at 80%/100%."""
+    lim = limits_catalog.get(key)
+    if lim.period not in (limits_catalog.MONTH, limits_catalog.DAY):
+        raise ValueError(f"{key} isn't a metered limit")
     start = period_start(key)
+    if start is None:
+        return
     row = _counter(account, key, start)
     UsageCounter.objects.filter(pk=row.pk).update(used=F("used") + units)
     _after_use(account, key, start, limit(account, key))
@@ -329,6 +337,7 @@ def reserve(
         existing.delete()
     allowed = limit(account, key)
     start = period_start(key)
+    assert start is not None
     row = _counter(account, key, start)
     try:
         with transaction.atomic():
@@ -368,7 +377,7 @@ def reserve_all_verbose(
     """Same as ``reserve_all``, plus which key actually blocked it (or None on success), so a
     caller can report the real cause without re-querying usage after the fact — a re-query would
     race a concurrent change and could name the wrong limit."""
-    taken = []
+    taken: list[UsageReservation] = []
     for key in keys:
         r = reserve(account, key, operation_id=operation_id, units=units)
         if r is None or r.status == UsageReservation.RELEASED:
@@ -395,7 +404,7 @@ def _settle(reservation: UsageReservation, status: str) -> bool:
 
 def commit(reservation: UsageReservation | None) -> bool:
     """The operation happened (or may have): its units stay used."""
-    return bool(reservation) and _settle(reservation, UsageReservation.COMMITTED)
+    return reservation is not None and _settle(reservation, UsageReservation.COMMITTED)
 
 
 def release(reservation: UsageReservation | None) -> bool:

@@ -107,7 +107,7 @@ def clean_extras(raw, *, tags=(), can_track: bool = False) -> list[dict]:
             extra = {"kind": "track_interest"}
         else:
             try:
-                days = int(item.get("in_days"))
+                days = int(item.get("in_days") or 0)
             except (TypeError, ValueError):
                 continue
             if not 1 <= days <= 14:
@@ -144,7 +144,8 @@ def validate(
     action = data.get("action")
     if action not in ACTIONS:
         raise ProposalError(f"Unknown proposal action {action!r}.")
-    payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+    _raw_payload = data.get("payload")
+    payload: dict = _raw_payload if isinstance(_raw_payload, dict) else {}
     confidence = data.get("confidence")
     try:
         confidence = (
@@ -170,12 +171,9 @@ def validate(
             raise ProposalError(
                 f"The AI proposed a template that isn't approved ({name!r})."
             )
-        raw = (
-            payload.get("variables")
-            if isinstance(payload.get("variables"), dict)
-            else {}
-        )
-        variables = {}
+        _raw_vars = payload.get("variables")
+        raw: dict = _raw_vars if isinstance(_raw_vars, dict) else {}
+        variables: dict[str, str] = {}
         for blank in templates[name]:
             value = str(raw.get(blank) or "").strip().strip("{} ").strip()
             is_source = value.startswith(_SOURCES)
@@ -186,7 +184,7 @@ def validate(
             if not value:
                 raise ProposalError(f"The AI left the blank {blank!r} empty.")
             variables[blank] = value if is_source else value[:MAX_VALUE]
-        clean = {"template": name, "variables": variables}
+        clean = {"template": name, "variables": variables}  # type: ignore[dict-item]
     else:  # handoff
         clean = {
             "note": str(

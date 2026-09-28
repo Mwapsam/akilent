@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -110,7 +110,7 @@ class SesSendProvider(EmailSendProvider):
             logger.debug("SES send: waited %.3f sec for rate limit token", waited)
 
         try:
-            params = {
+            params: dict[str, Any] = {
                 "FromEmailAddress": message.from_email,
                 "Destination": {
                     "ToAddresses": [message.to_email],

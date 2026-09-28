@@ -178,11 +178,13 @@ def _drop_message(msg: EmailMessage, reason: str) -> None:
     """
     msg.mark_failed(reason)
     if msg.campaign_id:
-        msg.campaign.increment_counts(failed=1)
-        BulkEmailRecipient.objects.filter(message=msg).update(
-            status=BulkEmailRecipient.Status.FAILED, error=reason[:5000]
-        )
-        _maybe_complete_campaign(msg.campaign)
+        campaign = msg.campaign
+        if campaign is not None:
+            campaign.increment_counts(failed=1)
+            BulkEmailRecipient.objects.filter(message=msg).update(
+                status=BulkEmailRecipient.Status.FAILED, error=reason[:5000]
+            )
+            _maybe_complete_campaign(campaign)
     _settle_quota(msg, ok=False)
 
 
@@ -196,7 +198,7 @@ def _send_email_message(
     from apps.email.services.reputation import check_can_send
     from apps.email.services.suppression import is_suppressed
 
-    att_objs = ()
+    att_objs: tuple = ()
     if attachments:
         from apps.email.services.attachments import decode_from_task
 
@@ -296,11 +298,13 @@ def _send_email_message(
             # message that never gets delivered shouldn't permanently burn it.
             _settle_quota(msg, ok=False)
             if msg.campaign_id:
-                msg.campaign.increment_counts(failed=1)
-                BulkEmailRecipient.objects.filter(message=msg).update(
-                    status=BulkEmailRecipient.Status.FAILED, error=str(exc)[:5000]
-                )
-                _maybe_complete_campaign(msg.campaign)
+                campaign = msg.campaign
+                if campaign is not None:
+                    campaign.increment_counts(failed=1)
+                    BulkEmailRecipient.objects.filter(message=msg).update(
+                        status=BulkEmailRecipient.Status.FAILED, error=str(exc)[:5000]
+                    )
+                    _maybe_complete_campaign(campaign)
             # Retries are exhausted and the message is permanently failed —
             # a spike of these is an infra problem, so page the operators.
             try:
@@ -386,24 +390,26 @@ def _after_send(msg: EmailMessage, result) -> None:
         logger.exception("_after_send: record_send failed for %s", msg.pk)
 
     if msg.campaign_id:
-        try:
-            # Count the send only when this call is what moved the recipient to
-            # SENT, so a re-entered task can never count it twice.
-            changed = (
-                BulkEmailRecipient.objects.filter(message=msg)
-                .exclude(status=BulkEmailRecipient.Status.SENT)
-                .update(status=BulkEmailRecipient.Status.SENT)
-            )
-            if changed:
-                msg.campaign.increment_counts(sent=1)
-        except Exception:
-            logger.exception("_after_send: campaign counters failed for %s", msg.pk)
-        try:
-            _maybe_complete_campaign(msg.campaign)
-        except Exception:
-            logger.exception(
-                "_after_send: campaign completion check failed for %s", msg.pk
-            )
+        campaign = msg.campaign
+        if campaign is not None:
+            try:
+                # Count the send only when this call is what moved the recipient to
+                # SENT, so a re-entered task can never count it twice.
+                changed = (
+                    BulkEmailRecipient.objects.filter(message=msg)
+                    .exclude(status=BulkEmailRecipient.Status.SENT)
+                    .update(status=BulkEmailRecipient.Status.SENT)
+                )
+                if changed:
+                    campaign.increment_counts(sent=1)
+            except Exception:
+                logger.exception("_after_send: campaign counters failed for %s", msg.pk)
+            try:
+                _maybe_complete_campaign(campaign)
+            except Exception:
+                logger.exception(
+                    "_after_send: campaign completion check failed for %s", msg.pk
+                )
 
 
 def _maybe_complete_campaign(campaign: BulkEmailCampaign) -> None:
@@ -602,8 +608,11 @@ def dispatch_campaign(self, campaign_id: int) -> None:
         for email, consent in Contact.objects.filter(
             account=campaign.account, email__in=chunk_emails
         ).values_list("email", "consent_status")
-        if consent == Contact.ConsentStatus.OPTED_OUT
-        or (require_consent and consent != Contact.ConsentStatus.OPTED_IN)
+        if email
+        and (
+            consent == Contact.ConsentStatus.OPTED_OUT
+            or (require_consent and consent != Contact.ConsentStatus.OPTED_IN)
+        )
     }
 
     to_process, failed_recipients = [], []
@@ -642,7 +651,8 @@ def dispatch_campaign(self, campaign_id: int) -> None:
     from apps.billing import api as billing_api
     from apps.billing.limits import EMAIL_LIMITS
 
-    to_send, to_hold = [], []
+    to_send: list[BulkEmailRecipient] = []
+    to_hold: list[BulkEmailRecipient] = []
     for r in to_process:
         taken = billing_api.reserve_all(
             campaign.account, EMAIL_LIMITS, operation_id=f"email-recipient:{r.pk}"
@@ -698,9 +708,12 @@ def _queue_recipients(campaign, recipients: list) -> None:
     campaign.increment_counts(queued=len(recipients))
 
     message_ids = [m.pk for m in created]
-    transaction.on_commit(
-        lambda ids=message_ids: [send_bulk_recipient_email.delay(mid) for mid in ids]
-    )
+
+    def _enqueue(ids: list[int] = message_ids) -> None:
+        for mid in ids:
+            send_bulk_recipient_email.delay(mid)
+
+    transaction.on_commit(_enqueue)
 
 
 _HELD_RECIPIENT_RETRY_BATCH = 500

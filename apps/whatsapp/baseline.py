@@ -72,7 +72,7 @@ def _load_rows(account, lower_bound):
     qs = MessageLog.objects.filter(account_id=account.id)
     if lower_bound is not None:
         qs = qs.filter(timestamp__gte=lower_bound)
-    qs = qs.order_by("contact_id", "timestamp", "id").values_list(
+    rows_qs = qs.order_by("contact_id", "timestamp", "id").values_list(
         "contact_id",
         "direction",
         "timestamp",
@@ -82,7 +82,7 @@ def _load_rows(account, lower_bound):
         "content",
         "contact__contact_id",
     )
-    for contact_id, group in groupby(qs.iterator(), key=lambda r: r[0]):
+    for contact_id, group in groupby(rows_qs.iterator(), key=lambda r: r[0]):
         yield (
             contact_id,
             [
@@ -101,7 +101,8 @@ def _load_rows(account, lower_bound):
 
 
 def _exchanges(rows, gap):
-    current, prev_ts = [], None
+    current: list[Row] = []
+    prev_ts = None
     for row in rows:
         if current and row.ts - prev_ts >= gap:
             yield current
@@ -176,7 +177,7 @@ def _cohort_counts(account, enquiries, until):
         "enquiries_with_order": ("commerce", "Order"),
     }.items():
         model = apps.get_model(app_label, model_name)
-        created = {}
+        created: dict[int, list] = {}
         ids = sorted(linked)
         for i in range(0, len(ids), _CHUNK):
             for contact_id, created_at in model.objects.filter(
@@ -191,7 +192,7 @@ def _cohort_counts(account, enquiries, until):
                 c >= e.start and (until is None or c < until)
                 for c in created.get(e.contact_fk, ())
             )
-        )
+        )  # type: ignore[arg-type]
     return counts
 
 
@@ -284,13 +285,13 @@ def measure_account(account, gap_hours_list, grace_hours, since, until, as_of):
 
 def sum_results(per_account_results):
     """Arithmetic total of independently computed per-account results (never an unscoped query)."""
-    by_gap = {}
+    by_gap: dict[float, list] = {}
     for results in per_account_results:
         for r in results:
             by_gap.setdefault(r["enquiry_gap_hours"], []).append(r)
     totals = []
     for gap_hours, items in sorted(by_gap.items()):
-        reasons = Counter()
+        reasons: Counter[str] = Counter()
         for r in items:
             reasons.update(r["enquiries"]["indeterminate_reasons"])
         totals.append(

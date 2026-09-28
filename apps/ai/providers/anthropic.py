@@ -68,7 +68,8 @@ class AnthropicProvider(AIProvider):
                 "anthropic-version": API_VERSION,
             },
         )
-        blocks = data.get("content") if isinstance(data.get("content"), list) else []
+        _content = data.get("content")
+        blocks: list = _content if isinstance(_content, list) else []
         text = "".join(
             b.get("text", "")
             for b in blocks
@@ -81,7 +82,7 @@ class AnthropicProvider(AIProvider):
             text=text,
             model=data.get("model") or self.model,
             usage={
-                "input_tokens": usage.get("input_tokens"),
-                "output_tokens": usage.get("output_tokens"),
+                "input_tokens": usage.get("input_tokens") or 0,
+                "output_tokens": usage.get("output_tokens") or 0,
             },
         )

@@ -1593,7 +1593,7 @@ class DeliverabilitySnapshot(models.Model):
         ordering = ["-day"]
 
     def __str__(self):
-        scope = self.domain.domain if self.domain_id else "account"
+        scope = self.domain.domain if self.domain_id and self.domain else "account"
         return f"{scope} {self.day}: {self.score}"
 
 

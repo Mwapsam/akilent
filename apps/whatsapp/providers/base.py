@@ -200,4 +200,6 @@ class WhatsAppProvider(ABC):
 class WhatsAppProviderError(Exception):
     """Base exception for WhatsApp provider errors."""
 
-    pass
+    code: str = ""
+    retryable: bool = True
+    ambiguous: bool = False

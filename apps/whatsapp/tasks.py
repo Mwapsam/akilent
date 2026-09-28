@@ -328,7 +328,9 @@ def _for_each_item(items, handler) -> None:
             logger.exception("webhook batch item failed")
             other_exc = other_exc or exc
     if other_exc or tenant_exc:
-        raise other_exc or tenant_exc
+        exc_to_raise = other_exc or tenant_exc
+        assert exc_to_raise is not None
+        raise exc_to_raise
 
 
 def _handle_inbound_message(event: WebhookEventLog) -> None:
@@ -470,7 +472,7 @@ def _process_inbound_message(
                     MessageReceived(
                         account_id=account.id,
                         contact_id=contact.id,
-                        message_id=message.get("id"),
+                        message_id=message.get("id") or "",
                         channel="whatsapp",
                         body=content,
                         message_type=msg_type,
@@ -520,6 +522,9 @@ def _process_status_update(value: dict, status_obj: dict) -> None:
 
     # message_id is only unique per account, so the lookup must be tenant-scoped.
     phone_number_id = (value.get("metadata") or {}).get("phone_number_id")
+    if not phone_number_id:
+        logger.warning("_process_status_update: missing phone_number_id in metadata")
+        return
     account = get_account_for_webhook(phone_number_id)
 
     try:
@@ -762,6 +767,7 @@ def _ensure_outbound_log(msg: OutboundMessage) -> MessageLog:
     have a row to reconcile against.
     """
     if msg.message_log_id:
+        assert msg.message_log is not None
         return msg.message_log
 
     payload = msg.payload or {}
@@ -1364,7 +1370,7 @@ def sync_templates_for_account(account) -> dict:
         seen_wabas.add(number.waba_id)
         try:
             provider = get_whatsapp_provider(account)
-            for tpl in provider.list_templates(number.waba_id):
+            for tpl in provider.list_templates(number.waba_id or ""):
                 _upsert_meta_template(account, tpl)
                 synced += 1
         except (WhatsAppProviderError, NotImplementedError) as exc:

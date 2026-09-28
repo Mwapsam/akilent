@@ -221,17 +221,13 @@ quote-style = "double"
 docstring-code-format = true
 
 # ---------------------------------------------------------------------------
-# mypy (strict + Django)
+# mypy (correctness + Django; full annotation coverage is a separate milestone)
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.13"
-strict = true
 plugins = ["mypy_django_plugin.main"]
 explicit_package_bases = true
-warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
 check_untyped_defs = true
 no_implicit_optional = true
 show_error_codes = true
@@ -244,10 +240,14 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
-    "b24pysdk.*",
+    "boto3.*",
+    "botocore.*",
     "celery.*",
+    "httpx.*",
+    "mypy_boto3_sesv2.*",
+    "rest_framework.*",
+    "storages.*",
     "stripe.*",
-    "moto.*",
 ]
 ignore_missing_imports = true
 

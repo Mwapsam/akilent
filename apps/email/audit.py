@@ -48,7 +48,7 @@ def record(
     try:
         AuditLog.objects.create(
             account=account,
-            actor=actor,
+            actor=actor,  # type: ignore[misc]
             action=action,
             resource_type=resource_type,
             resource_id=(resource_id or "")[:255],

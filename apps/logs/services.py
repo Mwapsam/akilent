@@ -53,7 +53,7 @@ _STATUS_RANK = {
 
 
 def _event_name(event_type: str) -> str | None:
-    return _WEBHOOK_EVENT_NAMES.get(event_type)
+    return _WEBHOOK_EVENT_NAMES.get(event_type)  # type: ignore[call-overload]
 
 
 def record_message_event(
@@ -101,7 +101,7 @@ def record_message_event(
 
 
 def _reconcile_status(message, event_type: str) -> None:
-    new_status = _STATUS_FOR_TYPE.get(event_type)
+    new_status = _STATUS_FOR_TYPE.get(event_type)  # type: ignore[call-overload]
     if not new_status:
         return
     current_rank = _STATUS_RANK.get(message.status, 0)

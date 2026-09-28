@@ -220,7 +220,7 @@ class SesProvider(EmailProvider):
             )
         return records
 
-    def get_dkim(self, domain: str, selector: str | None = None) -> DkimRecord | None:
+    def get_dkim(self, domain: str, selector: str | None = None) -> DkimRecord | None:  # type: ignore[override]
         """Compatibility helper — prefer get_dkim_records() and publish all three.
 
         ``selector`` is ignored for Easy DKIM (SES assigns the tokens).
