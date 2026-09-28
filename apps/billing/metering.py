@@ -163,7 +163,7 @@ def usage_report(account, *, metered_only: bool = False) -> list[dict]:
         else {}
     )
     starts: dict[str, date] = {
-        lim.key: cast(date, period_start(lim.key))
+        lim.key: cast("date", period_start(lim.key))
         for lim in limits_catalog.LIMITS
         if lim.period in (limits_catalog.MONTH, limits_catalog.DAY)
     }

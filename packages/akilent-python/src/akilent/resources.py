@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterator
-from typing import Any, List
+from typing import Any
 
 from ._transport import Transport
 
@@ -53,14 +54,14 @@ class Messages(_Base):
     def retrieve(self, message_id: str) -> dict:
         return self._t.request("GET", f"/api/v1/messages/{message_id}")
 
-    def events(self, message_id: str) -> List[dict]:
+    def events(self, message_id: str) -> builtins.list[dict]:
         return self._t.request("GET", f"/api/v1/messages/{message_id}/events")["data"]  # type: ignore[return-value]
 
     def iter(self, *, page_size: int = 100, **filters: Any) -> Iterator[dict]:
         offset = 0
         while True:
             page = self.list(limit=page_size, offset=offset, **filters)
-            rows: List[dict] = page.get("data", [])
+            rows: list[dict] = page.get("data", [])
             yield from rows
             offset += len(rows)
             if not rows or offset >= page.get("total", 0):

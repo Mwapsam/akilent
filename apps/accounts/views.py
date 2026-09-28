@@ -579,9 +579,9 @@ def dashboard_panels(request):
     if account is None:
         return HttpResponseForbidden("no account")
 
-    from django.conf import settings
-
     from typing import Any
+
+    from django.conf import settings
 
     numbers: list[Any] = []
     if settings.WHATSAPP_ENABLED:

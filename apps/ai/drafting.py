@@ -200,9 +200,9 @@ def _snake(name: str) -> str:
 
 
 def check_template(data: dict) -> tuple[dict, list[str]]:
-    from apps.whatsapp.api import lint_template, validate_template_fields
-
     from typing import Any
+
+    from apps.whatsapp.api import lint_template, validate_template_fields
 
     fields: dict[str, Any] = {
         "category": str(data.get("category") or "utility").lower(),
