@@ -52,6 +52,7 @@ dev = [
     "types-requests",
     "types-python-dateutil",
     "pre-commit (>=4.0)",
+    "pytest-asyncio (>=0.24,<1.0)",
 ]
 
 # ---------------------------------------------------------------------------
