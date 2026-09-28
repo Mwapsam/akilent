@@ -112,7 +112,9 @@ class PaymentProvider(ABC):
         """
 
     @abstractmethod
-    def refund(self, transaction_id: str, amount_cents: int | None = None) -> RefundResult:
+    def refund(
+        self, transaction_id: str, amount_cents: int | None = None
+    ) -> RefundResult:
         """Refund a previous charge.
 
         Args:

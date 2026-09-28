@@ -74,6 +74,7 @@ def reconcile_message_stats(day_iso: str | None = None) -> int:
 
     if day_iso:
         from datetime import datetime as _dt
+
         day = _dt.fromisoformat(day_iso).date()
     else:
         day = (timezone.now() - timedelta(days=1)).date()

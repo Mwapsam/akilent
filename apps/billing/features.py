@@ -268,7 +268,11 @@ def matrix_features() -> list[Feature]:
 def overridable(key: str) -> bool:
     """Whether an operator may grant or remove ``key`` for one business."""
     f = BY_KEY.get(key)
-    return f is not None and f.access_mode == PLAN and f.availability in (SELLABLE, NOT_SOLD)
+    return (
+        f is not None
+        and f.access_mode == PLAN
+        and f.availability in (SELLABLE, NOT_SOLD)
+    )
 
 
 def plan_assignable(key: str) -> bool:

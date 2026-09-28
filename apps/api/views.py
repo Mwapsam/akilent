@@ -434,7 +434,9 @@ class CampaignVersionsView(BaseApiView):
                         "label": v.label,
                         "from_email": v.from_email,
                         "subject": v.subject_override,
-                        "template": v.template.slug if v.template_id and v.template else None,
+                        "template": v.template.slug
+                        if v.template_id and v.template
+                        else None,
                         "template_version": v.template_version_number,
                         "recipient_count": v.recipient_count,
                         "status_at_snapshot": v.status_at_snapshot,

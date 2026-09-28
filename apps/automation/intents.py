@@ -313,7 +313,10 @@ def build_from_intent(
             else "answer-a-common-question"
         )
     else:
-        name, slug = intent["label"], intent.get("starter") or intent.get("slug") or intent_key
+        name, slug = (
+            intent["label"],
+            intent.get("starter") or intent.get("slug") or intent_key,
+        )
     tag = slugify(str(tag))[:40] if tag else None
 
     if intent_key == "welcome_new":
@@ -336,7 +339,9 @@ def build_from_intent(
         question = str(
             entities.get("question") or "Hi {first_name}! What can we help you with?"
         )[:1024]
-        definition = build_menu_definition(starter or {}, question=question, options=options)
+        definition = build_menu_definition(
+            starter or {}, question=question, options=options
+        )
         reply = question
         reasons.append(
             "Offers "

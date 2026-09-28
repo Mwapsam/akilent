@@ -587,9 +587,11 @@ def dashboard_panels(request):
     if settings.WHATSAPP_ENABLED:
         from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
-        numbers = list(WhatsAppBusinessNumber.objects.filter(account=account).order_by(
-            "phone_number_id"
-        ))
+        numbers = list(
+            WhatsAppBusinessNumber.objects.filter(account=account).order_by(
+                "phone_number_id"
+            )
+        )
 
     email_domains = []
     try:

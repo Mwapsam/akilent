@@ -209,7 +209,10 @@ def contact_create(request):
     # that's all we were given.
     if phone:
         contact, created = upsert_contact_by_phone(
-            account, phone, email=email or None, **fields  # type: ignore[arg-type]
+            account,
+            phone,
+            email=email or None,
+            **fields,  # type: ignore[arg-type]
         )
     else:
         contact, created = upsert_contact(account, email, **fields)  # type: ignore[arg-type]

@@ -76,7 +76,9 @@ def find_customer(account, who: str):
         return [], []
     wa = list(WhatsAppContact.objects.filter(account=account, phone_number=phone))
     contacts = list(Contact.objects.filter(account=account, phone=phone)) + [
-        w.contact for w in wa if w.contact_id and w.contact is not None  # type: ignore[misc]
+        w.contact
+        for w in wa
+        if w.contact_id and w.contact is not None  # type: ignore[misc]
     ]
     return list({c.pk: c for c in contacts}.values()), wa
 
