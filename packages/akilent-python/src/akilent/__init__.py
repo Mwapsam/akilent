@@ -9,7 +9,7 @@ client.messages.send(from_="billing@acme.com", to="user@example.com",
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from . import webhooks
 from ._transport import _DEFAULT_BASE_URL, Transport

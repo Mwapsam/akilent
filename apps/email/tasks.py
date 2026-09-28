@@ -111,7 +111,7 @@ def provision_domain_async(
         is_last = self.request.retries >= _MAX_RETRIES
         if job:
             job.mark_failed(str(exc), retrying=not is_last)
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
 
 # â”€â”€ Email sending â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -313,7 +313,7 @@ def _send_email_message(
             except Exception:
                 logger.exception("retry-exhaustion Slack alert failed for %s", msg.pk)
         delay = _exponential_backoff_delay(task.request.retries)
-        raise task.retry(exc=exc, countdown=delay)
+        raise task.retry(exc=exc, countdown=delay) from exc
 
     # The provider accepted the message. That is the irreversible boundary:
     # nothing from here on may raise into the retry path above, or the
@@ -819,7 +819,7 @@ def deliver_webhook(self, delivery_id: int) -> None:
             base=_WEBHOOK_RETRY_DELAY_BASE,
             multiplier=_RETRY_DELAY_MULTIPLIER,
         )
-        raise self.retry(exc=exc, countdown=countdown)
+        raise self.retry(exc=exc, countdown=countdown) from exc
 
 
 # â”€â”€ Maintenance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

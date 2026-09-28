@@ -103,7 +103,9 @@ async def _stream(account_id: int):
             except (TypeError, ValueError):
                 continue
             event = data.get("event", "message")
-            yield "event: {}\ndata: {}\n\n".format(event, json.dumps(data.get("ids", {})))
+            yield "event: {}\ndata: {}\n\n".format(
+                event, json.dumps(data.get("ids", {}))
+            )
     finally:
         await pubsub.close()
         _connections_by_account[account_id] = max(

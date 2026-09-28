@@ -382,7 +382,7 @@ def build_snapshot(
 
 
 def _fmt_seconds(value):
-    return "n/a (n<%d)" % PERCENTILE_MIN_SAMPLES if value is None else f"{value:,.0f}s"
+    return f"n/a (n<{PERCENTILE_MIN_SAMPLES})" if value is None else f"{value:,.0f}s"
 
 
 def _render_result(r):

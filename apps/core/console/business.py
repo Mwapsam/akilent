@@ -355,8 +355,8 @@ def set_limit(
         expires = (
             timezone.now() + timedelta(days=int(days)) if (days or "").strip() else None
         )
-    except ValueError:
-        raise ConsoleError("Enter whole numbers (-1 for unlimited).")
+    except ValueError as exc:
+        raise ConsoleError("Enter whole numbers (-1 for unlimited).") from exc
     try:
         return billing_api.set_limit_override(
             account, key, value=number, note=note, by=by, expires_at=expires

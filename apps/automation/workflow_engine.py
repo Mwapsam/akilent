@@ -1483,8 +1483,8 @@ def explain_enrollment(
         if kind not in MESSAGE_TRIGGERS:
             continue
 
-        def verdict(code: str, **details) -> None:
-            out.append({"workflow": wf, "code": code, "details": details})
+        def verdict(code: str, _wf: object = wf, **details) -> None:
+            out.append({"workflow": _wf, "code": code, "details": details})
 
         if wf.status != Workflow.Status.PUBLISHED:
             verdict("not_on", status=wf.status)

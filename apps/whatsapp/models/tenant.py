@@ -162,11 +162,11 @@ def get_account_for_webhook(phone_number_id: str):
             phone_number_id=phone_number_id, is_active=True
         )
         return whatsapp_num.account
-    except WhatsAppBusinessNumber.DoesNotExist:
+    except WhatsAppBusinessNumber.DoesNotExist as exc:
         raise TenantResolutionError(
             f"No active WhatsAppBusinessNumber found for phone_number_id={phone_number_id}. "
             "Check that the number has been registered in the dashboard."
-        )
+        ) from exc
 
 
 def get_number_for_webhook(phone_number_id: str) -> "WhatsAppBusinessNumber":
@@ -175,7 +175,7 @@ def get_number_for_webhook(phone_number_id: str) -> "WhatsAppBusinessNumber":
         return WhatsAppBusinessNumber.objects.select_related("account").get(
             phone_number_id=phone_number_id, is_active=True
         )
-    except WhatsAppBusinessNumber.DoesNotExist:
+    except WhatsAppBusinessNumber.DoesNotExist as exc:
         raise TenantResolutionError(
             f"No active WhatsAppBusinessNumber found for phone_number_id={phone_number_id}."
-        )
+        ) from exc

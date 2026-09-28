@@ -158,6 +158,16 @@ ignore = [
     "S308",    # mark_safe (template helpers)
     "S324",    # hashlib insecure hash (legacy code)
     "S608",    # SQL injection (false positives with ORM strings)
+
+    # try/except/pass is an intentional silent fallback in context processors & views
+    "S110",
+    # false positives: Redis keys and enum values with TOKEN/KEY in their names
+    "S105",
+    "S112",    # try/except/continue
+    # Unused lambda args (tool-call registries use fixed call signatures)
+    "ARG005",
+    # Async framework patterns
+    "ASYNC109",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -180,9 +190,28 @@ ignore = [
     "S107",
     # Exception chaining less critical in test helpers
     "B904",
+    # Mock/stub class names are intentionally lowercase
+    "N801",
+    "N802",
+    "N817",
+    "N812",
+    # pytest.raises without match= is fine in simple smoke tests
+    "B017",
+    # pathlib migration in test helpers is out of scope
+    "PTH118",
+    "PTH123",
+    # % format strings in legacy test helpers
+    "UP031",
+    # builtins shadowed in test fixtures
+    "A001",
 ]
 "**/migrations/**" = ["E501", "N806", "RUF012", "E402"]
-"**/settings*.py" = ["F403", "F405"]
+"**/settings*.py" = ["F403", "F405", "PTH118"]
+# Provider __init__.py files must import after settings are loaded
+"apps/*/providers/__init__.py" = ["E402"]
+"apps/automation/models.py" = ["E402"]
+# Management commands — subprocess and open() calls are intentional
+"apps/whatsapp/management/commands/*.py" = ["S607", "PTH123"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "automator"]

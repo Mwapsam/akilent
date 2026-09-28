@@ -29,11 +29,11 @@ class EncryptedTextField(models.TextField):
             return value
         try:
             return _fernet().decrypt(value.encode()).decode()
-        except Exception:
+        except Exception as exc:
             raise ValidationError(
                 "Could not decrypt field value - check FIELD_ENCRYPTION_KEYS "
                 "(is the original key still present in the list?)."
-            )
+            ) from exc
 
     def to_python(self, value):
         if value is None or value == "":

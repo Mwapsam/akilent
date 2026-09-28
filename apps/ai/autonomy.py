@@ -209,7 +209,10 @@ def evaluate(
     elif intent in topics and intent in locked:
         topic_detail = f"About {TOPICS[intent].lower()}, which can't be checked yet."
     else:
-        topic_detail = f"About {TOPICS.get(intent, 'something you haven’t chosen').lower()}, which isn't on your list."
+        _default = "something you haven't chosen"
+        topic_detail = (
+            f"About {TOPICS.get(intent, _default).lower()}, which isn't on your list."
+        )
     check("allowed_topic", allowed, topic_detail, value=intent)
     sure = confidence is not None and confidence >= threshold
     check(

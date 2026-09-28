@@ -143,4 +143,4 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
             return
         raise self.retry(
             exc=exc, countdown=_webhook_backoff_delay(self.request.retries)
-        )
+        ) from exc

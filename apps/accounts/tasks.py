@@ -48,4 +48,4 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
         )
     except Exception as exc:
         logger.exception("send_verification_email: failed for user %s", user_id)
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc

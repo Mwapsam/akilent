@@ -111,7 +111,7 @@ def process_whatsapp_event(self, event_id: int):
         logger.exception(
             "process_whatsapp_event: unhandled error for event %s", event_id
         )
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
 
 def _close_spine_conversation(whatsapp_conversation) -> None:

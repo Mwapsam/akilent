@@ -21,6 +21,11 @@ from apps.email.types import AliasInfo, OperationResult
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
 
+    class EmailAlias:  # dropped in migration 0016; service kept for reference
+        address: str
+        goto: str
+
+
 logger = logging.getLogger(__name__)
 
 

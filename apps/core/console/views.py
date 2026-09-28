@@ -148,8 +148,8 @@ def _act_subscription(request, account):
 def _act_extend_trial(request, account):
     try:
         days = int(request.POST.get("days") or 7)
-    except ValueError:
-        raise ConsoleError("Enter a number of days.")
+    except ValueError as exc:
+        raise ConsoleError("Enter a number of days.") from exc
     result = business.extend_trial(account, days)
     audit(request, "subscription.extend_trial", account, target=f"+{days} days")
     return result + "."
@@ -863,9 +863,7 @@ def audit_log(request):
             "rows": [{"row": r, "label": label(r.action)} for r in rows[:200]],
             "action": action,
             "actions": sorted(
-                set(AdminAction.objects.values_list(
-                        "action", flat=True
-                    ).distinct())
+                set(AdminAction.objects.values_list("action", flat=True).distinct())
             ),
             "label": label,
         },

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
-from django.db.models import Min as models_min
+from django.db.models import Min as models_min  # noqa: N813
 from django.utils import timezone
 
 from apps.commerce.models import Order
@@ -399,6 +399,7 @@ def last_team_reply_at(conversation):
 
 def newest_message_ids(conversation) -> tuple[int | None, int | None]:
     """``(newest inbound id, newest outbound id)`` in this conversation, by arrival order."""
+
     def newest(d):
         return (
             conversation.messages.filter(direction=d)
@@ -406,4 +407,5 @@ def newest_message_ids(conversation) -> tuple[int | None, int | None]:
             .values_list("id", flat=True)
             .first()
         )
+
     return newest(Message.Direction.INBOUND), newest(Message.Direction.OUTBOUND)

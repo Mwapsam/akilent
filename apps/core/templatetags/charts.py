@@ -38,9 +38,8 @@ def line_chart(series, labels, title="", unit="", height=200, baseline_at_zero=T
     for label, values in pairs:
         if len(values) != len(labels):
             raise ValueError(
-                "series %r has %d values but there are %d labels; a chart drawn "
+                f"series {label!r} has {len(values)} values but there are {len(labels)} labels; a chart drawn "
                 "from mismatched columns is wrong without looking wrong"
-                % (label, len(values), len(labels))
             )
     chart = geometry.line_chart(
         pairs, labels, height=float(height), baseline_at_zero=baseline_at_zero
@@ -49,7 +48,7 @@ def line_chart(series, labels, title="", unit="", height=200, baseline_at_zero=T
         "chart": chart,
         "title": title,
         "unit": unit,
-        "uid": "chart-%d" % next(_uid),
+        "uid": f"chart-{next(_uid)}",
         "columns_data": chart.columns,
     }
 

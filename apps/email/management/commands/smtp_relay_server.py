@@ -40,7 +40,7 @@ class RelayHandler:
 
         return text_body, html_body
 
-    async def handle_DATA(self, server, session, envelope):
+    async def handle_DATA(self, server, session, envelope):  # noqa: N802
         """Accept email and queue for delivery."""
         if not session.authenticated:
             return "530 Authentication required"

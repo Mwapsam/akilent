@@ -11,6 +11,6 @@ class StaticToS3Storage(S3Boto3Storage):
     location = settings.STATICFILES_LOCATION
 
 
-class mediaRootS3Boto3Storage(S3Boto3Storage):
+class mediaRootS3Boto3Storage(S3Boto3Storage):  # noqa: N801
     location = settings.MEDIAFILES_LOCATION
     file_overwrite = False

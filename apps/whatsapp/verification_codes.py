@@ -124,11 +124,11 @@ def _check(account, phone: str, code: str):
         )
     try:
         phone = normalize_phone(phone or "")
-    except ValidationError:
+    except ValidationError as exc:
         raise VerificationCodeError(
             "invalid_phone",
             "The phone number isn't valid. Send it with the country code, like +260971234567.",
-        )
+        ) from exc
     return phone, code
 
 

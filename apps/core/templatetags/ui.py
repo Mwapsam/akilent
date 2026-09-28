@@ -117,11 +117,11 @@ def ago(value, now=None):
     if seconds < 60:
         return "now"
     if seconds < 3600:
-        return "%dm" % (seconds // 60)
+        return f"{seconds // 60}m"
     if seconds < 86400:
-        return "%dh" % (seconds // 3600)
+        return f"{seconds // 3600}h"
     if seconds < 7 * 86400:
-        return "%dd" % (seconds // 86400)
+        return f"{seconds // 86400}d"
     local = timezone.localtime(value) if timezone.is_aware(value) else value
     same_year = (
         local.year == timezone.localtime(now).year

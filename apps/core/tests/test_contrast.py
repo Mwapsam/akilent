@@ -51,7 +51,9 @@ def _resolve(name, table, seen=None):
     ref = re.fullmatch(r"var\((--[\w-]+)\)", value)
     if ref:
         return _resolve(ref.group(1), table, seen)
-    assert re.fullmatch(r"#[0-9A-Fa-f]{6}", value), f"{name} is not a plain hex: {value}"
+    assert re.fullmatch(r"#[0-9A-Fa-f]{6}", value), (
+        f"{name} is not a plain hex: {value}"
+    )
     return value
 
 
@@ -112,4 +114,6 @@ def test_hovering_a_link_never_reduces_its_contrast(theme):
     surface = _resolve("--color-surface", table)
     rest = contrast(_resolve("--color-accent", table), surface)
     hover = contrast(_resolve("--color-accent-strong", table), surface)
-    assert hover >= rest, f"{theme} theme: hover contrast {hover:.2f}:1 is below resting {rest:.2f}:1"
+    assert hover >= rest, (
+        f"{theme} theme: hover contrast {hover:.2f}:1 is below resting {rest:.2f}:1"
+    )

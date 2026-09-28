@@ -206,7 +206,9 @@ class PasswordResetForm(PasswordResetForm):
                 html_body=html_message or "",
             )
         except Exception as exc:
-            raise forms.ValidationError(f"Failed to send password reset email: {exc}")
+            raise forms.ValidationError(
+                f"Failed to send password reset email: {exc}"
+            ) from exc
 
 
 class BusinessAddressForm(forms.ModelForm):

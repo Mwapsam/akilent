@@ -56,7 +56,7 @@ def main():
     ):
         if not bag:
             continue
-        print("%s (%d rule(s)):" % (label, sum(bag.values())))
+        print(f"{label} ({sum(bag.values())} rule(s)):")
         for rule, _ in list(bag.items())[:20]:
             print("  " + rule[:200].replace("\n", " "))
         print("")

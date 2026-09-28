@@ -56,15 +56,17 @@ def _git_commit(override=None) -> str:
 def _parse_date(value, flag):
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        raise CommandError(f"{flag} must be YYYY-MM-DD, got {value!r}")
+    except ValueError as exc:
+        raise CommandError(f"{flag} must be YYYY-MM-DD, got {value!r}") from exc
 
 
 def _parse_gaps(value):
     try:
         gaps = [int(part) for part in value.split(",") if part.strip()]
-    except ValueError:
-        raise CommandError("--gap-hours must be comma-separated integers, e.g. 24,72")
+    except ValueError as exc:
+        raise CommandError(
+            "--gap-hours must be comma-separated integers, e.g. 24,72"
+        ) from exc
     if not gaps or any(g <= 0 for g in gaps) or len(set(gaps)) != len(gaps):
         raise CommandError("--gap-hours needs one or more distinct positive integers")
     return gaps
@@ -182,7 +184,7 @@ class Command(BaseCommand):
         try:
             validate_snapshot(snapshot)
         except SnapshotSchemaError as exc:
-            raise CommandError(f"Snapshot violates the schema contract: {exc}")
+            raise CommandError(f"Snapshot violates the schema contract: {exc}") from exc
 
         self.stdout.write(render_report(snapshot))
 

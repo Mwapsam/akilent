@@ -45,7 +45,7 @@ class AuthenticationError(APIStatusError):
     """401 — the API key is missing or invalid."""
 
 
-class PermissionError_(APIStatusError):
+class PermissionError_(APIStatusError):  # noqa: N801
     """403 — the key lacks a feature, scope, or the domain is unverified."""
 
 

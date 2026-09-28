@@ -45,9 +45,9 @@ class FlutterwaveClient:
         r = self._session.post(f"{BASE_URL}/payments", json=payload, timeout=15)
         try:
             data = r.json()
-        except Exception:
+        except Exception as exc:
             r.raise_for_status()
-            raise FlutterwaveError("Invalid JSON response from Flutterwave")
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
 
         if r.status_code != 200 or data.get("status") != "success":
             raise FlutterwaveError(data.get("message", "Payment initialization failed"))
@@ -67,9 +67,9 @@ class FlutterwaveClient:
         r = self._session.post(f"{BASE_URL}/payment-plans", json=payload, timeout=15)
         try:
             data = r.json()
-        except Exception:
+        except Exception as exc:
             r.raise_for_status()
-            raise FlutterwaveError("Invalid JSON response from Flutterwave")
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
         if r.status_code not in (200, 201) or data.get("status") != "success":
             raise FlutterwaveError(data.get("message", "Payment plan creation failed"))
         return data["data"]
@@ -84,9 +84,9 @@ class FlutterwaveClient:
         r = self._session.get(f"{BASE_URL}/subscriptions", params=params, timeout=15)
         try:
             data = r.json()
-        except Exception:
+        except Exception as exc:
             r.raise_for_status()
-            raise FlutterwaveError("Invalid JSON response from Flutterwave")
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
         if r.status_code != 200 or data.get("status") != "success":
             raise FlutterwaveError(data.get("message", "Could not list subscriptions"))
         return data.get("data") or []
@@ -97,9 +97,9 @@ class FlutterwaveClient:
         )
         try:
             data = r.json()
-        except Exception:
+        except Exception as exc:
             r.raise_for_status()
-            raise FlutterwaveError("Invalid JSON response from Flutterwave")
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
 
         if r.status_code != 200 or data.get("status") != "success":
             raise FlutterwaveError(
@@ -114,9 +114,9 @@ class FlutterwaveClient:
         )
         try:
             data = r.json()
-        except Exception:
+        except Exception as exc:
             r.raise_for_status()
-            raise FlutterwaveError("Invalid JSON response from Flutterwave")
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
 
         if r.status_code not in (200, 204):
             raise FlutterwaveError(

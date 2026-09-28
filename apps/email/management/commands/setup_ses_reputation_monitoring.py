@@ -44,7 +44,7 @@ class Command(BaseCommand):
         try:
             client = boto3.client("sesv2", region_name=region)
         except Exception as e:
-            raise CommandError(f"Failed to connect to SES in {region}: {e}")
+            raise CommandError(f"Failed to connect to SES in {region}: {e}") from e
 
         self.stdout.write("\n=== SES Reputation Monitoring Setup ===\n")
         self.stdout.write(f"Configuration Set: {config_set}")
@@ -55,11 +55,11 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(f"[OK] Configuration set '{config_set}' exists\n")
             )
-        except client.exceptions.NotFoundException:
+        except client.exceptions.NotFoundException as exc:
             raise CommandError(
                 f"Configuration set '{config_set}' not found in {region}. "
                 "Create it first: aws sesv2 create-configuration-set --configuration-set-name <name>"
-            )
+            ) from exc
 
         self._check_event_destinations(client, config_set)
         self._print_setup_instructions(config_set, region, sns_arn)
