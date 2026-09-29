@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from apps.accounts.utils import get_current_account
 from apps.conversations import reporting
-from apps.conversations.models import InsightGoal
+from apps.conversations.models import InsightGoal, InsightSettings
 
 DEFAULT_PERIOD = 30
 FREE_GOAL_LIMIT = 3  # every plan; plans with detailed_analytics get unlimited goals
@@ -100,6 +100,11 @@ def insights(request):
             and goals["total"] >= goal_limit,
             "can_manage_goals": is_account_admin(request.user, account),
             "goal_metrics": reporting.GOAL_METRICS,
+            "weekly_report_enabled": getattr(
+                InsightSettings.objects.filter(account=account).first(),
+                "weekly_report",
+                True,
+            ),
             # Revenue can have one goal per currency, so it's never excluded here; every other
             # metric is single-goal, so once it's set it drops off the "add a goal" choices.
             "existing_goal_metrics": {
@@ -118,11 +123,12 @@ def _goals_redirect(request):
 
 
 def _require_goal_permission(request, account) -> bool:
-    """True if allowed; otherwise a message is queued and the caller should redirect."""
+    """True if allowed; otherwise a message is queued and the caller should redirect. Shared by
+    goal changes and the weekly report toggle — both are owner/admin-only settings."""
     from apps.accounts.api import is_account_admin
 
     if not is_account_admin(request.user, account):
-        messages.error(request, "Only an owner or admin can change goals.")
+        messages.error(request, "Only an owner or admin can change this.")
         return False
     return True
 
@@ -215,4 +221,23 @@ def insights_goal_delete(request, pk):
 
     InsightGoal.objects.filter(account=account, pk=pk).delete()
     messages.success(request, "Goal removed.")
+    return _goals_redirect(request)
+
+
+@login_required
+def insights_report_settings(request):
+    """Turn the weekly owner report on or off (see ``apps.conversations.weekly_report``)."""
+    account = get_current_account(request)
+    if account is None or request.method != "POST":
+        return redirect("dashboard")
+    if not _require_goal_permission(request, account):
+        return _goals_redirect(request)
+
+    enabled = request.POST.get("weekly_report") == "on"
+    InsightSettings.objects.update_or_create(
+        account=account, defaults={"weekly_report": enabled}
+    )
+    messages.success(
+        request, "Weekly report turned on." if enabled else "Weekly report turned off."
+    )
     return _goals_redirect(request)

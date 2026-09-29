@@ -21,4 +21,9 @@ urlpatterns = [
         insights_views.insights_goal_delete,
         name="insights-goal-delete",
     ),
+    path(
+        "report-settings/",
+        insights_views.insights_report_settings,
+        name="insights-report-settings",
+    ),
 ]

@@ -41,4 +41,13 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
     <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
     <p class="text-sm text-gray-600">No customer activity yet this week. Once WhatsApp messages start coming in, this page fills in automatically.</p>
   {% endif %}
+  {% if can_manage_goals %}
+  <form method="post" action="/insights/report-settings/" class="pt-2 border-t border-border">
+    {% csrf_token %}
+    <label class="flex items-center gap-2 text-xs text-gray-500">
+      <input type="checkbox" name="weekly_report" onchange="this.form.submit()" {% if weekly_report_enabled %}checked{% endif %}>
+      Email this to the owners every week
+    </label>
+  </form>
+  {% endif %}
 </section>
