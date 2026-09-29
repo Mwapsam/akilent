@@ -963,6 +963,21 @@ files = [
 ]
 
 [[package]]
+name = "ftfy"
+version = "6.3.1"
+description = "Fixes mojibake and other problems with Unicode, after the fact"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "ftfy-6.3.1-py3-none-any.whl", hash = "sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083"},
+    {file = "ftfy-6.3.1.tar.gz", hash = "sha256:9b3c3d90f84fb267fe64d375a07b7f8912d817cf86009ae134aa03e1819506ec"},
+]
+
+[package.dependencies]
+wcwidth = "*"
+
+[[package]]
 name = "gunicorn"
 version = "23.0.0"
 description = "WSGI HTTP Server for UNIX"
@@ -3027,7 +3042,7 @@ version = "0.9.1"
 description = "Measures the displayed width of unicode strings in a terminal"
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "wcwidth-0.9.1-cp310-abi3-macosx_10_9_x86_64.whl", hash = "sha256:10b00ba23482e352f874d2e8135e7ace9da838646c7dd800566246bbd46125ff"},
     {file = "wcwidth-0.9.1-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:40d936d72c9bdc10df43f93a8be502bc5024b487259139f66a328722c07f34a9"},
@@ -3103,4 +3118,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "a426f696857b5924e0bc5950a79bb50b8869e591d729402fa7c88262c623181f"
+content-hash = "9bb07715e0cabcec30546099fb83f5edf53dc59ee2aecfe0beb2ac5a7a1dfb48"
