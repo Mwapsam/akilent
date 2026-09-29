@@ -38,7 +38,7 @@ _PAGE_SIZE = 30
 
 def _inbox_context(request, account) -> dict:
     now = timezone.now()
-    view = (request.GET.get("view") or "needs_attention").strip()
+    view = (request.GET.get("view") or "all").strip()
     if view == "needs_reply":  # legacy name for the same tab
         view = "needs_attention"
 
@@ -49,13 +49,13 @@ def _inbox_context(request, account) -> dict:
         qs = with_activity(
             Conversation.objects.filter(account=account, assigned_to=request.user)
         ).order_by("-last_any", "-id")
-    elif view == "all":
+    elif view == "needs_attention":
+        qs = needs_attention(account, now)
+    else:
+        view = "all"
         qs = with_activity(Conversation.objects.filter(account=account)).order_by(
             "-last_any", "-id"
         )
-    else:
-        view = "needs_attention"
-        qs = needs_attention(account, now)
     qs = qs.select_related("contact")
 
     channel = (request.GET.get("channel") or "").strip()
