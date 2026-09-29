@@ -211,7 +211,9 @@ class TestPeakHours:
         )  # UTC+2, no DST
         start = NOW - timedelta(days=1)
         zone = zoneinfo.ZoneInfo("Africa/Lusaka")
-        # 25 enquiries at 20:00 local time (peak), 5 spread elsewhere.
+        # 25 enquiries at 20:00 local time (peak), one per minute back to 19:36, so hour 19 gets
+        # 24 and hour 20 gets 1 — deliberately not a round number, so a tie with the filler
+        # events below (placed at local hour 2, nowhere near the peak) can't happen.
         base_local = (
             (NOW - timedelta(days=1))
             .astimezone(zone)
@@ -220,8 +222,11 @@ class TestPeakHours:
         for i in range(25):
             at = base_local.astimezone(UTC) - timedelta(minutes=i)
             enquiry(account, at)
+        # 5 filler enquiries at local 02:00, built the same way as the peak ones so the test
+        # never depends on the wall-clock time it happens to run at.
+        filler_local = base_local.replace(hour=2)
         for i in range(5):
-            at = start + timedelta(hours=i * 3)
+            at = filler_local.astimezone(UTC) - timedelta(minutes=i)
             enquiry(account, at)
         period = reporting.Period(start - timedelta(days=2), NOW)
         peak = reporting.peak_hours(account, period)

@@ -31,6 +31,18 @@ function registerChat() {
 
     init() {
       this.$nextTick(() => this.scrollBottom(true));
+      // --cv-top defaults to a fixed 7rem, which only holds when the app shell's topbar is the
+      // only thing above .cv. Embedded in the two-pane inbox, the inbox header/filters push it
+      // down further, so measure the real offset instead of assuming one — this is what keeps
+      // the page itself from scrolling (the thread scrolls internally regardless of placement).
+      this._fit = () => {
+        const main = document.getElementById('main');
+        const pad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+        const top = this.$el.getBoundingClientRect().top + window.scrollY;
+        this.$el.style.setProperty('--cv-top', `${Math.round(top + pad)}px`);
+      };
+      requestAnimationFrame(this._fit);
+      window.addEventListener('resize', this._fit, { passive: true });
       this._onVisible = () => {
         if (!document.hidden) { this.interval = BASE_INTERVAL; this.schedule(0); }
       };
@@ -54,6 +66,7 @@ function registerChat() {
     destroy() {
       this._destroyed = true;
       clearTimeout(this.timer);
+      window.removeEventListener('resize', this._fit);
       document.removeEventListener('visibilitychange', this._onVisible);
       document.removeEventListener('sse:message.created', this._onSseMessage);
     },
