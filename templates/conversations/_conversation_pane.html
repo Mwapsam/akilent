@@ -189,22 +189,20 @@
                border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); }
 
   /* Side panel: a drawer over the pane by default, a column only once the *pane's own*
-     width (not the window's) comfortably fits list + thread + details side by side. A
-     container is the positioning root for its `position: fixed` descendants, so the drawer
+     width (not the window's) leaves the chat itself at least ~560px once the column (340px)
+     and its gap (16px) are taken out — matching the pane width that motivated this fix in the
+     first place, not wherever the old viewport breakpoint happened to land (that breakpoint
+     was itself the cramped layout: at a 1024px window .cv is only ~694px, which would leave
+     just ~338px for the chat — worse than what we're fixing). 57.25rem = (560 + 16 + 340) / 16.
+     A container is the positioning root for its `position: fixed` descendants, so the drawer
      and backdrop cover the conversation area rather than the whole window — correct inside
-     the two-pane inbox, where the list should stay visible behind them.
-     43.5rem matches what the standalone full-page view actually measures for .cv at a
-     1024px window (~694px, after the sidebar/content padding) — the old `min-width: 1024px`
-     breakpoint this replaces. A much larger threshold (e.g. 68rem) would technically read as
-     "the pane has room," but never crosses it at common desktop widths once the app's own
-     sidebar is accounted for, quietly reverting the standalone view's side column to a
-     drawer — measured directly, not guessed. */
+     the two-pane inbox, where the list should stay visible behind them. */
   .cv-side { display: none; position: fixed; inset-block: 0; right: 0; width: min(22rem, 90%);
              z-index: var(--z-drawer); box-shadow: var(--shadow-pop); }
   .cv-side.is-open { display: block; }
   .cv-backdrop { position: fixed; inset: 0; background: rgb(17 24 39 / .5); z-index: var(--z-drawer); }
   .cv-side-inner { height: 100%; overflow-y: auto; background: var(--cv-surface); }
-  @container cv (min-width: 43.5rem) {
+  @container cv (min-width: 57.25rem) {
     .cv { grid-template-columns: minmax(0, 1fr) 340px; }
     .cv-side { display: block; position: static; width: auto; box-shadow: none; min-height: 0; }
     .cv-side-inner { border: 1px solid var(--cv-line); border-radius: 1rem; }

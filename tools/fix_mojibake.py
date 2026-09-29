@@ -3,16 +3,21 @@
 Dry run:  poetry run python fix_mojibake.py templates static/js
 Apply:    poetry run python fix_mojibake.py templates static/js --apply
 """
+
 import sys
 from pathlib import Path
 
 import ftfy
 
 EXTS = {".html", ".js", ".css", ".txt", ".md"}
+
+
 def show(line: str) -> str:
     """Printable preview: control chars (like the U+0090 in broken '═') become \\x escapes."""
     line = line.strip()[:90]
     return "".join(c if c.isprintable() else f"\\x{ord(c):02x}" for c in line)
+
+
 apply = "--apply" in sys.argv
 roots = [Path(a) for a in sys.argv[1:] if a != "--apply"] or [Path("templates")]
 
@@ -28,7 +33,9 @@ for root in roots:
         if fixed == original:
             continue
         changed += 1
-        diffs = [(a, b) for a, b in zip(original.splitlines(), fixed.splitlines()) if a != b]
+        diffs = [
+            (a, b) for a, b in zip(original.splitlines(), fixed.splitlines()) if a != b
+        ]
         print(f"\n{path}  ({len(diffs)} lines)")
         for a, b in diffs[:3]:
             print(f"  - {show(a)}")
@@ -37,4 +44,6 @@ for root in roots:
             with Path.open(path, "w", encoding="utf-8", newline="") as f:
                 f.write(fixed)
 
-print(f"\n{changed} file(s) {'fixed' if apply else 'need fixing (dry run, add --apply)'}")
+print(
+    f"\n{changed} file(s) {'fixed' if apply else 'need fixing (dry run, add --apply)'}"
+)
