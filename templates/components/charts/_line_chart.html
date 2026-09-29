@@ -51,19 +51,36 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
       {% comment %}Guarded on columns[active] existing, not just active !== null: something
       outside this component (a browser extension, a stale hover after the data reloads) could
       otherwise set active to an index columns doesn't have, and an unguarded read would throw
-      and take the rest of the page's scripts down with it.{% endcomment %}
-      <template x-if="active !== null && columns[active]">
-        <g>
-          <line class="chart-crosshair" :x1="columns[active].centre" y1="0"
-                :x2="columns[active].centre" y2="{{ chart.height }}" />
-          <template x-for="(r, i) in columns[active].readings" :key="i">
-            <circle :cx="columns[active].centre" :cy="r.y" r="4"
-                    :fill="'var(--chart-series-' + (i + 1) + ')'"
-                    stroke="var(--color-surface)" stroke-width="2"
-                    vector-effect="non-scaling-stroke" />
-          </template>
-        </g>
-      </template>
+      and take the rest of the page's scripts down with it.
+
+      Plain conditional reads on every leaf expression, not just a guard on the containing
+      block: each :x1/:x2/:cx/:cy binding is its own independent Alpine effect on `active`, so
+      a fast mouseenter/mouseleave pair (active flips valid → null → valid within the same tick)
+      can run a binding against a transient `active` before any containing guard has caught up
+      — a scheduling race, not a data bug. Every leaf expression below falls back safely so that
+      race degrades to "draw nothing this tick" instead of a TypeError that kills every other
+      script on the page.
+
+      x-show, not x-if: x-if mounts/unmounts this block's DOM (via cloneNode) on every hover
+      transition, which is churn of exactly the kind the race above comes from, one level up —
+      x-show just toggles display, so the elements and their effects stay put and only their
+      attributes update.
+
+      One circle per series, written by Django (chart.series is fixed once the chart is built),
+      not an Alpine x-for: even a fixed-length x-for still mounts its items through Alpine's own
+      reactive machinery, which turned out to be exactly where this race kept resurfacing one
+      level deeper every time a containing element's churn was fixed. Writing the circles
+      directly removes Alpine's list-mounting from this path entirely — nothing left to race.{% endcomment %}
+      <g x-show="active !== null && columns[active]" style="display: none">
+        <line class="chart-crosshair" :x1="columns[active]?.centre ?? 0" y1="0"
+              :x2="columns[active]?.centre ?? 0" y2="{{ chart.height }}" />
+        {% for s in chart.series %}
+        <circle :cx="columns[active]?.centre ?? 0" :cy="columns[active]?.readings?.[{{ forloop.counter0 }}]?.y ?? 0" r="4"
+                fill="var(--chart-series-{{ forloop.counter }})"
+                stroke="var(--color-surface)" stroke-width="2"
+                vector-effect="non-scaling-stroke" />
+        {% endfor %}
+      </g>
 
       {% comment %}Full-height hit areas: the target is the column, not the
       2px line, which is the difference between usable and not on a phone.{% endcomment %}
@@ -84,16 +101,19 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
       {% endfor %}
     </div>
 
+    {% comment %}One row per series, written by Django — same reasoning as the crosshair
+    markers above: an Alpine x-for over anything keyed off columns[active] re-mounts on every
+    hovered column, which is where this component's DOM-churn/race problems kept coming from.{% endcomment %}
     <div class="chart-tooltip" x-show="active !== null && columns[active]" x-cloak
          :style="tooltipStyle()" role="status" aria-live="polite">
-      <p class="chart-tooltip-label" x-text="columns[active] ? columns[active].label : ''"></p>
-      <template x-for="(r, i) in (columns[active] ? columns[active].readings : [])" :key="i">
-        <p class="chart-tooltip-row">
-          <span class="chart-swatch" :style="'background: var(--chart-series-' + (i + 1) + ')'"></span>
-          <span x-text="r.label"></span>
-          <span class="chart-tooltip-value tabular-nums" x-text="r.value"></span>
-        </p>
-      </template>
+      <p class="chart-tooltip-label" x-text="columns[active]?.label ?? ''"></p>
+      {% for s in chart.series %}
+      <p class="chart-tooltip-row">
+        <span class="chart-swatch" style="background: var(--chart-series-{{ forloop.counter }})"></span>
+        <span x-text="columns[active]?.readings?.[{{ forloop.counter0 }}]?.label ?? ''"></span>
+        <span class="chart-tooltip-value tabular-nums" x-text="columns[active]?.readings?.[{{ forloop.counter0 }}]?.value ?? ''"></span>
+      </p>
+      {% endfor %}
     </div>
   </div>
 
