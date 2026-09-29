@@ -7,29 +7,29 @@ apps.conversations.reporting, for the selected ``days`` period.
   <h2 id="response-h" class="text-lg font-semibold text-ink">Customer response</h2>
   <p class="text-sm text-gray-600">Are we responding fast enough?</p>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <div class="rounded-xl border border-border p-4">
-      <p class="text-2xl font-semibold text-ink tabular-nums">{{ response.median_first_reply_seconds|duration }}</p>
-      <p class="text-sm text-gray-600">median first reply</p>
+  <div class="stat-grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+    <div>
+      <p class="stat-value">{{ response.median_first_reply_seconds|duration }}</p>
+      <p class="stat-label">median first reply</p>
     </div>
-    <div class="rounded-xl border border-border p-4">
-      <p class="text-2xl font-semibold text-ink tabular-nums">{% if response.answered_pct is not None %}{{ response.answered_pct }}%{% else %}—{% endif %}</p>
-      <p class="text-sm text-gray-600">conversations answered within 24 hours{% if response.enquiries %} ({{ response.answered }} of {{ response.enquiries }}){% endif %}</p>
+    <div>
+      <p class="stat-value">{% if response.answered_pct is not None %}{{ response.answered_pct }}%{% else %}—{% endif %}</p>
+      <p class="stat-label">conversations answered within 24 hours{% if response.enquiries %} ({{ response.answered }} of {{ response.enquiries }}){% endif %}</p>
     </div>
-    <div class="rounded-xl border border-border p-4">
-      <p class="text-2xl font-semibold text-ink tabular-nums">{% if recovery.rate_pct is not None %}{{ recovery.rate_pct }}%{% else %}—{% endif %}</p>
-      <p class="text-sm text-gray-600">
+    <div>
+      <p class="stat-value">{% if recovery.rate_pct is not None %}{{ recovery.rate_pct }}%{% else %}—{% endif %}</p>
+      <p class="stat-label">
         {% if recovery.missed %}{{ recovery.recovered }} of {{ recovery.missed }} missed conversations recovered{% else %}no missed conversations this period{% endif %}
       </p>
     </div>
-    <div class="rounded-xl border border-border p-4">
-      <p class="text-2xl font-semibold text-ink tabular-nums">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
-      <p class="text-sm text-gray-600">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
+    <div>
+      <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
+      <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
     </div>
   </div>
 
   {% if peak_hours.enough %}
-  <div class="rounded-xl border border-border p-4">
+  <div class="border-t border-border pt-5">
     <p class="text-sm text-ink">
       Your busiest time is <strong>{{ peak_hours.start_hour|hour12 }}–{{ peak_hours.end_hour|hour12 }}</strong>.
       {{ peak_hours.share_pct }}% of new enquiries arrive then.

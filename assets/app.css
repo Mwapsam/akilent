@@ -555,6 +555,19 @@
   }
   .card-hover:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
 
+  /* Stat rows -------------------------------------------------------------
+     A row of numbers grouped by a single hairline, not by boxing each one —
+     insights/*.html's alternative to a "rounded-xl border p-4" tile per metric.
+     Used for a group of stats standing on its own (outside a .card); inside
+     a .card, the card's own border is the grouping, so just use .stat-value/
+     .stat-label there without .stat-grid. */
+  .stat-grid { @apply grid gap-x-8 gap-y-5 py-5; border-top: 1px solid var(--color-border); }
+  .stat-value { @apply text-[1.75rem] leading-none font-semibold text-ink tabular-nums; letter-spacing: -0.01em; }
+  .stat-label { @apply mt-2 text-sm text-gray-600; }
+  .stat-delta { @apply mt-1.5 text-xs; }
+  .stat-delta--down { color: var(--color-teal-600); }
+  .stat-delta--up { color: var(--color-amber-600); }
+
   /* Chat ----------------------------------------------------------------
      Only the avatar survives here. The rest of the old .chat-* layout was
      replaced by the page-local .cv-* rules in conversation_detail.html and

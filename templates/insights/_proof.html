@@ -11,28 +11,28 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
       <p class="mt-1 text-sm text-gray-700">{{ proof.sentence }}.</p>
       {% endif %}
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="rounded-xl border border-border p-4">
-        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.median.seconds|duration }}</p>
-        <p class="text-sm text-gray-600">median first reply</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div>
+        <p class="stat-value">{{ proof.median.seconds|duration }}</p>
+        <p class="stat-label">median first reply</p>
         {% if proof.median.change is not None %}
-        <p class="text-xs mt-1 {% if proof.median.change < 0 %}text-emerald-600{% elif proof.median.change > 0 %}text-amber-600{% else %}text-gray-400{% endif %}">
+        <p class="stat-delta {% if proof.median.change < 0 %}stat-delta--down{% elif proof.median.change > 0 %}stat-delta--up{% else %}text-gray-400{% endif %}">
           {% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %} {{ proof.median.change|duration }} vs last week
         </p>
         {% endif %}
       </div>
-      <div class="rounded-xl border border-border p-4">
-        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.recovered.recovered }}</p>
-        <p class="text-sm text-gray-600">missed conversation{{ proof.recovered.recovered|pluralize }} recovered</p>
+      <div>
+        <p class="stat-value">{{ proof.recovered.recovered }}</p>
+        <p class="stat-label">missed conversation{{ proof.recovered.recovered|pluralize }} recovered</p>
         {% if proof.recovered.became_leads %}
-        <p class="text-xs text-gray-500 mt-1">{{ proof.recovered.became_leads }} became lead{{ proof.recovered.became_leads|pluralize }}</p>
+        <p class="stat-delta text-gray-500">{{ proof.recovered.became_leads }} became lead{{ proof.recovered.became_leads|pluralize }}</p>
         {% endif %}
       </div>
-      <div class="rounded-xl border border-border p-4">
-        <p class="text-2xl font-semibold text-ink tabular-nums">{{ proof.paid.orders }}</p>
-        <p class="text-sm text-gray-600">paid order{{ proof.paid.orders|pluralize }} from conversations</p>
+      <div>
+        <p class="stat-value">{{ proof.paid.orders }}</p>
+        <p class="stat-label">paid order{{ proof.paid.orders|pluralize }} from conversations</p>
         {% if proof.paid.revenue %}
-        <p class="text-xs text-gray-500 mt-1">{% for r in proof.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        <p class="stat-delta text-gray-500">{% for r in proof.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
         {% endif %}
       </div>
     </div>
