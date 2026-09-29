@@ -48,7 +48,11 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
       {% comment %}Crosshair and the marker on each series at the hovered
       column. A 2px ring in the surface colour keeps two markers legible where
       the lines cross.{% endcomment %}
-      <template x-if="active !== null">
+      {% comment %}Guarded on columns[active] existing, not just active !== null: something
+      outside this component (a browser extension, a stale hover after the data reloads) could
+      otherwise set active to an index columns doesn't have, and an unguarded read would throw
+      and take the rest of the page's scripts down with it.{% endcomment %}
+      <template x-if="active !== null && columns[active]">
         <g>
           <line class="chart-crosshair" :x1="columns[active].centre" y1="0"
                 :x2="columns[active].centre" y2="{{ chart.height }}" />
@@ -80,10 +84,10 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
       {% endfor %}
     </div>
 
-    <div class="chart-tooltip" x-show="active !== null" x-cloak
+    <div class="chart-tooltip" x-show="active !== null && columns[active]" x-cloak
          :style="tooltipStyle()" role="status" aria-live="polite">
-      <p class="chart-tooltip-label" x-text="active !== null ? columns[active].label : ''"></p>
-      <template x-for="(r, i) in (active !== null ? columns[active].readings : [])" :key="i">
+      <p class="chart-tooltip-label" x-text="columns[active] ? columns[active].label : ''"></p>
+      <template x-for="(r, i) in (columns[active] ? columns[active].readings : [])" :key="i">
         <p class="chart-tooltip-row">
           <span class="chart-swatch" :style="'background: var(--chart-series-' + (i + 1) + ')'"></span>
           <span x-text="r.label"></span>

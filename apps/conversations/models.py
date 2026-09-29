@@ -529,3 +529,46 @@ class WeeklySnapshot(models.Model):
         raise ValueError(
             "A weekly snapshot is a historical record and cannot be deleted."
         )
+
+
+class InsightGoal(models.Model):
+    """A monthly target an owner set on the Insights page ("Are we on track?").
+
+    Not a historical record like ``Benchmark``/``WeeklySnapshot`` — an ordinary setting the owner
+    can edit or remove. ``metric`` picks from a fixed catalogue (``reporting.GOAL_METRICS``); the
+    richer per-metric behaviour (direction, whether it's paced against the month, formatting)
+    lives there, not on the model, so the catalogue stays the one place a metric is defined.
+    """
+
+    class Metric(models.TextChoices):
+        MEDIAN_FIRST_REPLY = "median_first_reply", "Median first reply"
+        ANSWERED_PCT = "answered_pct", "Conversations answered within 24 hours"
+        LEADS = "leads", "Leads this month"
+        PAID_ORDERS = "paid_orders", "Paid orders this month"
+        REVENUE = "revenue", "Revenue this month"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="insight_goals"
+    )
+    metric = models.CharField(max_length=24, choices=Metric.choices)
+    target = models.DecimalField(max_digits=12, decimal_places=2)
+    # Only set (and only meaningful) for the "revenue" metric, which is per currency like every
+    # other money figure on this page.
+    currency = models.CharField(max_length=8, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["metric", "currency"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "metric", "currency"],
+                name="uniq_insightgoal_account_metric_currency",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.get_metric_display()} target for {self.account_id}"

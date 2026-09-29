@@ -7,14 +7,20 @@ one for its background aggregates.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from apps.accounts.utils import get_current_account
 from apps.conversations import reporting
+from apps.conversations.models import InsightGoal
 
 DEFAULT_PERIOD = 30
+FREE_GOAL_LIMIT = 3  # every plan; plans with detailed_analytics get unlimited goals
 
 
 def _period(request, account, now) -> tuple[reporting.Period, int, bool]:
@@ -36,6 +42,7 @@ def _period(request, account, now) -> tuple[reporting.Period, int, bool]:
 
 @login_required
 def insights(request):
+    from apps.accounts.api import is_account_admin
     from apps.billing.limits import LimitChecker
     from apps.conversations import api as conversations_api
     from apps.email.views import email_analytics_context
@@ -47,6 +54,8 @@ def insights(request):
     now = timezone.now()
     period, days, period_locked = _period(request, account, now)
     has_history = LimitChecker(account).has_feature("detailed_analytics")
+    goals = reporting.goal_progress(account, now=now)
+    goal_limit = None if has_history else FREE_GOAL_LIMIT
     rows = reporting.first_replies(account, period.start, period.end)
     peak_hours = reporting.peak_hours(account, period, rows)
 
@@ -85,6 +94,125 @@ def insights(request):
             if has_history
             else [],
             "momentum": reporting.momentum(account),
+            "goals": goals,
+            "goal_limit": goal_limit,
+            "goal_limit_reached": goal_limit is not None
+            and goals["total"] >= goal_limit,
+            "can_manage_goals": is_account_admin(request.user, account),
+            "goal_metrics": reporting.GOAL_METRICS,
+            # Revenue can have one goal per currency, so it's never excluded here; every other
+            # metric is single-goal, so once it's set it drops off the "add a goal" choices.
+            "existing_goal_metrics": {
+                g.metric
+                for g in InsightGoal.objects.filter(account=account)
+                if g.metric != InsightGoal.Metric.REVENUE
+            },
             **email_analytics_context(account, request),
         },
     )
+
+
+def _goals_redirect(request):
+    query = request.GET.urlencode()
+    return redirect(f"/insights/?{query}" if query else "/insights/")
+
+
+def _require_goal_permission(request, account) -> bool:
+    """True if allowed; otherwise a message is queued and the caller should redirect."""
+    from apps.accounts.api import is_account_admin
+
+    if not is_account_admin(request.user, account):
+        messages.error(request, "Only an owner or admin can change goals.")
+        return False
+    return True
+
+
+@login_required
+def insights_goal_create(request):
+    from apps.billing.limits import LimitChecker
+
+    account = get_current_account(request)
+    if account is None or request.method != "POST":
+        return redirect("dashboard")
+    if not _require_goal_permission(request, account):
+        return _goals_redirect(request)
+
+    has_history = LimitChecker(account).has_feature("detailed_analytics")
+    existing = InsightGoal.objects.filter(account=account).count()
+    if not has_history and existing >= FREE_GOAL_LIMIT:
+        messages.error(
+            request,
+            f"Your plan includes up to {FREE_GOAL_LIMIT} goals. Upgrade for unlimited goals.",
+        )
+        return _goals_redirect(request)
+
+    metric = request.POST.get("metric", "")
+    currency = (request.POST.get("currency") or "").strip().upper()
+    info = reporting.GOAL_METRICS.get(metric)
+    if info is None:
+        messages.error(request, "Choose a goal to track.")
+        return _goals_redirect(request)
+    if info["needs_currency"] and not currency:
+        messages.error(request, "Choose a currency for this goal.")
+        return _goals_redirect(request)
+    if not info["needs_currency"]:
+        currency = ""
+    try:
+        target = Decimal(request.POST.get("target", "").strip())
+        if target <= 0:
+            raise InvalidOperation
+    except (InvalidOperation, ValueError):
+        messages.error(request, "Enter a target greater than zero.")
+        return _goals_redirect(request)
+
+    try:
+        InsightGoal.objects.create(
+            account=account,
+            metric=metric,
+            target=target,
+            currency=currency,
+            created_by=request.user,
+        )
+    except IntegrityError:
+        messages.error(request, "You already have a goal for that.")
+        return _goals_redirect(request)
+    messages.success(request, "Goal added.")
+    return _goals_redirect(request)
+
+
+@login_required
+def insights_goal_update(request, pk):
+    account = get_current_account(request)
+    if account is None or request.method != "POST":
+        return redirect("dashboard")
+    if not _require_goal_permission(request, account):
+        return _goals_redirect(request)
+
+    goal = InsightGoal.objects.filter(account=account, pk=pk).first()
+    if goal is None:
+        messages.error(request, "That goal doesn't exist any more.")
+        return _goals_redirect(request)
+    try:
+        target = Decimal(request.POST.get("target", "").strip())
+        if target <= 0:
+            raise InvalidOperation
+    except (InvalidOperation, ValueError):
+        messages.error(request, "Enter a target greater than zero.")
+        return _goals_redirect(request)
+    goal.target = target
+    goal.save(update_fields=["target", "updated_at"])
+    messages.success(request, "Goal updated.")
+    return _goals_redirect(request)
+
+
+@login_required
+def insights_goal_delete(request, pk):
+    account = get_current_account(request)
+    if account is None or request.method != "POST":
+        return redirect("dashboard")
+    if not _require_goal_permission(request, account):
+        return _goals_redirect(request)
+
+    InsightGoal.objects.filter(account=account, pk=pk).delete()
+    messages.success(request, "Goal removed.")
+    return _goals_redirect(request)

@@ -27,7 +27,7 @@ from django.db.models.fields import CharField
 from django.db.models.fields.json import KT
 from django.utils import timezone
 
-from apps.conversations.models import Conversation, FollowUp, Message
+from apps.conversations.models import Conversation, FollowUp, InsightGoal, Message
 from apps.conversations.state import RESPONSE_STATUSES
 
 ANSWER_WITHIN = timedelta(hours=24)
@@ -938,6 +938,141 @@ def momentum(account, *, weeks: int = 12) -> dict:
             ("Unanswered", [r["unanswered"] for r in rows]),
         ],
         "paid_series": [("Paid orders", [r["paid_orders"] for r in rows])],
+    }
+
+
+# ---- goals --------------------------------------------------------------------------------
+
+# The one place a goal metric is defined. "direction" says whether lower or higher is better;
+# "paced" metrics are cumulative-for-the-month counts, on track once progress has kept pace with
+# how much of the month has passed — a rate (reply time, answered %) is compared with the target
+# directly, since there's nothing to "keep pace with" in a rate.
+GOAL_METRICS: dict[str, dict[str, object]] = {
+    InsightGoal.Metric.MEDIAN_FIRST_REPLY: {
+        "label": "Median first reply",
+        "unit": "minutes",
+        "direction": "lower",
+        "paced": False,
+        "needs_currency": False,
+    },
+    InsightGoal.Metric.ANSWERED_PCT: {
+        "label": "Conversations answered within 24 hours",
+        "unit": "percent",
+        "direction": "higher",
+        "paced": False,
+        "needs_currency": False,
+    },
+    InsightGoal.Metric.LEADS: {
+        "label": "Leads this month",
+        "unit": "count",
+        "direction": "higher",
+        "paced": True,
+        "needs_currency": False,
+    },
+    InsightGoal.Metric.PAID_ORDERS: {
+        "label": "Paid orders this month",
+        "unit": "count",
+        "direction": "higher",
+        "paced": True,
+        "needs_currency": False,
+    },
+    InsightGoal.Metric.REVENUE: {
+        "label": "Revenue this month",
+        "unit": "money",
+        "direction": "higher",
+        "paced": True,
+        "needs_currency": True,
+    },
+}
+
+
+def month_to_date(now: datetime | None = None) -> Period:
+    """The calendar month containing ``now``, from its 1st to ``now`` (not the whole month —
+    goals track progress against a month still in flight)."""
+    now = now or timezone.now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return Period(start, now)
+
+
+def month_elapsed_share(now: datetime | None = None) -> float:
+    """How much of the current calendar month has passed, as 0..1. A paced goal is on track once
+    its progress has kept up with this."""
+    import calendar
+
+    now = now or timezone.now()
+    _, days_in_month = calendar.monthrange(now.year, now.month)
+    return min(1.0, now.day / days_in_month)
+
+
+def _goal_actual(account, metric: str, currency: str, period: Period) -> float | None:
+    """The metric's current value for ``period``, or None when there's nothing to measure yet."""
+    if metric == InsightGoal.Metric.MEDIAN_FIRST_REPLY:
+        seconds = response(account, period)["median_first_reply_seconds"]
+        return None if seconds is None else seconds / 60
+    if metric == InsightGoal.Metric.ANSWERED_PCT:
+        pct_value = response(account, period)["answered_pct"]
+        return None if pct_value is None else float(pct_value)
+    if metric == InsightGoal.Metric.LEADS:
+        return float(sales(account, period)["leads"])
+    if metric == InsightGoal.Metric.PAID_ORDERS:
+        return float(sales(account, period)["paid_orders"])
+    if metric == InsightGoal.Metric.REVENUE:
+        row = next(
+            (r for r in revenue(account, period) if r["currency"] == currency), None
+        )
+        return float(row["total"]) if row else 0.0
+    return None
+
+
+def goal_progress(account, *, now: datetime | None = None) -> dict:
+    """Are we on track? Each active goal's current value against its target, for the calendar
+    month to date. ``{"on_track", "total", "goals": [...]}``.
+
+    A goal row: ``{"goal", "metric", "label", "target", "currency", "unit", "actual",
+    "progress_pct", "direction", "paced", "on_track"}``. ``on_track`` is None (shown as unknown,
+    never guessed) when there's no data yet for a rate metric.
+    """
+    now = now or timezone.now()
+    period = month_to_date(now)
+    elapsed_share = month_elapsed_share(now)
+    rows = []
+    for goal in InsightGoal.objects.filter(account=account).select_related(
+        "created_by"
+    ):
+        info = GOAL_METRICS[goal.metric]
+        actual = _goal_actual(account, goal.metric, goal.currency, period)
+        target = float(goal.target)
+        on_track: bool | None
+        if actual is None:
+            on_track = None
+        elif info["direction"] == "lower":
+            on_track = actual <= target
+        elif info["paced"]:
+            progress = (actual / target) if target else 1.0
+            on_track = progress >= elapsed_share
+        else:
+            on_track = actual >= target
+        rows.append(
+            {
+                "goal": goal,
+                "metric": goal.metric,
+                "label": info["label"],
+                "target": goal.target,
+                "currency": goal.currency,
+                "unit": info["unit"],
+                "actual": actual,
+                "progress_pct": min(100, round(actual / target * 100))
+                if actual is not None and target
+                else None,
+                "direction": info["direction"],
+                "paced": info["paced"],
+                "on_track": on_track,
+            }
+        )
+    return {
+        "on_track": sum(1 for r in rows if r["on_track"]),
+        "total": len(rows),
+        "goals": rows,
     }
 
 

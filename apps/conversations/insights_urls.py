@@ -6,4 +6,19 @@ from apps.conversations import insights_views
 # template with no namespace prefix.
 urlpatterns = [
     path("", insights_views.insights, name="insights"),
+    path(
+        "goals/create/",
+        insights_views.insights_goal_create,
+        name="insights-goal-create",
+    ),
+    path(
+        "goals/<int:pk>/update/",
+        insights_views.insights_goal_update,
+        name="insights-goal-update",
+    ),
+    path(
+        "goals/<int:pk>/delete/",
+        insights_views.insights_goal_delete,
+        name="insights-goal-delete",
+    ),
 ]

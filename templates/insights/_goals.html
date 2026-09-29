@@ -1,0 +1,109 @@
+{% comment %}
+Goals: "Are we on track?" ``goals`` is apps.conversations.reporting.goal_progress; the metric
+catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin only
+(``can_manage_goals``). No composite score across goals — each is judged on its own terms.
+{% endcomment %}
+{% load charts %}
+<section class="space-y-4" aria-labelledby="goals-h">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <h2 id="goals-h" class="text-lg font-semibold text-ink">Monthly goals</h2>
+      <p class="text-sm text-gray-600">Are we on track?</p>
+    </div>
+    {% if goals.total %}
+    <span class="text-sm font-medium text-ink tabular-nums">{{ goals.on_track }} of {{ goals.total }} on track</span>
+    {% endif %}
+  </div>
+
+  {% if goals.goals %}
+  <ul class="rounded-xl border border-border divide-y divide-border">
+    {% for row in goals.goals %}
+    <li class="p-4 space-y-2">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p class="text-sm font-medium text-ink">
+            {{ row.label }}{% if row.currency %} ({{ row.currency }}){% endif %}
+          </p>
+          <p class="text-sm text-gray-600 tabular-nums">
+            {% if row.actual is None %}
+              No data yet this month
+            {% elif row.unit == "minutes" %}
+              {{ row.actual|floatformat:0 }} min of {{ row.target|floatformat:0 }} min target
+            {% elif row.unit == "percent" %}
+              {{ row.actual|floatformat:0 }}% of {{ row.target|floatformat:0 }}% target
+            {% elif row.unit == "money" %}
+              {{ row.currency }} {{ row.actual|floatformat:2 }} / {{ row.target|floatformat:2 }}
+            {% else %}
+              {{ row.actual|floatformat:0 }} / {{ row.target|floatformat:0 }}
+            {% endif %}
+          </p>
+        </div>
+        {% if row.on_track is None %}
+        <span class="badge badge-neutral shrink-0">No data yet</span>
+        {% elif row.on_track %}
+        <span class="badge badge-success shrink-0">On track</span>
+        {% else %}
+        <span class="badge badge-warning shrink-0">Behind</span>
+        {% endif %}
+      </div>
+      {% if row.progress_pct is not None %}
+      {% meter row.actual row.target label=row.label tone=row.on_track|yesno:"good,warning,brand" %}
+      {% endif %}
+      {% if can_manage_goals %}
+      <div class="flex items-center gap-2 pt-1">
+        <form method="post" action="/insights/goals/{{ row.goal.pk }}/update/" class="flex items-center gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="sr-only" for="target-{{ row.goal.pk }}">New target</label>
+          <input type="number" step="0.01" min="0.01" name="target" id="target-{{ row.goal.pk }}"
+                 value="{{ row.target|floatformat:2 }}" class="input input-sm w-28">
+          <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+        </form>
+        <form method="post" action="/insights/goals/{{ row.goal.pk }}/delete/">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-sm text-red-600">Remove</button>
+        </form>
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-gray-600">No goals set yet.</p>
+  {% endif %}
+
+  {% if can_manage_goals %}
+    {% if goal_limit_reached %}
+    <p class="text-sm text-gray-600">
+      Your plan includes up to {{ goal_limit }} goals.
+      <a href="/billing/plans/" class="text-accent hover:text-accent-strong">Upgrade for unlimited goals.</a>
+    </p>
+    {% else %}
+    <form method="post" action="/insights/goals/create/"
+          class="flex items-end gap-2 flex-wrap border-t border-border pt-4"
+          x-data="{ metric: '' }">
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs text-gray-500 mb-1" for="goal-metric">Add a goal</label>
+        <select id="goal-metric" name="metric" class="select" x-model="metric">
+          <option value="">Choose what to track</option>
+          {% for key, info in goal_metrics.items %}
+            {% if key not in existing_goal_metrics %}
+            <option value="{{ key }}">{{ info.label }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div x-show="metric === 'revenue'" x-cloak>
+        <label class="block text-xs text-gray-500 mb-1" for="goal-currency">Currency</label>
+        <input type="text" id="goal-currency" name="currency" maxlength="8" placeholder="USD" class="input w-24">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1" for="goal-target">Target</label>
+        <input type="number" step="0.01" min="0.01" id="goal-target" name="target" class="input w-32" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Add goal</button>
+    </form>
+    {% endif %}
+  {% endif %}
+</section>
