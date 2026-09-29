@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static ui %}
-{% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} â€” Inbox{% endblock %}
+{% block title %}{{ conversation.contact.full_name|default:conversation.contact.phone }} — Inbox{% endblock %}
 
 {% block content %}
 {% include "conversations/_conversation_pane.html" %}
