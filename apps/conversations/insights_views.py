@@ -84,6 +84,7 @@ def insights(request):
             "channels": reporting.channels(account, period, rows)
             if has_history
             else [],
+            "momentum": reporting.momentum(account),
             **email_analytics_context(account, request),
         },
     )

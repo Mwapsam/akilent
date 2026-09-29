@@ -16,7 +16,9 @@ from apps.automation.models import Workflow, WorkflowRun
 from apps.billing.models import Plan, Subscription
 from apps.commerce.models import Order
 from apps.contacts.models import Contact
+from apps.conversations import snapshots
 from apps.conversations.models import Conversation, ConversationAttribution, Message
+from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
 IN, OUT = Message.Direction.INBOUND, Message.Direction.OUTBOUND
 NOW = timezone.now()
@@ -131,6 +133,23 @@ def test_every_populated_branch_renders(client, account):
         account=account, status=AIProposal.Status.DISMISSED, ready_at=NOW
     )
 
+    # A connected WhatsApp number far enough back to have closed, settled weeks, so the
+    # Momentum pillar's charts and table both have rows.
+    number = WhatsAppBusinessNumber.objects.create(
+        account=account,
+        phone_number_id="PN-full",
+        waba_id="W",
+        access_token="t",
+        is_active=True,
+    )
+    connected = NOW - timedelta(days=20)
+    WhatsAppBusinessNumber.objects.filter(pk=number.pk).update(created_at=connected)
+    week1_start = snapshots.closed_week_starts(connected, NOW)[0]
+    _enquiry(
+        account, week1_start + timedelta(hours=1), reply_after=timedelta(minutes=3)
+    )
+    snapshots.capture(account, connected, NOW)
+
     resp = client.get("/insights/?period=90")
     assert resp.status_code == 200
     body = resp.content.decode()
@@ -141,3 +160,7 @@ def test_every_populated_branch_renders(client, account):
     assert "Team member" in body
     # Channel performance table renders (plan has detailed_analytics), not the upgrade teaser.
     assert "Channel performance is available on higher plans" not in body
+    assert "Median first reply" in body  # momentum chart title
+    assert (
+        "Weekly numbers since your first captured week" in body
+    )  # momentum table caption

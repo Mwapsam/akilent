@@ -488,3 +488,44 @@ class InsightSettings(models.Model):
 
     def __str__(self):
         return f"Insight settings for {self.account_id}"
+
+
+class WeeklySnapshot(models.Model):
+    """A business's numbers for one closed Monday-to-Monday week, kept so Business Health can
+    show a trend without re-deriving history on every page view.
+
+    Measured once from stored messages after the week closes and has settled (see
+    ``apps.conversations.snapshots``), then never changed — a report run next year says the same
+    as today. ``metrics`` is ``reporting.period_metrics``'s output, JSON-safe.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="weekly_snapshots"
+    )
+    week_start = models.DateTimeField()
+    metrics = models.JSONField(default=dict)
+    captured_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["week_start"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "week_start"],
+                name="uniq_weeklysnapshot_account_week",
+            )
+        ]
+
+    def __str__(self):
+        return f"Week of {self.week_start:%d %b %Y} for {self.account_id}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValueError(
+                "A weekly snapshot is a historical record and cannot be changed."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError(
+            "A weekly snapshot is a historical record and cannot be deleted."
+        )

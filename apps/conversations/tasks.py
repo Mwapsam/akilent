@@ -31,3 +31,20 @@ def capture_benchmarks() -> int:
         except Exception:
             logger.exception("capture_benchmarks: failed for account %s", account.pk)
     return made
+
+
+@shared_task(queue="celery")
+def capture_weekly_snapshots() -> int:
+    """Measure each business's closed, settled weeks for the Momentum trend (``snapshots``)."""
+    from apps.conversations import snapshots
+    from apps.whatsapp import api as whatsapp_api
+
+    made = 0
+    for account, connected_at in whatsapp_api.connected_accounts():
+        try:
+            made += len(snapshots.capture(account, connected_at))
+        except Exception:
+            logger.exception(
+                "capture_weekly_snapshots: failed for account %s", account.pk
+            )
+    return made

@@ -604,6 +604,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.conversations.tasks.capture_benchmarks",
         "schedule": 21600.0,  # starting-week and day-30 numbers; captured once each, 6-hourly is plenty
     },
+    "capture-weekly-snapshots": {
+        "task": "apps.conversations.tasks.capture_weekly_snapshots",
+        "schedule": 21600.0,  # a week only closes and settles once; 6-hourly is plenty here too
+    },
     "delete-closed-accounts": {
         "task": "apps.core.tasks.delete_closed_accounts",
         "schedule": 86400.0,  # 30 days after an operator closes an account

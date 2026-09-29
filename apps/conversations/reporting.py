@@ -901,6 +901,46 @@ def period_metrics(account, start: datetime, end: datetime) -> dict:
     }
 
 
+# ---- pillar 5: business momentum -------------------------------------------------------------
+
+
+def momentum(account, *, weeks: int = 12) -> dict:
+    """Are we improving over time? The most recent captured weeks (``WeeklySnapshot``), shaped for
+    a line chart plus a table underneath.
+
+    Two charts only, each combining series that share a unit (a chart mixing minutes and counts
+    on one axis would be misleading): median first reply on its own, and answered/unanswered
+    conversations together. Revenue is per currency and is never summed onto one axis, so it's a
+    table column, not a chart series.
+    """
+    from apps.conversations import snapshots
+
+    rows = snapshots.trend(account, weeks=weeks)
+    # Not "%-d %b": that's a Linux-only strftime extension and breaks on Windows.
+    labels = [f"{r['week_start'].day} {r['week_start']:%b}" for r in rows]
+    return {
+        "rows": rows,
+        "has_data": bool(rows),
+        "labels": labels,
+        "reply_series": [
+            (
+                "Median first reply (min)",
+                [
+                    (r["median_first_reply_seconds"] or 0) / 60
+                    if r["median_first_reply_seconds"] is not None
+                    else 0
+                    for r in rows
+                ],
+            )
+        ],
+        "answered_series": [
+            ("Answered", [r["answered"] for r in rows]),
+            ("Unanswered", [r["unanswered"] for r in rows]),
+        ],
+        "paid_series": [("Paid orders", [r["paid_orders"] for r in rows])],
+    }
+
+
 # ---- formatting ------------------------------------------------------------------------------
 
 

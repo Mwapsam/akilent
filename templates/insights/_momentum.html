@@ -1,0 +1,58 @@
+{% comment %}
+Pillar: business momentum. ``momentum`` from apps.conversations.reporting.momentum (backed by
+WeeklySnapshot). The Starting point card is this pillar's baseline row: "since you started".
+{% endcomment %}
+{% load insights_tags charts %}
+<section class="space-y-4" aria-labelledby="momentum-h">
+  <h2 id="momentum-h" class="text-lg font-semibold text-ink">Business momentum</h2>
+  <p class="text-sm text-gray-600">Are we improving over time?</p>
+
+  {% if starting_point %}
+  <div>{% include "conversations/_starting_point.html" %}</div>
+  {% endif %}
+
+  {% if momentum.has_data %}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="card overflow-hidden">
+      <div class="px-5 py-4 border-b border-border"><h3 class="font-semibold text-sm">Median first reply</h3></div>
+      <div class="px-5 py-5">{% line_chart momentum.reply_series momentum.labels unit="Week" %}</div>
+    </div>
+    <div class="card overflow-hidden">
+      <div class="px-5 py-4 border-b border-border"><h3 class="font-semibold text-sm">Conversations answered vs unanswered</h3></div>
+      <div class="px-5 py-5">{% line_chart momentum.answered_series momentum.labels unit="Week" %}</div>
+    </div>
+    <div class="card overflow-hidden lg:col-span-2">
+      <div class="px-5 py-4 border-b border-border"><h3 class="font-semibold text-sm">Paid orders</h3></div>
+      <div class="px-5 py-5">{% line_chart momentum.paid_series momentum.labels unit="Week" %}</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <caption class="sr-only">Weekly numbers since your first captured week</caption>
+      <thead>
+        <tr>
+          <th>Week of</th><th>Conversations</th><th>Answered</th><th>Median reply</th>
+          <th>Recovered</th><th>Leads</th><th>Paid orders</th><th>Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in momentum.rows %}
+        <tr>
+          <td data-label="Week of">{{ row.week_start|date:"j M" }}</td>
+          <td data-label="Conversations">{{ row.conversations }}</td>
+          <td data-label="Answered">{% if row.answered_pct is not None %}{{ row.answered_pct }}%{% else %}—{% endif %}</td>
+          <td data-label="Median reply">{{ row.median_first_reply_seconds|duration }}</td>
+          <td data-label="Recovered">{{ row.recovered }} of {{ row.missed }}</td>
+          <td data-label="Leads">{{ row.interested }}</td>
+          <td data-label="Paid orders">{{ row.paid_orders }}</td>
+          <td data-label="Revenue">{% for r in row.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif not starting_point %}
+  <p class="text-sm text-gray-600">Weekly trends appear here once your first week has closed and settled.</p>
+  {% endif %}
+</section>
