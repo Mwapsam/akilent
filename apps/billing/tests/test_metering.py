@@ -313,7 +313,7 @@ class _Provider:
     def __init__(self, result=None):
         self.calls, self.result = [], result
 
-    def send_template(self, to, name, language, components):
+    def send_template(self, to, name, language, components, category=""):
         self.calls.append(name)
         return self.result or SendResult(
             message_id=f"wamid.OUT{len(self.calls)}", success=True
