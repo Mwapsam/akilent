@@ -9,14 +9,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.contacts.models import Contact, CustomAttributeDef, Tag
+from apps.contacts.models import (
+    Contact,
+    ContactList,
+    ContactListMembership,
+    CustomAttributeDef,
+    Tag,
+)
 from apps.contacts.services import (
     ContactLimitReached,
     ensure_room_for_contact,
@@ -326,3 +332,179 @@ def create_custom_field(request):
             "sample": attribute.sample_value,
         }
     )
+
+
+# --- Customer lists: the audience a WhatsApp/email campaign sends to. Until
+# now a ContactList could only be created through the public API — nothing in
+# the dashboard offered a way to make one, so campaign creation always found
+# an empty list of lists regardless of how many contacts existed. This is the
+# minimal path: name a list, then add contacts to it by tag or one at a time.
+# CSV import / preview / segments-as-lists are a later, bigger piece of work. -
+
+
+_LIST_PAGE_SIZE = 50
+
+
+@login_required
+def list_index(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    lists = (
+        ContactList.objects.filter(account=account)
+        .annotate(contact_count=Count("contacts"))
+        .order_by("name")
+    )
+    return render(
+        request,
+        "contacts/lists.html",
+        {
+            "account": account,
+            "lists": lists,
+            "tags": Tag.objects.filter(account=account),
+        },
+    )
+
+
+@login_required
+@require_POST
+def list_create(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    name = (request.POST.get("name") or "").strip()
+    if not name:
+        messages.error(request, "Give the list a name.")
+        return redirect("contacts:lists")
+
+    slug = slugify(name)[:160]
+    if ContactList.objects.filter(account=account, slug=slug).exists():
+        messages.error(request, f'A list called "{name}" already exists.')
+        return redirect("contacts:lists")
+
+    contact_list = ContactList.objects.create(account=account, name=name)
+
+    seed_tag_slug = (request.POST.get("seed_tag") or "").strip()
+    added = 0
+    if seed_tag_slug:
+        tag = Tag.objects.filter(account=account, slug=seed_tag_slug).first()
+        if tag is not None:
+            contacts = Contact.objects.filter(account=account, tags=tag)
+            ContactListMembership.objects.bulk_create(
+                [
+                    ContactListMembership(contact_list=contact_list, contact=c)
+                    for c in contacts
+                ],
+                ignore_conflicts=True,
+            )
+            added = contacts.count()
+
+    messages.success(
+        request,
+        f'"{name}" created with {added} customer{"" if added == 1 else "s"}.'
+        if seed_tag_slug
+        else f'"{name}" created — add customers to it below.',
+    )
+    return redirect("contacts:list_detail", pk=contact_list.pk)
+
+
+@login_required
+def list_detail(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact_list = get_object_or_404(ContactList, account=account, pk=pk)
+
+    all_members = contact_list.contacts.order_by("-first_seen", "-id")
+    member_count = all_members.count()
+    members = all_members[:_LIST_PAGE_SIZE]
+
+    cq = (request.GET.get("cq") or "").strip()
+    candidates = []
+    if cq:
+        candidates = list(
+            Contact.objects.filter(account=account)
+            .exclude(lists=contact_list)
+            .filter(
+                Q(email__icontains=cq)
+                | Q(phone__icontains=cq)
+                | Q(first_name__icontains=cq)
+                | Q(last_name__icontains=cq)
+            )[:20]
+        )
+
+    return render(
+        request,
+        "contacts/list_detail.html",
+        {
+            "account": account,
+            "contact_list": contact_list,
+            "members": members,
+            "member_count": member_count,
+            "tags": Tag.objects.filter(account=account),
+            "cq": cq,
+            "candidates": candidates,
+        },
+    )
+
+
+@login_required
+@require_POST
+def list_add_by_tag(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact_list = get_object_or_404(ContactList, account=account, pk=pk)
+
+    tag_slug = (request.POST.get("tag") or "").strip()
+    tag = Tag.objects.filter(account=account, slug=tag_slug).first()
+    if tag is None:
+        messages.error(request, "Choose a tag.")
+        return redirect("contacts:list_detail", pk=pk)
+
+    contacts = Contact.objects.filter(account=account, tags=tag).exclude(
+        lists=contact_list
+    )
+    ContactListMembership.objects.bulk_create(
+        [ContactListMembership(contact_list=contact_list, contact=c) for c in contacts],
+        ignore_conflicts=True,
+    )
+    count = contacts.count()
+    messages.success(
+        request,
+        f'Added {count} customer{"" if count == 1 else "s"} tagged "{tag.name}".'
+        if count
+        else f'Everyone tagged "{tag.name}" is already on this list.',
+    )
+    return redirect("contacts:list_detail", pk=pk)
+
+
+@login_required
+@require_POST
+def list_add_contact(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact_list = get_object_or_404(ContactList, account=account, pk=pk)
+    contact = get_object_or_404(
+        Contact, account=account, public_id=request.POST.get("public_id")
+    )
+    ContactListMembership.objects.get_or_create(
+        contact_list=contact_list, contact=contact
+    )
+    messages.success(request, f"{contact.full_name or contact} added to the list.")
+    return redirect("contacts:list_detail", pk=pk)
+
+
+@login_required
+@require_POST
+def list_remove_contact(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact_list = get_object_or_404(ContactList, account=account, pk=pk)
+    ContactListMembership.objects.filter(
+        contact_list=contact_list, contact__public_id=request.POST.get("public_id")
+    ).delete()
+    return redirect("contacts:list_detail", pk=pk)

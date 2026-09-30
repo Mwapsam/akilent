@@ -13,7 +13,7 @@
 
 <div class="card card-pad max-w-xl">
   {% if not contact_lists %}
-  <p class="text-sm text-gray-600">You don't have any customer lists yet. <a href="/contacts/" class="underline">Go to Contacts</a> to create one first.</p>
+  <p class="text-sm text-gray-600">You don't have any customer lists yet. <a href="{% url 'contacts:lists' %}" class="underline">Create a customer list</a> first.</p>
   {% elif not templates %}
   <p class="text-sm text-gray-600">You don't have any Meta-approved WhatsApp templates yet. Add one under WhatsApp Templates and wait for approval before sending a campaign.</p>
   {% else %}

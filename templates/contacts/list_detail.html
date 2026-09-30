@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}{{ contact_list.name }} — Customer lists{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{% url 'contacts:lists' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customer lists</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">{{ contact_list.name }}</h1>
+  <p class="mt-1 text-sm text-gray-600">{{ member_count }} customer{{ member_count|pluralize }} on this list.</p>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-1 space-y-6">
+    {% if tags %}
+    <div class="card card-pad">
+      <h2 class="text-sm font-medium text-ink mb-2">Add by tag</h2>
+      <form method="post" action="{% url 'contacts:list_add_by_tag' contact_list.pk %}" class="flex gap-2">
+        {% csrf_token %}
+        <label class="sr-only" for="add-by-tag">Tag</label>
+        <select id="add-by-tag" name="tag" class="select">
+          {% for t in tags %}<option value="{{ t.slug }}">{{ t.name }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-secondary btn-sm whitespace-nowrap">Add all</button>
+      </form>
+      <p class="text-xs text-gray-400 mt-1">Adds everyone with that tag who isn't already on this list.</p>
+    </div>
+    {% endif %}
+
+    <div class="card card-pad">
+      <h2 class="text-sm font-medium text-ink mb-2">Add one customer</h2>
+      <form method="get" class="flex gap-2 mb-3">
+        <label class="sr-only" for="candidate-search">Search customers</label>
+        <input id="candidate-search" type="search" name="cq" value="{{ cq }}" placeholder="Search name, phone or email…" class="input" />
+        <button class="btn btn-secondary btn-sm">Search</button>
+      </form>
+      {% if cq %}
+        {% if candidates %}
+        <ul class="space-y-1.5">
+          {% for c in candidates %}
+          <li class="flex items-center justify-between gap-2 text-sm">
+            <span class="truncate">{{ c.full_name|default:c.email|default:c.phone }}</span>
+            <form method="post" action="{% url 'contacts:list_add_contact' contact_list.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="public_id" value="{{ c.public_id }}" />
+              <button class="btn btn-ghost btn-sm">Add</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-500">No match, or they're already on this list.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="lg:col-span-2">
+    {% if members %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead>
+          <tr><th>Contact</th><th>Name</th><th>Phone</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for c in members %}
+          <tr>
+            <td data-label="Contact"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-accent hover:text-accent-strong">{{ c.email|default:c.phone|default:"Unknown contact" }}</a></td>
+            <td data-label="Name">{{ c.full_name|default:"—" }}</td>
+            <td data-label="Phone" class="tabular-nums">{{ c.phone|default:"—" }}</td>
+            <td>
+              <form method="post" action="{% url 'contacts:list_remove_contact' contact_list.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="public_id" value="{{ c.public_id }}" />
+                <button class="btn btn-ghost btn-sm text-red-600">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if member_count > members|length %}
+    <p class="text-xs text-gray-400 mt-2">Showing the first {{ members|length }} of {{ member_count }}.</p>
+    {% endif %}
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="users" title="No customers on this list yet" message="Add customers by tag or search for someone on the left." %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

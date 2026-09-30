@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Customer lists — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <a href="/contacts/" class="text-sm text-gray-500 hover:text-ink">&larr; Contacts</a>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Customer lists</h1>
+    <p class="mt-1 text-sm text-gray-600">Group customers into a list, then send a campaign to it.</p>
+  </div>
+  <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-list')">
+    {% include "components/icon.html" with name="plus" class="w-4 h-4" %} New list
+  </button>
+</header>
+
+{% if lists %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead>
+      <tr><th>List</th><th>Customers</th><th>Created</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for l in lists %}
+      <tr>
+        <td data-label="List"><a href="{% url 'contacts:list_detail' l.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ l.name }}</a></td>
+        <td data-label="Customers" class="tabular-nums">{{ l.contact_count }}</td>
+        <td data-label="Created" class="text-gray-500 tabular-nums">{{ l.created_at|date:"Y-m-d" }}</td>
+        <td><a href="{% url 'contacts:list_detail' l.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="table-wrap">
+  {% include "components/empty_state.html" with icon="users" title="No customer lists yet" message="Create a list and add customers to it by tag or one at a time — then it's ready to send a campaign to." %}
+</div>
+{% endif %}
+
+{% modal "new-list" title="New customer list" %}
+  <form method="post" action="{% url 'contacts:list_create' %}" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="label" for="new-list-name">List name</label>
+      <input id="new-list-name" name="name" class="input" placeholder="e.g. VIP customers" required />
+    </div>
+    {% if tags %}
+    <div>
+      <label class="label" for="new-list-tag">Start with everyone tagged <span class="font-normal text-gray-400">(optional)</span></label>
+      <select id="new-list-tag" name="seed_tag" class="select">
+        <option value="">Start empty — I'll add customers after</option>
+        {% for t in tags %}<option value="{{ t.slug }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Create list</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endblock %}
