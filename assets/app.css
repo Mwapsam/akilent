@@ -714,6 +714,9 @@
   .inbox-filter-note { @apply -mt-1 mb-3 text-sm text-gray-500; }
   .inbox-filter-note a { @apply underline text-accent; }
 
+  .inbox-filter-toggle { @apply inline-flex items-center gap-1.5 ml-2 text-sm text-gray-600 whitespace-nowrap cursor-pointer; }
+  .inbox-filter-toggle input { @apply w-3.5 h-3.5; accent-color: var(--tone-coral-fg); }
+
   /* A compact select for toolbars, sized to sit beside a row of pills. */
   .select-sm { @apply w-auto py-1.5 pl-3 pr-8 rounded-lg; min-height: 2.25rem; background-position: right 0.5rem center; }
 

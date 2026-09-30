@@ -490,6 +490,151 @@ def test_the_assign_picker_works_for_a_solo_account(logged_in, open_conversation
 
 
 @pytest.mark.django_db
+def test_assignment_records_an_event(logged_in, open_conversation):
+    from apps.conversations.models import Event
+
+    client, _, user = logged_in
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign"})
+    event = Event.objects.get(
+        subject_type="conversation",
+        subject_id=str(open_conversation.pk),
+        type="conversation.assigned",
+    )
+    assert event.actor == f"user:{user.pk}"
+    assert event.payload == {
+        "assigned_to_id": user.id,
+        "previous_assignee_id": None,
+    }
+
+
+@pytest.mark.django_db
+def test_reassignment_records_the_previous_and_new_assignee(
+    logged_in, open_conversation, teammate
+):
+    from apps.conversations.models import Event
+
+    client, _, user = logged_in
+    open_conversation.assign(user)
+    client.post(
+        f"/inbox/{open_conversation.public_id}/",
+        {"action": "assign", "assignee": teammate.pk},
+    )
+    event = Event.objects.filter(
+        subject_type="conversation",
+        subject_id=str(open_conversation.pk),
+        type="conversation.assigned",
+    ).latest("occurred_at")
+    assert event.payload == {
+        "assigned_to_id": teammate.pk,
+        "previous_assignee_id": user.pk,
+    }
+
+
+@pytest.mark.django_db
+def test_unassign_records_an_unassign_event(logged_in, open_conversation, teammate):
+    from apps.conversations.models import Event
+
+    client, _, _ = logged_in
+    open_conversation.assign(teammate)
+    client.post(
+        f"/inbox/{open_conversation.public_id}/",
+        {"action": "assign", "assignee": "none"},
+    )
+    event = Event.objects.filter(
+        subject_type="conversation",
+        subject_id=str(open_conversation.pk),
+        type="conversation.unassigned",
+    ).get()
+    assert event.payload == {
+        "assigned_to_id": None,
+        "previous_assignee_id": teammate.pk,
+    }
+
+
+@pytest.mark.django_db
+def test_assigning_the_same_person_again_records_nothing(logged_in, open_conversation):
+    from apps.conversations.models import Event
+
+    client, _, _ = logged_in
+
+    def assignment_events():
+        return Event.objects.filter(
+            subject_type="conversation",
+            type__in=["conversation.assigned", "conversation.unassigned"],
+        )
+
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign"})
+    assert assignment_events().count() == 1
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign"})
+    assert assignment_events().count() == 1
+
+
+@pytest.mark.django_db
+def test_auto_assign_records_an_automation_actor(open_conversation):
+    from apps.accounts.models import Membership
+    from apps.conversations.actions import run_action
+    from apps.conversations.models import Event
+
+    account = open_conversation.account
+    teammate = User.objects.create_user("lweendo", "l@example.com", "pw")
+    Membership.objects.create(
+        user=teammate, account=account, role=Membership.Role.MEMBER
+    )
+    run_action("auto_assign_conversation", {}, conversation=open_conversation)
+    open_conversation.refresh_from_db()
+    assert open_conversation.assigned_to_id is not None
+    event = Event.objects.get(
+        subject_type="conversation",
+        subject_id=str(open_conversation.pk),
+        type="conversation.assigned",
+    )
+    assert event.actor == "automation:auto_assign_conversation"
+
+
+@pytest.mark.django_db
+def test_assignment_does_not_change_conversation_status(logged_in, open_conversation):
+    client, _, _ = logged_in
+    status_before = open_conversation.status
+    client.post(f"/inbox/{open_conversation.public_id}/", {"action": "assign"})
+    open_conversation.refresh_from_db()
+    assert open_conversation.status == status_before
+
+
+@pytest.mark.django_db
+def test_a_closed_conversation_retains_its_assignment(
+    logged_in, open_conversation, teammate
+):
+    client, _, _ = logged_in
+    open_conversation.assign(teammate)
+    open_conversation.close()
+    open_conversation.refresh_from_db()
+    assert open_conversation.status == Conversation.Status.CLOSED
+    assert open_conversation.assigned_to_id == teammate.pk
+
+
+@pytest.mark.django_db
+def test_unauthorized_reassignment_outside_the_account_is_rejected_and_unrecorded(
+    logged_in, open_conversation
+):
+    """Mirrors test_cannot_assign_to_someone_outside_the_business, plus checks
+    a rejected attempt never becomes an audit-trail entry."""
+    from apps.conversations.models import Event
+
+    client, _, _ = logged_in
+    stranger = User.objects.create_user("stranger2", "s2@example.com", "pw")
+    other = Account.objects.create(company_name="Other Co 2")
+    Membership.objects.create(user=stranger, account=other, role=Membership.Role.OWNER)
+    client.post(
+        f"/inbox/{open_conversation.public_id}/",
+        {"action": "assign", "assignee": stranger.pk},
+    )
+    assert not Event.objects.filter(
+        subject_type="conversation",
+        type__in=["conversation.assigned", "conversation.unassigned"],
+    ).exists()
+
+
+@pytest.mark.django_db
 def test_a_customer_given_a_value_shows_as_tracked_in_the_pipeline(
     logged_in, conversation_without_a_lead
 ):

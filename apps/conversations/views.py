@@ -22,11 +22,13 @@ from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.models import Conversation, FollowUp, Message, SavedReply
 from apps.conversations.state import (
+    OVERDUE_WAITING,
     ConversationState,
     get_conversation_state,
     missed,
     needs_attention,
     snapshot_of,
+    unanswered_q,
     with_activity,
 )
 from apps.core.htmx import is_background
@@ -49,6 +51,22 @@ def _inbox_context(request, account) -> dict:
         qs = with_activity(
             Conversation.objects.filter(account=account, assigned_to=request.user)
         ).order_by("-last_any", "-id")
+    elif view == "unassigned":
+        # Nobody is responsible for this conversation yet — an open queue
+        # waiting to be routed, longest-waiting first like needs_attention.
+        qs = with_activity(
+            Conversation.objects.filter(
+                account=account,
+                status=Conversation.Status.OPEN,
+                assigned_to__isnull=True,
+            )
+        ).order_by("last_in")
+    elif view == "closed":
+        qs = with_activity(
+            Conversation.objects.filter(
+                account=account, status=Conversation.Status.CLOSED
+            )
+        ).order_by("-last_any", "-id")
     elif view == "needs_attention":
         qs = needs_attention(account, now)
     else:
@@ -61,6 +79,13 @@ def _inbox_context(request, account) -> dict:
     channel = (request.GET.get("channel") or "").strip()
     if channel:
         qs = qs.filter(channel=channel)
+
+    # Combinable with any tab ("My + Overdue", "Unassigned + Overdue"): the
+    # same waiting-on-us definition every tab already uses, just past the
+    # stricter OVERDUE_WAITING cutoff instead of the 24h one.
+    overdue_only = bool(request.GET.get("overdue"))
+    if overdue_only:
+        qs = qs.filter(unanswered_q(), last_in__lte=now - OVERDUE_WAITING)
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
     for c in page:
@@ -86,10 +111,19 @@ def _inbox_context(request, account) -> dict:
         "view": view,
         "channel": channel,
         "channel_choices": Conversation.Channel.choices,
+        "overdue_only": overdue_only,
         "needs_attention_count": needs_attention(account, now).count(),
         "missed_count": missed(account, now).count(),
         "assigned_count": Conversation.objects.filter(
             account=account, assigned_to=request.user
+        ).count(),
+        "unassigned_count": Conversation.objects.filter(
+            account=account,
+            status=Conversation.Status.OPEN,
+            assigned_to__isnull=True,
+        ).count(),
+        "closed_count": Conversation.objects.filter(
+            account=account, status=Conversation.Status.CLOSED
         ).count(),
         "all_count": Conversation.objects.filter(account=account).count(),
         "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
@@ -384,6 +418,7 @@ def conversation_detail(request, public_id: str):
                     ctx,
                     conversation=conversation,
                     user=_resolve_assignee(account, request),
+                    assigned_by=request.user,
                 )
             elif action == "add_note":
                 run_action(

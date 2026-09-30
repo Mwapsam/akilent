@@ -212,7 +212,14 @@ def snapshot_of(
     )
 
 
-def _unanswered():
+def unanswered_q():
+    """The customer spoke last, on the facts :func:`with_activity` annotates.
+
+    Public (not module-private) because callers outside this module — the
+    inbox's "overdue" filter toggle — need the identical definition rather
+    than a hand-rolled copy, per this module's own "one place the rules
+    live" rule.
+    """
     return Q(last_in__isnull=False) & (
         Q(last_out__isnull=True) | Q(last_in__gt=F("last_out"))
     )
@@ -227,7 +234,7 @@ def needs_attention(account, now: datetime | None = None):
                 account=account, status=Conversation.Status.OPEN
             )
         )
-        .filter(_unanswered(), last_in__gt=now - INACTIVITY_WINDOW)
+        .filter(unanswered_q(), last_in__gt=now - INACTIVITY_WINDOW)
         .order_by("last_in")
     )
 
@@ -292,6 +299,6 @@ def missed(account, now: datetime | None = None):
                 account=account, status=Conversation.Status.OPEN
             )
         )
-        .filter(_unanswered(), last_in__lte=now - INACTIVITY_WINDOW)
+        .filter(unanswered_q(), last_in__lte=now - INACTIVITY_WINDOW)
         .order_by("last_in")
     )

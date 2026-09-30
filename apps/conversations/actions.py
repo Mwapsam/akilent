@@ -133,9 +133,11 @@ class AssignConversationAction(Action):
     scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
-        return {"required": ["conversation", "user"]}
+        return {"required": ["conversation", "user"], "optional": ["assigned_by"]}
 
-    def execute(self, context: dict, *, conversation, user) -> dict:  # type: ignore[override]
+    def execute(  # type: ignore[override]
+        self, context: dict, *, conversation, user, assigned_by=None
+    ) -> dict:
         from apps.accounts.models import Membership
 
         if (
@@ -145,7 +147,8 @@ class AssignConversationAction(Action):
             ).exists()
         ):
             raise ActionError("That person isn't on your team.")
-        conversation.assign(user)
+        actor = f"user:{assigned_by.pk}" if assigned_by else ""
+        conversation.assign(user, actor=actor)
         return {
             "conversation_id": conversation.id,
             "assigned_to_id": user.id if user else None,
@@ -216,7 +219,7 @@ class AutoAssignConversationAction(Action):
             chosen = min(
                 (m.user for m in members), key=lambda u: (load.get(u.id, 0), u.id)
             )
-        conversation.assign(chosen)
+        conversation.assign(chosen, actor="automation:auto_assign_conversation")
         return {
             "conversation_id": conversation.id,
             "assigned_to_id": chosen.id,

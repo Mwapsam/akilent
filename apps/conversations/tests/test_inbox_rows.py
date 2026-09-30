@@ -35,6 +35,7 @@ def _conversation(
     email=None,
     waited=timedelta(minutes=17),
     assigned_to=None,
+    status=Conversation.Status.OPEN,
 ):
     contact = Contact.objects.create(
         account=account, first_name=first, phone=phone, email=email
@@ -44,6 +45,7 @@ def _conversation(
         contact=contact,
         channel=channel,
         assigned_to=assigned_to,
+        status=status,
     )
     Message.objects.create(
         account=account,
@@ -210,6 +212,57 @@ class TestTabs:
             "You"
             in frag[frag.index("inbox-assignee") : frag.index("inbox-assignee") + 400]
         )
+
+    def test_the_unassigned_tab_only_shows_open_unowned_conversations(self, logged_in):
+        client, account, user = logged_in
+        _conversation(account, first="Nobody")
+        _conversation(account, first="Owned", phone="+260971234568", assigned_to=user)
+        _conversation(
+            account,
+            first="ClosedUnowned",
+            phone="+260971234569",
+            status=Conversation.Status.CLOSED,
+        )
+        body = _inbox(client, "unassigned")
+        row = body[body.index('class="inbox-list"') :]
+        assert "Nobody" in row
+        assert "Owned" not in row and "ClosedUnowned" not in row
+
+    def test_the_closed_tab_shows_closed_conversations(self, logged_in):
+        client, account, _ = logged_in
+        _conversation(account, first="Resolved", status=Conversation.Status.CLOSED)
+        _conversation(account, first="StillOpen", phone="+260971234570")
+        body = _inbox(client, "closed")
+        row = body[body.index('class="inbox-list"') :]
+        assert "Resolved" in row and "StillOpen" not in row
+
+    def test_the_overdue_toggle_combines_with_any_tab(self, logged_in):
+        client, account, user = logged_in
+        _conversation(
+            account, first="JustWaiting", assigned_to=user, waited=timedelta(minutes=30)
+        )
+        _conversation(
+            account,
+            first="LongWaiting",
+            phone="+260971234571",
+            assigned_to=user,
+            waited=timedelta(hours=5),
+        )
+        plain_row = _inbox(client, "assigned")
+        plain_row = plain_row[plain_row.index('class="inbox-list"') :]
+        assert "JustWaiting" in plain_row and "LongWaiting" in plain_row
+
+        overdue_body = client.get("/inbox/?view=assigned&overdue=1").content.decode()
+        row = overdue_body[overdue_body.index('class="inbox-list"') :]
+        assert "LongWaiting" in row and "JustWaiting" not in row
+
+    def test_an_unassigned_overdue_conversation_is_flagged_in_the_row(self, logged_in):
+        client, account, _ = logged_in
+        _conversation(account, first="Chanda", waited=timedelta(hours=5))
+        row = _inbox(client, "unassigned")
+        row = row[row.index('class="inbox-list"') :]
+        assert 'title="Nobody is assigned to this conversation"' in row
+        assert ">Unassigned<" in row
 
 
 @pytest.mark.django_db

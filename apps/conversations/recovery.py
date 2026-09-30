@@ -19,7 +19,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.conversations.models import Conversation, FollowUp
-from apps.conversations.state import INACTIVITY_WINDOW, _unanswered, with_activity
+from apps.conversations.state import INACTIVITY_WINDOW, unanswered_q, with_activity
 
 # Conversations older than this are left alone so the first run never floods a team with
 # months of history; recovery is about recent enquiries.
@@ -38,7 +38,7 @@ def create_missed_followups(
                 channel=Conversation.Channel.WHATSAPP, status=Conversation.Status.OPEN
             )
         ).filter(
-            _unanswered(),
+            unanswered_q(),
             last_in__lte=now - INACTIVITY_WINDOW,
             last_in__gte=now - max_age,
         )

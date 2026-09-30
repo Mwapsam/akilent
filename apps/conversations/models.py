@@ -18,6 +18,7 @@ import secrets
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 def _conversation_public_id() -> str:
@@ -140,9 +141,31 @@ class Conversation(models.Model):
             self.last_message_at = at
             self.save(update_fields=["last_message_at", "updated_at"])
 
-    def assign(self, user) -> None:
+    def assign(self, user, *, actor: str = "") -> None:
+        """Set (or clear, ``user=None``) the owner and record it as an ``Event``.
+
+        A no-op re-assignment (same person, or ``None`` to ``None``) writes
+        nothing — only an actual change is history. ``actor`` identifies who
+        did it ("user:<id>" for a person, "automation:<action>" for a
+        workflow); callers that don't know pass "" and it is recorded as
+        "system".
+        """
+        previous_id = self.assigned_to_id
+        new_id = user.pk if user else None
+        if previous_id == new_id:
+            return
         self.assigned_to = user
         self.save(update_fields=["assigned_to", "updated_at"])
+        Event.objects.create(
+            account_id=self.account_id,
+            type="conversation.assigned" if user else "conversation.unassigned",
+            occurred_at=timezone.now(),
+            source="conversations",
+            actor=actor or "system",
+            subject_type="conversation",
+            subject_id=str(self.pk),
+            payload={"assigned_to_id": new_id, "previous_assignee_id": previous_id},
+        )
 
     def mark_read(self) -> None:
         if self.is_unread:

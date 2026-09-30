@@ -16,21 +16,28 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
   which would also scroll the page vertically.{% endcomment %}
   <nav class="inbox-tabs relative" aria-label="Inbox views"
        x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
-    {% with ch=channel|yesno:"&channel=,"|add:channel %}
-    <a href="?view=needs_attention{{ ch }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
+    {% with ch=channel|yesno:"&channel=,"|add:channel ov=overdue_only|yesno:"&overdue=1," %}
+    <a href="?view=needs_attention{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
       Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
     </a>
-    <a href="?view=missed{{ ch }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
+    <a href="?view=unassigned{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'unassigned' %}aria-current="page"{% endif %}
+       title="Open conversations nobody has been assigned to yet">
+      Unassigned{% if unassigned_count %}<span class="inbox-tab-count">{{ unassigned_count }}</span>{% endif %}
+    </a>
+    <a href="?view=missed{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
        title="Customers who wrote and got no reply for over 24 hours">
       Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>{% endif %}
     </a>
-    <a href="?view=assigned{{ ch }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
+    <a href="?view=assigned{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
       {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
       third of the screen, and it was the tab that got cut off.{% endcomment %}
       <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
     </a>
-    <a href="?view=all{{ ch }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
+    <a href="?view=all{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
       All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
+    </a>
+    <a href="?view=closed{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'closed' %}aria-current="page"{% endif %}>
+      Closed{% if closed_count %}<span class="inbox-tab-count">{{ closed_count }}</span>{% endif %}
     </a>
     {% endwith %}
   </nav>
@@ -52,6 +59,13 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
         <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
+    {% comment %}Combines with any tab above ("My" + overdue, "Unassigned" +
+    overdue) rather than being its own tab, since every tab can meaningfully
+    be narrowed to "...and it's overdue".{% endcomment %}
+    <label class="inbox-filter-toggle">
+      <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.submit()" />
+      Overdue only
+    </label>
   </form>
 </div>
 
@@ -129,6 +143,11 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
             {% include "components/icon.html" with name="user" class="w-3.5 h-3.5" %}
             {% if c.assigned_to_id == user.id %}You{% else %}{{ c.assigned_to.get_short_name|default:c.assigned_to.get_username }}{% endif %}
           </span>
+          {% elif c.snapshot.overdue or c.snapshot.missed %}
+          {% comment %}Nobody is responsible for a conversation that has gone
+          past the overdue/missed line — the situation the Unassigned tab
+          exists to surface, called out on the row itself too.{% endcomment %}
+          <span class="badge badge-danger" title="Nobody is assigned to this conversation">Unassigned</span>
           {% endif %}
         </div>
       </div>
@@ -143,6 +162,10 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
     {% include "components/empty_state.html" with icon="check-circle" title="No missed conversations" message="Every customer who wrote in the last day or more has had a reply. Nice work." %}
   {% elif view == 'assigned' %}
     {% include "components/empty_state.html" with icon="message-circle" title="Nothing assigned to you" message="Open a conversation and choose “Assign to me” to keep track of the ones you own." %}
+  {% elif view == 'unassigned' %}
+    {% include "components/empty_state.html" with icon="check-circle" title="Nothing unassigned" message="Every open conversation has someone responsible for it." %}
+  {% elif view == 'closed' %}
+    {% include "components/empty_state.html" with icon="message-circle" title="No closed conversations" message="Conversations move here once they're resolved or go quiet for a day." %}
   {% elif view == 'all' %}
     {% include "components/empty_state.html" with icon="message-circle" title="No conversations yet" message="Conversations from every connected channel will appear here as customers get in touch." %}
   {% else %}
