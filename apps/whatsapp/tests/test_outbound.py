@@ -38,7 +38,7 @@ class _FakeProvider:
             raise self._exc
         return self._result
 
-    def send_template(self, to, name, language, components):
+    def send_template(self, to, name, language, components, category=""):
         self.calls.append(("template", to, name))
         if self._exc:
             raise self._exc

@@ -28,7 +28,7 @@ class _FakeProvider:
     def __init__(self):
         self.calls = []
 
-    def send_template(self, to, name, language, components):
+    def send_template(self, to, name, language, components, category=""):
         self.calls.append((to, name, language, components))
         return SendResult(message_id="wamid.CODE1", success=True)
 

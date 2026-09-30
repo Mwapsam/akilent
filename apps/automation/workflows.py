@@ -59,6 +59,42 @@ def _resolve_or_provision_contact(
     )
 
 
+def _build_template_payload(
+    template,
+    params: dict,
+    *,
+    sent_by: str = "",
+    conversation=None,
+) -> dict:
+    """The one place that builds an OutboundMessage template payload.
+
+    Shared by ``send_whatsapp_message`` (single recipient) and the WhatsApp
+    campaign chunk task (``apps.whatsapp.campaigns.send_campaign``, bulk),
+    so a campaign-sent message and a workflow-sent message can never quietly
+    diverge in shape. ``_category`` carries the template's Meta category
+    (marketing/utility/authentication) so ``apps.whatsapp.tasks._send_outbound``
+    can route a marketing send through Meta's Marketing Messages API — see
+    ``apps.whatsapp.providers.meta.MetaCloudAPIProvider.send_template``.
+    """
+    from apps.whatsapp.send_components import build_send_components
+
+    payload = {
+        "type": "template",
+        "template_name": template.whatsapp_template_name,
+        "language": template.language_code,
+        # `params` stays the human-readable record (label -> value) that the UI
+        # and tests read; `components` is the wire shape Meta actually needs.
+        "params": params or {},
+        "components": build_send_components(template, params),
+        "_category": template.category,
+    }
+    if conversation is not None:
+        payload["_conversation_id"] = conversation.pk
+    if sent_by:
+        payload["_sent_by"] = sent_by
+    return payload
+
+
 def send_whatsapp_message(
     account,
     *,
@@ -99,7 +135,6 @@ def send_whatsapp_message(
     tell an automatic send from a person's.
     """
     from apps.whatsapp.models import MessageTemplate
-    from apps.whatsapp.send_components import build_send_components
 
     contact = _resolve_or_provision_contact(
         account, phone, auto_create=auto_create_contact, link_contact=link_contact
@@ -110,19 +145,9 @@ def send_whatsapp_message(
     if scheduled_at is not None:
         kwargs["scheduled_at"] = scheduled_at
 
-    payload = {
-        "type": "template",
-        "template_name": template.whatsapp_template_name,
-        "language": template.language_code,
-        # `params` stays the human-readable record (label -> value) that the UI
-        # and tests read; `components` is the wire shape Meta actually needs.
-        "params": params or {},
-        "components": build_send_components(template, params),
-    }
-    if conversation is not None:
-        payload["_conversation_id"] = conversation.pk
-    if sent_by:
-        payload["_sent_by"] = sent_by
+    payload = _build_template_payload(
+        template, params or {}, sent_by=sent_by, conversation=conversation
+    )
 
     return OutboundMessage.objects.create(
         account=account,

@@ -495,8 +495,9 @@ class CreateAndSubmitTemplateTest(TestCase):
                 }
             ],
         )
-        # regression guard: campaigns.py::_resolve_campaign_variables treats
-        # `variables` as a plain list of label strings used as mapping keys.
+        # regression guard: apps.automation.variables.resolve (used by campaign
+        # sending) treats `variables` as a plain list of label strings used as
+        # mapping keys.
         self.assertEqual(tpl.variables, ["Customer name", "Order number"])
 
     def test_meta_rejection_raises_and_does_not_create_row(self):

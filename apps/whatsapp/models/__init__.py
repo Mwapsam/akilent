@@ -1,5 +1,5 @@
 from .account import EncryptedTextField, _fernet
-from .campaign import WhatsAppCampaign
+from .campaign import WhatsAppCampaign, WhatsAppCampaignRecipient
 from .contact import CrmBinding, WhatsAppContact, normalize_phone
 from .conversation import Conversation
 from .message import MessageLog
@@ -25,6 +25,7 @@ __all__ = [
     "OutboundMessage",
     "WebhookEventLog",
     "WhatsAppCampaign",
+    "WhatsAppCampaignRecipient",
     "WhatsAppContact",
     "normalize_phone",
     "TenantResolutionError",

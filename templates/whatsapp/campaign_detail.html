@@ -20,15 +20,38 @@
   <div class="flex justify-between"><span class="text-gray-500">Customer list</span><span>{{ campaign.contact_list.name }}</span></div>
   <div class="flex justify-between"><span class="text-gray-500">Template</span><span>{{ campaign.template.name }}</span></div>
   <div class="flex justify-between"><span class="text-gray-500">Recipients</span><span>{{ campaign.recipient_count }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Queued to send</span><span>{{ campaign.queued_count }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Skipped</span><span>{{ campaign.skipped_count }}</span></div>
   <div class="flex justify-between"><span class="text-gray-500">Created</span><span>{{ campaign.created_at|date:"M j, Y H:i" }}</span></div>
   {% if campaign.error %}
   <div class="pt-2"><p class="text-gray-500 mb-1">Error</p><p class="text-red-700">{{ campaign.error }}</p></div>
   {% endif %}
-  <p class="text-xs text-gray-400 pt-2">
-    "Queued" means each message was handed to the sending queue — see
-    <a href="/logs/messages/" class="underline">Message history</a> for delivery status per customer.
-  </p>
 </div>
+
+<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
+  <h2 class="font-medium text-ink">Processing</h2>
+  <p class="text-xs text-gray-400">Has Akilent gotten to this recipient yet — not whether it reached them.</p>
+  <div class="flex justify-between"><span class="text-gray-500">Queued</span><span>{{ campaign.queued_count }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Skipped</span><span>{{ campaign.skipped_count }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Remaining</span><span>{{ remaining }}</span></div>
+</div>
+
+{% if campaign.queued_count %}
+<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
+  <h2 class="font-medium text-ink">Delivery</h2>
+  <p class="text-xs text-gray-400">What Meta reports back for the {{ campaign.queued_count }} messages Akilent handed off.</p>
+  <div class="flex justify-between"><span class="text-gray-500">Sent</span><span>{{ delivery.sent }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Delivered</span><span>{{ delivery.delivered }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Read</span><span>{{ delivery.read }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Failed</span><span>{{ delivery.failed }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Pending</span><span>{{ delivery.pending }}</span></div>
+</div>
+{% endif %}
+
+{% if campaign.skipped_count %}
+<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
+  <h2 class="font-medium text-ink">Skipped</h2>
+  <div class="flex justify-between"><span class="text-gray-500">Opted out</span><span>{{ skip_breakdown.opted_out|default:0 }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">No WhatsApp number</span><span>{{ skip_breakdown.no_whatsapp_identity|default:0 }}</span></div>
+  <div class="flex justify-between"><span class="text-gray-500">Missing template value</span><span>{{ skip_breakdown.missing_value|default:0 }}</span></div>
+</div>
+{% endif %}
 {% endblock %}

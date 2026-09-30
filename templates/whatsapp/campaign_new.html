@@ -17,7 +17,8 @@
   {% elif not templates %}
   <p class="text-sm text-gray-600">You don't have any Meta-approved WhatsApp templates yet. Add one under WhatsApp Templates and wait for approval before sending a campaign.</p>
   {% else %}
-  <form method="post" class="space-y-4">
+  {{ picks_default|json_script:"campaign-picks-data" }}
+  <form method="post" class="space-y-4" x-data="{ templateId: '', picks: JSON.parse(document.getElementById('campaign-picks-data').textContent), lits: {} }">
     {% csrf_token %}
     <div>
       <label class="label" for="campaign-name">Campaign name (optional)</label>
@@ -33,13 +34,41 @@
     </div>
     <div>
       <label class="label" for="campaign-template">Template</label>
-      <select id="campaign-template" name="template_id" class="select" required>
+      <select id="campaign-template" name="template_id" class="select" x-model="templateId" required>
+        <option value="">Choose an approved template…</option>
         {% for t in templates %}
         <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
         {% endfor %}
       </select>
       <p class="text-xs text-gray-400 mt-1">Only Meta-approved templates can be used for a campaign.</p>
     </div>
+    {% for t in templates %}
+      {% if t.variables %}
+      <div x-show="templateId === '{{ t.pk }}'" x-cloak class="space-y-3">
+        <p class="text-xs text-gray-500">Fill in the blanks in: &ldquo;{{ t.content|truncatechars:120 }}&rdquo;</p>
+        {% for b in t.blanks %}
+        <div class="rounded-xl border border-border p-3 space-y-2">
+          <label class="label" for="var-{{ t.pk }}-{{ forloop.counter }}">What goes in &ldquo;{{ b.name }}&rdquo;?</label>
+          <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="picks['{{ t.pk }}__{{ b.name }}']">
+            {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
+            <option value="literal">The same text for everyone</option>
+          </select>
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'first_name' || picks['{{ t.pk }}__{{ b.name }}'] === 'full_name'" x-cloak>
+            <label class="text-xs block">If we don't know their name, say
+              <input name="fb__{{ t.pk }}__{{ b.name }}" class="input mt-0.5" placeholder="there" />
+            </label>
+            <p class="text-xs text-gray-400 mt-1">Each customer gets their own name, so Ada's message says Ada.</p>
+          </div>
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'business'" x-cloak><p class="text-xs text-gray-400">Your business name, the same in every message.</p></div>
+          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'literal'" x-cloak>
+            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" x-model="lits['{{ t.pk }}__{{ b.name }}']" />
+            <p class="text-xs text-amber-700 mt-1">Every customer will get exactly this text. Don't type a person's name here.</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
     <div class="flex justify-end gap-2 pt-1">
       <a href="/email/campaigns/?channel=whatsapp" class="btn btn-ghost btn-sm">Cancel</a>
       <button class="btn btn-primary btn-sm">Send campaign</button>

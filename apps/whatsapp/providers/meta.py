@@ -138,8 +138,10 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         """Build a full Graph API URL from a path."""
         return f"{_graph_api_base()}/{path}"
 
-    def _post_message(self, payload: dict) -> dict:
-        """Post a message payload to the Cloud API.
+    def _post_message(self, payload: dict, *, endpoint: str = "messages") -> dict:
+        """Post a message payload to the Cloud API (or the Marketing Messages
+        API, when ``endpoint="marketing_messages"``) — same request/response
+        shape either way per Meta's docs.
 
         Returns the raw API response dict.
 
@@ -147,7 +149,7 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             WhatsAppProviderError: on network or API error. When Meta returned a
             structured error the exception carries ``.code`` and ``.retryable``.
         """
-        url = self._url(f"{self.phone_number_id}/messages")
+        url = self._url(f"{self.phone_number_id}/{endpoint}")
         try:
             response = self._session.post(url, json=payload, timeout=10)
         except requests.RequestException as e:
@@ -218,8 +220,16 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         template_name: str,
         language: str,
         components: list,
+        category: str = "",
     ) -> SendResult:
-        """Send a pre-approved template message."""
+        """Send a pre-approved template message.
+
+        A marketing-category template routes to Meta's Marketing Messages API
+        (``.../marketing_messages``) instead of the standard Cloud API
+        endpoint (``.../messages``) — same payload schema and billing model,
+        just better-optimized delivery for marketing sends. Anything else
+        (utility, authentication, unknown) keeps using the standard endpoint.
+        """
         payload = {
             "messaging_product": "whatsapp",
             "to": to.lstrip("+"),
@@ -230,8 +240,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 "components": components,
             },
         }
+        endpoint = "marketing_messages" if category == "marketing" else "messages"
         try:
-            result = self._post_message(payload)
+            result = self._post_message(payload, endpoint=endpoint)
             return SendResult(message_id=result["messages"][0]["id"], success=True)
         except (KeyError, IndexError, WhatsAppProviderError) as e:
             return self._fail(to, f"template '{template_name}'", e)

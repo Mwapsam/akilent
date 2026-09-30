@@ -11,6 +11,7 @@ class MetaProviderTest(TestCase):
     def setUp(self):
         self.provider = MetaCloudAPIProvider(access_token="tok", phone_number_id="PNID")
         self.messages_url = f"{_graph_api_base()}/PNID/messages"
+        self.marketing_messages_url = f"{_graph_api_base()}/PNID/marketing_messages"
 
     @responses.activate
     def test_send_text_success(self):
@@ -64,6 +65,36 @@ class MetaProviderTest(TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.error_code, "132001")
         self.assertFalse(result.retryable)
+
+    @responses.activate
+    def test_marketing_category_send_routes_to_marketing_messages_endpoint(self):
+        responses.add(
+            responses.POST,
+            self.marketing_messages_url,
+            json={"messages": [{"id": "wamid.OUT"}]},
+            status=200,
+        )
+        result = self.provider.send_template(
+            "+260971234567", "promo", "en", [], category="marketing"
+        )
+        self.assertTrue(result.success)
+        self.assertEqual(responses.calls[0].request.url, self.marketing_messages_url)
+
+    @responses.activate
+    def test_non_marketing_category_send_uses_standard_endpoint(self):
+        responses.add(
+            responses.POST,
+            self.messages_url,
+            json={"messages": [{"id": "wamid.OUT"}]},
+            status=200,
+        )
+        for category in ("utility", "authentication", ""):
+            responses.calls.reset()
+            result = self.provider.send_template(
+                "+260971234567", "otp", "en", [], category=category
+            )
+            self.assertTrue(result.success)
+            self.assertEqual(responses.calls[0].request.url, self.messages_url)
 
     @responses.activate
     def test_upload_media_returns_id(self):

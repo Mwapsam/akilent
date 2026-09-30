@@ -18,7 +18,11 @@ from django.views.decorators.http import require_POST
 from apps.accounts.utils import get_current_account
 from apps.contacts.models import ContactList, CustomAttributeDef
 from apps.core.module_gate import module_required
-from apps.whatsapp.campaigns import CampaignError, create_and_queue_campaign
+from apps.whatsapp.campaigns import (
+    CampaignError,
+    campaign_delivery_stats,
+    create_and_queue_campaign,
+)
 from apps.whatsapp.models import (
     MessageTemplate,
     MessageTemplateAsset,
@@ -468,12 +472,49 @@ def template_lint(request):
 # nowhere else in this app. ------------------------------------------------
 
 
+def _campaign_variable_mapping_from_post(request, template) -> tuple[dict, dict, list]:
+    """Build (variable_mapping, variable_fallbacks, missing_blanks) from a
+    campaign_new.html submission, using the same var__/lit__/fb__ convention
+    as automation/views.py::starter_install (templates/automation/workflow_list.html)."""
+    from apps.automation import variables as wa_variables
+
+    mapping, fallbacks, missing = {}, {}, []
+    for var in template.variables or []:
+        key = f"{template.pk}__{var}"
+        source, fallback = wa_variables.entry_from_choice(
+            request.POST.get(f"var__{key}") or "",
+            request.POST.get(f"lit__{key}") or "",
+            request.POST.get(f"fb__{key}") or "",
+        )
+        if source:
+            mapping[var] = source
+            if fallback:
+                fallbacks[var] = fallback
+        else:
+            missing.append(var)
+    return mapping, fallbacks, missing
+
+
 @login_required
 @module_required("whatsapp_campaigns")
 def campaign_new(request):
+    from apps.automation import variables as wa_variables
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+
+    templates = list(
+        MessageTemplate.objects.filter(
+            account=account,
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        ).order_by("name")
+    )
+    for t in templates:
+        t.blanks = [  # type: ignore[attr-defined]
+            {"name": v, "default": wa_variables.default_choice(v)}
+            for v in (t.variables or [])
+        ]
 
     if request.method == "POST":
         contact_list = ContactList.objects.filter(
@@ -482,12 +523,29 @@ def campaign_new(request):
         if contact_list is None:
             messages.error(request, "Choose a customer list.")
             return redirect("whatsapp-campaign-new")
+        template = next(
+            (t for t in templates if str(t.pk) == request.POST.get("template_id")),
+            None,
+        )
+        if template is None:
+            messages.error(request, "Choose a template.")
+            return redirect("whatsapp-campaign-new")
+        variable_mapping, variable_fallbacks, missing = (
+            _campaign_variable_mapping_from_post(request, template)
+        )
+        if missing:
+            messages.error(
+                request, "Fill in what should go in every blank of the message."
+            )
+            return redirect("whatsapp-campaign-new")
         try:
             campaign = create_and_queue_campaign(
                 account=account,
                 name=request.POST.get("name") or "",
                 contact_list=contact_list,
-                template_id=request.POST.get("template_id"),
+                template_id=template.pk,
+                variable_mapping=variable_mapping,
+                variable_fallbacks=variable_fallbacks,
                 created_by=request.user,
             )
         except CampaignError as exc:
@@ -496,6 +554,11 @@ def campaign_new(request):
         messages.success(request, "Campaign queued — it's sending now.")
         return redirect("whatsapp-campaign-detail", pk=campaign.pk)
 
+    picks_default = {
+        f"{t.pk}__{b['name']}": b["default"]
+        for t in templates
+        for b in t.blanks  # type: ignore[attr-defined]
+    }
     return render(
         request,
         "whatsapp/campaign_new.html",
@@ -504,10 +567,12 @@ def campaign_new(request):
             "contact_lists": ContactList.objects.filter(account=account).order_by(
                 "name"
             ),
-            "templates": MessageTemplate.objects.filter(
-                account=account,
-                approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-            ).order_by("name"),
+            "templates": templates,
+            "blank_choices": [
+                {"key": key, "label": label}
+                for key, _source, label, _fallback in wa_variables.CHOICES
+            ],
+            "picks_default": picks_default,
         },
     )
 
@@ -519,12 +584,26 @@ def campaign_detail(request, pk: int):
     if account is None:
         return redirect("dashboard")
     campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
+    from django.db.models import Count
+
+    remaining = (
+        campaign.recipient_count - campaign.queued_count - campaign.skipped_count
+    )
+    skip_breakdown = {
+        row["skip_reason"]: row["n"]
+        for row in campaign.recipients.exclude(skip_reason="")
+        .values("skip_reason")
+        .annotate(n=Count("id"))
+    }
     return render(
         request,
         "whatsapp/campaign_detail.html",
         {
             "account": account,
             "campaign": campaign,
+            "remaining": max(remaining, 0),
+            "delivery": campaign_delivery_stats(campaign),
+            "skip_breakdown": skip_breakdown,
         },
     )
 

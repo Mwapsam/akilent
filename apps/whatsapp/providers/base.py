@@ -54,6 +54,7 @@ class WhatsAppProvider(ABC):
         template_name: str,
         language: str,
         components: list,
+        category: str = "",
     ) -> SendResult:
         """Send a pre-approved template message.
 
@@ -62,6 +63,11 @@ class WhatsAppProvider(ABC):
             template_name: Name of the approved template.
             language: ISO 639-1 language code (e.g., 'en').
             components: List of template component dicts from Meta's schema.
+            category: The template's Meta category ("marketing", "utility",
+                "authentication", or "" if unknown). A provider that supports
+                Meta's Marketing Messages API uses this to route a marketing
+                send to that endpoint instead of the standard one; providers
+                that don't distinguish can ignore it.
 
         Returns:
             SendResult with message_id and success status.

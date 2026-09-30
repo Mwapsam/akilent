@@ -37,7 +37,7 @@ class _FakeProvider:
         self.calls.append(("text", to, body))
         return SendResult(message_id="wamid.OK", success=True)
 
-    def send_template(self, to, name, language, components):
+    def send_template(self, to, name, language, components, category=""):
         self.calls.append(("template", to, name))
         return SendResult(message_id="wamid.OK", success=True)
 

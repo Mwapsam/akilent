@@ -642,6 +642,7 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
                 payload["template_name"],
                 payload.get("language", "en"),
                 components if isinstance(components, list) else [],
+                category=payload.get("_category", ""),
             )
         elif msg_type in ("image", "audio", "video", "document", "sticker"):
             media_id = payload.get("media_id")
