@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ form.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <p class="text-sm"><a href="{% url 'conversations:forms_list' %}" class="text-accent underline">Forms</a></p>
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ form.name }}</h1>
+    <div class="flex items-center gap-2">
+      <span class="badge {% if form.status == 'published' %}badge-success{% elif form.status == 'archived' %}badge-neutral{% else %}badge-warning{% endif %}">{{ form.get_status_display }}</span>
+      <form method="post" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_status" />
+        {% if form.status == "draft" %}
+        <input type="hidden" name="status" value="published" />
+        <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>Publish</button>
+        {% elif form.status == "published" %}
+        <input type="hidden" name="status" value="archived" />
+        <button class="btn btn-ghost btn-sm">Archive</button>
+        {% else %}
+        <input type="hidden" name="status" value="draft" />
+        <button class="btn btn-ghost btn-sm">Move back to draft</button>
+        {% endif %}
+      </form>
+      <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" onsubmit="return confirm('Delete this form?');">
+        {% csrf_token %}
+        <button class="btn btn-ghost btn-sm">Delete</button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-2">
+  <section>
+    <h2 class="font-semibold mb-3">Questions, in order</h2>
+    {% if form.questions %}
+    <ol class="space-y-2">
+      {% for q in form.questions %}
+      <li class="rounded-lg border border-border px-3 py-2 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-ink">{{ forloop.counter }}. {{ q.label }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">
+            {{ q.field_type }}{% if q.maps_to %} · saves to {{ q.maps_to }}{% endif %}
+          </p>
+        </div>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove_question" />
+          <input type="hidden" name="index" value="{{ forloop.counter0 }}" />
+          <button class="btn btn-ghost btn-sm">Remove</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="text-sm text-gray-500">No questions yet. Add the first one.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a question</h2>
+      <form method="post" class="space-y-3" x-data="{ mapsTo: 'none' }">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_question" />
+        <div>
+          <label class="label" for="q-label">Question</label>
+          <input id="q-label" name="label" class="input" placeholder="e.g. What's your email?" required />
+        </div>
+        <div>
+          <label class="label" for="q-type">Answer type</label>
+          <select id="q-type" name="field_type" class="select">
+            {% for t in field_types %}
+            <option value="{{ t }}">{{ t|capfirst }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="q-maps-to">Save the answer to</label>
+          <select id="q-maps-to" name="maps_to_type" class="select" x-model="mapsTo">
+            <option value="none">Nothing — just record the answer</option>
+            <option value="first_name">Customer's first name</option>
+            <option value="last_name">Customer's last name</option>
+            <option value="custom">A custom field...</option>
+          </select>
+        </div>
+        <div x-show="mapsTo === 'custom'" x-cloak>
+          <label class="label" for="q-maps-to-key">Custom field name</label>
+          <input id="q-maps-to-key" name="maps_to_key" class="input" placeholder="e.g. company" />
+        </div>
+        <button class="btn btn-primary btn-sm w-full">Add question</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.accounts.models import Team
@@ -24,6 +25,7 @@ from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.models import (
     Conversation,
+    ConversationForm,
     FollowUp,
     Message,
     RoutingRule,
@@ -447,6 +449,17 @@ def conversation_detail(request, public_id: str):
                 )
             elif action == "reopen":
                 conversation.reopen(actor=f"user:{request.user.pk}")
+            elif action == "start_form":
+                form = ConversationForm.objects.filter(
+                    account=account,
+                    pk=request.POST.get("form_id"),
+                    status=ConversationForm.Status.PUBLISHED,
+                ).first()
+                if form is None:
+                    raise ActionError("Choose a form to start.")
+                run_action(
+                    "start_conversation_form", ctx, conversation=conversation, form=form
+                )
         except ActionError as exc:
             if _is_ajax(request):
                 return JsonResponse({"ok": False, "error": str(exc)}, status=400)
@@ -573,6 +586,17 @@ def conversation_detail(request, public_id: str):
     except Exception:
         automation_activity = []  # never let a side panel cost the owner their conversation
 
+    from apps.conversations import forms as conversation_forms
+
+    active_form_response = conversation_forms.active_response_for(conversation)
+    published_forms = (
+        ConversationForm.objects.filter(
+            account=account, status=ConversationForm.Status.PUBLISHED
+        ).order_by("name")
+        if active_form_response is None
+        else ConversationForm.objects.none()
+    )
+
     pane_context = {
         "account": account,
         "now": now,
@@ -589,6 +613,8 @@ def conversation_detail(request, public_id: str):
         "saved_replies": saved_replies,
         "open_followup": open_followup,
         "team_members": _team_members(account),
+        "active_form_response": active_form_response,
+        "published_forms": published_forms,
     }
     # The inbox list (templates/conversations/inbox.html, ≥lg) loads a conversation into its
     # own pane via a plain background GET — see static/js/inbox_pane.js — rather than a full
@@ -819,6 +845,112 @@ def routing_rule_delete(request, pk):
     rule.delete()
     messages.success(request, "Routing rule removed.")
     return redirect("conversations:routing_rules")
+
+
+_FORM_FIELD_TYPES = ["text", "email", "phone", "number"]
+
+
+@login_required
+def forms_list(request):
+    """B.3/Phase C: native WhatsApp forms (apps.conversations.forms). Deliberately
+    deterministic — no AI drafts or answers a form question."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if not name:
+            messages.error(request, "A form needs a name.")
+            return redirect("conversations:forms_list")
+        form = ConversationForm.objects.create(account=account, name=name)
+        return redirect("conversations:form_detail", pk=form.pk)
+    forms_qs = ConversationForm.objects.filter(account=account).order_by("name")
+    return render(
+        request,
+        "conversations/forms_list.html",
+        {"account": account, "forms": forms_qs},
+    )
+
+
+def _maps_to_from_post(request) -> str:
+    kind = request.POST.get("maps_to_type", "")
+    if kind == "first_name":
+        return "contact.first_name"
+    if kind == "last_name":
+        return "contact.last_name"
+    if kind == "custom":
+        key = slugify(request.POST.get("maps_to_key", "")).replace("-", "_")
+        return f"contact.attributes.{key}" if key else ""
+    return ""
+
+
+@login_required
+def form_detail(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    form = get_object_or_404(ConversationForm, account=account, pk=pk)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add_question":
+            label = request.POST.get("label", "").strip()
+            field_type = request.POST.get("field_type", "text")
+            if not label:
+                messages.error(request, "A question needs a label.")
+            elif field_type not in _FORM_FIELD_TYPES:
+                messages.error(request, "That's not a valid answer type.")
+            else:
+                used_keys = {q["key"] for q in form.questions}
+                base = slugify(label).replace("-", "_") or "question"
+                key, n = base, 2
+                while key in used_keys:
+                    key, n = f"{base}_{n}", n + 1
+                form.questions = [
+                    *form.questions,
+                    {
+                        "key": key,
+                        "label": label,
+                        "field_type": field_type,
+                        "maps_to": _maps_to_from_post(request),
+                    },
+                ]
+                form.save(update_fields=["questions", "updated_at"])
+                messages.success(request, "Question added.")
+        elif action == "remove_question":
+            try:
+                index = int(request.POST.get("index", -1))
+            except ValueError:
+                index = -1
+            if 0 <= index < len(form.questions):
+                form.questions = [q for i, q in enumerate(form.questions) if i != index]
+                form.save(update_fields=["questions", "updated_at"])
+        elif action == "set_status":
+            status = request.POST.get("status", "")
+            if status == ConversationForm.Status.PUBLISHED and not form.questions:
+                messages.error(request, "Add at least one question before publishing.")
+            elif status in ConversationForm.Status.values:
+                form.status = status
+                form.save(update_fields=["status", "updated_at"])
+        return redirect("conversations:form_detail", pk=form.pk)
+
+    return render(
+        request,
+        "conversations/form_detail.html",
+        {"account": account, "form": form, "field_types": _FORM_FIELD_TYPES},
+    )
+
+
+@login_required
+@require_POST
+def form_delete(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    form = get_object_or_404(ConversationForm, account=account, pk=pk)
+    form.delete()
+    messages.success(request, "Form deleted.")
+    return redirect("conversations:forms_list")
 
 
 @login_required

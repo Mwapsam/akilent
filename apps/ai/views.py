@@ -5,12 +5,13 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.ai import api as ai_api
 from apps.ai import autonomy
+from apps.ai.models import KnowledgeBaseEntry
 from apps.ai.providers import is_configured
 
 
@@ -109,6 +110,77 @@ def settings_ai_autopilot(request):
             "ai": ai_api.settings_for(account),
         },
     )
+
+
+@login_required
+def settings_ai_knowledge(request):
+    """FAQ/policy entries AI may answer from — see ``KnowledgeBaseEntry`` and
+    ``apps.ai.facts.build``. Manually authored only, no document upload."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    can_edit = _can_edit(request, account)
+    if request.method == "POST":
+        if not can_edit:
+            messages.error(request, "Only an owner or admin can change AI settings.")
+            return redirect("settings-ai-knowledge")
+        title = request.POST.get("title", "").strip()
+        content = request.POST.get("content", "").strip()
+        source_type = request.POST.get("source_type", KnowledgeBaseEntry.SourceType.FAQ)
+        if not title or not content:
+            messages.error(
+                request, "A knowledge base entry needs both a title and content."
+            )
+        elif source_type not in KnowledgeBaseEntry.SourceType.values:
+            messages.error(request, "That's not a valid entry type.")
+        else:
+            KnowledgeBaseEntry.objects.create(
+                account=account, title=title, content=content, source_type=source_type
+            )
+            messages.success(request, "Added to the knowledge base.")
+        return redirect("settings-ai-knowledge")
+    entries = KnowledgeBaseEntry.objects.filter(account=account).order_by("title")
+    return render(
+        request,
+        "accounts/settings_ai_knowledge.html",
+        {
+            "account": account,
+            "active_tab": "ai",
+            "can_edit": can_edit,
+            "entries": entries,
+            "source_types": KnowledgeBaseEntry.SourceType.choices,
+        },
+    )
+
+
+@login_required
+@require_POST
+def knowledge_entry_toggle(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if not _can_edit(request, account):
+        messages.error(request, "Only an owner or admin can change AI settings.")
+        return redirect("settings-ai-knowledge")
+    entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
+    entry.is_active = not entry.is_active
+    entry.save(update_fields=["is_active", "updated_at"])
+    return redirect("settings-ai-knowledge")
+
+
+@login_required
+@require_POST
+def knowledge_entry_delete(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if not _can_edit(request, account):
+        messages.error(request, "Only an owner or admin can change AI settings.")
+        return redirect("settings-ai-knowledge")
+    entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
+    entry.delete()
+    messages.success(request, "Removed from the knowledge base.")
+    return redirect("settings-ai-knowledge")
 
 
 @login_required

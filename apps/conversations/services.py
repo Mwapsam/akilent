@@ -289,6 +289,7 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
 def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
     """Start or resume workflows for this message. True if one started or resumed."""
     from apps.automation.workflow_engine import enroll_for_trigger, resume_on_reply
+    from apps.conversations import forms as conversation_forms
     from apps.whatsapp.interactive import reply_for_log
 
     message = {"body": message_log.content, "type": message_log.message_type}
@@ -296,6 +297,14 @@ def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
     if reply:
         message["reply_id"] = reply["id"]
         message["reply_title"] = reply["title"]
+
+    # A customer answering a form question must not also start or resume an
+    # unrelated workflow, or reach AI as if it were a normal message — same
+    # reasoning as the wait_for_reply check just below, checked first since a
+    # form in progress takes the message even if it also happens to look like
+    # a workflow's wait_for_reply choice.
+    if conversation_forms.record_answer(conversation, message["body"]):
+        return True
 
     # A customer answering a question an automation asked ("Prices or Booking?") continues
     # that conversation; it must not also start unrelated keyword workflows.

@@ -375,6 +375,92 @@ class RoutingRule(models.Model):
         return f"{self.name} -> {self.team} (priority {self.priority})"
 
 
+class ConversationForm(models.Model):
+    """An ordered set of questions to capture inside a WhatsApp conversation
+    (Phase C item 11), deliberately deterministic — no AI drafts or answers
+    a form question. One question at a time, free-text answer, an optional
+    per-answer validation and field mapping.
+
+    ``questions`` is a list of ``{"key", "label", "field_type", "maps_to"}``:
+    - ``field_type``: ``text`` | ``email`` | ``phone`` | ``number`` — what
+      ``apps.conversations.forms`` validates the answer as before advancing.
+    - ``maps_to``: where a completed answer is written, e.g.
+      ``"contact.first_name"`` or ``"contact.attributes.company"`` (the same
+      mapping-JSON idea as ``ContactImport.mapping``); ``""`` to only store
+      the raw answer on the ``FormResponse`` without writing it anywhere.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="conversation_forms"
+    )
+    name = models.CharField(max_length=150)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT
+    )
+    questions = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class FormResponse(models.Model):
+    """One customer's progress through a ``ConversationForm``. Modeled on
+    ``Workflow``'s DRAFT/PUBLISHED + ``WorkflowRun``'s per-contact run
+    tracking, per the plan — not a new state machine: IN_PROGRESS is exactly
+    "waiting for the customer's next answer", the same shape as a Workflow
+    run parked on ``wait_for_reply``.
+    """
+
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        ABANDONED = "abandoned", "Abandoned"
+
+    account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE)
+    form = models.ForeignKey(
+        ConversationForm, on_delete=models.CASCADE, related_name="responses"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="form_responses"
+    )
+    contact = models.ForeignKey("contacts.Contact", on_delete=models.CASCADE)
+    status = models.CharField(
+        max_length=15, choices=Status.choices, default=Status.IN_PROGRESS
+    )
+    current_index = models.IntegerField(default=0)
+    answers = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            # Only one form waiting on a customer's next message per
+            # conversation at a time - otherwise an answer would be
+            # ambiguous about which form it belongs to.
+            models.UniqueConstraint(
+                fields=["conversation"],
+                condition=models.Q(status="in_progress"),
+                name="unique_in_progress_form_response_per_conversation",
+            ),
+        ]
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return (
+            f"{self.form.name} for conversation {self.conversation_id} ({self.status})"
+        )
+
+
 class Event(models.Model):
     """A durable, immutable domain event.
 

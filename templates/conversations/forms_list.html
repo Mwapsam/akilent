@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Forms — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Forms</h1>
+  <p class="mt-1 text-sm text-gray-600">Ask a customer a fixed set of questions, one at a time, inside a WhatsApp conversation. No AI involved — every answer is checked deterministically before moving on.</p>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2">
+    {% if forms %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Form</th><th>Status</th><th>Questions</th><th></th></tr></thead>
+        <tbody>
+          {% for form in forms %}
+          <tr>
+            <td data-label="Form">{{ form.name }}</td>
+            <td data-label="Status">{{ form.get_status_display }}</td>
+            <td data-label="Questions" class="text-gray-600">{{ form.questions|length }}</td>
+            <td><a href="{% url 'conversations:form_detail' form.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="list" title="No forms yet" message="Add a form, then a question at a time, and publish it when it's ready to use." %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a form</h2>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="form-name">Name</label>
+          <input id="form-name" name="name" class="input" placeholder="e.g. New customer intake" required />
+        </div>
+        <button class="btn btn-primary btn-sm w-full">Add form</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

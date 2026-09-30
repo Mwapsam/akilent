@@ -29,7 +29,7 @@
     <ul class="list-disc pl-5 mt-1 space-y-0.5">
       <li>The last few messages of the one conversation being answered, and a short summary of its earlier messages. Phone numbers and email addresses in them are hidden.</li>
       <li>The customer's first name and tags, whether they're tracked as interested, and, when AI asks, their open follow-up and last few orders.</li>
-      <li>Your business name, opening hours, approved templates, tag names and the notes below, and, when AI asks, matching products and prices from your catalogue.</li>
+      <li>Your business name, opening hours, approved templates, tag names, the notes below and your <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> entries, and, when AI asks, matching products and prices from your catalogue.</li>
     </ul>
     <p class="mt-1">Internal notes, other customers and other conversations are never sent.</p>
   </div>
@@ -46,7 +46,8 @@
       <label class="label" for="ai-notes">What AI may tell customers about your business</label>
       <textarea id="ai-notes" name="business_notes" class="textarea" rows="8" maxlength="{{ max_notes }}" {% if not can_edit %}disabled{% endif %}
                 placeholder="Prices: 3 kW home system from K18,000, installed.&#10;Where: Plot 12, Cairo Road, Lusaka.&#10;Delivery: Lusaka next day; Copperbelt within 3 days.&#10;Payment: 50% deposit, balance on installation.">{{ ai.business_notes }}</textarea>
-      <p class="text-xs text-gray-500 mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.</p>
+      <p class="text-xs text-gray-500 mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.
+        For longer or more structured answers (FAQs, policies), use the <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> instead of one long block of notes.</p>
     </div>
 
     <fieldset class="space-y-2" x-data="{ mode: '{{ ai.reply_mode|default:'suggest' }}' }" {% if not can_edit %}disabled{% endif %}>

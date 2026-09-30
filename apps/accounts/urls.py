@@ -35,6 +35,21 @@ urlpatterns = [
         ai_views.settings_ai_autopilot,
         name="settings-ai-autopilot",
     ),
+    path(
+        "settings/ai/knowledge/",
+        ai_views.settings_ai_knowledge,
+        name="settings-ai-knowledge",
+    ),
+    path(
+        "settings/ai/knowledge/<int:pk>/toggle/",
+        ai_views.knowledge_entry_toggle,
+        name="settings-ai-knowledge-toggle",
+    ),
+    path(
+        "settings/ai/knowledge/<int:pk>/delete/",
+        ai_views.knowledge_entry_delete,
+        name="settings-ai-knowledge-delete",
+    ),
     path("settings/team/invite/", settings_views.invite_create, name="invite-create"),
     path(
         "settings/team/invitations/<int:pk>/revoke/",

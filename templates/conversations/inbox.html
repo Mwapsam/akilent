@@ -32,6 +32,10 @@ The links are icon buttons on a phone with their labels kept for screen readers
       {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}
       <span class="sr-only sm:not-sr-only">Routing rules</span>
     </a>
+    <a href="{% url 'conversations:forms_list' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Forms">
+      {% include "components/icon.html" with name="list" class="w-4 h-4" %}
+      <span class="sr-only sm:not-sr-only">Forms</span>
+    </a>
   </div>
 </header>
 

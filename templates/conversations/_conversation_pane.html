@@ -736,6 +736,30 @@
       </div>
       {% endif %}
 
+      {# Form #}
+      {% if active_form_response %}
+      <div class="cv-section">
+        <h2 class="cv-h">Form in progress</h2>
+        <p class="text-sm text-ink">{{ active_form_response.form.name }}</p>
+        <p class="text-xs text-gray-500 mt-0.5">Question {{ active_form_response.current_index|add:1 }} of {{ active_form_response.form.questions|length }}</p>
+      </div>
+      {% elif published_forms %}
+      <div class="cv-section">
+        <h2 class="cv-h">Start a form</h2>
+        <form method="post" class="flex gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="start_form" />
+          <label class="sr-only" for="start-form-id">Form</label>
+          <select id="start-form-id" name="form_id" class="select select-sm flex-1">
+            {% for f in published_forms %}
+            <option value="{{ f.pk }}">{{ f.name }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-secondary btn-sm">Start</button>
+        </form>
+      </div>
+      {% endif %}
+
       {# Follow-up #}
       <div class="cv-section">
         <h2 class="cv-h">Follow-up</h2>

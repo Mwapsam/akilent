@@ -12,6 +12,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 MAX_PRODUCTS = 30
+MAX_KNOWLEDGE_ENTRIES = 30
 
 # "K18,000", "ZMW 250", "$12.50", "250 kwacha", "1,200 USD"
 _CURRENCY = r"(?:K|ZMW|USD|US\$|\$|KES|KSh|NGN|₦|R|ZAR|GHS|£|€|TZS|UGX|MWK)"
@@ -58,13 +59,16 @@ def times_in(text: str) -> set:
 
 
 def build(account, *, business_notes: str = "") -> dict:
-    """``{"opening_hours", "timezone", "products", "business", "notes"}`` for this business.
+    """``{"opening_hours", "timezone", "products", "knowledge", "business", "notes"}`` for this
+    business.
 
     ``business`` is the owner's profile answers (location, payment methods, delivery, website).
-    Products only when Commerce is on.
+    Products only when Commerce is on. ``knowledge`` is the owner's written FAQ/policy entries
+    (``apps.ai.models.KnowledgeBaseEntry``) — the same trust level as ``notes``, just organized.
     """
     from apps.accounts import api as accounts_api
     from apps.accounts import business_hours
+    from apps.ai.models import KnowledgeBaseEntry
     from apps.billing import api as billing_api
 
     hours = business_hours.get_hours(account)
@@ -82,21 +86,33 @@ def build(account, *, business_notes: str = "") -> dict:
             ).get("products", [])
         except ActionError:
             products = []
+    knowledge = [
+        {"title": e.title, "content": e.content}
+        for e in KnowledgeBaseEntry.objects.filter(
+            account=account, is_active=True
+        ).order_by("title")[:MAX_KNOWLEDGE_ENTRIES]
+    ]
     return {
         "opening_hours": dict(hours.schedule) if hours and hours.schedule else {},
         "timezone": hours.timezone if hours and hours.schedule else "",
         "products": products,
+        "knowledge": knowledge,
         "business": accounts_api.business_facts(account),
         "notes": business_notes or "",
     }
 
 
 def written_text(facts: dict) -> str:
-    """Everything the owner wrote themselves (notes and profile answers), for text-level checks."""
+    """Everything the owner wrote themselves (notes, profile answers, and knowledge-base entries),
+    for text-level checks."""
     return "\n".join(
         [
             facts.get("notes", ""),
             *[str(v) for v in (facts.get("business") or {}).values()],
+            *[
+                f"{e.get('title', '')} {e.get('content', '')}"
+                for e in facts.get("knowledge", [])
+            ],
         ]
     )
 

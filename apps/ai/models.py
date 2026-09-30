@@ -54,6 +54,39 @@ class AISettings(models.Model):
         return f"AI settings for account {self.account_id} ({'on' if self.enabled else 'off'}, {self.reply_mode})"
 
 
+class KnowledgeBaseEntry(models.Model):
+    """A fact an owner writes once so AI can answer from it — an FAQ answer, a policy, a short
+    document — the same trust boundary as ``AISettings.business_notes`` (see ``apps.ai.facts``),
+    just organized as named entries instead of one free-text block. Manually authored only: no
+    document upload/ingestion here, deliberately a smaller first version.
+    """
+
+    class SourceType(models.TextChoices):
+        FAQ = "faq", "FAQ"
+        POLICY = "policy", "Policy"
+        OTHER = "other", "Other"
+
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="knowledge_base_entries",
+    )
+    source_type = models.CharField(
+        max_length=20, choices=SourceType.choices, default=SourceType.FAQ
+    )
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
 class AIProposal(models.Model):
     """Something AI proposes doing in a conversation. A person decides; AI never acts.
 

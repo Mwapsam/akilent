@@ -281,6 +281,33 @@ class RouteConversationAction(Action):
         }
 
 
+class StartConversationFormAction(Action):
+    """Start a ``ConversationForm`` on a conversation: sends its first question.
+
+    Callable from a Workflow's generic ``action`` step (no workflow_engine change
+    needed — see its own docstring) or from the inbox directly. Refuses to start a
+    second form while one is already in progress on this conversation, rather than
+    silently abandoning the first.
+    """
+
+    name = "start_conversation_form"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation", "form"]}
+
+    def execute(self, context: dict, *, conversation, form) -> dict:  # type: ignore[override]
+        from apps.conversations import forms as conversation_forms
+
+        if conversation_forms.active_response_for(conversation) is not None:
+            raise ActionError("A form is already in progress on this conversation.")
+        try:
+            response = conversation_forms.start_form(conversation, form)
+        except conversation_forms.FormError as exc:
+            raise ActionError(str(exc)) from exc
+        return {"conversation_id": conversation.id, "response_id": response.id}
+
+
 class AddInternalNoteAction(Action):
     """Attach a staff-only note to a conversation."""
 
@@ -410,5 +437,6 @@ register(AssignConversationAction())
 register(AutoAssignConversationAction())
 register(RouteConversationAction())
 register(AddInternalNoteAction())
+register(StartConversationFormAction())
 register(CreateFollowUpAction())
 register(CompleteFollowUpAction())
