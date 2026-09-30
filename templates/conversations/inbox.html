@@ -2,7 +2,7 @@
 {% block title %}Inbox — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
-{% comment %}Page header: the title, and links to the two neighbouring pages.
+{% comment %}Page header: the title, and links to the neighbouring pages.
 Controls that act on the list itself — the view tabs and the channel filter —
 live with the list in _inbox_body.html, not up here: the filter used to float
 beside the title as a tall select next to two plain text links, visually
@@ -23,6 +23,14 @@ The links are icon buttons on a phone with their labels kept for screen readers
     <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Saved replies">
       {% include "components/icon.html" with name="book-open" class="w-4 h-4" %}
       <span class="sr-only sm:not-sr-only">Saved replies</span>
+    </a>
+    <a href="{% url 'conversations:teams' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Teams">
+      {% include "components/icon.html" with name="users" class="w-4 h-4" %}
+      <span class="sr-only sm:not-sr-only">Teams</span>
+    </a>
+    <a href="{% url 'conversations:routing_rules' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Routing rules">
+      {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}
+      <span class="sr-only sm:not-sr-only">Routing rules</span>
     </a>
   </div>
 </header>

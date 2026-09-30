@@ -115,6 +115,39 @@ class TestFirstRepliesAndResponse:
 
 
 @pytest.mark.django_db
+class TestResolution:
+    def test_median_resolution_time_within_the_period(self, account):
+        start = NOW - timedelta(days=2)
+        a = enquiry(account, start)
+        a.closed_at = start + timedelta(hours=1)
+        a.save(update_fields=["closed_at"])
+        b = enquiry(account, start)
+        b.closed_at = start + timedelta(hours=3)
+        b.save(update_fields=["closed_at"])
+        period = reporting.Period(start - timedelta(hours=1), NOW)
+        res = reporting.resolution(account, period)
+        assert res["resolved"] == 2
+        assert res["median_resolution_seconds"] == 2 * 3600  # median of 1h, 3h
+
+    def test_still_open_conversations_are_not_counted(self, account):
+        start = NOW - timedelta(days=1)
+        enquiry(account, start)  # never closed
+        period = reporting.Period(start - timedelta(hours=1), NOW)
+        res = reporting.resolution(account, period)
+        assert res["resolved"] == 0
+        assert res["median_resolution_seconds"] is None
+
+    def test_a_conversation_closed_outside_the_period_is_excluded(self, account):
+        start = NOW - timedelta(days=10)
+        a = enquiry(account, start)
+        a.closed_at = start + timedelta(hours=1)  # long before the period below
+        a.save(update_fields=["closed_at"])
+        period = reporting.Period(NOW - timedelta(days=1), NOW)
+        res = reporting.resolution(account, period)
+        assert res["resolved"] == 0
+
+
+@pytest.mark.django_db
 class TestRecovery:
     def test_recovery_chain_missed_answered_lead_paid(self, account):
         start = NOW - timedelta(days=2)

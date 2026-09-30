@@ -26,6 +26,10 @@ apps.conversations.reporting, for the selected ``days`` period.
       <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
       <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
     </div>
+    <div>
+      <p class="stat-value">{{ resolution.median_resolution_seconds|duration }}</p>
+      <p class="stat-label">median time to resolve{% if resolution.resolved %} ({{ resolution.resolved }} closed this period){% endif %}</p>
+    </div>
   </div>
 
   {% if peak_hours.enough %}

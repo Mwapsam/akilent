@@ -47,6 +47,12 @@ class Conversation(models.Model):
         OPEN = "open", "Open"
         CLOSED = "closed", "Closed"
 
+    class Resolution(models.TextChoices):
+        RESOLVED = "resolved", "Resolved"
+        NO_RESPONSE = "no_response", "No response"
+        SPAM = "spam", "Spam"
+        OTHER = "other", "Other"
+
     public_id = models.CharField(
         max_length=40, unique=True, default=_conversation_public_id, editable=False
     )
@@ -72,12 +78,30 @@ class Conversation(models.Model):
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.OPEN
     )
+    # Set by close() (explicit or the 24h-inactivity auto-close), cleared by
+    # reopen()/register_inbound() — a reliable "when did this stop being
+    # open" for a resolution-time metric, unlike updated_at, which any
+    # unrelated save also advances. resolution stays blank for an
+    # inactivity auto-close: nobody gave a reason.
+    closed_at = models.DateTimeField(blank=True, null=True)
+    resolution = models.CharField(
+        max_length=20, choices=Resolution.choices, blank=True, default=""
+    )
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="assigned_conversations",
+    )
+    # Organizational responsibility, independent of assigned_to (see
+    # accounts.Team). Set by routing before, or without, an individual agent.
+    assigned_team = models.ForeignKey(
+        "accounts.Team",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conversations",
     )
     is_unread = models.BooleanField(default=True)
 
@@ -89,6 +113,7 @@ class Conversation(models.Model):
         indexes = [
             models.Index(fields=["account", "status", "last_message_at"]),
             models.Index(fields=["account", "assigned_to"]),
+            models.Index(fields=["account", "assigned_team"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -130,8 +155,17 @@ class Conversation(models.Model):
         self.last_message_at = at
         self.status = self.Status.OPEN
         self.is_unread = True
+        self.closed_at = None
+        self.resolution = ""
         self.save(
-            update_fields=["last_message_at", "status", "is_unread", "updated_at"]
+            update_fields=[
+                "last_message_at",
+                "status",
+                "is_unread",
+                "closed_at",
+                "resolution",
+                "updated_at",
+            ]
         )
 
     def register_outbound(self, at) -> None:
@@ -167,14 +201,75 @@ class Conversation(models.Model):
             payload={"assigned_to_id": new_id, "previous_assignee_id": previous_id},
         )
 
+    def set_team(self, team, *, actor: str = "") -> None:
+        """Set (or clear, ``team=None``) organizational responsibility.
+
+        Mirrors ``assign()``: a no-op re-set writes nothing, and an actual
+        change is recorded as an ``Event`` so team routing shows up in the
+        same audit trail as individual assignment.
+        """
+        previous_id = self.assigned_team_id
+        new_id = team.pk if team else None
+        if previous_id == new_id:
+            return
+        self.assigned_team = team
+        self.save(update_fields=["assigned_team", "updated_at"])
+        Event.objects.create(
+            account_id=self.account_id,
+            type="conversation.team_assigned"
+            if team
+            else "conversation.team_unassigned",
+            occurred_at=timezone.now(),
+            source="conversations",
+            actor=actor or "system",
+            subject_type="conversation",
+            subject_id=str(self.pk),
+            payload={"assigned_team_id": new_id, "previous_team_id": previous_id},
+        )
+
     def mark_read(self) -> None:
         if self.is_unread:
             self.is_unread = False
             self.save(update_fields=["is_unread", "updated_at"])
 
-    def close(self) -> None:
+    def close(self, *, resolution: str = "", actor: str = "") -> None:
+        was_open = self.status == self.Status.OPEN
         self.status = self.Status.CLOSED
-        self.save(update_fields=["status", "updated_at"])
+        self.closed_at = timezone.now()
+        self.resolution = resolution
+        self.save(update_fields=["status", "closed_at", "resolution", "updated_at"])
+        if was_open:
+            Event.objects.create(
+                account_id=self.account_id,
+                type="conversation.closed",
+                occurred_at=self.closed_at,
+                source="conversations",
+                actor=actor or "system",
+                subject_type="conversation",
+                subject_id=str(self.pk),
+                payload={"resolution": resolution},
+            )
+
+    def reopen(self, *, actor: str = "") -> None:
+        """Manually reopen a closed conversation (register_inbound() already
+        does this implicitly when the customer writes again — this is the
+        agent-initiated equivalent, e.g. "actually, let's keep this open")."""
+        if self.status == self.Status.OPEN:
+            return
+        self.status = self.Status.OPEN
+        self.closed_at = None
+        self.resolution = ""
+        self.save(update_fields=["status", "closed_at", "resolution", "updated_at"])
+        Event.objects.create(
+            account_id=self.account_id,
+            type="conversation.reopened",
+            occurred_at=timezone.now(),
+            source="conversations",
+            actor=actor or "system",
+            subject_type="conversation",
+            subject_id=str(self.pk),
+            payload={},
+        )
 
 
 class Message(models.Model):
@@ -247,6 +342,37 @@ class ConversationNote(models.Model):
 
     def __str__(self):
         return f"Note on conversation {self.conversation_id}"
+
+
+class RoutingRule(models.Model):
+    """Which team a new conversation belongs to, deliberately not a general
+    workflow engine: ``conditions`` is a flat dict of structured-signal keys
+    (see ``apps.conversations.routing.SIGNAL_KEYS``) that must *all* match —
+    no boolean nesting, no free-form scripting. An empty dict always matches,
+    which is how a business sets up a catch-all/default team.
+
+    Rules are evaluated in ``priority`` order (lowest first); the first
+    account rule whose conditions match wins. Unmatched conversations stay
+    unassigned — the Unassigned inbox tab is the safety net, never a bug.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="routing_rules"
+    )
+    name = models.CharField(max_length=100)
+    team = models.ForeignKey(
+        "accounts.Team", on_delete=models.CASCADE, related_name="routing_rules"
+    )
+    conditions = models.JSONField(default=dict, blank=True)
+    priority = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["priority", "id"]
+
+    def __str__(self):
+        return f"{self.name} -> {self.team} (priority {self.priority})"
 
 
 class Event(models.Model):

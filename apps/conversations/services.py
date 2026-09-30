@@ -87,7 +87,12 @@ def record_inbound_whatsapp_message(
     """
     from apps.whatsapp.interactive import reply_for_log
 
+    is_new = not Conversation.objects.filter(
+        whatsapp_conversation=whatsapp_conversation
+    ).exists()
     conversation = Conversation.get_or_create_for_whatsapp(whatsapp_conversation)
+    if is_new:
+        route_new_conversation(conversation)
     conversation.register_inbound(message_log.timestamp)
     reply = reply_for_log(message_log)  # a tapped button or list choice, else None
 
@@ -144,6 +149,29 @@ def record_inbound_whatsapp_message(
     _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, message_log.content)
     return conversation
+
+
+def route_new_conversation(conversation: Conversation) -> None:
+    """Give a conversation to a team/agent per the account's RoutingRules.
+
+    Called from here once, only for a conversation this call just created — a
+    returning customer's second message must never re-route a conversation
+    someone is already handling. Also reused by the overdue-escalation task
+    (``apps.conversations.tasks.escalate_overdue_conversations``) for a
+    still-unassigned conversation, where re-routing *is* the point. Best-effort,
+    same as the rest of this file's side effects: routing must never cost us
+    the message itself.
+    """
+    try:
+        run_action(
+            "route_conversation",
+            {"account": conversation.account},
+            conversation=conversation,
+        )
+    except Exception:
+        logger.exception(
+            "_route_new_conversation failed for conversation=%s", conversation.pk
+        )
 
 
 def _record_customer_activity(contact, message_log) -> None:

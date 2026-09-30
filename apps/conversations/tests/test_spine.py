@@ -6,7 +6,13 @@ from apps.automation.models import Workflow
 from apps.automation.workflow_engine import enroll_for_trigger
 from apps.contacts.models import Contact
 from apps.conversations.actions import ActionError, run_action
-from apps.conversations.models import Conversation, ConversationNote, Event, Message
+from apps.conversations.models import (
+    Conversation,
+    ConversationNote,
+    Event,
+    Message,
+    RoutingRule,
+)
 from apps.conversations.services import emit_event, record_inbound_whatsapp_message
 from apps.whatsapp.models import Conversation as WhatsAppConversation
 from apps.whatsapp.models import MessageLog, WhatsAppContact
@@ -121,6 +127,61 @@ def test_record_inbound_message_is_idempotent_on_replay(
     assert second is None
     assert Message.objects.filter(whatsapp_message=message_log).count() == 1
     assert Event.objects.filter(type="conversation.message_received").count() == 1
+
+
+@pytest.mark.django_db
+def test_a_new_conversation_is_routed_on_its_first_message(
+    account, contact, wa_contact, wa_conversation, message_log
+):
+    from apps.accounts.models import Team
+
+    team = Team.objects.create(account=account, name="Support")
+    RoutingRule.objects.create(account=account, name="Default", team=team)
+
+    conversation = record_inbound_whatsapp_message(
+        contact=contact,
+        wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation,
+        message_log=message_log,
+    )
+    assert conversation.assigned_team_id == team.id
+
+
+@pytest.mark.django_db
+def test_a_second_message_on_an_existing_conversation_is_not_re_routed(
+    account, contact, wa_contact, wa_conversation, message_log
+):
+    """A routing rule added after the fact must not retroactively move a
+    conversation someone may already be handling."""
+    from apps.accounts.models import Team
+
+    record_inbound_whatsapp_message(
+        contact=contact,
+        wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation,
+        message_log=message_log,
+    )
+    team = Team.objects.create(account=account, name="Support")
+    RoutingRule.objects.create(account=account, name="Default", team=team)
+
+    second_log = MessageLog.objects.create(
+        account=account,
+        conversation=wa_conversation,
+        contact=wa_contact,
+        message_id="wamid.TEST124",
+        direction=MessageLog.Direction.INBOUND,
+        message_type=MessageLog.MessageType.TEXT,
+        content="Are you open today?",
+        status=MessageLog.Status.DELIVERED,
+        timestamp=timezone.now(),
+    )
+    conversation = record_inbound_whatsapp_message(
+        contact=contact,
+        wa_contact=wa_contact,
+        whatsapp_conversation=wa_conversation,
+        message_log=second_log,
+    )
+    assert conversation.assigned_team_id is None
 
 
 @pytest.mark.django_db

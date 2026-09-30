@@ -70,6 +70,7 @@
      hidden they were ~44px each, and three of them set the name's width) and the
      assign select capped so it can't push the actions off the edge. */
   .cv-assign .select { max-width: 10rem; }
+  .cv-close .select { max-width: 8rem; }
   .cv-h-label, .cv-h-icon { display: none; }
   .cv-h-actions { gap: 0; }
   .cv-h-actions .btn { width: 2.25rem; padding-inline: 0; justify-content: center; }
@@ -284,13 +285,17 @@
           </select>
         </form>
         {# Driven by the live `open` flag, so it reappears if the customer writes again while the page is open. #}
-        <form method="post" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %}>
+        <form method="post" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %} class="cv-close flex items-center gap-1">
           {% csrf_token %}
           <input type="hidden" name="action" value="close" />
-          <button class="btn btn-ghost btn-sm" title="Close conversation. It reopens if the customer writes again.">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
-            <span class="cv-h-label">Close</span>
-          </button>
+          <svg class="cv-h-icon w-4 h-4 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+          <label class="sr-only" for="close-resolution">Close conversation</label>
+          <select id="close-resolution" name="resolution" class="select select-sm" onchange="this.form.submit()" title="Close conversation. It reopens if the customer writes again.">
+            <option value="" selected disabled>Close as…</option>
+            {% for value, label in conversation.Resolution.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
         </form>
         <button type="button" class="cv-iconbtn cv-info-btn" @click="infoOpen = true" :aria-expanded="infoOpen" aria-controls="chat-info" aria-label="Conversation details">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
@@ -580,8 +585,16 @@
     </template>
     <template x-if="!open">
       <div class="cv-closed">
-        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        This conversation is closed. It reopens if the customer writes again.
+        <svg class="w-4 h-4 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <span>
+          This conversation is closed{% if conversation.resolution %} as <strong>{{ conversation.get_resolution_display }}</strong>{% endif %}.
+          It reopens if the customer writes again.
+        </span>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reopen" />
+          <button class="btn btn-ghost btn-sm">Reopen</button>
+        </form>
       </div>
     </template>
   </section>
@@ -631,6 +644,14 @@
               <svg x-show="copied" x-cloak class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
             </button>
             {% else %}<span class="flex-1 text-gray-400">—</span>{% endif %}
+          </div>
+          <div class="cv-field">
+            <span class="cv-field-label">Customer since</span>
+            <span class="flex-1 truncate">{{ conversation.contact.first_seen|date:"j M Y" }}</span>
+          </div>
+          <div class="cv-field">
+            <span class="cv-field-label">Conversations</span>
+            <span class="flex-1 truncate">{{ conversation_count }}</span>
           </div>
           {% endwith %}
         </div>
@@ -701,6 +722,17 @@
         {% else %}
         <p class="text-sm text-gray-500">Not tracked yet.</p>
         {% endif %}
+      </div>
+      {% endif %}
+
+      {# Order #}
+      {% if "orders" in usable_features and open_order %}
+      <div class="cv-section">
+        <h2 class="cv-h">Open order</h2>
+        <a href="{% url 'commerce:detail' open_order.public_id %}" class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:tone-neutral-bg">
+          <span class="text-gray-600">{{ open_order.get_status_display }}</span>
+          <span class="font-medium text-accent">{{ open_order.currency }} {{ open_order.total }}</span>
+        </a>
       </div>
       {% endif %}
 

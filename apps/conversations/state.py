@@ -164,6 +164,23 @@ def calculate_response_time(conversation: Conversation) -> float | None:
     return None if reply is None else (reply - first_in).total_seconds()
 
 
+def calculate_resolution_seconds(conversation: Conversation) -> float | None:
+    """Seconds from the customer's first message to ``Conversation.closed_at``.
+
+    ``None`` while still open, or if — despite being closed — there's somehow
+    no customer message to measure from (never invented, same rule as
+    ``calculate_response_time``).
+    """
+    if conversation.closed_at is None:
+        return None
+    first_in = conversation.messages.aggregate(
+        first_in=Min("timestamp", filter=Q(direction=Message.Direction.INBOUND)),
+    )["first_in"]
+    if first_in is None:
+        return None
+    return (conversation.closed_at - first_in).total_seconds()
+
+
 def get_conversation_state(
     conversation: Conversation, now: datetime | None = None
 ) -> ConversationSnapshot:
@@ -285,6 +302,45 @@ def average_first_response_seconds(account, *, limit: int = 100) -> float | None
         .order_by("-last_any")
     )[:limit]
     samples = [s for c in candidates if (s := response_seconds_of(c)) is not None]
+    if not samples:
+        return None
+    return sum(samples) / len(samples)
+
+
+def with_resolution(qs):
+    """Annotate ``first_in`` (the fact :func:`resolution_seconds_of` needs
+    alongside the row's own ``closed_at``), so a list of conversations never
+    costs a query each."""
+    from django.db.models import OuterRef, Subquery
+
+    first_in = (
+        Message.objects.filter(
+            conversation=OuterRef("pk"), direction=Message.Direction.INBOUND
+        )
+        .order_by("timestamp", "id")
+        .values("timestamp")[:1]
+    )
+    return qs.annotate(first_in=Subquery(first_in))
+
+
+def resolution_seconds_of(annotated) -> float | None:
+    """``calculate_resolution_seconds`` for a conversation from :func:`with_resolution`."""
+    if annotated.closed_at is None or annotated.first_in is None:  # type: ignore[attr-defined]
+        return None
+    return (annotated.closed_at - annotated.first_in).total_seconds()  # type: ignore[attr-defined]
+
+
+def average_resolution_seconds(account, *, limit: int = 100) -> float | None:
+    """Average resolution time (seconds) over the most recently closed
+    conversations. Same "derived on demand, never invented" discipline as
+    :func:`average_first_response_seconds`.
+    """
+    candidates = with_resolution(
+        Conversation.objects.filter(account=account, closed_at__isnull=False).order_by(
+            "-closed_at"
+        )
+    )[:limit]
+    samples = [s for c in candidates if (s := resolution_seconds_of(c)) is not None]
     if not samples:
         return None
     return sum(samples) / len(samples)

@@ -209,6 +209,51 @@ def test_first_response_time(account):
 
 
 @pytest.mark.django_db
+def test_resolution_time(account):
+    from apps.conversations.state import calculate_resolution_seconds
+
+    c = convo(account, (IN, 60, "delivered"), (OUT, 55, "delivered"))
+    assert calculate_resolution_seconds(c) is None  # still open
+
+    c.closed_at = NOW - timedelta(minutes=10)
+    c.save(update_fields=["closed_at"])
+    # 60 minutes ago the customer wrote in; closed 10 minutes ago -> 50 minutes.
+    assert calculate_resolution_seconds(c) == 50 * 60
+
+    no_customer_message = convo(account, (OUT, 60, "delivered"))
+    no_customer_message.closed_at = NOW
+    no_customer_message.save(update_fields=["closed_at"])
+    assert calculate_resolution_seconds(no_customer_message) is None  # not invented
+
+
+@pytest.mark.django_db
+def test_average_resolution_seconds(account):
+    from apps.conversations.state import average_resolution_seconds
+
+    # 50 min and 30 min resolution times -> average 40 min = 2400s.
+    a = convo(account, (IN, 60, "delivered"))
+    a.closed_at = NOW - timedelta(minutes=10)
+    a.save(update_fields=["closed_at"])
+
+    b = convo(account, (IN, 60, "delivered"))
+    b.closed_at = NOW - timedelta(minutes=30)
+    b.save(update_fields=["closed_at"])
+
+    # Still open -- must not be counted or divide-by-zero the average.
+    convo(account, (IN, 10, "delivered"))
+
+    assert average_resolution_seconds(account) == pytest.approx(2400)
+
+
+@pytest.mark.django_db
+def test_average_resolution_seconds_none_when_nothing_closed_yet(account):
+    from apps.conversations.state import average_resolution_seconds
+
+    convo(account, (IN, 10, "delivered"))
+    assert average_resolution_seconds(account) is None
+
+
+@pytest.mark.django_db
 def test_average_first_response_seconds(account):
     # 5 min and 15 min response times -> average 10 min = 600s.
     convo(account, (IN, 60, "delivered"), (OUT, 55, "delivered"))

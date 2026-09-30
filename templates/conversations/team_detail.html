@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <p class="text-sm"><a href="{% url 'conversations:teams' %}" class="text-accent underline">Teams</a></p>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ team.name }}</h1>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-2">
+  <section>
+    <h2 class="font-semibold mb-3">Members</h2>
+    {% if members %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Name</th><th></th></tr></thead>
+        <tbody>
+          {% for user in members %}
+          <tr>
+            <td data-label="Name">{{ user.get_full_name|default:user.get_username }}</td>
+            <td>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove_member" />
+                <input type="hidden" name="user_id" value="{{ user.pk }}" />
+                <button class="btn btn-ghost btn-sm">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="users" title="No members yet" message="Add teammates below so routing has someone to give this team's conversations to." %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a member</h2>
+      {% if available %}
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_member" />
+        <div>
+          <label class="label" for="add-user">Teammate</label>
+          <select id="add-user" name="user_id" class="select" required>
+            {% for user in available %}
+            <option value="{{ user.pk }}">{{ user.get_full_name|default:user.get_username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm w-full">Add to team</button>
+      </form>
+      {% else %}
+      <p class="text-sm text-gray-500">Everyone on your account is already on this team.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

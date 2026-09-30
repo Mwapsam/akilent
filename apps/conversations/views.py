@@ -11,6 +11,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -18,9 +19,16 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from apps.accounts.models import Team
 from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
-from apps.conversations.models import Conversation, FollowUp, Message, SavedReply
+from apps.conversations.models import (
+    Conversation,
+    FollowUp,
+    Message,
+    RoutingRule,
+    SavedReply,
+)
 from apps.conversations.state import (
     OVERDUE_WAITING,
     ConversationState,
@@ -431,7 +439,14 @@ def conversation_detail(request, public_id: str):
             elif action == "mark_read":
                 conversation.mark_read()
             elif action == "close":
-                conversation.close()
+                resolution = request.POST.get("resolution", "")
+                if resolution and resolution not in Conversation.Resolution.values:
+                    raise ActionError("That's not a valid close reason.")
+                conversation.close(
+                    resolution=resolution, actor=f"user:{request.user.pk}"
+                )
+            elif action == "reopen":
+                conversation.reopen(actor=f"user:{request.user.pk}")
         except ActionError as exc:
             if _is_ajax(request):
                 return JsonResponse({"ok": False, "error": str(exc)}, status=400)
@@ -528,6 +543,29 @@ def conversation_detail(request, public_id: str):
     except Exception:
         pass  # crm app not installed/migrated — panel just won't show it
 
+    open_order = None
+    try:
+        from apps.commerce.models import Order
+
+        open_order = (
+            Order.objects.filter(
+                account=account,
+                contact=conversation.contact,
+                status__in=[Order.Status.PENDING, Order.Status.AWAITING_PAYMENT],
+            )
+            .order_by("-created_at")
+            .first()
+        )
+    except Exception:
+        pass  # commerce app not installed/migrated — panel just won't show it
+
+    # Cheap facts a support agent wants without leaving the conversation:
+    # how long this has been a customer, and whether this is a first
+    # contact or one of a longer history. Computed here, not stored.
+    conversation_count = Conversation.objects.filter(
+        account=account, contact=conversation.contact
+    ).count()
+
     try:
         from apps.automation.api import activity_for_contact
 
@@ -545,6 +583,8 @@ def conversation_detail(request, public_id: str):
         "notes": conversation.notes.select_related("author"),
         "open_lead": open_lead,
         "open_deal": open_deal,
+        "open_order": open_order,
+        "conversation_count": conversation_count,
         "approved_templates": approved_templates,
         "saved_replies": saved_replies,
         "open_followup": open_followup,
@@ -636,6 +676,149 @@ def saved_reply_delete(request, pk):
     reply.delete()
     messages.success(request, "Saved reply removed.")
     return redirect("conversations:saved_replies")
+
+
+@login_required
+def teams(request):
+    """B.2: organizational teams (Sales, Support, ...) that RoutingRules target.
+    Deliberately minimal — a name and a member roster, no per-team settings."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if not name:
+            messages.error(request, "A team needs a name.")
+        elif Team.objects.filter(account=account, name=name).exists():
+            messages.error(request, "A team with that name already exists.")
+        else:
+            Team.objects.create(account=account, name=name)
+            messages.success(request, "Team added.")
+        return redirect("conversations:teams")
+
+    team_list = (
+        Team.objects.filter(account=account)
+        .annotate(member_count=Count("members"))
+        .order_by("name")
+    )
+    return render(
+        request, "conversations/teams.html", {"account": account, "teams": team_list}
+    )
+
+
+@login_required
+def team_detail(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    team = get_object_or_404(Team, account=account, pk=pk)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        raw = request.POST.get("user_id", "")
+        user = _team_members(account).filter(pk=raw).first() if raw.isdigit() else None
+        if user is None:
+            messages.error(request, "That person isn't on your team.")
+        elif action == "add_member":
+            team.members.add(user)
+        elif action == "remove_member":
+            team.members.remove(user)
+        return redirect("conversations:team_detail", pk=team.pk)
+
+    current_members = team.members.all().order_by("first_name", "username")
+    available = _team_members(account).exclude(
+        pk__in=current_members.values_list("pk", flat=True)
+    )
+    return render(
+        request,
+        "conversations/team_detail.html",
+        {
+            "account": account,
+            "team": team,
+            "members": current_members,
+            "available": available,
+        },
+    )
+
+
+@login_required
+def routing_rules(request):
+    """B.2: which team a new conversation goes to. Deliberately a flat AND of a
+    handful of structured signals (see ``apps.conversations.routing``) — not a
+    rule builder — so the form below just checks the boxes that apply."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        team = Team.objects.filter(account=account, pk=request.POST.get("team")).first()
+        if not name or team is None:
+            messages.error(request, "A routing rule needs a name and a team.")
+        else:
+            conditions: dict = {}
+            channel = request.POST.get("channel", "").strip()
+            if channel:
+                conditions["channel"] = channel
+            tag = request.POST.get("tag", "").strip()
+            if tag:
+                conditions["tag"] = tag
+            for key in ("is_new_customer", "has_open_lead", "has_open_order"):
+                if request.POST.get(key):
+                    conditions[key] = True
+            try:
+                priority = int(request.POST.get("priority") or 0)
+            except ValueError:
+                priority = 0
+            RoutingRule.objects.create(
+                account=account,
+                name=name,
+                team=team,
+                conditions=conditions,
+                priority=priority,
+            )
+            messages.success(request, "Routing rule added.")
+        return redirect("conversations:routing_rules")
+
+    rules = (
+        RoutingRule.objects.filter(account=account)
+        .select_related("team")
+        .order_by("priority", "id")
+    )
+    return render(
+        request,
+        "conversations/routing_rules.html",
+        {
+            "account": account,
+            "rules": rules,
+            "teams": Team.objects.filter(account=account).order_by("name"),
+            "channel_choices": Conversation.Channel.choices,
+        },
+    )
+
+
+@login_required
+@require_POST
+def routing_rule_toggle(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    rule = get_object_or_404(RoutingRule, account=account, pk=pk)
+    rule.is_active = not rule.is_active
+    rule.save(update_fields=["is_active"])
+    return redirect("conversations:routing_rules")
+
+
+@login_required
+@require_POST
+def routing_rule_delete(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    rule = get_object_or_404(RoutingRule, account=account, pk=pk)
+    rule.delete()
+    messages.success(request, "Routing rule removed.")
+    return redirect("conversations:routing_rules")
 
 
 @login_required

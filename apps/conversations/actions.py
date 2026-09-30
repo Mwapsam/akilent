@@ -160,18 +160,26 @@ class AutoAssignConversationAction(Action):
 
     "Least busy" is the member with the fewest open conversations already assigned to them
     (ties go to whoever joined first), which spreads work fairly without remembering whose
-    turn it was. A conversation that already has an assignee is left alone unless ``force`` is
-    set, so a workflow never takes a customer away from the person already looking after them.
+    turn it was — the same simple mechanism doubles as B.2's "round-robin" once ``team``
+    scopes the candidates to one team's roster, rather than a second algorithm. A conversation
+    that already has an assignee is left alone unless ``force`` is set, so a workflow never
+    takes a customer away from the person already looking after them.
     """
 
     name = "auto_assign_conversation"
     scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
-        return {"required": ["conversation"], "optional": ["email", "force"]}
+        return {"required": ["conversation"], "optional": ["email", "force", "team"]}
 
     def execute(  # type: ignore[override]
-        self, context: dict, *, conversation, email: str = "", force: bool = False
+        self,
+        context: dict,
+        *,
+        conversation,
+        email: str = "",
+        force: bool = False,
+        team=None,
     ) -> dict:
         from django.db.models import Count
 
@@ -185,13 +193,12 @@ class AutoAssignConversationAction(Action):
                 "changed": False,
             }
 
-        members = list(
-            Membership.objects.filter(
-                account_id=conversation.account_id, user__is_active=True
-            )
-            .select_related("user")
-            .order_by("id")
+        members_qs = Membership.objects.filter(
+            account_id=conversation.account_id, user__is_active=True
         )
+        if team is not None:
+            members_qs = members_qs.filter(user__teams=team)
+        members = list(members_qs.select_related("user").order_by("id"))
         email = (email or "").strip()
         if email:
             chosen = next(
@@ -224,6 +231,53 @@ class AutoAssignConversationAction(Action):
             "conversation_id": conversation.id,
             "assigned_to_id": chosen.id,
             "changed": True,
+        }
+
+
+class RouteConversationAction(Action):
+    """Give a brand-new conversation to a team, then to an agent on that team —
+    the entry point Phase B.2 wires up on conversation creation.
+
+    Never raises for "no rule matched" or "team has nobody active": both are
+    valid, expected outcomes (team/unassigned, or fully unassigned) per the
+    fallback the plan calls out — a conversation must never disappear because
+    routing couldn't fully resolve it. The Unassigned inbox tab (optionally
+    narrowed to a team) is where it lands instead.
+    """
+
+    name = "route_conversation"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {"required": ["conversation"]}
+
+    def execute(self, context: dict, *, conversation) -> dict:  # type: ignore[override]
+        from apps.conversations.routing import match_team
+
+        team = match_team(conversation)
+        if team is None:
+            return {
+                "conversation_id": conversation.id,
+                "team_id": None,
+                "assigned_to_id": None,
+            }
+
+        conversation.set_team(team, actor="automation:route_conversation")
+        try:
+            result = run_action(
+                "auto_assign_conversation",
+                context,
+                conversation=conversation,
+                team=team,
+            )
+            assigned_to_id = result.get("assigned_to_id")
+        except ActionError:
+            # Team has nobody active right now — team/unassigned, not an error.
+            assigned_to_id = None
+        return {
+            "conversation_id": conversation.id,
+            "team_id": team.id,
+            "assigned_to_id": assigned_to_id,
         }
 
 
@@ -354,6 +408,7 @@ register(LookupCustomerAction())
 register(ReplyAction())
 register(AssignConversationAction())
 register(AutoAssignConversationAction())
+register(RouteConversationAction())
 register(AddInternalNoteAction())
 register(CreateFollowUpAction())
 register(CompleteFollowUpAction())

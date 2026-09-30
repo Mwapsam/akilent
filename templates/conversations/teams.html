@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Teams — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Teams</h1>
+  <p class="mt-1 text-sm text-gray-600">Organizational responsibility for a conversation — Sales, Support — kept separate from which agent owns it.</p>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2">
+    {% if teams %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Team</th><th>Members</th><th></th></tr></thead>
+        <tbody>
+          {% for team in teams %}
+          <tr>
+            <td data-label="Team">{{ team.name }}</td>
+            <td data-label="Members" class="text-gray-600">{{ team.member_count }}</td>
+            <td><a href="{% url 'conversations:team_detail' team.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="users" title="No teams yet" message="Add a team, then route conversations to it from Routing rules." %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a team</h2>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="team-name">Name</label>
+          <input id="team-name" name="name" class="input" placeholder="e.g. Sales" required />
+        </div>
+        <button class="btn btn-primary btn-sm w-full">Add team</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

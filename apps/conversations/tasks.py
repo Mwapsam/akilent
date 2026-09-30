@@ -19,6 +19,58 @@ def remind_missed_conversations() -> int:
 
 
 @shared_task(queue="celery")
+def escalate_overdue_conversations() -> dict:
+    """Every OPEN, still-waiting conversation past ``OVERDUE_WAITING`` gets one
+    ``conversation.escalated`` Event per waiting episode (Phase B.2). A still-
+    unassigned one also gets a fresh routing attempt — a team or agent may
+    have become available since the customer wrote in. An assigned one just
+    gets the Event for now: the notification mechanism beyond the audit
+    trail is deliberately out of scope until there's a real need for it.
+
+    Idempotent via ``emit_event``'s ``source_event_id`` (keyed on the
+    conversation and the exact ``last_in`` it's waiting on): a customer's
+    later message changes ``last_in`` and starts a new, escalatable episode;
+    re-running this task on the same episode escalates nothing twice.
+    """
+    from django.utils import timezone
+
+    from apps.conversations.models import Conversation
+    from apps.conversations.services import emit_event, route_new_conversation
+    from apps.conversations.state import OVERDUE_WAITING, unanswered_q, with_activity
+
+    now = timezone.now()
+    cutoff = now - OVERDUE_WAITING
+    overdue = with_activity(
+        Conversation.objects.filter(status=Conversation.Status.OPEN)
+    ).filter(unanswered_q(), last_in__lte=cutoff)
+
+    escalated = 0
+    for conversation in overdue.select_related("account"):
+        event = emit_event(
+            account=conversation.account,
+            type="conversation.escalated",
+            occurred_at=now,
+            source="conversations",
+            source_event_id=f"escalate:{conversation.pk}:{conversation.last_in.isoformat()}",
+            payload={
+                "conversation_id": conversation.public_id,
+                "assigned_to_id": conversation.assigned_to_id,
+                "assigned_team_id": conversation.assigned_team_id,
+            },
+            subject_type="conversation",
+            subject_id=str(conversation.pk),
+        )
+        if event is None:
+            continue  # already escalated this waiting episode
+        escalated += 1
+        if conversation.assigned_to_id is None:
+            route_new_conversation(conversation)
+    if escalated:
+        logger.warning("escalate_overdue_conversations: escalated=%s", escalated)
+    return {"escalated": escalated}
+
+
+@shared_task(queue="celery")
 def capture_benchmarks() -> int:
     """Measure each business's starting week and day-30 week once they've closed (``benchmarks``)."""
     from apps.conversations import benchmarks

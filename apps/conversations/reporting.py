@@ -166,6 +166,31 @@ def response(account, period: Period, rows: list[dict] | None = None) -> dict:
     }
 
 
+def resolution(account, period: Period) -> dict:
+    """How long a closed conversation took to resolve: median seconds from the
+    customer's first message to ``Conversation.closed_at``, for conversations
+    closed within the period. Complements ``response()`` — that's how fast the
+    first reply was, this is how long the whole thing took."""
+    from apps.conversations.state import resolution_seconds_of, with_resolution
+
+    closed = with_resolution(
+        Conversation.objects.filter(
+            account=account,
+            closed_at__isnull=False,
+            closed_at__gte=period.start,
+            closed_at__lt=period.end,
+        )
+    )
+    samples = [s for c in closed if (s := resolution_seconds_of(c)) is not None]
+    median_seconds = _median(samples)
+    return {
+        "resolved": len(samples),
+        "median_resolution_seconds": round(median_seconds)
+        if median_seconds is not None
+        else None,
+    }
+
+
 def recovery(account, period: Period) -> dict:
     """Missed conversations (recovery made a follow-up in the period) and what became of them.
 

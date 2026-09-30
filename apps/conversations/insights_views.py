@@ -82,6 +82,7 @@ def insights(request):
             "at_risk": reporting.at_risk(account, now),
             "starting_point": conversations_api.starting_point(account, now),
             "response": reporting.response(account, period, rows),
+            "resolution": reporting.resolution(account, period),
             "recovery": reporting.recovery(account, period),
             "followups": followup_completion(account, days=days, now=now),
             "peak_hours": peak_hours,

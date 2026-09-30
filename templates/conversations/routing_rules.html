@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Routing rules — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Routing rules</h1>
+  <p class="mt-1 text-sm text-gray-600">
+    A new conversation is checked against these, in priority order (lowest first); the first one that
+    matches decides its team. A rule with no conditions checked always matches — that's how to set a
+    default/catch-all team. Nothing matching leaves the conversation in
+    <a href="{% url 'conversations:inbox' %}?view=unassigned" class="text-accent underline">Unassigned</a>, not lost.
+  </p>
+</header>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2">
+    {% if rules %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Priority</th><th>Rule</th><th>Team</th><th>Conditions</th><th></th></tr></thead>
+        <tbody>
+          {% for rule in rules %}
+          <tr>
+            <td data-label="Priority">{{ rule.priority }}</td>
+            <td data-label="Rule">
+              {{ rule.name }}
+              {% if not rule.is_active %}<span class="badge badge-neutral">Off</span>{% endif %}
+            </td>
+            <td data-label="Team">{{ rule.team.name }}</td>
+            <td data-label="Conditions" class="text-gray-600 text-sm">
+              {% if rule.conditions %}
+                {% for key, value in rule.conditions.items %}{{ key }}={{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              {% else %}
+                <em>always (default)</em>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap">
+              <form method="post" action="{% url 'conversations:routing_rule_toggle' rule.pk %}" class="inline">
+                {% csrf_token %}
+                <button class="btn btn-ghost btn-sm">{% if rule.is_active %}Turn off{% else %}Turn on{% endif %}</button>
+              </form>
+              <form method="post" action="{% url 'conversations:routing_rule_delete' rule.pk %}" class="inline"
+                    onsubmit="return confirm('Delete this routing rule?');">
+                {% csrf_token %}
+                <button class="btn btn-ghost btn-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">
+      {% include "components/empty_state.html" with icon="workflow" title="No routing rules yet" message="Without one, every new conversation lands Unassigned for someone to pick up." %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-semibold mb-3">Add a routing rule</h2>
+      {% if teams %}
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="rule-name">Name</label>
+          <input id="rule-name" name="name" class="input" placeholder="e.g. Order questions" required />
+        </div>
+        <div>
+          <label class="label" for="rule-team">Team</label>
+          <select id="rule-team" name="team" class="select" required>
+            {% for team in teams %}
+            <option value="{{ team.pk }}">{{ team.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="rule-priority">Priority</label>
+          <input id="rule-priority" name="priority" type="number" class="input" value="0" />
+          <p class="mt-1 text-xs text-gray-500">Lower runs first.</p>
+        </div>
+        <fieldset class="space-y-2">
+          <legend class="label">Conditions (leave all blank/unchecked for a default/catch-all rule)</legend>
+          <div>
+            <label class="label" for="rule-channel">Channel</label>
+            <select id="rule-channel" name="channel" class="select">
+              <option value="">Any channel</option>
+              {% for value, label in channel_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="rule-tag">Contact tag</label>
+            <input id="rule-tag" name="tag" class="input" placeholder="e.g. vip" />
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="is_new_customer" value="1" /> First-time customer
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="has_open_lead" value="1" /> Has an open lead
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="has_open_order" value="1" /> Has an open order
+          </label>
+        </fieldset>
+        <button class="btn btn-primary btn-sm w-full">Add rule</button>
+      </form>
+      {% else %}
+      <p class="text-sm text-gray-500">Add a <a href="{% url 'conversations:teams' %}" class="text-accent underline">team</a> first — a rule needs somewhere to route to.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

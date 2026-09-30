@@ -139,6 +139,30 @@ class Membership(models.Model):
         return f"{self.user} -> {self.account} ({self.role})"
 
 
+class Team(models.Model):
+    """An organizational routing bucket (e.g. Sales, Support) — deliberately
+    independent of ``Conversation.assigned_to``: a conversation can carry
+    team responsibility (routed) before, or without, an individual agent
+    (staffed). A user can belong to more than one team.
+    """
+
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="teams")
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(User, related_name="teams", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "name"], name="unique_team_name_per_account"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.account})"
+
+
 class Invitation(models.Model):
     """A pending invitation for someone to join an ``Account`` with a role.
 
