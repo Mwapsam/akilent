@@ -650,6 +650,9 @@ if WHATSAPP_ENABLED:
             "apps.whatsapp.tasks.process_whatsapp_event": {"queue": "whatsapp"},
             "apps.whatsapp.tasks.drain_outbound_queue": {"queue": "outbound"},
             "apps.whatsapp.tasks.mark_read": {"queue": "whatsapp"},
+            "apps.whatsapp.tasks.sweep_stuck_whatsapp_campaigns": {
+                "queue": "campaigns"
+            },
         }
     )
     CELERY_BEAT_SCHEDULE.update(
@@ -673,6 +676,10 @@ if WHATSAPP_ENABLED:
             "alert-on-whatsapp-failure-spike": {
                 "task": "apps.whatsapp.tasks.alert_on_whatsapp_failure_spike",
                 "schedule": 900.0,  # every 15 min
+            },
+            "sweep-stuck-whatsapp-campaigns": {
+                "task": "apps.whatsapp.tasks.sweep_stuck_whatsapp_campaigns",
+                "schedule": 900.0,  # every 15 min, mirrors retry-held-email-recipients
             },
         }
     )

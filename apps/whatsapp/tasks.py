@@ -19,6 +19,8 @@ from apps.whatsapp.models import (
     MessageTemplate,
     OutboundMessage,
     WebhookEventLog,
+    WhatsAppCampaign,
+    WhatsAppCampaignRecipient,
     WhatsAppContact,
 )
 from apps.whatsapp.models.contact import normalize_phone
@@ -1423,3 +1425,48 @@ def sync_templates() -> dict:
     if synced or errors:
         logger.info("sync_templates: synced=%s errors=%s", synced, errors)
     return {"synced": synced, "errors": errors}
+
+
+_STUCK_CAMPAIGN_THRESHOLD = timedelta(minutes=20)
+
+
+@shared_task
+def sweep_stuck_whatsapp_campaigns() -> dict:
+    """Re-enqueue a campaign whose chunk chain has gone quiet.
+
+    ``apps.whatsapp.campaigns.send_campaign`` re-enqueues itself via
+    ``transaction.on_commit`` after every chunk — normally nothing needs to
+    kick it again. But that self-rescheduling is only as durable as the one
+    ``.delay()`` call that carries it forward: if that message is dropped
+    (broker hiccup, worker killed between commit and enqueue), a campaign is
+    left in SENDING with PENDING recipients and nothing left to process them.
+    ``WhatsAppCampaign.last_progress_at`` is the signal — updated by every
+    successful chunk, so "stale" only means "no chunk has landed recently",
+    never "the list is just big" (a big list keeps re-touching it every
+    chunk). Also covers the campaign that never got its very first chunk at
+    all — its initial ``.delay()`` from ``create_and_queue_campaign`` lost —
+    which leaves it in QUEUED with ``last_progress_at`` still unset. Mirrors
+    ``apps.email.tasks.retry_held_email_recipients``' role for the email side.
+    """
+    cutoff = timezone.now() - _STUCK_CAMPAIGN_THRESHOLD
+    stuck = WhatsAppCampaign.objects.filter(
+        Q(
+            status=WhatsAppCampaign.Status.SENDING,
+            last_progress_at__lt=cutoff,
+        )
+        | Q(
+            status=WhatsAppCampaign.Status.QUEUED,
+            created_at__lt=cutoff,
+        )
+    ).filter(recipients__status=WhatsAppCampaignRecipient.Status.PENDING)
+
+    resumed = 0
+    for campaign_id in stuck.values_list("id", flat=True).distinct():
+        from apps.whatsapp.campaigns import send_campaign
+
+        send_campaign.delay(campaign_id)
+        resumed += 1
+
+    if resumed:
+        logger.warning("sweep_stuck_whatsapp_campaigns: resumed=%s", resumed)
+    return {"resumed": resumed}

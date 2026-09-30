@@ -157,6 +157,11 @@ def send_campaign(self, campaign_id: int) -> None:
                 campaign=campaign, status=_Status.PENDING
             ).exists()
         else:
+            # Record progress before doing the work: if this chunk fails partway
+            # through, the atomic block rolls this back too, so a stuck sweeper
+            # re-check still sees the last *successful* chunk's timestamp.
+            campaign.touch_progress()
+
             # One query for every WhatsAppContact this chunk needs, not one per recipient.
             wa_by_contact = {
                 wc.contact_id: wc
@@ -194,6 +199,12 @@ def send_campaign(self, campaign_id: int) -> None:
             # fetched once already via select_related) and bulk_create them,
             # instead of N calls into send_whatsapp_message (which re-fetches
             # the template every time).
+            #
+            # idempotency_key is deterministic (campaign+recipient), not a
+            # random uuid: dedup here doesn't rely solely on select_for_update
+            # only ever claiming PENDING rows — the DB's partial unique
+            # constraint on (account, idempotency_key) is a second, independent
+            # guard if a recipient is ever handed to this branch twice.
             outbound_rows = [
                 OutboundMessage(
                     account=campaign.account,
@@ -202,8 +213,9 @@ def send_campaign(self, campaign_id: int) -> None:
                     payload=_build_template_payload(
                         campaign.template, params, sent_by="campaign"
                     ),
+                    idempotency_key=f"campaign:{campaign.id}:recipient:{r.id}",
                 )
-                for _r, wc, params in to_create
+                for r, wc, params in to_create
             ]
             created = OutboundMessage.objects.bulk_create(outbound_rows)
             for (r, _wc, _params), msg in zip(to_create, created):

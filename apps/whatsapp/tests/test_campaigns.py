@@ -2,6 +2,7 @@
 WhatsAppCampaignRecipient. See apps.whatsapp.models.campaign and the plan doc
 for the processing-vs-delivery split these tests pin."""
 
+import threading
 from unittest import mock
 
 import pytest
@@ -221,6 +222,36 @@ def test_restart_only_touches_pending_rows(account, approved_template):
     assert not WhatsAppCampaignRecipient.objects.filter(
         campaign=campaign, status=_Status.PENDING
     ).exists()
+
+
+@pytest.mark.django_db
+def test_outbound_messages_get_a_deterministic_campaign_recipient_idempotency_key(
+    account, approved_template
+):
+    contact_list = ContactList.objects.create(account=account, name="Three")
+    for i in range(3):
+        contact_list.contacts.add(_opted_in_contact(account, i))
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+
+    keys = list(
+        OutboundMessage.objects.filter(account=account)
+        .order_by("id")
+        .values_list("idempotency_key", flat=True)
+    )
+    assert len(keys) == 3
+    assert len(set(keys)) == 3  # unique per recipient, not shared/blank
+    recipient = WhatsAppCampaignRecipient.objects.filter(campaign=campaign).first()
+    assert (
+        recipient.message.idempotency_key
+        == f"campaign:{campaign.id}:recipient:{recipient.id}"
+    )
 
 
 @pytest.mark.django_db
@@ -513,3 +544,222 @@ def _make_conversation(wa_contact):
     from apps.whatsapp.models import Conversation
 
     return Conversation.objects.create(account=wa_contact.account, contact=wa_contact)
+
+
+# --- Category routing regression: campaign-created OutboundMessage rows ---
+# --- must carry the template's Meta category through to the provider, so
+# --- marketing sends hit /marketing_messages and utility sends hit /messages
+# --- (apps.whatsapp.providers.meta.MetaCloudAPIProvider.send_template). This
+# --- pins apps.automation.workflows._build_template_payload's `_category`
+# --- field end-to-end from campaign send through drain_outbound_queue.
+
+
+@pytest.fixture
+def business_number(account):
+    from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
+
+    return WhatsAppBusinessNumber.objects.create(
+        account=account,
+        phone_number_id="123456789",
+        waba_id="waba_123",
+        access_token="tok",
+        is_active=True,
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("category", "expected"),
+    [
+        (MessageTemplate.Category.MARKETING, "marketing"),
+        (MessageTemplate.Category.UTILITY, "utility"),
+    ],
+)
+def test_campaign_send_propagates_template_category_to_provider(
+    account, business_number, category, expected
+):
+    from apps.whatsapp.tasks import drain_outbound_queue
+
+    template = MessageTemplate.objects.create(
+        account=account,
+        name="Promo" if category == MessageTemplate.Category.MARKETING else "OTP",
+        whatsapp_template_name="promo",
+        content="Hi {{1}}",
+        variables=["name"],
+        category=category,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    contact_list = ContactList.objects.create(account=account, name="List")
+    contact_list.contacts.add(_opted_in_contact(account, 1))
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list,
+        template_id=template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+
+    calls = []
+
+    class _RecordingProvider:
+        def send_template(self, to, name, language, components, category=""):
+            calls.append(category)
+            from apps.whatsapp.types import SendResult
+
+            return SendResult(message_id="wamid.OUT", success=True)
+
+    with mock.patch(
+        "apps.whatsapp.tasks._get_provider_for_account",
+        return_value=_RecordingProvider(),
+    ):
+        drain_outbound_queue()
+
+    assert calls == [expected]
+
+
+# --- Concurrency hardening --------------------------------------------------
+# Real multi-connection proof that select_for_update() prevents two workers
+# from double-claiming the same chunk of PENDING recipients. SQLite serialises
+# writes at the process level so it can't exercise this race — same skip
+# rationale as apps.billing.tests.test_metering's concurrent-reservation test.
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(
+    connection.vendor == "sqlite",
+    reason="SQLite serialises writes; no cross-connection race to exercise",
+)
+def test_concurrent_send_campaign_calls_never_double_claim_a_recipient():
+    account = Account.objects.create(company_name="Acme")
+    template = MessageTemplate.objects.create(
+        account=account,
+        name="Promo",
+        whatsapp_template_name="promo",
+        content="Hi {{1}}",
+        variables=["name"],
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    contact_list = ContactList.objects.create(account=account, name="Many")
+    for i in range(20):
+        contact_list.contacts.add(_opted_in_contact(account, i))
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list,
+        template_id=template.id,
+        variable_mapping={"name": "Hi"},
+    )
+
+    errors = []
+
+    def go():
+        from django.db import connection as conn
+
+        try:
+            with mock.patch.object(campaigns, "_CAMPAIGN_CHUNK_SIZE", 6):
+                send_campaign.run(campaign.id)
+        except Exception as exc:  # pragma: no cover - surfaced via `errors`
+            errors.append(exc)
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=go) for _ in range(4)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+
+    assert not errors
+    # Every recipient must be claimed by exactly one OutboundMessage — no
+    # recipient double-processed, none left unclaimed once all threads settle.
+    recipients = list(WhatsAppCampaignRecipient.objects.filter(campaign=campaign))
+    assert len(recipients) == 20
+    assert all(r.status == _Status.QUEUED for r in recipients)
+    assert OutboundMessage.objects.filter(account=account).count() == 20
+    message_ids = [r.message_id for r in recipients]
+    assert len(message_ids) == len(
+        set(message_ids)
+    )  # no message shared across recipients
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(
+    connection.vendor == "sqlite",
+    reason="SQLite serialises writes; no cross-connection race to exercise",
+)
+def test_increment_counts_is_correct_under_concurrent_writers():
+    account = Account.objects.create(company_name="Acme")
+    template = MessageTemplate.objects.create(
+        account=account,
+        name="Promo",
+        whatsapp_template_name="promo",
+        content="Hi",
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    contact_list = ContactList.objects.create(account=account, name="X")
+    contact_list.contacts.add(_opted_in_contact(account, 1))
+    campaign = WhatsAppCampaign.objects.create(
+        account=account,
+        name="X",
+        contact_list=contact_list,
+        template=template,
+        recipient_count=0,
+    )
+
+    def go():
+        from django.db import connection as conn
+
+        WhatsAppCampaign.objects.get(pk=campaign.pk).increment_counts(
+            queued=3, skipped=1
+        )
+        conn.close()
+
+    threads = [threading.Thread(target=go) for _ in range(10)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+
+    campaign.refresh_from_db()
+    assert campaign.queued_count == 30
+    assert campaign.skipped_count == 10
+
+
+# --- Mid-transaction failure: a chunk that raises before commit must leave --
+# --- PENDING rows exactly as they were (no partial OutboundMessage without a
+# --- matching recipient update) — restart-safety under an in-process crash,
+# --- not just a sequential re-run.
+
+
+@pytest.mark.django_db
+def test_failure_mid_chunk_leaves_pending_rows_and_no_orphan_outbound_message(
+    account, approved_template
+):
+    contact_list = ContactList.objects.create(account=account, name="Five")
+    for i in range(5):
+        contact_list.contacts.add(_opted_in_contact(account, i))
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+
+    with mock.patch.object(
+        OutboundMessage.objects, "bulk_create", side_effect=RuntimeError("boom")
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            send_campaign.run(campaign.id)
+
+    # The atomic block rolled back: nothing was claimed, nothing partially written.
+    assert (
+        WhatsAppCampaignRecipient.objects.filter(
+            campaign=campaign, status=_Status.PENDING
+        ).count()
+        == 5
+    )
+    assert not OutboundMessage.objects.filter(account=account).exists()
+
+    # Restart-safe: a clean re-run (no injected failure) processes normally.
+    send_campaign.run(campaign.id)
+    campaign.refresh_from_db()
+    assert campaign.status == WhatsAppCampaign.Status.COMPLETED
+    assert campaign.queued_count == 5

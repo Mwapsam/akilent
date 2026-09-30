@@ -64,6 +64,11 @@ class WhatsAppCampaign(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
+    # Touched every time send_campaign claims/dispatches a chunk for this
+    # campaign — the signal apps.whatsapp.tasks.sweep_stuck_campaigns uses to
+    # tell "still working, just a big list" from "the chunk chain died"
+    # (e.g. an on_commit-scheduled .delay() that never reached the broker).
+    last_progress_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -77,6 +82,10 @@ class WhatsAppCampaign(models.Model):
             if self.started_at is None:
                 self.started_at = timezone.now()
             self.save(update_fields=["status", "started_at"])
+
+    def touch_progress(self) -> None:
+        self.last_progress_at = timezone.now()
+        self.save(update_fields=["last_progress_at"])
 
     def mark_completed(self) -> None:
         self.status = self.Status.COMPLETED
