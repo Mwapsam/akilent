@@ -133,6 +133,31 @@ def test_inactive_24h_is_closed_and_outbound_never_resets_the_clock(account):
 
 
 @pytest.mark.django_db
+def test_overdue_fires_past_the_threshold_but_before_missed(account):
+    from apps.conversations.state import OVERDUE_WAITING
+
+    threshold_minutes = OVERDUE_WAITING.total_seconds() / 60
+    under = state(convo(account, (IN, threshold_minutes - 1, "delivered")))
+    assert under.state is S.WAITING_FOR_AGENT and not under.overdue
+
+    over = state(convo(account, (IN, threshold_minutes + 1, "delivered")))
+    assert over.state is S.WAITING_FOR_AGENT and over.overdue
+
+    # A missed (24h+) conversation is CLOSED, not WAITING_FOR_AGENT — overdue
+    # only describes the still-open, still-waiting case.
+    missed_convo = state(convo(account, (IN, DAY + 60, "delivered")))
+    assert missed_convo.missed and not missed_convo.overdue
+
+
+@pytest.mark.django_db
+def test_overdue_is_false_when_not_waiting(account):
+    replied = state(convo(account, (IN, 300, "delivered"), (OUT, 10, "delivered")))
+    assert not replied.overdue
+    no_messages = state(convo(account))
+    assert not no_messages.overdue
+
+
+@pytest.mark.django_db
 def test_missed_flags_unanswered_open_conversations_past_24h(account):
     unanswered = state(convo(account, (IN, DAY + 60, "delivered")))
     assert unanswered.state is S.CLOSED and unanswered.missed

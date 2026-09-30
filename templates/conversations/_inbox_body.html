@@ -91,11 +91,18 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
           {% comment %}While the customer is waiting, the time is how long they
           have been waiting — the inbox's own question — so it carries the
           "waiting" signal itself, in amber with a clock, rather than
-          repeating it in a badge.{% endcomment %}
+          repeating it in a badge. Past OVERDUE_WAITING it escalates to red,
+          well before the 24h "Missed" badge fires.{% endcomment %}
           {% if c.is_waiting %}
+            {% if c.snapshot.overdue %}
+            {% include "components/icon.html" with name="clock" class="w-3.5 h-3.5 inbox-when-icon is-overdue" %}<span class="sr-only">Waiting, overdue</span>
+            <time class="inbox-time is-overdue" datetime="{{ c.snapshot.last_customer_message_at|date:'c' }}"
+                  title="Waiting since {{ c.snapshot.last_customer_message_at|date:'j M Y, H:i' }} — overdue">{{ c.snapshot.last_customer_message_at|ago:now }}</time>
+            {% else %}
             {% include "components/icon.html" with name="clock" class="w-3.5 h-3.5 inbox-when-icon" %}<span class="sr-only">Waiting</span>
             <time class="inbox-time is-urgent" datetime="{{ c.snapshot.last_customer_message_at|date:'c' }}"
                   title="Waiting since {{ c.snapshot.last_customer_message_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_customer_message_at|ago:now }}</time>
+            {% endif %}
           {% elif c.snapshot.last_activity_at %}
             <time class="inbox-time" datetime="{{ c.snapshot.last_activity_at|date:'c' }}"
                   title="{{ c.snapshot.last_activity_at|date:'j M Y, H:i' }}">{{ c.snapshot.last_activity_at|ago:now }}</time>

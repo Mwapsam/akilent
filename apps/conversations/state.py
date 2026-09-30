@@ -55,6 +55,13 @@ from apps.conversations.models import Conversation, Message
 INACTIVITY_WINDOW = timedelta(hours=24)
 RESPONSE_STATUSES = ("sent", "delivered", "read")
 
+# A waiting customer crosses from "urgent" (amber) to "overdue" (red) here — a
+# tighter, actionable warning well before INACTIVITY_WINDOW's 24h auto-close/
+# "missed" ceiling. Fixed for now, not a per-account setting: see the plan doc
+# before adding one, so it doesn't get reinvented per feature that wants a
+# response-time threshold.
+OVERDUE_WAITING = timedelta(hours=2)
+
 
 class ConversationState(StrEnum):
     WAITING_FOR_AGENT = "waiting_for_agent"
@@ -80,6 +87,17 @@ class ConversationSnapshot:
     @property
     def needs_attention(self) -> bool:
         return self.state is ConversationState.WAITING_FOR_AGENT
+
+    @property
+    def overdue(self) -> bool:
+        """Waiting long enough to escalate past the plain "urgent" styling.
+
+        Deliberately a stricter subset of ``needs_attention`` — every overdue
+        conversation needs attention, but most waiting conversations are still
+        within a normal response window. ``missed`` conversations (24h+) are
+        always overdue too; this just fires earlier.
+        """
+        return self.waiting_age is not None and self.waiting_age >= OVERDUE_WAITING
 
 
 def _customer_spoke_last(last_in, last_out) -> bool:

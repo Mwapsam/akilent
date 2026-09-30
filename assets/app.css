@@ -680,9 +680,13 @@
   .inbox-when { grid-area: when; @apply flex items-center gap-1.5 justify-self-end; }
   .inbox-time { @apply text-xs tabular-nums text-gray-500 whitespace-nowrap; }
   /* The wait is the inbox's whole question, so the time carries it — amber,
-     with a clock — instead of a separate "Waiting" badge. */
+     with a clock — instead of a separate "Waiting" badge. Past
+     conversations.state.OVERDUE_WAITING it escalates to coral (red), the
+     same tone as the "Missed" badge, well before that 24h ceiling fires. */
   .inbox-time.is-urgent { @apply font-semibold; color: var(--tone-amber-fg); }
+  .inbox-time.is-overdue { @apply font-semibold; color: var(--tone-coral-fg); }
   .inbox-when-icon { color: var(--tone-amber-fg); }
+  .inbox-when-icon.is-overdue { color: var(--tone-coral-fg); }
   /* Unread is the accent, not amber: amber already means "waiting", and a
      row that was both showed two amber marks side by side. */
   .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full; background-color: var(--color-accent); }

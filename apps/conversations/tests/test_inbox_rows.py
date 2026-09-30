@@ -134,10 +134,18 @@ class TestRows:
 
     def test_a_waiting_row_times_the_wait_and_marks_it_urgent(self, logged_in):
         client, account, _ = logged_in
-        _conversation(account, first="Chanda", waited=timedelta(hours=5))
+        _conversation(account, first="Chanda", waited=timedelta(hours=1))
         body = _inbox(client, "needs_attention")
         assert 'class="inbox-time is-urgent"' in body
         assert "Waiting since" in body, "the precise time must still be one hover away"
+
+    def test_a_long_waiting_row_escalates_to_overdue(self, logged_in):
+        client, account, _ = logged_in
+        _conversation(account, first="Chanda", waited=timedelta(hours=5))
+        body = _inbox(client, "needs_attention")
+        assert 'class="inbox-time is-overdue"' in body
+        assert "is-urgent" not in body
+        assert "overdue" in body, "the precise time's tooltip must say so"
 
     def test_a_conversation_assigned_to_you_says_you(self, logged_in):
         client, account, user = logged_in
