@@ -277,3 +277,77 @@ class BusinessProfile(models.Model):
 
     def __str__(self):
         return f"Business profile for {self.account_id}"
+
+
+class BusinessContext(models.Model):
+    """Who the business is — strategic identity, model, goals, and capability profile.
+
+    Distinct from BusinessProfile (self-reported facts) and BusinessKnowledge (AI retrieval
+    content). BusinessContext drives insight generation and workspace personalisation:
+    which features to surface, how to order the dashboard, what objectives to measure against.
+
+    ``capability_profile`` maps each selected objective key to the feature keys Akilent
+    recommends for it. It evolves: when a new insight fires, the engine can add a new
+    objective and its associated features without re-running onboarding.
+    """
+
+    class BusinessModel(models.TextChoices):
+        B2C = "b2c", "B2C (direct to consumer)"
+        B2B = "b2b", "B2B (business to business)"
+        BOTH = "both", "Both"
+
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name="business_context"
+    )
+    business_model = models.CharField(
+        max_length=4,
+        choices=BusinessModel.choices,
+        blank=True,
+        default="",
+    )
+    # e.g. ["whatsapp", "email", "walk_in", "phone"]
+    customer_channels = models.JSONField(default=list, blank=True)
+    # Ordered list of objective keys the business has selected or accepted from insights.
+    # Valid keys are defined in apps.accounts.context.OBJECTIVES.
+    objectives = models.JSONField(default=list, blank=True)
+    # Maps each objective key → list of feature keys Akilent recommends for it.
+    # Populated by context.activate_objective(); read by context.recommended_features().
+    capability_profile = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Context for {self.account_id}"
+
+
+class BusinessKnowledge(models.Model):
+    """What the business knows — the AI retrieval layer.
+
+    Distinct from BusinessContext (strategic identity) and BusinessProfile (operational facts).
+    AI reads this when answering product questions, objection-handling queries, and routing
+    decisions. Kept separate so it can be updated and retrieved independently of the
+    strategic layer — a product FAQ changes more often than a business's objectives.
+    """
+
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name="business_knowledge"
+    )
+    # Who is the ideal customer?
+    who_is_it_for = models.TextField(blank=True, default="")
+    # What problem does the product/service solve?
+    problem_solved = models.TextField(blank=True, default="")
+    # [{q: str, a: str}] — common inbound questions with prepared answers
+    common_questions = models.JSONField(default=list, blank=True)
+    # [{objection: str, response: str}] — sales objections and how to handle them
+    common_objections = models.JSONField(default=list, blank=True)
+    # Conditions a customer must meet to qualify (e.g. age, location, business type)
+    eligibility_rules = models.JSONField(default=dict, blank=True)
+    # Customer tags/segments this product is recommended for
+    recommended_for = models.JSONField(default=list, blank=True)
+    # [{q: str, a: str}] — account-level FAQs (not product-specific)
+    faqs = models.JSONField(default=list, blank=True)
+    # Geographic zones for delivery, keyed by zone name with details
+    delivery_zones = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Knowledge for {self.account_id}"
