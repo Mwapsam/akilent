@@ -48,13 +48,16 @@ def create_lead(
         account, contact, public_id=conversation_id
     )
     try:
-        lead = Lead.objects.create(
-            account=account,
-            contact=contact,
-            source=source,
-            owner=owner,
-            conversation=conversation,
-        )
+        with (
+            transaction.atomic()
+        ):  # savepoint so caller's transaction isn't aborted on failure
+            lead = Lead.objects.create(
+                account=account,
+                contact=contact,
+                source=source,
+                owner=owner,
+                conversation=conversation,
+            )
     except IntegrityError:
         # Concurrent create_lead: another worker won the race for the same contact.
         existing = Lead.objects.filter(

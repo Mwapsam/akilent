@@ -54,16 +54,33 @@ class TokenExpiryTest(TestCase):
         with patch(
             "apps.automation.integrations.whatsapp.mark_outbound_message_failed"
         ):
-            _notify_terminal_failure(msg)
+            _notify_terminal_failure(msg, phone_number_id=self.number.phone_number_id)
         self.number.refresh_from_db()
         self.assertTrue(self.number.token_expired)
+
+    def test_error_190_does_not_flag_unrelated_number(self):
+        # A second number on the same account must not be flagged when only the first fails.
+        other = WhatsAppBusinessNumber.objects.create(
+            account=self.account,
+            phone_number_id="PNID2",
+            access_token="tok2",
+            waba_id="W1",
+            registration_status=WhatsAppBusinessNumber.RegistrationStatus.REGISTERED,
+        )
+        msg = self._make_failed_msg("190")
+        with patch(
+            "apps.automation.integrations.whatsapp.mark_outbound_message_failed"
+        ):
+            _notify_terminal_failure(msg, phone_number_id=self.number.phone_number_id)
+        other.refresh_from_db()
+        self.assertFalse(other.token_expired)
 
     def test_other_error_does_not_set_token_expired(self):
         msg = self._make_failed_msg("131047")
         with patch(
             "apps.automation.integrations.whatsapp.mark_outbound_message_failed"
         ):
-            _notify_terminal_failure(msg)
+            _notify_terminal_failure(msg, phone_number_id=self.number.phone_number_id)
         self.number.refresh_from_db()
         self.assertFalse(self.number.token_expired)
 

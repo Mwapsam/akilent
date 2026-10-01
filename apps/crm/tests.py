@@ -29,12 +29,16 @@ class LeadConcurrentCreationTest(TestCase):
         # Simulate the race: the pre-check finds nothing, but the INSERT fails
         # because another worker already inserted. The service must recover by
         # returning the existing lead instead of raising.
-        from django.db import IntegrityError
+        # Run inside transaction.atomic() to reproduce the production call path
+        # (workflow_engine wraps in atomic); without it the aborted-transaction
+        # InternalError that PostgreSQL raises on the recovery query wouldn't surface.
+        from django.db import IntegrityError, transaction
 
         lead = create_lead(self.account, self.contact)
 
         with patch.object(Lead.objects, "create", side_effect=IntegrityError):
-            result = create_lead(self.account, self.contact)
+            with transaction.atomic():
+                result = create_lead(self.account, self.contact)
 
         assert result.pk == lead.pk
 

@@ -84,13 +84,16 @@ def process_whatsapp_event(self, event_id: int):
     # Guard against two workers processing the same event simultaneously
     # (broker duplicate delivery or a retry while the first attempt is still running).
     lock_key = f"wa_event_processing:{event_id}"
-    acquired = cache.add(lock_key, "1", timeout=120)
+    acquired = cache.add(lock_key, "1", timeout=300)
     if not acquired:
-        logger.debug(
-            "process_whatsapp_event: event %s already being processed, skipping",
+        # Another worker is processing this event — or a killed worker left the lock live.
+        # Retry with a short countdown so that after the lock expires (300s) the event is
+        # still processed; max_retries=10 covers the 300s window at 30s intervals.
+        logger.warning(
+            "process_whatsapp_event: event %s lock held; scheduling retry",
             event_id,
         )
-        return
+        raise self.retry(countdown=30, max_retries=10)
 
     try:
         event = WebhookEventLog.objects.get(pk=event_id)
@@ -866,7 +869,7 @@ def _throttle_for_account(account, cache: dict) -> None:
     )
 
 
-def _notify_terminal_failure(msg) -> None:
+def _notify_terminal_failure(msg, *, phone_number_id: str = "") -> None:
     """Tell any consumer outside apps.whatsapp that this send permanently failed.
 
     Only fires once ``mark_failed`` has actually landed the message in its
@@ -893,13 +896,24 @@ def _notify_terminal_failure(msg) -> None:
             msg.id,
         )
 
-    # Mark the account's WhatsApp number as having an expired token so the UI
-    # can surface a re-registration prompt instead of a generic degraded state.
+    # Mark the specific number whose token was rejected so the UI can surface a
+    # re-registration prompt. Narrows to the sending number when known to avoid
+    # flagging unrelated numbers on multi-number accounts.
     if msg.error_code == "190":
         try:
-            WhatsAppBusinessNumber.objects.filter(
-                account=msg.account, is_active=True
-            ).update(token_expired=True)
+            if phone_number_id:
+                WhatsAppBusinessNumber.objects.filter(
+                    account=msg.account, phone_number_id=phone_number_id
+                ).update(token_expired=True)
+            else:
+                logger.warning(
+                    "_notify_terminal_failure: phone_number_id unknown; "
+                    "marking all active numbers for account %s as token-expired",
+                    msg.account_id,
+                )
+                WhatsAppBusinessNumber.objects.filter(
+                    account=msg.account, is_active=True
+                ).update(token_expired=True)
         except Exception:
             logger.exception(
                 "_notify_terminal_failure: token_expired update failed for account %s",
@@ -1141,7 +1155,9 @@ def drain_outbound_queue():
                 )
                 project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
             verification_codes.forget_code(msg)
-            _notify_terminal_failure(msg)
+            _notify_terminal_failure(
+                msg, phone_number_id=getattr(provider, "phone_number_id", "")
+            )
             failed += 1
         except Exception as exc:
             if (
@@ -1164,7 +1180,9 @@ def drain_outbound_queue():
                 project_outbound_to_inbox(MessageLog.objects.get(pk=msg.message_log_id))
             if msg.status == OutboundMessage.Status.FAILED:
                 verification_codes.forget_code(msg)
-            _notify_terminal_failure(msg)
+            _notify_terminal_failure(
+                msg, phone_number_id=getattr(provider, "phone_number_id", "")
+            )
             failed += 1
 
     if sent or failed or held:
