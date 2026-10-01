@@ -116,11 +116,13 @@ def _question_text(question: dict) -> str:
 
 
 def start_form(conversation, form: ConversationForm) -> FormResponse:
-    """Begin ``form`` on ``conversation``: sends the first question and creates the
-    tracking row. Raises ``FormError`` if the form has no questions, or a
-    ``django.db.IntegrityError`` (via the model's constraint) if this conversation
-    already has a form in progress — callers should check first with
-    ``active_response_for``.
+    """Begin ``form`` on ``conversation``: creates the tracking row and sends
+    the first question (as plain text) or launches the WhatsApp Flow,
+    per ``form.presentation``. Raises ``FormError`` if the form has no
+    questions, or — for a Flow presentation — if it hasn't been published
+    yet. Raises a ``django.db.IntegrityError`` (via the model's constraint)
+    if this conversation already has a form in progress — callers should
+    check first with ``active_response_for``.
     """
     if not form.questions:
         raise FormError(f"{form.name!r} has no questions.")
@@ -130,12 +132,56 @@ def start_form(conversation, form: ConversationForm) -> FormResponse:
         conversation=conversation,
         contact=conversation.contact,
     )
-    _send(
-        conversation,
-        _question_text(form.questions[0]),
-        idempotency_key=f"form:{response.pk}:q0",
-    )
+    if form.presentation == ConversationForm.Presentation.WHATSAPP_FLOW:
+        _start_flow(conversation, form, response)
+    else:
+        _send(
+            conversation,
+            _question_text(form.questions[0]),
+            idempotency_key=f"form:{response.pk}:q0",
+        )
     return response
+
+
+def _start_flow(conversation, form: ConversationForm, response: FormResponse) -> None:
+    """Send the Flow-launch interactive message. Raises ``FormError`` if the
+    form's Flow isn't published yet — a business must publish before it can
+    be used, same idea as an unapproved MessageTemplate not being sendable.
+    """
+    import uuid
+
+    from apps.whatsapp import api as whatsapp_api
+
+    if form.flow_status != ConversationForm.FlowStatus.PUBLISHED or not form.flow_id:
+        raise FormError(
+            f"{form.name!r} is set to WhatsApp Flow but hasn't been published yet."
+        )
+    token = uuid.uuid4().hex
+    response.flow_token = token
+    response.save(update_fields=["flow_token"])
+
+    interactive = {
+        "type": "flow",
+        "body": {"text": form.name or "Please complete this form"},
+        "action": {
+            "name": "flow",
+            "parameters": {
+                "flow_message_version": "3",
+                "flow_token": token,
+                "flow_id": form.flow_id,
+                "flow_cta": "Start",
+                "flow_action": "navigate",
+                "flow_action_payload": {"screen": "FORM"},
+            },
+        },
+    }
+    wa_contact = conversation.whatsapp_conversation.contact
+    whatsapp_api.send_interactive(
+        conversation.account,
+        wa_contact,
+        interactive,
+        idempotency_key=f"form:{response.pk}:flow-launch",
+    )
 
 
 def active_response_for(conversation) -> FormResponse | None:
@@ -193,6 +239,15 @@ def record_answer(conversation, text: str) -> bool:
         )
         return True
 
+    _finish(response, conversation)
+    return True
+
+
+def _finish(response: FormResponse, conversation) -> None:
+    """Mark ``response`` completed, thank the customer, and emit
+    ``conversation.form_completed``. Shared by the last text-mode answer and
+    a one-shot Flow completion (``complete_from_flow``) — one completion
+    code path, not two."""
     response.status = FormResponse.Status.COMPLETED
     response.completed_at = timezone.now()
     response.save(update_fields=["answers", "current_index", "status", "completed_at"])
@@ -210,4 +265,46 @@ def record_answer(conversation, text: str) -> bool:
         subject_id=str(conversation.pk),
         payload={"form_id": response.form_id, "response_id": response.pk},
     )
+
+
+def complete_from_flow(conversation, flow_token: str, fields: dict) -> bool:
+    """A customer's ``nfm_reply`` completing a WhatsApp Flow form, applied in
+    one shot (no per-question retry loop — Meta's own UI already gated each
+    field's input type before letting the customer submit).
+
+    Returns True iff a matching in-progress ``FormResponse`` was found and
+    completed — False means nothing to do here (stale/duplicate reply, or
+    this conversation isn't mid a Flow-presentation form) and the caller
+    must not treat the message as consumed.
+
+    A field that still fails Akilent's own validation (rare — the Flow UI
+    already validated client-side) is skipped rather than failing the whole
+    completion: whatever validates is applied, the rest is simply not
+    stored/mapped.
+    """
+    if not flow_token:
+        return False
+    response = FormResponse.objects.filter(
+        conversation=conversation,
+        status=FormResponse.Status.IN_PROGRESS,
+        flow_token=flow_token,
+    ).first()
+    if response is None:
+        return False
+
+    answers = dict(response.answers)
+    for question in response.form.questions:
+        key = question.get("key", "")
+        if key not in fields:
+            continue
+        validator = _VALIDATORS.get(question.get("field_type", "text"), _validate_text)
+        value = validator(str(fields[key]))
+        if value is None:
+            continue
+        answers[key] = value
+        _apply_mapping(response.contact, question.get("maps_to", ""), value)
+
+    response.answers = answers
+    response.current_index = len(response.form.questions)
+    _finish(response, conversation)
     return True

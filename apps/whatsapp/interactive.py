@@ -32,7 +32,8 @@ class InteractiveError(ValueError):
 
 
 def extract_reply(message: dict) -> dict | None:
-    """The tapped option of an inbound interactive message, or None for anything else."""
+    """The tapped option — or, for a completed WhatsApp Flow, the submitted
+    fields — of an inbound interactive message, or None for anything else."""
     kind = message.get("type")
     if kind == "interactive":
         block = message.get("interactive") or {}
@@ -43,6 +44,26 @@ def extract_reply(message: dict) -> dict | None:
                 "id": reply.get("id") or "",
                 "title": reply.get("title") or "",
                 "kind": subtype,
+            }
+        if subtype == "nfm_reply":
+            # A completed static WhatsApp Flow: Meta echoes back every field the
+            # customer submitted, plus the flow_token this send was launched
+            # with, packed together as a JSON string in response_json.
+            import json
+
+            nfm = block.get("nfm_reply") or {}
+            try:
+                fields = json.loads(nfm.get("response_json") or "{}")
+            except ValueError:
+                fields = {}
+            if not isinstance(fields, dict):
+                fields = {}
+            return {
+                "id": "",
+                "title": nfm.get("body") or "",
+                "kind": "nfm_reply",
+                "flow_token": fields.pop("flow_token", ""),
+                "fields": fields,
             }
     elif kind == "button":  # a quick-reply button on a template the business sent
         button = message.get("button") or {}

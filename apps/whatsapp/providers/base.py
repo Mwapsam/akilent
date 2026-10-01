@@ -161,6 +161,38 @@ class WhatsAppProvider(ABC):
             f"{type(self).__name__} does not support template creation"
         )
 
+    def create_flow(self, waba_id: str, name: str, categories: list[str]) -> dict:
+        """Create a new, empty (draft, no screens yet) WhatsApp Flow against a WABA.
+
+        Optional capability. Returns Meta's raw response (carries the new
+        Flow's ``id``).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Flow creation"
+        )
+
+    def update_flow_json(self, flow_id: str, flow_json: dict) -> dict:
+        """Attach/replace a Flow's JSON definition (screens/components).
+
+        Optional capability. ``flow_json`` comes from
+        ``apps.conversations.flow_json.build``. Returns Meta's raw response,
+        which carries any validation errors for a malformed Flow JSON.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Flow JSON upload"
+        )
+
+    def publish_flow(self, flow_id: str) -> dict:
+        """Publish a Flow, making it sendable.
+
+        Optional capability. Raises ``WhatsAppProviderError`` if Meta's
+        validation rejects the Flow (e.g. unresolved validation errors) — the
+        message surfaces to the settings UI verbatim.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Flow publishing"
+        )
+
     def upload_media(
         self, content: bytes, mime_type: str, filename: str = "upload"
     ) -> MediaUploadResult:

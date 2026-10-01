@@ -93,4 +93,54 @@
     </div>
   </section>
 </div>
+
+<section class="mt-6 card card-pad">
+  <h2 class="font-semibold mb-3">Presentation</h2>
+  <form method="post" class="flex items-end gap-3 flex-wrap">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="set_presentation" />
+    <div>
+      <label class="label" for="presentation">How to send this form</label>
+      <select id="presentation" name="presentation" class="select">
+        <option value="text" {% if form.presentation == "text" %}selected{% endif %}>Plain text (one question at a time)</option>
+        <option value="whatsapp_flow" {% if form.presentation == "whatsapp_flow" %}selected{% endif %}>WhatsApp Flow (native in-chat UI)</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-sm">Save</button>
+  </form>
+
+  {% if form.presentation == "whatsapp_flow" %}
+  <div class="mt-4 border-t border-border pt-4">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <p class="text-sm font-medium">WhatsApp Flow status</p>
+        <p class="text-xs text-gray-500 mt-0.5">
+          {% if form.flow_status == "published" %}
+            <span class="badge badge-success">Published</span>
+            {% if form.flow_published_at %}&nbsp;on {{ form.flow_published_at|date:"N j, Y" }}{% endif %}
+          {% elif form.flow_status == "needs_republish" %}
+            <span class="badge badge-warning">Questions changed — republish needed</span>
+          {% elif form.flow_status == "draft" %}
+            <span class="badge badge-neutral">Draft on Meta (not yet published)</span>
+          {% elif form.flow_status == "error" %}
+            <span class="badge badge-error">Error</span>
+          {% else %}
+            <span class="badge badge-neutral">Not created on Meta yet</span>
+          {% endif %}
+        </p>
+        {% if form.flow_error %}
+        <p class="text-xs text-error mt-1">{{ form.flow_error }}</p>
+        {% endif %}
+      </div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="publish_flow" />
+        <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>
+          {% if form.flow_status == "not_created" %}Create &amp; Publish Flow{% elif form.flow_status == "needs_republish" %}Republish Flow{% else %}Publish Flow{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

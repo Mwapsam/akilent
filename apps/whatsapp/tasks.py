@@ -1401,6 +1401,73 @@ def sync_templates_for_account(account) -> dict:
     return {"synced": synced, "errors": errors}
 
 
+def publish_conversation_flow(form) -> None:
+    """Create (if needed), upload, and publish a ``ConversationForm``'s WhatsApp
+    Flow. Public, synchronous entry point (not a Celery task) for the "Publish
+    to WhatsApp" button — mirrors ``sync_templates_for_account``'s shape: a
+    bounded number of Meta API calls a business owner is deliberately
+    triggering, so an immediate result is what they need, not a queue.
+
+    Writes the result straight onto ``form`` (``flow_id``/``flow_status``/
+    ``flow_json_hash``/``flow_error``/``flow_published_at``) and saves it —
+    Meta's own publish response is the source of truth, no separate webhook
+    sync needed.
+    """
+    from apps.conversations.flow_json import build, content_hash
+    from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
+
+    number = (
+        WhatsAppBusinessNumber.objects.filter(account=form.account, is_active=True)
+        .exclude(waba_id__isnull=True)
+        .exclude(waba_id="")
+        .first()
+    )
+    if number is None:
+        form.flow_status = form.FlowStatus.ERROR
+        form.flow_error = "No connected WhatsApp number for this account."
+        form.save(update_fields=["flow_status", "flow_error", "updated_at"])
+        return
+
+    assert number.waba_id  # queryset excludes null/empty; narrow for mypy
+    waba_id: str = number.waba_id
+
+    try:
+        flow_json = build(form.questions)
+    except ValueError as exc:
+        form.flow_status = form.FlowStatus.ERROR
+        form.flow_error = str(exc)
+        form.save(update_fields=["flow_status", "flow_error", "updated_at"])
+        return
+
+    provider = get_whatsapp_provider(form.account)
+    try:
+        if not form.flow_id:
+            created = provider.create_flow(waba_id, form.name, ["OTHER"])
+            form.flow_id = created["id"]
+        provider.update_flow_json(form.flow_id, flow_json)
+        provider.publish_flow(form.flow_id)
+    except (WhatsAppProviderError, NotImplementedError, KeyError) as exc:
+        form.flow_status = form.FlowStatus.ERROR
+        form.flow_error = str(exc)
+        form.save(update_fields=["flow_id", "flow_status", "flow_error", "updated_at"])
+        return
+
+    form.flow_status = form.FlowStatus.PUBLISHED
+    form.flow_json_hash = content_hash(flow_json)
+    form.flow_error = ""
+    form.flow_published_at = timezone.now()
+    form.save(
+        update_fields=[
+            "flow_id",
+            "flow_status",
+            "flow_json_hash",
+            "flow_error",
+            "flow_published_at",
+            "updated_at",
+        ]
+    )
+
+
 @shared_task
 def sync_templates() -> dict:
     """Pull template approval status from Meta into local MessageTemplate rows,

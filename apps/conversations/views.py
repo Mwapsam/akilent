@@ -916,6 +916,7 @@ def form_detail(request, pk):
                     },
                 ]
                 form.save(update_fields=["questions", "updated_at"])
+                form.note_questions_changed()
                 messages.success(request, "Question added.")
         elif action == "remove_question":
             try:
@@ -925,6 +926,23 @@ def form_detail(request, pk):
             if 0 <= index < len(form.questions):
                 form.questions = [q for i, q in enumerate(form.questions) if i != index]
                 form.save(update_fields=["questions", "updated_at"])
+                form.note_questions_changed()
+        elif action == "set_presentation":
+            presentation = request.POST.get("presentation", "")
+            if presentation in ConversationForm.Presentation.values:
+                form.presentation = presentation
+                form.save(update_fields=["presentation", "updated_at"])
+        elif action == "publish_flow":
+            from apps.whatsapp.tasks import publish_conversation_flow
+
+            publish_conversation_flow(form)
+            form.refresh_from_db()
+            if form.flow_status == ConversationForm.FlowStatus.PUBLISHED:
+                messages.success(request, "WhatsApp Flow published successfully.")
+            else:
+                messages.error(
+                    request, f"Publish failed: {form.flow_error or 'unknown error'}"
+                )
         elif action == "set_status":
             status = request.POST.get("status", "")
             if status == ConversationForm.Status.PUBLISHED and not form.questions:

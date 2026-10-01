@@ -395,6 +395,23 @@ class ConversationForm(models.Model):
         PUBLISHED = "published", "Published"
         ARCHIVED = "archived", "Archived"
 
+    class Presentation(models.TextChoices):
+        TEXT = "text", "Plain text (one question at a time)"
+        WHATSAPP_FLOW = "whatsapp_flow", "WhatsApp Flow"
+
+    class FlowStatus(models.TextChoices):
+        """The Meta-side Flow object's own lifecycle — independent of ``status``
+        above, which is whether *this form* is usable at all. A form can be
+        Published (usable) while its Flow is still Draft/not yet created, if
+        ``presentation`` is TEXT; the Flow fields only matter once someone
+        switches presentation to WHATSAPP_FLOW."""
+
+        NOT_CREATED = "not_created", "Not created on Meta"
+        DRAFT = "draft", "Draft (not published)"
+        PUBLISHED = "published", "Published"
+        NEEDS_REPUBLISH = "needs_republish", "Questions changed since publish"
+        ERROR = "error", "Meta rejected the last publish attempt"
+
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="conversation_forms"
     )
@@ -403,6 +420,22 @@ class ConversationForm(models.Model):
         max_length=10, choices=Status.choices, default=Status.DRAFT
     )
     questions = models.JSONField(default=list, blank=True)
+    # How this form is rendered to the customer. A second presentation of the
+    # same question/validation/mapping definition above, not a second form —
+    # see apps.conversations.flow_json for the WhatsApp Flow renderer.
+    presentation = models.CharField(
+        max_length=15, choices=Presentation.choices, default=Presentation.TEXT
+    )
+    flow_id = models.CharField(max_length=50, blank=True, default="")
+    flow_status = models.CharField(
+        max_length=20, choices=FlowStatus.choices, default=FlowStatus.NOT_CREATED
+    )
+    # sha1 of the last-published Flow JSON (apps.conversations.flow_json.content_hash),
+    # so an edit to ``questions`` after publishing can be detected and flagged
+    # (see note_questions_changed) without polling Meta.
+    flow_json_hash = models.CharField(max_length=40, blank=True, default="")
+    flow_error = models.TextField(blank=True, default="")
+    flow_published_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -411,6 +444,24 @@ class ConversationForm(models.Model):
 
     def __str__(self):
         return self.name
+
+    def note_questions_changed(self) -> None:
+        """Call after mutating and saving ``questions``. Flags a previously
+        published Flow as needing republish if its content actually changed —
+        not just touched (e.g. a question removed and re-added identically
+        produces the same hash, so no spurious republish)."""
+        if self.presentation != self.Presentation.WHATSAPP_FLOW:
+            return
+        if self.flow_status != self.FlowStatus.PUBLISHED:
+            return
+        from apps.conversations.flow_json import build, content_hash
+
+        if not self.questions:
+            return
+        new_hash = content_hash(build(self.questions))
+        if new_hash != self.flow_json_hash:
+            self.flow_status = self.FlowStatus.NEEDS_REPUBLISH
+            self.save(update_fields=["flow_status", "updated_at"])
 
 
 class FormResponse(models.Model):
@@ -439,6 +490,11 @@ class FormResponse(models.Model):
     )
     current_index = models.IntegerField(default=0)
     answers = models.JSONField(default=dict, blank=True)
+    # Correlates an outbound WhatsApp Flow send to its eventual nfm_reply
+    # completion (Meta echoes this back inside response_json). Blank for a
+    # text-presentation response, where the conversation itself is enough to
+    # find "the" in-progress response.
+    flow_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(blank=True, null=True)
 

@@ -298,6 +298,18 @@ def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
         message["reply_id"] = reply["id"]
         message["reply_title"] = reply["title"]
 
+    # A completed WhatsApp Flow arrives as an nfm_reply interactive message.
+    # It must be handled before record_answer so the synthetic message body
+    # (whatever text Meta echoes back) is never treated as a stray text answer
+    # to whatever current_index a text-mode form might coincidentally be on.
+    if reply and reply.get("kind") == "nfm_reply":
+        if conversation_forms.complete_from_flow(
+            conversation,
+            reply.get("flow_token", ""),
+            reply.get("fields", {}),
+        ):
+            return True
+
     # A customer answering a form question must not also start or resume an
     # unrelated workflow, or reach AI as if it were a normal message — same
     # reasoning as the wait_for_reply check just below, checked first since a

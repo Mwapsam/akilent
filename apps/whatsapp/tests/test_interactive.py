@@ -46,7 +46,18 @@ TEMPLATE_BUTTON = {"type": "button", "button": {"payload": "yes", "text": "Yes p
             {"id": "yes", "title": "Yes please", "kind": "template_button"},
         ),
         ({"type": "text", "text": {"body": "hi"}}, None),
-        ({"type": "interactive", "interactive": {"type": "nfm_reply"}}, None),
+        # A bare nfm_reply with no body/response_json still counts as a completed
+        # Flow (empty fields, empty token) — callers receive it and decide what to do.
+        (
+            {"type": "interactive", "interactive": {"type": "nfm_reply"}},
+            {
+                "id": "",
+                "title": "",
+                "kind": "nfm_reply",
+                "flow_token": "",
+                "fields": {},
+            },
+        ),
         ({"type": "image"}, None),
     ],
 )
