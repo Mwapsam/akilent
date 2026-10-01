@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
@@ -168,7 +169,12 @@ def build_dismiss(request):
     if key.startswith(("intent:", "pattern:")):
         patterns.dismiss(account, key)
         messages.info(request, "Hidden for 30 days.")
-    return redirect(request.POST.get("next") or reverse("build:home") + "?step=3")
+    next_url = request.POST.get("next") or ""
+    if next_url and not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        next_url = ""
+    return redirect(next_url or reverse("build:home") + "?step=3")
 
 
 def _source(account, params) -> tuple[str, dict, dict, object]:

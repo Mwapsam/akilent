@@ -84,6 +84,7 @@ class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
         return super().form_invalid(form)
 
     def form_valid(self, form):
+        from django.utils.http import url_has_allowed_host_and_scheme
         from django_otp.plugins.otp_totp.models import TOTPDevice
 
         user = form.get_user()
@@ -91,10 +92,15 @@ class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
             # Stash the authenticated user in the session; don't call login() yet.
             self.request.session[_2FA_SESSION_KEY] = user.pk
             self.request.session[_2FA_SESSION_BACKEND_KEY] = user.backend
-            next_url = (
+            raw_next = (
                 self.request.POST.get("next") or self.request.GET.get("next") or ""
             )
-            self.request.session[_2FA_SESSION_NEXT_KEY] = next_url
+            # Reject off-site redirects before they reach the session.
+            if raw_next and not url_has_allowed_host_and_scheme(
+                raw_next, allowed_hosts={self.request.get_host()}
+            ):
+                raw_next = ""
+            self.request.session[_2FA_SESSION_NEXT_KEY] = raw_next
             return redirect(reverse("2fa-verify"))
         return super().form_valid(form)
 

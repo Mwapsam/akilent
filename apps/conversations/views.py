@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
@@ -667,7 +668,12 @@ def followup_complete(request, pk):
     followup = get_object_or_404(FollowUp, account=account, pk=pk)
     run_action("complete_followup", {"account": account}, followup=followup)
     messages.success(request, "Follow-up marked done.")
-    return redirect(request.POST.get("next") or "conversations:followups_due")
+    next_url = request.POST.get("next") or ""
+    if next_url and not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        next_url = ""
+    return redirect(next_url or "conversations:followups_due")
 
 
 @login_required
