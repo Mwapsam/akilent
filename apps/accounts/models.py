@@ -351,3 +351,36 @@ class BusinessKnowledge(models.Model):
 
     def __str__(self):
         return f"Knowledge for {self.account_id}"
+
+
+class PilotEnrollment(models.Model):
+    """Tracks pilot accounts and their baseline metrics at enrollment.
+
+    Enrollment requires a setup score ≥ 80 (see apps.accounts.pilot.setup_score).
+    Baseline metrics are snapshotted at enrollment so pilot_outcome() can compare
+    current vs baseline after a pilot period.
+    """
+
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name="pilot_enrollment"
+    )
+    wave = models.PositiveSmallIntegerField(default=2)
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    enrolled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pilot_enrollments",
+    )
+    # Baseline snapshots — compared against current metrics in pilot_outcome()
+    baseline_avg_response_seconds = models.FloatField(null=True, blank=True)
+    baseline_lead_count = models.IntegerField(default=0)
+    baseline_conversation_count = models.IntegerField(default=0)
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["enrolled_at"]
+
+    def __str__(self):
+        return f"Pilot wave {self.wave}: {self.account}"
