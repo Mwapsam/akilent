@@ -81,13 +81,26 @@ def _automation_events_enabled() -> bool:
     reject_on_worker_lost=True,
 )
 def process_whatsapp_event(self, event_id: int):
+    # Guard against two workers processing the same event simultaneously
+    # (broker duplicate delivery or a retry while the first attempt is still running).
+    lock_key = f"wa_event_processing:{event_id}"
+    acquired = cache.add(lock_key, "1", timeout=120)
+    if not acquired:
+        logger.debug(
+            "process_whatsapp_event: event %s already being processed, skipping",
+            event_id,
+        )
+        return
+
     try:
         event = WebhookEventLog.objects.get(pk=event_id)
     except WebhookEventLog.DoesNotExist:
+        cache.delete(lock_key)
         logger.error("process_whatsapp_event: event %s not found", event_id)
         return
 
     if event.processed:
+        cache.delete(lock_key)
         return
 
     try:
@@ -114,6 +127,8 @@ def process_whatsapp_event(self, event_id: int):
             "process_whatsapp_event: unhandled error for event %s", event_id
         )
         raise self.retry(exc=exc) from exc
+    finally:
+        cache.delete(lock_key)
 
 
 def _close_spine_conversation(whatsapp_conversation) -> None:
@@ -123,7 +138,9 @@ def _close_spine_conversation(whatsapp_conversation) -> None:
         spine.close()
 
 
-def _apply_consent_keyword(contact, conversation, body: str) -> None:
+def _apply_consent_keyword(
+    contact, conversation, body: str, inbound_log_id=None
+) -> None:
     """Honor STOP / START keywords in an inbound text message.
 
     A lone keyword (ignoring surrounding whitespace/punctuation) toggles the
@@ -150,6 +167,11 @@ def _apply_consent_keyword(contact, conversation, body: str) -> None:
                     "body": confirmation,
                     "_consent_ack": True,
                 },
+                # Deterministic key so a task retry cannot enqueue a second
+                # confirmation for the same inbound STOP message.
+                idempotency_key=(
+                    f"consent_ack:{inbound_log_id}" if inbound_log_id else None
+                ),
             )
             drain_outbound_queue.delay()
     elif token in settings.WHATSAPP_START_KEYWORDS:
@@ -468,7 +490,9 @@ def _process_inbound_message(
     )
 
     if created and msg_type == "text":
-        _apply_consent_keyword(contact, conversation, content)
+        _apply_consent_keyword(
+            contact, conversation, content, inbound_log_id=message_log.pk
+        )
 
     if created and not contact.is_opted_out:
         _auto_reply_during_setup(phone_number_id, contact)
@@ -853,6 +877,35 @@ def _notify_terminal_failure(msg) -> None:
     """
     if msg.status != OutboundMessage.Status.FAILED:
         return  # HELD is retried automatically (see _hold): it isn't a failure yet
+
+    # Propagate terminal failure back to the campaign recipient row so the
+    # campaign stats page can show per-recipient failure reasons, not just the
+    # aggregate outbound count (the recipient would otherwise remain QUEUED forever).
+    try:
+        recipient = getattr(msg, "campaign_recipient", None)
+        if recipient is not None:
+            recipient.status = WhatsAppCampaignRecipient.Status.FAILED
+            recipient.error = (msg.last_error or "")[:5000]
+            recipient.save(update_fields=["status", "error"])
+    except Exception:
+        logger.exception(
+            "_notify_terminal_failure: campaign recipient update failed for message %s",
+            msg.id,
+        )
+
+    # Mark the account's WhatsApp number as having an expired token so the UI
+    # can surface a re-registration prompt instead of a generic degraded state.
+    if msg.error_code == "190":
+        try:
+            WhatsAppBusinessNumber.objects.filter(
+                account=msg.account, is_active=True
+            ).update(token_expired=True)
+        except Exception:
+            logger.exception(
+                "_notify_terminal_failure: token_expired update failed for account %s",
+                msg.account_id,
+            )
+
     try:
         from apps.automation.integrations.whatsapp import mark_outbound_message_failed
 

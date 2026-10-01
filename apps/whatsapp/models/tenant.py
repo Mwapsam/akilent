@@ -49,6 +49,7 @@ class WhatsAppBusinessNumber(models.Model):
         TEST_SENT = "test_sent", "Test message sent"
         READY = "ready", "Ready"
         DEGRADED = "degraded", "Degraded"
+        TOKEN_EXPIRED = "token_expired", "Access token expired"
 
     # State of the Cloud API registration call — the one external operation we
     # persist. Everything else about setup progress is derived from this plus
@@ -63,6 +64,11 @@ class WhatsAppBusinessNumber(models.Model):
     registration_locked_until = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
+    # Set when a send fails with Meta error 190 (access token invalid/expired).
+    # Cleared by the settings view when new credentials are saved.
+    # Surfaced in setup_status so the owner sees an actionable prompt instead of
+    # a generic "Degraded" state.
+    token_expired = models.BooleanField(default=False)
 
     # Max outbound messages/second for this number. Meta's throughput tiers are
     # 80/s (default) rising to 1000/s; start conservative and raise per number.
@@ -88,6 +94,7 @@ class WhatsAppBusinessNumber(models.Model):
         return bool(
             self.registration_status == self.RegistrationStatus.REGISTERED
             and self.access_token
+            and not self.token_expired
             and self.waba_id
             and self.phone_number_id
         )
@@ -103,6 +110,8 @@ class WhatsAppBusinessNumber(models.Model):
         if self.registration_status == R.FAILED:
             return S.FAILED
         if self.registration_status == R.REGISTERED:
+            if self.token_expired:
+                return S.TOKEN_EXPIRED
             if self.last_successful_test() is None:
                 return S.READY_FOR_TEST
             if not self.has_received_test_reply():

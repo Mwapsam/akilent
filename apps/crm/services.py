@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.conversations.services import emit_event
@@ -47,13 +47,22 @@ def create_lead(
     conversation, method = attribution.decide(
         account, contact, public_id=conversation_id
     )
-    lead = Lead.objects.create(
-        account=account,
-        contact=contact,
-        source=source,
-        owner=owner,
-        conversation=conversation,
-    )
+    try:
+        lead = Lead.objects.create(
+            account=account,
+            contact=contact,
+            source=source,
+            owner=owner,
+            conversation=conversation,
+        )
+    except IntegrityError:
+        # Concurrent create_lead: another worker won the race for the same contact.
+        existing = Lead.objects.filter(
+            account=account, contact=contact, status__in=_OPEN_LEAD_STATUSES
+        ).first()
+        if existing is not None:
+            return existing
+        raise
     attribution.record(lead, conversation, method, workflow_run=workflow_run)
 
     emit_event(

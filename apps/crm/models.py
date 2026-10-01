@@ -158,6 +158,15 @@ class Lead(models.Model):
             models.Index(fields=["account", "status"]),
             models.Index(fields=["account", "owner"]),
         ]
+        constraints = [
+            # Prevent concurrent duplicate open leads for the same contact.
+            # Services layer still filters first; this is the DB-level backstop.
+            models.UniqueConstraint(
+                fields=["account", "contact"],
+                condition=models.Q(status__in=["new", "contacted", "qualified"]),
+                name="unique_open_lead_per_contact",
+            ),
+        ]
         ordering = ["-created_at"]
 
     def __str__(self):
