@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     "apps.internal_debug",
     "apps.ai",
     "apps.insights",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
 ]
 
 MIDDLEWARE = [
@@ -59,6 +61,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
@@ -131,6 +134,11 @@ AUTHENTICATION_BACKENDS = [
     "apps.accounts.backends.EmailBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
+
+# Sessions expire when the browser closes, with an absolute ceiling of 8 hours.
+# This prevents tokens left in unattended browsers from staying valid indefinitely.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 8 * 60 * 60  # 8 hours
 
 AUTH_PASSWORD_VALIDATORS = [
     {

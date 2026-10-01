@@ -231,3 +231,45 @@ class AdminAction(models.Model):
 
     def __str__(self):
         return f"{self.actor} {self.action} {self.target}".strip()
+
+
+class PlatformAuditLog(models.Model):
+    """Immutable record of sensitive business-user actions across the platform.
+
+    Written by ``apps.core.audit.platform_record()`` — never directly. Use this
+    for team changes, campaign sends, settings changes, and AI actions that a
+    business should be able to review. Rows are never updated or deleted.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="platform_audit_logs",
+    )
+    actor = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    action = models.CharField(max_length=100)
+    resource_type = models.CharField(max_length=50, blank=True, default="")
+    resource_id = models.CharField(max_length=255, blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    success = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["account", "timestamp"]),
+            models.Index(fields=["action", "timestamp"]),
+        ]
+
+    def __str__(self) -> str:
+        status = "OK" if self.success else "FAIL"
+        return f"[{status}] {self.action} {self.resource_id}"

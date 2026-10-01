@@ -1,0 +1,62 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Two-factor authentication</h2>
+
+  {% if enabled %}
+    <p class="text-sm text-gray-500 mb-4">
+      Two-factor authentication is <span class="font-medium text-green-600">enabled</span> on your account.
+      You'll be asked for a code from your authenticator app each time you sign in.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="disable">
+      <button type="submit" class="btn btn-danger btn-sm"
+              onclick="return confirm('Disable two-factor authentication? Your account will only be protected by your password.')">
+        Disable two-factor authentication
+      </button>
+    </form>
+
+  {% else %}
+    <p class="text-sm text-gray-500 mb-4">
+      Protect your account with a time-based one-time password (TOTP) from an app like
+      Google Authenticator, Authy, or 1Password.
+    </p>
+
+    <div class="mb-5 flex flex-col items-start gap-4">
+      <div class="border border-gray-200 rounded-lg p-2 inline-block bg-white">
+        <img src="data:image/svg+xml;base64,{{ qr_svg }}"
+             alt="Scan with your authenticator app"
+             class="w-48 h-48">
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 mb-1">Can't scan? Enter this key manually:</p>
+        <code class="text-xs font-mono bg-gray-100 px-2 py-1 rounded select-all break-all">{{ secret }}</code>
+      </div>
+    </div>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="mb-4 alert alert-danger">
+          {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+          <p>{{ msg }}</p>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="enable">
+      <div>
+        <label for="id_token" class="label">Confirm with a code from the app</label>
+        <input id="id_token" type="text" name="token"
+               inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
+               autocomplete="one-time-code"
+               placeholder="000 000"
+               class="input w-40 text-center tracking-widest text-lg">
+      </div>
+      <button type="submit" class="btn btn-primary">Enable two-factor authentication</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,4 +1,8 @@
-"""The Operator Console's audit trail: who changed what for which business.
+"""Audit trails for the Operator Console and platform-wide business actions.
+
+``audit()`` records Operator Console actions (operators only).
+``platform_record()`` records sensitive business-user actions visible to the
+business (team changes, auth events, campaign sends, AI recommendations).
 
 Every console POST calls ``audit``; "View as" start and stop are recorded too. Failures to record
 are logged, never raised, so an audit hiccup can't block fixing a customer's problem.
@@ -7,6 +11,7 @@ are logged, never raised, so an audit hiccup can't block fixing a customer's pro
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,3 +89,45 @@ def audit(request, action: str, account=None, target: str = "", **detail) -> Non
 
 def label(action: str) -> str:
     return LABELS.get(action, action.replace("_", " ").replace(".", ": "))
+
+
+def platform_record(
+    *,
+    action: str,
+    account=None,
+    actor=None,
+    resource_type: str = "",
+    resource_id: str = "",
+    ip_address: str | None = None,
+    success: bool = True,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Write one PlatformAuditLog entry for a business-user action.
+
+    Args:
+        action:        Dot-namespaced string, e.g. "team.invite", "auth.login_failed".
+        account:       The Account context (None for pre-auth events like login failure).
+        actor:         The authenticated User who triggered the action (None for system).
+        resource_type: "user", "campaign", "invitation", etc.
+        resource_id:   Identifier of the resource (email, public_id, etc.).
+        ip_address:    Client IP; include for auth events.
+        success:       Whether the action succeeded.
+        metadata:      Extra key/value pairs.
+
+    Best-effort: a DB write failure logs an error but never raises.
+    """
+    from apps.core.models import PlatformAuditLog
+
+    try:
+        PlatformAuditLog.objects.create(
+            account=account,
+            actor=actor,
+            action=action,
+            resource_type=resource_type,
+            resource_id=(resource_id or "")[:255],
+            ip_address=ip_address,
+            success=success,
+            metadata=metadata or {},
+        )
+    except Exception:
+        logger.exception("platform_record: failed to record action=%s", action)

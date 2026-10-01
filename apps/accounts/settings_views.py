@@ -31,6 +31,7 @@ from apps.accounts.utils import (
     is_ajax,
     set_current_account,
 )
+from apps.core.audit import platform_record
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +166,21 @@ def settings_security(request):
             user = form.save()
             # Keep the user signed in after their password hash changes.
             update_session_auth_hash(request, user)
+            platform_record(
+                action="auth.password_changed",
+                account=account,
+                actor=request.user,
+                resource_type="user",
+                resource_id=request.user.email,
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
             messages.success(request, "Password changed.")
             return redirect("settings-security")
     else:
         form = PasswordChangeForm(request.user)
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    totp_enabled = TOTPDevice.objects.filter(user=request.user, confirmed=True).exists()
     return render(
         request,
         "accounts/settings_security.html",
@@ -176,6 +188,7 @@ def settings_security(request):
             "form": form,
             "account": account,
             "active_tab": "security",
+            "totp_enabled": totp_enabled,
         },
     )
 
@@ -371,6 +384,15 @@ def invite_create(request):
         )
         return redirect("settings-team")
 
+    platform_record(
+        action="team.invite",
+        account=account,
+        actor=request.user,
+        resource_type="invitation",
+        resource_id=email,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"role": role},
+    )
     messages.success(request, f"Invitation sent to {email}.")
     return redirect("settings-team")
 
@@ -387,6 +409,14 @@ def invite_revoke(request, pk):
     )
     email = invite.email
     invite.delete()
+    platform_record(
+        action="team.invite_revoked",
+        account=account,
+        actor=request.user,
+        resource_type="invitation",
+        resource_id=email,
+        ip_address=request.META.get("REMOTE_ADDR"),
+    )
     messages.success(request, f"Invitation to {email} revoked.")
     return redirect("settings-team")
 
@@ -406,8 +436,18 @@ def member_role(request, pk):
     if new_role not in (Membership.Role.MEMBER, Membership.Role.ADMIN):
         messages.error(request, "Pick a valid role.")
         return redirect("settings-team")
+    previous_role = target.role
     target.role = new_role
     target.save(update_fields=["role"])
+    platform_record(
+        action="team.role_changed",
+        account=account,
+        actor=request.user,
+        resource_type="user",
+        resource_id=target.user.email,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"from_role": previous_role, "to_role": new_role},
+    )
     messages.success(
         request, f"{target.user.get_username()} is now {target.get_role_display()}."
     )

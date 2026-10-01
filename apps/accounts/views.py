@@ -8,6 +8,7 @@ from django.contrib.auth import login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -22,6 +23,14 @@ from apps.accounts.models import Account, Membership
 from apps.accounts.utils import get_current_account, set_current_account
 
 logger = logging.getLogger(__name__)
+
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_LOCKOUT_SECONDS = 15 * 60  # 15 minutes
+
+
+def _login_rate_key(request, username: str) -> str:
+    ip = request.META.get("REMOTE_ADDR", "unknown")
+    return f"login_attempts:{ip}:{username.lower()[:254]}"
 
 
 class _RestoreSiteBrandingMixin:
@@ -42,8 +51,52 @@ class _RestoreSiteBrandingMixin:
         return context
 
 
+_2FA_SESSION_KEY = "_2fa_user_pk"
+_2FA_SESSION_BACKEND_KEY = "_2fa_backend"
+_2FA_SESSION_NEXT_KEY = "_2fa_next"
+
+
 class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
-    pass
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST":
+            key = _login_rate_key(request, request.POST.get("username", ""))
+            if (cache.get(key) or 0) >= _LOGIN_MAX_ATTEMPTS:
+                messages.error(
+                    request,
+                    "Too many failed login attempts. Please wait 15 minutes before trying again.",
+                )
+                return self.get(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        username = self.request.POST.get("username", "")
+        key = _login_rate_key(self.request, username)
+        attempts = (cache.get(key) or 0) + 1
+        cache.set(key, attempts, _LOGIN_LOCKOUT_SECONDS)
+        from apps.core.audit import platform_record
+
+        platform_record(
+            action="auth.login_failed",
+            ip_address=self.request.META.get("REMOTE_ADDR"),
+            success=False,
+            metadata={"username": username[:254], "attempts": attempts},
+        )
+        return super().form_invalid(form)
+
+    def form_valid(self, form):
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        user = form.get_user()
+        if TOTPDevice.objects.filter(user=user, confirmed=True).exists():
+            # Stash the authenticated user in the session; don't call login() yet.
+            self.request.session[_2FA_SESSION_KEY] = user.pk
+            self.request.session[_2FA_SESSION_BACKEND_KEY] = user.backend
+            next_url = (
+                self.request.POST.get("next") or self.request.GET.get("next") or ""
+            )
+            self.request.session[_2FA_SESSION_NEXT_KEY] = next_url
+            return redirect(reverse("2fa-verify"))
+        return super().form_valid(form)
 
 
 class LogoutView(_RestoreSiteBrandingMixin, auth_views.LogoutView):
@@ -831,3 +884,143 @@ def _email_stats(account, subscription):
         "usage_pct": usage_pct,
         "recent_sends": list(msgs.order_by("-created_at")[:6]),
     }
+
+
+# ---------------------------------------------------------------------------
+# Two-Factor Authentication
+# ---------------------------------------------------------------------------
+
+
+def _2fa_verify(request):
+    """Step 2 of login when the user has TOTP enabled.
+
+    After password auth succeeds, LoginView stashes the user PK in the session
+    and redirects here instead of calling login(). We verify the TOTP token;
+    on success we call login() ourselves and proceed to the next URL.
+    """
+    from django.contrib.auth import login as auth_login
+    from django.contrib.auth.models import User
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.core.audit import platform_record
+
+    user_pk = request.session.get(_2FA_SESSION_KEY)
+    if not user_pk:
+        return redirect(settings.LOGIN_URL)
+
+    try:
+        user = User.objects.get(pk=user_pk)
+    except User.DoesNotExist:
+        del request.session[_2FA_SESSION_KEY]
+        return redirect(settings.LOGIN_URL)
+
+    if request.method == "POST":
+        token = request.POST.get("token", "").replace(" ", "")
+        device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+        if device and device.verify_token(token):
+            backend = request.session.pop(
+                _2FA_SESSION_BACKEND_KEY, "apps.accounts.backends.EmailBackend"
+            )
+            next_url = (
+                request.session.pop(_2FA_SESSION_NEXT_KEY, "")
+                or settings.LOGIN_REDIRECT_URL
+            )
+            request.session.pop(_2FA_SESSION_KEY, None)
+            user.backend = backend
+            auth_login(request, user)
+            platform_record(
+                action="auth.2fa_success",
+                actor=user,
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+            return redirect(next_url)
+        platform_record(
+            action="auth.2fa_failed",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            success=False,
+            metadata={"user_pk": user_pk},
+        )
+        messages.error(request, "Invalid code. Please try again.")
+
+    return render(request, "auth/2fa_verify.html")
+
+
+@login_required
+def _2fa_setup(request):
+    """Enable or disable TOTP 2FA from the security settings page."""
+    import base64
+    import io
+
+    import segno
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.core.audit import platform_record
+
+    account = get_current_account(request)
+    user = request.user
+    existing = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "disable" and existing:
+            TOTPDevice.objects.filter(user=user).delete()
+            platform_record(
+                action="auth.2fa_disabled",
+                account=account,
+                actor=user,
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+            messages.success(request, "Two-factor authentication disabled.")
+            return redirect("settings-security")
+
+        if action == "enable":
+            token = request.POST.get("token", "").replace(" ", "")
+            # Retrieve the unconfirmed device created during GET.
+            device = TOTPDevice.objects.filter(user=user, confirmed=False).first()
+            if device and device.verify_token(token):
+                device.confirmed = True
+                device.save(update_fields=["confirmed"])
+                platform_record(
+                    action="auth.2fa_enabled",
+                    account=account,
+                    actor=user,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                )
+                messages.success(request, "Two-factor authentication enabled.")
+                return redirect("settings-security")
+            messages.error(
+                request,
+                "Code didn't match. Please scan the QR code again and try a fresh code.",
+            )
+            # Fall through to re-render setup with the same (unconfirmed) device.
+
+    if existing:
+        return render(
+            request, "accounts/settings_2fa.html", {"enabled": True, "account": account}
+        )
+
+    # Create (or reuse) an unconfirmed device and show the QR code.
+    device, _ = TOTPDevice.objects.get_or_create(
+        user=user,
+        confirmed=False,
+        defaults={"name": "default"},
+    )
+    uri = device.config_url  # otpauth://totp/...
+
+    # Render QR as an inline SVG (no file I/O, no Pillow required).
+    qr = segno.make(uri, error="M")
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=4, border=2)
+    qr_svg = base64.b64encode(buf.getvalue()).decode()
+
+    return render(
+        request,
+        "accounts/settings_2fa.html",
+        {
+            "enabled": False,
+            "account": account,
+            "qr_svg": qr_svg,
+            "secret": base64.b32encode(device.bin_key).decode().rstrip("="),
+        },
+    )

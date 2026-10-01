@@ -31,6 +31,23 @@
 </div>
 
 <div class="card card-pad max-w-xl mt-4">
+  <h2 class="font-semibold mb-1">Two-factor authentication</h2>
+  <p class="text-sm text-gray-500 mb-3">
+    {% if totp_enabled %}
+      <span class="inline-flex items-center gap-1 text-green-600 font-medium">
+        {% include "components/icon.html" with name="check" class="w-4 h-4" %} Enabled
+      </span>
+      — your account requires a code from your authenticator app at sign-in.
+    {% else %}
+      Not enabled. Add an extra layer of security to your account.
+    {% endif %}
+  </p>
+  <a href="{% url '2fa-setup' %}" class="btn btn-secondary btn-sm">
+    {% if totp_enabled %}Manage{% else %}Set up{% endif %} two-factor authentication
+  </a>
+</div>
+
+<div class="card card-pad max-w-xl mt-4">
   <h2 class="font-semibold mb-1">Session</h2>
   <p class="text-sm text-gray-500">
     Signed in as <span class="font-medium text-gray-700">{{ user.get_username }}</span>{% if user.last_login %} · last sign-in {{ user.last_login|date:"M j, Y · H:i" }}{% endif %}.

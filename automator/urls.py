@@ -4,7 +4,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from apps.accounts.forms import LoginForm
-from apps.accounts.views import LoginView, LogoutView, PasswordResetView
+from apps.accounts.views import LoginView, LogoutView, PasswordResetView, _2fa_verify
 from apps.core import views as core_views
 from apps.core import views_events
 
@@ -23,6 +23,7 @@ urlpatterns = [
         name="login",
     ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
+    path("auth/2fa/verify/", _2fa_verify, name="2fa-verify"),
     path(
         "auth/password-reset/",
         PasswordResetView.as_view(

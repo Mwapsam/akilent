@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Two-factor authentication — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex mb-4">
+        {% include "components/brand_mark.html" with class="w-12 h-12" %}
+      </div>
+      <h1 class="text-xl font-semibold text-ink">Two-factor authentication</h1>
+      <p class="text-sm text-gray-400 mt-1">Enter the 6-digit code from your authenticator app</p>
+    </div>
+
+    <div class="card card-pad sm:!p-8">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="mb-5 alert alert-danger">
+            {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+            <p>{{ msg }}</p>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" novalidate class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label for="id_token" class="label">Authentication code</label>
+          <input id="id_token" type="text" name="token"
+                 inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
+                 autocomplete="one-time-code" autofocus
+                 placeholder="000 000"
+                 class="input text-center tracking-widest text-lg">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block mt-2">Verify</button>
+      </form>
+    </div>
+
+    <p class="text-center text-xs text-gray-400 mt-6">
+      <a href="{% url 'login' %}" class="text-accent hover:text-accent-strong">Back to sign in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

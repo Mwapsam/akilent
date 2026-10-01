@@ -23,6 +23,7 @@ urlpatterns = [
     path(
         "settings/business/", settings_views.settings_business, name="settings-business"
     ),
+    path("settings/security/2fa/", views._2fa_setup, name="2fa-setup"),
     path(
         "settings/security/", settings_views.settings_security, name="settings-security"
     ),
