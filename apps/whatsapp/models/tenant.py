@@ -59,6 +59,8 @@ class WhatsAppBusinessNumber(models.Model):
         default=RegistrationStatus.PENDING,
     )
     registration_error = models.TextField(blank=True, default="")
+    registration_attempts = models.PositiveSmallIntegerField(default=0)
+    registration_locked_until = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
 

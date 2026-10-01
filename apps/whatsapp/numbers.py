@@ -180,11 +180,17 @@ def finish_embedded_connection(
 
     ob.advance_onboarding(account)  # side effects only; the numbers page is the console
     if not result.ok:
-        messages.warning(
-            request,
-            "WhatsApp connected, but setup isn't finished — we couldn't register "
-            "this number yet. Use Retry registration below.",
-        )
+        if result.pin_required:
+            msg = (
+                "WhatsApp connected. Enter your two-step verification PIN below "
+                "to finish activating this number for messaging."
+            )
+        else:
+            msg = (
+                "WhatsApp connected, but setup isn't finished — we couldn't register "
+                "this number yet. Use Retry registration below."
+            )
+        messages.warning(request, msg)
     return True, {"redirect": "/whatsapp/numbers/"}
 
 
@@ -460,15 +466,27 @@ def numbers_create(request):
 @login_required
 @require_POST
 def numbers_register(request, pk):
-    """Retry Cloud API registration. Idempotent: an already-registered number is a no-op."""
+    """Retry Cloud API registration. Accepts an optional two-step verification PIN."""
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
     number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
-    result = register_number(number)
+    pin = (request.POST.get("pin") or "").strip()
+    result = register_number(number, pin=pin)
     if result.ok:
         messages.success(request, "Number registered — you can now send messages.")
+    elif result.locked_until:
+        messages.error(
+            request,
+            f"Too many failed attempts. Registration is locked until "
+            f"{result.locked_until.strftime('%H:%M UTC')}. Please wait before trying again.",
+        )
+    elif result.pin_required:
+        messages.error(
+            request,
+            "Enter the six-digit two-step verification PIN for this WhatsApp number.",
+        )
     else:
         messages.error(request, f"Registration failed: {result.error}")
     return redirect("whatsapp-numbers")

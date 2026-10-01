@@ -64,12 +64,27 @@ def build_setup_console(
 
     register = None
     if number and has_creds:
+        from apps.whatsapp.registration import is_pin_mismatch
+
         failed = number.registration_status == number.RegistrationStatus.FAILED
-        register = {
-            "label": "Retry registration" if failed else "Register number",
-            "url": f"/whatsapp/numbers/{number.pk}/register/",
-            "method": "post",
-        }
+        pin_required = failed and (
+            is_pin_mismatch(number.registration_error)
+            or number.registration_attempts > 0
+        )
+        if pin_required:
+            register = {
+                "kind": "pin_register",
+                "label": "Enter PIN to register",
+                "url": f"/whatsapp/numbers/{number.pk}/register/",
+                "method": "post",
+                "locked_until": number.registration_locked_until,
+            }
+        else:
+            register = {
+                "label": "Retry registration" if failed else "Register number",
+                "url": f"/whatsapp/numbers/{number.pk}/register/",
+                "method": "post",
+            }
 
     ready = bool(number and number.is_ready)
     tested = bool(ready and number.last_successful_test())

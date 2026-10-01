@@ -81,6 +81,28 @@
           </div>
           {% elif step.action.kind == "verify" %}
           {% include "whatsapp/_verify_form.html" with url=step.action.url label=step.action.label prefill=step.action.prefill %}
+          {% elif step.action.kind == "pin_register" %}
+          {% if step.action.locked_until %}
+          <p class="mt-3 text-sm tone-amber">Registration is locked until {{ step.action.locked_until|time:"H:i" }} UTC after too many failed attempts.</p>
+          {% else %}
+          <form method="post" action="{{ step.action.url }}" class="mt-3 space-y-3"
+                onsubmit="this.querySelector('button[type=submit]').disabled = true">
+            {% csrf_token %}
+            <div>
+              <label for="wa-register-pin" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Two-step verification PIN
+              </label>
+              <input id="wa-register-pin" type="text" name="pin" inputmode="numeric" maxlength="6"
+                     pattern="[0-9]{6}" autocomplete="one-time-code"
+                     class="input input-sm w-32 font-mono tracking-widest"
+                     placeholder="6 digits" required>
+              <p class="mt-1 text-xs text-gray-500">
+                The 6-digit PIN set in WhatsApp &rarr; Settings &rarr; Account &rarr; Two-step verification.
+              </p>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">{{ step.action.label }}</button>
+          </form>
+          {% endif %}
           {% elif step.action.method == "post" %}
           <form method="post" action="{{ step.action.url }}" class="mt-3"
                 onsubmit="this.querySelector('button').disabled = true">
