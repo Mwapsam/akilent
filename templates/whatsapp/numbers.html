@@ -231,8 +231,11 @@
     // Verify connection: JSON contract {ok, message, action}; never parses Meta responses.
     document.querySelectorAll('[data-wa-verify]').forEach(function (vform) {
       var out = vform.querySelector('[data-wa-verify-result]');
+      var submitted = false;
       vform.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (submitted) return;
+        submitted = true;
         var btn = vform.querySelector('button[type="submit"]');
         btn.disabled = true;
         out.className = 'w-full text-sm text-gray-500';
@@ -251,6 +254,7 @@
               setTimeout(function () { window.location.reload(); }, 1500);
               return;
             }
+            submitted = false;
             btn.disabled = false;
             out.className = 'w-full text-sm text-red-700';
             out.textContent = d.message || 'Could not send the test message.';
@@ -259,6 +263,7 @@
             }
           })
           .catch(function () {
+            submitted = false;
             btn.disabled = false;
             out.className = 'w-full text-sm text-red-700';
             out.textContent = 'Network error. Try again.';

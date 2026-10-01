@@ -25,6 +25,15 @@ class Contact(models.Model):
         BOUNCED = "bounced", "Bounced"
         COMPLAINED = "complained", "Complained"
 
+    class LifecycleStage(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        IMPORTED = "imported", "Imported"
+        VALIDATED = "validated", "Validated"
+        ENGAGED = "engaged", "Engaged"
+        CUSTOMER = "customer", "Customer"
+        REPEAT_CUSTOMER = "repeat_customer", "Repeat Customer"
+        INACTIVE = "inactive", "Inactive"
+
     class ConsentStatus(models.TextChoices):
         """Provenance of the recipient's permission to be emailed.
 
@@ -80,6 +89,14 @@ class Contact(models.Model):
     consent_evidence = models.JSONField(default=dict, blank=True)
     opt_out_at = models.DateTimeField(blank=True, null=True)
     opt_out_reason = models.CharField(max_length=255, blank=True, default="")
+
+    lifecycle_stage = models.CharField(
+        max_length=20,
+        choices=LifecycleStage.choices,
+        default=LifecycleStage.UNKNOWN,
+    )
+    quality_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    quality_updated_at = models.DateTimeField(blank=True, null=True)
 
     first_seen = models.DateTimeField(auto_now_add=True)
     last_engaged_at = models.DateTimeField(blank=True, null=True)
@@ -175,6 +192,76 @@ class Contact(models.Model):
                 "updated_at",
             ]
         )
+
+
+class ContactPhone(models.Model):
+    """Verified phone identity for a contact, with WhatsApp reachability status."""
+
+    class WhatsAppStatus(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        CONFIRMED = "confirmed", "Confirmed"
+        UNREACHABLE = "unreachable", "Unreachable"
+
+    contact = models.ForeignKey(
+        Contact, on_delete=models.CASCADE, related_name="contact_phones"
+    )
+    raw_value = models.CharField(max_length=30)
+    normalized_value = models.CharField(max_length=20, blank=True, default="")
+    country = models.CharField(max_length=2, blank=True, default="")
+    is_valid_format = models.BooleanField(default=False)
+    whatsapp_status = models.CharField(
+        max_length=12, choices=WhatsAppStatus.choices, default=WhatsAppStatus.UNKNOWN
+    )
+    whatsapp_checked_at = models.DateTimeField(blank=True, null=True)
+    is_primary = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_primary", "-created_at"]
+        indexes = [
+            models.Index(fields=["contact", "is_primary"]),
+            models.Index(
+                fields=["contact", "whatsapp_status"],
+                name="cx_phone_wa_status_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return self.normalized_value or self.raw_value
+
+
+class ContactEmail(models.Model):
+    """Verified email identity for a contact, with deliverability status."""
+
+    class DeliverabilityStatus(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        VALID = "valid", "Valid"
+        INVALID = "invalid", "Invalid"
+        BOUNCED = "bounced", "Bounced"
+
+    contact = models.ForeignKey(
+        Contact, on_delete=models.CASCADE, related_name="contact_emails"
+    )
+    email = models.EmailField()
+    is_valid_format = models.BooleanField(default=False)
+    domain_valid = models.BooleanField(default=False)
+    deliverability_status = models.CharField(
+        max_length=10,
+        choices=DeliverabilityStatus.choices,
+        default=DeliverabilityStatus.UNKNOWN,
+    )
+    last_checked = models.DateTimeField(blank=True, null=True)
+    is_primary = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_primary", "-created_at"]
+        indexes = [
+            models.Index(fields=["contact", "is_primary"]),
+        ]
+
+    def __str__(self):
+        return self.email
 
 
 class Tag(models.Model):

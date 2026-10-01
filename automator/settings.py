@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.api",
     "apps.internal_debug",
     "apps.ai",
+    "apps.insights",
 ]
 
 MIDDLEWARE = [
