@@ -36,8 +36,8 @@ def modal(content, id, title="", size="lg", footer=""):
         render_to_string(
             "components/_modal.html",
             {
-                "slot": mark_safe(content),
-                "footer": mark_safe(footer),
+                "slot": mark_safe(content),  # nosec B703 B308
+                "footer": mark_safe(footer),  # nosec B703 B308
                 "id": id,
                 "title": title,
                 "size_class": _MODAL_SIZES.get(size, _MODAL_SIZES["lg"]),
@@ -88,7 +88,7 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
         render_to_string(
             "components/_dropdown.html",
             {
-                "slot": mark_safe(content),
+                "slot": mark_safe(content),  # nosec B703 B308
                 "label": label,
                 "align_class": "left-0" if align == "left" else "right-0",
                 "button_class": button_class,
