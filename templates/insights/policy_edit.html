@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Edit policy — {{ policy.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
+  <header>
+    <p class="text-sm text-gray-500 mb-1">
+      <a href="{% url 'insight-policies' %}" class="hover:underline">Automation Policies</a>
+      <span class="mx-1">›</span> Edit
+    </p>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ policy.name }}</h1>
+    <p class="mt-1 text-sm text-gray-600">{{ policy.get_trigger_display }}</p>
+  </header>
+
+  {% if policy.action.type == 'campaign' and not policy.action.campaign_id %}
+  <div class="alert alert-warning" role="alert">
+    {% include "components/icon.html" with name="alert-circle" class="w-5 h-5 shrink-0" %}
+    <span>A campaign must be linked before this policy can be activated.</span>
+  </div>
+  {% endif %}
+
+  <form method="post" class="space-y-8">
+    {% csrf_token %}
+
+    {# ── WHEN ─────────────────────────────────────────────────────── #}
+    <section class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink uppercase tracking-wide">When</h2>
+
+      {% if policy.trigger == 'conversation_unanswered' or policy.trigger == 'lead_unanswered' %}
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm text-gray-700">No reply for</span>
+        <input type="number" name="hours" id="hours"
+               value="{{ policy.condition.hours|default:2 }}"
+               min="1" class="input w-24 text-sm"
+               aria-label="Hours threshold">
+        <span class="text-sm text-gray-700">hours</span>
+      </div>
+
+      {% elif policy.trigger == 'customer_inactive' %}
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm text-gray-700">Customer inactive for</span>
+        <input type="number" name="days" id="days"
+               value="{{ policy.condition.days|default:90 }}"
+               min="1" class="input w-24 text-sm"
+               aria-label="Days threshold">
+        <span class="text-sm text-gray-700">days</span>
+      </div>
+
+      {% elif policy.trigger == 'repurchase_due' %}
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm text-gray-700">Overdue for repurchase by</span>
+        <input type="number" name="days" id="days"
+               value="{{ policy.condition.days|default:30 }}"
+               min="1" class="input w-24 text-sm"
+               aria-label="Days threshold">
+        <span class="text-sm text-gray-700">days</span>
+      </div>
+      {% endif %}
+    </section>
+
+    {# ── DO ───────────────────────────────────────────────────────── #}
+    <section class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink uppercase tracking-wide">Do</h2>
+
+      {% if policy.action.type == 'campaign' %}
+      <div>
+        <p class="text-sm text-gray-700 mb-3">Send campaign</p>
+        <div class="space-y-3">
+          <div>
+            <label for="campaign_id" class="label text-xs">Campaign</label>
+            {% if campaigns %}
+            <select name="campaign_id" id="campaign_id" class="select w-full">
+              <option value="">— select a campaign —</option>
+              {% for c in campaigns %}
+              <option value="{{ c.id }}"{% if c.id == policy.action.campaign_id %} selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
+            <p class="text-sm text-gray-500 italic">No WhatsApp campaigns found. <a href="/campaigns/" class="text-accent underline">Create one first.</a></p>
+            {% endif %}
+          </div>
+          <div>
+            <label for="label" class="label text-xs">Label (optional)</label>
+            <input type="text" name="label" id="label"
+                   value="{{ policy.action.label|default:'' }}"
+                   placeholder="e.g. Customer reactivation"
+                   class="input w-full text-sm">
+          </div>
+        </div>
+      </div>
+
+      {% elif policy.action.type == 'create_followup' %}
+      <div>
+        <p class="text-sm text-gray-700 mb-3">Create a follow-up</p>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <label for="due_hours" class="text-sm text-gray-700 shrink-0">Due after</label>
+            <input type="number" name="due_hours" id="due_hours"
+                   value="{{ policy.action.due_hours|default:4 }}"
+                   min="1" class="input w-24 text-sm"
+                   aria-label="Follow-up due hours">
+            <span class="text-sm text-gray-700">hours</span>
+          </div>
+          <div>
+            <label for="note" class="label text-xs">Note (optional)</label>
+            <input type="text" name="note" id="note"
+                   value="{{ policy.action.note|default:'' }}"
+                   placeholder="e.g. Call back — lead went quiet"
+                   class="input w-full text-sm">
+          </div>
+        </div>
+      </div>
+
+      {% elif policy.action.type == 'notify_owner' %}
+      <p class="text-sm text-gray-500 italic">Owner notification will be sent when this feature is available. No configuration is needed yet.</p>
+
+      {% else %}
+      <p class="text-sm text-gray-500">Unknown action type: <code>{{ policy.action.type }}</code></p>
+      {% endif %}
+    </section>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="btn btn-primary">Save changes</button>
+      <a href="{% url 'insight-policies' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+
+  {% if policy.created_from %}
+  <p class="text-xs text-gray-400 pt-2 border-t border-border">
+    Created from insight:
+    <a href="{% url 'insights' %}#insight-{{ policy.created_from_id }}" class="underline hover:text-gray-600">{{ policy.created_from.title }}</a>
+  </p>
+  {% endif %}
+
+</div>
+{% endblock %}

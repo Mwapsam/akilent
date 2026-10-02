@@ -24,14 +24,14 @@
     </p>
 
     <div class="mb-5 flex flex-col items-start gap-4">
-      <div class="border border-gray-200 rounded-lg p-2 inline-block bg-white">
+      <div class="border border-border rounded-lg p-2 inline-block bg-white">
         <img src="data:image/svg+xml;base64,{{ qr_svg }}"
              alt="Scan with your authenticator app"
              class="w-48 h-48">
       </div>
       <div>
         <p class="text-xs text-gray-500 mb-1">Can't scan? Enter this key manually:</p>
-        <code class="text-xs font-mono bg-gray-100 px-2 py-1 rounded select-all break-all">{{ secret }}</code>
+        <code class="text-xs font-mono tone-neutral-bg px-2 py-1 rounded select-all break-all">{{ secret }}</code>
       </div>
     </div>
 

@@ -162,9 +162,12 @@ def test_first_byte_stays_cheap(client, account, django_assert_max_num_queries):
     re-reads domains and API keys. That duplication is app-wide, not specific to
     this page, so it is recorded here rather than fixed here. Lower the number
     if you fix it; do not raise it without a reason.
+
+    Budget raised 28→29: workspace_context processor added a BusinessContext
+    lookup to drive business-model-aware dashboard section ordering.
     """
     client.force_login(account.owner)
-    with django_assert_max_num_queries(28):
+    with django_assert_max_num_queries(29):
         assert client.get("/dashboard/").status_code == 200
 
 
