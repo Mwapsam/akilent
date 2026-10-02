@@ -14,23 +14,47 @@ from apps.core.request_context import (
 # Tightened where possible without breaking HTMX / Alpine / whitenoise:
 #   * CSP allows 'unsafe-inline' (inline theme-toggle script in base.html)
 #     and 'unsafe-eval' (Alpine 3 uses Function() to evaluate x-data expressions).
-#   * img-src includes https: for S3/CloudFront user-uploaded media.
-#   * connect-src includes wss: for the optional SSE upgrade path.
+#   * img-src: uses specific S3/CloudFront domain in production; falls back to
+#     https: in dev (no S3). Avoids the wildcard-directive ZAP warning in prod.
+#   * connect-src: 'self' only — SSE uses HTTP EventSource, not WebSocket.
+#   * script-src: adds googletagmanager.com when GA is configured.
 #   * COEP is intentionally omitted: Cloudflare cdn-cgi resources lack CORP
 #     headers, so require-corp would break error pages served from that origin.
 
-_CSP = (
-    "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-    "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob: https:; "
-    "font-src 'self' data:; "
-    "connect-src 'self' wss:; "
-    "frame-ancestors 'none'; "
-    "base-uri 'self'; "
-    "form-action 'self'; "
-    "object-src 'none';"
-)
+_csp_cache: str | None = None
+
+
+def _build_csp() -> str:
+    from django.conf import settings
+
+    # img-src: use the specific S3/CloudFront domain when available.
+    custom_domain = getattr(settings, "AWS_S3_CUSTOM_DOMAIN", "")
+    img_src_extra = f"https://{custom_domain}" if custom_domain else "https:"
+
+    # script-src: allow Google Analytics loader only when a GA ID is configured.
+    ga_id = getattr(settings, "GOOGLE_ANALYTICS_ID", "")
+    script_src_extra = " https://www.googletagmanager.com" if ga_id else ""
+
+    return (
+        "default-src 'self'; "
+        f"script-src 'self' 'unsafe-inline' 'unsafe-eval'{script_src_extra}; "
+        "style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' data: blob: {img_src_extra}; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none';"
+    )
+
+
+def _get_csp() -> str:
+    global _csp_cache
+    if _csp_cache is None:
+        _csp_cache = _build_csp()
+    return _csp_cache
+
 
 _PERMISSIONS = (
     "accelerometer=(), camera=(), display-capture=(), geolocation=(), "
@@ -80,7 +104,7 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        response.setdefault("Content-Security-Policy", _CSP)
+        response.setdefault("Content-Security-Policy", _get_csp())
         response.setdefault("Permissions-Policy", _PERMISSIONS)
         response.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         return response

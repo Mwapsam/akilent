@@ -13,3 +13,4 @@
 90004	IGNORE	COEP Header Missing — COEP require-corp breaks Cloudflare cdn-cgi resources
 10031	IGNORE	User Controllable HTML Attribute — Django login form reflects next param by design; redirect is same-origin validated
 10015	IGNORE	Re-examine Cache-control — public marketing pages intentionally cacheable
+10055	IGNORE	CSP: Wildcard Directive — img-src uses specific S3/CloudFront domain in production; https: fallback only in dev where S3 is not configured
