@@ -306,7 +306,7 @@ def insight_dismiss(request, pk):
 
     from django.urls import reverse
 
-    from apps.insights.models import Insight
+    from apps.insights.models import Insight, RecommendationLog
 
     insight = Insight.objects.filter(
         account=account,
@@ -316,6 +316,14 @@ def insight_dismiss(request, pk):
     if insight:
         insight.status = Insight.Status.DISMISSED
         insight.save(update_fields=["status", "updated_at"])
+        # Record the dismissal so acceptance rate is computable (denominator tracking).
+        RecommendationLog.objects.create(
+            account=account,
+            insight=insight,
+            accepted=False,
+            acted_at=timezone.now(),
+            status=RecommendationLog.Status.DISMISSED,
+        )
 
     base = reverse("insights")
     query = request.GET.urlencode()
@@ -367,6 +375,7 @@ def insight_act(request, pk):
                 insight=insight,
                 accepted=True,
                 acted_at=now,
+                status=RecommendationLog.Status.ACCEPTED,
             )
             insight.status = Insight.Status.ACTED_ON
             insight.save(update_fields=["status", "updated_at"])
@@ -505,8 +514,25 @@ def policy_update_status(request, pk):
     if policy is None:
         return redirect("insight-policies")
 
+    _KNOWN_ACTION_TYPES = frozenset({"campaign", "create_followup", "notify_owner"})
+
     action = request.POST.get("action", "")
     if action == "activate":
+        action_type = policy.action.get("type", "")
+        if action_type not in _KNOWN_ACTION_TYPES:
+            messages.error(
+                request,
+                f'"{policy.name}" has an unrecognised action type '
+                f"({action_type!r}) and cannot be activated.",
+            )
+            return redirect("insight-policies")
+        if action_type == "campaign" and not policy.action.get("campaign_id"):
+            messages.error(
+                request,
+                f'"{policy.name}" requires a campaign to be linked before it '
+                f"can be activated. Edit the policy to add a campaign.",
+            )
+            return redirect("insight-policies")
         policy.status = BusinessPolicy.Status.ACTIVE
         policy.save(update_fields=["status", "updated_at"])
         messages.success(request, f'"{policy.name}" is now active.')

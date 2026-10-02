@@ -5,38 +5,40 @@ Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sa
   <h2 id="sales-h" class="text-lg font-semibold text-ink">Sales from conversations</h2>
   <p class="text-sm text-gray-600">Did conversations turn into money?</p>
 
-  <div class="stat-grid grid-cols-2 sm:grid-cols-4">
-    <div>
-      <p class="stat-value">
-        {% if sales.revenue %}{% for r in sales.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}—{% endif %}
-      </p>
-      <p class="stat-label">revenue from conversations</p>
-    </div>
-    <div>
-      <p class="stat-value">{{ sales.leads }}</p>
-      <p class="stat-label">leads created</p>
-    </div>
-    <div>
-      <p class="stat-value">{{ sales.paid_orders }}</p>
-      <p class="stat-label">paid orders</p>
-    </div>
-    <div>
-      <p class="stat-value">{% if sales.lead_to_sale_pct is not None %}{{ sales.lead_to_sale_pct }}%{% else %}—{% endif %}</p>
-      <p class="stat-label">lead-to-sale conversion</p>
+  <div class="card card-pad">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5">
+      <div>
+        <p class="stat-value">
+          {% if sales.revenue %}{% for r in sales.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}—{% endif %}
+        </p>
+        <p class="stat-label">revenue from conversations</p>
+      </div>
+      <div>
+        <p class="stat-value">{{ sales.leads }}</p>
+        <p class="stat-label">leads created</p>
+      </div>
+      <div>
+        <p class="stat-value">{{ sales.paid_orders }}</p>
+        <p class="stat-label">paid orders</p>
+      </div>
+      <div>
+        <p class="stat-value">{% if sales.lead_to_sale_pct is not None %}{{ sales.lead_to_sale_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">lead-to-sale conversion</p>
+      </div>
     </div>
   </div>
 
-  <div>
-    <h3 class="text-base font-semibold text-ink mb-4">From conversation to sale</h3>
-    <div class="stat-grid grid-cols-2 sm:grid-cols-5">
+  <div class="card card-pad space-y-4">
+    <h3 class="text-base font-semibold text-ink">From conversation to sale</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-x-8 gap-y-5">
       <div><p class="stat-value">{{ sales.funnel.wrote_in }}</p><p class="stat-label">wrote in</p></div>
       <div><p class="stat-value">{{ sales.funnel.leads }}</p><p class="stat-label">tracked as interested</p></div>
       <div><p class="stat-value">{{ sales.funnel.deals }}</p><p class="stat-label">in your pipeline</p></div>
       <div><p class="stat-value">{{ sales.funnel.won }}</p><p class="stat-label">deals won</p></div>
       <div><p class="stat-value">{{ sales.funnel.paid }}</p><p class="stat-label">paid orders</p></div>
     </div>
+    {% if sales.named or sales.recent %}
+    <p class="text-xs text-gray-500 border-t border-border pt-4">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
+    {% endif %}
   </div>
-  {% if sales.named or sales.recent %}
-  <p class="text-xs text-gray-500">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
-  {% endif %}
 </section>

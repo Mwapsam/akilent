@@ -7,52 +7,56 @@ No composite score; the one estimate (time saved) always shows its formula.
   <h2 id="automation-h" class="text-lg font-semibold text-ink">Automation &amp; AI impact</h2>
   <p class="text-sm text-gray-600">How much work did Akilent handle?</p>
 
-  <div class="stat-grid grid-cols-2 sm:grid-cols-4">
-    <div>
-      <p class="stat-value">{{ automation.first_replies_automatic }}</p>
-      <p class="stat-label">first replies handled automatically{% if automation.enquiries %} of {{ automation.enquiries }}{% endif %}</p>
+  <div class="card card-pad space-y-5">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5">
+      <div>
+        <p class="stat-value">{{ automation.first_replies_automatic }}</p>
+        <p class="stat-label">first replies handled automatically{% if automation.enquiries %} of {{ automation.enquiries }}{% endif %}</p>
+      </div>
+      <div>
+        {% if automation.out_of_hours %}
+        <p class="stat-value">{{ automation.out_of_hours.reached }}</p>
+        <p class="stat-label">out-of-hours customers reached of {{ automation.out_of_hours.closed_enquiries }}</p>
+        {% else %}
+        <p class="stat-value">—</p>
+        <p class="stat-label"><a href="/settings/hours/" class="text-accent hover:text-accent-strong">Set your hours</a> to measure this</p>
+        {% endif %}
+      </div>
+      <div>
+        {% if automation.ai %}
+        <p class="stat-value">{% if automation.ai.used_pct is not None %}{{ automation.ai.used_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">AI suggestions used{% if automation.ai.suggested %} ({{ automation.ai.used }} of {{ automation.ai.suggested }}){% endif %}</p>
+        {% else %}
+        <p class="stat-value">—</p>
+        <p class="stat-label">AI isn't turned on</p>
+        {% endif %}
+      </div>
+      <div>
+        <p class="stat-value">{{ automation.minutes_saved|duration_minutes }}</p>
+        <p class="stat-label">estimated time saved</p>
+        <p class="stat-delta text-gray-500">Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min</p>
+      </div>
     </div>
-    <div>
-      {% if automation.out_of_hours %}
-      <p class="stat-value">{{ automation.out_of_hours.reached }}</p>
-      <p class="stat-label">out-of-hours customers reached of {{ automation.out_of_hours.closed_enquiries }}</p>
-      {% else %}
-      <p class="stat-value">—</p>
-      <p class="stat-label"><a href="/settings/hours/" class="text-accent hover:text-accent-strong">Set your hours</a> to measure this</p>
-      {% endif %}
-    </div>
-    <div>
-      {% if automation.ai %}
-      <p class="stat-value">{% if automation.ai.used_pct is not None %}{{ automation.ai.used_pct }}%{% else %}—{% endif %}</p>
-      <p class="stat-label">AI suggestions used{% if automation.ai.suggested %} ({{ automation.ai.used }} of {{ automation.ai.suggested }}){% endif %}</p>
-      {% else %}
-      <p class="stat-value">—</p>
-      <p class="stat-label">AI isn't turned on</p>
-      {% endif %}
-    </div>
-    <div>
-      <p class="stat-value">{{ automation.minutes_saved|duration_minutes }}</p>
-      <p class="stat-label">estimated time saved</p>
-      <p class="stat-delta text-gray-500">Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min</p>
-    </div>
-  </div>
 
-  {% if automation.workflows %}
-  <h3 class="text-base font-semibold text-ink">Automations that led to sales</h3>
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead><tr><th>Automation</th><th>Leads</th><th>Paid orders</th><th>Revenue</th></tr></thead>
-      <tbody>
-        {% for wf in automation.workflows %}
-        <tr>
-          <td data-label="Automation"><a href="/automations/{{ wf.slug }}/stats/" class="text-accent hover:text-accent-strong">{{ wf.name }}</a></td>
-          <td data-label="Leads">{{ wf.leads }}</td>
-          <td data-label="Paid orders">{{ wf.paid_orders }}</td>
-          <td data-label="Revenue">{% for r in wf.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% if automation.workflows %}
+    <div class="border-t border-border pt-5">
+      <h3 class="text-sm font-semibold text-ink mb-3">Automations that led to sales</h3>
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <thead><tr><th>Automation</th><th>Leads</th><th>Paid orders</th><th>Revenue</th></tr></thead>
+          <tbody>
+            {% for wf in automation.workflows %}
+            <tr>
+              <td data-label="Automation"><a href="/automations/{{ wf.slug }}/stats/" class="text-accent hover:text-accent-strong">{{ wf.name }}</a></td>
+              <td data-label="Leads">{{ wf.leads }}</td>
+              <td data-label="Paid orders">{{ wf.paid_orders }}</td>
+              <td data-label="Revenue">{% for r in wf.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 </section>

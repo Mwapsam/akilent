@@ -532,6 +532,14 @@ CELERY_TASK_ROUTES = {
 }
 
 CELERY_BEAT_SCHEDULE = {
+    "generate-insights": {
+        "task": "apps.insights.tasks.generate_insights",
+        "schedule": 86400.0,  # nightly — insight rules query potentially large datasets
+    },
+    "evaluate-policies": {
+        "task": "apps.insights.tasks.evaluate_policies",
+        "schedule": 900.0,  # every 15 min — matches the escalation / campaign-sweep tier
+    },
     "expire-trials": {
         "task": "apps.billing.tasks.expire_trials",
         "schedule": 3600.0,

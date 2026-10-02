@@ -155,16 +155,21 @@ def rule_unanswered_conversations(account):
     )
 
 
-def rule_campaign_opportunity(account):
-    """Customers whose repurchase interval has elapsed — prime candidates for a re-order campaign.
+def overdue_repurchase_contacts(account) -> tuple[list, int]:
+    """Return ``(overdue_rows, median_interval_days)`` for contacts past their repurchase window.
 
-    Computes the median gap between consecutive paid orders across all contacts for this account.
-    Flags contacts whose last paid order is older than that gap.  Falls back to 30 days when there
-    is not enough history to compute a meaningful interval.
+    Shared between ``rule_campaign_opportunity`` (insight generation) and the policy
+    executor (trigger evaluation for ``repurchase_due`` policies).  Keeping the logic
+    here ensures both callers use the same definition of "repurchase due."
+
+    ``overdue_rows`` — list of order-row dicts (one per overdue contact) with keys:
+        contact_id, paid_at, contact__first_name, contact__last_name, contact__phone
+    ``median_interval_days`` — the computed (or fallback) repurchase window in days.
+    Falls back to 30 days when there is insufficient order history.
+    Returns ``([], 30)`` when there are no paid orders.
     """
     from apps.commerce.models import Order
 
-    # Gather all paid order dates per contact for this account, newest first.
     rows = list(
         Order.objects.filter(account=account, status=Order.Status.PAID)
         .values(
@@ -177,14 +182,12 @@ def rule_campaign_opportunity(account):
         .order_by("contact_id", "-paid_at")
     )
     if not rows:
-        return None
+        return [], 30
 
-    # Group by contact.
     contact_orders: dict[int, list] = {}
     for row in rows:
         contact_orders.setdefault(row["contact_id"], []).append(row)
 
-    # Compute inter-order gaps (seconds) across all contacts with 2+ orders.
     gaps: list[float] = []
     for orders in contact_orders.values():
         dates = [o["paid_at"] for o in orders if o["paid_at"] is not None]
@@ -200,8 +203,10 @@ def rule_campaign_opportunity(account):
     else:
         median_gap = timedelta(days=30)
 
+    interval_days = round(median_gap.total_seconds() / 86400)
+
     now = timezone.now()
-    overdue_contacts = []
+    overdue = []
     for contact_id, orders in contact_orders.items():
         last_paid = next(
             (o["paid_at"] for o in orders if o["paid_at"] is not None), None
@@ -209,8 +214,14 @@ def rule_campaign_opportunity(account):
         if last_paid is None:
             continue
         if (now - last_paid) >= median_gap:
-            overdue_contacts.append(orders[0])
+            overdue.append(orders[0])
 
+    return overdue, interval_days
+
+
+def rule_campaign_opportunity(account):
+    """Customers whose repurchase interval has elapsed — prime candidates for a re-order campaign."""
+    overdue_contacts, interval_days = overdue_repurchase_contacts(account)
     count = len(overdue_contacts)
     if count == 0:
         return None
@@ -219,8 +230,6 @@ def rule_campaign_opportunity(account):
     for o in overdue_contacts[:5]:
         name = f"{o.get('contact__first_name', '') or ''} {o.get('contact__last_name', '') or ''}".strip()
         sample_names.append(name or o.get("contact__phone") or "—")
-
-    interval_days = round(median_gap.total_seconds() / 86400)
 
     from apps.insights.models import Insight
 

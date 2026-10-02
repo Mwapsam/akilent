@@ -79,7 +79,20 @@ class RecommendationLog(models.Model):
     """Tracks whether an Insight's suggestion was acted on and what outcome followed.
 
     This is the authority layer: recommendations must earn trust through evidence.
+
+    ``status`` tracks the full lifecycle so acceptance rate is computable:
+        presented → accepted / dismissed / expired
+    ``policy_execution`` links to the PolicyExecution that ran as a result of
+    acceptance, establishing the explicit audit chain:
+        Insight → RecommendationLog → BusinessPolicy → PolicyExecution
+    ``outcome_*`` fields are populated later (P1) once business signals exist.
     """
+
+    class Status(models.TextChoices):
+        PRESENTED = "presented", "Presented"
+        ACCEPTED = "accepted", "Accepted"
+        DISMISSED = "dismissed", "Dismissed"
+        EXPIRED = "expired", "Expired"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="recommendation_logs"
@@ -91,26 +104,35 @@ class RecommendationLog(models.Model):
         blank=True,
         related_name="recommendation_logs",
     )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PRESENTED
+    )
     recommended_at = models.DateTimeField(auto_now_add=True)
     accepted = models.BooleanField(null=True, blank=True)
     acted_at = models.DateTimeField(blank=True, null=True)
+    # Set after the related BusinessPolicy executes — wires the explicit chain.
+    # Null until execution happens (may remain null if no policy was created).
+    policy_execution = models.ForeignKey(
+        "PolicyExecution",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recommendation_logs",
+    )
     outcome_measured_at = models.DateTimeField(blank=True, null=True)
-    # Free-form outcome: {"metric": "response_time", "before": 45, "after": 12, "unit": "min"}
+    # Free-form outcome populated by future business-signal measurement (P1).
+    # E.g. {"metric": "response_time", "before": 45, "after": 12, "unit": "min"}
     outcome_summary = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-recommended_at"]
         indexes = [
             models.Index(fields=["account", "recommended_at"]),
+            models.Index(fields=["account", "status"]),
         ]
 
     def __str__(self):
-        state = (
-            "accepted"
-            if self.accepted
-            else ("declined" if self.accepted is False else "pending")
-        )
-        return f"Recommendation {self.pk} ({state})"
+        return f"Recommendation {self.pk} ({self.status})"
 
 
 class BusinessPolicy(models.Model):
@@ -197,3 +219,59 @@ class BusinessPolicy(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.status}]"
+
+
+class PolicyExecution(models.Model):
+    """Audit record for a single execution attempt of an active BusinessPolicy.
+
+    Each row answers: "When did Akilent evaluate this policy, what did it find,
+    and what did it actually do?"
+
+    Field semantics
+    ---------------
+    trigger_snapshot  — policy config captured at evaluation time (not a live FK)
+    target            — who the trigger matched: {"type": "conversation"|"contact",
+                         "count": n, "ids": [...up to 50...]}
+    result            — what was invoked: {"action": "campaign", "campaign_id": n,
+                         "dispatch": "queued"} or {"action": "create_followup",
+                         "followup_count": n, "created_count": n, "existing_count": n}
+    status            — execution lifecycle (see Status choices)
+    error             — populated only on FAILED; describes what went wrong
+
+    This is an execution ledger, not an outcome ledger.  A COMPLETED execution
+    means Akilent successfully invoked the configured action — it does not mean
+    the customer responded, purchased, or that the recommendation "worked."
+    Business outcome measurement is a separate, later concern (P1).
+    """
+
+    class Status(models.TextChoices):
+        STARTED = "started", "Started"
+        COMPLETED = "completed", "Completed"
+        SKIPPED = "skipped", "Skipped"
+        FAILED = "failed", "Failed"
+
+    policy = models.ForeignKey(
+        BusinessPolicy, on_delete=models.CASCADE, related_name="executions"
+    )
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="policy_executions"
+    )
+    trigger_snapshot = models.JSONField(default=dict, blank=True)
+    target = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.STARTED
+    )
+    error = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["account", "status"]),
+            models.Index(fields=["policy", "started_at"]),
+        ]
+
+    def __str__(self):
+        return f"PolicyExecution {self.pk} policy={self.policy_id} [{self.status}]"

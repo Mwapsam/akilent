@@ -7,60 +7,65 @@ apps.conversations.reporting, for the selected ``days`` period.
   <h2 id="response-h" class="text-lg font-semibold text-ink">Customer response</h2>
   <p class="text-sm text-gray-600">Are we responding fast enough?</p>
 
-  <div class="stat-grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-    <div>
-      <p class="stat-value">{{ response.median_first_reply_seconds|duration }}</p>
-      <p class="stat-label">median first reply</p>
+  <div class="card card-pad space-y-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5">
+      <div>
+        <p class="stat-value">{{ response.median_first_reply_seconds|duration }}</p>
+        <p class="stat-label">median first reply</p>
+      </div>
+      <div>
+        <p class="stat-value">{% if response.answered_pct is not None %}{{ response.answered_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">conversations answered within 24 hours{% if response.enquiries %} ({{ response.answered }} of {{ response.enquiries }}){% endif %}</p>
+      </div>
+      <div>
+        <p class="stat-value">{% if recovery.rate_pct is not None %}{{ recovery.rate_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">
+          {% if recovery.missed %}{{ recovery.recovered }} of {{ recovery.missed }} missed conversations recovered{% else %}no missed conversations this period{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
+      </div>
+      <div>
+        <p class="stat-value">{{ resolution.median_resolution_seconds|duration }}</p>
+        <p class="stat-label">median time to resolve{% if resolution.resolved %} ({{ resolution.resolved }} closed this period){% endif %}</p>
+      </div>
     </div>
-    <div>
-      <p class="stat-value">{% if response.answered_pct is not None %}{{ response.answered_pct }}%{% else %}—{% endif %}</p>
-      <p class="stat-label">conversations answered within 24 hours{% if response.enquiries %} ({{ response.answered }} of {{ response.enquiries }}){% endif %}</p>
-    </div>
-    <div>
-      <p class="stat-value">{% if recovery.rate_pct is not None %}{{ recovery.rate_pct }}%{% else %}—{% endif %}</p>
-      <p class="stat-label">
-        {% if recovery.missed %}{{ recovery.recovered }} of {{ recovery.missed }} missed conversations recovered{% else %}no missed conversations this period{% endif %}
+
+    {% if peak_hours.enough %}
+    <div class="border-t border-border pt-5">
+      <p class="text-sm text-ink">
+        Your busiest time is <strong>{{ peak_hours.start_hour|hour12 }}–{{ peak_hours.end_hour|hour12 }}</strong>.
+        {{ peak_hours.share_pct }}% of new enquiries arrive then.
+        {% if peak_hours.closed_share_pct %}{{ peak_hours.closed_share_pct }}% of those arrive while you're closed.{% endif %}
       </p>
+      {% line_chart peak_series peak_labels unit="Hour" %}
     </div>
-    <div>
-      <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
-      <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
-    </div>
-    <div>
-      <p class="stat-value">{{ resolution.median_resolution_seconds|duration }}</p>
-      <p class="stat-label">median time to resolve{% if resolution.resolved %} ({{ resolution.resolved }} closed this period){% endif %}</p>
-    </div>
-  </div>
+    {% endif %}
 
-  {% if peak_hours.enough %}
-  <div class="border-t border-border pt-5">
-    <p class="text-sm text-ink">
-      Your busiest time is <strong>{{ peak_hours.start_hour|hour12 }}–{{ peak_hours.end_hour|hour12 }}</strong>.
-      {{ peak_hours.share_pct }}% of new enquiries arrive then.
-      {% if peak_hours.closed_share_pct %}{{ peak_hours.closed_share_pct }}% of those arrive while you're closed.{% endif %}
-    </p>
-    {% line_chart peak_series peak_labels unit="Hour" %}
+    {% if team %}
+    <div class="border-t border-border pt-5">
+      <h3 class="text-sm font-semibold text-ink mb-3">Team performance</h3>
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <caption class="sr-only">Team performance, by who owns the conversation</caption>
+          <thead>
+            <tr><th>Team member</th><th>Conversations</th><th>Waiting now</th><th>Median first reply</th></tr>
+          </thead>
+          <tbody>
+            {% for row in team %}
+            <tr>
+              <td data-label="Team member">{{ row.name }}</td>
+              <td data-label="Conversations">{{ row.conversations }}</td>
+              <td data-label="Waiting now">{{ row.waiting }}</td>
+              <td data-label="Median first reply">{{ row.median_first_reply_seconds|duration }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
-
-  {% if team %}
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <caption class="sr-only">Team performance, by who owns the conversation</caption>
-      <thead>
-        <tr><th>Team member</th><th>Conversations</th><th>Waiting now</th><th>Median first reply</th></tr>
-      </thead>
-      <tbody>
-        {% for row in team %}
-        <tr>
-          <td data-label="Team member">{{ row.name }}</td>
-          <td data-label="Conversations">{{ row.conversations }}</td>
-          <td data-label="Waiting now">{{ row.waiting }}</td>
-          <td data-label="Median first reply">{{ row.median_first_reply_seconds|duration }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
 </section>
