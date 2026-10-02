@@ -1,4 +1,4 @@
-{% load static %}{% comment %}
+{% load static seo_tags %}{% comment %}
   Two render modes. A normal request gets the whole document. A boosted navigation from inside
   the signed-in shell (request.shell_swap, see apps/core/htmx.py) gets only what changes: the
   <title>, the shell marker, out-of-band updates for nav and breadcrumbs, and the page itself,
@@ -10,8 +10,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
+  {% seo_meta %}
+  {% google_analytics %}
 {% endif %}
-  <title>{% block title %}{{ site.app_name|default:"Automator" }}{% endblock %}</title>
+  <title>{% block title %}{{ seo.title|default:site.app_name|default:"Automator" }}{% endblock %}</title>
   <meta name="akilent-shell" content="{% block shell_name %}{% if user.is_authenticated %}app{% else %}public{% endif %}{% endblock %}">
 {% if not request.shell_swap %}
   {# Apply the saved theme before first paint — avoids a light/dark flash. #}

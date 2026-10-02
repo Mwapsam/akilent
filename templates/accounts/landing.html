@@ -1,12 +1,10 @@
-{% load static %}<!DOCTYPE html>
+{% load static seo_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  {% with app=site.app_name|default:"Akilent" %}
-  <title>{{ app }} — Turn customer conversations into opportunities you don't miss</title>
-  <meta name="description" content="{% if WHATSAPP_ENABLED %}{{ app }} gives small businesses one shared inbox for WhatsApp conversations, email from their own address, automatic replies, follow-up reminders, customer records and payment links.{% else %}{{ app }} helps small businesses email customers from their own address and keep follow-up reminders, customer records and payment links in one place.{% endif %}">
-  {% endwith %}
+  {% seo_meta %}
+  {% google_analytics %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">

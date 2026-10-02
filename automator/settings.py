@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     "apps.insights",
     "django_otp",
     "django_otp.plugins.otp_totp",
+    "django.contrib.sitemaps",
+    "apps.seo",
 ]
 
 MIDDLEWARE = [
@@ -92,6 +94,7 @@ TEMPLATES = [
                 "apps.accounts.context_processors.onboarding_status",
                 "apps.accounts.context_processors.plan_features",
                 "apps.accounts.context_processors.workspace_context",
+                "apps.seo.context_processors.resolve_seo_context",
             ],
         },
     },
@@ -226,6 +229,23 @@ else:
 
 
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "localhost:8000")
+
+# --- SEO ---
+
+SITE_URL = os.getenv("SITE_URL", "https://akilent.com")
+
+SEO_DEFAULTS = {
+    "site_name": "Akilent",
+    "default_title": "Customer Conversations, CRM & Business Automation",
+    "default_description": "Akilent helps businesses manage customer conversations, contacts, sales, automation and insights from one workspace.",
+    "title_suffix": "— Akilent",
+    "og_image": "img/seo/og-default.png",
+}
+
+# Set to True only in production. Staging/dev emit noindex globally and robots.txt Disallow: /
+SEO_ALLOW_INDEXING = os.getenv("SEO_ALLOW_INDEXING", "False").lower() == "true"
+
+GOOGLE_ANALYTICS_ID = os.getenv("GOOGLE_ANALYTICS_ID", "")
 
 # --- AI (optional) ---
 # "none" switches every AI feature off; Akilent works fully without it.

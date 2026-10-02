@@ -1,0 +1,20 @@
+{% with s=seo %}{% if s %}
+<title>{{ s.title }}</title>
+{% if s.description %}<meta name="description" content="{{ s.description }}">{% endif %}
+<link rel="canonical" href="{{ s.canonical_url }}">
+<meta name="robots" content="{% if s.index %}index{% else %}noindex{% endif %},{% if s.follow %}follow{% else %}nofollow{% endif %}">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ s.site_name }}">
+<meta property="og:title" content="{{ s.og_title }}">
+{% if s.og_description %}<meta property="og:description" content="{{ s.og_description }}">{% endif %}
+<meta property="og:url" content="{{ s.og_url }}">
+{% if s.og_image %}<meta property="og:image" content="{{ s.og_image }}">{% endif %}
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ s.og_title }}">
+{% if s.og_description %}<meta name="twitter:description" content="{{ s.og_description }}">{% endif %}
+{% if s.og_image %}<meta name="twitter:image" content="{{ s.og_image }}">{% endif %}
+
+{% for item_json in s.structured_data_items %}<script type="application/ld+json">{{ item_json|safe }}</script>
+{% endfor %}{% endif %}{% endwith %}

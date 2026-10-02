@@ -1,10 +1,10 @@
-{% load static %}<!DOCTYPE html>
+{% load static seo_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ page.title }} — Developer docs — {{ site.app_name|default:"Automator" }}{% endblock %}</title>
-  <meta name="description" content="{{ page.summary }}">
+  {% seo_meta %}
+  {% google_analytics %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
