@@ -29,4 +29,4 @@ jobs:
         run: pip install bandit
 
       - name: Run Bandit
-        run: bandit -r . -ll -ii
+        run: bandit -r . -ll -ii --exclude ./.venv,./staticfiles,./media,./node_modules -c pyproject.toml

@@ -55,6 +55,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.SecurityHeadersMiddleware",
     # Serve built static assets (CSS/JS/fonts) compressed + cache-busted.
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -747,6 +748,10 @@ LOGGING = {
 }
 
 # --- Production security ---
+
+CSRF_COOKIE_HTTPONLY = (
+    True  # safe: HTMX reads the token from {{ csrf_token }}, never from JS
+)
 
 if not DEBUG:
     # SECURE_SSL_REDIRECT = True

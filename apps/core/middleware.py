@@ -8,9 +8,37 @@ from apps.core.request_context import (
     set_request_id,
 )
 
+# ---------------------------------------------------------------------------
+# Security-response headers
+# ---------------------------------------------------------------------------
+# Tightened where possible without breaking HTMX / Alpine / whitenoise:
+#   * CSP allows 'unsafe-inline' (inline theme-toggle script in base.html)
+#     and 'unsafe-eval' (Alpine 3 uses Function() to evaluate x-data expressions).
+#   * img-src includes https: for S3/CloudFront user-uploaded media.
+#   * connect-src includes wss: for the optional SSE upgrade path.
+#   * COEP is intentionally omitted: Cloudflare cdn-cgi resources lack CORP
+#     headers, so require-corp would break error pages served from that origin.
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob: https:; "
+    "font-src 'self' data:; "
+    "connect-src 'self' wss:; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "object-src 'none';"
+)
+
+_PERMISSIONS = (
+    "accelerometer=(), camera=(), display-capture=(), geolocation=(), "
+    "gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+)
+
 _INBOUND_HEADER = "HTTP_X_REQUEST_ID"
 _RESPONSE_HEADER = "X-Request-Id"
-
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Paths that keep working for a suspended member or while viewing as a business.
@@ -42,6 +70,20 @@ def _wants_json(request) -> bool:
         )
         or "application/json" in request.headers.get("accept", "")
     )
+
+
+class SecurityHeadersMiddleware:
+    """Emit security headers that Django's SecurityMiddleware does not cover."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault("Content-Security-Policy", _CSP)
+        response.setdefault("Permissions-Policy", _PERMISSIONS)
+        response.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        return response
 
 
 class SuspendedAccountMiddleware:

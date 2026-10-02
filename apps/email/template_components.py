@@ -72,4 +72,4 @@ def component(context, name, **kwargs):
     rendered = _COMPONENT_ENGINE.from_string(body).render(
         Context(safe_kwargs, autoescape=True)
     )
-    return mark_safe(rendered)
+    return mark_safe(rendered)  # nosec B703 B308 - rendered via Django template engine with autoescape=True

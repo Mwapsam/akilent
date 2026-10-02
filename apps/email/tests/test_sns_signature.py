@@ -55,7 +55,7 @@ def _signed_message(key, *, version: str) -> dict:
         "SignatureVersion": version,
         "SigningCertURL": CERT_URL,
     }
-    algo = hashes.SHA1() if version == "1" else hashes.SHA256()
+    algo = hashes.SHA1() if version == "1" else hashes.SHA256()  # nosec B303 - mirrors AWS SNS v1 signature spec
     sig = key.sign(_canonical(msg).encode(), padding.PKCS1v15(), algo)
     msg["Signature"] = base64.b64encode(sig).decode()
     return msg
@@ -102,7 +102,7 @@ def test_wrong_key_fails(keypair):
     key, _ = keypair
     msg = _signed_message(key, version="1")
     other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    bad_sig = other.sign(_canonical(msg).encode(), padding.PKCS1v15(), hashes.SHA1())
+    bad_sig = other.sign(_canonical(msg).encode(), padding.PKCS1v15(), hashes.SHA1())  # nosec B303
     msg["Signature"] = base64.b64encode(bad_sig).decode()
     assert ses_webhooks._verify_sns_signature(msg) is False
 

@@ -32,12 +32,12 @@ _MODAL_SIZES = {
 @register.simple_block_tag
 def modal(content, id, title="", size="lg", footer=""):
     """Canonical modal. `id` is the event key used to open it."""
-    return mark_safe(
+    return mark_safe(  # nosec B703 B308 - content is caller-supplied pre-rendered HTML
         render_to_string(
             "components/_modal.html",
             {
-                "slot": mark_safe(content),
-                "footer": mark_safe(footer),
+                "slot": mark_safe(content),  # nosec B703 B308
+                "footer": mark_safe(footer),  # nosec B703 B308
                 "id": id,
                 "title": title,
                 "size_class": _MODAL_SIZES.get(size, _MODAL_SIZES["lg"]),
@@ -80,12 +80,15 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
     import hashlib
 
     # Generate a stable unique id based on content hash for a11y linkage
-    menu_id = "dropdown-" + hashlib.md5(content.encode()).hexdigest()[:8]
-    return mark_safe(
+    menu_id = (
+        "dropdown-"
+        + hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:8]  # nosec B324
+    )
+    return mark_safe(  # nosec B703 B308 - content is caller-supplied pre-rendered HTML
         render_to_string(
             "components/_dropdown.html",
             {
-                "slot": mark_safe(content),
+                "slot": mark_safe(content),  # nosec B703 B308
                 "label": label,
                 "align_class": "left-0" if align == "left" else "right-0",
                 "button_class": button_class,

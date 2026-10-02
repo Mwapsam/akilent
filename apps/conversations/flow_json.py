@@ -93,4 +93,4 @@ def content_hash(flow_json: dict) -> str:
     """A stable hash of a built Flow JSON, for ``ConversationForm.flow_json_hash``'s
     "has this actually changed" comparison."""
     canonical = json.dumps(flow_json, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha1(canonical.encode()).hexdigest()
+    return hashlib.sha1(canonical.encode(), usedforsecurity=False).hexdigest()  # nosec B324

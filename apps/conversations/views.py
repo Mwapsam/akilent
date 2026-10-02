@@ -174,7 +174,9 @@ def inbox_feed(request):
     )
 
     if is_background(request):
-        digest = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]
+        digest = hashlib.sha1(html.encode("utf-8"), usedforsecurity=False).hexdigest()[
+            :12
+        ]  # nosec B324
         if request.GET.get("h") == digest:
             return HttpResponse(status=204)
         response = HttpResponse(html)

@@ -18,4 +18,5 @@ jobs:
         uses: zaproxy/action-baseline@v0.15.0
         with:
           target: "https://akilent.com"
+          rules_file_name: ".zap/rules.tsv"
           fail_action: true
