@@ -1,0 +1,112 @@
+{% load ui %}
+{# ── Status / Priority controls ──────────────────────────────────────── #}
+<div class="rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+
+  <div class="px-4 py-3">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Status</p>
+    <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_status">
+      <select name="status" onchange="this.form.submit()"
+              class="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-2 py-1.5">
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="px-4 py-3">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Priority</p>
+    <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_priority">
+      <select name="priority" onchange="this.form.submit()"
+              class="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-2 py-1.5">
+        {% for val, label in priority_choices %}
+        <option value="{{ val }}" {% if ticket.priority == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="px-4 py-3">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Assigned to</p>
+    <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="assign">
+      <select name="agent_id" onchange="this.form.submit()"
+              class="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-2 py-1.5">
+        <option value="">— Unassigned —</option>
+        {% for agent in agents %}
+        <option value="{{ agent.pk }}" {% if ticket.assigned_agent_id == agent.pk %}selected{% endif %}>
+          {{ agent.get_full_name|default:agent.username }}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+</div>
+
+{# ── SLA info ─────────────────────────────────────────────────────────── #}
+<div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 space-y-2">
+  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">SLA</p>
+  {% if ticket.sla_due_at %}
+  <p class="text-sm {% if ticket.sla_breached %}text-red-600{% else %}text-gray-700 dark:text-gray-300{% endif %}">
+    Due {{ ticket.sla_due_at|date:"M j, H:i" }}
+    {% if ticket.sla_breached %}<span class="ml-1 text-xs font-semibold text-red-600">BREACHED</span>{% endif %}
+  </p>
+  {% if ticket.first_response_at %}
+  <p class="text-xs text-gray-400">First response {{ ticket.first_response_at|timesince }} ago</p>
+  {% endif %}
+  {% else %}
+  <p class="text-sm text-gray-400">No SLA policy</p>
+  {% endif %}
+</div>
+
+{# ── Metadata ─────────────────────────────────────────────────────────── #}
+<div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 space-y-2">
+  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Details</p>
+  <dl class="space-y-1.5 text-sm">
+    <div class="flex justify-between gap-2">
+      <dt class="text-gray-400">Queue</dt>
+      <dd class="text-gray-700 dark:text-gray-300 text-right">{{ ticket.queue.name|default:"—" }}</dd>
+    </div>
+    <div class="flex justify-between gap-2">
+      <dt class="text-gray-400">Category</dt>
+      <dd class="text-gray-700 dark:text-gray-300 text-right">{{ ticket.category.name|default:"—" }}</dd>
+    </div>
+    <div class="flex justify-between gap-2">
+      <dt class="text-gray-400">Tier</dt>
+      <dd class="text-gray-700 dark:text-gray-300">T{{ ticket.customer_tier }}</dd>
+    </div>
+    <div class="flex justify-between gap-2">
+      <dt class="text-gray-400">Level</dt>
+      <dd class="text-gray-700 dark:text-gray-300">{{ ticket.support_level|upper }}</dd>
+    </div>
+    <div class="flex justify-between gap-2">
+      <dt class="text-gray-400">Created</dt>
+      <dd class="text-gray-400">{{ ticket.created_at|date:"M j, H:i" }}</dd>
+    </div>
+  </dl>
+</div>
+
+{# ── Escalate ─────────────────────────────────────────────────────────── #}
+{% if ticket.support_level != 'l4' and ticket.status not in 'resolved,closed' %}
+<div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Escalate</p>
+  <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="escalate">
+    <select name="to_level" class="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-2 py-1.5 mb-2">
+      <option value="l2">L2</option>
+      <option value="l3">L3</option>
+      <option value="l4">L4</option>
+    </select>
+    <textarea name="notes" rows="2" placeholder="Escalation notes…"
+              class="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-2 py-1.5 resize-none mb-2"></textarea>
+    <button type="submit" class="w-full btn btn-secondary btn-sm">Escalate</button>
+  </form>
+</div>
+{% endif %}

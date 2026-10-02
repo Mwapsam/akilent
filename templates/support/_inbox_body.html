@@ -1,0 +1,73 @@
+{% load ui %}
+{% if page.object_list %}
+<ul class="divide-y divide-gray-100 dark:divide-gray-800">
+  {% for ticket in page.object_list %}
+  <li>
+    <a href="{% url 'support:detail' ticket.ticket_number %}"
+       class="flex items-start gap-3 px-2 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-lg transition-colors">
+
+      {# Priority badge #}
+      <span class="mt-0.5 shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold
+        {% if ticket.priority == 'p1' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300
+        {% elif ticket.priority == 'p2' %}bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300
+        {% elif ticket.priority == 'p3' %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300
+        {% else %}bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400{% endif %}">
+        {{ ticket.priority|upper }}
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-ink truncate">{{ ticket.subject }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">
+              {{ ticket.ticket_number }}
+              {% if ticket.category %} · {{ ticket.category.name }}{% endif %}
+              {% if ticket.queue %} · {{ ticket.queue.name }}{% endif %}
+            </p>
+          </div>
+          <div class="shrink-0 text-right">
+            <span class="text-xs text-gray-400">T{{ ticket.customer_tier }}</span>
+            {% if ticket.sla_breached %}
+            <span class="ml-1 inline-flex items-center rounded px-1 py-0.5 text-xs bg-red-100 text-red-600 dark:bg-red-900/30">SLA</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mt-1 flex items-center gap-3">
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
+            {% if ticket.status == 'new' %}bg-yellow-100 text-yellow-700
+            {% elif ticket.status == 'in_progress' %}bg-green-100 text-green-700
+            {% elif ticket.status == 'escalated' %}bg-red-100 text-red-700
+            {% elif ticket.status in 'resolved,closed' %}bg-gray-100 text-gray-500
+            {% else %}bg-blue-100 text-blue-700{% endif %}">
+            {{ ticket.get_status_display }}
+          </span>
+          {% if ticket.assigned_agent %}
+          <span class="text-xs text-gray-400">→ {{ ticket.assigned_agent.get_full_name|default:ticket.assigned_agent.username }}</span>
+          {% endif %}
+          <span class="text-xs text-gray-400 ml-auto">{{ ticket.created_at|timesince }} ago</span>
+        </div>
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if page.has_other_pages %}
+<div class="flex items-center justify-between mt-4 px-2">
+  {% if page.has_previous %}
+  <a href="?page={{ page.previous_page_number }}&status={{ status_filter }}&queue={{ active_queue }}" class="btn btn-secondary btn-sm">← Previous</a>
+  {% else %}<span></span>{% endif %}
+  <span class="text-sm text-gray-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}
+  <a href="?page={{ page.next_page_number }}&status={{ status_filter }}&queue={{ active_queue }}" class="btn btn-secondary btn-sm">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="py-16 text-center text-gray-400">
+  {% include "components/icon.html" with name="inbox" class="w-10 h-10 mx-auto mb-3 opacity-30" %}
+  <p class="text-sm">No tickets found.</p>
+</div>
+{% endif %}

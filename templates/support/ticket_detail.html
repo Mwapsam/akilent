@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}{{ ticket.ticket_number }} — Support{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 h-full -mt-4">
+
+  {# ── Left: ticket header + thread ─────────────────────────────────── #}
+  <div id="ticket-pane-inner" class="flex-1 min-w-0 pt-6 overflow-y-auto">
+    {% include "support/_ticket_pane.html" %}
+  </div>
+
+  {# ── Right: metadata panel ─────────────────────────────────────────── #}
+  <aside class="hidden xl:flex flex-col w-72 shrink-0 pt-6 gap-6">
+    {% include "support/_ticket_meta.html" %}
+  </aside>
+
+</div>
+{% endblock %}

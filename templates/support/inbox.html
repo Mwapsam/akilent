@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Support — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 h-full -mt-4 -mx-4 sm:-mx-6">
+
+  {# ── Queue sidebar ─────────────────────────────────────────────────── #}
+  <aside class="hidden lg:flex flex-col w-52 shrink-0 border-r border-gray-200 dark:border-gray-700 pt-6 pb-4 px-3 gap-1 overflow-y-auto">
+    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 px-2 mb-1">Queues</p>
+
+    <a href="{% url 'support:inbox' %}"
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if not active_queue %}bg-blue-50 text-blue-700 font-medium dark:bg-blue-900/30 dark:text-blue-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">
+      <span>All tickets</span>
+    </a>
+    <a href="{% url 'support:inbox' %}?mine=1"
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+      <span>My tickets</span>
+    </a>
+
+    <hr class="my-2 border-gray-200 dark:border-gray-700">
+
+    {% for queue in queues %}
+    <a href="{% url 'support:inbox' %}?queue={{ queue.slug }}"
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if active_queue == queue.slug %}bg-blue-50 text-blue-700 font-medium dark:bg-blue-900/30 dark:text-blue-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">
+      <span>{{ queue.name }}</span>
+      {% if queue.open_count %}
+      <span class="ml-2 text-xs tabular-nums bg-gray-200 dark:bg-gray-700 rounded-full px-1.5 py-0.5">{{ queue.open_count }}</span>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </aside>
+
+  {# ── Ticket list ───────────────────────────────────────────────────── #}
+  <div class="flex-1 min-w-0 pt-6 pb-4 overflow-y-auto">
+    <header class="flex flex-wrap items-center justify-between gap-3 mb-4 px-1">
+      <h1 class="text-xl font-semibold text-ink">
+        {% if active_queue %}{{ active_queue|title }}{% else %}Support{% endif %}
+      </h1>
+      <div class="flex items-center gap-2">
+        <form method="get" class="flex items-center gap-2">
+          {% if active_queue %}<input type="hidden" name="queue" value="{{ active_queue }}">{% endif %}
+          <select name="status" onchange="this.form.submit()"
+                  class="text-sm border border-gray-300 rounded-md px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+            <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
+            <option value="resolved" {% if status_filter == "resolved" %}selected{% endif %}>Resolved</option>
+            <option value="closed" {% if status_filter == "closed" %}selected{% endif %}>Closed</option>
+            <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
+          </select>
+        </form>
+        <a href="{% url 'support:portal-create' %}" class="btn btn-primary btn-sm">
+          {% include "components/icon.html" with name="plus" class="w-4 h-4" %} New ticket
+        </a>
+      </div>
+    </header>
+
+    <div id="inbox-body"
+         hx-get="{{ request.get_full_path }}"
+         hx-trigger="every 30s"
+         hx-swap="innerHTML">
+      {% include "support/_inbox_body.html" %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

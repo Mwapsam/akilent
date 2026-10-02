@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.internal_debug",
     "apps.ai",
     "apps.insights",
+    "apps.support",
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django.contrib.sitemaps",
@@ -662,6 +663,10 @@ CELERY_BEAT_SCHEDULE = {
     "send-heartbeats": {
         "task": "apps.core.tasks.send_heartbeats",
         "schedule": 60.0,  # the Pilot Command Center shows each queue's last heartbeat
+    },
+    "evaluate-support-sla": {
+        "task": "apps.support.tasks.evaluate_sla",
+        "schedule": 300.0,  # every 5 min — SLA breach detection + at-risk escalation
     },
 }
 

@@ -244,6 +244,7 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
+    "apps.payments.*",
     "boto3.*",
     "botocore.*",
     "celery.*",

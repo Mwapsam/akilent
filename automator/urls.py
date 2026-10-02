@@ -96,6 +96,7 @@ urlpatterns = [
     path("billing/", include("apps.billing.urls", namespace="billing")),
     path("manage/", include("apps.core.urls", namespace="core")),
     path("api/", include("apps.api.urls")),
+    path("support/", include("apps.support.urls", namespace="support")),
 ]
 
 # Soft-disabled verticals — only routed when their feature flag is on.
