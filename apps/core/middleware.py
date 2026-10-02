@@ -27,20 +27,23 @@ _csp_cache: str | None = None
 def _build_csp() -> str:
     from django.conf import settings
 
-    # img-src: use the specific S3/CloudFront domain when available.
+    # Static assets (JS, CSS, fonts, images) are served from the S3/CloudFront domain.
+    # All four directives need it; fall back to https: in dev where S3 is not configured.
     custom_domain = getattr(settings, "AWS_S3_CUSTOM_DOMAIN", "")
-    img_src_extra = f"https://{custom_domain}" if custom_domain else "https:"
+    cdn = f"https://{custom_domain}" if custom_domain else "https:"
 
     # script-src: allow Google Analytics loader only when a GA ID is configured.
+    # Cloudflare Insights injects beacon.min.js from static.cloudflareinsights.com.
     ga_id = getattr(settings, "GOOGLE_ANALYTICS_ID", "")
     script_src_extra = " https://www.googletagmanager.com" if ga_id else ""
 
     return (
         "default-src 'self'; "
-        f"script-src 'self' 'unsafe-inline' 'unsafe-eval'{script_src_extra}; "
-        "style-src 'self' 'unsafe-inline'; "
-        f"img-src 'self' data: blob: {img_src_extra}; "
-        "font-src 'self' data:; "
+        f"script-src 'self' 'unsafe-inline' 'unsafe-eval' {cdn}"
+        f" https://static.cloudflareinsights.com{script_src_extra}; "
+        f"style-src 'self' 'unsafe-inline' {cdn}; "
+        f"img-src 'self' data: blob: {cdn}; "
+        f"font-src 'self' data: {cdn}; "
         "connect-src 'self'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
