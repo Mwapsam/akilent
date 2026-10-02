@@ -2,6 +2,8 @@
 Business intelligence: AI-generated observations from apps.insights. Surfaced above the
 Business Health metrics so owners see what needs attention before reading the numbers.
 ``intelligence_insights`` is a queryset of Insight rows ordered by severity then created_at.
+Required context: ``automatable_insight_types`` — frozenset of insight type strings that have
+an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`` from the view).
 {% endcomment %}
 {% if intelligence_insights %}
 <section class="space-y-3" aria-labelledby="intelligence-h">
@@ -16,10 +18,10 @@ Business Health metrics so owners see what needs attention before reading the nu
   <ul class="space-y-3">
     {% for insight in intelligence_insights %}
     <li class="card card-pad
-        {% if insight.severity == 'urgent' %}border-l-4 border-red-500
-        {% elif insight.severity == 'warning' %}border-l-4 border-amber-400
-        {% elif insight.severity == 'opportunity' %}border-l-4 border-emerald-500
-        {% else %}border-l-4 border-blue-400
+        {% if insight.severity == 'urgent' %}border-l-4 tone-coral-border
+        {% elif insight.severity == 'warning' %}border-l-4 tone-amber-border
+        {% elif insight.severity == 'opportunity' %}border-l-4 tone-teal-border
+        {% else %}border-l-4 tone-info-border
         {% endif %}"
         id="insight-{{ insight.pk }}">
       <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -69,7 +71,8 @@ Business Health metrics so owners see what needs attention before reading the nu
           {% if insight.suggested_action.action %}
           <form method="post" action="{% url 'insight-act' insight.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-primary btn-sm">
+            <button type="submit" class="btn btn-primary btn-sm"
+                    aria-label="{{ insight.suggested_action.label|default:'Take action' }} — {{ insight.title }}">
               {{ insight.suggested_action.label|default:"Take action" }}
             </button>
           </form>
@@ -80,19 +83,23 @@ Business Health metrics so owners see what needs attention before reading the nu
           {% if insight.type in automatable_insight_types %}
           <form method="post" action="{% url 'policy-from-insight' insight.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-ghost btn-sm" title="Create an automation policy from this insight">Automate</button>
+            <button type="submit" class="btn btn-ghost btn-sm"
+                    title="Create an automation policy from this insight"
+                    aria-label="Automate: {{ insight.title }}">Automate</button>
           </form>
           {% endif %}
 
           {% if insight.status == 'new' %}
           <form method="post" action="{% url 'insight-acknowledge' insight.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-ghost btn-sm">Got it</button>
+            <button type="submit" class="btn btn-ghost btn-sm"
+                    aria-label="Acknowledge: {{ insight.title }}">Got it</button>
           </form>
           {% endif %}
           <form method="post" action="{% url 'insight-dismiss' insight.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-ghost btn-sm text-gray-400 hover:text-red-600">Dismiss</button>
+            <button type="submit" class="btn btn-danger-ghost btn-sm"
+                    aria-label="Dismiss: {{ insight.title }}">Dismiss</button>
           </form>
         </div>
       </div>
@@ -108,4 +115,9 @@ Business Health metrics so owners see what needs attention before reading the nu
     {% endfor %}
   </ul>
 </section>
+{% else %}
+<div class="card card-pad flex items-center gap-3 text-sm text-gray-500">
+  {% include "components/icon.html" with name="check-circle" class="w-5 h-5 shrink-0 text-emerald-500" %}
+  <span>Business health looks good — no open observations right now.</span>
+</div>
 {% endif %}

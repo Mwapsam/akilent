@@ -455,9 +455,12 @@ def policy_from_insight(request, pk):
     except IntegrityError:
         # Concurrent double-submit lost the race to the DB constraint.
         created = False
-        policy = BusinessPolicy.objects.filter(
+        _existing = BusinessPolicy.objects.filter(
             account=account, created_from=insight
         ).first()
+        if _existing is None:
+            return redirect("insight-policies")
+        policy = _existing
 
     if created:
         messages.success(
