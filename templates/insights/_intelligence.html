@@ -77,6 +77,13 @@ Business Health metrics so owners see what needs attention before reading the nu
           <span class="text-sm text-gray-500 italic">{{ insight.suggested_action.label }}</span>
           {% endif %}
 
+          {% if insight.type in automatable_insight_types %}
+          <form method="post" action="{% url 'policy-from-insight' insight.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm" title="Create an automation policy from this insight">Automate</button>
+          </form>
+          {% endif %}
+
           {% if insight.status == 'new' %}
           <form method="post" action="{% url 'insight-acknowledge' insight.pk %}">
             {% csrf_token %}

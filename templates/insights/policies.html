@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Automation Policies{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-semibold text-ink">Automation Policies</h1>
+      <p class="mt-1 text-sm text-gray-600">
+        Policies run automatically when a business condition is met.
+        Create them from insights on the
+        <a href="{% url 'insights' %}" class="text-brand underline">Business Health</a> page.
+      </p>
+    </div>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for message in messages %}
+    <div class="rounded-md px-4 py-3 text-sm
+        {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800
+        {% elif message.tags == 'error' %}bg-red-50 text-red-800
+        {% else %}bg-blue-50 text-blue-800{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if policy_list %}
+  <ul class="space-y-3">
+    {% for policy in policy_list %}
+    <li class="card card-pad">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="text-sm font-semibold text-ink">{{ policy.name }}</p>
+            <span class="badge text-xs
+                {% if policy.status == 'active' %}badge-success
+                {% elif policy.status == 'paused' %}badge-warning
+                {% else %}badge-neutral{% endif %}">
+              {{ policy.get_status_display }}
+            </span>
+            <span class="badge badge-neutral text-xs">{{ policy.get_trigger_display }}</span>
+          </div>
+          {% if policy.condition %}
+          <p class="mt-1 text-xs text-gray-500">
+            Condition:
+            {% for k, v in policy.condition.items %}{{ k }}&nbsp;=&nbsp;{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </p>
+          {% endif %}
+          {% if policy.action.label %}
+          <p class="mt-0.5 text-xs text-gray-500">Action: {{ policy.action.label }}</p>
+          {% endif %}
+          {% if policy.created_from %}
+          <p class="mt-0.5 text-xs text-gray-400">
+            From insight: <a href="{% url 'insights' %}#insight-{{ policy.created_from_id }}" class="underline hover:text-gray-600">{{ policy.created_from.title }}</a>
+          </p>
+          {% endif %}
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+          {% if policy.status == 'draft' or policy.status == 'paused' %}
+          <form method="post" action="{% url 'insight-policy-update-status' policy.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="activate">
+            <button type="submit" class="btn btn-primary btn-sm">Activate</button>
+          </form>
+          {% endif %}
+
+          {% if policy.status == 'active' %}
+          <form method="post" action="{% url 'insight-policy-update-status' policy.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="pause">
+            <button type="submit" class="btn btn-ghost btn-sm">Pause</button>
+          </form>
+          {% endif %}
+
+          <form method="post" action="{% url 'insight-policy-update-status' policy.pk %}"
+                onsubmit="return confirm('Delete this policy?')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <button type="submit" class="btn btn-ghost btn-sm text-gray-400 hover:text-red-600">Delete</button>
+          </form>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% else %}
+  <div class="card card-pad text-center py-12 text-gray-400 text-sm">
+    No policies yet. Open an insight on the
+    <a href="{% url 'insights' %}" class="text-brand underline">Business Health</a> page
+    and click <strong>Automate</strong> to create one.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

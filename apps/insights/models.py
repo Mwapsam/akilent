@@ -111,3 +111,89 @@ class RecommendationLog(models.Model):
             else ("declined" if self.accepted is False else "pending")
         )
         return f"Recommendation {self.pk} ({state})"
+
+
+class BusinessPolicy(models.Model):
+    """An automation rule created (usually from an Insight) that defines
+    what Akilent should do when a specific business condition is met.
+
+    This is the bridge from "Akilent observed X" to "whenever X happens, do Y
+    automatically."  Policies start as DRAFT (the owner reviews the pre-filled
+    proposal from an insight), become ACTIVE when they enable it, and can be
+    PAUSED without deletion.
+
+    ``created_from`` links back to the Insight that prompted this policy, giving
+    a traceable chain: observation → recommendation → policy → execution.
+    """
+
+    class Trigger(models.TextChoices):
+        CONVERSATION_UNANSWERED = "conversation_unanswered", "Conversation unanswered"
+        LEAD_UNANSWERED = "lead_unanswered", "Lead unanswered"
+        CUSTOMER_INACTIVE = "customer_inactive", "Customer inactive"
+        REPURCHASE_DUE = "repurchase_due", "Repurchase window elapsed"
+
+    # Maps insight.type to the closest trigger key.
+    INSIGHT_TYPE_TO_TRIGGER = {
+        "unanswered_conversations": Trigger.CONVERSATION_UNANSWERED,
+        "lead_followup_gap": Trigger.LEAD_UNANSWERED,
+        "inactive_customers": Trigger.CUSTOMER_INACTIVE,
+        "campaign_opportunity": Trigger.REPURCHASE_DUE,
+    }
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="policies"
+    )
+    name = models.CharField(max_length=200)
+    trigger = models.CharField(max_length=64, choices=Trigger.choices)
+    # Threshold values that gate the trigger. Shape depends on trigger type.
+    # E.g. {"hours": 24} for LEAD_UNANSWERED, {"days": 90} for CUSTOMER_INACTIVE.
+    condition = models.JSONField(default=dict, blank=True)
+    # What the system should do when the trigger fires.
+    # E.g. {"type": "campaign", "label": "Re-order campaign"} or {"type": "notify"}.
+    action = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT
+    )
+    # The insight that prompted this policy — null when created directly.
+    created_from = models.ForeignKey(
+        Insight,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="derived_policies",
+    )
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["account", "status"]),
+            models.Index(fields=["account", "trigger", "status"]),
+        ]
+        constraints = [
+            # Only one policy per source insight per account, regardless of status.
+            # Prevents both the race-condition double-create and re-creating a draft
+            # after a policy has already been activated or paused from the same insight.
+            models.UniqueConstraint(
+                fields=["account", "created_from"],
+                condition=models.Q(created_from__isnull=False),
+                name="uniq_policy_per_insight",
+            ),
+        ]
+        verbose_name_plural = "business policies"
+
+    def __str__(self):
+        return f"{self.name} [{self.status}]"

@@ -69,7 +69,7 @@ def insights(request):
     peak_labels = [hour12(h) for h in range(24)]
     peak_series = [("Enquiries", peak_hours.get("hours", [0] * 24))]
 
-    from apps.insights.models import Insight
+    from apps.insights.models import BusinessPolicy, Insight
 
     # Severity ordering: urgent first, then warning, opportunity, info.
     severity_order: dict[str, int] = {
@@ -93,6 +93,12 @@ def insights(request):
             "account": account,
             "days": days,
             "intelligence_insights": raw_insights,
+            # Keys of insight types that have a known automation mapping.  The
+            # template uses this to guard the Automate button so the same set of
+            # types is checked in both places — no divergence between client and server.
+            "automatable_insight_types": frozenset(
+                BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER
+            ),
             "period_choices": reporting.PERIODS,
             "period_locked": period_locked,
             "has_history": has_history,
@@ -367,3 +373,145 @@ def insight_act(request, pk):
         return redirect(destination)
 
     return redirect("insights")
+
+
+# ---------------------------------------------------------------------------
+# Policy Layer — BusinessPolicy CRUD
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def policies(request):
+    """List all BusinessPolicy rows for this account."""
+    from apps.insights.models import BusinessPolicy
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    policy_list = BusinessPolicy.objects.filter(account=account).order_by(
+        "status", "-created_at"
+    )
+    return render(
+        request,
+        "insights/policies.html",
+        {"policy_list": policy_list},
+    )
+
+
+@login_required
+def policy_from_insight(request, pk):
+    """Create a draft BusinessPolicy pre-filled from an insight's suggested_action.
+
+    The owner reviews and edits the draft on the policies list page before
+    activating it.  This view accepts only POST so the creation is explicit.
+
+    Idempotent: clicking Automate when a policy already exists for this insight
+    (in any status — draft, active, or paused) shows a message and redirects
+    rather than creating a duplicate.  A DB UniqueConstraint on (account,
+    created_from) is the backstop against the race between two simultaneous
+    double-submits.
+    """
+    if request.method != "POST":
+        return redirect("insights")
+
+    from django.db import transaction
+
+    from apps.insights.models import BusinessPolicy, Insight
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    insight = Insight.objects.filter(account=account, pk=pk).first()
+    if insight is None:
+        return redirect("insights")
+
+    trigger = BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER.get(insight.type)
+    if trigger is None:
+        # This insight type has no automation mapping — the Automate button
+        # should not have appeared, but guard here so it fails loudly.
+        messages.error(request, "Automation is not available for this insight type.")
+        return redirect("insights")
+
+    suggested = insight.suggested_action or {}
+    try:
+        with transaction.atomic():
+            policy, created = BusinessPolicy.objects.get_or_create(
+                account=account,
+                created_from=insight,
+                defaults={
+                    "name": suggested.get("label") or insight.title,
+                    "trigger": trigger,
+                    "condition": _default_condition_for_trigger(trigger),
+                    "action": {
+                        "type": suggested.get("action", ""),
+                        "label": suggested.get("label", ""),
+                    },
+                    "status": BusinessPolicy.Status.DRAFT,
+                    "created_by": request.user,
+                },
+            )
+    except IntegrityError:
+        # Concurrent double-submit lost the race to the DB constraint.
+        created = False
+        policy = BusinessPolicy.objects.filter(
+            account=account, created_from=insight
+        ).first()
+
+    if created:
+        messages.success(
+            request,
+            f'Draft policy "{policy.name}" created. Review and activate it when ready.',
+        )
+    else:
+        messages.info(
+            request,
+            f'A policy for this insight already exists ("{policy.name}", {policy.get_status_display()}).',
+        )
+    return redirect("insight-policies")
+
+
+def _default_condition_for_trigger(trigger: str) -> dict:
+    """Sensible default thresholds for each trigger type."""
+    defaults = {
+        "conversation_unanswered": {"hours": 2},
+        "lead_unanswered": {"hours": 24},
+        "customer_inactive": {"days": 90},
+        "repurchase_due": {"days": 30},
+    }
+    return defaults.get(trigger, {})
+
+
+@login_required
+def policy_update_status(request, pk):
+    """Activate or pause a BusinessPolicy.  Accepts POST with ``action`` in (activate, pause, delete)."""
+    if request.method != "POST":
+        return redirect("insight-policies")
+
+    from apps.insights.models import BusinessPolicy
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    policy = BusinessPolicy.objects.filter(account=account, pk=pk).first()
+    if policy is None:
+        return redirect("insight-policies")
+
+    action = request.POST.get("action", "")
+    if action == "activate":
+        policy.status = BusinessPolicy.Status.ACTIVE
+        policy.save(update_fields=["status", "updated_at"])
+        messages.success(request, f'"{policy.name}" is now active.')
+    elif action == "pause":
+        policy.status = BusinessPolicy.Status.PAUSED
+        policy.save(update_fields=["status", "updated_at"])
+        messages.success(request, f'"{policy.name}" paused.')
+    elif action == "delete":
+        name = policy.name
+        policy.delete()
+        messages.success(request, f'"{name}" deleted.')
+    else:
+        messages.error(request, "Unknown action.")
+    return redirect("insight-policies")

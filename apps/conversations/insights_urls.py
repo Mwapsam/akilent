@@ -33,4 +33,15 @@ urlpatterns = [
         insights_views.insights_report_settings,
         name="insights-report-settings",
     ),
+    path("policies/", insights_views.policies, name="insight-policies"),
+    path(
+        "<int:pk>/automate/",
+        insights_views.policy_from_insight,
+        name="policy-from-insight",
+    ),
+    path(
+        "policies/<int:pk>/status/",
+        insights_views.policy_update_status,
+        name="insight-policy-update-status",
+    ),
 ]
