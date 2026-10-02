@@ -74,7 +74,11 @@ class ModuleBoundaryTest(TestCase):
             # Skip files/apps that are exempt from this rule
             if file_name in ("__init__.py", "apps.py", "admin.py"):
                 continue
-            if "tests" in rel_path.parts or file_name == "tests.py" or file_name.startswith("test_"):
+            if (
+                "tests" in rel_path.parts
+                or file_name == "tests.py"
+                or file_name.startswith("test_")
+            ):
                 continue  # Test files can import anything
             if "migrations" in rel_path.parts:
                 continue  # Migration files can import anything
