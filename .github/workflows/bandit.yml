@@ -39,6 +39,7 @@ jobs:
 
       - name: Run Bandit
         run: |
+          poetry run pip install bandit-sarif-formatter
           poetry run bandit -r . \
             -ll \
             -ii \
