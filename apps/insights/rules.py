@@ -155,9 +155,102 @@ def rule_unanswered_conversations(account):
     )
 
 
+def rule_campaign_opportunity(account):
+    """Customers whose repurchase interval has elapsed — prime candidates for a re-order campaign.
+
+    Computes the median gap between consecutive paid orders across all contacts for this account.
+    Flags contacts whose last paid order is older than that gap.  Falls back to 30 days when there
+    is not enough history to compute a meaningful interval.
+    """
+    from apps.commerce.models import Order
+
+    # Gather all paid order dates per contact for this account, newest first.
+    rows = list(
+        Order.objects.filter(account=account, status=Order.Status.PAID)
+        .values(
+            "contact_id",
+            "paid_at",
+            "contact__first_name",
+            "contact__last_name",
+            "contact__phone",
+        )
+        .order_by("contact_id", "-paid_at")
+    )
+    if not rows:
+        return None
+
+    # Group by contact.
+    contact_orders: dict[int, list] = {}
+    for row in rows:
+        contact_orders.setdefault(row["contact_id"], []).append(row)
+
+    # Compute inter-order gaps (seconds) across all contacts with 2+ orders.
+    gaps: list[float] = []
+    for orders in contact_orders.values():
+        dates = [o["paid_at"] for o in orders if o["paid_at"] is not None]
+        dates.sort()
+        for i in range(1, len(dates)):
+            delta = (dates[i] - dates[i - 1]).total_seconds()
+            if delta > 0:
+                gaps.append(delta)
+
+    if gaps:
+        gaps.sort()
+        median_gap = timedelta(seconds=gaps[len(gaps) // 2])
+    else:
+        median_gap = timedelta(days=30)
+
+    now = timezone.now()
+    overdue_contacts = []
+    for contact_id, orders in contact_orders.items():
+        last_paid = next(
+            (o["paid_at"] for o in orders if o["paid_at"] is not None), None
+        )
+        if last_paid is None:
+            continue
+        if (now - last_paid) >= median_gap:
+            overdue_contacts.append(orders[0])
+
+    count = len(overdue_contacts)
+    if count == 0:
+        return None
+
+    sample_names = []
+    for o in overdue_contacts[:5]:
+        name = f"{o.get('contact__first_name', '') or ''} {o.get('contact__last_name', '') or ''}".strip()
+        sample_names.append(name or o.get("contact__phone") or "—")
+
+    interval_days = round(median_gap.total_seconds() / 86400)
+
+    from apps.insights.models import Insight
+
+    return Insight(
+        account=account,
+        type="campaign_opportunity",
+        severity=Insight.Severity.OPPORTUNITY,
+        title=f"{count} customer{'s' if count != 1 else ''} ready for their next purchase",
+        body=(
+            f"{count} customer{'s are' if count != 1 else ' is'} past their typical repurchase "
+            f"window of {interval_days} day{'s' if interval_days != 1 else ''}. "
+            f"A timely campaign can turn past buyers into repeat customers."
+        ),
+        evidence={
+            "count": count,
+            "sample_names": sample_names,
+            "median_interval_days": interval_days,
+        },
+        evidence_count=count,
+        suggested_action={
+            "action": "campaign",
+            "label": f"Re-order campaign for {count} customer{'s' if count != 1 else ''}",
+        },
+    )
+
+
 # Registry of all rules.  generate_insights iterates this list.
 RULES = [
     rule_unanswered_conversations,
     rule_lead_followup_gap,
     rule_inactive_customers,
+    rule_campaign_opportunity,
 ]

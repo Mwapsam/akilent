@@ -90,6 +90,7 @@ TEMPLATES = [
                 "apps.core.context_processors.operator_context",
                 "apps.accounts.context_processors.onboarding_status",
                 "apps.accounts.context_processors.plan_features",
+                "apps.accounts.context_processors.workspace_context",
             ],
         },
     },

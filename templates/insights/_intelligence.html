@@ -66,21 +66,13 @@ Business Health metrics so owners see what needs attention before reading the nu
 
         {# Actions #}
         <div class="flex items-center gap-2 shrink-0 flex-wrap">
-          {% if insight.suggested_action.action == 'inbox' %}
-          <a href="/inbox/?filter={{ insight.suggested_action.filter|default:"needs_attention" }}"
-             class="btn btn-primary btn-sm">
-            {{ insight.suggested_action.label|default:"Open inbox" }}
-          </a>
-          {% elif insight.suggested_action.action == 'follow_up' %}
-          <a href="/inbox/?filter={{ insight.suggested_action.filter|default:"overdue_24h" }}"
-             class="btn btn-primary btn-sm">
-            {{ insight.suggested_action.label|default:"Follow up" }}
-          </a>
-          {% elif insight.suggested_action.action == 'campaign' %}
-          <a href="/whatsapp/campaigns/new/"
-             class="btn btn-primary btn-sm">
-            {{ insight.suggested_action.label|default:"Create campaign" }}
-          </a>
+          {% if insight.suggested_action.action %}
+          <form method="post" action="{% url 'insight-act' insight.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-sm">
+              {{ insight.suggested_action.label|default:"Take action" }}
+            </button>
+          </form>
           {% elif insight.suggested_action.label %}
           <span class="text-sm text-gray-500 italic">{{ insight.suggested_action.label }}</span>
           {% endif %}

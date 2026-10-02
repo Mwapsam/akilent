@@ -12,6 +12,7 @@ urlpatterns = [
         name="insight-acknowledge",
     ),
     path("<int:pk>/dismiss/", insights_views.insight_dismiss, name="insight-dismiss"),
+    path("<int:pk>/act/", insights_views.insight_act, name="insight-act"),
     path(
         "goals/create/",
         insights_views.insights_goal_create,

@@ -282,7 +282,7 @@ def insight_acknowledge(request, pk):
     ).first()
     if insight:
         insight.status = Insight.Status.ACKNOWLEDGED
-        insight.save(update_fields=["status"])
+        insight.save(update_fields=["status", "updated_at"])
 
     base = reverse("insights")
     query = request.GET.urlencode()
@@ -309,8 +309,61 @@ def insight_dismiss(request, pk):
     ).first()
     if insight:
         insight.status = Insight.Status.DISMISSED
-        insight.save(update_fields=["status"])
+        insight.save(update_fields=["status", "updated_at"])
 
     base = reverse("insights")
     query = request.GET.urlencode()
     return redirect(f"{base}?{query}" if query else base)
+
+
+# Action destinations keyed by suggested_action.action value.
+# Must be safe, internal paths only.  Any action not listed here falls back to /insights/.
+_ACTION_DESTINATIONS = {
+    "inbox": "/inbox/",
+    "follow_up": "/inbox/?filter=overdue_24h",
+    "campaign": "/whatsapp/campaigns/new/",
+}
+
+
+@login_required
+def insight_act(request, pk):
+    """Record that the owner acted on an insight, then redirect to the action destination.
+
+    Creates a RecommendationLog row (accepted=True) and sets the insight to ACTED_ON.
+    The destination is derived from insight.suggested_action — never from user input —
+    so there is no open-redirect risk.
+    """
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    from django.utils import timezone
+
+    from apps.insights.models import Insight, RecommendationLog
+
+    insight = Insight.objects.filter(
+        account=account,
+        pk=pk,
+        status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
+    ).first()
+
+    if insight:
+        from django.db import transaction
+
+        now = timezone.now()
+        action = (insight.suggested_action or {}).get("action", "")
+        destination = _ACTION_DESTINATIONS.get(action, "/insights/")
+        with transaction.atomic():
+            RecommendationLog.objects.create(
+                account=account,
+                insight=insight,
+                accepted=True,
+                acted_at=now,
+            )
+            insight.status = Insight.Status.ACTED_ON
+            insight.save(update_fields=["status", "updated_at"])
+        return redirect(destination)
+
+    return redirect("insights")
