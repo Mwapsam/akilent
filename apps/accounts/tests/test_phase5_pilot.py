@@ -82,8 +82,12 @@ def _add_completed_campaign(account, user):
     from apps.contacts.models import Contact, ContactList
     from apps.whatsapp.models import MessageTemplate, WhatsAppCampaign
 
-    contact = Contact.objects.create(account=account, phone="+260977500001", source="seed")
-    clist = ContactList.objects.create(account=account, name="Pilot List", slug=f"pilot-list-{account.slug}")
+    contact = Contact.objects.create(
+        account=account, phone="+260977500001", source="seed"
+    )
+    clist = ContactList.objects.create(
+        account=account, name="Pilot List", slug=f"pilot-list-{account.slug}"
+    )
     clist.contacts.set([contact])
     template = MessageTemplate.objects.create(
         account=account,
@@ -211,7 +215,9 @@ class EnrollPilotTest(TestCase):
         enroll_pilot(self.account, wave=2)
         enroll_pilot(self.account, wave=3)
 
-        self.assertEqual(PilotEnrollment.objects.filter(account=self.account).count(), 1)
+        self.assertEqual(
+            PilotEnrollment.objects.filter(account=self.account).count(), 1
+        )
         enrollment = PilotEnrollment.objects.get(account=self.account)
         self.assertEqual(enrollment.wave, 3)
 

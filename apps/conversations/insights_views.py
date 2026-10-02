@@ -69,12 +69,30 @@ def insights(request):
     peak_labels = [hour12(h) for h in range(24)]
     peak_series = [("Enquiries", peak_hours.get("hours", [0] * 24))]
 
+    from apps.insights.models import Insight
+
+    # Severity ordering: urgent first, then warning, opportunity, info.
+    severity_order: dict[str, int] = {
+        Insight.Severity.URGENT: 0,
+        Insight.Severity.WARNING: 1,
+        Insight.Severity.OPPORTUNITY: 2,
+        Insight.Severity.INFO: 3,
+    }
+    raw_insights = list(
+        Insight.objects.filter(
+            account=account,
+            status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
+        ).order_by("-created_at")
+    )
+    raw_insights.sort(key=lambda i: severity_order.get(i.severity, 9))
+
     return render(
         request,
         "insights/index.html",
         {
             "account": account,
             "days": days,
+            "intelligence_insights": raw_insights,
             "period_choices": reporting.PERIODS,
             "period_locked": period_locked,
             "has_history": has_history,
@@ -242,3 +260,57 @@ def insights_report_settings(request):
         request, "Weekly report turned on." if enabled else "Weekly report turned off."
     )
     return _goals_redirect(request)
+
+
+@login_required
+def insight_acknowledge(request, pk):
+    """Mark an intelligence insight as acknowledged (owner has seen it, not yet acted)."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    from django.urls import reverse
+
+    from apps.insights.models import Insight
+
+    insight = Insight.objects.filter(
+        account=account,
+        pk=pk,
+        status=Insight.Status.NEW,
+    ).first()
+    if insight:
+        insight.status = Insight.Status.ACKNOWLEDGED
+        insight.save(update_fields=["status"])
+
+    base = reverse("insights")
+    query = request.GET.urlencode()
+    return redirect(f"{base}?{query}" if query else base)
+
+
+@login_required
+def insight_dismiss(request, pk):
+    """Dismiss an intelligence insight — owner has decided not to act on it."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    from django.urls import reverse
+
+    from apps.insights.models import Insight
+
+    insight = Insight.objects.filter(
+        account=account,
+        pk=pk,
+        status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
+    ).first()
+    if insight:
+        insight.status = Insight.Status.DISMISSED
+        insight.save(update_fields=["status"])
+
+    base = reverse("insights")
+    query = request.GET.urlencode()
+    return redirect(f"{base}?{query}" if query else base)

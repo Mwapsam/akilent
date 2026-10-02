@@ -1,0 +1,112 @@
+{% comment %}
+Business intelligence: AI-generated observations from apps.insights. Surfaced above the
+Business Health metrics so owners see what needs attention before reading the numbers.
+``intelligence_insights`` is a queryset of Insight rows ordered by severity then created_at.
+{% endcomment %}
+{% if intelligence_insights %}
+<section class="space-y-3" aria-labelledby="intelligence-h">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <h2 id="intelligence-h" class="text-lg font-semibold text-ink">What needs your attention</h2>
+      <p class="text-sm text-gray-600">Akilent observed these in your business data.</p>
+    </div>
+    <span class="text-xs text-gray-500">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
+  </div>
+
+  <ul class="space-y-3">
+    {% for insight in intelligence_insights %}
+    <li class="card card-pad
+        {% if insight.severity == 'urgent' %}border-l-4 border-red-500
+        {% elif insight.severity == 'warning' %}border-l-4 border-amber-400
+        {% elif insight.severity == 'opportunity' %}border-l-4 border-emerald-500
+        {% else %}border-l-4 border-blue-400
+        {% endif %}"
+        id="insight-{{ insight.pk }}">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="flex items-start gap-3 min-w-0">
+          {# Severity icon #}
+          <span class="mt-0.5 shrink-0
+              {% if insight.severity == 'urgent' %}text-red-500
+              {% elif insight.severity == 'warning' %}text-amber-500
+              {% elif insight.severity == 'opportunity' %}text-emerald-600
+              {% else %}text-blue-500
+              {% endif %}">
+            {% if insight.severity == 'urgent' %}
+              {% include "components/icon.html" with name="alert-triangle" class="w-5 h-5" %}
+            {% elif insight.severity == 'warning' %}
+              {% include "components/icon.html" with name="alert-circle" class="w-5 h-5" %}
+            {% elif insight.severity == 'opportunity' %}
+              {% include "components/icon.html" with name="trending-up" class="w-5 h-5" %}
+            {% else %}
+              {% include "components/icon.html" with name="info" class="w-5 h-5" %}
+            {% endif %}
+          </span>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-sm font-semibold text-ink leading-snug">{{ insight.title }}</p>
+              <span class="badge
+                  {% if insight.severity == 'urgent' %}badge-danger
+                  {% elif insight.severity == 'warning' %}badge-warning
+                  {% elif insight.severity == 'opportunity' %}badge-success
+                  {% else %}badge-neutral
+                  {% endif %}
+                  text-xs shrink-0">{{ insight.get_severity_display }}</span>
+              {% if insight.status == 'acknowledged' %}
+              <span class="badge badge-neutral text-xs shrink-0">Acknowledged</span>
+              {% endif %}
+            </div>
+            {% if insight.body %}
+            <p class="mt-1 text-sm text-gray-600 leading-relaxed">{{ insight.body }}</p>
+            {% endif %}
+            {% if insight.evidence_count %}
+            <p class="mt-1.5 text-xs text-gray-500 tabular-nums">{{ insight.evidence_count }} record{{ insight.evidence_count|pluralize }} affected</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Actions #}
+        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+          {% if insight.suggested_action.action == 'inbox' %}
+          <a href="/inbox/?filter={{ insight.suggested_action.filter|default:"needs_attention" }}"
+             class="btn btn-primary btn-sm">
+            {{ insight.suggested_action.label|default:"Open inbox" }}
+          </a>
+          {% elif insight.suggested_action.action == 'follow_up' %}
+          <a href="/inbox/?filter={{ insight.suggested_action.filter|default:"overdue_24h" }}"
+             class="btn btn-primary btn-sm">
+            {{ insight.suggested_action.label|default:"Follow up" }}
+          </a>
+          {% elif insight.suggested_action.action == 'campaign' %}
+          <a href="/whatsapp/campaigns/new/"
+             class="btn btn-primary btn-sm">
+            {{ insight.suggested_action.label|default:"Create campaign" }}
+          </a>
+          {% elif insight.suggested_action.label %}
+          <span class="text-sm text-gray-500 italic">{{ insight.suggested_action.label }}</span>
+          {% endif %}
+
+          {% if insight.status == 'new' %}
+          <form method="post" action="{% url 'insight-acknowledge' insight.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm">Got it</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{% url 'insight-dismiss' insight.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm text-gray-400 hover:text-red-600">Dismiss</button>
+          </form>
+        </div>
+      </div>
+
+      {% if insight.evidence.sample_names %}
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        {% for name in insight.evidence.sample_names %}
+        <span class="badge badge-neutral text-xs">{{ name }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

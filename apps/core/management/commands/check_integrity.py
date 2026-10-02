@@ -17,6 +17,7 @@ Exit codes
 
 import logging
 import sys
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import models
@@ -177,7 +178,7 @@ class Command(BaseCommand):
         """WhatsAppCampaignRecipient rows stuck PENDING on a completed campaign."""
         from apps.whatsapp.models import WhatsAppCampaign, WhatsAppCampaignRecipient
 
-        cutoff = timezone.now() - timezone.timedelta(minutes=_STUCK_CAMPAIGN_MINUTES)
+        cutoff = timezone.now() - timedelta(minutes=_STUCK_CAMPAIGN_MINUTES)
         stuck = WhatsAppCampaignRecipient.objects.filter(
             campaign__account=account,
             campaign__status=WhatsAppCampaign.Status.COMPLETED,

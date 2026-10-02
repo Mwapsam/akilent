@@ -7,6 +7,12 @@ from apps.conversations import insights_views
 urlpatterns = [
     path("", insights_views.insights, name="insights"),
     path(
+        "<int:pk>/acknowledge/",
+        insights_views.insight_acknowledge,
+        name="insight-acknowledge",
+    ),
+    path("<int:pk>/dismiss/", insights_views.insight_dismiss, name="insight-dismiss"),
+    path(
         "goals/create/",
         insights_views.insights_goal_create,
         name="insights-goal-create",

@@ -107,7 +107,6 @@ class OutboundIdempotencyTest(TestCase):
         self.assertNotEqual(m1.pk, m2.pk)
 
     def test_no_key_auto_generates_unique_key(self):
-        from apps.whatsapp.models import OutboundMessage
 
         from apps.whatsapp.api import send_message
 
@@ -205,11 +204,9 @@ class CampaignOptOutTest(TestCase):
 
     def test_opted_out_contact_skipped_not_queued(self):
         from apps.whatsapp.campaigns import send_campaign
-        from apps.whatsapp.models import OutboundMessage, WhatsAppCampaignRecipient
+        from apps.whatsapp.models import WhatsAppCampaignRecipient
 
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
-        )
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         with patch("apps.whatsapp.tasks.drain_outbound_queue.delay"):
             send_campaign(campaign.pk)
 
@@ -229,9 +226,7 @@ class CampaignOptOutTest(TestCase):
         from apps.whatsapp.campaigns import send_campaign
         from apps.whatsapp.models import WhatsAppCampaignRecipient
 
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
-        )
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         with patch("apps.whatsapp.tasks.drain_outbound_queue.delay"):
             send_campaign(campaign.pk)
 
@@ -266,9 +261,7 @@ class CampaignNoIdentityTest(TestCase):
         from apps.whatsapp.campaigns import send_campaign
         from apps.whatsapp.models import WhatsAppCampaignRecipient
 
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
-        )
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         send_campaign(campaign.pk)
 
         recipient = WhatsAppCampaignRecipient.objects.get(
@@ -299,11 +292,9 @@ class CampaignFanOutIdempotencyTest(TestCase):
     def test_second_run_skipped_when_campaign_completed(self):
         """A completed campaign returns early — status gate is the first defence."""
         from apps.whatsapp.campaigns import send_campaign
-        from apps.whatsapp.models import OutboundMessage, WhatsAppCampaign
+        from apps.whatsapp.models import OutboundMessage
 
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
-        )
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         with patch("apps.whatsapp.tasks.drain_outbound_queue.delay"):
             send_campaign(campaign.pk)
 
@@ -318,7 +309,9 @@ class CampaignFanOutIdempotencyTest(TestCase):
         # Second run returns early because campaign is COMPLETED — no new rows.
         send_campaign(campaign.pk)
 
-        count_after_second = OutboundMessage.objects.filter(account=self.account).count()
+        count_after_second = OutboundMessage.objects.filter(
+            account=self.account
+        ).count()
         self.assertEqual(count_after_first, count_after_second)
 
     def test_idempotency_key_constraint_is_db_backstop(self):
@@ -327,11 +320,12 @@ class CampaignFanOutIdempotencyTest(TestCase):
         from django.db import IntegrityError
 
         from apps.whatsapp.campaigns import send_campaign
-        from apps.whatsapp.models import OutboundMessage, WhatsAppCampaign, WhatsAppCampaignRecipient
-
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
+        from apps.whatsapp.models import (
+            WhatsAppCampaign,
+            WhatsAppCampaignRecipient,
         )
+
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         with patch("apps.whatsapp.tasks.drain_outbound_queue.delay"):
             send_campaign(campaign.pk)
 
@@ -366,9 +360,7 @@ class CampaignDeliveryStatsTest(TestCase):
     def test_stats_has_expected_keys(self):
         from apps.whatsapp.campaigns import campaign_delivery_stats
 
-        campaign = _make_campaign(
-            self.account, self.user, self.clist, self.template
-        )
+        campaign = _make_campaign(self.account, self.user, self.clist, self.template)
         stats = campaign_delivery_stats(campaign)
 
         self.assertIn("sent", stats)
@@ -421,9 +413,7 @@ class MessageStatusOrderingTest(TestCase):
     def _make_message_log(self, status):
         from apps.whatsapp.models import Conversation, MessageLog
 
-        conv = Conversation.objects.create(
-            account=self.account, contact=self.wc
-        )
+        conv = Conversation.objects.create(account=self.account, contact=self.wc)
         return MessageLog.objects.create(
             account=self.account,
             conversation=conv,
