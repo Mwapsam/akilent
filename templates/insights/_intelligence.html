@@ -98,7 +98,7 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
           {% endif %}
           <form method="post" action="{% url 'insight-dismiss' insight.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger-ghost btn-sm"
+            <button type="submit" class="btn btn-ghost btn-sm"
                     aria-label="Dismiss: {{ insight.title }}">Dismiss</button>
           </form>
         </div>

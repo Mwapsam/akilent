@@ -48,12 +48,14 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
   beside the tabs left room for only two of the four. From sm up it is the
   ordinary select. The dot marks a filter in force, since the icon alone would
   not show which channel is selected.{% endcomment %}
-  <form method="get" class="inbox-filter{% if channel %} is-active{% endif %}">
+  <form method="get" class="inbox-filter{% if channel %} is-active{% endif %}"
+        x-data="{ busy: false }" @submit="busy = true">
     <input type="hidden" name="view" value="{{ view }}" />
     <span class="inbox-filter-icon" aria-hidden="true">
       {% include "components/icon.html" with name="sliders" class="w-4 h-4" %}
     </span>
-    <select name="channel" class="select select-sm" onchange="this.form.submit()" aria-label="Filter by channel">
+    <select name="channel" class="select select-sm" onchange="this.form.requestSubmit()" aria-label="Filter by channel"
+            :disabled="busy">
       <option value="">All channels</option>
       {% for value, label in channel_choices %}
         <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
@@ -63,7 +65,8 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
     overdue) rather than being its own tab, since every tab can meaningfully
     be narrowed to "...and it's overdue".{% endcomment %}
     <label class="inbox-filter-toggle">
-      <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.submit()" />
+      <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.requestSubmit()"
+             :disabled="busy" />
       Overdue only
     </label>
   </form>

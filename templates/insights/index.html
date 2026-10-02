@@ -7,9 +7,11 @@
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
     <p class="mt-1 text-sm text-gray-600">What Akilent is doing for your business.</p>
   </div>
-  <form method="get" class="flex items-center gap-2">
+  <form method="get" class="flex items-center gap-2"
+        x-data="{ busy: false }" @submit="busy = true">
     <label class="sr-only" for="period">Period</label>
-    <select id="period" name="period" class="select" onchange="this.form.submit()">
+    <select id="period" name="period" class="select" onchange="this.form.requestSubmit()"
+            :disabled="busy">
       {% for choice in period_choices %}
         <option value="{{ choice }}" {% if choice == days %}selected{% endif %}>
           Last {{ choice }} days{% if choice == 90 and period_locked %} (upgrade){% endif %}
@@ -22,7 +24,7 @@
 {% if period_locked %}
 <div class="alert alert-info mb-6" role="status">
   {% include "components/icon.html" with name="lock" %}
-  <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="/billing/plans/" class="underline">Upgrade</a></span>
+  <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="underline">Upgrade</a></span>
 </div>
 {% endif %}
 

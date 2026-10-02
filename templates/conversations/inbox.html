@@ -60,13 +60,16 @@ The links are icon buttons on a phone with their labels kept for screen readers
       we send back in ?h=, and HTMX swaps nothing on a 204. after-request stores the
       new digest so the next poll can be compared against it.
     {% endcomment %}
+    {% comment %}sr-only status region: announces a brief "Inbox updated" when the poll
+    changes the list, without reading out the entire list to screen reader users.{% endcomment %}
+    <div id="inbox-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
     <div id="inbox-body"
          data-hash=""
          hx-get="{% url 'conversations:inbox_feed' %}?view={{ view|urlencode }}&channel={{ channel|urlencode }}"
          hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))]{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
          hx-swap="innerHTML"
          hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
-         hx-on::after-request="if (event.detail.xhr.status === 200) this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''">
+         hx-on::after-request="if (event.detail.xhr.status === 200) { this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''; document.getElementById('inbox-status').textContent = 'Inbox updated.'; setTimeout(() => { document.getElementById('inbox-status').textContent = ''; }, 4000); }">
       {% include "conversations/_inbox_body.html" %}
     </div>
   </div>

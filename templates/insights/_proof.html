@@ -17,7 +17,7 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
         <p class="stat-label">median first reply</p>
         {% if proof.median.change is not None %}
         <p class="stat-delta {% if proof.median.change < 0 %}stat-delta--down{% elif proof.median.change > 0 %}stat-delta--up{% else %}text-gray-400{% endif %}">
-          {% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %} {{ proof.median.change|duration }} vs last week
+          <span aria-hidden="true">{% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if proof.median.change < 0 %}improved{% elif proof.median.change > 0 %}worsened{% else %}unchanged{% endif %},</span> {{ proof.median.change|duration }} vs last week
         </p>
         {% endif %}
       </div>

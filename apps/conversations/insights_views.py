@@ -459,6 +459,9 @@ def policy_from_insight(request, pk):
             account=account, created_from=insight
         ).first()
         if _existing is None:
+            messages.error(
+                request, "Could not create a policy for this insight. Please try again."
+            )
             return redirect("insight-policies")
         policy = _existing
 
