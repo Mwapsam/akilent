@@ -55,7 +55,7 @@ def _signed_message(key, *, version: str) -> dict:
         "SignatureVersion": version,
         "SigningCertURL": CERT_URL,
     }
-    algo = hashes.SHA1() if version == "1" else hashes.SHA256()  # nosec B303 - mirrors AWS SNS v1 signature spec
+    algo = hashes.SHA1() if version == "1" else hashes.SHA256()  # nosec B303
     sig = key.sign(_canonical(msg).encode(), padding.PKCS1v15(), algo)
     msg["Signature"] = base64.b64encode(sig).decode()
     return msg

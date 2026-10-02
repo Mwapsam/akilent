@@ -7,14 +7,14 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   analyze:
     name: Bandit Security Scan
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      security-events: write
 
     steps:
       - name: Checkout
@@ -24,9 +24,31 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: pip
 
-      - name: Install Bandit
-        run: pip install bandit
+      - name: Install tools
+        run: pip install "bandit==1.9.4" pip-audit
+
+      - name: Export dependencies for audit
+        run: |
+          pip install poetry
+          poetry export -f requirements.txt --without-hashes --output /tmp/audit-reqs.txt
+
+      - name: Audit dependencies
+        run: pip-audit -r /tmp/audit-reqs.txt
 
       - name: Run Bandit
-        run: bandit -r . -ll -ii --exclude ./.venv,./staticfiles,./media,./node_modules -c pyproject.toml
+        run: |
+          bandit -r . \
+            -ll \
+            -ii \
+            --exclude ./.venv,./staticfiles,./media,./node_modules \
+            -c pyproject.toml \
+            -f sarif \
+            -o bandit.sarif
+
+      - name: Upload Bandit SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif

@@ -126,7 +126,7 @@ def _verify_sns_signature(message: dict[str, Any]) -> bool:
             logger.warning("Unsupported SNS SignatureVersion: %s", signature_version)
             return False
 
-        hash_algo = hashes.SHA1() if signature_version == "1" else hashes.SHA256()  # nosec B303 - AWS SNS mandates SHA1 for v1 signatures
+        hash_algo = hashes.SHA1() if signature_version == "1" else hashes.SHA256()  # nosec B303
 
         cache_key = f"sns_cert_{hashlib.sha256(cert_url.encode()).hexdigest()}"
         cert_content = cache.get(cache_key)

@@ -28,7 +28,7 @@ class NotifyError(ValueError):
 def absolute_url(path: str) -> str:
     """A full link to ``path`` on this site (workflows run outside any request)."""
     domain = getattr(settings, "BASE_DOMAIN", "") or "localhost"
-    local = domain.startswith(("localhost", "127.", "0.0.0.0"))  # nosec B104
+    local = domain.startswith(("localhost", "127.", "0.0.0.0"))
     return f"{'http' if local else 'https'}://{domain}{path}"
 
 

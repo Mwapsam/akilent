@@ -224,7 +224,7 @@ def find(account, *, now=None) -> list[dict]:
         )
         found.append(
             {
-                "key": hashlib.sha1(  # nosec B324
+                "key": hashlib.sha1(
                     " ".join(sorted(set(_words(typical["reply"])))).encode(),
                     usedforsecurity=False,
                 ).hexdigest()[:16],

@@ -216,7 +216,7 @@ def record_answer(conversation, text: str) -> bool:
     if value is None:
         digest = hashlib.sha1((text or "").encode(), usedforsecurity=False).hexdigest()[
             :10
-        ]  # nosec B324
+        ]
         _send(
             conversation,
             _RETRY_PROMPTS.get(question.get("field_type", "text"), "")
