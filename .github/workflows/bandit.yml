@@ -26,18 +26,20 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      - name: Install tools
-        run: pip install "bandit==1.9.4" pip-audit "poetry==2.1.3" "poetry-plugin-export==1.9.0"
+      - name: Install Poetry
+        run: pip install poetry
 
-      - name: Export dependencies for audit
-        run: poetry export -f requirements.txt --without-hashes --output /tmp/audit-reqs.txt
+      - name: Install project
+        run: poetry install --no-interaction --no-root
 
       - name: Audit dependencies
-        run: pip-audit -r /tmp/audit-reqs.txt
+        run: |
+          pip install pip-audit
+          pip-audit --path "$(poetry env info --path)"
 
       - name: Run Bandit
         run: |
-          bandit -r . \
+          poetry run bandit -r . \
             -ll \
             -ii \
             --exclude ./.venv,./staticfiles,./media,./node_modules \
