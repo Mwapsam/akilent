@@ -44,4 +44,9 @@ urlpatterns = [
         insights_views.policy_update_status,
         name="insight-policy-update-status",
     ),
+    path(
+        "policies/<int:pk>/edit/",
+        insights_views.policy_edit,
+        name="insight-policy-edit",
+    ),
 ]

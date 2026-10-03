@@ -69,7 +69,9 @@ def insights(request):
     peak_labels = [hour12(h) for h in range(24)]
     peak_series = [("Enquiries", peak_hours.get("hours", [0] * 24))]
 
-    from apps.insights.models import BusinessPolicy, Insight
+    from django.db.models import Count, Q
+
+    from apps.insights.models import BusinessPolicy, Insight, RecommendationLog
 
     # Severity ordering: urgent first, then warning, opportunity, info.
     severity_order: dict[str, int] = {
@@ -86,6 +88,15 @@ def insights(request):
     )
     raw_insights.sort(key=lambda i: severity_order.get(i.severity, 9))
 
+    rec_stats = RecommendationLog.objects.filter(
+        account=account,
+        recommended_at__gte=period.start,
+    ).aggregate(
+        total=Count("id"),
+        acted_on=Count("id", filter=Q(status=RecommendationLog.Status.ACCEPTED)),
+        dismissed=Count("id", filter=Q(status=RecommendationLog.Status.DISMISSED)),
+    )
+
     return render(
         request,
         "insights/index.html",
@@ -93,6 +104,7 @@ def insights(request):
             "account": account,
             "days": days,
             "intelligence_insights": raw_insights,
+            "rec_stats": rec_stats,
             # Keys of insight types that have a known automation mapping.  The
             # template uses this to guard the Automate button so the same set of
             # types is checked in both places — no divergence between client and server.
@@ -398,8 +410,20 @@ def policies(request):
     if account is None:
         return redirect("dashboard")
 
-    policy_list = BusinessPolicy.objects.filter(account=account).order_by(
-        "status", "-created_at"
+    from django.db.models import Prefetch
+
+    from apps.insights.models import PolicyExecution
+
+    policy_list = (
+        BusinessPolicy.objects.filter(account=account)
+        .prefetch_related(
+            Prefetch(
+                "executions",
+                queryset=PolicyExecution.objects.order_by("-started_at"),
+                to_attr="recent_executions",
+            )
+        )
+        .order_by("status", "-created_at")
     )
     return render(
         request,
@@ -496,6 +520,91 @@ def _default_condition_for_trigger(trigger: str) -> dict:
         "repurchase_due": {"days": 30},
     }
     return defaults.get(trigger, {})
+
+
+@login_required
+def policy_edit(request, pk):
+    from apps.insights.models import BusinessPolicy
+    from apps.whatsapp.models import WhatsAppCampaign
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    policy = BusinessPolicy.objects.filter(account=account, pk=pk).first()
+    if policy is None:
+        return redirect("insight-policies")
+
+    if policy.status == BusinessPolicy.Status.ACTIVE:
+        messages.error(request, "Pause the policy before editing it.")
+        return redirect("insight-policies")
+
+    if request.method == "POST":
+        action = dict(policy.action)
+        condition = dict(policy.condition)
+        action_type = action.get("type", "")
+        errors = []
+
+        if action_type == "campaign":
+            campaign_id_raw = request.POST.get("campaign_id", "").strip()
+            if campaign_id_raw.isdigit() and int(campaign_id_raw) > 0:
+                campaign = WhatsAppCampaign.objects.filter(
+                    account=account, pk=int(campaign_id_raw)
+                ).first()
+                if campaign is None:
+                    errors.append("Select a campaign that belongs to this account.")
+                else:
+                    action["campaign_id"] = campaign.pk
+            else:
+                errors.append("Select a campaign.")
+            label = request.POST.get("label", "").strip()
+            if label:
+                action["label"] = label
+
+        elif action_type == "create_followup":
+            due_raw = request.POST.get("due_hours", "").strip()
+            if due_raw.isdigit() and int(due_raw) >= 1:
+                action["due_hours"] = int(due_raw)
+            else:
+                errors.append("Follow-up delay must be at least 1 hour.")
+            action["note"] = request.POST.get("note", "").strip()
+
+        _trigger_key = (
+            "hours"
+            if policy.trigger in ("conversation_unanswered", "lead_unanswered")
+            else "days"
+        )
+        raw = request.POST.get(_trigger_key, "").strip()
+        if raw and raw.isdigit() and int(raw) >= 1:
+            condition[_trigger_key] = int(raw)
+        elif raw:
+            errors.append(
+                f"{_trigger_key.capitalize()} threshold must be a positive number."
+            )
+
+        if errors:
+            for msg in errors:
+                messages.error(request, msg)
+        else:
+            policy.action = action
+            policy.condition = condition
+            policy.save(update_fields=["action", "condition", "updated_at"])
+            messages.success(request, f'"{policy.name}" updated.')
+            return redirect("insight-policies")
+
+    campaigns = []
+    if policy.action.get("type") == "campaign":
+        campaigns = list(
+            WhatsAppCampaign.objects.filter(account=account)
+            .order_by("name")
+            .values("id", "name")
+        )
+
+    return render(
+        request,
+        "insights/policy_edit.html",
+        {"policy": policy, "campaigns": campaigns},
+    )
 
 
 @login_required

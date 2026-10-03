@@ -12,41 +12,41 @@
   </div>
 
   {% if tickets %}
-  <ul class="divide-y divide-gray-100 dark:divide-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+  <ul class="divide-y divide-border rounded-xl border border-border overflow-hidden">
     {% for ticket in tickets %}
     <li>
       <a href="{% url 'support:portal-ticket' ticket.ticket_number %}"
-         class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+         class="flex items-start gap-3 px-4 py-3 hover:bg-surface-muted transition-colors">
         <span class="mt-0.5 shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold
-          {% if ticket.priority == 'p1' %}bg-red-100 text-red-700
-          {% elif ticket.priority == 'p2' %}bg-orange-100 text-orange-700
-          {% elif ticket.priority == 'p3' %}bg-blue-100 text-blue-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {% if ticket.priority == 'p1' %}tone-coral
+          {% elif ticket.priority == 'p2' %}tone-amber
+          {% elif ticket.priority == 'p3' %}tone-info
+          {% else %}tone-neutral{% endif %}">
           {{ ticket.priority|upper }}
         </span>
         <div class="min-w-0 flex-1">
           <p class="text-sm font-medium text-ink truncate">{{ ticket.subject }}</p>
-          <p class="text-xs text-gray-500 mt-0.5">
+          <p class="text-xs text-ink-muted mt-0.5">
             {{ ticket.ticket_number }}
             {% if ticket.category %} · {{ ticket.category.name }}{% endif %}
           </p>
         </div>
         <div class="shrink-0 text-right">
           <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
-            {% if ticket.status == 'new' %}bg-yellow-100 text-yellow-700
-            {% elif ticket.status == 'in_progress' %}bg-green-100 text-green-700
-            {% elif ticket.status == 'resolved' or ticket.status == 'closed' %}bg-gray-100 text-gray-500
-            {% else %}bg-blue-100 text-blue-700{% endif %}">
+            {% if ticket.status == 'new' %}tone-amber
+            {% elif ticket.status == 'in_progress' %}tone-teal
+            {% elif ticket.status == 'resolved' or ticket.status == 'closed' %}tone-neutral
+            {% else %}tone-info{% endif %}">
             {{ ticket.get_status_display }}
           </span>
-          <p class="text-xs text-gray-400 mt-1">{{ ticket.created_at|timesince }} ago</p>
+          <p class="text-xs text-ink-subtle mt-1">{{ ticket.created_at|timesince }} ago</p>
         </div>
       </a>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <div class="py-16 text-center text-gray-400 rounded-xl border border-gray-200 dark:border-gray-700">
+  <div class="py-16 text-center text-ink-subtle rounded-xl border border-border">
     {% include "components/icon.html" with name="life-buoy" class="w-10 h-10 mx-auto mb-3 opacity-30" %}
     <p class="text-sm mb-4">You have no support tickets yet.</p>
     <a href="{% url 'support:portal-create' %}" class="btn btn-primary btn-sm">Open a ticket</a>

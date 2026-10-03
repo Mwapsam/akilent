@@ -31,15 +31,42 @@
             </span>
             <span class="badge badge-neutral text-xs">{{ policy.get_trigger_display }}</span>
           </div>
-          {% if policy.condition %}
+          {% if policy.trigger == 'conversation_unanswered' or policy.trigger == 'lead_unanswered' %}
+          <p class="mt-1 text-xs text-gray-500">No reply for {{ policy.condition.hours|default:"—" }}h</p>
+          {% elif policy.trigger == 'customer_inactive' %}
+          <p class="mt-1 text-xs text-gray-500">Inactive for {{ policy.condition.days|default:"—" }} days</p>
+          {% elif policy.trigger == 'repurchase_due' %}
+          <p class="mt-1 text-xs text-gray-500">Overdue for {{ policy.condition.days|default:"—" }} days</p>
+          {% elif policy.condition %}
           <p class="mt-1 text-xs text-gray-500">
-            Condition:
             {% for k, v in policy.condition.items %}{{ k }}&nbsp;=&nbsp;{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}
           </p>
           {% endif %}
           {% if policy.action.label %}
           <p class="mt-0.5 text-xs text-gray-500">Action: {{ policy.action.label }}</p>
           {% endif %}
+          {% with latest=policy.recent_executions|first %}
+          {% if policy.status == 'draft' %}
+            <p class="mt-1 text-xs text-gray-400">Not active yet</p>
+          {% elif not latest %}
+            <p class="mt-1 text-xs text-gray-400">Never evaluated</p>
+          {% elif latest.status == 'started' %}
+            <p class="mt-1 text-xs text-amber-500">Running now · started {{ latest.started_at|timesince }} ago</p>
+          {% elif latest.status == 'skipped' %}
+            <p class="mt-1 text-xs text-gray-500">Last evaluated {{ latest.started_at|timesince }} ago · Skipped — no new matches</p>
+          {% elif latest.status == 'completed' %}
+            <p class="mt-1 text-xs text-gray-500">
+              Last evaluated {{ latest.started_at|timesince }} ago ·
+              {% if latest.result.dispatch == 'queued' %}Campaign queued
+              {% elif latest.result.created_count %}{{ latest.result.created_count }} follow-up{{ latest.result.created_count|pluralize }} created
+              {% elif latest.result.dispatch == 'deferred' %}Notification deferred
+              {% else %}Completed{% endif %}
+              {% if latest.target.count %} · {{ latest.target.count }} targeted{% endif %}
+            </p>
+          {% elif latest.status == 'failed' %}
+            <p class="mt-1 text-xs text-red-500">Last evaluated {{ latest.started_at|timesince }} ago · Action failed</p>
+          {% endif %}
+          {% endwith %}
           {% if policy.created_from %}
           <p class="mt-0.5 text-xs text-gray-400">
             From insight: <a href="{% url 'insights' %}#insight-{{ policy.created_from_id }}" class="underline hover:text-gray-600">{{ policy.created_from.title }}</a>
@@ -54,6 +81,7 @@
             <input type="hidden" name="action" value="activate">
             <button type="submit" class="btn btn-primary btn-sm">Activate</button>
           </form>
+          <a href="{% url 'insight-policy-edit' policy.pk %}" class="btn btn-ghost btn-sm">Edit</a>
           {% endif %}
 
           {% if policy.status == 'active' %}

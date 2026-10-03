@@ -6,26 +6,26 @@
 <div class="flex gap-4 h-full -mt-4 -mx-4 sm:-mx-6">
 
   {# ── Queue sidebar ─────────────────────────────────────────────────── #}
-  <aside class="hidden lg:flex flex-col w-52 shrink-0 border-r border-gray-200 dark:border-gray-700 pt-6 pb-4 px-3 gap-1 overflow-y-auto">
-    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 px-2 mb-1">Queues</p>
+  <aside class="hidden lg:flex flex-col w-52 shrink-0 border-r border-border pt-6 pb-4 px-3 gap-1 overflow-y-auto">
+    <p class="text-xs font-semibold uppercase tracking-wide text-ink-subtle px-2 mb-1">Queues</p>
 
     <a href="{% url 'support:inbox' %}"
-       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if not active_queue %}bg-blue-50 text-blue-700 font-medium dark:bg-blue-900/30 dark:text-blue-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if not active_queue %}tone-info-bg text-accent font-medium{% else %}text-ink-muted hover:bg-surface-muted{% endif %}">
       <span>All tickets</span>
     </a>
     <a href="{% url 'support:inbox' %}?mine=1"
-       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-ink-muted hover:bg-surface-muted">
       <span>My tickets</span>
     </a>
 
-    <hr class="my-2 border-gray-200 dark:border-gray-700">
+    <hr class="my-2 border-border">
 
     {% for queue in queues %}
     <a href="{% url 'support:inbox' %}?queue={{ queue.slug }}"
-       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if active_queue == queue.slug %}bg-blue-50 text-blue-700 font-medium dark:bg-blue-900/30 dark:text-blue-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">
+       class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm {% if active_queue == queue.slug %}tone-info-bg text-accent font-medium{% else %}text-ink-muted hover:bg-surface-muted{% endif %}">
       <span>{{ queue.name }}</span>
       {% if queue.open_count %}
-      <span class="ml-2 text-xs tabular-nums bg-gray-200 dark:bg-gray-700 rounded-full px-1.5 py-0.5">{{ queue.open_count }}</span>
+      <span class="ml-2 text-xs tabular-nums tone-neutral-bg rounded-full px-1.5 py-0.5">{{ queue.open_count }}</span>
       {% endif %}
     </a>
     {% endfor %}
@@ -41,7 +41,7 @@
         <form method="get" class="flex items-center gap-2">
           {% if active_queue %}<input type="hidden" name="queue" value="{{ active_queue }}">{% endif %}
           <select name="status" onchange="this.form.submit()"
-                  class="text-sm border border-gray-300 rounded-md px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+                  class="text-sm border border-border rounded-md px-2 py-1 bg-surface">
             <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
             <option value="resolved" {% if status_filter == "resolved" %}selected{% endif %}>Resolved</option>
             <option value="closed" {% if status_filter == "closed" %}selected{% endif %}>Closed</option>

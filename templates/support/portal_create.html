@@ -5,34 +5,34 @@
 {% block content %}
 <div class="max-w-xl mx-auto py-6">
   <div class="flex items-center gap-3 mb-6">
-    <a href="{% url 'support:portal' %}" class="text-gray-400 hover:text-gray-600">
+    <a href="{% url 'support:portal' %}" class="text-ink-subtle hover:text-ink">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
     <h1 class="text-2xl font-semibold text-ink">New Ticket</h1>
   </div>
 
   {% if error %}
-  <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+  <div class="mb-4 alert-danger">
     {{ error }}
   </div>
   {% endif %}
 
   <form method="post" action="{% url 'support:portal-create' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
-        class="space-y-4 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        class="space-y-4 rounded-xl border border-border p-6">
     {% csrf_token %}
 
     <div>
-      <label for="subject" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+      <label for="subject" class="block text-sm font-medium text-ink mb-1">Subject</label>
       <input type="text" id="subject" name="subject" required
              value="{{ post.subject|default:'' }}"
              placeholder="Brief summary of your issue"
-             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+             class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
     </div>
 
     <div>
-      <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+      <label for="category" class="block text-sm font-medium text-ink mb-1">Category</label>
       <select id="category" name="category"
-              class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
         <option value="">— Select a category —</option>
         {% for cat in categories %}
         <option value="{{ cat.slug }}" {% if post.category == cat.slug %}selected{% endif %}>{{ cat.name }}</option>
@@ -41,9 +41,9 @@
     </div>
 
     <div>
-      <label for="priority" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
+      <label for="priority" class="block text-sm font-medium text-ink mb-1">Priority</label>
       <select id="priority" name="priority"
-              class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
         <option value="p4" {% if post.priority == 'p4' %}selected{% endif %}>Low</option>
         <option value="p3" {% if not post.priority or post.priority == 'p3' %}selected{% endif %}>Normal</option>
         <option value="p2" {% if post.priority == 'p2' %}selected{% endif %}>High</option>
@@ -52,10 +52,10 @@
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+      <label for="description" class="block text-sm font-medium text-ink mb-1">Description</label>
       <textarea id="description" name="description" rows="6" required
                 placeholder="Describe your issue in detail…"
-                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">{{ post.description|default:'' }}</textarea>
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ post.description|default:'' }}</textarea>
     </div>
 
     <div class="flex justify-end gap-3">

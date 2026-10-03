@@ -3,29 +3,29 @@
 <div class="flex items-start justify-between gap-4 mb-4">
   <div>
     <div class="flex items-center gap-2 mb-1">
-      <span class="text-xs font-mono text-gray-400">{{ ticket.ticket_number }}</span>
+      <span class="text-xs font-mono text-ink-subtle">{{ ticket.ticket_number }}</span>
       <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
-        {% if ticket.status == 'new' %}bg-yellow-100 text-yellow-700
-        {% elif ticket.status == 'in_progress' %}bg-green-100 text-green-700
-        {% elif ticket.status == 'escalated' %}bg-red-100 text-red-700
-        {% elif ticket.status in 'resolved,closed' %}bg-gray-100 text-gray-500
-        {% else %}bg-blue-100 text-blue-700{% endif %}">
+        {% if ticket.status == 'new' %}tone-amber
+        {% elif ticket.status == 'in_progress' %}tone-teal
+        {% elif ticket.status == 'escalated' %}tone-coral
+        {% elif ticket.status in 'resolved,closed' %}tone-neutral
+        {% else %}tone-info{% endif %}">
         {{ ticket.get_status_display }}
       </span>
       <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold
-        {% if ticket.priority == 'p1' %}bg-red-100 text-red-700
-        {% elif ticket.priority == 'p2' %}bg-orange-100 text-orange-700
-        {% elif ticket.priority == 'p3' %}bg-blue-100 text-blue-700
-        {% else %}bg-gray-100 text-gray-600{% endif %}">
+        {% if ticket.priority == 'p1' %}tone-coral
+        {% elif ticket.priority == 'p2' %}tone-amber
+        {% elif ticket.priority == 'p3' %}tone-info
+        {% else %}tone-neutral{% endif %}">
         {{ ticket.priority|upper }}
       </span>
-      <span class="text-xs text-gray-400">T{{ ticket.customer_tier }}</span>
+      <span class="text-xs text-ink-subtle">T{{ ticket.customer_tier }}</span>
       {% if ticket.sla_breached %}
-      <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-600">SLA breached</span>
+      <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs tone-coral">SLA breached</span>
       {% endif %}
     </div>
     <h1 class="text-xl font-semibold text-ink">{{ ticket.subject }}</h1>
-    <p class="text-sm text-gray-500 mt-1">
+    <p class="text-sm text-ink-muted mt-1">
       Opened {{ ticket.created_at|timesince }} ago
       {% if ticket.queue %} · {{ ticket.queue.name }}{% endif %}
       {% if ticket.category %} · {{ ticket.category.name }}{% endif %}
@@ -36,15 +36,15 @@
 
 {# ── Context references ────────────────────────────────────────────────── #}
 {% if references %}
-<div class="mb-5 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Context</p>
+<div class="mb-5 p-3 tone-surface rounded-lg border border-border">
+  <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Context</p>
   <ul class="space-y-1">
     {% for ref in references %}
-    <li class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-      {% include "components/icon.html" with name="link" class="w-3.5 h-3.5 text-gray-400 shrink-0" %}
+    <li class="flex items-center gap-2 text-sm text-ink">
+      {% include "components/icon.html" with name="chevron-right" class="w-3.5 h-3.5 text-ink-subtle shrink-0" %}
       <span class="font-medium">{{ ref.content_type.model|capfirst }}</span>
-      <span class="text-gray-400">#{{ ref.object_id }}</span>
-      {% if ref.label %}<span class="text-gray-400">— {{ ref.label }}</span>{% endif %}
+      <span class="text-ink-subtle">#{{ ref.object_id }}</span>
+      {% if ref.label %}<span class="text-ink-subtle">— {{ ref.label }}</span>{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -53,19 +53,19 @@
 
 {# ── Tabs ──────────────────────────────────────────────────────────────── #}
 <div x-data="{ tab: 'messages' }" class="flex flex-col gap-4">
-  <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+  <div class="flex gap-1 border-b border-border">
     <button @click="tab='messages'"
-            :class="tab==='messages' ? 'border-b-2 border-blue-600 text-blue-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'"
+            :class="tab==='messages' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
-      Messages <span class="ml-1 text-xs text-gray-400">{{ messages|length }}</span>
+      Messages <span class="ml-1 text-xs text-ink-subtle">{{ messages|length }}</span>
     </button>
     <button @click="tab='notes'"
-            :class="tab==='notes' ? 'border-b-2 border-blue-600 text-blue-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'"
+            :class="tab==='notes' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
-      Internal notes <span class="ml-1 text-xs text-gray-400">{{ internal_notes|length }}</span>
+      Internal notes <span class="ml-1 text-xs text-ink-subtle">{{ internal_notes|length }}</span>
     </button>
     <button @click="tab='timeline'"
-            :class="tab==='timeline' ? 'border-b-2 border-blue-600 text-blue-700 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700'"
+            :class="tab==='timeline' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
       Timeline
     </button>
@@ -73,15 +73,15 @@
 
   {# Messages tab #}
   <div x-show="tab==='messages'" class="space-y-3">
-    <div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+    <div class="p-3 tone-surface rounded-lg text-sm text-ink border border-border">
       {{ ticket.description|linebreaksbr }}
     </div>
 
     {% for msg in messages %}
     <div class="flex gap-3 {% if msg.is_from_customer %}justify-start{% else %}justify-end{% endif %}">
       <div class="max-w-lg rounded-lg px-4 py-2.5 text-sm
-        {% if msg.is_from_customer %}bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200
-        {% else %}bg-blue-600 text-white{% endif %}">
+        {% if msg.is_from_customer %}bg-surface border border-border text-ink
+        {% else %}bg-accent text-white{% endif %}">
         <p class="font-medium text-xs mb-1 opacity-70">
           {% if msg.is_from_customer %}Customer{% else %}{{ msg.author.get_full_name|default:msg.author.username }}{% endif %}
           · {{ msg.created_at|timesince }} ago
@@ -96,7 +96,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="reply">
       <textarea name="body" rows="3" placeholder="Write a reply…"
-                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
       <div class="mt-2 flex justify-end">
         <button type="submit" class="btn btn-primary btn-sm">Send reply</button>
       </div>
@@ -106,21 +106,21 @@
   {# Internal notes tab #}
   <div x-show="tab==='notes'" x-cloak class="space-y-3">
     {% for note in internal_notes %}
-    <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm">
-      <p class="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+    <div class="p-3 tone-amber rounded-lg text-sm border tone-amber-border">
+      <p class="text-xs font-medium mb-1">
         {{ note.author.get_full_name|default:note.author.username|default:"System" }} · {{ note.created_at|timesince }} ago
       </p>
       {{ note.body|linebreaksbr }}
     </div>
     {% empty %}
-    <p class="text-sm text-gray-400 py-4 text-center">No internal notes yet.</p>
+    <p class="text-sm text-ink-subtle py-4 text-center">No internal notes yet.</p>
     {% endfor %}
 
     <form method="post" action="{% url 'support:detail' ticket.ticket_number %}" class="mt-4">
       {% csrf_token %}
       <input type="hidden" name="action" value="internal_note">
       <textarea name="body" rows="3" placeholder="Add an internal note (not visible to customer)…"
-                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-yellow-400"></textarea>
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
       <div class="mt-2 flex justify-end">
         <button type="submit" class="btn btn-secondary btn-sm">Add note</button>
       </div>
@@ -129,18 +129,18 @@
 
   {# Timeline tab #}
   <div x-show="tab==='timeline'" x-cloak>
-    <ol class="relative border-l border-gray-200 dark:border-gray-700 ml-3 space-y-4">
+    <ol class="relative border-l border-border ml-3 space-y-4">
       {% for event in events %}
       <li class="ml-4">
-        <div class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border-2 border-white dark:border-gray-900 bg-gray-400"></div>
-        <p class="text-xs text-gray-400">{{ event.created_at|date:"M j, H:i" }}</p>
-        <p class="text-sm text-gray-700 dark:text-gray-300">
+        <div class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border-2 border-surface bg-ink-subtle"></div>
+        <p class="text-xs text-ink-subtle">{{ event.created_at|date:"M j, H:i" }}</p>
+        <p class="text-sm text-ink">
           {{ event.get_event_type_display }}
           {% if event.actor %} by {{ event.actor.get_full_name|default:event.actor.username }}{% endif %}
         </p>
       </li>
       {% empty %}
-      <li class="ml-4 text-sm text-gray-400">No events yet.</li>
+      <li class="ml-4 text-sm text-ink-subtle">No events yet.</li>
       {% endfor %}
     </ol>
   </div>

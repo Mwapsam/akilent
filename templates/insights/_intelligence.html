@@ -12,7 +12,14 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
       <h2 id="intelligence-h" class="text-lg font-semibold text-ink">What needs your attention</h2>
       <p class="text-sm text-gray-600">Akilent observed these in your business data.</p>
     </div>
-    <span class="text-xs text-gray-500">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-gray-500">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
+      {% if rec_stats.total %}
+      <span class="text-xs text-gray-500">
+        {{ rec_stats.acted_on }} of {{ rec_stats.total }} acted on{% if rec_stats.dismissed %} · {{ rec_stats.dismissed }} dismissed{% endif %}
+      </span>
+      {% endif %}
+    </div>
   </div>
 
   <ul class="space-y-3">
