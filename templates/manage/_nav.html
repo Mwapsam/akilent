@@ -4,6 +4,7 @@
   {% include "components/_nav_item.html" with href="/manage/businesses/" label="Businesses" icon="building" match="manage/businesses" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/manage/payments/" label="Payments" icon="credit-card" match="manage/payments" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/manage/plans/" label="Plans" icon="card" match="manage/plans" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/chatbots/" label="Chatbots" icon="message-circle" match="manage/chatbots" collapsible=collapsible %}
 
   <div role="group" aria-label="Platform">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Platform</p>

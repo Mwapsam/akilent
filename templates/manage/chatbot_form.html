@@ -1,0 +1,141 @@
+{% extends "manage/base.html" %}
+{% block title %}{% if bot %}Edit chatbot{% else %}New chatbot{% endif %} — Operator{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-2xl font-semibold text-ink mb-1">
+    {% if bot %}Edit "{{ bot.name }}"{% else %}New chatbot{% endif %}
+  </h1>
+  {% if bot %}
+  <p class="text-sm text-ink-muted mb-6">
+    Business: <a href="{% url 'core:business' bot.account.pk %}" class="text-accent">{{ bot.account.company_name }}</a>
+    · public key: <code class="text-xs">{{ bot.public_key }}</code>
+  </p>
+  {% else %}
+  <p class="text-sm text-ink-muted mb-6">Creating on behalf of a business account.</p>
+  {% endif %}
+
+  {% if messages %}
+  <div class="space-y-2 mb-4">
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+
+    {# Business account — only shown on create #}
+    {% if not bot %}
+    <div class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Business</h2>
+      <div>
+        <label class="label" for="account">Business account <span class="text-red-500">*</span></label>
+        <select id="account" name="account" required class="input w-full">
+          <option value="">— select —</option>
+          {% for acc in accounts %}
+          <option value="{{ acc.pk }}" {% if post.account == acc.pk|stringformat:"s" %}selected{% endif %}>
+            {{ acc.company_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Identity #}
+    <div class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Identity</h2>
+
+      <div>
+        <label class="label" for="name">Name <span class="text-red-500">*</span></label>
+        <input type="text" id="name" name="name" required maxlength="100"
+          value="{{ post.name|default:bot.name }}"
+          class="input w-full" placeholder="e.g. Sales Bot">
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label" for="purpose">Purpose</label>
+          <select id="purpose" name="purpose" class="input w-full">
+            {% for val, label in purposes %}
+            <option value="{{ val }}"
+              {% if post.purpose == val or bot.purpose == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="category">Category</label>
+          <select id="category" name="category" class="input w-full">
+            <option value="">— none —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}"
+              {% if post.category == cat.pk|stringformat:"s" or bot.category_id == cat.pk %}selected{% endif %}>
+              {{ cat.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="is_active" class="rounded"
+            {% if post.is_active or bot.is_active or not bot %}checked{% endif %}>
+          <span class="text-sm font-medium text-ink">Active</span>
+        </label>
+      </div>
+    </div>
+
+    {# Appearance #}
+    <div class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Appearance</h2>
+
+      <div>
+        <label class="label" for="welcome_message">Welcome message</label>
+        <textarea id="welcome_message" name="welcome_message" rows="3" class="input w-full"
+          placeholder="Hi! How can I help you today?">{{ post.welcome_message|default:bot.welcome_message }}</textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label" for="primary_color">Primary colour</label>
+          <div class="flex items-center gap-2">
+            <input type="color" id="primary_color_picker"
+              value="{{ post.primary_color|default:bot.primary_color|default:'#1a56db' }}"
+              class="h-9 w-9 rounded border border-border cursor-pointer"
+              oninput="document.getElementById('primary_color').value=this.value">
+            <input type="text" id="primary_color" name="primary_color" maxlength="7"
+              value="{{ post.primary_color|default:bot.primary_color|default:'#1a56db' }}"
+              class="input flex-1 font-mono text-sm"
+              oninput="document.getElementById('primary_color_picker').value=this.value">
+          </div>
+        </div>
+        <div>
+          <label class="label" for="position">Position</label>
+          <select id="position" name="position" class="input w-full">
+            <option value="bottom_right" {% if post.position == "bottom_right" or bot.position == "bottom_right" %}selected{% endif %}>Bottom right</option>
+            <option value="bottom_left" {% if post.position == "bottom_left" or bot.position == "bottom_left" %}selected{% endif %}>Bottom left</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    {# Security #}
+    <div class="card card-pad space-y-3">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</h2>
+      <p class="text-xs text-ink-muted">One domain per line. Empty = deny all origins.</p>
+      <textarea name="allowed_domains" rows="4" class="input w-full font-mono text-sm"
+        placeholder="https://example.com">{{ domains_display }}</textarea>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="btn btn-primary">
+        {% if bot %}Save changes{% else %}Create chatbot{% endif %}
+      </button>
+      <a href="{% url 'core:chatbot-list' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

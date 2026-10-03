@@ -1,0 +1,101 @@
+{% extends "manage/base.html" %}
+{% block title %}Chatbots — Operator{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold text-ink">Chatbots</h1>
+    <p class="mt-1 text-sm text-gray-600">All chat widgets across every business. <a href="{% url 'core:chatbot-categories' %}" class="text-accent">Manage categories →</a></p>
+  </div>
+  <a href="{% url 'core:chatbot-create' %}" class="btn btn-primary btn-sm">New chatbot</a>
+</div>
+
+{% if messages %}
+<div class="space-y-2 mb-4">
+  {% for message in messages %}
+  <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# Filters #}
+<form method="get" class="flex flex-wrap gap-2 mb-5">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search name or business…"
+    class="input w-56 text-sm" aria-label="Search">
+  <select name="category" class="input text-sm" aria-label="Category">
+    <option value="">All categories</option>
+    {% for cat in categories %}
+    <option value="{{ cat.pk }}" {% if category_pk == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="active" class="input text-sm" aria-label="Status">
+    <option value="">All statuses</option>
+    <option value="1" {% if active_filter == "1" %}selected{% endif %}>Active</option>
+    <option value="0" {% if active_filter == "0" %}selected{% endif %}>Inactive</option>
+  </select>
+  <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
+  {% if q or category_pk or active_filter %}
+  <a href="{% url 'core:chatbot-list' %}" class="btn btn-ghost btn-sm">Clear</a>
+  {% endif %}
+</form>
+
+{% if bots %}
+<div class="card overflow-hidden">
+  <div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Business</th>
+        <th>Category</th>
+        <th>Purpose</th>
+        <th class="text-center">Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bot in bots %}
+      <tr>
+        <td class="font-medium text-ink">
+          <a href="{% url 'core:chatbot-edit' bot.pk %}" class="hover:text-accent">{{ bot.name }}</a>
+        </td>
+        <td>
+          <a href="{% url 'core:business' bot.account.pk %}" class="text-sm text-ink-muted hover:text-ink">
+            {{ bot.account.company_name }}
+          </a>
+        </td>
+        <td class="text-sm text-ink-muted">{{ bot.category.name|default:"—" }}</td>
+        <td class="text-sm text-ink-muted">{{ bot.get_purpose_display }}</td>
+        <td class="text-center">
+          {% if bot.is_active %}
+          <span class="badge badge-success">Active</span>
+          {% else %}
+          <span class="badge badge-neutral">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="text-xs text-ink-muted tabular-nums">{{ bot.created_at|date:"M j, Y" }}</td>
+        <td class="text-right whitespace-nowrap">
+          <a href="{% url 'core:chatbot-edit' bot.pk %}" class="text-sm text-accent hover:text-accent-strong mr-3">Edit</a>
+          <form method="post" action="{% url 'core:chatbot-toggle' bot.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="text-sm {% if bot.is_active %}text-amber-600 hover:text-amber-800{% else %}text-teal-600 hover:text-teal-800{% endif %}">
+              {% if bot.is_active %}Deactivate{% else %}Activate{% endif %}
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="card card-pad text-center text-sm text-ink-muted py-12">
+  No chatbots found.
+  {% if not q and not category_pk and not active_filter %}
+  <a href="{% url 'core:chatbot-create' %}" class="text-accent">Create one</a>.
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

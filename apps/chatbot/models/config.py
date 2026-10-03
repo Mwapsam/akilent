@@ -49,6 +49,13 @@ class ChatbotConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    category = models.ForeignKey(
+        "chatbot.ChatbotCategory",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chatbots",
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

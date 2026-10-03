@@ -3,7 +3,7 @@
 from django.urls import path
 
 from apps.billing import views as billing_views
-from apps.core.console import views
+from apps.core.console import chatbot_views, views
 
 app_name = "core"
 
@@ -94,6 +94,31 @@ urlpatterns = [
         "settings/configurations/<int:pk>/delete/",
         views.delete_configuration,
         name="delete-configuration",
+    ),
+    # Chatbot management
+    path("chatbots/", chatbot_views.chatbot_list, name="chatbot-list"),
+    path("chatbots/new/", chatbot_views.chatbot_create, name="chatbot-create"),
+    path("chatbots/<int:pk>/edit/", chatbot_views.chatbot_edit, name="chatbot-edit"),
+    path(
+        "chatbots/<int:pk>/toggle/", chatbot_views.chatbot_toggle, name="chatbot-toggle"
+    ),
+    path(
+        "chatbots/categories/", chatbot_views.category_list, name="chatbot-categories"
+    ),
+    path(
+        "chatbots/categories/new/",
+        chatbot_views.category_create,
+        name="chatbot-category-create",
+    ),
+    path(
+        "chatbots/categories/<int:pk>/edit/",
+        chatbot_views.category_edit,
+        name="chatbot-category-edit",
+    ),
+    path(
+        "chatbots/categories/<int:pk>/delete/",
+        chatbot_views.category_delete,
+        name="chatbot-category-delete",
     ),
     path("styleguide/", views.styleguide, name="styleguide"),
     # Old addresses, kept so bookmarks and emails still work

@@ -1,0 +1,74 @@
+{% extends "manage/base.html" %}
+{% block title %}Chatbot categories — Operator{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold text-ink">Chatbot categories</h1>
+    <p class="mt-1 text-sm text-gray-600">Platform-wide labels that group chatbots across all businesses.</p>
+  </div>
+  <a href="{% url 'core:chatbot-category-create' %}" class="btn btn-primary btn-sm">New category</a>
+</div>
+
+{% if messages %}
+<div class="space-y-2 mb-4">
+  {% for message in messages %}
+  <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if categories %}
+<div class="card overflow-hidden">
+  <div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Slug</th>
+        <th>Description</th>
+        <th class="text-center">Bots</th>
+        <th class="text-center">Order</th>
+        <th class="text-center">Active</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cat in categories %}
+      <tr>
+        <td class="font-medium text-ink">{{ cat.name }}</td>
+        <td class="font-mono text-xs text-ink-muted">{{ cat.slug }}</td>
+        <td class="text-ink-muted">{{ cat.description|default:"—"|truncatechars:60 }}</td>
+        <td class="text-center tabular-nums">{{ cat.chatbots.count }}</td>
+        <td class="text-center tabular-nums">{{ cat.order }}</td>
+        <td class="text-center">
+          {% if cat.is_active %}
+          <span class="badge badge-success">Active</span>
+          {% else %}
+          <span class="badge badge-neutral">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="text-right whitespace-nowrap">
+          <a href="{% url 'core:chatbot-category-edit' cat.pk %}" class="text-sm text-accent hover:text-accent-strong mr-3">Edit</a>
+          <form method="post" action="{% url 'core:chatbot-category-delete' cat.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="text-sm text-red-600 hover:text-red-800"
+              onclick="return confirm('Delete category &quot;{{ cat.name }}&quot;?')">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="card card-pad text-center text-sm text-ink-muted py-12">
+  No categories yet. <a href="{% url 'core:chatbot-category-create' %}" class="text-accent">Create one</a>.
+</div>
+{% endif %}
+
+<div class="mt-4">
+  <a href="{% url 'core:chatbot-list' %}" class="text-sm text-accent">← All chatbots</a>
+</div>
+{% endblock %}
