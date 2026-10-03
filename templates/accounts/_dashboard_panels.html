@@ -68,6 +68,46 @@ hx-trigger of its own, so it loads exactly once.
     </div>
   </div>
 
+  {# ── Chatbot ───────────────────────────────────────────────────────── #}
+  {% if chatbots %}
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between card-pad pb-3">
+      <div class="flex items-center gap-2">
+        <h2 class="text-lg font-semibold text-ink">Chat widgets</h2>
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs tone-teal tabular-nums">
+          {{ chatbot_sessions_month }} sessions · 30d
+        </span>
+      </div>
+      <a href="{% url 'chatbot:create' %}" class="btn btn-ghost btn-sm">
+        {% include "components/icon.html" with name="plus" class="w-4 h-4" %}
+        New
+      </a>
+    </div>
+    <ul class="divide-y divide-border">
+      {% for bot in chatbots %}
+      <li class="px-5 sm:px-6 py-3 flex items-center gap-3">
+        <span class="w-2 h-2 rounded-full shrink-0 {% if bot.is_active %}bg-teal-500{% else %}bg-gray-300{% endif %}"></span>
+        <span class="flex-1 min-w-0">
+          <a href="{% url 'chatbot:detail' bot.pk %}" class="text-sm font-medium text-ink hover:text-accent truncate block">
+            {{ bot.name }}
+          </a>
+          <span class="text-xs text-ink-muted">{{ bot.get_purpose_display }}</span>
+        </span>
+        <a href="{% url 'chatbot:analytics' bot.pk %}" class="text-xs text-ink-muted hover:text-accent shrink-0">Analytics</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <div class="card card-pad flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-semibold text-ink">No chat widgets yet</h2>
+      <p class="mt-0.5 text-sm text-ink-muted">Add a floating chat widget to your website in minutes.</p>
+    </div>
+    <a href="{% url 'chatbot:create' %}" class="btn btn-ghost btn-sm">Create chatbot</a>
+  </div>
+  {% endif %}
+
   {# ── Email stats (secondary; "Scheduled" lives in the panel above) ──── #}
   <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
     {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}

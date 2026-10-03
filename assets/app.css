@@ -696,7 +696,7 @@
   .inbox-meta:empty { @apply hidden; }
   .inbox-assignee { @apply inline-flex items-center gap-1 text-xs text-gray-600; }
 
-  .inbox-filter { @apply relative shrink-0; }
+  .inbox-filter { @apply relative shrink-0 flex items-center gap-2; }
   .inbox-filter-icon {
     @apply relative inline-flex items-center justify-center rounded-full border border-border
       bg-surface text-gray-600 sm:hidden;
@@ -714,7 +714,7 @@
   .inbox-filter-note { @apply -mt-1 mb-3 text-sm text-gray-500; }
   .inbox-filter-note a { @apply underline text-accent; }
 
-  .inbox-filter-toggle { @apply inline-flex items-center gap-1.5 ml-2 text-sm text-gray-600 whitespace-nowrap cursor-pointer; }
+  .inbox-filter-toggle { @apply inline-flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap cursor-pointer; }
   .inbox-filter-toggle input { @apply w-4 h-4; accent-color: var(--tone-coral-fg); }
 
   /* A compact select for toolbars, sized to sit beside a row of pills. */

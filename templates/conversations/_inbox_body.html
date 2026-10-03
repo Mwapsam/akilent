@@ -64,7 +64,7 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
     {% comment %}Combines with any tab above ("My" + overdue, "Unassigned" +
     overdue) rather than being its own tab, since every tab can meaningfully
     be narrowed to "...and it's overdue".{% endcomment %}
-    <label class="inbox-filter-toggle">
+    <label class="inbox-filter-toggle hidden sm:inline-flex">
       <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.requestSubmit()"
              :disabled="busy" />
       Overdue only

@@ -681,6 +681,7 @@ def dashboard_panels(request):
             ),
             **stats,
             **_upcoming_sends(account),
+            **_chatbot_summary(account),
         },
     )
 
@@ -889,6 +890,30 @@ def _email_stats(account, subscription):
         "email_quota": email_quota,
         "usage_pct": usage_pct,
         "recent_sends": list(msgs.order_by("-created_at")[:6]),
+    }
+
+
+def _chatbot_summary(account) -> dict:
+    """Chatbot stats for the dashboard panel: bot list + 30-day session counts."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.chatbot.models import ChatbotConfig
+    from apps.chatbot.models.session import ChatSession
+
+    bots = list(ChatbotConfig.objects.filter(account=account).order_by("-created_at"))
+    if not bots:
+        return {"chatbots": [], "chatbot_sessions_month": 0}
+
+    since = timezone.now() - timedelta(days=30)
+    sessions_month = ChatSession.objects.filter(
+        chatbot__account=account, started_at__gte=since
+    ).count()
+
+    return {
+        "chatbots": bots,
+        "chatbot_sessions_month": sessions_month,
     }
 
 
