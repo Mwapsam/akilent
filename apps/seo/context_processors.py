@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.templatetags.static import static
@@ -131,4 +132,10 @@ def resolve_seo_context(request):
 
     ga_id = getattr(settings, "GOOGLE_ANALYTICS_ID", "")
 
-    return {"seo": seo, "ga_id": ga_id}
+    static_url = getattr(settings, "STATIC_URL", "")
+    cdn_origin = ""
+    if static_url.startswith("https://"):
+        parsed = urlparse(static_url)
+        cdn_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+    return {"seo": seo, "ga_id": ga_id, "cdn_origin": cdn_origin}

@@ -31,6 +31,9 @@
       } catch (e) {}
     })();
   </script>
+  {% if cdn_origin %}<link rel="preconnect" href="{{ cdn_origin }}" crossorigin>{% endif %}
+  <link rel="preconnect" href="https://www.googletagmanager.com">
+  <link rel="dns-prefetch" href="https://www.googletagmanager.com">
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
