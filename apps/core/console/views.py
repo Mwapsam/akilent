@@ -79,8 +79,29 @@ def home(request):
                 {"row": a, "label": label(a.action)}
                 for a in AdminAction.objects.select_related("actor", "account")[:8]
             ],
+            "chatbot": _chatbot_ops_status(now),
         },
     )
+
+
+def _chatbot_ops_status(now):
+    """Platform-wide chatbot snapshot for the operator console."""
+    from apps.chatbot.models import ChatbotConfig
+    from apps.chatbot.models.session import ChatSession
+
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    total_bots = ChatbotConfig.objects.count()
+    active_bots = ChatbotConfig.objects.filter(is_active=True).count()
+    sessions_today = ChatSession.objects.filter(started_at__gte=today).count()
+    sessions_24h = ChatSession.objects.filter(
+        started_at__gte=now - timedelta(hours=24)
+    ).count()
+    return {
+        "total_bots": total_bots,
+        "active_bots": active_bots,
+        "sessions_today": sessions_today,
+        "sessions_24h": sessions_24h,
+    }
 
 
 # --- Businesses ---------------------------------------------------------------------------------

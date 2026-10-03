@@ -62,6 +62,12 @@
       <li class="flex justify-between py-1.5"><span>Waiting to send</span><span>{{ whatsapp.queued }}</span></li>
       <li class="flex justify-between py-1.5"><span>Failed, 24 hours</span><span class="{% if whatsapp.failed_24h %}text-red-700 font-medium{% endif %}">{{ whatsapp.failed_24h }}</span></li>
     </ul>
+    <h2 class="font-semibold pt-2">Chatbots</h2>
+    <ul class="text-sm divide-y divide-border">
+      <li class="flex justify-between py-1.5"><span>Active widgets</span><span>{{ chatbot.active_bots }} / {{ chatbot.total_bots }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Sessions today</span><span>{{ chatbot.sessions_today }}</span></li>
+      <li class="flex justify-between py-1.5"><span>Sessions, 24 h</span><span>{{ chatbot.sessions_24h }}</span></li>
+    </ul>
     <h2 class="font-semibold pt-2">Recent operator actions</h2>
     {% if recent_actions %}
     <ul class="text-sm space-y-1">
