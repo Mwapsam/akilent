@@ -38,7 +38,11 @@ In `apps/core/views.py`, temporarily modify `healthz` to return 503:
 # TEMPORARY — rollback drill only, revert immediately
 def healthz(request):
     from django.http import JsonResponse
-    return JsonResponse({"ok": False, "db": False, "cache": False, "beat": False, "drill": True}, status=503)
+
+    return JsonResponse(
+        {"ok": False, "db": False, "cache": False, "beat": False, "drill": True},
+        status=503,
+    )
 ```
 
 ```bash
