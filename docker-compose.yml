@@ -22,7 +22,14 @@ services:
       retries: 3
       start_period: 40s
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # Serves only /events/stream/ (apps/core/views_events.py), on ASGI, so a long-lived SSE
   # connection per browser tab never takes a worker away from `web`'s WSGI pool. Off by default
@@ -38,13 +45,25 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     command: sh /app/docker/entrypoint_events.sh
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', 8001)); s.close()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 
   db:
-    image: postgres:16-alpine
+    image: postgres:16.4-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -54,15 +73,33 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     restart: unless-stopped
+    # The entrypoint writes REDIS_PASSWORD to a file so it never appears in the redis-server
+    # argument list (docker inspect, ps aux, Docker events would otherwise expose it).
+    command: sh /redis-entrypoint.sh
+    volumes:
+      - ./docker/redis-entrypoint.sh:/redis-entrypoint.sh:ro
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping; else redis-cli ping; fi | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3.13-management-alpine
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
@@ -70,10 +107,16 @@ services:
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"   # management UI: open it through an SSH tunnel
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
 
   nginx:
-    image: nginx:latest
+    image: nginx:1.27-alpine
     restart: unless-stopped
     profiles: ["prod"]
     ports:
@@ -94,9 +137,16 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
-      - rabbitmq
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # AI calls can take many seconds; a worker of their own means they never delay WhatsApp sends.
   celery_ai:
@@ -108,9 +158,16 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
-      - rabbitmq
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   celery_beat:
     build: .
@@ -121,9 +178,12 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
-      - rabbitmq
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   # Nightly pg_dump to a private S3 bucket and a weekly restore test (docs/ops/backups.md).
   # Idles, logging why, until BACKUP_S3_BUCKET is set.
@@ -140,6 +200,7 @@ services:
       AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${AWS_REGION:-eu-north-1}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     depends_on:
       - db
 

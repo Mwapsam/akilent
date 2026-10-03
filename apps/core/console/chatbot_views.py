@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
@@ -49,13 +50,19 @@ def category_create(request):
                 {"post": request.POST},
             )
 
-        cat = ChatbotCategory.objects.create(
-            name=name,
-            slug=slug,
-            description=description,
-            order=order,
-            is_active=is_active,
-        )
+        try:
+            cat = ChatbotCategory.objects.create(
+                name=name,
+                slug=slug,
+                description=description,
+                order=order,
+                is_active=is_active,
+            )
+        except IntegrityError:
+            messages.error(request, f'A category with slug "{slug}" already exists.')
+            return render(
+                request, "manage/chatbot_category_form.html", {"post": request.POST}
+            )
         audit(request, "chatbot.category.create", target=cat.name)
         messages.success(request, f'Category "{cat.name}" created.')
         return redirect("core:chatbot-categories")
@@ -82,10 +89,19 @@ def category_edit(request, pk):
             )
 
         cat.name = name
+        cat.slug = slugify(name)
         cat.description = description
         cat.order = order
         cat.is_active = is_active
-        cat.save()
+        try:
+            cat.save()
+        except IntegrityError:
+            messages.error(request, f'A category named "{name}" already exists.')
+            return render(
+                request,
+                "manage/chatbot_category_form.html",
+                {"category": cat, "post": request.POST},
+            )
         audit(request, "chatbot.category.edit", target=cat.name)
         messages.success(request, f'Category "{cat.name}" updated.')
         return redirect("core:chatbot-categories")
@@ -98,15 +114,23 @@ def category_edit(request, pk):
 def category_delete(request, pk):
     cat = get_object_or_404(ChatbotCategory, pk=pk)
     name = cat.name
-    count = cat.chatbots.count()
-    if count:
-        messages.error(
-            request,
-            f'Cannot delete "{name}" — {count} chatbot(s) use it. Reassign them first.',
-        )
-        return redirect("core:chatbot-categories")
-    cat.delete()
-    audit(request, "chatbot.category.delete", target=name)
+    # Lock the row so a concurrent chatbot assignment can't slip between the count check and delete.
+    with transaction.atomic():
+        try:
+            cat = ChatbotCategory.objects.select_for_update().get(pk=pk)
+        except ChatbotCategory.DoesNotExist:
+            # Concurrent delete — treat as success; the record is gone either way.
+            messages.success(request, f'Category "{name}" deleted.')
+            return redirect("core:chatbot-categories")
+        count = cat.chatbots.count()
+        if count:
+            messages.error(
+                request,
+                f'Cannot delete "{name}" — {count} chatbot(s) use it. Reassign them first.',
+            )
+            return redirect("core:chatbot-categories")
+        cat.delete()
+        audit(request, "chatbot.category.delete", target=name)
     messages.success(request, f'Category "{name}" deleted.')
     return redirect("core:chatbot-categories")
 
@@ -155,14 +179,25 @@ def chatbot_create(request):
     )
     accounts = Account.objects.filter(is_active=True).order_by("company_name")
 
+    _valid_purposes = {c[0] for c in ChatbotConfig.Purpose.choices}
+    _valid_positions = {"bottom_right", "bottom_left"}
+
     if request.method == "POST":
         account_pk = request.POST.get("account") or ""
         name = (request.POST.get("name") or "").strip()
-        purpose = request.POST.get("purpose") or ChatbotConfig.Purpose.GENERAL
+        _purpose_raw = request.POST.get("purpose") or ChatbotConfig.Purpose.GENERAL
+        purpose = (
+            _purpose_raw
+            if _purpose_raw in _valid_purposes
+            else ChatbotConfig.Purpose.GENERAL
+        )
         category_pk = request.POST.get("category") or ""
         welcome = (request.POST.get("welcome_message") or "").strip()
         color = (request.POST.get("primary_color") or "#1a56db").strip()
-        position = request.POST.get("position") or "bottom_right"
+        _position_raw = request.POST.get("position") or "bottom_right"
+        position = (
+            _position_raw if _position_raw in _valid_positions else "bottom_right"
+        )
         is_active = "is_active" in request.POST
 
         errors = []
@@ -226,23 +261,42 @@ def chatbot_edit(request, pk):
         "order", "name"
     )
 
+    _valid_purposes = {c[0] for c in ChatbotConfig.Purpose.choices}
+    _valid_positions = {"bottom_right", "bottom_left"}
+
     if request.method == "POST":
-        name = (request.POST.get("name") or "").strip() or bot.name
-        purpose = request.POST.get("purpose") or bot.purpose
+        name = (request.POST.get("name") or "").strip()
+        if not name:
+            messages.error(request, "Name is required.")
+            return render(
+                request,
+                "manage/chatbot_form.html",
+                {
+                    "bot": bot,
+                    "categories": categories,
+                    "purposes": ChatbotConfig.Purpose.choices,
+                    "domains_display": "\n".join(bot.allowed_domains),
+                    "post": request.POST,
+                },
+            )
+        _purpose_raw = request.POST.get("purpose") or bot.purpose
+        purpose = _purpose_raw if _purpose_raw in _valid_purposes else bot.purpose
         category_pk = request.POST.get("category") or ""
         welcome = (request.POST.get("welcome_message") or "").strip()
         color = (request.POST.get("primary_color") or bot.primary_color).strip()
-        position = request.POST.get("position") or bot.position
+        _position_raw = request.POST.get("position") or bot.position
+        position = _position_raw if _position_raw in _valid_positions else bot.position
         is_active = "is_active" in request.POST
         raw_domains = request.POST.get("allowed_domains", "")
 
         bot.name = name
         bot.purpose = purpose
-        bot.category = (
-            ChatbotCategory.objects.filter(pk=int(category_pk)).first()
-            if category_pk.isdigit()
-            else None
-        )
+        if "category" in request.POST:
+            bot.category = (
+                ChatbotCategory.objects.filter(pk=int(category_pk)).first()
+                if category_pk.isdigit()
+                else None
+            )
         bot.welcome_message = welcome
         bot.primary_color = color
         bot.position = position

@@ -12,6 +12,8 @@ if [ "$DJANGO_ENV" = "production" ]; then
         --timeout "${GUNICORN_TIMEOUT:-120}" \
         --graceful-timeout 30 \
         --keep-alive 5 \
+        --max-requests "${GUNICORN_MAX_REQUESTS:-1200}" \
+        --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}" \
         --log-level info \
         --access-logfile - \
         --error-logfile -

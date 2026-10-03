@@ -1,10 +1,9 @@
 name: ZAP
 
+# ZAP scans live production — run manually only, not on every push, to avoid
+# triggering WAF rules or probing real customer data on every deployment.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   zap:

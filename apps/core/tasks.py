@@ -14,6 +14,12 @@ from celery import shared_task
 KEY = "ops:heartbeat:{}"
 TTL = 60 * 60 * 24
 
+# Written every 2 minutes with a 5-minute TTL. Measures beat+worker liveness: beat must be alive
+# to schedule the task AND a worker must be alive to execute it. If either dies the key expires
+# and /healthz reports "beat": false, making the failure detectable by uptime monitors.
+BEAT_HEARTBEAT_KEY = "ops:beat:heartbeat"
+BEAT_HEARTBEAT_TTL = 300  # 5 minutes
+
 
 @shared_task(queue="celery")
 def send_heartbeats() -> None:
@@ -24,6 +30,13 @@ def send_heartbeats() -> None:
 @shared_task
 def heartbeat(queue: str) -> None:
     cache.set(KEY.format(queue), timezone.now().isoformat(), TTL)
+
+
+@shared_task(queue="celery")
+def beat_heartbeat() -> None:
+    """Refresh the beat+worker liveness key. Both beat (schedules) and a worker (executes) must
+    be alive for this to run. Key expires after 5 min; /healthz reports "beat": false when gone."""
+    cache.set(BEAT_HEARTBEAT_KEY, timezone.now().isoformat(), BEAT_HEARTBEAT_TTL)
 
 
 @shared_task(queue="celery")

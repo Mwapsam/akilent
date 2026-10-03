@@ -699,6 +699,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.core.tasks.send_heartbeats",
         "schedule": 60.0,  # the Pilot Command Center shows each queue's last heartbeat
     },
+    "beat-heartbeat": {
+        "task": "apps.core.tasks.beat_heartbeat",
+        "schedule": 120.0,  # every 2 min; TTL is 5 min — /healthz reports "beat": false when expired
+    },
     "evaluate-support-sla": {
         "task": "apps.support.tasks.evaluate_sla",
         "schedule": 300.0,  # every 5 min — SLA breach detection + at-risk escalation

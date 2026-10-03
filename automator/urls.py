@@ -76,6 +76,7 @@ urlpatterns = [
         {"slug": "data-deletion"},
         name="data-deletion",
     ),
+    path("cookies/", core_views.legal_page, {"slug": "cookies"}, name="cookies"),
     path("docs/", core_views.docs_page, name="docs"),
     path("docs/<slug:slug>/", core_views.docs_page, name="docs-page"),
     path("", include("apps.accounts.urls")),

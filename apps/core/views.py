@@ -26,7 +26,9 @@ def healthz(request):
     from django.db import connection
     from django.http import JsonResponse
 
-    status = {"ok": True, "db": True, "cache": True}
+    from apps.core.tasks import BEAT_HEARTBEAT_KEY
+
+    status = {"ok": True, "db": True, "cache": True, "beat": True}
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
@@ -36,8 +38,12 @@ def healthz(request):
     try:
         cache.set("healthz", "1", 10)
         status["cache"] = cache.get("healthz") == "1"
+        # beat is informational — a stopped beat must not restart the web container,
+        # so it does not affect status["ok"]. Uptime monitors check for "beat": true.
+        status["beat"] = bool(cache.get(BEAT_HEARTBEAT_KEY))
     except Exception:
         status["cache"] = False
+        status["beat"] = False
     return JsonResponse(status, status=200 if status["ok"] else 503)
 
 
@@ -78,6 +84,7 @@ _LEGAL_PAGES = {
     "privacy": ("legal/privacy.html", "Privacy policy"),
     "terms": ("legal/terms.html", "Terms of service"),
     "data-deletion": ("legal/data_deletion.html", "Data deletion"),
+    "cookies": ("legal/cookies.html", "Cookie policy"),
 }
 _LEGAL_UPDATED = "26 September 2026"  # change with the text
 

@@ -17,6 +17,20 @@ SCRATCH_DB="restore_check"
 
 log() { echo "[backup $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
+# Posts a message to Slack when SLACK_WEBHOOK_URL is set. Silently no-ops if unset or if
+# the request fails, so a Slack outage never breaks the backup itself.
+slack_notify() {
+    local msg="$1"
+    [ -z "${SLACK_WEBHOOK_URL:-}" ] && return 0
+    # Strip control characters (newlines, tabs, etc.) that are invalid in JSON strings, then
+    # escape backslashes and double-quotes so the interpolated value is always well-formed JSON.
+    local escaped
+    escaped=$(printf '%s' "$msg" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')
+    curl -s -X POST "$SLACK_WEBHOOK_URL" \
+        -H "Content-Type: application/json" \
+        -d "{\"text\": \"${escaped}\"}" >/dev/null 2>&1 || true
+}
+
 need_bucket() {
     if [ -z "$BUCKET" ]; then
         log "BACKUP_S3_BUCKET is not set; nothing is being backed up."
@@ -74,9 +88,19 @@ loop() {
         today=$(date -u +%Y-%m-%d)
         if [ "$(date -u +%H)" = "$HOUR" ] && [ "$last" != "$today" ]; then
             last="$today"
-            dump || log "dump FAILED"
+            if dump; then
+                slack_notify ":white_check_mark: Akilent backup: dump completed (${today})"
+            else
+                log "dump FAILED"
+                slack_notify ":rotating_light: Akilent backup: DUMP FAILED on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            fi
             if [ "$(date -u +%u)" = "7" ]; then
-                restore_test || log "restore test FAILED"
+                if restore_test; then
+                    slack_notify ":white_check_mark: Akilent backup: weekly restore test PASSED (${today})"
+                else
+                    log "restore test FAILED"
+                    slack_notify ":rotating_light: Akilent backup: weekly restore test FAILED on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                fi
             fi
         fi
         sleep 300

@@ -1,0 +1,58 @@
+{% extends "legal/_layout.html" %}
+{% block legal_body %}
+
+<p>
+  This page explains what cookies and similar technologies Akilent uses, why we use them, and how you can control them.
+</p>
+
+<h2>What are cookies?</h2>
+<p>
+  Cookies are small text files stored on your device when you visit a website. They allow the website to remember information about your visit, such as your login session or preferences.
+</p>
+
+<h2>Cookies we use</h2>
+
+<h3>Strictly necessary cookies</h3>
+<p>
+  These cookies are required for the application to function. You cannot opt out of them.
+</p>
+<ul>
+  <li><strong>Session cookie</strong> — keeps you logged in during your session. Expires when your browser closes or after 8 hours, whichever comes first. Set on the <code>akilent.com</code> domain, HttpOnly and Secure.</li>
+  <li><strong>CSRF token</strong> — protects form submissions against cross-site request forgery attacks. Set on the <code>akilent.com</code> domain.</li>
+</ul>
+
+<h3>Analytics cookies</h3>
+<p>
+  If Google Analytics is configured on your account, it sets cookies to measure usage patterns. These cookies do not identify you personally.
+</p>
+<ul>
+  <li><strong>_ga, _ga_*, _gid</strong> — Google Analytics audience measurement. See <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google's privacy policy</a> for details.</li>
+</ul>
+
+<h3>Performance monitoring</h3>
+<p>
+  We use Cloudflare Insights to measure page load performance. Cloudflare may set cookies or use local storage for this purpose. See <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener noreferrer">Cloudflare's privacy policy</a>.
+</p>
+
+<h2>How to control cookies</h2>
+<p>
+  You can block or delete cookies through your browser settings. Note that blocking strictly necessary cookies will prevent you from logging in.
+</p>
+<ul>
+  <li><a href="https://support.google.com/chrome/answer/95647" rel="noopener noreferrer">Chrome</a></li>
+  <li><a href="https://support.mozilla.org/en-US/kb/enhanced-tracking-protection-firefox-desktop" rel="noopener noreferrer">Firefox</a></li>
+  <li><a href="https://support.apple.com/en-gb/guide/safari/sfri11471/mac" rel="noopener noreferrer">Safari</a></li>
+  <li><a href="https://support.microsoft.com/en-us/windows/delete-and-manage-cookies-168dab11-0753-043d-7c16-ede5947fc64d" rel="noopener noreferrer">Edge</a></li>
+</ul>
+
+<h2>Changes to this policy</h2>
+<p>
+  We may update this page when we change the cookies we use. The "Last updated" date at the top will reflect any changes.
+</p>
+
+<h2>Contact</h2>
+<p>
+  If you have questions about our use of cookies, contact us through our <a href="{% url 'help' %}">help centre</a>.
+</p>
+
+{% endblock %}

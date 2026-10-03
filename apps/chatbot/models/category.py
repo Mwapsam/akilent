@@ -27,6 +27,7 @@ class ChatbotCategory(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        # Only auto-generate slug on creation; explicit slug (e.g. set in Django admin) is preserved.
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
