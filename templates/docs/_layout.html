@@ -198,7 +198,7 @@
       <p class="text-[var(--color-ink-subtle)] mb-8">{{ page.summary }}</p>
 
       <div class="docs-body">
-        {% block docs_content %}{% endblock %}
+        <!-- MARKDOWN_START -->{% block docs_content %}{% endblock %}<!-- MARKDOWN_END -->
       </div>
 
       {% if prev_page or next_page %}

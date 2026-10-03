@@ -9,10 +9,11 @@ from apps.accounts.views import LoginView, LogoutView, PasswordResetView, _2fa_v
 from apps.core import views as core_views
 from apps.core import views_events
 from apps.seo.sitemaps import SITEMAPS
-from apps.seo.views import robots_txt
+from apps.seo.views import api_catalog, robots_txt
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots-txt"),
+    path(".well-known/api-catalog", api_catalog, name="api-catalog"),
     path(
         "sitemap.xml",
         sitemap,

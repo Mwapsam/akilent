@@ -537,7 +537,7 @@ def landing(request):
     ]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
-    return render(
+    resp = render(
         request,
         "accounts/landing.html",
         {
@@ -546,6 +546,14 @@ def landing(request):
             "trial_days": trial_days,
         },
     )
+    # RFC 8288 / RFC 9727 §3 — advertise machine-readable APIs for agent discovery.
+    resp["Link"] = (
+        '</.well-known/api-catalog>; rel="api-catalog", '
+        '</api/schema>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.0", '
+        '</docs/>; rel="service-doc", '
+        '</api/schema>; rel="describedby"; type="application/vnd.oai.openapi+json;version=3.0"'
+    )
+    return resp
 
 
 @login_required

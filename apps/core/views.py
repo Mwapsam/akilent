@@ -53,13 +53,32 @@ def healthz(request):
 def help_index(request):
     q = (request.GET.get("q") or "").strip()
     results = help_kb.search(q) if q else None
+    categories = help_kb.grouped()
+
+    from apps.core.markdown import wants_markdown
+
+    if wants_markdown(request):
+        from apps.core.markdown import markdown_response
+
+        lines = ["# Help Center\n"]
+        if q and results is not None:
+            lines.append(f'**Search results for "{q}"**\n')
+            for a in results:
+                lines.append(f"- [{a.title}](/help/{a.slug}/) — {a.summary}")
+        else:
+            for cat, articles in categories:
+                lines.append(f"\n## {cat}\n")
+                for a in articles:
+                    lines.append(f"- [{a.title}](/help/{a.slug}/) — {a.summary}")
+        return markdown_response("\n".join(lines))
+
     return render(
         request,
         "help/index.html",
         {
             "q": q,
             "results": results,
-            "categories": help_kb.grouped(),
+            "categories": categories,
         },
     )
 
@@ -68,12 +87,40 @@ def help_article(request, slug):
     article = help_kb.get_article(slug)
     if article is None:
         raise Http404("No such help article")
+    related = help_kb.related_to(article)
+
+    from apps.core.markdown import wants_markdown
+
+    if wants_markdown(request):
+        from django.template.loader import render_to_string
+
+        from apps.core.markdown import html_to_markdown, markdown_response
+
+        body_html = render_to_string(
+            article.template, {"article": article}, request=request
+        )
+        body_md = html_to_markdown(body_html)
+        related_md = ""
+        if related:
+            related_md = "\n\n## Related guides\n\n" + "\n".join(
+                f"- [{a.title}](/help/{a.slug}/)" for a in related
+            )
+        text = (
+            f"# {article.title}\n\n"
+            f"{article.summary}\n\n"
+            f"**Category:** {article.category}\n\n"
+            f"---\n\n"
+            f"{body_md}"
+            f"{related_md}"
+        )
+        return markdown_response(text)
+
     return render(
         request,
         "help/article.html",
         {
             "article": article,
-            "related": help_kb.related_to(article),
+            "related": related,
         },
     )
 
@@ -91,7 +138,21 @@ _LEGAL_UPDATED = "26 September 2026"  # change with the text
 
 def legal_page(request, slug):
     template, title = _LEGAL_PAGES[slug]
-    return render(request, template, {"page_title": title, "updated": _LEGAL_UPDATED})
+    ctx = {"page_title": title, "updated": _LEGAL_UPDATED}
+
+    from apps.core.markdown import wants_markdown
+
+    if wants_markdown(request):
+        from django.template.loader import render_to_string
+
+        from apps.core.markdown import extract_and_convert, markdown_response
+
+        html = render_to_string(template, ctx, request=request)
+        body_md = extract_and_convert(html)
+        text = f"# {title}\n\n_Last updated {_LEGAL_UPDATED}_\n\n{body_md}"
+        return markdown_response(text)
+
+    return render(request, template, ctx)
 
 
 # --- Developer docs (public) ---------------------------------------------------
@@ -104,15 +165,37 @@ def docs_page(request, slug="index"):
     if page is None:
         raise Http404("No such docs page")
     prev_page, next_page = docs_kb.neighbors(page)
-    return render(
-        request,
-        page.template,
-        {
-            "page": page,
-            "pages": docs_kb.PAGES,
-            "prev_page": prev_page,
-            "next_page": next_page,
-            "smtp_relay_host": settings.SMTP_RELAY_HOST,
-            "smtp_relay_port": settings.SMTP_RELAY_PORT,
-        },
-    )
+    ctx = {
+        "page": page,
+        "pages": docs_kb.PAGES,
+        "prev_page": prev_page,
+        "next_page": next_page,
+        "smtp_relay_host": settings.SMTP_RELAY_HOST,
+        "smtp_relay_port": settings.SMTP_RELAY_PORT,
+    }
+
+    from apps.core.markdown import wants_markdown
+
+    if wants_markdown(request):
+        from django.template.loader import render_to_string
+
+        from apps.core.markdown import extract_and_convert, markdown_response
+
+        html = render_to_string(page.template, ctx, request=request)
+        body_md = extract_and_convert(html)
+        nav_md = ""
+        if prev_page:
+            nav_md += f"\n\n← [Previous: {prev_page.title}](/docs/{prev_page.slug}/)"
+        if next_page:
+            nav_md += f"\n\n→ [Next: {next_page.title}](/docs/{next_page.slug}/)"
+        text = (
+            f"# {page.title}\n\n"
+            f"{page.summary}\n\n"
+            f"**Section:** {page.section}\n\n"
+            f"---\n\n"
+            f"{body_md}"
+            f"{nav_md}"
+        )
+        return markdown_response(text)
+
+    return render(request, page.template, ctx)

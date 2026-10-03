@@ -4,11 +4,29 @@ from apps.seo.models import SEOPage
 
 
 @pytest.mark.django_db
+def test_api_catalog_rfc9727(client, settings):
+    settings.SITE_URL = "https://akilent.com"
+    resp = client.get("/.well-known/api-catalog")
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/linkset+json"
+    data = resp.json()
+    assert "linkset" in data
+    entry = data["linkset"][0]
+    assert entry["anchor"] == "https://akilent.com/api/"
+    assert any(
+        d["href"] == "https://akilent.com/api/schema" for d in entry["service-desc"]
+    )
+    assert any(d["href"] == "https://akilent.com/docs/" for d in entry["service-doc"])
+    assert any(d["href"] == "https://akilent.com/healthz" for d in entry["status"])
+
+
+@pytest.mark.django_db
 def test_robots_txt_when_indexing_disabled(client, settings):
     settings.SEO_ALLOW_INDEXING = False
     r = client.get("/robots.txt")
     assert r.status_code == 200
     assert "Disallow: /" in r.text
+    assert "Content-Signal: ai-train=no, search=yes, ai-input=no" in r.text
 
 
 @pytest.mark.django_db
@@ -20,6 +38,7 @@ def test_robots_txt_when_indexing_enabled(client, settings):
     assert "Disallow: /admin/" in r.text
     assert "Disallow: /dashboard/" in r.text
     assert "Allow: /" in r.text
+    assert "Content-Signal: ai-train=no, search=yes, ai-input=no" in r.text
 
 
 @pytest.mark.django_db
@@ -36,6 +55,21 @@ def test_sitemap_excludes_app_paths(client, settings):
     assert "/dashboard/" not in r.text
     assert "/api/" not in r.text
     assert "/inbox/" not in r.text
+
+
+@pytest.mark.django_db
+def test_landing_link_headers_for_agent_discovery(client, settings):
+    settings.SEO_ALLOW_INDEXING = True
+    resp = client.get("/")
+    assert resp.status_code == 200
+    link = resp.get("Link", "")
+    assert 'rel="api-catalog"' in link
+    assert "/.well-known/api-catalog" in link
+    assert 'rel="service-desc"' in link
+    assert "/api/schema" in link
+    assert 'rel="service-doc"' in link
+    assert "/docs/" in link
+    assert 'rel="describedby"' in link
 
 
 @pytest.mark.django_db
