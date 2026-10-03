@@ -36,6 +36,10 @@ def _build_csp() -> str:
     # Cloudflare Insights injects beacon.min.js from static.cloudflareinsights.com.
     ga_id = getattr(settings, "GOOGLE_ANALYTICS_ID", "")
     script_src_extra = " https://www.googletagmanager.com" if ga_id else ""
+    # connect-src: GA4 beacons go to analytics.google.com and www.google.com.
+    connect_src_extra = (
+        " https://analytics.google.com https://www.google.com" if ga_id else ""
+    )
 
     return (
         "default-src 'self'; "
@@ -44,7 +48,7 @@ def _build_csp() -> str:
         f"style-src 'self' 'unsafe-inline' {cdn}; "
         f"img-src 'self' data: blob: {cdn}; "
         f"font-src 'self' data: {cdn}; "
-        "connect-src 'self'; "
+        f"connect-src 'self'{connect_src_extra}; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self'; "
