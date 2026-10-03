@@ -3,7 +3,7 @@ Pass collapsible=True in the desktop sidebar so group labels + link text hide
 when the rail is collapsed (icons + tooltips remain).
 Active state comes from apps/core/templatetags/nav.py (path-prefix based).
 Arrow Up/Down move through every link in the nav; groups are labelling only.{% endcomment %}
-<nav class="flex-1 space-y-0.5 px-3" aria-label="Primary" @keydown.arrow-up.window="navFocusLink($event, 'up')" @keydown.arrow-down.window="navFocusLink($event, 'down')">
+<nav class="flex-1 space-y-0.5 px-3" aria-label="Primary" @keydown.arrow-up="navFocusLink($event, 'up')" @keydown.arrow-down="navFocusLink($event, 'down')">
 
   {% include "components/_nav_item.html" with href="/inbox/" label="Inbox" icon="message-circle" match="inbox" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/dashboard/" label="Dashboard" icon="home" collapsible=collapsible %}

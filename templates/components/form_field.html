@@ -1,7 +1,7 @@
 {% comment %}Accessible field for raw inputs.
 Usage: include components/form_field.html with name="email" label="Email" type="email" required=True placeholder="…" help="…" error=err value=val{% endcomment %}
 <div>
-  {% if label %}<label class="label" for="id_{{ name }}">{{ label }}{% if required %} <span class="text-red-500">*</span>{% endif %}</label>{% endif %}
+  {% if label %}<label class="label" for="id_{{ name }}">{{ label }}{% if required %} <span class="text-red-500" aria-hidden="true">*</span>{% endif %}</label>{% endif %}
   <input id="id_{{ name }}" name="{{ name }}" type="{{ type|default:'text' }}"
          value="{{ value|default:'' }}"
          {% if xmodel %}x-model="{{ xmodel }}"{% endif %}

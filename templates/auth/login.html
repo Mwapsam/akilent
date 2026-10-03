@@ -8,12 +8,12 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">{{ site.app_name|default:"Automator" }}</h1>
-      <p class="text-sm text-gray-400 mt-1">Sign in to continue</p>
+      <p class="text-sm text-gray-500 mt-1">Sign in to continue</p>
     </div>
 
     <div class="card card-pad sm:!p-8">
       {% if form.non_field_errors %}
-        <div class="mb-5 alert alert-danger">
+        <div class="mb-5 alert alert-danger" role="alert">
           {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
           <p>{{ form.non_field_errors|join:" " }}</p>
         </div>
@@ -26,8 +26,9 @@
           <label for="id_username" class="label">Email</label>
           <input id="id_username" type="email" name="username" value="{{ form.username.value|default:'' }}"
                  autocomplete="email" autofocus
+                 {% if form.username.errors %}aria-invalid="true" aria-describedby="err_username"{% endif %}
                  class="input{% if form.username.errors %} input-error{% endif %}">
-          {% if form.username.errors %}<p class="field-error">{{ form.username.errors|join:" " }}</p>{% endif %}
+          {% if form.username.errors %}<p id="err_username" class="field-error">{{ form.username.errors|join:" " }}</p>{% endif %}
         </div>
         <div>
           <div class="flex items-center justify-between">
@@ -35,13 +36,13 @@
             <a href="{% url 'password_reset' %}" class="text-xs text-accent hover:text-accent-strong">Forgot password?</a>
           </div>
           {% include "components/password_field.html" with id="id_password" name="password" autocomplete="current-password" error=form.password.errors %}
-          {% if form.password.errors %}<p class="field-error">{{ form.password.errors|join:" " }}</p>{% endif %}
+          {% if form.password.errors %}<p id="err_password" class="field-error">{{ form.password.errors|join:" " }}</p>{% endif %}
         </div>
         <button type="submit" class="btn btn-primary btn-block mt-2">Sign in</button>
       </form>
     </div>
 
-    <p class="text-center text-xs text-gray-400 mt-6">
+    <p class="text-center text-xs text-gray-500 mt-6">
       New here? <a href="{% url 'signup' %}" class="text-accent hover:text-accent-strong">Create an account</a>
       &middot;
       <a href="{% url 'resend-verification' %}" class="text-accent hover:text-accent-strong">Resend confirmation link</a>

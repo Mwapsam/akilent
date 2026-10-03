@@ -5,7 +5,7 @@ AJAX forms with data-confirm trigger this; it resolves true/false.{% endcomment 
      style="z-index: var(--z-modal)"
      @keydown.escape.window="$store.confirm.respond(false)"
      role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-  <div class="absolute inset-0 bg-gray-900/50" @click="$store.confirm.respond(false)"></div>
+  <div class="absolute inset-0 bg-gray-900/50" @click="$store.confirm.respond(false)" aria-hidden="true"></div>
   <div class="card shadow-modal w-full max-w-md p-6 relative"
        x-transition.scale.95.opacity x-trap.noscroll="$store.confirm.open">
     <h2 id="confirm-title" class="text-base font-semibold text-ink"
@@ -16,7 +16,7 @@ AJAX forms with data-confirm trigger this; it resolves true/false.{% endcomment 
               @click="$store.confirm.respond(false)">Cancel</button>
       <button type="button" class="btn btn-sm"
               :class="$store.confirm.danger ? 'btn-danger' : 'btn-primary'"
-              x-text="$store.confirm.confirmLabel"
+              x-text="$store.confirm.confirmLabel || 'Confirm'"
               @click="$store.confirm.respond(true)" x-init="$nextTick(() => {})"></button>
     </div>
   </div>

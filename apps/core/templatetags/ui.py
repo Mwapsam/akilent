@@ -69,6 +69,7 @@ def render_field(bound_field, extra_class=""):
     if bound_field.errors:
         attrs["class"] = (css + " input-error").strip()
         attrs["aria-invalid"] = "true"
+        attrs["aria-describedby"] = f"err_{bound_field.html_name}"
     return bound_field.as_widget(attrs=attrs)
 
 

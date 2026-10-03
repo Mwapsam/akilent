@@ -11,14 +11,14 @@ Usually reached via components/form.html, but can be used directly:
   {% else %}
     {% if field.label %}
       <label class="label" for="{{ field.id_for_label }}">
-        {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+        {{ field.label }}{% if field.field.required %} <span class="text-red-500" aria-hidden="true">*</span>{% endif %}
       </label>
     {% endif %}
     {% render_field field %}
   {% endif %}
 
   {% for error in field.errors %}
-    <p class="field-error">{{ error }}</p>
+    <p id="err_{{ field.html_name }}" class="field-error">{{ error }}</p>
   {% endfor %}
   {% if field.help_text and not field.errors %}
     <p class="help">{{ field.help_text }}</p>

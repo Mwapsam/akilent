@@ -11,7 +11,7 @@
   {# ── Greeting ─────────────────────────────────────────────── #}
   <header class="mb-6">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">
-      {{ greeting }}{% if request.user.first_name %}, {{ request.user.first_name }}{% endif %} 👋
+      {{ greeting }}{% if request.user.first_name %}, {{ request.user.first_name }}{% endif %} <span aria-hidden="true">👋</span>
     </h1>
     <p class="mt-1 text-sm text-gray-600">
       {% if onboarding_complete %}
