@@ -61,6 +61,7 @@
   <div class="card card-pad space-y-3">
     <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Action executions</p>
     {% if actions %}
+    <div class="table-wrap">
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-xs text-ink-muted border-b border-border">
@@ -93,6 +94,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     <p class="text-sm text-ink-muted">No action executions in this period.</p>
     {% endif %}
