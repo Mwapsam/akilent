@@ -8,8 +8,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
-from apps.accounts.models import Account
-from apps.chatbot.models import ChatbotCategory, ChatbotConfig
+from apps.accounts.api import Account
+from apps.chatbot.api import ChatbotCategory, ChatbotConfig
 from apps.core.audit import audit
 from apps.core.utils import admin_required
 

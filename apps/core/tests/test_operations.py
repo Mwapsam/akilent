@@ -15,7 +15,8 @@ ROOT = Path(settings.BASE_DIR)
 def test_healthz_is_public_and_reports_the_database_and_cache(client):
     resp = client.get("/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "db": True, "cache": True}
+    # beat is informational-only and False in test env (no celery beat running).
+    assert resp.json() == {"ok": True, "db": True, "cache": True, "beat": False}
 
 
 @pytest.mark.django_db
