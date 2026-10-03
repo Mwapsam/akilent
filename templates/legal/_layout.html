@@ -25,7 +25,7 @@ should review them. Same prose styling as the help articles.
     <p class="mt-1 text-sm text-gray-500">Last updated {{ updated }}</p>
   </header>
   <div class="legal-body">
-    <!-- MARKDOWN_START -->{% block legal_body %}{% endblock %}<!-- MARKDOWN_END -->
+    {% comment %}MARKDOWN_START{% endcomment %}{% block legal_body %}{% endblock %}{% comment %}MARKDOWN_END{% endcomment %}
   </div>
   <nav class="mt-10 pt-6 border-t border-border flex flex-wrap gap-4 text-sm" aria-label="Legal">
     <a class="text-accent underline" href="{% url 'privacy' %}">Privacy policy</a>
