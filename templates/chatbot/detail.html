@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ bot.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8 px-4 space-y-6">
+
+  <div class="flex items-center gap-3">
+    <a href="{% url 'chatbot:list' %}" class="text-ink-subtle hover:text-ink">
+      {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+    </a>
+    <h1 class="text-2xl font-semibold text-ink flex-1">{{ bot.name }}</h1>
+    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
+      {% if bot.is_active %}tone-teal{% else %}tone-neutral{% endif %}">
+      {% if bot.is_active %}Active{% else %}Inactive{% endif %}
+    </span>
+    <a href="{% url 'chatbot:analytics' bot.pk %}" class="btn btn-ghost btn-sm">Analytics</a>
+    <a href="{% url 'chatbot:edit' bot.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── Embed snippet ──────────────────────────────────────────────────────── #}
+  <div class="card card-pad space-y-2">
+    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Embed snippet</p>
+    <p class="text-xs text-ink-muted">Paste this before the closing <code>&lt;/body&gt;</code> tag on any page you want the widget to appear.</p>
+    <pre class="rounded-lg tone-surface border border-border px-3 py-2 text-xs text-ink overflow-x-auto">{{ embed_snippet }}</pre>
+  </div>
+
+  {# ── Appearance ─────────────────────────────────────────────────────────── #}
+  <div class="card card-pad space-y-3">
+    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Appearance</p>
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+      <div><dt class="text-ink-subtle">Purpose</dt><dd class="text-ink">{{ bot.get_purpose_display }}</dd></div>
+      <div><dt class="text-ink-subtle">Position</dt><dd class="text-ink">{{ bot.get_position_display|default:bot.position }}</dd></div>
+      <div><dt class="text-ink-subtle">Colour</dt>
+           <dd class="flex items-center gap-2">
+             <span class="w-4 h-4 rounded-sm border border-border" style="background:{{ bot.primary_color }}"></span>
+             <span class="text-ink font-mono text-xs">{{ bot.primary_color }}</span>
+           </dd></div>
+      <div><dt class="text-ink-subtle">Welcome</dt><dd class="text-ink truncate">{{ bot.welcome_message|default:"—" }}</dd></div>
+    </dl>
+  </div>
+
+  {# ── Allowed domains ─────────────────────────────────────────────────────── #}
+  <div class="card card-pad space-y-2">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</p>
+      <a href="{% url 'chatbot:edit' bot.pk %}" class="text-xs text-accent hover:underline">Edit</a>
+    </div>
+    {% if bot.allowed_domains %}
+    <ul class="space-y-1">
+      {% for d in bot.allowed_domains %}
+      <li class="text-sm text-ink font-mono">{{ d }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="alert-warning text-sm">
+      No domains configured — the widget will be denied on all origins until at least one is added.
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Knowledge sources ───────────────────────────────────────────────────── #}
+  <div class="card card-pad space-y-3">
+    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Knowledge sources</p>
+    {% if knowledge_entries %}
+    <ul class="divide-y divide-border rounded-lg border border-border overflow-hidden">
+      {% for entry in knowledge_entries %}
+      <li class="flex items-center justify-between px-3 py-2 text-sm">
+        <div>
+          <span class="text-ink">{{ entry.title }}</span>
+          <span class="ml-2 text-xs text-ink-muted">{{ entry.get_source_type_display }}</span>
+        </div>
+        <form method="post" action="{% url 'chatbot:knowledge' bot.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="entry_id" value="{{ entry.pk }}">
+          {% if entry.pk in linked_ids %}
+          <input type="hidden" name="action" value="remove">
+          <button type="submit" class="text-xs text-ink-muted hover:text-coral">Remove</button>
+          {% else %}
+          <input type="hidden" name="action" value="add">
+          <button type="submit" class="text-xs text-accent hover:underline">Add</button>
+          {% endif %}
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-ink-muted">No knowledge base entries yet. <a href="{% url 'ai:knowledge' %}" class="text-accent underline">Add some</a>.</p>
+    {% endif %}
+  </div>
+
+  {# ── Actions ─────────────────────────────────────────────────────────────── #}
+  <div class="card card-pad space-y-3">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Actions</p>
+      <a href="{% url 'chatbot:action-create' bot.pk %}" class="btn btn-ghost btn-sm">
+        {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add action
+      </a>
+    </div>
+    {% if actions %}
+    <ul class="divide-y divide-border rounded-lg border border-border overflow-hidden">
+      {% for act in actions %}
+      <li class="flex items-center gap-3 px-3 py-2 text-sm">
+        <span class="flex-1">
+          <span class="font-mono text-ink">{{ act.slug }}</span>
+          <span class="ml-2 text-ink-muted">{{ act.label }}</span>
+        </span>
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
+          {% if act.is_enabled %}tone-teal{% else %}tone-neutral{% endif %}">
+          {% if act.is_enabled %}Enabled{% else %}Disabled{% endif %}
+        </span>
+        <a href="{% url 'chatbot:action-edit' bot.pk act.pk %}" class="text-xs text-ink-muted hover:text-ink">Edit</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-ink-muted">No actions configured yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

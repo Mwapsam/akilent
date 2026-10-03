@@ -19,9 +19,11 @@ class SupportEvent(models.Model):
     REOPENED = "reopened"
     NOTE_ADDED = "note_added"
     REFERENCE_ADDED = "reference_added"
+    CREATED_FROM_CONVERSATION = "created_from_conversation"
 
     EVENT_CHOICES = [
         (CREATED, "Ticket created"),
+        (CREATED_FROM_CONVERSATION, "Created from conversation"),
         (STATUS_CHANGED, "Status changed"),
         (PRIORITY_CHANGED, "Priority changed"),
         (ASSIGNED, "Assigned to agent"),

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ bot.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto py-8 px-4">
+  <div class="flex items-center gap-3 mb-6">
+    <a href="{% url 'chatbot:detail' bot.pk %}" class="text-ink-subtle hover:text-ink">
+      {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+    </a>
+    <h1 class="text-2xl font-semibold text-ink">Edit {{ bot.name }}</h1>
+  </div>
+
+  <form method="post" action="{% url 'chatbot:edit' bot.pk %}" class="space-y-5">
+    {% csrf_token %}
+
+    <div>
+      <label for="name" class="block text-sm font-medium text-ink mb-1">Name</label>
+      <input type="text" id="name" name="name" required value="{{ bot.name }}"
+             class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+    </div>
+
+    <div>
+      <label for="purpose" class="block text-sm font-medium text-ink mb-1">Purpose</label>
+      <select id="purpose" name="purpose"
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+        {% for val, label in purposes %}
+        <option value="{{ val }}" {% if bot.purpose == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="welcome_message" class="block text-sm font-medium text-ink mb-1">Welcome message</label>
+      <textarea id="welcome_message" name="welcome_message" rows="2"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ bot.welcome_message }}</textarea>
+    </div>
+
+    <div class="flex gap-4">
+      <div class="flex-1">
+        <label for="primary_color" class="block text-sm font-medium text-ink mb-1">Brand colour</label>
+        <input type="color" id="primary_color" name="primary_color" value="{{ bot.primary_color }}"
+               class="h-9 w-full rounded-lg border border-border bg-surface cursor-pointer">
+      </div>
+      <div class="flex-1">
+        <label for="position" class="block text-sm font-medium text-ink mb-1">Position</label>
+        <select id="position" name="position"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+          <option value="bottom_right" {% if bot.position == 'bottom_right' %}selected{% endif %}>Bottom right</option>
+          <option value="bottom_left" {% if bot.position == 'bottom_left' %}selected{% endif %}>Bottom left</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label for="allowed_domains" class="block text-sm font-medium text-ink mb-1">
+        Allowed domains
+        <span class="text-xs font-normal text-ink-muted ml-1">— one per line, e.g. https://example.com</span>
+      </label>
+      <textarea id="allowed_domains" name="allowed_domains" rows="4"
+                placeholder="https://example.com&#10;https://app.example.com"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ domains_display }}</textarea>
+      <p class="mt-1 text-xs text-ink-muted">
+        Leave empty and the widget will be denied on all origins.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="is_active" name="is_active" {% if bot.is_active %}checked{% endif %}
+             class="rounded border-border">
+      <label for="is_active" class="text-sm text-ink">Active (widget loads on authorised pages)</label>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{% url 'chatbot:detail' bot.pk %}" class="btn btn-secondary btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

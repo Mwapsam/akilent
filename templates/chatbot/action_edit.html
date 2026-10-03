@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{% if action %}Edit action{% else %}New action{% endif %} — {{ bot.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto py-8 px-4">
+  <div class="flex items-center gap-3 mb-6">
+    <a href="{% url 'chatbot:detail' bot.pk %}" class="text-ink-subtle hover:text-ink">
+      {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+    </a>
+    <h1 class="text-2xl font-semibold text-ink">
+      {% if action %}Edit action{% else %}New action{% endif %}
+    </h1>
+  </div>
+
+  <p class="text-sm text-ink-muted mb-5">
+    Actions are callable slugs your backend code registers.
+    The <span class="font-mono">slug</span> must match a function registered via
+    <code>@register("slug")</code> in your app's <code>chatbot_actions.py</code>.
+    The description is shown to the LLM so it knows when to invoke the action.
+  </p>
+
+  {% if messages %}
+  <div class="mb-4 space-y-2">
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post"
+        action="{% if action %}{% url 'chatbot:action-edit' bot.pk action.pk %}{% else %}{% url 'chatbot:action-create' bot.pk %}{% endif %}"
+        class="space-y-5">
+    {% csrf_token %}
+
+    <div>
+      <label for="slug" class="block text-sm font-medium text-ink mb-1">Slug</label>
+      <input type="text" id="slug" name="slug" required
+             value="{{ action.slug|default:'' }}"
+             placeholder="create_support_ticket"
+             {% if action %}readonly class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono text-ink-muted cursor-not-allowed"
+             {% else %}class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"{% endif %}>
+      {% if action %}<p class="mt-1 text-xs text-ink-muted">Slug cannot be changed after creation.</p>{% endif %}
+    </div>
+
+    <div>
+      <label for="label" class="block text-sm font-medium text-ink mb-1">Label</label>
+      <input type="text" id="label" name="label" required
+             value="{{ action.label|default:'' }}"
+             placeholder="Create support ticket"
+             class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+    </div>
+
+    <div>
+      <label for="description" class="block text-sm font-medium text-ink mb-1">
+        Description
+        <span class="text-xs font-normal text-ink-muted ml-1">— shown to the LLM</span>
+      </label>
+      <textarea id="description" name="description" rows="3"
+                placeholder="Create a new support ticket from the chat session. Use this when the visitor requests human help or the bot cannot resolve the issue."
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ action.description|default:'' }}</textarea>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="is_enabled" name="is_enabled"
+             {% if not action or action.is_enabled %}checked{% endif %}
+             class="rounded border-border">
+      <label for="is_enabled" class="text-sm text-ink">Enabled</label>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{% url 'chatbot:detail' bot.pk %}" class="btn btn-secondary btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">
+        {% if action %}Save changes{% else %}Add action{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

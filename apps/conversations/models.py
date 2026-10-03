@@ -42,6 +42,7 @@ class Conversation(models.Model):
         WHATSAPP = "whatsapp", "WhatsApp"
         EMAIL = "email", "Email"
         SMS = "sms", "SMS"
+        WEBSITE_CHAT = "website_chat", "Website Chat"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"

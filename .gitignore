@@ -60,3 +60,4 @@ packages/*/.phpunit.result.cache
 packages/*/.phpunit.cache/
 
 .mypy_cache/
+.claude/

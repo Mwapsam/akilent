@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Chatbots{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8 px-4">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold text-ink">Chatbots</h1>
+    <a href="{% url 'chatbot:create' %}" class="btn btn-primary btn-sm">New chatbot</a>
+  </div>
+
+  {% if bots %}
+  <ul class="divide-y divide-border rounded-xl border border-border overflow-hidden">
+    {% for bot in bots %}
+    <li>
+      <a href="{% url 'chatbot:detail' bot.pk %}"
+         class="flex items-center gap-4 px-4 py-3 hover:bg-surface transition-colors">
+        <span class="w-3 h-3 rounded-full shrink-0"
+              style="background: {{ bot.primary_color }}"></span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-ink truncate">{{ bot.name }}</p>
+          <p class="text-xs text-ink-muted mt-0.5">{{ bot.get_purpose_display }} · {{ bot.public_key }}</p>
+        </div>
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
+          {% if bot.is_active %}tone-teal{% else %}tone-neutral{% endif %}">
+          {% if bot.is_active %}Active{% else %}Inactive{% endif %}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="py-16 text-center text-ink-subtle rounded-xl border border-border">
+    {% include "components/icon.html" with name="message-circle" class="w-10 h-10 mx-auto mb-3 opacity-30" %}
+    <p class="text-sm mb-4">No chatbots yet.</p>
+    <a href="{% url 'chatbot:create' %}" class="btn btn-primary btn-sm">Create your first chatbot</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

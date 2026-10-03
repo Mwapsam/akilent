@@ -1041,3 +1041,61 @@ def messages_feed(request, public_id: str):
             "open": conversation.status == Conversation.Status.OPEN,
         }
     )
+
+
+@login_required
+@require_POST
+def create_ticket_from_conversation(request, public_id: str):
+    """Create a support ticket from an agent inbox conversation.
+
+    POST params:
+      priority   — p1/p2/p3/p4 (optional, default p3)
+      subject    — override the derived subject (optional)
+      force      — "1" to create even if an open ticket already exists
+    """
+    from apps.support.services.conversation import (
+        DuplicateTicketError,
+    )
+    from apps.support.services.conversation import (
+        create_ticket_from_conversation as _create,
+    )
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    conversation = get_object_or_404(Conversation, public_id=public_id, account=account)
+
+    _VALID_PRIORITIES = frozenset(["p1", "p2", "p3", "p4"])
+    priority = request.POST.get("priority", "p3")
+    if priority not in _VALID_PRIORITIES:
+        priority = "p3"
+    subject = request.POST.get("subject", "").strip() or None
+    force = request.POST.get("force") == "1"
+
+    try:
+        from apps.support.models import SupportTicket as _SupportTicket
+
+        ticket: _SupportTicket = _create(  # type: ignore[assignment]
+            conversation,
+            submitted_by=request.user,
+            subject=subject,
+            priority=priority,
+            force=force,
+        )
+        messages.success(
+            request,
+            f"Support ticket {ticket.ticket_number} created.",
+        )
+        return redirect("support:detail", ticket_number=ticket.ticket_number)
+    except DuplicateTicketError as exc:
+        messages.warning(
+            request,
+            f"This conversation already has an open ticket ({exc.ticket.ticket_number}). "
+            "Resolve or close it before creating a new one.",
+        )
+        return redirect("conversations:detail", public_id=public_id)
+    except Exception:
+        logger.exception("create_ticket_from_conversation failed for %s", public_id)
+        messages.error(request, "Could not create ticket. Please try again.")
+        return redirect("conversations:detail", public_id=public_id)

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}New Chatbot{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto py-8 px-4">
+  <div class="flex items-center gap-3 mb-6">
+    <a href="{% url 'chatbot:list' %}" class="text-ink-subtle hover:text-ink">
+      {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+    </a>
+    <h1 class="text-2xl font-semibold text-ink">New Chatbot</h1>
+  </div>
+
+  {% if error %}
+  <div class="mb-4 alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="{% url 'chatbot:create' %}" class="space-y-5">
+    {% csrf_token %}
+
+    <div>
+      <label for="name" class="block text-sm font-medium text-ink mb-1">Name</label>
+      <input type="text" id="name" name="name" required
+             value="{{ post.name|default:'' }}"
+             placeholder="e.g. Acme Support Bot"
+             class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+    </div>
+
+    <div>
+      <label for="purpose" class="block text-sm font-medium text-ink mb-1">Purpose</label>
+      <select id="purpose" name="purpose"
+              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+        {% for val, label in purposes %}
+        <option value="{{ val }}" {% if post.purpose == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="welcome_message" class="block text-sm font-medium text-ink mb-1">Welcome message</label>
+      <textarea id="welcome_message" name="welcome_message" rows="2"
+                placeholder="Hi! How can I help you today?"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ post.welcome_message|default:'' }}</textarea>
+    </div>
+
+    <div class="flex gap-4">
+      <div class="flex-1">
+        <label for="primary_color" class="block text-sm font-medium text-ink mb-1">Brand colour</label>
+        <input type="color" id="primary_color" name="primary_color"
+               value="{{ post.primary_color|default:'#1a56db' }}"
+               class="h-9 w-full rounded-lg border border-border bg-surface cursor-pointer">
+      </div>
+      <div class="flex-1">
+        <label for="position" class="block text-sm font-medium text-ink mb-1">Position</label>
+        <select id="position" name="position"
+                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+          <option value="bottom_right">Bottom right</option>
+          <option value="bottom_left">Bottom left</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{% url 'chatbot:list' %}" class="btn btn-secondary btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Create chatbot</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -12,10 +12,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-if not SECRET_KEY and not DEBUG:
-    raise ValueError("DJANGO_SECRET_KEY is required in production")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ValueError("DJANGO_SECRET_KEY is required in production")
+    # Stable fallback so dev can boot without .env. Never use in production.
+    SECRET_KEY = "dev-only-insecure-secret-key-change-me"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+if not DEBUG and set(ALLOWED_HOSTS) <= {"localhost", "127.0.0.1"}:
+    raise ValueError("ALLOWED_HOSTS must be configured for production")
 
 _extra_origins = os.getenv("CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in _extra_origins.split(",") if o.strip()]
@@ -49,6 +58,7 @@ INSTALLED_APPS = [
     "apps.internal_debug",
     "apps.ai",
     "apps.insights",
+    "apps.chatbot",
     "apps.support",
     "django_otp",
     "django_otp.plugins.otp_totp",
@@ -60,6 +70,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "apps.core.middleware.SecurityHeadersMiddleware",
     # Serve built static assets (CSS/JS/fonts) compressed + cache-busted.
+    # WhiteNoise is only useful when static files are served locally.
+    # When USE_S3_STORAGE is True it is omitted (see below).
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -120,6 +132,11 @@ else:
             "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
             "HOST": os.getenv("POSTGRES_HOST", "db"),
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "OPTIONS": {
+                # Uncomment if your Postgres requires SSL
+                # "sslmode": "require",
+            },
         }
     }
 
@@ -185,6 +202,11 @@ else:
     ENFORCE_HTTPS = _enforce_https_env.lower() == "true"
 
 if USE_S3_STORAGE:
+    # Remove WhiteNoise when static assets live on S3/CloudFront
+    MIDDLEWARE = [
+        m for m in MIDDLEWARE if m != "whitenoise.middleware.WhiteNoiseMiddleware"
+    ]
+
     STATICFILES_DIRS = [BASE_DIR / "static"]
 
     # Buckets created since April 2023 default to Object Ownership "Bucket
@@ -228,8 +250,10 @@ else:
         },
     }
 
-
-BASE_DOMAIN = os.getenv("BASE_DOMAIN", "localhost:8000")
+# Single source of truth for the public domain
+BASE_DOMAIN = os.getenv(
+    "BASE_DOMAIN", (ALLOWED_HOSTS[0] if ALLOWED_HOSTS else "localhost")
+)
 
 # --- SEO ---
 
@@ -287,9 +311,20 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 
 FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 if not FIELD_ENCRYPTION_KEY:
-    raise ValueError(
-        "FIELD_ENCRYPTION_KEY must be set. Generate one using Fernet.generate_key()."
-    )
+    if DEBUG:
+        # Derive a stable key from SECRET_KEY so encrypted-field data survives
+        # server restarts in local development. Fernet.generate_key() at import
+        # time would produce a new key on every restart, making any previously
+        # encrypted rows unreadable (InvalidToken) and requiring a DB wipe.
+        import base64
+        import hashlib
+
+        _raw = hashlib.sha256(SECRET_KEY.encode()).digest()  # type: ignore[name-defined]
+        FIELD_ENCRYPTION_KEY = base64.urlsafe_b64encode(_raw).decode()
+    else:
+        raise ValueError(
+            "FIELD_ENCRYPTION_KEY must be set. Generate one using Fernet.generate_key()."
+        )
 FIELD_ENCRYPTION_KEYS = [FIELD_ENCRYPTION_KEY]
 
 # --- Feature flags ---
@@ -382,11 +417,6 @@ DNSCHECK_AUTHORITATIVE = os.getenv("DNSCHECK_AUTHORITATIVE", "0") == "1"
 
 _USING_SES = "ses" in (MAIL_PROVIDER_BACKEND, EMAIL_SEND_PROVIDER_BACKEND)
 
-# Public domain used to build absolute tracking URLs in outgoing emails.
-BASE_DOMAIN = os.getenv(
-    "BASE_DOMAIN", (ALLOWED_HOSTS[0] if ALLOWED_HOSTS else "localhost")
-)
-
 # SMTP submission credentials (Stalwart port 587) used to actually send mail.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
@@ -394,7 +424,12 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() == "true"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
+# Django raises ImproperlyConfigured when both TLS and SSL are True.
+# An existing .env with EMAIL_USE_SSL=True + EMAIL_USE_TLS=True (the default)
+# would crash on startup, so force SSL off when TLS is on.
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    EMAIL_USE_SSL = False
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@localhost")
 
 if not DEBUG:
@@ -774,22 +809,40 @@ LOGGING = {
 
 # --- Production security ---
 
-CSRF_COOKIE_HTTPONLY = (
-    True  # safe: HTMX reads the token from {{ csrf_token }}, never from JS
-)
+CSRF_COOKIE_HTTPONLY = True
 
 if not DEBUG:
-    # SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = True
+    # Health probes hit web:8000 directly (bypassing nginx), so they carry no
+    # X-Forwarded-Proto header. Without this exemption Django redirects them to
+    # HTTPS and the probe loop-fails forever.
+    SECURE_REDIRECT_EXEMPT = [r"^/healthz/?$"]
+
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
+
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    CSRF_TRUSTED_ORIGINS = [
-        "https://akilent.com",
-        "https://www.akilent.com",
-    ]
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+    # Extend (do not overwrite) any origins supplied via the environment
+    CSRF_TRUSTED_ORIGINS = list(
+        {
+            *CSRF_TRUSTED_ORIGINS,
+            "https://akilent.com",
+            "https://www.akilent.com",
+        }
+    )
+
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 if SENTRY_DSN:

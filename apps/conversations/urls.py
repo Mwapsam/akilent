@@ -40,4 +40,9 @@ urlpatterns = [
     path("<str:public_id>/ai/suggest/", views.ai_suggest, name="ai_suggest"),
     path("<str:public_id>/ai/dismiss/", views.ai_dismiss, name="ai_dismiss"),
     path("<str:public_id>/ai/apply/", views.ai_apply, name="ai_apply"),
+    path(
+        "<str:public_id>/create-ticket/",
+        views.create_ticket_from_conversation,
+        name="create_ticket",
+    ),
 ]

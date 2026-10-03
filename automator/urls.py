@@ -96,6 +96,8 @@ urlpatterns = [
     path("billing/", include("apps.billing.urls", namespace="billing")),
     path("manage/", include("apps.core.urls", namespace="core")),
     path("api/", include("apps.api.urls")),
+    path("api/chat/", include("apps.chatbot.api.urls")),
+    path("chatbot/", include("apps.chatbot.urls", namespace="chatbot")),
     path("support/", include("apps.support.urls", namespace="support")),
 ]
 
