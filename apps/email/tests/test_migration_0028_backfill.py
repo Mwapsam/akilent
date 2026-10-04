@@ -18,6 +18,8 @@ _AFTER = "0028_alter_emailtemplateversion_options_and_more"
 @pytest.mark.django_db(transaction=True)
 def test_backfill_runs_forward_with_duplicate_unnumbered_rows():
     executor = MigrationExecutor(connection)
+    if (_APP, _BEFORE) not in executor.loader.graph.nodes:
+        pytest.skip("migration graph unavailable (--nomigrations)")
     executor.migrate([(_APP, _BEFORE)])
     executor.loader.build_graph()
 
