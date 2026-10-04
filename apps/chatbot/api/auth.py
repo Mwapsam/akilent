@@ -55,6 +55,13 @@ def check_origin(chatbot: object, request: HttpRequest) -> bool:
 
     # Strip trailing slashes and normalize.
     origin = origin.rstrip("/")
+
+    # Always allow the platform's own origin so the dashboard preview works
+    # without requiring operators to add their own domain to allowed_domains.
+    site_url = getattr(settings, "SITE_URL", "").rstrip("/")
+    if site_url and origin == site_url:
+        return True
+
     return any(origin == d.rstrip("/") for d in allowed)
 
 
