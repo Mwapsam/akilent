@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 
 from apps.accounts.utils import get_current_account
 from apps.chatbot.models import ChatbotAction, ChatbotConfig, ChatbotKnowledgeSource
@@ -241,4 +242,5 @@ def _parse_domains(raw: str) -> list[str]:
 
 
 def _embed_snippet(bot: ChatbotConfig) -> str:
-    return f'<script src="https://cdn.akilent.com/chat/v1/chat.js"\n        data-chatbot="{bot.public_key}"\n        async></script>'
+    widget_url = static("chat-widget/v1/chat.js")
+    return f'<script src="{widget_url}"\n        data-chatbot="{bot.public_key}"\n        async></script>'
