@@ -206,6 +206,7 @@ class PasswordResetForm(PasswordResetForm):  # type: ignore[no-redef]
                 subject=subject,
                 text_body=message,
                 html_body=html_message or "",
+                sender_label="Security",
             )
         except Exception as exc:
             raise forms.ValidationError(

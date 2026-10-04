@@ -78,6 +78,7 @@ def _send_invitation_email(request, invite):
         subject=subject,
         text_body=text_body,
         html_body=html_body,
+        sender_label="Team",
     )
 
 

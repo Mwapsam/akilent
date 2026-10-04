@@ -83,6 +83,7 @@ def send_system_email(
     subject: str,
     text_body: str = "",
     html_body: str = "",
+    sender_label: str = "",
 ) -> None:
     """Send a system email (password reset, verification, etc.) with suppression checks.
 
@@ -90,8 +91,14 @@ def send_system_email(
     Uses the configured send provider (SES or SMTP).
     Does not require domain verification or an Account — for platform system emails only.
 
+    ``sender_label`` is appended to the platform name in the From display name,
+    e.g. "Security" → "Akilent Security <no-reply@akilent.com>".
+    When omitted the display name is just the platform app_name.
+
     Raises on non-suppression errors (caller should log/retry).
     """
+    import email.utils
+
     from apps.email.providers import get_send_provider
     from apps.email.services.suppression import is_suppressed_globally
     from apps.email.services.validation import validate_recipient
@@ -109,7 +116,18 @@ def send_system_email(
         logger.warning("Skipping system email to %s (validation failed)", to_email)
         return
 
-    from_email = settings.DEFAULT_FROM_EMAIL
+    raw_from = settings.DEFAULT_FROM_EMAIL
+    app_name = ""
+    try:
+        from apps.core.models import SiteSettings
+
+        app_name = SiteSettings.load().app_name or ""
+    except Exception:
+        pass
+    display_name = f"{app_name} {sender_label}".strip() if sender_label else app_name
+    from_email = (
+        email.utils.formataddr((display_name, raw_from)) if display_name else raw_from
+    )
 
     # Ensure a plain-text part always exists so clients that can't render HTML
     # don't receive an empty message (and spam filters don't penalise it).

@@ -148,6 +148,7 @@ def send_weekly_reports() -> int:
                     subject=email["subject"],
                     text_body=email["text_body"],
                     html_body=email.get("html_body", ""),
+                    sender_label="Reports",
                 )
             Event.objects.create(
                 account=account,

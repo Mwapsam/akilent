@@ -71,6 +71,7 @@ def _email_submitted_by(ticket) -> None:
             subject=subject,
             text_body=text_body,
             html_body=build_transactional_html(text_body, subject),
+            sender_label="Support",
         )
     except Exception:
         logger.exception(

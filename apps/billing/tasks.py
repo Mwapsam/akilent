@@ -83,7 +83,9 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
         from apps.email.services.html_email import build_transactional_html
 
         html_body = build_transactional_html(body, subject)
-        send_system_email(owner.email, subject, text_body=body, html_body=html_body)
+        send_system_email(
+            owner.email, subject, text_body=body, html_body=html_body, sender_label="Billing"
+        )
     except Exception:
         logger.exception(
             "send_limit_warning: couldn't email the owner of account %s", account_id
@@ -138,7 +140,11 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
         for email in admin_emails:
             try:
                 send_system_email(
-                    email, subject, text_body=text_body, html_body=html_body
+                    email,
+                    subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                    sender_label="Billing",
                 )
             except Exception:
                 logger.exception(

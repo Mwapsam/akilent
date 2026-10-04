@@ -95,6 +95,7 @@ def notify_team(
                 subject=subject[:200],
                 text_body=body,
                 html_body=html_body,
+                sender_label="Team",
             )
             sent += 1
         except Exception:

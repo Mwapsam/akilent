@@ -47,6 +47,7 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
             subject=subject,
             text_body=text_body,
             html_body=html_body,
+            sender_label="Account",
         )
     except Exception as exc:
         logger.exception("send_verification_email: failed for user %s", user_id)
