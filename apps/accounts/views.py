@@ -923,9 +923,11 @@ def _chatbot_summary(account) -> dict:
         chatbot__account=account, started_at__gte=since
     ).count()
 
+    active_bots = [b for b in bots if b.is_active]
     return {
         "chatbots": bots,
         "chatbot_sessions_month": sessions_month,
+        "first_active_bot": active_bots[0] if active_bots else None,
     }
 
 

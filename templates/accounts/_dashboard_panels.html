@@ -3,6 +3,7 @@
 Swapped in for the skeleton placeholder in dashboard.html. Deliberately has no
 hx-trigger of its own, so it loads exactly once.
 {% endcomment %}
+{% load static %}
 <div id="dashboard-panels" class="space-y-6 mt-6">
 
   {% include "billing/_usage_warnings.html" %}
@@ -189,3 +190,9 @@ hx-trigger of its own, so it loads exactly once.
   {% endif %}
 
 </div>
+
+{% if first_active_bot %}
+<script src="{% static 'chat-widget/v1/chat.js' %}"
+        data-chatbot="{{ first_active_bot.public_key }}"
+        async></script>
+{% endif %}
