@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.insights",
     "apps.chatbot",
     "apps.support",
+    "apps.instagram",
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django.contrib.sitemaps",

@@ -43,6 +43,7 @@ class Conversation(models.Model):
         EMAIL = "email", "Email"
         SMS = "sms", "SMS"
         WEBSITE_CHAT = "website_chat", "Website Chat"
+        INSTAGRAM = "instagram", "Instagram"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -70,6 +71,13 @@ class Conversation(models.Model):
     # (e.g. WhatsApp's 24h window) remains authoritative there.
     whatsapp_conversation = models.OneToOneField(
         "whatsapp.Conversation",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="generic_conversation",
+    )
+    instagram_conversation = models.OneToOneField(
+        "instagram.InstagramConversation",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -122,6 +130,11 @@ class Conversation(models.Model):
                 condition=models.Q(whatsapp_conversation__isnull=False),
                 name="unique_generic_conversation_per_whatsapp_conversation",
             ),
+            models.UniqueConstraint(
+                fields=["instagram_conversation"],
+                condition=models.Q(instagram_conversation__isnull=False),
+                name="unique_generic_conversation_per_instagram_conversation",
+            ),
         ]
         ordering = ["-last_message_at", "-created_at"]
 
@@ -148,6 +161,29 @@ class Conversation(models.Model):
                 "account": whatsapp_conversation.account,
                 "contact": contact,
                 "channel": cls.Channel.WHATSAPP,
+            },
+        )
+        return convo
+
+    @classmethod
+    def get_or_create_for_instagram(cls, instagram_conversation) -> "Conversation":
+        """Idempotently get/create the generic wrapper for an instagram.InstagramConversation.
+
+        ``instagram_conversation.instagram_contact.contact`` must already be
+        resolved by the caller before this is called.
+        """
+        contact = instagram_conversation.instagram_contact.contact
+        if contact is None:
+            raise ValueError(
+                "instagram_conversation.instagram_contact.contact must be resolved "
+                "before creating a generic Conversation"
+            )
+        convo, _ = cls.objects.get_or_create(
+            instagram_conversation=instagram_conversation,
+            defaults={
+                "account": instagram_conversation.instagram_account.account,
+                "contact": contact,
+                "channel": cls.Channel.INSTAGRAM,
             },
         )
         return convo

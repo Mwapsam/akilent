@@ -108,6 +108,8 @@ urlpatterns = [
 if settings.WHATSAPP_ENABLED:
     urlpatterns += [path("whatsapp/", include("apps.whatsapp.urls"))]
 
+urlpatterns += [path("instagram/", include("apps.instagram.urls"))]
+
 # Internal debug API — off by default; see settings.INTERNAL_DEBUG_ENABLED.
 if settings.INTERNAL_DEBUG_ENABLED:
     urlpatterns += [path("internal/debug/api/", include("apps.internal_debug.urls"))]
