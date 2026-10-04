@@ -10,7 +10,7 @@
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Platform</p>
     {% include "components/_nav_item.html" with href="/manage/pilot/" label="Pilot Command Center" icon="bar-chart" match="manage/pilot" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/manage/health/" label="Health" icon="heartbeat" match="manage/health" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/manage/ux-events/" label="UX events" icon="activity" match="manage/ux-events" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/ux-events/" label="UX events" icon="eye" match="manage/ux-events" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/manage/audit/" label="Audit log" icon="list" match="manage/audit" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/manage/settings/" label="Settings" icon="sliders" match="manage/settings" collapsible=collapsible %}
   </div>

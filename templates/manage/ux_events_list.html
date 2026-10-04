@@ -37,7 +37,7 @@
 
 <section class="card">
   {% if events %}
-  <table class="w-full text-xs" role="table">
+  <div class="table-wrap"><table class="w-full text-xs" role="table">
     <thead>
       <tr class="text-gray-500 text-left border-b border-border">
         <th class="px-4 py-2 font-medium">Time</th>
@@ -54,12 +54,7 @@
       <tr class="border-b border-border/50 hover:bg-surface-muted/50">
         <td class="px-4 py-2 font-mono text-gray-500 whitespace-nowrap">{{ event.occurred_at|date:"m-d H:i:s" }}</td>
         <td class="px-4 py-2">
-          <span class="inline-block px-1.5 py-0.5 rounded
-            {% if event.type == 'rage_click' %}bg-red-50 text-red-700
-            {% elif event.type == 'dead_click' %}bg-yellow-50 text-yellow-700
-            {% elif event.type == 'js_error' %}bg-red-50 text-red-700
-            {% elif event.type == 'rapid_navigation' %}bg-purple-50 text-purple-700
-            {% else %}bg-orange-50 text-orange-700{% endif %}">{{ event.type }}</span>
+          <span class="badge {% if event.type == 'rage_click' %}badge-danger{% elif event.type == 'dead_click' %}badge-warning{% elif event.type == 'js_error' %}badge-danger{% elif event.type == 'rapid_navigation' %}badge-info{% else %}badge-neutral{% endif %}">{{ event.type }}</span>
         </td>
         <td class="px-4 py-2 font-mono text-gray-600 max-w-xs truncate">{{ event.page }}</td>
         <td class="px-4 py-2 text-gray-500 max-w-xs truncate">{{ event.target|default:"—"|truncatechars:60 }}</td>
@@ -81,7 +76,7 @@
       </tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% else %}
   <div class="card-pad">
     <p class="text-sm text-gray-500">No UX events match the current filters.</p>

@@ -57,6 +57,7 @@ dev = [
     "pre-commit (>=4.0)",
     "pytest-asyncio (>=0.24,<1.0)",
     "ftfy (>=6.3.1,<7.0.0)",
+    "pytest-xdist (>=3.8.0,<4.0.0)",
 ]
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,14 @@ dev = [
 DJANGO_SETTINGS_MODULE = "automator.settings_test"
 python_files = ["test_*.py", "tests.py", "*_test.py"]
 testpaths = ["apps"]
-addopts = "-q --import-mode=importlib --strict-markers"
+addopts = [
+    "-q",
+    "--import-mode=importlib",
+    "--strict-markers",
+    "--reuse-db",          
+    "--nomigrations", 
+    "-n", "auto",     
+]
 
 # ---------------------------------------------------------------------------
 # Ruff – lint + format

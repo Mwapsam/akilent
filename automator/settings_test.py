@@ -14,6 +14,27 @@ os.environ["WHATSAPP_APP_SECRET"] = "test_app_secret"
 
 from automator.settings import *
 
+# ---------------------------------------------------------------------------
+# Fast test database (pure in-memory SQLite)
+# ---------------------------------------------------------------------------
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
+        "OPTIONS": {
+            "timeout": 20,
+        },
+        "TEST": {
+            "NAME": ":memory:",
+        },
+    }
+}
+
+# Fastest possible password hashing for tests
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.MD5PasswordHasher",
+]
+
 # Capture mail in django.core.mail.outbox instead of hitting SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
@@ -49,3 +70,30 @@ AI_AUTONOMY_ENABLED = True
 
 # Never query real nameservers from tests.
 DNSCHECK_AUTHORITATIVE = False
+
+# Silence logging noise during tests (noticeable speed win on large suites)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": True,
+    "handlers": {
+        "null": {"class": "logging.NullHandler"},
+    },
+    "root": {
+        "handlers": ["null"],
+        "level": "CRITICAL",
+    },
+}
+
+# Drop middleware that is pure overhead in tests
+MIDDLEWARE = [
+    m
+    for m in MIDDLEWARE
+    if not m.endswith(
+        (
+            "SecurityMiddleware",
+            "WhiteNoiseMiddleware",
+            "GZipMiddleware",
+            "XFrameOptionsMiddleware",
+        )
+    )
+]

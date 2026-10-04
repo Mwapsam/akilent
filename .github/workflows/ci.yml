@@ -69,11 +69,14 @@ jobs:
       - name: Run email tests
         # Email delivery / SES is reputation-critical — run it as its own step so
         # a regression here is unmistakable, and fail if any test is skipped.
-        run: poetry run pytest apps/email -rs --strict-markers
+        run: poetry run pytest apps/email -rs --strict-markers --reuse-db --nomigrations
         env:
           DJANGO_SETTINGS_MODULE: automator.settings_test
 
       - name: Run tests
-        run: poetry run pytest
+        # --reuse-db + --nomigrations = big speed win
+        # -n auto = parallel (requires pytest-xdist; remove the flag if you
+        # haven't installed it yet)
+        run: poetry run pytest --reuse-db --nomigrations -n auto
         env:
           DJANGO_SETTINGS_MODULE: automator.settings_test

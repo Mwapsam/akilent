@@ -37,7 +37,7 @@
     <span class="text-sm font-normal text-gray-500">({{ timeline|length }} event{% if timeline|length != 1 %}s{% endif %})</span>
   </h2>
   {% if timeline %}
-  <table class="w-full text-xs" role="table">
+  <div class="table-wrap"><table class="w-full text-xs" role="table">
     <thead>
       <tr class="text-gray-500 text-left border-b border-border">
         <th class="pb-1 font-medium w-24">Time</th>
@@ -52,7 +52,7 @@
       <tr class="border-b border-border/50 align-top hover:bg-surface-muted/50">
         <td class="py-1.5 font-mono text-gray-500">{{ item.ts|date:"H:i:s" }}</td>
         {% if item.kind == "request" %}
-        <td class="py-1.5"><span class="inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">{{ item.obj.method }}</span></td>
+        <td class="py-1.5"><span class="badge badge-info font-mono">{{ item.obj.method }}</span></td>
         <td class="py-1.5">
           <a href="/logs/requests/{{ item.obj.public_id }}/" class="font-mono text-accent hover:underline">{{ item.obj.path }}</a>
           {% if item.obj.latency_ms %}<span class="text-gray-400 ml-2">{{ item.obj.latency_ms }}ms</span>{% endif %}
@@ -62,7 +62,7 @@
         </td>
         <td class="py-1.5 font-mono text-gray-400">{{ item.obj.request_id|default:"—" }}</td>
         {% else %}
-        <td class="py-1.5"><span class="inline-block px-1.5 py-0.5 rounded bg-orange-50 text-orange-700">{{ item.obj.type }}</span></td>
+        <td class="py-1.5"><span class="badge badge-warning">{{ item.obj.type }}</span></td>
         <td class="py-1.5 text-gray-600 col-span-2">
           {{ item.obj.page }}
           {% if item.obj.target %}<span class="text-gray-400"> · {{ item.obj.target|truncatechars:80 }}</span>{% endif %}
@@ -78,7 +78,7 @@
       </tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% else %}
   <p class="text-sm text-gray-500">No events recorded for this session yet.</p>
   {% endif %}
