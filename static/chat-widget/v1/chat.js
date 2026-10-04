@@ -154,7 +154,7 @@
 
     // Input row
     var inputRow = el("div", {
-      style: "display:flex;gap:8px;padding:10px 12px;border-top:1px solid #eee",
+      style: "display:flex;gap:8px;padding:10px 12px;border-top:1px solid #eee;color:#111;background:#f9f9f9",
     });
     input = el("input", {
       type: "text",
