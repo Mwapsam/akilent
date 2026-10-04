@@ -17,6 +17,8 @@ _AFTER = "0004_contact_consent"
 @pytest.mark.django_db(transaction=True)
 def test_backfill_records_unknown_not_opted_in():
     executor = MigrationExecutor(connection)
+    if (_APP, _BEFORE) not in executor.loader.graph.nodes:
+        pytest.skip("migration graph unavailable (--nomigrations)")
     executor.migrate([(_APP, _BEFORE)])
     executor.loader.build_graph()
 
@@ -55,6 +57,8 @@ def test_backfill_records_unknown_not_opted_in():
 @pytest.mark.django_db(transaction=True)
 def test_migration_reverses_cleanly():
     executor = MigrationExecutor(connection)
+    if (_APP, _AFTER) not in executor.loader.graph.nodes:
+        pytest.skip("migration graph unavailable (--nomigrations)")
     executor.migrate([(_APP, _AFTER)])
     executor.loader.build_graph()
     executor.migrate([(_APP, _BEFORE)])
