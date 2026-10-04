@@ -11,14 +11,12 @@
 </head>
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f9;min-height:100vh;">
+  <table class="table-wrap" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f9;min-height:100vh;">
     <tr>
       <td align="center" style="padding:32px 16px;">
 
-        <!-- Outer card -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
 
-          <!-- Header band -->
           <tr>
             <td style="background-color:#0E1526;border-radius:12px 12px 0 0;padding:24px 32px;text-align:center;">
               {% if logo_url %}
@@ -29,14 +27,12 @@
             </td>
           </tr>
 
-          <!-- Body card -->
           <tr>
             <td style="background-color:#ffffff;padding:36px 32px;border-left:1px solid #E8EDF3;border-right:1px solid #E8EDF3;">
               {% block content %}{% endblock %}
             </td>
           </tr>
 
-          <!-- Footer -->
           <tr>
             <td style="background-color:#ffffff;border-radius:0 0 12px 12px;border:1px solid #E8EDF3;border-top:1px solid #E8EDF3;padding:20px 32px;text-align:center;">
               <p style="margin:0;font-size:12px;color:#657089;line-height:1.6;">
@@ -49,7 +45,6 @@
           </tr>
 
         </table>
-        <!-- /outer card -->
 
       </td>
     </tr>
