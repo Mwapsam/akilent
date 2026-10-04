@@ -135,7 +135,7 @@
       <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</h2>
       <p class="text-xs text-ink-muted">One domain per line. Empty = deny all origins.</p>
       <textarea name="allowed_domains" rows="4" class="input w-full font-mono text-sm"
-        placeholder="https://example.com">{{ post.allowed_domains|default:domains_display }}</textarea>
+        placeholder="https://example.com">{{ post.allowed_domains|default:initial.domains_display }}</textarea>
     </div>
 
     <div class="flex gap-3">

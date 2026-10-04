@@ -276,7 +276,6 @@ def chatbot_edit(request, pk):
                     "bot": bot,
                     "categories": categories,
                     "purposes": ChatbotConfig.Purpose.choices,
-                    "domains_display": "\n".join(bot.allowed_domains),
                     "post": request.POST,
                     "initial": _bot_initial(bot),
                 },
@@ -318,7 +317,6 @@ def chatbot_edit(request, pk):
             "bot": bot,
             "categories": categories,
             "purposes": ChatbotConfig.Purpose.choices,
-            "domains_display": "\n".join(bot.allowed_domains),
             "initial": _bot_initial(bot),
         },
     )
@@ -350,6 +348,7 @@ def _bot_initial(bot: ChatbotConfig | None = None) -> dict:
             "welcome_message": "",
             "is_active": True,
             "category_id": "",
+            "domains_display": "",
         }
     return {
         "name": bot.name,
@@ -359,6 +358,7 @@ def _bot_initial(bot: ChatbotConfig | None = None) -> dict:
         "welcome_message": bot.welcome_message,
         "is_active": bot.is_active,
         "category_id": bot.category_id or "",
+        "domains_display": "\n".join(bot.allowed_domains),
     }
 
 
