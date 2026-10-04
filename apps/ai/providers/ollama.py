@@ -44,7 +44,11 @@ class OllamaProvider(AIProvider):
         timeout: float | None = None,
     ) -> CompletionResult:
         wire = ([{"role": "system", "content": system}] if system else []) + [
-            {"role": m.role, "content": m.content} for m in messages
+            {
+                "role": m["role"] if isinstance(m, dict) else m.role,
+                "content": m["content"] if isinstance(m, dict) else m.content,
+            }
+            for m in messages
         ]
         headers = {"Content-Type": "application/json"}
         if self.api_key:

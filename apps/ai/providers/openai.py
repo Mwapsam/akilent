@@ -48,7 +48,11 @@ class OpenAIProvider(AIProvider):
         if not self.model:
             raise AIProviderError("Set AI_MODEL to the OpenAI model to use.")
         wire = ([{"role": "system", "content": system}] if system else []) + [
-            {"role": m.role, "content": m.content} for m in messages
+            {
+                "role": m["role"] if isinstance(m, dict) else m.role,
+                "content": m["content"] if isinstance(m, dict) else m.content,
+            }
+            for m in messages
         ]
         data = post_json(
             f"{self.base_url}/v1/chat/completions",

@@ -50,9 +50,12 @@ class AnthropicProvider(AIProvider):
             "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": [
-                {"role": m.role, "content": m.content}
+                {
+                    "role": m["role"] if isinstance(m, dict) else m.role,
+                    "content": m["content"] if isinstance(m, dict) else m.content,
+                }
                 for m in messages
-                if m.role != "system"
+                if (m["role"] if isinstance(m, dict) else m.role) != "system"
             ],
         }
         if system:

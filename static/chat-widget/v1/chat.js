@@ -129,7 +129,7 @@
       style: [
         "position:fixed;bottom:92px;" + position,
         "width:340px;max-height:520px",
-        "background:#fff;border-radius:16px",
+        "background:#fff;color:#111;border-radius:16px",
         "box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:9999",
         "display:none;flex-direction:column;overflow:hidden",
         "font-family:system-ui,sans-serif;font-size:14px",
