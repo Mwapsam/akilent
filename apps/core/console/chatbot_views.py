@@ -248,6 +248,7 @@ def chatbot_create(request):
             "accounts": accounts,
             "categories": categories,
             "purposes": ChatbotConfig.Purpose.choices,
+            "initial": _bot_initial(),
         },
     )
 
@@ -277,6 +278,7 @@ def chatbot_edit(request, pk):
                     "purposes": ChatbotConfig.Purpose.choices,
                     "domains_display": "\n".join(bot.allowed_domains),
                     "post": request.POST,
+                    "initial": _bot_initial(bot),
                 },
             )
         _purpose_raw = request.POST.get("purpose") or bot.purpose
@@ -317,6 +319,7 @@ def chatbot_edit(request, pk):
             "categories": categories,
             "purposes": ChatbotConfig.Purpose.choices,
             "domains_display": "\n".join(bot.allowed_domains),
+            "initial": _bot_initial(bot),
         },
     )
 
@@ -334,6 +337,29 @@ def chatbot_toggle(request, pk):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _bot_initial(bot: ChatbotConfig | None = None) -> dict:
+    """Safe defaults for the chatbot form — never references bot attributes directly in template."""
+    if bot is None:
+        return {
+            "name": "",
+            "purpose": ChatbotConfig.Purpose.GENERAL,
+            "primary_color": "#1a56db",
+            "position": "bottom_right",
+            "welcome_message": "",
+            "is_active": True,
+            "category_id": "",
+        }
+    return {
+        "name": bot.name,
+        "purpose": bot.purpose,
+        "primary_color": bot.primary_color,
+        "position": bot.position,
+        "welcome_message": bot.welcome_message,
+        "is_active": bot.is_active,
+        "category_id": bot.category_id or "",
+    }
 
 
 def _int_field(value, default: int) -> int:

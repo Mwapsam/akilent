@@ -51,7 +51,7 @@
       <div>
         <label class="label" for="name">Name <span class="text-red-500">*</span></label>
         <input type="text" id="name" name="name" required maxlength="100"
-          value="{{ post.name|default:bot.name }}"
+          value="{{ post.name|default:initial.name }}"
           class="input w-full" placeholder="e.g. Sales Bot">
       </div>
 
@@ -61,7 +61,9 @@
           <select id="purpose" name="purpose" class="input w-full">
             {% for val, label in purposes %}
             <option value="{{ val }}"
-              {% if post.purpose == val or bot.purpose == val %}selected{% endif %}>{{ label }}</option>
+              {% if post.purpose == val %}selected
+              {% elif not post and initial.purpose == val %}selected
+              {% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
@@ -71,9 +73,9 @@
             <option value="">— none —</option>
             {% for cat in categories %}
             <option value="{{ cat.pk }}"
-              {% if post.category == cat.pk|stringformat:"s" or bot.category_id == cat.pk %}selected{% endif %}>
-              {{ cat.name }}
-            </option>
+              {% if post.category == cat.pk|stringformat:"s" %}selected
+              {% elif not post and initial.category_id == cat.pk %}selected
+              {% endif %}>{{ cat.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -82,7 +84,9 @@
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" name="is_active" class="rounded"
-            {% if post.is_active or bot.is_active or not bot %}checked{% endif %}>
+            {% if post %}
+              {% if post.is_active %}checked{% endif %}
+            {% elif initial.is_active %}checked{% endif %}>
           <span class="text-sm font-medium text-ink">Active</span>
         </label>
       </div>
@@ -95,28 +99,32 @@
       <div>
         <label class="label" for="welcome_message">Welcome message</label>
         <textarea id="welcome_message" name="welcome_message" rows="3" class="input w-full"
-          placeholder="Hi! How can I help you today?">{{ post.welcome_message|default:bot.welcome_message }}</textarea>
+          placeholder="Hi! How can I help you today?">{{ post.welcome_message|default:initial.welcome_message }}</textarea>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="label" for="primary_color">Primary colour</label>
+          {% with color=post.primary_color|default:initial.primary_color %}
           <div class="flex items-center gap-2">
             <input type="color" id="primary_color_picker"
-              value="{{ post.primary_color|default:bot.primary_color|default:'#1a56db' }}"
+              value="{{ color }}"
               class="h-9 w-9 rounded border border-border cursor-pointer"
               oninput="document.getElementById('primary_color').value=this.value">
             <input type="text" id="primary_color" name="primary_color" maxlength="7"
-              value="{{ post.primary_color|default:bot.primary_color|default:'#1a56db' }}"
+              value="{{ color }}"
               class="input flex-1 font-mono text-sm"
               oninput="document.getElementById('primary_color_picker').value=this.value">
           </div>
+          {% endwith %}
         </div>
         <div>
           <label class="label" for="position">Position</label>
           <select id="position" name="position" class="input w-full">
-            <option value="bottom_right" {% if post.position == "bottom_right" or bot.position == "bottom_right" %}selected{% endif %}>Bottom right</option>
-            <option value="bottom_left" {% if post.position == "bottom_left" or bot.position == "bottom_left" %}selected{% endif %}>Bottom left</option>
+            {% with pos=post.position|default:initial.position %}
+            <option value="bottom_right" {% if pos == "bottom_right" %}selected{% endif %}>Bottom right</option>
+            <option value="bottom_left" {% if pos == "bottom_left" %}selected{% endif %}>Bottom left</option>
+            {% endwith %}
           </select>
         </div>
       </div>
@@ -127,7 +135,7 @@
       <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</h2>
       <p class="text-xs text-ink-muted">One domain per line. Empty = deny all origins.</p>
       <textarea name="allowed_domains" rows="4" class="input w-full font-mono text-sm"
-        placeholder="https://example.com">{{ domains_display }}</textarea>
+        placeholder="https://example.com">{{ post.allowed_domains|default:domains_display }}</textarea>
     </div>
 
     <div class="flex gap-3">
