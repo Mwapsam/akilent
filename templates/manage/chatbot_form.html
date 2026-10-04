@@ -8,11 +8,15 @@
   </h1>
   {% if bot %}
   <p class="text-sm text-ink-muted mb-6">
+    {% if bot.chatbot_type == "system" %}
+    System chatbot · platform account
+    {% else %}
     Business: <a href="{% url 'core:business' bot.account.pk %}" class="text-accent">{{ bot.account.company_name }}</a>
+    {% endif %}
     · public key: <code class="text-xs">{{ bot.public_key }}</code>
   </p>
   {% else %}
-  <p class="text-sm text-ink-muted mb-6">Creating on behalf of a business account.</p>
+  <p class="text-sm text-ink-muted mb-6">Choose a type, then configure the chatbot.</p>
   {% endif %}
 
   {% if messages %}
@@ -26,13 +30,50 @@
   <form method="post" class="space-y-5">
     {% csrf_token %}
 
-    {# Business account — only shown on create #}
+    {# Chatbot type — only shown on create; on edit, type is shown read-only #}
     {% if not bot %}
     <div class="card card-pad space-y-4">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Type</h2>
+      <div>
+        <label class="label" for="chatbot_type">Chatbot type <span class="text-red-500">*</span></label>
+        <select id="chatbot_type" name="chatbot_type" class="input w-full"
+          onchange="toggleAccountField(this.value)">
+          {% for val, label in chatbot_types %}
+          <option value="{{ val }}"
+            {% if post.chatbot_type == val %}selected
+            {% elif not post and initial.chatbot_type == val %}selected
+            {% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="mt-1 text-xs text-ink-muted">
+          <strong>System:</strong> owned by Akilent — trained on Akilent knowledge, deployed on Akilent domains.<br>
+          <strong>Customer:</strong> owned by a business account — trained on their data, embedded on their website.
+        </p>
+      </div>
+    </div>
+    {% else %}
+    <div class="card card-pad">
+      <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide mb-2">Type</h2>
+      <p class="text-sm text-ink">
+        {% if bot.chatbot_type == "system" %}
+        <span class="badge badge-neutral">System</span> — changing type is done via the service layer.
+        {% else %}
+        <span class="badge badge-info">Customer</span>
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {# Business account — only shown on create for customer type #}
+    {% if not bot %}
+    <div id="account-section" class="card card-pad space-y-4"
+      {% with ct=post.chatbot_type|default:initial.chatbot_type %}
+      {% if ct == "system" %}style="display:none"{% endif %}
+      {% endwith %}>
       <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Business</h2>
       <div>
         <label class="label" for="account">Business account <span class="text-red-500">*</span></label>
-        <select id="account" name="account" required class="input w-full">
+        <select id="account" name="account" class="input w-full">
           <option value="">— select —</option>
           {% for acc in accounts %}
           <option value="{{ acc.pk }}" {% if post.account == acc.pk|stringformat:"s" %}selected{% endif %}>
@@ -146,4 +187,18 @@
     </div>
   </form>
 </div>
+
+<script>
+function toggleAccountField(type) {
+  var section = document.getElementById('account-section');
+  if (!section) return;
+  section.style.display = (type === 'system') ? 'none' : '';
+  var select = document.getElementById('account');
+  if (select) select.required = (type !== 'system');
+}
+(function() {
+  var t = document.getElementById('chatbot_type');
+  if (t) toggleAccountField(t.value);
+})();
+</script>
 {% endblock %}

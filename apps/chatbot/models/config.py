@@ -1,5 +1,6 @@
 import secrets
 
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -13,6 +14,10 @@ class ChatbotConfig(models.Model):
         SALES = "sales", "Sales"
         GENERAL = "general", "General assistant"
         CUSTOM = "custom", "Custom"
+
+    class ChatbotType(models.TextChoices):
+        SYSTEM = "system", "System"
+        CUSTOMER = "customer", "Customer"
 
     account = models.ForeignKey(
         "accounts.Account",
@@ -56,6 +61,11 @@ class ChatbotConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name="chatbots",
     )
+    chatbot_type = models.CharField(
+        max_length=20,
+        choices=ChatbotType.choices,
+        default=ChatbotType.CUSTOMER,
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -64,6 +74,30 @@ class ChatbotConfig(models.Model):
         verbose_name = "Chatbot config"
         verbose_name_plural = "Chatbot configs"
         ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+        if not self.account_id:
+            # No account yet — reject SYSTEM type explicitly rather than
+            # silently passing and letting the DB NOT NULL constraint fire.
+            if self.chatbot_type == self.ChatbotType.SYSTEM:
+                raise ValidationError(
+                    "System chatbots must be assigned to the platform account."
+                )
+            return
+        is_platform = self.account.is_platform_account
+        if self.chatbot_type == self.ChatbotType.SYSTEM and not is_platform:
+            raise ValidationError(
+                "System chatbots must belong to the platform account."
+            )
+        if self.chatbot_type == self.ChatbotType.CUSTOMER and is_platform:
+            raise ValidationError(
+                "Customer chatbots cannot belong to the platform account."
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.name} ({self.account})"

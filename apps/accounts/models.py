@@ -72,8 +72,19 @@ class Account(models.Model):
     # Per-account token for the Progstack domain-verification API.
     progstack_token = models.CharField(max_length=255, blank=True, default="")
 
+    # Marks the single internal Akilent platform account that owns system chatbots
+    # and platform-level knowledge. Only one account may have this flag set.
+    is_platform_account = models.BooleanField(default=False)
+
     class Meta:
         ordering = ["company_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_platform_account"],
+                condition=models.Q(is_platform_account=True),
+                name="only_one_platform_account",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:

@@ -5,11 +5,14 @@ from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 
 from apps.accounts.utils import get_current_account
 from apps.chatbot.models import ChatbotAction, ChatbotConfig, ChatbotKnowledgeSource
+from apps.chatbot.services import chatbot as chatbot_service
+from apps.chatbot.services import knowledge as knowledge_service
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -20,7 +23,9 @@ logger = logging.getLogger(__name__)
 @login_required
 def chatbot_list(request: HttpRequest) -> HttpResponse:
     account = get_current_account(request)
-    bots = ChatbotConfig.objects.filter(account=account).order_by("-created_at")
+    bots = ChatbotConfig.objects.filter(
+        account=account, chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER
+    ).order_by("-created_at")
     return render(request, "chatbot/list.html", {"bots": bots})
 
 
@@ -45,8 +50,9 @@ def chatbot_create(request: HttpRequest) -> HttpResponse:
                 },
             )
 
-        bot = ChatbotConfig.objects.create(
-            account=account,
+        # chatbot_type and account are set server-side; submitted values are ignored.
+        bot = chatbot_service.create_customer_chatbot(
+            account,
             name=name,
             purpose=purpose,
             welcome_message=welcome,
@@ -68,7 +74,12 @@ def chatbot_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def chatbot_detail(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_current_account(request)
-    bot = get_object_or_404(ChatbotConfig, pk=pk, account=account)
+    bot = get_object_or_404(
+        ChatbotConfig,
+        pk=pk,
+        account=account,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    )
     from apps.ai.models import KnowledgeBaseEntry
 
     knowledge_entries = KnowledgeBaseEntry.objects.filter(
@@ -96,20 +107,45 @@ def chatbot_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_current_account(request)
-    bot = get_object_or_404(ChatbotConfig, pk=pk, account=account)
+    bot = get_object_or_404(
+        ChatbotConfig,
+        pk=pk,
+        account=account,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    )
 
     if request.method == "POST":
-        bot.name = request.POST.get("name", bot.name).strip() or bot.name
-        bot.purpose = request.POST.get("purpose", bot.purpose)
-        bot.welcome_message = request.POST.get(
-            "welcome_message", bot.welcome_message
-        ).strip()
-        bot.primary_color = request.POST.get("primary_color", bot.primary_color).strip()
-        bot.position = request.POST.get("position", bot.position)
-        raw_domains = request.POST.get("allowed_domains", "")
-        bot.allowed_domains = _parse_domains(raw_domains)
-        bot.is_active = "is_active" in request.POST
-        bot.save()
+        fields = {
+            "name": request.POST.get("name", bot.name).strip() or bot.name,
+            "purpose": request.POST.get("purpose", bot.purpose),
+            "welcome_message": request.POST.get(
+                "welcome_message", bot.welcome_message
+            ).strip(),
+            "primary_color": request.POST.get(
+                "primary_color", bot.primary_color
+            ).strip(),
+            "position": request.POST.get("position", bot.position),
+            "allowed_domains": _parse_domains(request.POST.get("allowed_domains", "")),
+            "is_active": "is_active" in request.POST,
+        }
+        try:
+            chatbot_service.update_chatbot(
+                bot,
+                actor_account=account,
+                is_staff=False,
+                **fields,
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                "chatbot/edit.html",
+                {
+                    "bot": bot,
+                    "purposes": ChatbotConfig.Purpose.choices,
+                    "domains_display": "\n".join(bot.allowed_domains),
+                },
+            )
         messages.success(request, "Chatbot updated.")
         return redirect("chatbot:detail", pk=bot.pk)
 
@@ -128,7 +164,12 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
 def chatbot_knowledge(request: HttpRequest, pk: int) -> HttpResponse:
     """Toggle a knowledge entry on/off for this chatbot."""
     account = get_current_account(request)
-    bot = get_object_or_404(ChatbotConfig, pk=pk, account=account)
+    bot = get_object_or_404(
+        ChatbotConfig,
+        pk=pk,
+        account=account,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    )
 
     if request.method == "POST":
         from apps.ai.models import KnowledgeBaseEntry
@@ -140,13 +181,12 @@ def chatbot_knowledge(request: HttpRequest, pk: int) -> HttpResponse:
                 KnowledgeBaseEntry, pk=int(entry_id), account=account
             )
             if action == "add":
-                ChatbotKnowledgeSource.objects.get_or_create(
-                    chatbot=bot, knowledge_entry=entry, defaults={"is_active": True}
-                )
+                try:
+                    knowledge_service.link_knowledge(bot, entry)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
             elif action == "remove":
-                ChatbotKnowledgeSource.objects.filter(
-                    chatbot=bot, knowledge_entry=entry
-                ).delete()
+                knowledge_service.unlink_knowledge(bot, entry)
 
     return redirect("chatbot:detail", pk=bot.pk)
 
@@ -157,7 +197,12 @@ def chatbot_action_edit(
 ) -> HttpResponse:
     """Create or edit a ChatbotAction for this chatbot."""
     account = get_current_account(request)
-    bot = get_object_or_404(ChatbotConfig, pk=pk, account=account)
+    bot = get_object_or_404(
+        ChatbotConfig,
+        pk=pk,
+        account=account,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    )
     action_obj = None
     if action_pk:
         action_obj = get_object_or_404(ChatbotAction, pk=action_pk, chatbot=bot)
@@ -200,7 +245,12 @@ def chatbot_action_edit(
 @login_required
 def chatbot_analytics(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_current_account(request)
-    bot = get_object_or_404(ChatbotConfig, pk=pk, account=account)
+    bot = get_object_or_404(
+        ChatbotConfig,
+        pk=pk,
+        account=account,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    )
 
     from apps.chatbot import analytics
 

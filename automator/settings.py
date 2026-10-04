@@ -260,6 +260,15 @@ BASE_DOMAIN = os.getenv(
 
 SITE_URL = os.getenv("SITE_URL", "https://akilent.com")
 
+# Origins where system (Akilent-owned) chatbots may be deployed.
+# SITE_URL is always implicitly included; add additional Akilent-controlled
+# origins here (e.g. staging, marketing site, help centre).
+PLATFORM_ALLOWED_ORIGINS: list[str] = [
+    o.strip().rstrip("/")
+    for o in os.getenv("PLATFORM_ALLOWED_ORIGINS", SITE_URL).split(",")
+    if o.strip()
+]
+
 SEO_DEFAULTS = {
     "site_name": "Akilent",
     "default_title": "Customer Conversations, CRM & Business Automation",

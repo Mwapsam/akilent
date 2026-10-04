@@ -33,8 +33,14 @@
     <option value="1" {% if active_filter == "1" %}selected{% endif %}>Active</option>
     <option value="0" {% if active_filter == "0" %}selected{% endif %}>Inactive</option>
   </select>
+  <select name="chatbot_type" class="input text-sm" aria-label="Type">
+    <option value="">All types</option>
+    {% for val, label in chatbot_types %}
+    <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
   <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
-  {% if q or category_pk or active_filter %}
+  {% if q or category_pk or active_filter or type_filter %}
   <a href="{% url 'core:chatbot-list' %}" class="btn btn-ghost btn-sm">Clear</a>
   {% endif %}
 </form>
@@ -46,6 +52,7 @@
     <thead>
       <tr>
         <th>Name</th>
+        <th>Type</th>
         <th>Business</th>
         <th>Category</th>
         <th>Purpose</th>
@@ -59,6 +66,13 @@
       <tr>
         <td class="font-medium text-ink">
           <a href="{% url 'core:chatbot-edit' bot.pk %}" class="hover:text-accent">{{ bot.name }}</a>
+        </td>
+        <td>
+          {% if bot.chatbot_type == "system" %}
+          <span class="badge badge-neutral text-xs">System</span>
+          {% else %}
+          <span class="badge badge-info text-xs">Customer</span>
+          {% endif %}
         </td>
         <td>
           <a href="{% url 'core:business' bot.account.pk %}" class="text-sm text-ink-muted hover:text-ink">
