@@ -159,7 +159,7 @@
     input = el("input", {
       type: "text",
       placeholder: "Type a message…",
-      style: "flex:1;border:1px solid #ddd;border-radius:8px;padding:6px 10px;outline:none;font-size:13px",
+      style: "flex:1;border:1px solid #ddd;border-radius:8px;padding:6px 10px;outline:none;font-size:13px;color:#111;background:#fff",
     });
     sendBtn = el("button", {
       style: [
@@ -299,7 +299,7 @@
   }
 
   function inputStyle() {
-    return "width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;padding:6px 10px;font-size:13px;margin-bottom:6px;outline:none";
+    return "width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;padding:6px 10px;font-size:13px;margin-bottom:6px;outline:none;color:#111;background:#fff";
   }
 
   function svgIcon() {
