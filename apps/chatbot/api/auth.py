@@ -41,11 +41,20 @@ def check_origin(chatbot: object, request: HttpRequest) -> bool:
     """
     from django.conf import settings
 
+    origin = request.META.get("HTTP_ORIGIN", "")
+
+    # Always allow the platform's own origin so the dashboard preview works
+    # without requiring operators to add their own domain to allowed_domains.
+    # This check runs before the allowed_domains guard so it works even when
+    # the operator hasn't configured any allowed domains yet.
+    site_url = getattr(settings, "SITE_URL", "").rstrip("/")
+    if site_url and origin.rstrip("/") == site_url:
+        return True
+
     allowed: list[str] = chatbot.allowed_domains  # type: ignore[attr-defined]
     if not allowed:
         return False
 
-    origin = request.META.get("HTTP_ORIGIN", "")
     if not origin:
         # Browsers always send Origin on cross-origin requests, so a missing
         # header means a non-browser caller. Let the operator opt in to
@@ -53,16 +62,7 @@ def check_origin(chatbot: object, request: HttpRequest) -> bool:
         require_origin: bool = getattr(settings, "CHATBOT_REQUIRE_ORIGIN", True)
         return not require_origin
 
-    # Strip trailing slashes and normalize.
-    origin = origin.rstrip("/")
-
-    # Always allow the platform's own origin so the dashboard preview works
-    # without requiring operators to add their own domain to allowed_domains.
-    site_url = getattr(settings, "SITE_URL", "").rstrip("/")
-    if site_url and origin == site_url:
-        return True
-
-    return any(origin == d.rstrip("/") for d in allowed)
+    return any(origin.rstrip("/") == d.rstrip("/") for d in allowed)
 
 
 _INIT_RATE_LIMIT = 10  # init calls per window per IP
