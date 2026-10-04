@@ -877,7 +877,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         release=RELEASE_VERSION,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
-        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.0"),
         send_default_pii=False,
         before_send=_sentry_before_send,
     )
