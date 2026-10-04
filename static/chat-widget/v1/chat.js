@@ -124,6 +124,8 @@
     // Chat panel
     panel = el("div", {
       id: "ak-chat-panel",
+      "hx-boost": "false",
+      "x-ignore": "",
       style: [
         "position:fixed;bottom:92px;" + position,
         "width:340px;max-height:520px",
