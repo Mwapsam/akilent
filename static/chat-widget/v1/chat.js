@@ -61,7 +61,7 @@
 
   function post(path, body, cb, useScriptOrigin) {
     var origin = useScriptOrigin
-      ? script.src.replace(/\/chat\/.*$/, "")
+      ? window.location.origin
       : state.apiOrigin;
     var url = origin + path;
 
