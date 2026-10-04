@@ -21,6 +21,7 @@ urlpatterns = [
         name="django.contrib.sitemaps.views.sitemap",
     ),
     path("healthz", core_views.healthz, name="healthz"),
+    path("internal/ux-event/", core_views.ingest_ux_event, name="ux-event-ingest"),
     # Served by a separate ASGI process (docker-compose.yml's `events` service) behind nginx's
     # /events/ location — the main `web` service stays on WSGI. Routed here too so it resolves
     # under DEBUG/runserver and `{% url %}`/reverse() have one definition to agree with.

@@ -64,6 +64,9 @@ urlpatterns = [
         billing_views.payment_method_edit,
         name="payment-method-edit",
     ),
+    # Session intelligence
+    path("sessions/<str:session_id>/", views.session_detail, name="session-detail"),
+    path("ux-events/", views.ux_events_list, name="ux-events"),
     # Platform
     path("pilot/", views.pilot_command_center, name="pilot"),
     path("health/", views.platform_health, name="platform-health"),

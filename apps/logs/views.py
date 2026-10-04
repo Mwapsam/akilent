@@ -9,7 +9,7 @@ from django.shortcuts import redirect, render
 from apps.accounts.utils import get_current_account
 from apps.core.htmx import is_background
 from apps.email.models import EmailMessage, WebhookDelivery
-from apps.logs.models import ApiRequest, MessageEvent
+from apps.logs.models import ApiRequest, BrowserSession, MessageEvent, UxEvent
 
 _PAGE_SIZE = 50
 _STATUS_CHOICES = EmailMessage.Status.choices
@@ -131,6 +131,45 @@ def request_detail(request, public_id: str):
             .first()
         )
         linked_message = ev.message if ev else None
+
+    # Preceding 30-second session timeline (inline — no separate page visit needed)
+    preceding_timeline: list[dict] = []
+    if row.browser_session_id:
+        from datetime import timedelta
+
+        window_start = row.created_at - timedelta(seconds=30)
+        prior_requests = list(
+            ApiRequest.objects.filter(
+                browser_session_id=row.browser_session_id,
+                created_at__range=(window_start, row.created_at),
+            )
+            .exclude(pk=row.pk)
+            .values(
+                "created_at", "method", "path", "status_code", "request_id", "public_id"
+            )
+        )
+        ux_events = list(
+            UxEvent.objects.filter(
+                session__session_id=row.browser_session_id,
+                occurred_at__range=(window_start, row.created_at),
+            ).values(
+                "occurred_at", "type", "page", "target", "click_count", "request_id"
+            )
+        )
+        for r in prior_requests:
+            preceding_timeline.append(
+                {"ts": r["created_at"], "kind": "request", "obj": r}
+            )
+        for e in ux_events:
+            preceding_timeline.append({"ts": e["occurred_at"], "kind": "ux", "obj": e})
+        preceding_timeline.sort(key=lambda x: x["ts"])  # type: ignore[arg-type]
+
+    session_obj = None
+    if row.browser_session_id:
+        session_obj = BrowserSession.objects.filter(
+            session_id=row.browser_session_id
+        ).first()
+
     return render(
         request,
         "logs/request_detail.html",
@@ -138,5 +177,7 @@ def request_detail(request, public_id: str):
             "account": account,
             "row": row,
             "linked_message": linked_message,
+            "preceding_timeline": preceding_timeline,
+            "session_obj": session_obj,
         },
     )

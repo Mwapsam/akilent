@@ -337,6 +337,9 @@
     if (isBoosted(e.detail) || (e.detail.elt && e.detail.elt.closest && e.detail.elt.closest("[hx-boost]"))) {
       e.detail.headers["X-Akilent-Shell"] = shellName();
     }
+    if (window.__akilentSessionId) {
+      e.detail.headers["X-Browser-Session-Id"] = window.__akilentSessionId;
+    }
   });
 
   document.addEventListener("htmx:beforeSwap", function (e) {

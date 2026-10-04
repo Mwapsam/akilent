@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+
+from apps.core.browser_session import (
+    reset_browser_session_id,
+    set_browser_session_id,
+)
 from apps.core.request_context import (
     new_request_id,
     reset_request_id,
@@ -115,6 +121,122 @@ class SecurityHeadersMiddleware:
         response.setdefault("Permissions-Policy", _PERMISSIONS)
         response.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         return response
+
+
+def _parse_browser(ua: str) -> str:
+    ua = ua.lower()
+    for name in ("edg/", "opr/", "chrome/", "firefox/", "safari/"):
+        if name in ua:
+            return (
+                name.rstrip("/").replace("edg", "edge").replace("opr", "opera").title()
+            )
+    return "unknown"
+
+
+def _parse_device(ua: str) -> str:
+    ua = ua.lower()
+    if "mobile" in ua or "android" in ua and "mobi" in ua:
+        return "mobile"
+    if "tablet" in ua or "ipad" in ua:
+        return "tablet"
+    return "desktop"
+
+
+_BS_INBOUND = "HTTP_X_BROWSER_SESSION_ID"
+_BS_COOKIE = "bsid"
+_BS_MAX_AGE = 4 * 60 * 60  # 4 hours
+
+
+class BrowserSessionMiddleware:
+    """Resolve a pseudonymous browser session ID from the inbound header or
+    cookie, set ``request.browser_session_id``, establish the ContextVar, and
+    upsert the ``BrowserSession`` row.
+
+    Must be placed after ``RequestIdMiddleware`` in MIDDLEWARE.  Never reaches
+    into ``RequestIdMiddleware``'s internals — clean responsibility boundary.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        raw = request.META.get(_BS_INBOUND, "") or request.COOKIES.get(_BS_COOKIE, "")
+        sid = raw[:64] if (raw and raw.startswith("sess_")) else ""
+        request.browser_session_id = sid
+
+        token = set_browser_session_id(sid)
+        try:
+            if sid:
+                _upsert_browser_session(request, sid)
+            response = self.get_response(request)
+        finally:
+            reset_browser_session_id(token)
+
+        if sid:
+            from django.conf import settings as _s
+
+            response.set_cookie(
+                _BS_COOKIE,
+                sid,
+                max_age=_BS_MAX_AGE,
+                secure=not _s.DEBUG,
+                httponly=True,
+                samesite="Lax",
+            )
+        return response
+
+
+def _upsert_browser_session(request, sid: str) -> None:
+    """Create or touch BrowserSession.  Swallows all errors — never raises
+    into the request path."""
+    try:
+        from django.conf import settings as _s
+        from django.utils import timezone
+
+        from apps.logs.models import BrowserSession
+
+        now = timezone.now()
+        account = getattr(request, "account", None)
+        user = getattr(request, "user", None)
+        user_id_hash = (
+            hashlib.sha256(str(user.pk).encode()).hexdigest()
+            if user and getattr(user, "is_authenticated", False)
+            else ""
+        )
+        release = getattr(_s, "RELEASE_VERSION", "")
+        ua = request.META.get("HTTP_USER_AGENT", "")
+
+        _obj, created = BrowserSession.objects.update_or_create(
+            session_id=sid,
+            defaults=dict(
+                last_seen_at=now,
+                release=release,
+                browser=_parse_browser(ua),
+                device=_parse_device(ua),
+            ),
+            create_defaults=dict(
+                last_seen_at=now,
+                account=account,
+                user_id_hash=user_id_hash,
+                release=release,
+                browser=_parse_browser(ua),
+                device=_parse_device(ua),
+                entry_path=request.path[:255],
+            ),
+        )
+        if not created:
+            # Update account / user association as soon as authentication is known.
+            if account is not None and _obj.account_id is None:
+                BrowserSession.objects.filter(pk=_obj.pk).update(
+                    account=account,
+                    user_id_hash=user_id_hash,
+                )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).debug(
+            "_upsert_browser_session failed for sid=%s", sid, exc_info=True
+        )
 
 
 class SuspendedAccountMiddleware:

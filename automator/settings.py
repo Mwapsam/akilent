@@ -81,6 +81,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.BrowserSessionMiddleware",
     "apps.core.middleware.SuspendedAccountMiddleware",
     "apps.core.middleware.ViewAsReadOnlyMiddleware",
     # In-place navigation: falls back to a full page load whenever a fragment won't do.
@@ -519,29 +520,39 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 
+
 # --- Cache ---
 # Backs DRF request-rate throttling and the API-key bad-attempt lockout
 # counter (apps.api.authentication) — must be shared across gunicorn workers,
 # so LocMemCache (Django's default) won't do outside of tests. Redis is
 # already a dependency for Celery; a separate DB index keeps the keyspaces apart.
+def _redis_url(raw: str | None, default: str) -> str:
+    url = raw or default
+    if url and not url.startswith(("redis://", "rediss://", "unix://")):
+        url = f"redis://{url}"
+    return url
+
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_CACHE_URL", "redis://redis:6379/1"),
+        "LOCATION": _redis_url(os.getenv("REDIS_CACHE_URL"), "redis://redis:6379/1"),
     }
 }
 
 # --- Celery ---
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = _redis_url(
+    os.getenv("CELERY_RESULT_BACKEND"), "redis://redis:6379/0"
+)
 
 # Shared Redis used for the distributed SES send rate limiter (falls back to the
 # cache URL, then the Celery result backend). If none resolve to a redis:// URL
 # the limiter degrades to a per-process token bucket.
-REDIS_URL = os.getenv(
-    "REDIS_URL",
-    os.getenv("REDIS_CACHE_URL", CELERY_RESULT_BACKEND),
+REDIS_URL = _redis_url(
+    os.getenv("REDIS_URL", os.getenv("REDIS_CACHE_URL")),
+    CELERY_RESULT_BACKEND,
 )
 
 # Off by default: the SSE endpoint (apps/core/views_events.py) is meant to run behind a
@@ -848,13 +859,25 @@ if not DEBUG:
     )
 
 
+RELEASE_VERSION = os.getenv("RELEASE_VERSION", "")
+
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 if SENTRY_DSN:
     import sentry_sdk
 
+    from apps.core.browser_session import get_browser_session_id
+    from apps.core.request_context import get_request_id
+
+    def _sentry_before_send(event, hint):
+        event.setdefault("tags", {})["browser_session_id"] = get_browser_session_id()
+        event.setdefault("tags", {})["request_id"] = get_request_id()
+        return event
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
+        release=RELEASE_VERSION,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
         send_default_pii=False,
+        before_send=_sentry_before_send,
     )

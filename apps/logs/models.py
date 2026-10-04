@@ -137,11 +137,34 @@ class ApiRequest(models.Model):
     user_agent = models.CharField(max_length=512, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Session / release correlation (Tier-2 observability)
+    browser_session_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    release = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="RELEASE_VERSION at request time.",
+    )
+    op_meta = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Server-generated structured diagnostic context only. "
+            "Never copy request.POST or request.data here."
+        ),
+    )
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["account", "created_at"]),
             models.Index(fields=["status_code", "created_at"]),
+            models.Index(fields=["browser_session_id", "-created_at"]),
         ]
 
     def __str__(self):
@@ -181,6 +204,121 @@ class IdempotencyRecord(models.Model):
 
     def __str__(self):
         return f"{self.endpoint} {self.key} [{self.status}]"
+
+
+class BrowserSession(models.Model):
+    """One pseudonymous browser session — the common correlation key for
+    frontend events, API requests, and Sentry errors.
+
+    Created by ``BrowserSessionMiddleware`` on first sight of a valid
+    ``sess_…`` browser-session ID.  Works for anonymous and authenticated users.
+    """
+
+    session_id = models.CharField(max_length=64, unique=True, db_index=True)
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="browser_sessions",
+    )
+    user_id_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="SHA-256 of user.pk — no PII stored.",
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField()
+    release = models.CharField(max_length=64, blank=True, default="")
+    browser = models.CharField(max_length=100, blank=True, default="")
+    device = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="desktop | mobile | tablet",
+    )
+    replay_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="Populated in Phase 4 when a replay SDK is configured.",
+    )
+    entry_path = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+        indexes = [
+            models.Index(fields=["account", "-last_seen_at"]),
+            models.Index(fields=["-last_seen_at"]),
+        ]
+
+    def __str__(self):
+        return self.session_id
+
+
+class UxEvent(models.Model):
+    """One UX friction or JS error event emitted by the browser tracker.
+
+    Linked to a ``BrowserSession`` via session FK.  The ``request_id`` field
+    holds the nearest backend request ID known to the frontend at the time of
+    the event, enabling rage-click → 500 correlation.
+    """
+
+    class Type(models.TextChoices):
+        RAGE_CLICK = "rage_click", "Rage click"
+        DEAD_CLICK = "dead_click", "Dead click"
+        RAPID_NAV = "rapid_navigation", "Rapid navigation"
+        FORM_FAILURE = "repeated_form_failure", "Repeated form failure"
+        JS_ERROR = "js_error", "JS error"
+
+    session = models.ForeignKey(
+        BrowserSession,
+        on_delete=models.CASCADE,
+        related_name="ux_events",
+    )
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ux_events",
+    )
+    type = models.CharField(max_length=40, choices=Type.choices)
+    page = models.CharField(max_length=255, blank=True, default="")
+    target = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Sanitised CSS selector; no attribute values containing user data.",
+    )
+    click_count = models.PositiveSmallIntegerField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Bounded at 16 KB in the ingest view.",
+    )
+    occurred_at = models.DateTimeField(auto_now_add=True)
+    request_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Nearest backend request ID known to the frontend at event time.",
+    )
+    sentry_event_id = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        ordering = ["-occurred_at"]
+        indexes = [
+            models.Index(fields=["session", "-occurred_at"]),
+            models.Index(fields=["account", "-occurred_at"]),
+            models.Index(fields=["type", "-occurred_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.type} on {self.page}"
 
 
 class MessageStatsDaily(models.Model):

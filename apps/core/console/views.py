@@ -1125,3 +1125,90 @@ def styleguide(request):
             ],
         },
     )
+
+
+# --- Session Intelligence (Tier-2 Observability) ------------------------------------------------
+
+
+@admin_required
+def session_detail(request, session_id: str):
+    from apps.logs.models import ApiRequest, BrowserSession, UxEvent
+
+    session = get_object_or_404(BrowserSession, session_id=session_id)
+
+    api_requests = list(
+        ApiRequest.objects.filter(browser_session_id=session_id)
+        .order_by("created_at")
+        .values(
+            "created_at",
+            "method",
+            "path",
+            "status_code",
+            "request_id",
+            "public_id",
+            "latency_ms",
+            "op_meta",
+        )
+    )
+    ux_events = list(
+        UxEvent.objects.filter(session=session)
+        .order_by("occurred_at")
+        .values(
+            "occurred_at",
+            "type",
+            "page",
+            "target",
+            "click_count",
+            "duration_ms",
+            "request_id",
+            "data",
+        )
+    )
+
+    timeline: list[dict] = [
+        {"ts": r["created_at"], "kind": "request", "obj": r} for r in api_requests
+    ] + [{"ts": e["occurred_at"], "kind": "ux", "obj": e} for e in ux_events]
+    timeline.sort(key=lambda item: item["ts"])  # type: ignore[arg-type]
+
+    return render(
+        request,
+        "manage/session_detail.html",
+        {
+            "session": session,
+            "timeline": timeline,
+        },
+    )
+
+
+@admin_required
+def ux_events_list(request):
+    from apps.logs.models import UxEvent
+
+    qs = UxEvent.objects.select_related("session", "account").order_by("-occurred_at")
+
+    event_type = request.GET.get("type", "")
+    account_id = request.GET.get("account", "")
+    date_from = request.GET.get("from", "")
+    date_to = request.GET.get("to", "")
+
+    if event_type:
+        qs = qs.filter(type=event_type)
+    if account_id:
+        qs = qs.filter(account_id=account_id)
+    if date_from:
+        qs = qs.filter(occurred_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(occurred_at__date__lte=date_to)
+
+    return render(
+        request,
+        "manage/ux_events_list.html",
+        {
+            "events": qs[:200],
+            "type_choices": UxEvent.Type.choices,
+            "filter_type": event_type,
+            "filter_account": account_id,
+            "filter_from": date_from,
+            "filter_to": date_to,
+        },
+    )

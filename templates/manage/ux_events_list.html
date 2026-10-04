@@ -1,0 +1,91 @@
+{% extends "manage/base.html" %}
+{% block title %}UX events — Operator Console{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-end gap-4">
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">UX events</h1>
+    <p class="text-sm text-gray-500 mt-1">Rage clicks, dead clicks, rapid navigation, form failures, and JS errors from active sessions.</p>
+  </div>
+</div>
+
+<form method="get" class="card card-pad mb-6">
+  <div class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label for="filter-type" class="block text-xs font-medium text-gray-500 mb-1">Event type</label>
+      <select id="filter-type" name="type" class="input text-sm">
+        <option value="">All types</option>
+        {% for value, label in type_choices %}
+        <option value="{{ value }}" {% if filter_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="filter-from" class="block text-xs font-medium text-gray-500 mb-1">From</label>
+      <input id="filter-from" type="date" name="from" value="{{ filter_from }}" class="input text-sm">
+    </div>
+    <div>
+      <label for="filter-to" class="block text-xs font-medium text-gray-500 mb-1">To</label>
+      <input id="filter-to" type="date" name="to" value="{{ filter_to }}" class="input text-sm">
+    </div>
+    <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+    {% if filter_type or filter_from or filter_to or filter_account %}
+    <a href="/manage/ux-events/" class="text-sm text-gray-500 hover:text-ink">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<section class="card">
+  {% if events %}
+  <table class="w-full text-xs" role="table">
+    <thead>
+      <tr class="text-gray-500 text-left border-b border-border">
+        <th class="px-4 py-2 font-medium">Time</th>
+        <th class="px-4 py-2 font-medium">Type</th>
+        <th class="px-4 py-2 font-medium">Page</th>
+        <th class="px-4 py-2 font-medium">Target</th>
+        <th class="px-4 py-2 font-medium">Account</th>
+        <th class="px-4 py-2 font-medium">Session</th>
+        <th class="px-4 py-2 font-medium">Request ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for event in events %}
+      <tr class="border-b border-border/50 hover:bg-surface-muted/50">
+        <td class="px-4 py-2 font-mono text-gray-500 whitespace-nowrap">{{ event.occurred_at|date:"m-d H:i:s" }}</td>
+        <td class="px-4 py-2">
+          <span class="inline-block px-1.5 py-0.5 rounded
+            {% if event.type == 'rage_click' %}bg-red-50 text-red-700
+            {% elif event.type == 'dead_click' %}bg-yellow-50 text-yellow-700
+            {% elif event.type == 'js_error' %}bg-red-50 text-red-700
+            {% elif event.type == 'rapid_navigation' %}bg-purple-50 text-purple-700
+            {% else %}bg-orange-50 text-orange-700{% endif %}">{{ event.type }}</span>
+        </td>
+        <td class="px-4 py-2 font-mono text-gray-600 max-w-xs truncate">{{ event.page }}</td>
+        <td class="px-4 py-2 text-gray-500 max-w-xs truncate">{{ event.target|default:"—"|truncatechars:60 }}</td>
+        <td class="px-4 py-2">
+          {% if event.account %}
+          <a href="/manage/businesses/{{ event.account_id }}/" class="text-accent hover:underline">{{ event.account }}</a>
+          {% else %}
+          <span class="text-gray-400">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 font-mono">
+          {% if event.session %}
+          <a href="/manage/sessions/{{ event.session.session_id }}/" class="text-accent hover:underline">{{ event.session.session_id|slice:":12" }}&hellip;</a>
+          {% else %}
+          <span class="text-gray-400">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 font-mono text-gray-400">{{ event.request_id|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-pad">
+    <p class="text-sm text-gray-500">No UX events match the current filters.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,17 +1,108 @@
 """Public pages served by core: help center, legal pages, developer docs and the health check.
 
 The Operator Console (/manage/) lives in apps/core/console/.
+UX event ingest endpoint (/internal/ux-event/) also lives here.
 """
 
+import json
 import logging
 
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_POST
 
 from apps.core import docs as docs_kb
 from apps.core import help as help_kb
 
 logger = logging.getLogger(__name__)
+
+_UX_TYPES = {
+    "rage_click",
+    "dead_click",
+    "rapid_navigation",
+    "repeated_form_failure",
+    "js_error",
+}
+_RATE_LIMIT_KEY = "ux_event_rate:{sid}"
+_RATE_LIMIT_MAX = 60  # events per minute per session
+
+
+@require_POST
+def ingest_ux_event(request) -> JsonResponse:
+    """Receive a UX friction / JS error event from the browser tracker.
+
+    - Session ID is derived from the middleware-set request attribute, never
+      the POST body (the body value is only used as a cross-check).
+    - Payload size limits are enforced here.
+    - Rate-limited to 60 events/minute per session.
+    - No authentication required — anonymous sessions are valid.
+    """
+    sid = getattr(request, "browser_session_id", "")
+    if not sid:
+        return JsonResponse({"ok": False, "error": "no_session"}, status=400)
+
+    # Rate-limit
+    from django.core.cache import cache
+
+    rate_key = _RATE_LIMIT_KEY.format(sid=sid)
+    count = cache.get(rate_key, 0)
+    if count >= _RATE_LIMIT_MAX:
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
+    cache.set(rate_key, count + 1, timeout=60)
+
+    try:
+        payload = json.loads(request.body[:65_536])  # hard cap on body size
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
+
+    event_type = str(payload.get("type", ""))[:40]
+    if event_type not in _UX_TYPES:
+        return JsonResponse({"ok": False, "error": "unknown_type"}, status=400)
+
+    page = str(payload.get("page", ""))[:255]
+    target = str(payload.get("target", ""))[:255]
+    click_count = payload.get("click_count")
+    duration_ms = payload.get("duration_ms")
+    request_id = str(payload.get("request_id", ""))[:64]
+
+    raw_data = payload.get("data", {})
+    if not isinstance(raw_data, dict):
+        raw_data = {}
+    # Enforce 16 KB limit on the data blob
+    data_str = json.dumps(raw_data)
+    if len(data_str) > 16_384:
+        raw_data = {"truncated": True, "message": data_str[:2048]}
+
+    try:
+        from apps.logs.models import BrowserSession, UxEvent
+
+        try:
+            session = BrowserSession.objects.get(session_id=sid)
+        except BrowserSession.DoesNotExist:
+            return JsonResponse({"ok": False, "error": "session_not_found"}, status=404)
+
+        account = getattr(request, "account", None) or session.account
+
+        UxEvent.objects.create(
+            session=session,
+            account=account,
+            type=event_type,
+            page=page,
+            target=target,
+            click_count=int(click_count)
+            if isinstance(click_count, (int, float))
+            else None,
+            duration_ms=int(duration_ms)
+            if isinstance(duration_ms, (int, float))
+            else None,
+            data=raw_data,
+            request_id=request_id,
+        )
+    except Exception:
+        logger.exception("ingest_ux_event failed for sid=%s", sid)
+        return JsonResponse({"ok": False, "error": "server_error"}, status=500)
+
+    return JsonResponse({"ok": True})
 
 
 def healthz(request):

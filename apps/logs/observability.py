@@ -37,6 +37,8 @@ def _fingerprint(endpoint: str, body) -> str:
 def log_api_request(request, response, *, latency_ms: int, view=None) -> None:
     """Persist one ApiRequest row. Swallows all errors."""
     try:
+        from django.conf import settings
+
         account = getattr(request, "user", None)
         account = account if getattr(account, "pk", None) else None
         api_key = getattr(request, "auth", None)
@@ -71,9 +73,21 @@ def log_api_request(request, response, *, latency_ms: int, view=None) -> None:
             response_body=redact_body(body if isinstance(body, (dict, list)) else {}),
             client_ip=_client_ip(request),
             user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:512],
+            # Tier-2 session correlation
+            browser_session_id=getattr(request, "browser_session_id", "") or "",
+            release=getattr(settings, "RELEASE_VERSION", ""),
+            op_meta=_safe_op_meta(request),
         )
     except Exception:
         logger.exception("log_api_request failed")
+
+
+def _safe_op_meta(request) -> dict:
+    """Read view-set diagnostic metadata.  Never raises; caps at 100 keys."""
+    meta = getattr(request, "op_meta", {})
+    if not isinstance(meta, dict):
+        return {}
+    return {str(k)[:64]: str(v)[:256] for k, v in list(meta.items())[:100]}
 
 
 def _safe_data(request):
