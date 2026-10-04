@@ -55,18 +55,22 @@ def _email_submitted_by(ticket) -> None:
     if not email:
         return
     try:
+        from apps.email.services.html_email import build_transactional_html
         from apps.email.services.send import send_system_email
 
+        subject = f"Support request received — {ticket.ticket_number}"
+        text_body = (
+            f"Hi,\n\n"
+            f"We've received your support request:\n\n"
+            f"  #{ticket.ticket_number}: {ticket.subject}\n\n"
+            f"We'll be in touch shortly.\n\n"
+            f"Akilent Support"
+        )
         send_system_email(
             to_email=email,
-            subject=f"Support request received — {ticket.ticket_number}",
-            text_body=(
-                f"Hi,\n\n"
-                f"We've received your support request:\n\n"
-                f"  #{ticket.ticket_number}: {ticket.subject}\n\n"
-                f"We'll be in touch shortly.\n\n"
-                f"Akilent Support"
-            ),
+            subject=subject,
+            text_body=text_body,
+            html_body=build_transactional_html(text_body, subject),
         )
     except Exception:
         logger.exception(

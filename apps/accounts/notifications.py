@@ -81,13 +81,20 @@ def notify_team(
         body += f"\n\nOpen it: {absolute_url(path)}"
     body += "\n\nYou're getting this because an automation in Akilent was set up to tell your team."
 
+    from apps.email.services.html_email import build_transactional_html
+
+    html_body = build_transactional_html(body, subject[:200])
+
     sent = 0
     for user in recipients(account, to, conversation=conversation):
         if not user.email:
             continue
         try:
             send_system_email(
-                to_email=user.email, subject=subject[:200], text_body=body
+                to_email=user.email,
+                subject=subject[:200],
+                text_body=body,
+                html_body=html_body,
             )
             sent += 1
         except Exception:

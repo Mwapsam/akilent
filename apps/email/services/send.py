@@ -8,6 +8,7 @@ by the tracking views (apps.email.views.tracking_open / tracking_click).
 
 from __future__ import annotations
 
+import email.utils
 import logging
 import re
 import secrets
@@ -111,6 +112,24 @@ def send_system_email(
 
     from_email = settings.DEFAULT_FROM_EMAIL
 
+    # Ensure a plain-text part always exists so clients that can't render HTML
+    # don't receive an empty message (and spam filters don't penalise it).
+    if html_body and not text_body:
+        import re as _re
+
+        text_body = _re.sub(r"<[^>]+>", "", html_body).strip()
+
+    base_domain = getattr(settings, "BASE_DOMAIN", "") or (
+        settings.ALLOWED_HOSTS[0] if settings.ALLOWED_HOSTS else "localhost"
+    )
+    message_id = email.utils.make_msgid(domain=base_domain)
+
+    headers = {
+        "Message-ID": message_id,
+        "Precedence": "transactional",
+        "X-Auto-Response-Suppress": "OOF, AutoReply",
+    }
+
     try:
         get_send_provider().send(
             OutboundEmail(
@@ -119,6 +138,7 @@ def send_system_email(
                 subject=subject,
                 text_body=text_body,
                 html_body=html_body,
+                headers=headers,
             )
         )
         logger.debug(

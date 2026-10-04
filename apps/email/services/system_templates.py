@@ -24,27 +24,42 @@ def render_system_email(
     *,
     fallback_subject_template: str,
     fallback_body_template: str,
-) -> tuple[str, str]:
-    """Return (subject, body) for the system email identified by `key`.
+    fallback_html_template: str = "",
+) -> tuple[str, str, str]:
+    """Return (subject, text_body, html_body) for the system email identified by ``key``.
 
-    Tries an active apps.email.models.SystemEmailTemplate row first; if none
-    exists, renders `fallback_subject_template`/`fallback_body_template` via
-    the standard Django template loader exactly as today's call sites do.
+    Tries an active SystemEmailTemplate DB row first; if none exists, renders
+    the fallback file templates. Branding context (site_name, logo_url, etc.)
+    is merged into the template variables automatically so HTML templates that
+    extend email/base_email.html have everything they need.
+
+    ``html_body`` is ``""`` when no HTML template is available.
     """
     from apps.email.models import SystemEmailTemplate
+    from apps.email.services.html_email import site_email_context
 
     variables = variables or {}
+    branding = site_email_context()
+    # Merge branding last so caller-supplied variables take precedence.
+    render_ctx = {**branding, **variables}
+
     row = SystemEmailTemplate.objects.filter(key=key, is_active=True).first()
     if row is not None:
-        subject = render_string(row.subject, variables).strip()
-        body = render_string(row.text_body, variables)
-        return subject, body
+        subject = render_string(row.subject, render_ctx).strip()
+        text_body = render_string(row.text_body, render_ctx)
+        html_body = render_string(row.html_body, render_ctx) if row.html_body else ""
+        return subject, text_body, html_body
 
     logger.warning(
         "render_system_email: no active SystemEmailTemplate for key=%s, "
         "falling back to file template",
         key,
     )
-    subject = render_to_string(fallback_subject_template, variables).strip()
-    body = render_to_string(fallback_body_template, variables)
-    return subject, body
+    subject = render_to_string(fallback_subject_template, render_ctx).strip()
+    text_body = render_to_string(fallback_body_template, render_ctx)
+    html_body = (
+        render_to_string(fallback_html_template, render_ctx)
+        if fallback_html_template
+        else ""
+    )
+    return subject, text_body, html_body

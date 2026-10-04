@@ -1,0 +1,27 @@
+{% extends "email/base_email.html" %}
+{% block title %}You're invited to {{ invite.account.company_name }}{% endblock %}
+{% block content %}
+  <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#12182B;">You've been invited</h1>
+  <p style="margin:0 0 24px;font-size:14px;color:#657089;line-height:1.7;">
+    {% if inviter %}{{ inviter.get_username }} has invited you{% else %}You have been invited{% endif %}
+    to join <strong style="color:#12182B;">{{ invite.account.company_name }}</strong> on {{ site_name }}
+    as a <span style="display:inline-block;padding:2px 10px;background-color:#f4f6f9;border-radius:20px;font-size:12px;font-weight:600;color:#12182B;">{{ invite.get_role_display }}</span>.
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
+    <tr>
+      <td style="border-radius:8px;background-color:#FFB020;">
+        <a href="{{ link }}" style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:700;color:#12182B;text-decoration:none;border-radius:8px;">
+          Accept invitation
+        </a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0 0 8px;font-size:13px;color:#657089;line-height:1.6;">
+    Or copy this link into your browser:<br>
+    <a href="{{ link }}" style="color:#657089;word-break:break-all;">{{ link }}</a>
+  </p>
+  <hr style="margin:24px 0;border:none;border-top:1px solid #E8EDF3;">
+  <p style="margin:0;font-size:12px;color:#9aa3b8;line-height:1.6;">
+    This invitation expires in {{ invite.EXPIRY_DAYS }} days. If you weren't expecting it, you can safely ignore this email.
+  </p>
+{% endblock %}

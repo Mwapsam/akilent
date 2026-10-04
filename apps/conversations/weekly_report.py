@@ -110,4 +110,11 @@ def build_email(account, week: Period, *, full: bool) -> dict | None:
     lines.append(f"Open Insights: {absolute_url('/insights/')}")
 
     subject = f"Your week with Akilent: {data['sentence']}"
-    return {"subject": subject[:200], "text_body": "\n".join(lines)}
+    text_body = "\n".join(lines)
+    try:
+        from apps.email.services.html_email import build_transactional_html
+
+        html_body = build_transactional_html(text_body, subject[:200])
+    except Exception:
+        html_body = ""
+    return {"subject": subject[:200], "text_body": text_body, "html_body": html_body}

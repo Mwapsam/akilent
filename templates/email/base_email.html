@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>{% block title %}{{ subject|default:site_name }}{% endblock %}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f9;min-height:100vh;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!-- Outer card -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+          <!-- Header band -->
+          <tr>
+            <td style="background-color:#0E1526;border-radius:12px 12px 0 0;padding:24px 32px;text-align:center;">
+              {% if logo_url %}
+                <img src="{{ logo_url }}" alt="{{ site_name }}" height="36" style="display:inline-block;border:0;max-height:36px;width:auto;">
+              {% else %}
+                <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.5px;">{{ site_name }}</span>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- Body card -->
+          <tr>
+            <td style="background-color:#ffffff;padding:36px 32px;border-left:1px solid #E8EDF3;border-right:1px solid #E8EDF3;">
+              {% block content %}{% endblock %}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#ffffff;border-radius:0 0 12px 12px;border:1px solid #E8EDF3;border-top:1px solid #E8EDF3;padding:20px 32px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#657089;line-height:1.6;">
+                &copy; {{ year }} {{ site_name }}.{% if support_email %} Questions? <a href="mailto:{{ support_email }}" style="color:#657089;">{{ support_email }}</a>.{% endif %}
+              </p>
+              <p style="margin:8px 0 0;font-size:11px;color:#9aa3b8;">
+                You're receiving this because you have an account with {{ site_name }}.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /outer card -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

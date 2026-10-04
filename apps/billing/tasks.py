@@ -1,7 +1,6 @@
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 
 from celery import shared_task
@@ -81,7 +80,10 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
         f"See your usage or upgrade: {_absolute_url('/billing/plans/')}\n"
     )
     try:
-        send_system_email(owner.email, subject, text_body=body)
+        from apps.email.services.html_email import build_transactional_html
+
+        html_body = build_transactional_html(body, subject)
+        send_system_email(owner.email, subject, text_body=body, html_body=html_body)
     except Exception:
         logger.exception(
             "send_limit_warning: couldn't email the owner of account %s", account_id
@@ -123,27 +125,27 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
         .values_list("email", flat=True)
     )
     if admin_emails:
+        from apps.email.services.send import send_system_email
         from apps.email.services.system_templates import render_system_email
 
-        subject, body = render_system_email(
+        subject, text_body, html_body = render_system_email(
             "billing.manual_payment_admin",
             ctx,
             fallback_subject_template="billing/manual_payment_admin_subject.txt",
             fallback_body_template="billing/manual_payment_admin.txt",
+            fallback_html_template="billing/manual_payment_admin.html",
         )
-        try:
-            send_mail(
-                subject,
-                body,
-                settings.DEFAULT_FROM_EMAIL,
-                admin_emails,
-                fail_silently=False,
-            )
-        except Exception:
-            logger.exception(
-                "notify_admins_of_manual_payment: email failed for request=%s",
-                request_id,
-            )
+        for email in admin_emails:
+            try:
+                send_system_email(
+                    email, subject, text_body=text_body, html_body=html_body
+                )
+            except Exception:
+                logger.exception(
+                    "notify_admins_of_manual_payment: email failed for %s request=%s",
+                    email,
+                    request_id,
+                )
     else:
         logger.warning("notify_admins_of_manual_payment: no admin emails to notify")
 

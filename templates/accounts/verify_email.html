@@ -1,0 +1,25 @@
+{% extends "email/base_email.html" %}
+{% block title %}Confirm your {{ site_name }} email{% endblock %}
+{% block content %}
+  <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#12182B;">Welcome to {{ site_name }}!</h1>
+  <p style="margin:0 0 24px;font-size:14px;color:#12182B;line-height:1.7;">
+    Thanks for signing up. Please confirm your email address to activate your account and start sending.
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
+    <tr>
+      <td style="border-radius:8px;background-color:#FFB020;">
+        <a href="{{ link }}" style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:700;color:#12182B;text-decoration:none;border-radius:8px;">
+          Confirm email address
+        </a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0;font-size:13px;color:#657089;line-height:1.6;">
+    Or copy and paste this link into your browser:<br>
+    <a href="{{ link }}" style="color:#657089;word-break:break-all;">{{ link }}</a>
+  </p>
+  <hr style="margin:28px 0;border:none;border-top:1px solid #E8EDF3;">
+  <p style="margin:0;font-size:12px;color:#9aa3b8;line-height:1.6;">
+    If you didn't create this account, you can safely ignore this email.
+  </p>
+{% endblock %}

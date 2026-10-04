@@ -32,11 +32,12 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
         return
 
     ctx = {"user": user, "site_name": site_name, "link": link}
-    subject, body = render_system_email(
+    subject, text_body, html_body = render_system_email(
         "accounts.verify",
         ctx,
         fallback_subject_template="accounts/verify_email_subject.txt",
         fallback_body_template="accounts/verify_email.txt",
+        fallback_html_template="accounts/verify_email.html",
     )
     try:
         from apps.email.services.send import send_system_email
@@ -44,7 +45,8 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
         send_system_email(
             to_email=user.email,
             subject=subject,
-            text_body=body,
+            text_body=text_body,
+            html_body=html_body,
         )
     except Exception as exc:
         logger.exception("send_verification_email: failed for user %s", user_id)

@@ -120,6 +120,8 @@ class PasswordResetView(auth_views.PasswordResetView):
     instead of Django's hardcoded EMAIL_BACKEND, and respects suppression lists.
     """
 
+    html_email_template_name = "auth/password_reset_email.html"
+
     def get_form_class(self):
         from apps.accounts.forms import PasswordResetForm
 
@@ -127,9 +129,11 @@ class PasswordResetView(auth_views.PasswordResetView):
 
     def form_valid(self, form):
         from apps.core.models import SiteSettings
+        from apps.email.services.html_email import site_email_context
 
         self.extra_email_context = {
-            "site_name": SiteSettings.load().app_name or "Automator"
+            "site_name": SiteSettings.load().app_name or "Automator",
+            **site_email_context(),
         }
         return super().form_valid(form)
 

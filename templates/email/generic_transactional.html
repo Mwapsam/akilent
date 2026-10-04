@@ -1,0 +1,6 @@
+{% extends "email/base_email.html" %}
+{% block content %}
+  {% for paragraph in paragraphs %}
+    <p style="margin:0 0 16px;font-size:14px;color:#12182B;line-height:1.7;">{{ paragraph|linebreaksbr }}</p>
+  {% endfor %}
+{% endblock %}

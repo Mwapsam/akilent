@@ -66,16 +66,18 @@ def _send_invitation_email(request, invite):
         "link": link,
         "inviter": invite.invited_by,
     }
-    subject, body = render_system_email(
+    subject, text_body, html_body = render_system_email(
         "accounts.invite",
         ctx,
         fallback_subject_template="accounts/invite_email_subject.txt",
         fallback_body_template="accounts/invite_email.txt",
+        fallback_html_template="accounts/invite_email.html",
     )
     send_system_email(
         to_email=invite.email,
         subject=subject,
-        text_body=body,
+        text_body=text_body,
+        html_body=html_body,
     )
 
 
