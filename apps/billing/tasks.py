@@ -84,7 +84,11 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
 
         html_body = build_transactional_html(body, subject)
         send_system_email(
-            owner.email, subject, text_body=body, html_body=html_body, sender_label="Billing"
+            owner.email,
+            subject,
+            text_body=body,
+            html_body=html_body,
+            sender_label="Billing",
         )
     except Exception:
         logger.exception(
