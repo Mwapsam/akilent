@@ -8,7 +8,6 @@ by the tracking views (apps.email.views.tracking_open / tracking_click).
 
 from __future__ import annotations
 
-import email.utils
 import logging
 import re
 import secrets
@@ -119,14 +118,7 @@ def send_system_email(
 
         text_body = _re.sub(r"<[^>]+>", "", html_body).strip()
 
-    base_domain = getattr(settings, "BASE_DOMAIN", "") or (
-        settings.ALLOWED_HOSTS[0] if settings.ALLOWED_HOSTS else "localhost"
-    )
-    message_id = email.utils.make_msgid(domain=base_domain)
-
     headers = {
-        "Message-ID": message_id,
-        "Precedence": "transactional",
         "X-Auto-Response-Suppress": "OOF, AutoReply",
     }
 
