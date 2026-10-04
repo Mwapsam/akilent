@@ -21,28 +21,28 @@
     <div>
       <label class="label" for="name">Name <span class="text-red-500">*</span></label>
       <input type="text" id="name" name="name" required maxlength="100"
-        value="{{ post.name|default:category.name }}"
+        value="{{ post.name|default:initial.name }}"
         class="input w-full" placeholder="e.g. E-commerce">
     </div>
 
     <div>
       <label class="label" for="description">Description</label>
       <textarea id="description" name="description" rows="3"
-        class="input w-full" placeholder="Optional — shown in the admin for context.">{{ post.description|default:category.description }}</textarea>
+        class="input w-full" placeholder="Optional — shown in the admin for context.">{{ post.description|default:initial.description }}</textarea>
     </div>
 
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="label" for="order">Display order</label>
         <input type="number" id="order" name="order" min="0"
-          value="{{ post.order|default:category.order|default:0 }}"
+          value="{{ post.order|default:initial.order }}"
           class="input w-full">
         <p class="text-xs text-ink-muted mt-1">Lower numbers appear first.</p>
       </div>
       <div class="flex items-end pb-1">
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" name="is_active" class="rounded"
-            {% if post.is_active or category.is_active or not category %}checked{% endif %}>
+            {% if post %}{% if post.is_active %}checked{% endif %}{% elif initial.is_active %}checked{% endif %}>
           <span class="text-sm font-medium text-ink">Active</span>
         </label>
       </div>

@@ -38,7 +38,7 @@ def category_create(request):
             return render(
                 request,
                 "manage/chatbot_category_form.html",
-                {"post": request.POST},
+                {"post": request.POST, "initial": _cat_initial()},
             )
 
         slug = slugify(name)
@@ -47,7 +47,7 @@ def category_create(request):
             return render(
                 request,
                 "manage/chatbot_category_form.html",
-                {"post": request.POST},
+                {"post": request.POST, "initial": _cat_initial()},
             )
 
         try:
@@ -61,13 +61,17 @@ def category_create(request):
         except IntegrityError:
             messages.error(request, f'A category with slug "{slug}" already exists.')
             return render(
-                request, "manage/chatbot_category_form.html", {"post": request.POST}
+                request,
+                "manage/chatbot_category_form.html",
+                {"post": request.POST, "initial": _cat_initial()},
             )
         audit(request, "chatbot.category.create", target=cat.name)
         messages.success(request, f'Category "{cat.name}" created.')
         return redirect("core:chatbot-categories")
 
-    return render(request, "manage/chatbot_category_form.html", {})
+    return render(
+        request, "manage/chatbot_category_form.html", {"initial": _cat_initial()}
+    )
 
 
 @admin_required
@@ -85,7 +89,7 @@ def category_edit(request, pk):
             return render(
                 request,
                 "manage/chatbot_category_form.html",
-                {"category": cat, "post": request.POST},
+                {"category": cat, "post": request.POST, "initial": _cat_initial(cat)},
             )
 
         cat.name = name
@@ -100,13 +104,17 @@ def category_edit(request, pk):
             return render(
                 request,
                 "manage/chatbot_category_form.html",
-                {"category": cat, "post": request.POST},
+                {"category": cat, "post": request.POST, "initial": _cat_initial(cat)},
             )
         audit(request, "chatbot.category.edit", target=cat.name)
         messages.success(request, f'Category "{cat.name}" updated.')
         return redirect("core:chatbot-categories")
 
-    return render(request, "manage/chatbot_category_form.html", {"category": cat})
+    return render(
+        request,
+        "manage/chatbot_category_form.html",
+        {"category": cat, "initial": _cat_initial(cat)},
+    )
 
 
 @admin_required
@@ -359,6 +367,18 @@ def _bot_initial(bot: ChatbotConfig | None = None) -> dict:
         "is_active": bot.is_active,
         "category_id": bot.category_id or "",
         "domains_display": "\n".join(bot.allowed_domains),
+    }
+
+
+def _cat_initial(cat: ChatbotCategory | None = None) -> dict:
+    """Safe defaults for the category form."""
+    if cat is None:
+        return {"name": "", "description": "", "order": 0, "is_active": True}
+    return {
+        "name": cat.name,
+        "description": cat.description,
+        "order": cat.order,
+        "is_active": cat.is_active,
     }
 
 
