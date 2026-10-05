@@ -81,10 +81,17 @@ def get_account_for_webhook(page_id: str):
 
 
 def get_instagram_account_for_webhook(page_id: str) -> "InstagramBusinessAccount":
-    """Resolve a Page ID to the InstagramBusinessAccount (carries the token)."""
+    """Resolve a webhook entry ID to the InstagramBusinessAccount.
+
+    Tries page_id first (Facebook Login flow), then falls back to
+    instagram_business_account_id (Instagram Business Login flow, no page).
+    """
+    from django.db.models import Q
+
     try:
         return InstagramBusinessAccount.objects.select_related("account").get(
-            page_id=page_id, is_active=True
+            Q(page_id=page_id) | Q(instagram_business_account_id=page_id),
+            is_active=True,
         )
     except InstagramBusinessAccount.DoesNotExist as exc:
         raise TenantResolutionError(
