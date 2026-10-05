@@ -178,9 +178,26 @@ class TestBuildEmail:
         assert "Team:" in full["text_body"]
 
 
+def _settled_now():
+    """A "now" that is always well past the 1-day SETTLE window for the previous week.
+
+    report_week(now) only returns non-None when now >= last_monday_midnight + 1 day.
+    Running tests on Monday mornings fails that check, so we advance to Wednesday.
+    """
+    now = timezone.now()
+    days_to_wednesday = (2 - now.weekday()) % 7 or 7  # 2 = Wednesday; never 0
+    return now + timedelta(days=days_to_wednesday)
+
+
 @pytest.mark.django_db
 class TestSendWeeklyReportsTask:
+    @pytest.fixture(autouse=True)
+    def _freeze_to_wednesday(self, monkeypatch):
+        settled = _settled_now()
+        monkeypatch.setattr("django.utils.timezone.now", lambda: settled)
+
     def _settled_week(self):
+        # timezone.now() is mocked by _freeze_to_wednesday to a settled Wednesday
         return reporting.week_of(timezone.now()).previous()
 
     def test_sends_to_owners_only_and_records_the_event(self, account):
