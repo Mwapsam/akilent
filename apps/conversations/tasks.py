@@ -111,10 +111,9 @@ def send_weekly_reports() -> int:
     to report on, and the ``Event`` record below stops a business being emailed twice for the
     same week even if the task overlaps a retry.
     """
-    from django.utils import timezone
-
     from django.conf import settings
     from django.core.mail import EmailMultiAlternatives
+    from django.utils import timezone
 
     from apps.accounts.notifications import recipients
     from apps.billing.limits import LimitChecker
