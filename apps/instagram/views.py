@@ -1,24 +1,33 @@
 """
-Instagram webhook view.
+Instagram views: webhook ingestion + business account connection settings.
 
-Responsibilities:
+Webhook responsibilities:
   GET  — Meta hub.mode / hub.verify_token handshake
   POST — Verify X-Hub-Signature-256; store raw payload; enqueue Celery task.
 
-The view does nothing else. All business logic is in tasks.py → services/.
+Settings responsibilities:
+  /instagram/accounts/            — list connected Instagram Business Accounts
+  /instagram/accounts/connect/    — connect a new account (manual token entry)
+  /instagram/accounts/<pk>/edit/  — update credentials for an existing account
+  /instagram/accounts/<pk>/delete/ — disconnect an account
 """
 
 import hashlib
 import hmac
 import json
 import logging
+import secrets
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
+from apps.accounts.utils import get_current_account
 from apps.instagram.models.account import (
     InstagramBusinessAccount,
     TenantResolutionError,
@@ -28,6 +37,155 @@ from apps.instagram.models.webhook import WebhookEventLog
 from apps.instagram.tasks import process_instagram_event
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Settings views
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def instagram_accounts(request):
+    """List all Instagram Business Accounts connected to this tenant."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    iba_list = list(
+        InstagramBusinessAccount.objects.filter(account=account).order_by("created_at")
+    )
+    return render(
+        request,
+        "instagram/accounts.html",
+        {
+            "account": account,
+            "iba_list": iba_list,
+            "webhook_url_hint": request.build_absolute_uri("/instagram/webhook/"),
+        },
+    )
+
+
+@login_required
+def instagram_account_connect(request):
+    """Connect a new Instagram Business Account via manual token entry."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        iba_id = (request.POST.get("instagram_business_account_id") or "").strip()
+        page_id = (request.POST.get("page_id") or "").strip()
+        access_token = (request.POST.get("access_token") or "").strip()
+        name = (request.POST.get("name") or "").strip()
+        username = (request.POST.get("username") or "").strip()
+
+        if not iba_id or not access_token:
+            messages.error(
+                request, "Instagram Business Account ID and access token are required."
+            )
+            return render(
+                request,
+                "instagram/account_form.html",
+                {"account": account, "form_data": request.POST, "mode": "connect"},
+            )
+
+        if (
+            InstagramBusinessAccount.objects.filter(
+                instagram_business_account_id=iba_id
+            )
+            .exclude(account=account)
+            .exists()
+        ):
+            messages.error(
+                request,
+                "That Instagram Business Account ID is already connected to another workspace.",
+            )
+            return render(
+                request,
+                "instagram/account_form.html",
+                {"account": account, "form_data": request.POST, "mode": "connect"},
+            )
+
+        verify_token = secrets.token_hex(32)
+        _iba, created = InstagramBusinessAccount.objects.update_or_create(
+            account=account,
+            instagram_business_account_id=iba_id,
+            defaults={
+                "page_id": page_id,
+                "name": name,
+                "username": username,
+                "access_token": access_token,
+                "token_expired": False,
+                "verify_token": verify_token,
+                "is_active": True,
+            },
+        )
+        action = "connected" if created else "updated"
+        messages.success(
+            request,
+            f"Instagram account {action}. Copy the verify token below and configure your Meta webhook.",
+        )
+        return redirect("instagram-accounts")
+
+    return render(
+        request,
+        "instagram/account_form.html",
+        {"account": account, "form_data": {}, "mode": "connect"},
+    )
+
+
+@login_required
+def instagram_account_edit(request, pk: int):
+    """Update credentials for an existing Instagram Business Account."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    iba = get_object_or_404(InstagramBusinessAccount, pk=pk, account=account)
+
+    if request.method == "POST":
+        page_id = (request.POST.get("page_id") or "").strip()
+        access_token = (request.POST.get("access_token") or "").strip()
+        name = (request.POST.get("name") or "").strip()
+        username = (request.POST.get("username") or "").strip()
+
+        iba.page_id = page_id
+        iba.name = name
+        iba.username = username
+        if access_token:
+            iba.access_token = access_token
+            iba.token_expired = False
+        iba.save()
+        messages.success(request, "Instagram account updated.")
+        return redirect("instagram-accounts")
+
+    return render(
+        request,
+        "instagram/account_form.html",
+        {"account": account, "iba": iba, "form_data": {}, "mode": "edit"},
+    )
+
+
+@login_required
+def instagram_account_delete(request, pk: int):
+    """Disconnect (delete) an Instagram Business Account."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    iba = get_object_or_404(InstagramBusinessAccount, pk=pk, account=account)
+
+    if request.method == "POST":
+        label = iba.username or iba.instagram_business_account_id
+        iba.delete()
+        messages.success(request, f"Instagram account @{label} disconnected.")
+        return redirect("instagram-accounts")
+
+    return render(
+        request,
+        "instagram/account_confirm_delete.html",
+        {"account": account, "iba": iba},
+    )
 
 
 def _verify_signature(request, access_token: str) -> bool:

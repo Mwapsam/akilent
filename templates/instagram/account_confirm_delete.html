@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Disconnect Instagram — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Disconnect Instagram account</h1>
+</header>
+
+<div class="card p-6 max-w-lg">
+  <p class="text-sm text-gray-700 mb-1">You are about to disconnect:</p>
+  <p class="font-semibold text-ink">{{ iba.name|default:iba.instagram_business_account_id }}</p>
+  {% if iba.username %}<p class="text-sm text-gray-500">{{ iba.username }}</p>{% endif %}
+
+  <p class="mt-4 text-sm text-gray-600">
+    This will remove the access token and stop Akilent from receiving Instagram messages and comments.
+    Existing conversations will not be deleted.
+  </p>
+
+  <div class="mt-6 flex items-center gap-3">
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger">Disconnect</button>
+    </form>
+    <a href="{% url 'instagram-accounts' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</div>
+
+{% endblock %}

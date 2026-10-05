@@ -765,6 +765,16 @@ def channels(request):
     except Exception:
         pass
 
+    instagram_accounts = []
+    try:
+        from apps.instagram.models.account import InstagramBusinessAccount
+
+        instagram_accounts = list(
+            InstagramBusinessAccount.objects.filter(account=account)
+        )
+    except Exception:
+        pass
+
     return render(
         request,
         "accounts/channels.html",
@@ -775,6 +785,8 @@ def channels(request):
             "whatsapp_enabled": settings.WHATSAPP_ENABLED,
             "whatsapp_numbers": numbers,
             "whatsapp_connected": bool(numbers),
+            "instagram_accounts": instagram_accounts,
+            "instagram_connected": any(iba.is_ready for iba in instagram_accounts),
         },
     )
 

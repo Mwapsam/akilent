@@ -56,6 +56,28 @@
   </div>
   {% endif %}
 
+  <div class="card p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+          {% include "components/icon.html" with name="instagram" class="w-5 h-5" %}
+        </span>
+        <div>
+          <p class="font-semibold text-ink">Instagram</p>
+          <p class="text-sm text-gray-600">Connect your Instagram Business Account to receive messages and comments.</p>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center justify-between">
+      {% if instagram_connected %}
+        {% include "components/status.html" with state="sent" badge=True %}
+      {% else %}
+        <span class="badge badge-neutral">Not connected</span>
+      {% endif %}
+      <a href="{% url 'instagram-accounts' %}" class="btn btn-secondary btn-sm">Manage Instagram</a>
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}

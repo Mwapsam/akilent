@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == "edit" %}Edit Instagram account{% else %}Connect Instagram{% endif %} — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">
+    {% if mode == "edit" %}Edit Instagram account{% else %}Connect Instagram{% endif %}
+  </h1>
+  <p class="mt-1 text-sm text-gray-600">
+    {% if mode == "edit" %}
+      Update credentials for {{ iba.username|default:iba.instagram_business_account_id }}.
+    {% else %}
+      Enter your Instagram Business Account credentials from the Meta Developer Dashboard.
+    {% endif %}
+  </p>
+</header>
+
+{% if messages %}
+<div class="mb-4 space-y-2">
+  {% for msg in messages %}
+  <div class="card p-3 text-sm text-red-700 tone-coral-border border">{{ msg }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card p-6 max-w-lg">
+  <form method="post">
+    {% csrf_token %}
+
+    {% if mode == "connect" %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-ink mb-1" for="iba_id">
+        Instagram Business Account ID <span class="text-red-500">*</span>
+      </label>
+      <input
+        id="iba_id"
+        name="instagram_business_account_id"
+        type="text"
+        value="{{ form_data.instagram_business_account_id|default:'' }}"
+        class="input w-full font-mono"
+        placeholder="e.g. 17841400008460056"
+        required
+        autocomplete="off"
+      >
+      <p class="mt-1 text-xs text-gray-500">Found in Meta Business Suite → Instagram → About → Instagram ID.</p>
+    </div>
+    {% endif %}
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-ink mb-1" for="page_id">Facebook Page ID</label>
+      <input
+        id="page_id"
+        name="page_id"
+        type="text"
+        value="{{ form_data.page_id|default:iba.page_id|default:'' }}"
+        class="input w-full font-mono"
+        placeholder="e.g. 112233445566"
+        autocomplete="off"
+      >
+      <p class="mt-1 text-xs text-gray-500">The Facebook Page connected to your Instagram account. Required for comment webhooks.</p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-ink mb-1" for="access_token">
+        Page access token {% if mode == "connect" %}<span class="text-red-500">*</span>{% else %}<span class="text-gray-400">(leave blank to keep current)</span>{% endif %}
+      </label>
+      <textarea
+        id="access_token"
+        name="access_token"
+        rows="3"
+        class="input w-full font-mono text-xs resize-none"
+        placeholder="EAAGm0..."
+        {% if mode == "connect" %}required{% endif %}
+        autocomplete="off"
+      ></textarea>
+      <p class="mt-1 text-xs text-gray-500">Long-lived page access token from Meta's Graph API Explorer or your app's token generation flow.</p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-ink mb-1" for="name">Display name</label>
+      <input
+        id="name"
+        name="name"
+        type="text"
+        value="{{ form_data.name|default:iba.name|default:'' }}"
+        class="input w-full"
+        placeholder="e.g. My Brand Page"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-ink mb-1" for="username">Instagram username</label>
+      <input
+        id="username"
+        name="username"
+        type="text"
+        value="{{ form_data.username|default:iba.username|default:'' }}"
+        class="input w-full"
+        placeholder="e.g. @yourbrand"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "edit" %}Save changes{% else %}Connect{% endif %}
+      </button>
+      <a href="{% url 'instagram-accounts' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
