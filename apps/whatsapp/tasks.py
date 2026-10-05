@@ -4,15 +4,13 @@ from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.core.events import MessageReceived, MessageStatusChanged, dispatcher
+from apps.core.events import MessageStatusChanged, dispatcher
 from apps.whatsapp import verification_codes
-from apps.whatsapp.interactive import extract_reply
 from apps.whatsapp.models import (
     Conversation,
     MessageLog,
@@ -23,7 +21,6 @@ from apps.whatsapp.models import (
     WhatsAppCampaignRecipient,
     WhatsAppContact,
 )
-from apps.whatsapp.models.contact import normalize_phone
 from apps.whatsapp.models.tenant import (
     TenantResolutionError,
     WhatsAppBusinessNumber,
@@ -137,10 +134,15 @@ def process_whatsapp_event(self, event_id: int):
 def _close_spine_conversation(whatsapp_conversation) -> None:
     """Keep the inbox in step when a WhatsApp conversation is closed (e.g. STOP)."""
     from apps.conversations.models import ChannelConversation, Conversation
-    cc = ChannelConversation.objects.select_related("conversation").filter(
-        channel=Conversation.Channel.WHATSAPP,
-        object_id=whatsapp_conversation.pk,
-    ).first()
+
+    cc = (
+        ChannelConversation.objects.select_related("conversation")
+        .filter(
+            channel=Conversation.Channel.WHATSAPP,
+            object_id=whatsapp_conversation.pk,
+        )
+        .first()
+    )
     if cc is not None:
         cc.conversation.close()
 
@@ -259,6 +261,7 @@ def project_to_inbox(
 
 def _canonical_contact(account, wa_contact):
     from apps.whatsapp.services.contacts import resolve_channel_contact
+
     return resolve_channel_contact(account, wa_contact)
 
 
@@ -383,6 +386,7 @@ def _process_inbound_message(
     # stored; the conversation limit is only counted and warned about. Limits may hold
     # what the business sends, never what it receives.
     from apps.whatsapp.services.inbound import WhatsAppInboundService
+
     WhatsAppInboundService(event, value, message).handle()
 
 

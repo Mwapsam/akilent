@@ -6,61 +6,178 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0013_seed_platform_account'),
-        ('instagram', '0001_initial'),
+        ("accounts", "0013_seed_platform_account"),
+        ("instagram", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ModerationRule',
+            name="ModerationRule",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
-                ('match_type', models.CharField(choices=[('spam_detection', 'Spam detection (heuristic)'), ('toxicity', 'Toxicity detection (heuristic)'), ('keyword', 'Keyword / phrase match'), ('buying_intent', 'Buying intent'), ('complaint', 'Complaint language'), ('mention', 'Mention of the account')], max_length=20)),
-                ('keywords', models.TextField(blank=True, default='', help_text='Comma-separated keywords/phrases for KEYWORD match type.')),
-                ('moderation_action', models.CharField(choices=[('none', 'No moderation action'), ('hide', 'Hide comment'), ('delete', 'Delete comment'), ('flag', 'Flag for staff review')], default='none', max_length=10)),
-                ('automation_trigger', models.CharField(choices=[('none', 'No automation'), ('notify_staff', 'Notify assigned staff / team'), ('create_proposal', 'Create purchase intent proposal')], default='none', max_length=20)),
-                ('priority', models.PositiveSmallIntegerField(default=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='instagram_moderation_rules', to='accounts.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "match_type",
+                    models.CharField(
+                        choices=[
+                            ("spam_detection", "Spam detection (heuristic)"),
+                            ("toxicity", "Toxicity detection (heuristic)"),
+                            ("keyword", "Keyword / phrase match"),
+                            ("buying_intent", "Buying intent"),
+                            ("complaint", "Complaint language"),
+                            ("mention", "Mention of the account"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "keywords",
+                    models.TextField(
+                        blank=True,
+                        default="",
+                        help_text="Comma-separated keywords/phrases for KEYWORD match type.",
+                    ),
+                ),
+                (
+                    "moderation_action",
+                    models.CharField(
+                        choices=[
+                            ("none", "No moderation action"),
+                            ("hide", "Hide comment"),
+                            ("delete", "Delete comment"),
+                            ("flag", "Flag for staff review"),
+                        ],
+                        default="none",
+                        max_length=10,
+                    ),
+                ),
+                (
+                    "automation_trigger",
+                    models.CharField(
+                        choices=[
+                            ("none", "No automation"),
+                            ("notify_staff", "Notify assigned staff / team"),
+                            ("create_proposal", "Create purchase intent proposal"),
+                        ],
+                        default="none",
+                        max_length=20,
+                    ),
+                ),
+                ("priority", models.PositiveSmallIntegerField(default=10)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="instagram_moderation_rules",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['priority', 'created_at'],
+                "ordering": ["priority", "created_at"],
             },
         ),
         migrations.CreateModel(
-            name='ModerationLog',
+            name="ModerationLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('moderation_action', models.CharField(max_length=10)),
-                ('automation_trigger', models.CharField(blank=True, default='', max_length=20)),
-                ('outcome', models.CharField(choices=[('applied', 'Applied'), ('skipped', 'Skipped (already in state)'), ('failed', 'Failed (API error)')], max_length=10)),
-                ('error', models.TextField(blank=True, default='')),
-                ('occurred_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='moderation_logs', to='accounts.account')),
-                ('acted_by', models.ForeignKey(blank=True, help_text='Set when a staff member manually triggered this action.', null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('comment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='moderation_logs', to='instagram.comment')),
-                ('rule', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='logs', to='instagram.moderationrule')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("moderation_action", models.CharField(max_length=10)),
+                (
+                    "automation_trigger",
+                    models.CharField(blank=True, default="", max_length=20),
+                ),
+                (
+                    "outcome",
+                    models.CharField(
+                        choices=[
+                            ("applied", "Applied"),
+                            ("skipped", "Skipped (already in state)"),
+                            ("failed", "Failed (API error)"),
+                        ],
+                        max_length=10,
+                    ),
+                ),
+                ("error", models.TextField(blank=True, default="")),
+                ("occurred_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="moderation_logs",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "acted_by",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="Set when a staff member manually triggered this action.",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "comment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="moderation_logs",
+                        to="instagram.comment",
+                    ),
+                ),
+                (
+                    "rule",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="logs",
+                        to="instagram.moderationrule",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-occurred_at'],
+                "ordering": ["-occurred_at"],
             },
         ),
         migrations.AddIndex(
-            model_name='moderationrule',
-            index=models.Index(fields=['account', 'is_active', 'priority'], name='instagram_m_account_8b3fb6_idx'),
+            model_name="moderationrule",
+            index=models.Index(
+                fields=["account", "is_active", "priority"],
+                name="instagram_m_account_8b3fb6_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='moderationlog',
-            index=models.Index(fields=['account', 'occurred_at'], name='instagram_m_account_cbdedf_idx'),
+            model_name="moderationlog",
+            index=models.Index(
+                fields=["account", "occurred_at"], name="instagram_m_account_cbdedf_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='moderationlog',
-            index=models.Index(fields=['comment', 'occurred_at'], name='instagram_m_comment_790209_idx'),
+            model_name="moderationlog",
+            index=models.Index(
+                fields=["comment", "occurred_at"], name="instagram_m_comment_790209_idx"
+            ),
         ),
     ]

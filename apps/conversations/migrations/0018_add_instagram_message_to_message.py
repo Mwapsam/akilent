@@ -5,26 +5,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('conversations', '0017_remove_channel_fks'),
-        ('instagram', '0003_phase3_triggers'),
+        ("conversations", "0017_remove_channel_fks"),
+        ("instagram", "0003_phase3_triggers"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='channelconversation',
-            new_name='conversatio_channel_81ad49_idx',
-            old_name='conversations_channelconv_channel_objid',
+            model_name="channelconversation",
+            new_name="conversatio_channel_81ad49_idx",
+            old_name="conversations_channelconv_channel_objid",
         ),
         migrations.AddField(
-            model_name='message',
-            name='instagram_message',
-            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='generic_message', to='instagram.instagrammessage'),
+            model_name="message",
+            name="instagram_message",
+            field=models.OneToOneField(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="generic_message",
+                to="instagram.instagrammessage",
+            ),
         ),
         migrations.AlterField(
-            model_name='channelconversation',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
+            model_name="channelconversation",
+            name="id",
+            field=models.BigAutoField(
+                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+            ),
         ),
     ]

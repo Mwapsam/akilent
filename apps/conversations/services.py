@@ -85,9 +85,9 @@ def record_inbound_whatsapp_message(
     ``enroll_workflows=False`` records the Inbox conversation/message without
     starting any Workflow (used when automation events are switched off).
     """
+    from apps.conversations.models import ChannelConversation
     from apps.whatsapp.interactive import reply_for_log
 
-    from apps.conversations.models import ChannelConversation
     is_new = not ChannelConversation.objects.filter(
         channel=Conversation.Channel.WHATSAPP,
         object_id=whatsapp_conversation.pk,
@@ -159,7 +159,7 @@ def record_inbound_instagram_message(
     instagram_conversation,
     instagram_message,
     enroll_workflows: bool = True,
-) -> "Conversation | None":
+) -> Conversation | None:
     """Project an already-created inbound InstagramMessage onto the spine.
 
     Mirrors ``record_inbound_whatsapp_message``: idempotent on the
@@ -211,6 +211,7 @@ def record_inbound_instagram_message(
     if enroll_workflows:
         try:
             from apps.automation.workflow_engine import enroll_for_trigger
+
             enroll_for_trigger(
                 conversation.account_id,
                 "conversation.message_received",

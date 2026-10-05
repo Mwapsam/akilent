@@ -1,6 +1,7 @@
 """
 Shared test helpers for Instagram Phase 1 tests.
 """
+
 import hashlib
 import hmac
 import json
@@ -10,7 +11,6 @@ from io import BytesIO
 from django.contrib.auth.models import User
 from django.http import HttpRequest
 from django.utils import timezone
-
 
 # ---------------------------------------------------------------------------
 # Account / user fixtures
@@ -35,7 +35,9 @@ def make_account(slug=None):
     return account, user
 
 
-def make_instagram_account(account, *, ibaid=None, page_id=None, verify_token="test_verify"):
+def make_instagram_account(
+    account, *, ibaid=None, page_id=None, verify_token="test_verify"
+):
     from apps.instagram.models.account import InstagramBusinessAccount
 
     ibaid = ibaid or f"ig_{secrets.token_hex(6)}"
@@ -51,8 +53,8 @@ def make_instagram_account(account, *, ibaid=None, page_id=None, verify_token="t
 
 
 def make_instagram_contact(account, ig_account, *, igsid=None):
-    from apps.instagram.models.contact import InstagramContact
     from apps.contacts.models import Contact
+    from apps.instagram.models.contact import InstagramContact
 
     igsid = igsid or f"igsid_{secrets.token_hex(6)}"
     contact = Contact.objects.create(account=account, source="instagram")
@@ -69,7 +71,9 @@ def make_instagram_contact(account, ig_account, *, igsid=None):
 # ---------------------------------------------------------------------------
 
 
-def dm_payload(page_id: str, sender_igsid: str, body: str, *, msg_id=None, ts=None) -> dict:
+def dm_payload(
+    page_id: str, sender_igsid: str, body: str, *, msg_id=None, ts=None
+) -> dict:
     ts = ts or int(timezone.now().timestamp() * 1000)
     msg_id = msg_id or f"mid.{secrets.token_hex(8)}"
     return {
@@ -91,7 +95,9 @@ def dm_payload(page_id: str, sender_igsid: str, body: str, *, msg_id=None, ts=No
     }
 
 
-def comment_payload(page_id: str, sender_igsid: str, body: str, *, comment_id=None, post_id=None) -> dict:
+def comment_payload(
+    page_id: str, sender_igsid: str, body: str, *, comment_id=None, post_id=None
+) -> dict:
     comment_id = comment_id or f"cmt_{secrets.token_hex(6)}"
     post_id = post_id or f"post_{secrets.token_hex(6)}"
     return {

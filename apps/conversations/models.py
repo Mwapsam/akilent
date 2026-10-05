@@ -112,7 +112,7 @@ class Conversation(models.Model):
         return f"{self.get_channel_display()} conversation with {self.contact}"
 
     @classmethod
-    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> "Conversation":
+    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> Conversation:
         """Idempotently get/create the generic wrapper for a whatsapp.Conversation.
 
         ``whatsapp_conversation.contact.contact`` (the linked ``apps.contacts.Contact``)
@@ -126,13 +126,14 @@ class Conversation(models.Model):
                 "creating a generic Conversation"
             )
         return cls._bind_channel(
-            whatsapp_conversation, cls.Channel.WHATSAPP,
+            whatsapp_conversation,
+            cls.Channel.WHATSAPP,
             account=whatsapp_conversation.account,
             contact=contact,
         )
 
     @classmethod
-    def get_or_create_for_instagram(cls, instagram_conversation) -> "Conversation":
+    def get_or_create_for_instagram(cls, instagram_conversation) -> Conversation:
         """Idempotently get/create the generic wrapper for an instagram.InstagramConversation.
 
         ``instagram_conversation.instagram_contact.contact`` must already be
@@ -145,13 +146,14 @@ class Conversation(models.Model):
                 "before creating a generic Conversation"
             )
         return cls._bind_channel(
-            instagram_conversation, cls.Channel.INSTAGRAM,
+            instagram_conversation,
+            cls.Channel.INSTAGRAM,
             account=instagram_conversation.instagram_account.account,
             contact=contact,
         )
 
     @classmethod
-    def get_or_create_for_channel(cls, channel_obj, channel: str) -> "Conversation":
+    def get_or_create_for_channel(cls, channel_obj, channel: str) -> Conversation:
         """Generic factory: get/create the spine Conversation for any channel-specific record.
 
         Dispatches to the channel-specific method so contact/account resolution
@@ -161,10 +163,14 @@ class Conversation(models.Model):
             return cls.get_or_create_for_whatsapp(channel_obj)
         if channel == cls.Channel.INSTAGRAM:
             return cls.get_or_create_for_instagram(channel_obj)
-        raise ValueError(f"Unsupported channel for get_or_create_for_channel: {channel!r}")
+        raise ValueError(
+            f"Unsupported channel for get_or_create_for_channel: {channel!r}"
+        )
 
     @classmethod
-    def _bind_channel(cls, channel_obj, channel: str, *, account, contact) -> "Conversation":
+    def _bind_channel(
+        cls, channel_obj, channel: str, *, account, contact
+    ) -> Conversation:
         """Core implementation: find-or-create the spine Conversation via ChannelConversation.
 
         Uses the ChannelConversation UNIQUE(channel, object_id) constraint as the
@@ -172,8 +178,7 @@ class Conversation(models.Model):
         concurrently, the winner's Conversation survives and the loser's is deleted.
         """
         cc = (
-            ChannelConversation.objects
-            .select_related("conversation")
+            ChannelConversation.objects.select_related("conversation")
             .filter(channel=channel, object_id=channel_obj.pk)
             .first()
         )
@@ -181,14 +186,26 @@ class Conversation(models.Model):
             return cc.conversation
 
         convo = cls.objects.create(account=account, contact=contact, channel=channel)
-        cc, winner = ChannelConversation.objects.get_or_create(
-            channel=channel,
-            object_id=channel_obj.pk,
-            defaults={"conversation": convo},
-        )
+        try:
+            cc, winner = ChannelConversation.objects.get_or_create(
+                channel=channel,
+                object_id=channel_obj.pk,
+                defaults={"conversation": convo},
+            )
+        except Exception:
+            # get_or_create raised (e.g. a non-unique DB error); clean up the
+            # orphan Conversation we just created so the invariant is preserved.
+            convo.delete()
+            raise
         if not winner:
             # Race: another worker bound this channel_obj first; discard our Conversation.
             convo.delete()
+            # Re-fetch to avoid returning the stale in-memory cc.conversation reference.
+            return (
+                ChannelConversation.objects.select_related("conversation")
+                .get(pk=cc.pk)
+                .conversation
+            )
         return cc.conversation
 
     @property
@@ -196,13 +213,18 @@ class Conversation(models.Model):
         """The WhatsApp backing record for this conversation, or None.
 
         Reads through ChannelConversation rather than a direct FK; the old
-        field was removed in migration 0017. Callers that need performance-
-        critical bulk access should use select_related("channel_conversations").
+        field was removed in migration 0017.
+
+        IMPORTANT — this is a Python property, not a relation field.
+        select_related("whatsapp_conversation") is silently ignored by Django
+        and will cause N+1 queries. For bulk access, prefetch via:
+            prefetch_related("channel_conversations")
         """
         cc = self.channel_conversations.filter(channel=self.Channel.WHATSAPP).first()
         if cc is None:
             return None
         from apps.whatsapp.models import Conversation as WaConversation
+
         return WaConversation.objects.filter(pk=cc.object_id).first()
 
     @property
@@ -210,11 +232,17 @@ class Conversation(models.Model):
         """The Instagram backing record for this conversation, or None.
 
         Reads through ChannelConversation rather than a direct FK.
+
+        IMPORTANT — this is a Python property, not a relation field.
+        select_related("instagram_conversation") is silently ignored by Django
+        and will cause N+1 queries. For bulk access, prefetch via:
+            prefetch_related("channel_conversations")
         """
         cc = self.channel_conversations.filter(channel=self.Channel.INSTAGRAM).first()
         if cc is None:
             return None
         from apps.instagram.models import InstagramConversation
+
         return InstagramConversation.objects.filter(pk=cc.object_id).first()
 
     def register_inbound(self, at) -> None:

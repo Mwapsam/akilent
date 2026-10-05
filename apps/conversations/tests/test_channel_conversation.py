@@ -14,9 +14,9 @@ ChannelConversation join table a reliable spine:
   INV-09  instagram_conversation property returns the backing IG record
   INV-10  whatsapp_conversation property returns None for an Instagram spine
 """
+
 from __future__ import annotations
 
-import pytest
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
@@ -26,6 +26,7 @@ from apps.conversations.models import ChannelConversation, Conversation
 
 def _account():
     from apps.accounts.models import Account
+
     return Account.objects.create(company_name="Test Co")
 
 
@@ -34,7 +35,9 @@ def _contact(account):
 
 
 def _spine(account, contact, channel="whatsapp"):
-    return Conversation.objects.create(account=account, contact=contact, channel=channel)
+    return Conversation.objects.create(
+        account=account, contact=contact, channel=channel
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -68,9 +71,7 @@ class TestUniquenessConstraint(TestCase):
         ChannelConversation.objects.create(
             conversation=spine_ig, channel="instagram", object_id=42
         )
-        self.assertEqual(
-            ChannelConversation.objects.filter(object_id=42).count(), 2
-        )
+        self.assertEqual(ChannelConversation.objects.filter(object_id=42).count(), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +101,8 @@ class TestFactoryIdempotency(TestCase):
     def _make_wa_conversation(self):
         from apps.accounts.models import Account
         from apps.contacts.models import Contact
-        from apps.whatsapp.models import Conversation as WaConversation, WhatsAppContact
+        from apps.whatsapp.models import Conversation as WaConversation
+        from apps.whatsapp.models import WhatsAppContact
 
         account = Account.objects.create(company_name="WA Co")
         contact = Contact.objects.create(account=account)
@@ -117,7 +119,7 @@ class TestFactoryIdempotency(TestCase):
         from apps.instagram.models.conversation import InstagramConversation
 
         account = Account.objects.create(company_name="IG Co")
-        ig_account = InstagramBusinessAccount.objects.create(
+        _ig_account = InstagramBusinessAccount.objects.create(
             account=account,
             instagram_business_account_id="ig_test_001",
             page_id="page_test_001",
@@ -140,7 +142,9 @@ class TestFactoryIdempotency(TestCase):
         self.assertEqual(spine1.pk, spine2.pk)
         self.assertEqual(Conversation.objects.filter(channel="whatsapp").count(), 1)
         self.assertEqual(
-            ChannelConversation.objects.filter(channel="whatsapp", object_id=wa_conv.pk).count(),
+            ChannelConversation.objects.filter(
+                channel="whatsapp", object_id=wa_conv.pk
+            ).count(),
             1,
         )
 
@@ -152,7 +156,9 @@ class TestFactoryIdempotency(TestCase):
         self.assertEqual(spine1.pk, spine2.pk)
         self.assertEqual(Conversation.objects.filter(channel="instagram").count(), 1)
         self.assertEqual(
-            ChannelConversation.objects.filter(channel="instagram", object_id=ig_conv.pk).count(),
+            ChannelConversation.objects.filter(
+                channel="instagram", object_id=ig_conv.pk
+            ).count(),
             1,
         )
 
@@ -166,7 +172,8 @@ class TestGetOrCreateForChannel(TestCase):
     def test_dispatches_to_whatsapp(self):
         from apps.accounts.models import Account
         from apps.contacts.models import Contact
-        from apps.whatsapp.models import Conversation as WaConversation, WhatsAppContact
+        from apps.whatsapp.models import Conversation as WaConversation
+        from apps.whatsapp.models import WhatsAppContact
 
         account = Account.objects.create(company_name="Dispatch WA")
         contact = Contact.objects.create(account=account)
@@ -174,12 +181,12 @@ class TestGetOrCreateForChannel(TestCase):
             account=account, phone_number="+260971000002", contact=contact
         )
         wa_conv = WaConversation.get_or_open(wa_contact)
-        spine = Conversation.get_or_create_for_channel(wa_conv, Conversation.Channel.WHATSAPP)
+        spine = Conversation.get_or_create_for_channel(
+            wa_conv, Conversation.Channel.WHATSAPP
+        )
         self.assertEqual(spine.channel, Conversation.Channel.WHATSAPP)
 
     def test_unsupported_channel_raises(self):
-        account = _account()
-        contact = _contact(account)
         fake_obj = type("FakeChannelObj", (), {"pk": 1})()
         with self.assertRaises(ValueError, msg="Unsupported channel"):
             Conversation.get_or_create_for_channel(fake_obj, "carrier_pigeon")
@@ -202,7 +209,8 @@ class TestBindChannelRace(TestCase):
         """
         from apps.accounts.models import Account
         from apps.contacts.models import Contact
-        from apps.whatsapp.models import Conversation as WaConversation, WhatsAppContact
+        from apps.whatsapp.models import Conversation as WaConversation
+        from apps.whatsapp.models import WhatsAppContact
 
         account = Account.objects.create(company_name="Race Co")
         contact = Contact.objects.create(account=account)
@@ -213,22 +221,26 @@ class TestBindChannelRace(TestCase):
 
         # First bind — creates the ChannelConversation
         spine_a = Conversation._bind_channel(
-            wa_conv, Conversation.Channel.WHATSAPP,
-            account=account, contact=contact,
+            wa_conv,
+            Conversation.Channel.WHATSAPP,
+            account=account,
+            contact=contact,
         )
         # Second bind — finds the existing ChannelConversation; any new Conversation it
         # creates internally is deleted; returned value must equal spine_a
         spine_b = Conversation._bind_channel(
-            wa_conv, Conversation.Channel.WHATSAPP,
-            account=account, contact=contact,
+            wa_conv,
+            Conversation.Channel.WHATSAPP,
+            account=account,
+            contact=contact,
         )
 
         self.assertEqual(spine_a.pk, spine_b.pk)
+        self.assertEqual(Conversation.objects.filter(channel="whatsapp").count(), 1)
         self.assertEqual(
-            Conversation.objects.filter(channel="whatsapp").count(), 1
-        )
-        self.assertEqual(
-            ChannelConversation.objects.filter(channel="whatsapp", object_id=wa_conv.pk).count(),
+            ChannelConversation.objects.filter(
+                channel="whatsapp", object_id=wa_conv.pk
+            ).count(),
             1,
         )
 
@@ -242,7 +254,8 @@ class TestProperties(TestCase):
     def _make_whatsapp_spine(self):
         from apps.accounts.models import Account
         from apps.contacts.models import Contact
-        from apps.whatsapp.models import Conversation as WaConversation, WhatsAppContact
+        from apps.whatsapp.models import Conversation as WaConversation
+        from apps.whatsapp.models import WhatsAppContact
 
         account = Account.objects.create(company_name="Prop WA")
         contact = Contact.objects.create(account=account)
@@ -261,7 +274,7 @@ class TestProperties(TestCase):
         from apps.instagram.models.conversation import InstagramConversation
 
         account = Account.objects.create(company_name="Prop IG")
-        ig_account = InstagramBusinessAccount.objects.create(
+        _ig_account = InstagramBusinessAccount.objects.create(
             account=account,
             instagram_business_account_id="ig_prop_001",
             page_id="page_prop_001",

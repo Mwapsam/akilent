@@ -12,6 +12,7 @@ Design invariant (from Phase 2 spec):
   Automation triggers (notify_staff, create_proposal) affect Akilent state.
   They are separate concerns and evaluated independently.
 """
+
 from __future__ import annotations
 
 import logging
@@ -96,11 +97,21 @@ _MENTION_PATTERNS = [
 ]
 
 _COMPILED: dict[str, list[re.Pattern]] = {
-    ModerationRule.MatchType.SPAM_DETECTION: [re.compile(p, re.IGNORECASE) for p in _SPAM_PATTERNS],
-    ModerationRule.MatchType.TOXICITY: [re.compile(p, re.IGNORECASE) for p in _TOXICITY_PATTERNS],
-    ModerationRule.MatchType.COMPLAINT: [re.compile(p, re.IGNORECASE) for p in _COMPLAINT_PATTERNS],
-    ModerationRule.MatchType.BUYING_INTENT: [re.compile(p, re.IGNORECASE) for p in _BUYING_INTENT_PATTERNS],
-    ModerationRule.MatchType.MENTION: [re.compile(p, re.IGNORECASE) for p in _MENTION_PATTERNS],
+    ModerationRule.MatchType.SPAM_DETECTION: [
+        re.compile(p, re.IGNORECASE) for p in _SPAM_PATTERNS
+    ],
+    ModerationRule.MatchType.TOXICITY: [
+        re.compile(p, re.IGNORECASE) for p in _TOXICITY_PATTERNS
+    ],
+    ModerationRule.MatchType.COMPLAINT: [
+        re.compile(p, re.IGNORECASE) for p in _COMPLAINT_PATTERNS
+    ],
+    ModerationRule.MatchType.BUYING_INTENT: [
+        re.compile(p, re.IGNORECASE) for p in _BUYING_INTENT_PATTERNS
+    ],
+    ModerationRule.MatchType.MENTION: [
+        re.compile(p, re.IGNORECASE) for p in _MENTION_PATTERNS
+    ],
 }
 
 
@@ -121,9 +132,7 @@ def _rule_matches(rule: ModerationRule, comment: Comment) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _execute_moderation(
-    comment: Comment, action: str
-) -> tuple[str, str]:
+def _execute_moderation(comment: Comment, action: str) -> tuple[str, str]:
     """
     Apply the moderation action to the comment on Instagram and update the
     local Comment record. Returns (outcome, error_message).
@@ -146,6 +155,8 @@ def _execute_moderation(
     from apps.instagram.providers.meta import MetaInstagramProvider
 
     account = comment.thread.instagram_account
+    if not account.access_token:
+        return ModerationLog.Outcome.SKIPPED, "no access token"
     provider = MetaInstagramProvider(
         access_token=account.access_token,
         instagram_account_id=account.instagram_business_account_id,
@@ -158,8 +169,7 @@ def _execute_moderation(
             comment.moderation_state = Comment.ModerationState.HIDDEN
             comment.save(update_fields=["is_hidden", "moderation_state"])
             return ModerationLog.Outcome.APPLIED, ""
-        else:
-            return ModerationLog.Outcome.FAILED, "hide_comment API call failed"
+        return ModerationLog.Outcome.FAILED, "hide_comment API call failed"
 
     if action == ModerationRule.ModerationAction.DELETE:
         success = provider.delete_comment(comment.comment_id)
@@ -167,8 +177,7 @@ def _execute_moderation(
             comment.moderation_state = Comment.ModerationState.DELETED
             comment.save(update_fields=["moderation_state"])
             return ModerationLog.Outcome.APPLIED, ""
-        else:
-            return ModerationLog.Outcome.FAILED, "delete_comment API call failed"
+        return ModerationLog.Outcome.FAILED, "delete_comment API call failed"
 
     return ModerationLog.Outcome.SKIPPED, f"unknown action: {action}"
 
@@ -235,7 +244,9 @@ def _create_proposal(comment: Comment) -> None:
         payload__comment_thread_id=thread.pk,
     ).exists()
     if existing:
-        logger.debug("_create_proposal: pending proposal already exists for thread %s", thread.pk)
+        logger.debug(
+            "_create_proposal: pending proposal already exists for thread %s", thread.pk
+        )
         return
 
     AIProposal.objects.create(

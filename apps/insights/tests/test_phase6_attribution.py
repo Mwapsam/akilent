@@ -14,9 +14,9 @@ P6-11  insight_for_order returns None when no attribution exists
 P6-12  END-TO-END: high_engagement_contact → Insight → Rec → DM → reply
        → Lead → Order → Order.attribution.originated_from.insight == original Insight
 """
+
 from __future__ import annotations
 
-import pytest
 from django.test import TestCase
 from django.utils import timezone
 
@@ -33,17 +33,22 @@ from apps.insights.models import Insight, RecommendationLog
 
 def _make_account(name="P6 Co"):
     from apps.accounts.models import Account
+
     return Account.objects.create(company_name=name)
 
 
 def _make_contact(account):
     from apps.contacts.models import Contact
+
     return Contact.objects.create(account=account)
 
 
 def _make_spine(account, contact, channel="instagram"):
     from apps.conversations.models import Conversation
-    return Conversation.objects.create(account=account, contact=contact, channel=channel)
+
+    return Conversation.objects.create(
+        account=account, contact=contact, channel=channel
+    )
 
 
 def _make_insight(account):
@@ -76,7 +81,9 @@ class TestExecuteRecommendation(TestCase):
         self.rec = _make_rec(self.account, insight=insight)
 
     def test_p601_links_conversation_and_marks_accepted(self):
-        execute_recommendation(self.rec, conversation=self.spine, action_type="instagram_dm")
+        execute_recommendation(
+            self.rec, conversation=self.spine, action_type="instagram_dm"
+        )
         self.rec.refresh_from_db()
         self.assertEqual(self.rec.conversation_id, self.spine.pk)
         self.assertEqual(self.rec.status, RecommendationLog.Status.ACCEPTED)
@@ -85,9 +92,13 @@ class TestExecuteRecommendation(TestCase):
         self.assertIsNotNone(self.rec.acted_at)
 
     def test_p602_idempotent_second_call_noop(self):
-        execute_recommendation(self.rec, conversation=self.spine, action_type="instagram_dm")
+        execute_recommendation(
+            self.rec, conversation=self.spine, action_type="instagram_dm"
+        )
         spine2 = _make_spine(self.account, self.contact)
-        execute_recommendation(self.rec, conversation=spine2, action_type="instagram_dm")
+        execute_recommendation(
+            self.rec, conversation=spine2, action_type="instagram_dm"
+        )
         self.rec.refresh_from_db()
         # Still points at the first conversation
         self.assertEqual(self.rec.conversation_id, self.spine.pk)
@@ -95,7 +106,10 @@ class TestExecuteRecommendation(TestCase):
     def test_p603_backfills_originated_from_on_existing_attribution(self):
         from apps.conversations.models import ConversationAttribution
         from apps.crm.models import Lead
-        lead = Lead.objects.create(account=self.account, contact=self.contact, source="instagram")
+
+        lead = Lead.objects.create(
+            account=self.account, contact=self.contact, source="instagram"
+        )
         attribution = ConversationAttribution.objects.create(
             account=self.account,
             conversation=self.spine,
@@ -104,7 +118,9 @@ class TestExecuteRecommendation(TestCase):
             method=ConversationAttribution.Method.EXPLICIT,
         )
         self.assertIsNone(attribution.originated_from_id)
-        execute_recommendation(self.rec, conversation=self.spine, action_type="instagram_dm")
+        execute_recommendation(
+            self.rec, conversation=self.spine, action_type="instagram_dm"
+        )
         attribution.refresh_from_db()
         self.assertEqual(attribution.originated_from_id, self.rec.pk)
 
@@ -143,7 +159,9 @@ class TestRecordOutcomeSignal(TestCase):
         self.assertEqual(self.rec.outcome_measured_at, first_measured)
 
     def test_p607_revenue_and_currency_stored_on_order_paid(self):
-        record_outcome_signal(self.rec, "order_paid_at", revenue="250.00", currency="ZMW")
+        record_outcome_signal(
+            self.rec, "order_paid_at", revenue="250.00", currency="ZMW"
+        )
         self.rec.refresh_from_db()
         self.assertEqual(self.rec.outcome_summary["revenue"], "250.00")
         self.assertEqual(self.rec.outcome_summary["currency"], "ZMW")
@@ -162,6 +180,7 @@ class TestAttachAttributionProvenance(TestCase):
     def test_p609_wires_originated_from(self):
         from apps.conversations.models import ConversationAttribution
         from apps.crm.models import Lead
+
         account = _make_account()
         contact = _make_contact(account)
         spine = _make_spine(account, contact)
@@ -181,6 +200,7 @@ class TestAttachAttributionProvenance(TestCase):
     def test_p609_idempotent(self):
         from apps.conversations.models import ConversationAttribution
         from apps.crm.models import Lead
+
         account = _make_account()
         contact = _make_contact(account)
         spine = _make_spine(account, contact)
@@ -208,6 +228,7 @@ class TestAttachAttributionProvenance(TestCase):
 class TestInsightForOrder(TestCase):
     def _make_order(self, account, contact, attribution=None):
         from apps.commerce.models import Order
+
         order = Order.objects.create(
             account=account,
             contact=contact,
@@ -216,15 +237,18 @@ class TestInsightForOrder(TestCase):
         return order
 
     def test_p610_returns_originating_insight(self):
-        from apps.conversations.models import ConversationAttribution
         from apps.commerce.models import Order
+        from apps.conversations.models import ConversationAttribution
+
         account = _make_account()
         contact = _make_contact(account)
         spine = _make_spine(account, contact)
         insight, _ = upsert_insight(_make_insight(account))
         rec = _make_rec(account, insight=insight)
-        order = Order.objects.create(account=account, contact=contact, status=Order.Status.PAID)
-        attribution = ConversationAttribution.objects.create(
+        order = Order.objects.create(
+            account=account, contact=contact, status=Order.Status.PAID
+        )
+        ConversationAttribution.objects.create(
             account=account,
             conversation=spine,
             channel="instagram",
@@ -237,9 +261,12 @@ class TestInsightForOrder(TestCase):
 
     def test_p611_returns_none_when_no_attribution(self):
         from apps.commerce.models import Order
+
         account = _make_account()
         contact = _make_contact(account)
-        order = Order.objects.create(account=account, contact=contact, status=Order.Status.PAID)
+        order = Order.objects.create(
+            account=account, contact=contact, status=Order.Status.PAID
+        )
         self.assertIsNone(insight_for_order(order))
 
 
@@ -280,6 +307,7 @@ class TestEndToEndAttributionChain(TestCase):
         self._make_threads(ig_account, ig_contact, count=3)
 
         from apps.insights.rules import rule_instagram_high_engagement_contact
+
         raw_insight = rule_instagram_high_engagement_contact(account)
         self.assertIsNotNone(raw_insight, "Rule must fire with 3+ threads")
         insight, _ = upsert_insight(raw_insight)
@@ -303,9 +331,12 @@ class TestEndToEndAttributionChain(TestCase):
 
         # --- Lead created from conversation ---
         lead = Lead.objects.create(
-            account=account, contact=canonical_contact, conversation=spine, source="instagram"
+            account=account,
+            contact=canonical_contact,
+            conversation=spine,
+            source="instagram",
         )
-        lead_attribution = ConversationAttribution.objects.create(
+        ConversationAttribution.objects.create(
             account=account,
             conversation=spine,
             channel="instagram",
@@ -316,8 +347,10 @@ class TestEndToEndAttributionChain(TestCase):
         record_outcome_signal(rec, "lead_created_at")
 
         # --- Order created ---
-        order = Order.objects.create(account=account, contact=canonical_contact, status=Order.Status.PENDING)
-        order_attribution = ConversationAttribution.objects.create(
+        order = Order.objects.create(
+            account=account, contact=canonical_contact, status=Order.Status.PENDING
+        )
+        ConversationAttribution.objects.create(
             account=account,
             conversation=spine,
             channel="instagram",
@@ -370,6 +403,7 @@ class TestEndToEndAttributionChain(TestCase):
 
     def _make_threads(self, ig_account, ig_contact, *, count=3):
         from apps.instagram.models.comment import CommentThread
+
         for i in range(count):
             CommentThread.objects.create(
                 instagram_account=ig_account,

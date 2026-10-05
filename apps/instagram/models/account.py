@@ -63,15 +63,15 @@ class InstagramBusinessAccount(models.Model):
 
 class TenantResolutionError(Exception):
     """Raised when a webhook event cannot be mapped to a tenant."""
+
     pass
 
 
 def get_account_for_webhook(page_id: str):
     """Resolve a Facebook Page ID (from the webhook) to its Akilent Account."""
     try:
-        iba = (
-            InstagramBusinessAccount.objects.select_related("account")
-            .get(page_id=page_id, is_active=True)
+        iba = InstagramBusinessAccount.objects.select_related("account").get(
+            page_id=page_id, is_active=True
         )
         return iba.account
     except InstagramBusinessAccount.DoesNotExist as exc:
@@ -83,9 +83,8 @@ def get_account_for_webhook(page_id: str):
 def get_instagram_account_for_webhook(page_id: str) -> "InstagramBusinessAccount":
     """Resolve a Page ID to the InstagramBusinessAccount (carries the token)."""
     try:
-        return (
-            InstagramBusinessAccount.objects.select_related("account")
-            .get(page_id=page_id, is_active=True)
+        return InstagramBusinessAccount.objects.select_related("account").get(
+            page_id=page_id, is_active=True
         )
     except InstagramBusinessAccount.DoesNotExist as exc:
         raise TenantResolutionError(

@@ -23,10 +23,11 @@ Checklist (all must pass for Phase 2 sign-off):
   P2-19  Mention webhook entries are normalised and processed as comments
   P2-20  Buying intent still detected even when moderation rule matches
 """
+
 from __future__ import annotations
 
 import secrets
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -37,16 +38,22 @@ from apps.instagram.services.moderation import moderate_comment
 
 from .helpers import make_account, make_instagram_account, make_instagram_contact
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
 
-def make_rule(account, *, name=None, match_type=ModerationRule.MatchType.KEYWORD,
-              keywords="badword", moderation_action=ModerationRule.ModerationAction.HIDE,
-              automation_trigger=ModerationRule.AutomationTrigger.NONE,
-              priority=10, is_active=True):
+def make_rule(
+    account,
+    *,
+    name=None,
+    match_type=ModerationRule.MatchType.KEYWORD,
+    keywords="badword",
+    moderation_action=ModerationRule.ModerationAction.HIDE,
+    automation_trigger=ModerationRule.AutomationTrigger.NONE,
+    priority=10,
+    is_active=True,
+):
     return ModerationRule.objects.create(
         account=account,
         name=name or f"rule_{secrets.token_hex(4)}",
@@ -85,7 +92,6 @@ def make_thread_and_comment(ig_account, ig_contact, body="test comment"):
 
 
 class TestModerationActions(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -94,9 +100,14 @@ class TestModerationActions(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_01_keyword_hide(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = True
-        make_rule(self.account, keywords="badword",
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
-        _, comment = make_thread_and_comment(self.ig_account, self.ig_contact, "badword here")
+        make_rule(
+            self.account,
+            keywords="badword",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
+        _, comment = make_thread_and_comment(
+            self.ig_account, self.ig_contact, "badword here"
+        )
 
         log = moderate_comment(comment)
 
@@ -106,28 +117,44 @@ class TestModerationActions(TestCase):
         comment.refresh_from_db()
         self.assertTrue(comment.is_hidden)
         self.assertEqual(comment.moderation_state, Comment.ModerationState.HIDDEN)
-        MockProvider.return_value.hide_comment.assert_called_once_with(comment.comment_id)
+        MockProvider.return_value.hide_comment.assert_called_once_with(
+            comment.comment_id
+        )
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_02_keyword_delete(self, MockProvider):
         MockProvider.return_value.delete_comment.return_value = True
-        make_rule(self.account, keywords="spam",
-                  moderation_action=ModerationRule.ModerationAction.DELETE)
-        _, comment = make_thread_and_comment(self.ig_account, self.ig_contact, "buy cheap spam")
+        make_rule(
+            self.account,
+            keywords="spam",
+            moderation_action=ModerationRule.ModerationAction.DELETE,
+        )
+        _, comment = make_thread_and_comment(
+            self.ig_account, self.ig_contact, "buy cheap spam"
+        )
 
         log = moderate_comment(comment)
 
         self.assertEqual(log.outcome, ModerationLog.Outcome.APPLIED)
         comment.refresh_from_db()
         self.assertEqual(comment.moderation_state, Comment.ModerationState.DELETED)
-        MockProvider.return_value.delete_comment.assert_called_once_with(comment.comment_id)
+        MockProvider.return_value.delete_comment.assert_called_once_with(
+            comment.comment_id
+        )
 
     def test_p2_03_flag_action_is_local_only(self):
-        make_rule(self.account, keywords="flag_me",
-                  moderation_action=ModerationRule.ModerationAction.FLAG)
-        _, comment = make_thread_and_comment(self.ig_account, self.ig_contact, "flag_me")
+        make_rule(
+            self.account,
+            keywords="flag_me",
+            moderation_action=ModerationRule.ModerationAction.FLAG,
+        )
+        _, comment = make_thread_and_comment(
+            self.ig_account, self.ig_contact, "flag_me"
+        )
 
-        with patch("apps.instagram.providers.meta.MetaInstagramProvider") as MockProvider:
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider"
+        ) as MockProvider:
             log = moderate_comment(comment)
             MockProvider.assert_not_called()
 
@@ -142,7 +169,6 @@ class TestModerationActions(TestCase):
 
 
 class TestHeuristicMatchers(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -151,9 +177,11 @@ class TestHeuristicMatchers(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_04_spam_detection(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = True
-        make_rule(self.account,
-                  match_type=ModerationRule.MatchType.SPAM_DETECTION,
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            match_type=ModerationRule.MatchType.SPAM_DETECTION,
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
 
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "check out my profile for deals"
@@ -164,9 +192,11 @@ class TestHeuristicMatchers(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_05_toxicity_detection(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = True
-        make_rule(self.account,
-                  match_type=ModerationRule.MatchType.TOXICITY,
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            match_type=ModerationRule.MatchType.TOXICITY,
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
 
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "this is trash and you are stupid"
@@ -177,9 +207,11 @@ class TestHeuristicMatchers(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_06_complaint_detection(self, MockProvider):
         MockProvider.return_value.flag_comment = None
-        make_rule(self.account,
-                  match_type=ModerationRule.MatchType.COMPLAINT,
-                  moderation_action=ModerationRule.ModerationAction.FLAG)
+        make_rule(
+            self.account,
+            match_type=ModerationRule.MatchType.COMPLAINT,
+            moderation_action=ModerationRule.ModerationAction.FLAG,
+        )
 
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "I want a refund, this is a scam"
@@ -194,7 +226,6 @@ class TestHeuristicMatchers(TestCase):
 
 
 class TestNoRuleNoLog(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -217,7 +248,6 @@ class TestNoRuleNoLog(TestCase):
 
 
 class TestInboundPipelineOrder(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -253,7 +283,6 @@ class TestInboundPipelineOrder(TestCase):
 
 
 class TestModerationIdempotency(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -261,8 +290,11 @@ class TestModerationIdempotency(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_09_already_hidden_skip(self, MockProvider):
-        make_rule(self.account, keywords="bad",
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            keywords="bad",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "something bad"
         )
@@ -275,8 +307,11 @@ class TestModerationIdempotency(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_10_already_deleted_skip(self, MockProvider):
-        make_rule(self.account, keywords="bad",
-                  moderation_action=ModerationRule.ModerationAction.DELETE)
+        make_rule(
+            self.account,
+            keywords="bad",
+            moderation_action=ModerationRule.ModerationAction.DELETE,
+        )
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "something bad"
         )
@@ -294,7 +329,6 @@ class TestModerationIdempotency(TestCase):
 
 
 class TestAPIFailures(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -303,8 +337,11 @@ class TestAPIFailures(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_11_hide_api_failure(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = False
-        make_rule(self.account, keywords="bad",
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            keywords="bad",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "bad text"
         )
@@ -317,8 +354,11 @@ class TestAPIFailures(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_12_delete_api_failure(self, MockProvider):
         MockProvider.return_value.delete_comment.return_value = False
-        make_rule(self.account, keywords="bad",
-                  moderation_action=ModerationRule.ModerationAction.DELETE)
+        make_rule(
+            self.account,
+            keywords="bad",
+            moderation_action=ModerationRule.ModerationAction.DELETE,
+        )
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "bad text"
         )
@@ -334,7 +374,6 @@ class TestAPIFailures(TestCase):
 
 
 class TestAutomationTriggers(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -354,7 +393,9 @@ class TestAutomationTriggers(TestCase):
         )
         with patch("apps.instagram.services.moderation.logger") as mock_logger:
             log = moderate_comment(comment)
-        self.assertEqual(log.automation_trigger, ModerationRule.AutomationTrigger.NOTIFY_STAFF)
+        self.assertEqual(
+            log.automation_trigger, ModerationRule.AutomationTrigger.NOTIFY_STAFF
+        )
         # Ensure the notification intent was logged (no API call)
         mock_logger.info.assert_called()
 
@@ -382,7 +423,7 @@ class TestAutomationTriggers(TestCase):
     def test_p2_15_create_proposal_is_idempotent(self):
         from apps.ai.models import AIProposal
 
-        rule = make_rule(
+        make_rule(
             self.account,
             match_type=ModerationRule.MatchType.BUYING_INTENT,
             moderation_action=ModerationRule.ModerationAction.FLAG,
@@ -440,7 +481,6 @@ class TestAutomationTriggers(TestCase):
 
 
 class TestModerationLogImmutability(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -449,8 +489,11 @@ class TestModerationLogImmutability(TestCase):
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_17_moderation_log_is_immutable(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = True
-        make_rule(self.account, keywords="bad",
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            keywords="bad",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "bad word"
         )
@@ -471,7 +514,6 @@ class TestModerationLogImmutability(TestCase):
 
 
 class TestRulePriorityOrdering(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -484,12 +526,14 @@ class TestRulePriorityOrdering(TestCase):
 
         # Both rules match "badword"; priority 1 (hide) should win over priority 20 (delete)
         hide_rule = make_rule(
-            self.account, keywords="badword",
+            self.account,
+            keywords="badword",
             moderation_action=ModerationRule.ModerationAction.HIDE,
             priority=1,
         )
         make_rule(
-            self.account, keywords="badword",
+            self.account,
+            keywords="badword",
             moderation_action=ModerationRule.ModerationAction.DELETE,
             priority=20,
         )
@@ -508,7 +552,6 @@ class TestRulePriorityOrdering(TestCase):
 
 
 class TestMentionWebhookProcessing(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -538,7 +581,6 @@ class TestMentionWebhookProcessing(TestCase):
 
 
 class TestIntentWithModeration(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -548,8 +590,11 @@ class TestIntentWithModeration(TestCase):
     def test_p2_20_intent_detected_alongside_moderation(self, MockProvider):
         MockProvider.return_value.hide_comment.return_value = True
         # Rule to hide comments containing "click here"
-        make_rule(self.account, keywords="click here",
-                  moderation_action=ModerationRule.ModerationAction.HIDE)
+        make_rule(
+            self.account,
+            keywords="click here",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
         # Comment that both triggers the keyword rule AND contains buying intent
         # "how much" and "buy" both trigger detect_buying_intent
         body = "click here to see how much it costs to buy"

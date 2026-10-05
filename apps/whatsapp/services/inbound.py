@@ -11,6 +11,7 @@ Processing sequence:
   5. Apply consent keywords (STOP/START/UNSTOP)
   6. Auto-reply during setup + mark_read + publish MessageReceived
 """
+
 from __future__ import annotations
 
 import logging
@@ -124,7 +125,11 @@ class WhatsAppInboundService:
         except Exception:
             enroll = False
         project_to_inbox(
-            account, contact_record, wa_conversation, message_log, enroll_workflows=enroll
+            account,
+            contact_record,
+            wa_conversation,
+            message_log,
+            enroll_workflows=enroll,
         )
 
         # Step 6 — consent keywords, auto-reply, mark_read, domain event
@@ -136,16 +141,16 @@ class WhatsAppInboundService:
         if created and not contact_record.is_opted_out:
             _auto_reply_during_setup(phone_number_id, contact_record)
 
-        if (
-            created
-            and self.message.get("id")
-        ):
+        if created and self.message.get("id"):
             from django.conf import settings
+
             if getattr(settings, "WHATSAPP_MARK_READ_ENABLED", True):
                 mark_read.delay(account.id, self.message["id"])
 
         if created:
-            self._publish_message_received(account, contact_record, msg_ts, msg_type, content)
+            self._publish_message_received(
+                account, contact_record, msg_ts, msg_type, content
+            )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -174,6 +179,7 @@ class WhatsAppInboundService:
     def _count_conversation(account) -> None:
         try:
             from apps.billing import api as billing_api
+
             billing_api.count_conversation(account)
         except Exception as exc:
             logger.warning(
@@ -183,9 +189,12 @@ class WhatsAppInboundService:
             )
 
     @staticmethod
-    def _publish_message_received(account, contact_record, msg_ts, msg_type, content) -> None:
+    def _publish_message_received(
+        account, contact_record, msg_ts, msg_type, content
+    ) -> None:
         from apps.core.events import MessageReceived, dispatcher
         from apps.whatsapp.tasks import _automation_events_enabled
+
         try:
             if _automation_events_enabled():
                 dispatcher.publish(

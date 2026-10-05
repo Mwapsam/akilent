@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('conversations', '0018_add_instagram_message_to_message'),
-        ('insights', '0004_policy_execution_and_rec_log_status'),
+        ("conversations", "0018_add_instagram_message_to_message"),
+        ("insights", "0004_policy_execution_and_rec_log_status"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='conversationattribution',
-            name='originated_from',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='attributions', to='insights.recommendationlog'),
+            model_name="conversationattribution",
+            name="originated_from",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="attributions",
+                to="insights.recommendationlog",
+            ),
         ),
     ]

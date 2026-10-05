@@ -4,11 +4,11 @@ Celery tasks for Instagram webhook processing.
 The task is an orchestrator only — it delegates all business logic to
 services/inbound.py. No Meta API details live here.
 """
+
 import logging
 
-from celery import shared_task
-
 from apps.instagram.models.webhook import WebhookEventLog
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def process_instagram_event(self, event_id: int):
             "process_instagram_event: event %s failed: %s", event_id, error_msg
         )
         event.mark_failed(error_msg)
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60) from exc
 
 
 def _dispatch(event: WebhookEventLog) -> None:

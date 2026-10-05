@@ -5,21 +5,26 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('conversations', '0019_phase6_rec_log_action_conversation'),
-        ('insights', '0004_policy_execution_and_rec_log_status'),
+        ("conversations", "0019_phase6_rec_log_action_conversation"),
+        ("insights", "0004_policy_execution_and_rec_log_status"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='recommendationlog',
-            name='action_type',
-            field=models.CharField(blank=True, default='', max_length=64),
+            model_name="recommendationlog",
+            name="action_type",
+            field=models.CharField(blank=True, default="", max_length=64),
         ),
         migrations.AddField(
-            model_name='recommendationlog',
-            name='conversation',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='originating_recommendations', to='conversations.conversation'),
+            model_name="recommendationlog",
+            name="conversation",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="originating_recommendations",
+                to="conversations.conversation",
+            ),
         ),
     ]

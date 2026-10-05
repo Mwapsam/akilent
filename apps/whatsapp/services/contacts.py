@@ -3,6 +3,7 @@
 Mirrors apps/instagram/services/contacts.py: ensures every WhatsAppContact
 has a linked canonical contacts.Contact before any spine work begins.
 """
+
 from __future__ import annotations
 
 from apps.whatsapp.models import WhatsAppContact

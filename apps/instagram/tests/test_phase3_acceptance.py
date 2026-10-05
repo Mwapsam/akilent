@@ -18,31 +18,37 @@ Checklist (5 invariants from spec + supporting cases):
   P3-14  ANY_COMMENT trigger fires on every root comment body
   P3-15  Priority ordering: lower priority trigger wins when multiple match
 """
+
 from __future__ import annotations
 
 import secrets
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.instagram.models.comment import Comment, CommentThread
+from apps.instagram.models.comment import CommentThread
 from apps.instagram.models.message import OutboundMessage
 from apps.instagram.models.trigger import CommentTrigger
 from apps.instagram.services.triggers import evaluate_triggers
 
 from .helpers import make_account, make_instagram_account, make_instagram_contact
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
 
-def make_trigger(account, *, name=None,
-                 match_type=CommentTrigger.MatchType.KEYWORD,
-                 keywords="buy", reply_template="Hi {username}, DM us!",
-                 priority=10, is_active=True):
+def make_trigger(
+    account,
+    *,
+    name=None,
+    match_type=CommentTrigger.MatchType.KEYWORD,
+    keywords="buy",
+    reply_template="Hi {username}, DM us!",
+    priority=10,
+    is_active=True,
+):
     return CommentTrigger.objects.create(
         account=account,
         name=name or f"trigger_{secrets.token_hex(4)}",
@@ -54,7 +60,9 @@ def make_trigger(account, *, name=None,
     )
 
 
-def make_thread(ig_account, ig_contact, body="", *, comment_id=None, trigger_fired=False):
+def make_thread(
+    ig_account, ig_contact, body="", *, comment_id=None, trigger_fired=False
+):
     thread = CommentThread.objects.create(
         instagram_account=ig_account,
         comment_id=comment_id or f"cmt_{secrets.token_hex(6)}",
@@ -73,7 +81,6 @@ def make_thread(ig_account, ig_contact, body="", *, comment_id=None, trigger_fir
 
 
 class TestKeywordTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -88,7 +95,9 @@ class TestKeywordTrigger(TestCase):
         )
 
         make_trigger(self.account, keywords="buy,price")
-        thread = make_thread(self.ig_account, self.ig_contact, "how much does it cost to buy?")
+        thread = make_thread(
+            self.ig_account, self.ig_contact, "how much does it cost to buy?"
+        )
 
         result = evaluate_triggers(thread, "how much does it cost to buy?")
 
@@ -111,7 +120,6 @@ class TestKeywordTrigger(TestCase):
 
 
 class TestBuyingIntentTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -140,7 +148,6 @@ class TestBuyingIntentTrigger(TestCase):
 
 
 class TestPrivateReplyIdempotency(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -180,7 +187,6 @@ class TestPrivateReplyIdempotency(TestCase):
 
 
 class TestPrivateReplyDistinctOperation(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -209,7 +215,6 @@ class TestPrivateReplyDistinctOperation(TestCase):
 
 
 class TestConversationCreationTiming(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -242,7 +247,6 @@ class TestConversationCreationTiming(TestCase):
 
 
 class TestNoDuplicateConversations(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -278,6 +282,7 @@ class TestNoDuplicateConversations(TestCase):
 
         # Only one InstagramConversation
         from apps.instagram.models.conversation import InstagramConversation
+
         self.assertEqual(
             InstagramConversation.objects.filter(
                 instagram_contact=self.ig_contact
@@ -292,7 +297,6 @@ class TestNoDuplicateConversations(TestCase):
 
 
 class TestAttributionChain(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -318,6 +322,7 @@ class TestAttributionChain(TestCase):
 
         # The spine conversation links to InstagramConversation which links to contact
         from apps.conversations.models import Conversation
+
         spine = Conversation.objects.get(pk=thread.conversation_id)
         self.assertIsNotNone(spine.instagram_conversation)
         ig_convo = spine.instagram_conversation
@@ -325,6 +330,7 @@ class TestAttributionChain(TestCase):
 
         # Staff confirms → Lead
         from apps.crm.models import Lead
+
         Lead.objects.create(
             account=self.account,
             contact=self.contact,
@@ -335,9 +341,9 @@ class TestAttributionChain(TestCase):
         # Attribution chain: Lead → Conversation → InstagramConversation → CommentThread
         self.assertEqual(lead.conversation, spine)
         self.assertEqual(spine.instagram_conversation, ig_convo)
-        self.assertEqual(ig_convo.instagram_contact.comment_threads.filter(
-            pk=thread.pk
-        ).count(), 1)
+        self.assertEqual(
+            ig_convo.instagram_contact.comment_threads.filter(pk=thread.pk).count(), 1
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +352,6 @@ class TestAttributionChain(TestCase):
 
 
 class TestTriggerFiredAtAtomicity(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -382,7 +387,6 @@ class TestTriggerFiredAtAtomicity(TestCase):
 
 
 class TestReplyCommentsNoTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -424,7 +428,6 @@ class TestReplyCommentsNoTrigger(TestCase):
 
 
 class TestNoActiveTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -448,7 +451,6 @@ class TestNoActiveTrigger(TestCase):
 
 
 class TestAlreadyFiredTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -474,7 +476,6 @@ class TestAlreadyFiredTrigger(TestCase):
 
 
 class TestReplyTemplateInterpolation(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -497,7 +498,6 @@ class TestReplyTemplateInterpolation(TestCase):
 
 
 class TestApiFailureNoConversation(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -528,7 +528,6 @@ class TestApiFailureNoConversation(TestCase):
 
 
 class TestAnyCommentTrigger(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -557,7 +556,6 @@ class TestAnyCommentTrigger(TestCase):
 
 
 class TestTriggerPriorityOrdering(TestCase):
-
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
@@ -572,12 +570,14 @@ class TestTriggerPriorityOrdering(TestCase):
         )
 
         low_priority = make_trigger(
-            self.account, keywords="buy",
+            self.account,
+            keywords="buy",
             reply_template="LOW priority reply",
             priority=1,
         )
         make_trigger(
-            self.account, keywords="buy",
+            self.account,
+            keywords="buy",
             reply_template="HIGH priority reply",
             priority=20,
         )

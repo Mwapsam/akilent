@@ -5,7 +5,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def evaluate_intent(account, conversation, body: str, source_description: str = "") -> None:
+def evaluate_intent(
+    account, conversation, body: str, source_description: str = ""
+) -> None:
     """
     Run buying-intent detection. If a phrase is matched, create an AIProposal
     for staff review. A Lead is never created automatically.

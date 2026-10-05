@@ -13,6 +13,7 @@ Checklist:
   P4-09  Conversion rates are calculated correctly (comment_to_dm, dm_to_lead, lead_to_order)
   P4-10  Zero denominator in conversion rate returns 0, not an exception
 """
+
 from __future__ import annotations
 
 import secrets
@@ -37,7 +38,9 @@ def _period_dict(start=None, end=None):
     return Period(start or PERIOD.start, end or PERIOD.end)
 
 
-def make_thread(ig_account, ig_contact, *, received_at=None, trigger_fired=False, conversation=None):
+def make_thread(
+    ig_account, ig_contact, *, received_at=None, trigger_fired=False, conversation=None
+):
     thread = CommentThread.objects.create(
         instagram_account=ig_account,
         comment_id=f"cmt_{secrets.token_hex(6)}",
@@ -52,13 +55,17 @@ def make_thread(ig_account, ig_contact, *, received_at=None, trigger_fired=False
 
 def make_instagram_conversation(account, ig_account, ig_contact):
     """Create an InstagramConversation + spine Conversation for the contact."""
-    from apps.instagram.services.conversations import get_or_create_instagram_conversation
+    from apps.instagram.services.conversations import (
+        get_or_create_instagram_conversation,
+    )
+
     ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
     return ig_convo, spine
 
 
 def make_lead(account, contact, source="instagram", *, created_at=None):
     from apps.crm.models import Lead
+
     lead = Lead.objects.create(
         account=account,
         contact=contact,
@@ -72,6 +79,7 @@ def make_lead(account, contact, source="instagram", *, created_at=None):
 
 def make_paid_order(account, contact, conversation, *, total="50.00", currency="USD"):
     from apps.commerce.models import Order
+
     order = Order.objects.create(
         account=account,
         contact=contact,
@@ -95,6 +103,7 @@ def make_paid_order(account, contact, conversation, *, total="50.00", currency="
 # P4-01  Zero dict when no Instagram data
 # ---------------------------------------------------------------------------
 
+
 class TestP401EmptyFunnel(TestCase):
     def test_returns_zeros_with_no_instagram_data(self):
         account, _ = make_account()
@@ -112,6 +121,7 @@ class TestP401EmptyFunnel(TestCase):
 # ---------------------------------------------------------------------------
 # P4-02  CommentThreads in period counted
 # ---------------------------------------------------------------------------
+
 
 class TestP402CommentsReceived(TestCase):
     def test_threads_in_period_counted(self):
@@ -140,6 +150,7 @@ class TestP402CommentsReceived(TestCase):
 # P4-03  triggered threads counted
 # ---------------------------------------------------------------------------
 
+
 class TestP403ThreadsTriggered(TestCase):
     def test_triggered_threads_counted_separately(self):
         account, _ = make_account()
@@ -157,6 +168,7 @@ class TestP403ThreadsTriggered(TestCase):
 # P4-04  DMs opened (conversation linked) counted
 # ---------------------------------------------------------------------------
 
+
 class TestP404DmsOpened(TestCase):
     def test_threads_with_conversation_counted(self):
         account, _ = make_account()
@@ -172,6 +184,7 @@ class TestP404DmsOpened(TestCase):
 # ---------------------------------------------------------------------------
 # P4-05  Leads with source='instagram' counted
 # ---------------------------------------------------------------------------
+
 
 class TestP405LeadsConfirmed(TestCase):
     def test_instagram_leads_counted(self):
@@ -189,6 +202,7 @@ class TestP405LeadsConfirmed(TestCase):
 # P4-06  Paid orders with instagram attribution counted; revenue summed
 # ---------------------------------------------------------------------------
 
+
 class TestP406PaidOrders(TestCase):
     def test_paid_order_with_instagram_attribution_counted(self):
         account, _ = make_account()
@@ -205,17 +219,28 @@ class TestP406PaidOrders(TestCase):
 
     def test_non_instagram_attributed_order_excluded(self):
         account, _ = make_account()
-        from apps.contacts.models import Contact
         from apps.commerce.models import Order
+        from apps.contacts.models import Contact
+
         contact = Contact.objects.create(account=account)
-        conv = Conversation.objects.create(account=account, contact=contact, channel="whatsapp")
+        conv = Conversation.objects.create(
+            account=account, contact=contact, channel="whatsapp"
+        )
         order = Order.objects.create(
-            account=account, contact=contact, conversation=conv,
-            status=Order.Status.PAID, total=Decimal("50.00"), currency="USD", paid_at=NOW,
+            account=account,
+            contact=contact,
+            conversation=conv,
+            status=Order.Status.PAID,
+            total=Decimal("50.00"),
+            currency="USD",
+            paid_at=NOW,
         )
         ConversationAttribution.objects.create(
-            account=account, conversation=conv, channel="whatsapp",
-            order=order, method=ConversationAttribution.Method.EXPLICIT,
+            account=account,
+            conversation=conv,
+            channel="whatsapp",
+            order=order,
+            method=ConversationAttribution.Method.EXPLICIT,
         )
         result = instagram_funnel(account, PERIOD)
         self.assertEqual(result["paid_orders"], 0)
@@ -224,6 +249,7 @@ class TestP406PaidOrders(TestCase):
 # ---------------------------------------------------------------------------
 # P4-07  period_metrics includes 'instagram' key
 # ---------------------------------------------------------------------------
+
 
 class TestP407PeriodMetrics(TestCase):
     def test_period_metrics_has_instagram_key(self):
@@ -243,6 +269,7 @@ class TestP407PeriodMetrics(TestCase):
 # ---------------------------------------------------------------------------
 # P4-08  Threads outside the period are excluded
 # ---------------------------------------------------------------------------
+
 
 class TestP408PeriodBoundaries(TestCase):
     def test_thread_before_period_excluded(self):
@@ -266,6 +293,7 @@ class TestP408PeriodBoundaries(TestCase):
 # ---------------------------------------------------------------------------
 # P4-09  Conversion rates calculated correctly
 # ---------------------------------------------------------------------------
+
 
 class TestP409ConversionRates(TestCase):
     def test_conversion_rates_computed(self):
@@ -295,6 +323,7 @@ class TestP409ConversionRates(TestCase):
 # ---------------------------------------------------------------------------
 # P4-10  Zero denominator returns 0
 # ---------------------------------------------------------------------------
+
 
 class TestP410ZeroDenominator(TestCase):
     def test_zero_comments_gives_none_conversion(self):

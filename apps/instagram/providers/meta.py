@@ -39,7 +39,9 @@ class MetaInstagramProvider(BaseInstagramProvider):
             error = data.get("error", {})
             code = error.get("code", resp.status_code)
             msg = error.get("message", resp.text[:200])
-            raise InstagramAPIError(code=code, message=msg, http_status=resp.status_code)
+            raise InstagramAPIError(
+                code=code, message=msg, http_status=resp.status_code
+            )
         return data
 
     def can_send(self, recipient_igsid: str, action_type: str) -> EligibilityResult:
@@ -123,7 +125,9 @@ class MetaInstagramProvider(BaseInstagramProvider):
             )
             return False
         except Exception:
-            logger.exception("Instagram hide_comment unexpected error for %s", comment_id)
+            logger.exception(
+                "Instagram hide_comment unexpected error for %s", comment_id
+            )
             return False
 
     def delete_comment(self, comment_id: str) -> bool:
@@ -153,7 +157,9 @@ class MetaInstagramProvider(BaseInstagramProvider):
             )
             return False
         except Exception:
-            logger.exception("Instagram delete_comment unexpected error for %s", comment_id)
+            logger.exception(
+                "Instagram delete_comment unexpected error for %s", comment_id
+            )
             return False
 
 

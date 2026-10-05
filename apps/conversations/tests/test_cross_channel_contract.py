@@ -27,11 +27,11 @@ Known gap (documented):
   TestInstagramContracts.test_cc05 is marked @expectedFailure to surface the
   gap rather than silently skip it.
 """
+
 from __future__ import annotations
 
 import abc
-import unittest
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -39,7 +39,6 @@ from django.utils import timezone
 from apps.automation.models import Workflow
 from apps.conversations.models import ChannelConversation, Conversation, Message
 from apps.crm.models import Lead
-
 
 # ---------------------------------------------------------------------------
 # Channel fixture protocol
@@ -52,6 +51,7 @@ class ChannelFixture(abc.ABC):
 
     channel: str  # Conversation.Channel value
 
+    @abc.abstractmethod
     def setup(self) -> None:
         """Create all model prerequisites; called once per test."""
 
@@ -74,8 +74,7 @@ class ChannelFixture(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def account(self):
-        ...
+    def account(self): ...
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +88,8 @@ class WhatsAppFixture(ChannelFixture):
     def setup(self) -> None:
         from apps.accounts.models import Account
         from apps.contacts.models import Contact
-        from apps.whatsapp.models import Conversation as WaConversation, MessageLog, WhatsAppContact
+        from apps.whatsapp.models import Conversation as WaConversation
+        from apps.whatsapp.models import MessageLog, WhatsAppContact
 
         self._account = Account.objects.create(company_name="WA Contract Co")
         # canonical Contact must exist before WhatsApp spine creation
@@ -118,6 +118,7 @@ class WhatsAppFixture(ChannelFixture):
 
     def resolve_contact(self):
         from apps.whatsapp.services.contacts import resolve_channel_contact
+
         return resolve_channel_contact(self._account, self._wa_contact)
 
     def resolve_conversation(self):
@@ -126,6 +127,7 @@ class WhatsAppFixture(ChannelFixture):
 
     def record_first_inbound(self) -> Conversation:
         from apps.conversations.services import record_inbound_whatsapp_message
+
         contact = self.resolve_contact()
         return record_inbound_whatsapp_message(
             contact=contact,
@@ -136,6 +138,7 @@ class WhatsAppFixture(ChannelFixture):
 
     def record_same_inbound_again(self) -> None:
         from apps.conversations.services import record_inbound_whatsapp_message
+
         contact = self.resolve_contact()
         record_inbound_whatsapp_message(
             contact=contact,
@@ -186,19 +189,25 @@ class InstagramFixture(ChannelFixture):
 
     def resolve_contact(self):
         from apps.instagram.services.contacts import resolve_or_create_contact
+
         ig_contact = resolve_or_create_contact(self._ig_account, "igsid_contract_001")
         return ig_contact.contact
 
     def resolve_conversation(self):
-        from apps.instagram.services.conversations import get_or_create_instagram_conversation
+        from apps.instagram.services.conversations import (
+            get_or_create_instagram_conversation,
+        )
+
         ig_convo, spine = get_or_create_instagram_conversation(self._ig_contact)
         return ig_convo, spine
 
     def record_first_inbound(self) -> Conversation:
+        from apps.conversations.services import record_inbound_instagram_message
         from apps.instagram.models.message import InstagramMessage
         from apps.instagram.services.contacts import resolve_or_create_contact
-        from apps.instagram.services.conversations import get_or_create_instagram_conversation
-        from apps.conversations.services import record_inbound_instagram_message
+        from apps.instagram.services.conversations import (
+            get_or_create_instagram_conversation,
+        )
 
         ig_contact = resolve_or_create_contact(self._ig_account, "igsid_contract_001")
         ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
@@ -221,10 +230,12 @@ class InstagramFixture(ChannelFixture):
         return spine
 
     def record_same_inbound_again(self) -> None:
+        from apps.conversations.services import record_inbound_instagram_message
         from apps.instagram.models.message import InstagramMessage
         from apps.instagram.services.contacts import resolve_or_create_contact
-        from apps.instagram.services.conversations import get_or_create_instagram_conversation
-        from apps.conversations.services import record_inbound_instagram_message
+        from apps.instagram.services.conversations import (
+            get_or_create_instagram_conversation,
+        )
 
         ig_contact = resolve_or_create_contact(self._ig_account, "igsid_contract_001")
         ig_convo, _ = get_or_create_instagram_conversation(ig_contact)
@@ -278,9 +289,8 @@ class CrossChannelContractBase(TestCase):
         c2 = self.fx.resolve_contact()
         self.assertEqual(c1.pk, c2.pk)
         from apps.contacts.models import Contact
-        self.assertEqual(
-            Contact.objects.filter(account=self.fx.account).count(), 1
-        )
+
+        self.assertEqual(Contact.objects.filter(account=self.fx.account).count(), 1)
 
     # CC-03  ChannelConversation has correct channel tag
     def test_cc03_channel_conversation_has_correct_channel(self):
@@ -301,7 +311,8 @@ class CrossChannelContractBase(TestCase):
         spine = self.fx.record_first_inbound()
         self.assertIsNotNone(spine)
         self.assertGreater(
-            Message.objects.filter(conversation=spine).count(), 0,
+            Message.objects.filter(conversation=spine).count(),
+            0,
             "At least one Message must exist on the spine after inbound",
         )
 
@@ -319,7 +330,8 @@ class CrossChannelContractBase(TestCase):
         with patch.object(dispatcher, "publish", wraps=dispatcher.publish) as mock_pub:
             self.fx.record_first_inbound()
             published = [
-                c.args[0] for c in mock_pub.call_args_list
+                c.args[0]
+                for c in mock_pub.call_args_list
                 if c.args and isinstance(c.args[0], MessageReceived)
             ]
 
@@ -336,6 +348,7 @@ class CrossChannelContractBase(TestCase):
     # CC-07  automation workflow is enrolled when MessageReceived fires
     def test_cc07_automation_enrolled_on_message_received(self):
         from apps.automation.models import WorkflowRun
+
         Workflow.objects.create(
             account=self.fx.account,
             name="Cross-channel trigger",
@@ -407,4 +420,3 @@ class TestWhatsAppContracts(CrossChannelContractBase):
 
 class TestInstagramContracts(CrossChannelContractBase):
     fixture_class = InstagramFixture
-

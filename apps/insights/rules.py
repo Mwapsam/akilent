@@ -280,8 +280,9 @@ def rule_instagram_unanswered_intent(account):
         return None
 
     sample = list(
-        qs.order_by("-received_at")
-        .values("instagram_contact__username", "intent", "body")[:5]
+        qs.order_by("-received_at").values(
+            "instagram_contact__username", "intent", "body"
+        )[:5]
     )
     sample_items = [
         {
@@ -297,7 +298,9 @@ def rule_instagram_unanswered_intent(account):
     return Insight(
         account=account,
         type="instagram_unanswered_intent",
-        severity=Insight.Severity.OPPORTUNITY if count < 10 else Insight.Severity.WARNING,
+        severity=Insight.Severity.OPPORTUNITY
+        if count < 10
+        else Insight.Severity.WARNING,
         title=f"{count} Instagram comment{'s' if count != 1 else ''} with buying intent, no DM sent",
         body=(
             f"{count} Instagram comment{'s show' if count != 1 else ' shows'} buying intent "

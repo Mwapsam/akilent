@@ -40,7 +40,9 @@ class InstagramConversation(models.Model):
         ]
 
     @classmethod
-    def get_or_open(cls, instagram_contact: InstagramContact) -> "InstagramConversation":
+    def get_or_open(
+        cls, instagram_contact: InstagramContact
+    ) -> "InstagramConversation":
         with transaction.atomic():
             convo = (
                 cls.objects.select_for_update()

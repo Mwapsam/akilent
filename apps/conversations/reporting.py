@@ -600,7 +600,6 @@ def instagram_funnel(account, period: Period) -> dict:
         return _empty_instagram_funnel()
 
     from apps.commerce.models import Order
-    from apps.conversations.models import ConversationAttribution as A
     from apps.crm.models import Lead
 
     threads = CommentThread.objects.filter(
@@ -664,7 +663,11 @@ def _empty_instagram_funnel() -> dict:
         "leads_confirmed": 0,
         "paid_orders": 0,
         "revenue": [],
-        "conversion": {"comment_to_dm": None, "dm_to_lead": None, "lead_to_order": None},
+        "conversion": {
+            "comment_to_dm": None,
+            "dm_to_lead": None,
+            "lead_to_order": None,
+        },
     }
 
 

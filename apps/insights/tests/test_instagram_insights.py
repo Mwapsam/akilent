@@ -13,11 +13,11 @@ IG-10  instagram_high_engagement_contact: threads outside 14-day window → excl
 IG-11  run_all_rules includes both Instagram rules without error
 IG-12  both insight types appear in BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
 
-import pytest
 from django.test import TestCase
 from django.utils import timezone
 
@@ -31,11 +31,13 @@ from apps.insights.rules import (
 
 def _make_account():
     from apps.accounts.models import Account
+
     return Account.objects.create(company_name="IG Insights Co")
 
 
 def _make_ig_account(account):
     from apps.instagram.models.account import InstagramBusinessAccount
+
     return InstagramBusinessAccount.objects.create(
         account=account,
         instagram_business_account_id=f"igba_{account.pk}",
@@ -47,6 +49,7 @@ def _make_ig_account(account):
 
 def _make_ig_contact(account, username="buyer"):
     from apps.instagram.models.contact import InstagramContact
+
     return InstagramContact.objects.create(
         account=account,
         instagram_scoped_id=f"igsid_{username}_{account.pk}",
@@ -56,6 +59,7 @@ def _make_ig_contact(account, username="buyer"):
 
 def _make_thread(ig_account, ig_contact, *, intent="", conversation=None, days_ago=1):
     from apps.instagram.models.comment import CommentThread
+
     return CommentThread.objects.create(
         instagram_account=ig_account,
         instagram_contact=ig_contact,
@@ -89,13 +93,18 @@ class TestInstagramUnansweredIntent(TestCase):
 
     # IG-03
     def test_thread_with_dm_conversation_excluded(self):
-        from apps.conversations.models import Conversation
         from apps.contacts.models import Contact
+        from apps.conversations.models import Conversation
+
         contact = Contact.objects.create(account=self.account)
         spine = Conversation.objects.create(
-            account=self.account, contact=contact, channel=Conversation.Channel.INSTAGRAM
+            account=self.account,
+            contact=contact,
+            channel=Conversation.Channel.INSTAGRAM,
         )
-        _make_thread(self.ig_account, self.ig_contact, intent="buy now", conversation=spine)
+        _make_thread(
+            self.ig_account, self.ig_contact, intent="buy now", conversation=spine
+        )
         result = rule_instagram_unanswered_intent(self.account)
         self.assertIsNone(result)
 
@@ -117,7 +126,9 @@ class TestInstagramUnansweredIntent(TestCase):
         _, created = upsert_insight(second)
 
         self.assertFalse(created)
-        saved = Insight.objects.get(account=self.account, type="instagram_unanswered_intent")
+        saved = Insight.objects.get(
+            account=self.account, type="instagram_unanswered_intent"
+        )
         self.assertEqual(saved.evidence_count, 2)
 
     # IG-06

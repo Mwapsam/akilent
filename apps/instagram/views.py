@@ -7,6 +7,7 @@ Responsibilities:
 
 The view does nothing else. All business logic is in tasks.py → services/.
 """
+
 import hashlib
 import hmac
 import json
@@ -35,9 +36,7 @@ def _verify_signature(request, access_token: str) -> bool:
     if not signature_header.startswith("sha256="):
         return False
     received = signature_header[7:]
-    expected = hmac.new(
-        access_token.encode(), request.body, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(access_token.encode(), request.body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(received, expected)
 
 
@@ -58,7 +57,9 @@ def _classify_event(payload: dict) -> str:
     return WebhookEventLog.EventType.UNKNOWN
 
 
-def _deterministic_event_id(instagram_account_id: int, payload: dict, event_type: str) -> str:
+def _deterministic_event_id(
+    instagram_account_id: int, payload: dict, event_type: str
+) -> str:
     """Build a stable idempotency key for the event."""
     try:
         entries = payload.get("entry", [])
@@ -69,12 +70,12 @@ def _deterministic_event_id(instagram_account_id: int, payload: dict, event_type
     except (KeyError, TypeError, IndexError):
         pass
     import secrets
+
     return f"{instagram_account_id}:{event_type}:{secrets.token_hex(8)}"
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class InstagramWebhookView(View):
-
     def get(self, request):
         """Meta webhook verification handshake."""
         mode = request.GET.get("hub.mode")
@@ -131,6 +132,7 @@ class InstagramWebhookView(View):
 
         # Store raw payload (idempotency enforced by unique constraint)
         from django.db import IntegrityError
+
         try:
             with transaction.atomic():
                 event = WebhookEventLog.objects.create(

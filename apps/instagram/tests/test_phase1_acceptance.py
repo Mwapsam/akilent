@@ -17,11 +17,8 @@ Each test proves one of the twelve Phase 1 acceptance criteria:
 12. WhatsApp regression — existing conversations continue to work.
 """
 
-import hashlib
-import hmac
-import json
 import secrets
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -31,11 +28,9 @@ from apps.instagram.tests.helpers import (
     dm_payload,
     make_account,
     make_instagram_account,
-    make_instagram_contact,
     signed_post,
 )
 from apps.instagram.views import InstagramWebhookView
-
 
 # ---------------------------------------------------------------------------
 # Test 1 — Webhook signature verification
@@ -190,13 +185,16 @@ class TestInboundDM(TestCase):
         self.assertTrue(ig_convo.is_open)
 
         from apps.conversations.models import ChannelConversation
+
         spine = ChannelConversation.objects.get(
             channel=Conversation.Channel.INSTAGRAM, object_id=ig_convo.pk
         ).conversation
         self.assertEqual(spine.channel, Conversation.Channel.INSTAGRAM)
         self.assertEqual(spine.contact, ig_contact.contact)
 
-        self.assertEqual(InstagramMessage.objects.filter(conversation=ig_convo).count(), 1)
+        self.assertEqual(
+            InstagramMessage.objects.filter(conversation=ig_convo).count(), 1
+        )
 
     def test_second_dm_from_same_contact_reuses_conversation(self):
         from apps.conversations.models import Conversation
@@ -211,7 +209,9 @@ class TestInboundDM(TestCase):
         for i, body in enumerate(["First message", "Second message"]):
             with patch("apps.instagram.views.process_instagram_event"):
                 payload = dm_payload(
-                    self.ig_account.page_id, igsid, body,
+                    self.ig_account.page_id,
+                    igsid,
+                    body,
                     msg_id=f"mid.{secrets.token_hex(4)}",
                     ts=base_ts + (i * 2000),  # distinct second-level timestamps
                 )
@@ -225,8 +225,8 @@ class TestInboundDM(TestCase):
     def test_tenant_isolation(self):
         """A DM for account A is never visible to account B."""
         from apps.conversations.models import Conversation
-        from apps.instagram.tasks import process_instagram_event
         from apps.instagram.models.webhook import WebhookEventLog
+        from apps.instagram.tasks import process_instagram_event
 
         account_b, _ = make_account()
         make_instagram_account(account_b)
@@ -242,9 +242,7 @@ class TestInboundDM(TestCase):
 
         # Account B should have zero Instagram conversations
         self.assertEqual(
-            Conversation.objects.filter(
-                account=account_b, channel="instagram"
-            ).count(),
+            Conversation.objects.filter(account=account_b, channel="instagram").count(),
             0,
         )
 
@@ -265,12 +263,16 @@ class TestOutboundIdempotency(TestCase):
 
         key = f"test:{secrets.token_hex(8)}"
         msg1 = enqueue_reply(
-            self.ig_account, "igsid_xyz", "Hello",
+            self.ig_account,
+            "igsid_xyz",
+            "Hello",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=key,
         )
         msg2 = enqueue_reply(
-            self.ig_account, "igsid_xyz", "Hello",
+            self.ig_account,
+            "igsid_xyz",
+            "Hello",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=key,
         )
@@ -284,7 +286,9 @@ class TestOutboundIdempotency(TestCase):
 
         key = f"test:{secrets.token_hex(8)}"
         outbound = enqueue_reply(
-            self.ig_account, "igsid_resend", "Hi",
+            self.ig_account,
+            "igsid_resend",
+            "Hi",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=key,
         )
@@ -316,7 +320,9 @@ class TestSendEligibility(TestCase):
         from apps.instagram.services.outbound import enqueue_reply, send_outbound
 
         outbound = enqueue_reply(
-            self.ig_account, "igsid_blocked", "Hi",
+            self.ig_account,
+            "igsid_blocked",
+            "Hi",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=f"test:{secrets.token_hex(8)}",
         )
@@ -352,9 +358,7 @@ class TestBuyingIntentProposal(TestCase):
 
         # "How much does it cost?" contains a buying-intent phrase
         igsid = f"igsid_{secrets.token_hex(4)}"
-        payload = dm_payload(
-            self.ig_account.page_id, igsid, "How much does it cost?"
-        )
+        payload = dm_payload(self.ig_account.page_id, igsid, "How much does it cost?")
         view = InstagramWebhookView.as_view()
         with patch("apps.instagram.views.process_instagram_event"):
             view(signed_post(payload))
@@ -380,7 +384,9 @@ class TestBuyingIntentProposal(TestCase):
         for i, body in enumerate(["How much?", "What is the price?"]):
             with patch("apps.instagram.views.process_instagram_event"):
                 payload = dm_payload(
-                    self.ig_account.page_id, igsid, body,
+                    self.ig_account.page_id,
+                    igsid,
+                    body,
                     msg_id=f"mid.{secrets.token_hex(4)}",
                     ts=base_ts + (i * 2000),
                 )
@@ -463,7 +469,9 @@ class TestStaffConfirmedLead(TestCase):
         proposal = AIProposal.objects.filter(
             account=self.account, action="purchase_intent"
         ).first()
-        spine = Conversation.objects.filter(account=self.account, channel="instagram").first()
+        spine = Conversation.objects.filter(
+            account=self.account, channel="instagram"
+        ).first()
         return proposal, spine
 
     def test_staff_confirm_creates_one_lead(self):
@@ -503,7 +511,7 @@ class TestStaffConfirmedLead(TestCase):
         )
 
         # The Lead model enforces at most one open lead per contact per account
-        from django.db import IntegrityError, transaction
+        from django.db import transaction
 
         try:
             with transaction.atomic():
@@ -627,7 +635,9 @@ class TestOutboundFailureHandling(TestCase):
         from apps.instagram.services.outbound import enqueue_reply, send_outbound
 
         outbound = enqueue_reply(
-            self.ig_account, "igsid_err", "Hi",
+            self.ig_account,
+            "igsid_err",
+            "Hi",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=f"test:{secrets.token_hex(8)}",
         )
@@ -635,7 +645,9 @@ class TestOutboundFailureHandling(TestCase):
         with patch(
             "apps.instagram.providers.meta.MetaInstagramProvider"
         ) as MockProvider:
-            MockProvider.return_value.can_send.return_value = EligibilityResult(eligible=True)
+            MockProvider.return_value.can_send.return_value = EligibilityResult(
+                eligible=True
+            )
             MockProvider.return_value.send_message.return_value = SendResult(
                 success=False, error="rate_limited", terminal=False
             )
@@ -654,7 +666,9 @@ class TestOutboundFailureHandling(TestCase):
         from apps.instagram.services.outbound import enqueue_reply, send_outbound
 
         outbound = enqueue_reply(
-            self.ig_account, "igsid_perm", "Hi",
+            self.ig_account,
+            "igsid_perm",
+            "Hi",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=f"test:{secrets.token_hex(8)}",
         )
@@ -662,7 +676,9 @@ class TestOutboundFailureHandling(TestCase):
         with patch(
             "apps.instagram.providers.meta.MetaInstagramProvider"
         ) as MockProvider:
-            MockProvider.return_value.can_send.return_value = EligibilityResult(eligible=True)
+            MockProvider.return_value.can_send.return_value = EligibilityResult(
+                eligible=True
+            )
             MockProvider.return_value.send_message.return_value = SendResult(
                 success=False, error="token_invalid", terminal=True
             )
@@ -720,7 +736,9 @@ class TestWhatsAppRegression(TestCase):
         from apps.whatsapp.models.conversation import Conversation as WAConversation
 
         # WhatsApp side
-        wa_contact_model = Contact.objects.create(account=self.account, source="whatsapp")
+        wa_contact_model = Contact.objects.create(
+            account=self.account, source="whatsapp"
+        )
         wa_contact = WhatsAppContact.objects.create(
             account=self.account,
             phone_number="+260971000077",
@@ -739,7 +757,9 @@ class TestWhatsAppRegression(TestCase):
             verify_token="tok",
             is_active=True,
         )
-        ig_contact_model = Contact.objects.create(account=self.account, source="instagram")
+        ig_contact_model = Contact.objects.create(
+            account=self.account, source="instagram"
+        )
         ig_contact = InstagramContact.objects.create(
             account=self.account,
             instagram_scoped_id="igsid_777",

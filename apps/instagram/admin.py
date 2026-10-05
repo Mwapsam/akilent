@@ -17,15 +17,31 @@ from .models import (
 
 @admin.register(InstagramBusinessAccount)
 class InstagramBusinessAccountAdmin(admin.ModelAdmin):
-    list_display = ["account", "username", "instagram_business_account_id", "is_active", "token_expired"]
+    list_display = [
+        "account",
+        "username",
+        "instagram_business_account_id",
+        "is_active",
+        "token_expired",
+    ]
     list_filter = ["is_active", "token_expired"]
-    search_fields = ["account__company_name", "username", "instagram_business_account_id"]
+    search_fields = [
+        "account__company_name",
+        "username",
+        "instagram_business_account_id",
+    ]
     readonly_fields = ["created_at", "updated_at", "webhook_subscribed_at"]
 
 
 @admin.register(InstagramContact)
 class InstagramContactAdmin(admin.ModelAdmin):
-    list_display = ["instagram_scoped_id", "username", "account", "contact", "opted_out"]
+    list_display = [
+        "instagram_scoped_id",
+        "username",
+        "account",
+        "contact",
+        "opted_out",
+    ]
     list_filter = ["opted_out", "messaging_eligible"]
     search_fields = ["instagram_scoped_id", "username", "name"]
     raw_id_fields = ["contact"]
@@ -33,14 +49,25 @@ class InstagramContactAdmin(admin.ModelAdmin):
 
 @admin.register(InstagramConversation)
 class InstagramConversationAdmin(admin.ModelAdmin):
-    list_display = ["instagram_contact", "instagram_account", "is_open", "last_message_at"]
+    list_display = [
+        "instagram_contact",
+        "instagram_account",
+        "is_open",
+        "last_message_at",
+    ]
     list_filter = ["is_open"]
     raw_id_fields = ["instagram_contact", "instagram_account"]
 
 
 @admin.register(CommentThread)
 class CommentThreadAdmin(admin.ModelAdmin):
-    list_display = ["comment_id", "instagram_contact", "post_type", "intent", "received_at"]
+    list_display = [
+        "comment_id",
+        "instagram_contact",
+        "post_type",
+        "intent",
+        "received_at",
+    ]
     list_filter = ["post_type"]
     search_fields = ["comment_id", "body", "intent"]
     raw_id_fields = ["instagram_contact", "instagram_account", "conversation"]
@@ -48,7 +75,13 @@ class CommentThreadAdmin(admin.ModelAdmin):
 
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ["comment_id", "thread", "direction", "moderation_state", "timestamp"]
+    list_display = [
+        "comment_id",
+        "thread",
+        "direction",
+        "moderation_state",
+        "timestamp",
+    ]
     list_filter = ["direction", "moderation_state"]
     raw_id_fields = ["thread", "instagram_contact"]
 
@@ -63,7 +96,13 @@ class InstagramMessageAdmin(admin.ModelAdmin):
 
 @admin.register(OutboundMessage)
 class OutboundMessageAdmin(admin.ModelAdmin):
-    list_display = ["recipient_igsid", "action_type", "status", "attempts", "created_at"]
+    list_display = [
+        "recipient_igsid",
+        "action_type",
+        "status",
+        "attempts",
+        "created_at",
+    ]
     list_filter = ["status", "action_type"]
     search_fields = ["recipient_igsid", "idempotency_key"]
     readonly_fields = ["created_at", "updated_at", "sent_at"]
@@ -86,7 +125,15 @@ class CommentTriggerAdmin(admin.ModelAdmin):
 
 @admin.register(ModerationRule)
 class ModerationRuleAdmin(admin.ModelAdmin):
-    list_display = ["name", "account", "match_type", "moderation_action", "automation_trigger", "priority", "is_active"]
+    list_display = [
+        "name",
+        "account",
+        "match_type",
+        "moderation_action",
+        "automation_trigger",
+        "priority",
+        "is_active",
+    ]
     list_filter = ["match_type", "moderation_action", "automation_trigger", "is_active"]
     search_fields = ["name", "keywords"]
     raw_id_fields = ["account"]
@@ -94,7 +141,13 @@ class ModerationRuleAdmin(admin.ModelAdmin):
 
 @admin.register(ModerationLog)
 class ModerationLogAdmin(admin.ModelAdmin):
-    list_display = ["comment", "moderation_action", "automation_trigger", "outcome", "occurred_at"]
+    list_display = [
+        "comment",
+        "moderation_action",
+        "automation_trigger",
+        "outcome",
+        "occurred_at",
+    ]
     list_filter = ["moderation_action", "automation_trigger", "outcome"]
     raw_id_fields = ["account", "rule", "comment", "acted_by"]
     readonly_fields = ["occurred_at"]

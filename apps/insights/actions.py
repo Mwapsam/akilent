@@ -14,12 +14,16 @@ This module is the bridge between the intelligence layer (insights) and the
 action layer (conversations, DMs, leads, orders).  It never creates business
 objects — callers do that — but it wires provenance and records measurements.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from apps.insights.models import Insight
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +51,8 @@ def execute_recommendation(
 
     Idempotent: calling twice with the same conversation is a no-op.
     """
-    from apps.insights.models import RecommendationLog
     from apps.conversations.models import ConversationAttribution
+    from apps.insights.models import RecommendationLog
 
     if rec_log.conversation_id is not None:
         return  # already executed
@@ -58,7 +62,9 @@ def execute_recommendation(
     rec_log.action_type = action_type
     rec_log.conversation = conversation
     rec_log.acted_at = timezone.now()
-    rec_log.save(update_fields=["status", "accepted", "action_type", "conversation", "acted_at"])
+    rec_log.save(
+        update_fields=["status", "accepted", "action_type", "conversation", "acted_at"]
+    )
 
     # Back-fill provenance on any attribution rows that already exist for this
     # conversation (rare at execute time, but possible on replay).
@@ -82,7 +88,9 @@ def record_outcome_signal(
     ``outcome_measured_at`` is set to now() on the first signal recorded.
     """
     if signal not in OUTCOME_SIGNAL_ORDER:
-        raise ValueError(f"Unknown outcome signal: {signal!r}. Must be one of {OUTCOME_SIGNAL_ORDER}")
+        raise ValueError(
+            f"Unknown outcome signal: {signal!r}. Must be one of {OUTCOME_SIGNAL_ORDER}"
+        )
 
     signals = dict(rec_log.outcome_summary)
     if signals.get(signal):
@@ -122,7 +130,7 @@ def attach_attribution_provenance(attribution, rec_log) -> None:
     attribution.originated_from_id = rec_log.pk
 
 
-def insight_for_order(order) -> "Insight | None":
+def insight_for_order(order) -> Insight | None:
     """Return the Insight that originated the conversation leading to this order, if any.
 
     Traverses: Order → ConversationAttribution → RecommendationLog → Insight

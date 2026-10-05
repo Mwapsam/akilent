@@ -202,6 +202,10 @@ ignore = [
     "S107",
     # Exception chaining less critical in test helpers
     "B904",
+    # MockProvider is idiomatic for @patch test arguments — PEP 8 lowercase not enforced
+    "N803",
+    # En-dashes in test section comment headers are intentional
+    "RUF003",
     # Mock/stub class names are intentionally lowercase
     "N801",
     "N802",

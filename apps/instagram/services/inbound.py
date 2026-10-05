@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone as dt_timezone
+from datetime import UTC, datetime
 
 from django.utils import timezone
 
@@ -27,6 +27,9 @@ def handle_dm(event: WebhookEventLog) -> None:
     """
     payload = event.raw_payload
     instagram_account = event.instagram_account
+    if instagram_account is None:
+        logger.error("handle_dm: event %s has no instagram_account", event.pk)
+        return
 
     try:
         messaging = _extract_dm_messaging(payload)
@@ -41,13 +44,12 @@ def handle_dm(event: WebhookEventLog) -> None:
         raise
 
 
-def _process_dm_entry(
-    instagram_account: InstagramBusinessAccount, entry: dict
-) -> None:
+def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) -> None:
     from apps.instagram.services.contacts import resolve_or_create_contact
-    from apps.instagram.services.conversations import get_or_create_instagram_conversation
+    from apps.instagram.services.conversations import (
+        get_or_create_instagram_conversation,
+    )
     from apps.instagram.services.intent import evaluate_intent
-    from apps.core.events import MessageReceived, dispatcher
 
     sender = entry.get("sender", {})
     igsid = sender.get("id", "")
@@ -58,7 +60,9 @@ def _process_dm_entry(
     message_id = message.get("mid", "")
     body = message.get("text", "")
     ts_ms = entry.get("timestamp", 0)
-    timestamp = datetime.fromtimestamp(ts_ms / 1000, tz=dt_timezone.utc) if ts_ms else timezone.now()
+    timestamp = (
+        datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else timezone.now()
+    )
 
     # 1. Resolve channel identity → canonical Contact
     ig_contact = resolve_or_create_contact(instagram_account, igsid)
@@ -83,6 +87,7 @@ def _process_dm_entry(
 
     # 4. Project onto the canonical spine (Message + Event + workflow enrollment)
     from apps.conversations.services import record_inbound_instagram_message
+
     record_inbound_instagram_message(
         contact=ig_contact.contact,
         instagram_conversation=ig_convo,
@@ -113,6 +118,9 @@ def handle_comment(event: WebhookEventLog) -> None:
     """
     payload = event.raw_payload
     instagram_account = event.instagram_account
+    if instagram_account is None:
+        logger.error("handle_comment: event %s has no instagram_account", event.pk)
+        return
 
     try:
         comment_entries = _extract_comment_entries(payload)
@@ -126,8 +134,8 @@ def handle_comment(event: WebhookEventLog) -> None:
 def _process_comment_entry(
     instagram_account: InstagramBusinessAccount, entry: dict
 ) -> None:
-    from apps.instagram.services.contacts import resolve_or_create_contact
     from apps.conversations.intent import detect_buying_intent
+    from apps.instagram.services.contacts import resolve_or_create_contact
 
     commenter = entry.get("from", {})
     igsid = commenter.get("id", "")
@@ -183,11 +191,13 @@ def _process_comment_entry(
     comment_obj = Comment.objects.filter(thread=thread, comment_id=comment_id).first()
     if comment_obj:
         from apps.instagram.services.moderation import moderate_comment
+
         moderate_comment(comment_obj)
 
     # Evaluate CommentTriggers (Phase 3) — root comments only; triggers open a DM.
     if not parent_id and body:
         from apps.instagram.services.triggers import evaluate_triggers
+
         evaluate_triggers(thread, body)
 
     # Detect buying intent on root comments only

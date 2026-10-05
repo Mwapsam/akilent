@@ -53,12 +53,8 @@ class InstagramMessage(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(
-                        conversation__isnull=False, comment_thread__isnull=True
-                    )
-                    | models.Q(
-                        conversation__isnull=True, comment_thread__isnull=False
-                    )
+                    models.Q(conversation__isnull=False, comment_thread__isnull=True)
+                    | models.Q(conversation__isnull=True, comment_thread__isnull=False)
                 ),
                 name="instagram_message_exactly_one_parent",
             ),
@@ -146,9 +142,7 @@ class OutboundMessage(models.Model):
             self.next_attempt_at = timezone.now() + timedelta(
                 minutes=2 ** (self.attempts - 1)
             )
-        self.save(
-            update_fields=["attempts", "last_error", "status", "next_attempt_at"]
-        )
+        self.save(update_fields=["attempts", "last_error", "status", "next_attempt_at"])
 
     def __str__(self):
         return f"-> {self.recipient_igsid} [{self.status}]"

@@ -12,11 +12,11 @@ Invariants:
   - The Instagram conversation is only created AFTER the Meta API call succeeds.
   - On API failure the OutboundMessage stays FAILED; no conversation is created.
 """
+
 from __future__ import annotations
 
 import logging
 
-from django.db import transaction
 from django.utils import timezone
 
 from apps.instagram.models.comment import CommentThread
@@ -50,9 +50,9 @@ def evaluate_triggers(thread: CommentThread, body: str) -> bool:
         return False
 
     account = thread.instagram_account.account
-    triggers = CommentTrigger.objects.filter(
-        account=account, is_active=True
-    ).order_by("priority", "created_at")
+    triggers = CommentTrigger.objects.filter(account=account, is_active=True).order_by(
+        "priority", "created_at"
+    )
 
     for trigger in triggers:
         if _trigger_matches(trigger, body):
@@ -79,6 +79,7 @@ def _trigger_matches(trigger: CommentTrigger, body: str) -> bool:
 
     if match_type == CommentTrigger.MatchType.BUYING_INTENT:
         from apps.conversations.intent import detect_buying_intent
+
         return bool(detect_buying_intent(body))
 
     return False
@@ -108,12 +109,10 @@ def _fire_trigger(thread: CommentThread, trigger: CommentTrigger) -> None:
     body = trigger.render_reply(username)
 
     # Deterministic idempotency key: one outbox record per comment thread.
-    idempotency_key = (
-        f"private_reply:{ig_account.pk}:{thread.comment_id}"
-    )
+    idempotency_key = f"private_reply:{ig_account.pk}:{thread.comment_id}"
 
-    from apps.instagram.services.outbound import enqueue_reply
     from apps.instagram.models.message import OutboundMessage
+    from apps.instagram.services.outbound import enqueue_reply
 
     outbound = enqueue_reply(
         ig_account,
@@ -166,16 +165,16 @@ def _claim_trigger(thread: CommentThread) -> bool:
     return False
 
 
-def _ensure_conversation(
-    thread: CommentThread, ig_contact
-) -> None:
+def _ensure_conversation(thread: CommentThread, ig_contact) -> None:
     """
     Open/retrieve the InstagramConversation + spine for this contact and link
     it to the CommentThread if not already linked.
     """
-    from apps.instagram.services.conversations import get_or_create_instagram_conversation
+    from apps.instagram.services.conversations import (
+        get_or_create_instagram_conversation,
+    )
 
-    ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
+    _ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
 
     if thread.conversation_id != spine.pk:
         CommentThread.objects.filter(pk=thread.pk).update(conversation=spine)

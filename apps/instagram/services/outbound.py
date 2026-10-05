@@ -54,14 +54,18 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         return True  # already sent — idempotent
 
     instagram_account = outbound.instagram_account
+    if not instagram_account.access_token:
+        logger.error(
+            "send_outbound: instagram_account %s has no access_token",
+            instagram_account.pk,
+        )
+        return False
     provider = MetaInstagramProvider(
         access_token=instagram_account.access_token,
         instagram_account_id=instagram_account.instagram_business_account_id,
     )
 
-    eligibility = provider.can_send(
-        outbound.recipient_igsid, outbound.action_type
-    )
+    eligibility = provider.can_send(outbound.recipient_igsid, outbound.action_type)
     if not eligibility.eligible:
         outbound.mark_failed(
             f"Not eligible to send: {eligibility.reason}", terminal=True
@@ -81,6 +85,5 @@ def send_outbound(outbound: OutboundMessage) -> bool:
     if result.success:
         outbound.mark_sent(result.provider_message_id)
         return True
-    else:
-        outbound.mark_failed(result.error, terminal=result.terminal)
-        return False
+    outbound.mark_failed(result.error, terminal=result.terminal)
+    return False
