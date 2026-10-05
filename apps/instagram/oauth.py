@@ -120,20 +120,31 @@ def discover_instagram_account(access_token: str) -> dict:
 
     Raises InstagramOAuthError if the /me call fails or returns no ID.
     """
+    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    # Meta requires access_token as a query param (not Authorization header) and a versioned URL.
+    # user_id is the actual IG account ID used in webhooks; id is the app-scoped ID.
     resp = requests.get(
-        f"{GRAPH_IG}/me",
-        params={"fields": "id,name,username"},
-        headers={"Authorization": f"Bearer {access_token}"},
+        f"{GRAPH_IG}/{version}/me",
+        params={
+            "fields": "id,user_id,name,username",
+            "access_token": access_token,
+        },
         timeout=_TIMEOUT,
     )
     data = resp.json() if resp.content else {}
-    if resp.status_code != 200 or not data.get("id"):
+    if resp.status_code != 200:
         raise InstagramOAuthError(
             (data.get("error") or {}).get("message")
             or f"Could not retrieve Instagram account ({resp.status_code})"
         )
+    # user_id is the webhook-relevant IG Business Account ID; fall back to app-scoped id
+    ig_id = data.get("user_id") or data.get("id")
+    if not ig_id:
+        raise InstagramOAuthError(
+            f"Could not retrieve Instagram account ID ({resp.status_code}): {data}"
+        )
     return {
-        "instagram_business_account_id": data["id"],
+        "instagram_business_account_id": ig_id,
         "name": data.get("name", ""),
         "username": data.get("username", ""),
         "page_id": "",
