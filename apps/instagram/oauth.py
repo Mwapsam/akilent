@@ -91,15 +91,16 @@ def get_long_lived_token(short_lived_token: str) -> str:
     """
     if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
         return short_lived_token
-    resp = requests.get(
+    resp = requests.post(
         f"{GRAPH_IG}/access_token",
-        params={
+        data={
             "grant_type": "ig_exchange_token",
             "client_id": settings.INSTAGRAM_APP_ID,
             "client_secret": settings.INSTAGRAM_APP_SECRET,
             "access_token": short_lived_token,
         },
         timeout=_TIMEOUT,
+        allow_redirects=False,
     )
     data = resp.json() if resp.content else {}
     if resp.status_code == 200 and "access_token" in data:
@@ -123,7 +124,8 @@ def discover_instagram_account(access_token: str) -> dict:
     """
     resp = requests.get(
         f"{GRAPH_IG}/me",
-        params={"fields": "id,name,username", "access_token": access_token},
+        params={"fields": "id,name,username"},
+        headers={"Authorization": f"Bearer {access_token}"},
         timeout=_TIMEOUT,
     )
     data = resp.json() if resp.content else {}
