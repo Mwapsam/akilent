@@ -21,6 +21,37 @@
     <a href="{% url 'contacts:detail' order.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 
+  {% if origin_insight %}
+  <section class="card card-pad text-sm lg:col-span-3 space-y-3">
+    <h2 class="text-base font-semibold text-ink">Customer journey</h2>
+    <div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+      <span class="badge badge-neutral">{{ origin_insight.type|title }}</span>
+      <span>→</span>
+      <span class="badge badge-neutral">Opportunity</span>
+      <span>→</span>
+      <span class="badge badge-neutral">{% include "components/channel_tag.html" with channel=order.contact.source compact=True %} DM</span>
+      <span>→</span>
+      <span class="badge badge-neutral">Conversation</span>
+      <span>→</span>
+      <span class="badge badge-neutral">Lead</span>
+      <span>→</span>
+      <span class="badge badge-success">Order</span>
+    </div>
+    <div class="pt-2 border-t border-border space-y-1">
+      <p class="text-gray-500">Attribution</p>
+      <p>
+        <span class="text-gray-500">Originated from:</span>
+        <a href="{% url 'insights' %}#insight-{{ origin_insight.pk }}" class="font-medium text-ink underline">{{ origin_insight.title }}</a>
+      </p>
+      <p>
+        <span class="text-gray-500">Attributed revenue:</span>
+        <span class="font-medium text-ink">{{ order.currency }} {{ order.total }}</span>
+      </p>
+    </div>
+    <p class="text-xs text-gray-400">ⓘ Attribution shows provenance, not proof of causation.</p>
+  </section>
+  {% endif %}
+
   <section class="lg:col-span-2 space-y-6">
     <div class="card card-pad">
       <h2 class="text-lg font-semibold text-ink mb-3">Items</h2>

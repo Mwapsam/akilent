@@ -118,6 +118,18 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
         {% endfor %}
       </div>
       {% endif %}
+
+      {% with rec=insight.accepted_recs.0 %}
+      {% if rec %}
+      <div class="mt-3 pt-3 border-t border-border text-xs text-gray-500 space-y-0.5">
+        <p>✓ Contacted {% if rec.acted_at %}<span class="text-gray-400">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}</p>
+        {% if rec.outcome_summary.lead_created_at %}<p>Lead created</p>{% endif %}
+        {% if rec.outcome_summary.order_paid_at %}
+        <p>Order paid{% if rec.outcome_summary.revenue %} · <span class="font-medium text-ink">{{ rec.outcome_summary.currency }} {{ rec.outcome_summary.revenue }}</span>{% endif %}</p>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endwith %}
     </li>
     {% endfor %}
   </ul>

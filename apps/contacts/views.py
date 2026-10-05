@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from django.contrib import messages
@@ -32,7 +33,31 @@ from apps.contacts.services import (
 from apps.core.htmx import is_background
 from apps.email.models import EmailMessage
 
+logger = logging.getLogger(__name__)
+
 _PAGE_SIZE = 50
+
+
+def _contact_recommendations(contact):
+    """Return recent RecommendationLogs involving this contact (via their conversations).
+
+    Labelled 'recommendations involving this contact' — not 'insights' — because
+    these are derived through the RecommendationLog relationship, not directly
+    from a contact-scoped Insight.
+    """
+    try:
+        from apps.insights.models import RecommendationLog
+
+        return list(
+            RecommendationLog.objects.filter(
+                conversation__contact=contact,
+            )
+            .select_related("insight")
+            .order_by("-recommended_at")[:3]
+        )
+    except Exception:
+        logger.debug("_contact_recommendations unavailable for contact=%s", contact.pk)
+        return []
 
 
 @login_required
@@ -108,6 +133,8 @@ def contact_detail(request, public_id: str):
         for k, v in (contact.attributes or {}).items()
         if v not in (None, "")
     )
+    contact_recs = _contact_recommendations(contact)
+
     return render(
         request,
         "contacts/detail.html",
@@ -120,6 +147,7 @@ def contact_detail(request, public_id: str):
             "attribute_rows": attribute_rows,
             "contact_tags": contact.tags.all(),
             "known_tags": Tag.objects.filter(account=account),
+            "contact_recs": contact_recs,
         },
     )
 

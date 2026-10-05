@@ -77,6 +77,7 @@ def create_lead(
         subject_id=lead.public_id,
         payload={"contact_id": contact.public_id, "source": source},
     )
+    _record_lead_outcome_signal(lead, conversation)
     _dispatch_legacy_lead_created(account, lead)
     # A lead opened from a conversation carries it, so a workflow can act in that thread
     # (assign it, tell the team) rather than guessing which conversation was meant.
@@ -269,6 +270,31 @@ def _dispatch_legacy_deal_stage_changed(account, deal: Deal, stage: Stage) -> No
         logger.exception(
             "_dispatch_legacy_deal_stage_changed failed for deal=%s", deal.pk
         )
+
+
+def _record_lead_outcome_signal(lead, conversation) -> None:
+    """Record lead_created_at on any RecommendationLog originating this conversation.
+
+    Only fires when the lead has a deterministic provenance path:
+      lead.conversation → RecommendationLog.conversation
+    All other Lead creation paths (admin, import, API) have no provenance and
+    are intentionally left untouched.
+    """
+    if conversation is None:
+        return
+    try:
+        from apps.insights.actions import record_outcome_signal
+        from apps.insights.models import RecommendationLog
+
+        rec_log = (
+            RecommendationLog.objects.filter(conversation=conversation)
+            .order_by("-acted_at")
+            .first()
+        )
+        if rec_log is not None:
+            record_outcome_signal(rec_log, "lead_created_at")
+    except Exception:
+        logger.exception("_record_lead_outcome_signal failed for lead=%s", lead.pk)
 
 
 def _enroll_workflows(account, trigger_type: str, contact, context: dict) -> None:

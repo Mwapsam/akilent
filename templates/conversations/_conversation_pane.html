@@ -252,6 +252,34 @@
   }
 
   @media (prefers-reduced-motion: reduce) { .cv-inputwrap, .cv-send { transition: none; } }
+
+  /* Instagram channel — soft gradient background, white bubbles both directions */
+  {% if conversation.channel == "instagram" %}
+  .cv {
+    --cv-wallpaper: #fafafa;
+    --cv-in-bg: #ffffff;
+    --cv-in-fg: #111827;
+    --cv-out-bg: #f0e6ff;
+    --cv-out-fg: #111827;
+    --cv-accent: #c13584;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cv {
+      --cv-wallpaper: #1a1a2e;
+      --cv-in-bg: #16213e;
+      --cv-in-fg: #e5e7eb;
+      --cv-out-bg: #4a2060;
+      --cv-out-fg: #e5e7eb;
+    }
+  }
+  :root[data-theme="dark"] .cv {
+    --cv-wallpaper: #1a1a2e;
+    --cv-in-bg: #16213e;
+    --cv-in-fg: #e5e7eb;
+    --cv-out-bg: #4a2060;
+    --cv-out-fg: #e5e7eb;
+  }
+  {% endif %}
 </style>
 
 <div class="cv-wrap">
@@ -687,6 +715,11 @@
         {% endfor %}
         {% if automation_activity %}<a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" class="text-xs underline text-gray-500">Why didn't it reply?</a>{% endif %}
       </div>
+
+      {# Recommended action — shown when there is an actionable recommendation for this conversation #}
+      {% if active_recommendation %}
+        {% include "conversations/_recommendation_context.html" with rec=active_recommendation conversation=conversation %}
+      {% endif %}
 
       {# Tags #}
       <div class="cv-section">

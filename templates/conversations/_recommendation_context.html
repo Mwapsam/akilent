@@ -1,0 +1,78 @@
+{% comment %}
+Recommended action block — shown in the conversation sidebar when an actionable
+RecommendationLog exists for this conversation.
+
+Context variables:
+  rec         — RecommendationLog instance (with .insight prefetched)
+  conversation — the current Conversation spine
+
+Severity colours mirror the Insight card pattern in templates/insights/_intelligence.html.
+{% endcomment %}
+<div class="cv-section" id="recommendation-context-{{ rec.pk }}">
+  <h2 class="cv-h">💡 Recommended action</h2>
+
+  {% with insight=rec.insight %}
+  <div class="rounded-lg border-l-4 {% if insight.severity == 'urgent' %}tone-coral-border{% elif insight.severity == 'warning' %}tone-amber-border{% else %}tone-teal-border{% endif %} px-3 py-2.5 text-sm bg-surface-muted">
+
+    {% if insight %}
+    <p class="font-medium text-ink mb-0.5">{{ insight.title }}</p>
+    {% if insight.evidence_count %}
+    <p class="text-xs text-gray-500 mb-2">
+      {{ insight.evidence_count }} signal{{ insight.evidence_count|pluralize }}
+      {% if insight.evidence.period_days %} · last {{ insight.evidence.period_days }} days{% endif %}
+    </p>
+    {% endif %}
+    {% endif %}
+
+    {% if rec.status == "presented" %}
+      <p class="text-gray-600 mb-3">{{ insight.suggested_action.label|default:"Start a conversation with this customer." }}</p>
+      <form method="post"
+            action="{% url 'conversations:recommendation-act' rec.pk %}"
+            hx-post="{% url 'conversations:recommendation-act' rec.pk %}"
+            hx-target="#recommendation-context-{{ rec.pk }}"
+            hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="conversation_id" value="{{ conversation.pk }}">
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 transition-colors">
+          {% if conversation.channel == "instagram" %}
+            {% include "components/icon.html" with name="instagram" class="w-3.5 h-3.5" %}Send DM
+          {% elif conversation.channel == "whatsapp" %}
+            {% include "components/icon.html" with name="message-circle" class="w-3.5 h-3.5" %}Send WhatsApp
+          {% else %}
+            {% include "components/icon.html" with name="send" class="w-3.5 h-3.5" %}Send message
+          {% endif %}
+        </button>
+      </form>
+
+    {% elif rec.status == "accepted" %}
+      <p class="text-xs text-gray-500 mb-1">
+        ✓ Contacted
+        {% if rec.acted_at %}<span class="text-gray-400">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}
+      </p>
+      {% with signals=rec.outcome_summary %}
+        {% if signals.lead_created_at %}
+        <p class="text-xs text-gray-500">Lead created</p>
+        {% endif %}
+        {% if signals.order_paid_at %}
+        <p class="text-xs text-gray-500">
+          Order paid
+          {% if signals.revenue %}<span class="font-medium text-ink">· {{ signals.currency|default:"" }} {{ signals.revenue }}</span>{% endif %}
+        </p>
+        {% endif %}
+      {% endwith %}
+
+    {% elif rec.status == "dismissed" %}
+      <p class="text-xs text-gray-400">Dismissed</p>
+    {% endif %}
+
+    {% if insight %}
+    <a href="{% url 'insights' %}#insight-{{ insight.pk }}"
+       class="mt-2 inline-block text-xs text-ink-muted hover:text-ink underline">
+      View insight →
+    </a>
+    {% endif %}
+
+  </div>
+  {% endwith %}
+</div>

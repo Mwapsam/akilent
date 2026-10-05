@@ -963,6 +963,7 @@
   .channel-tag[data-channel="email"] { color: var(--tone-amber-fg); }
   .channel-tag[data-channel="whatsapp"] { color: var(--tone-teal-fg); }
   .channel-tag[data-channel="sms"] { color: var(--tone-info-fg); }
+  .channel-tag[data-channel="instagram"] { color: var(--tone-coral-fg); }
   /* In a list row the label goes quiet and only the icon keeps the channel
      colour: repeated on every row in full colour, "WhatsApp" was louder than
      the status badge that actually needs reading. */
@@ -971,6 +972,7 @@
   .channel-tag--compact[data-channel="email"] > svg { color: var(--tone-amber-fg); }
   .channel-tag--compact[data-channel="whatsapp"] > svg { color: var(--tone-teal-fg); }
   .channel-tag--compact[data-channel="sms"] > svg { color: var(--tone-info-fg); }
+  .channel-tag--compact[data-channel="instagram"] > svg { color: var(--tone-coral-fg); }
   .channel-tag--compact > svg { @apply w-3.5 h-3.5; }
 
   /* Copy field ---------------------------------------------------------- */

@@ -55,6 +55,25 @@
       </dl>
     </div>
     {% endif %}
+    {% if contact_recs %}
+    <div class="pt-2 border-t border-border">
+      <p class="text-gray-500 mb-2 text-sm">Recommended actions</p>
+      <ul class="space-y-2">
+        {% for rec in contact_recs %}
+        {% if rec.insight %}
+        <li class="text-sm">
+          <p class="font-medium text-ink">{{ rec.insight.title }}</p>
+          {% if rec.insight.evidence_count %}
+          <p class="text-xs text-gray-400">{{ rec.insight.evidence_count }} signal{{ rec.insight.evidence_count|pluralize }}</p>
+          {% endif %}
+          <a href="{% url 'insights' %}#insight-{{ rec.insight.pk }}"
+             class="text-xs text-gray-400 hover:text-gray-600 underline">View →</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
   </section>
 
   <section class="lg:col-span-2 card card-pad">

@@ -35,6 +35,11 @@ urlpatterns = [
     path("forms/", views.forms_list, name="forms_list"),
     path("forms/<int:pk>/", views.form_detail, name="form_detail"),
     path("forms/<int:pk>/delete/", views.form_delete, name="form_delete"),
+    path(
+        "recommendations/<int:pk>/act/",
+        views.recommendation_act,
+        name="recommendation-act",
+    ),
     path("<str:public_id>/", views.conversation_detail, name="detail"),
     path("<str:public_id>/messages/", views.messages_feed, name="messages_feed"),
     path("<str:public_id>/ai/suggest/", views.ai_suggest, name="ai_suggest"),

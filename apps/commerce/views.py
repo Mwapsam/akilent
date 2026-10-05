@@ -148,6 +148,14 @@ def order_detail(request, public_id: str):
             messages.error(request, str(exc))
         return redirect("commerce:detail", public_id=public_id)
 
+    origin_insight = None
+    try:
+        from apps.insights.actions import insight_for_order
+
+        origin_insight = insight_for_order(order)
+    except Exception:
+        pass  # insights app unavailable — panel simply won't show attribution
+
     return render(
         request,
         "commerce/order_detail.html",
@@ -156,5 +164,6 @@ def order_detail(request, public_id: str):
             "order": order,
             "items": order.items.all(),
             "payment": order.payments.order_by("-created_at").first(),
+            "origin_insight": origin_insight,
         },
     )

@@ -173,6 +173,7 @@ def mark_paid(
         f"Payment received — {order.currency} {order.total}",
         {"kind": "payment.succeeded", "order_id": order.public_id},
     )
+    _record_order_paid_outcome_signal(order)
     return order
 
 
@@ -215,6 +216,48 @@ def mark_failed(payment: Payment, *, error: str = "") -> Order:
         payload={"order_id": order.public_id, "error": error},
     )
     return order
+
+
+def _record_order_paid_outcome_signal(order) -> None:
+    """Record order_paid_at on any RecommendationLog whose Insight is attributable
+    to this order via the canonical ConversationAttribution provenance chain.
+
+    Uses insight_for_order() — the same traversal the UI uses — so the signal
+    and the display are always consistent. Safe to call multiple times;
+    record_outcome_signal() is idempotent and monotonic.
+    """
+    from apps.insights.actions import insight_for_order, record_outcome_signal
+    from apps.insights.models import RecommendationLog
+
+    # ImportError / AttributeError from the imports above are not caught here —
+    # they indicate a broken install and should propagate so they're visible.
+    try:
+        insight = insight_for_order(order)
+        if insight is None:
+            return
+        rec_log = (
+            RecommendationLog.objects.filter(
+                insight=insight, status=RecommendationLog.Status.ACCEPTED
+            )
+            .order_by("-acted_at")
+            .first()
+        )
+        if rec_log is None:
+            return
+        record_outcome_signal(
+            rec_log,
+            "order_paid_at",
+            revenue=str(order.total),
+            currency=order.currency or "",
+        )
+        # order_created_at must be recorded at order-creation time, not here —
+        # mark_paid fires after the order exists, so timestamping it to now
+        # would be wrong (and record_outcome_signal is monotonic, so a later
+        # call could silently drop it). Wire it at create_order time instead.
+    except Exception:
+        logger.exception(
+            "_record_order_paid_outcome_signal failed for order=%s", order.pk
+        )
 
 
 def _enroll_workflows(

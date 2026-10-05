@@ -15,6 +15,22 @@
     <div class="flex justify-between"><span class="text-gray-500">Where they came from</span><span>{{ lead.source|default:"—" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Looked after by</span><span>{{ lead.owner|default:"Unassigned" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">First interested</span><span>{{ lead.created_at|date:"j M Y, H:i" }}</span></div>
+    {% if lead.conversation %}
+    <div class="flex justify-between"><span class="text-gray-500">Conversation</span>
+      <a href="{% url 'conversations:detail' lead.conversation.public_id %}" class="text-accent underline">View</a>
+    </div>
+    {% endif %}
+    {% if origin_recommendation %}
+    <div class="pt-2 border-t border-border">
+      <p class="text-gray-500 mb-1">Origin</p>
+      <p class="font-medium text-ink">{{ origin_recommendation.insight.title|default:"Recommendation" }}</p>
+      {% if origin_recommendation.insight.evidence_count %}
+      <p class="text-gray-400 text-xs">{{ origin_recommendation.insight.evidence_count }} signal{{ origin_recommendation.insight.evidence_count|pluralize }}</p>
+      {% endif %}
+      <a href="{% url 'insights' %}#insight-{{ origin_recommendation.insight.pk }}"
+         class="text-xs text-gray-400 hover:text-gray-600 underline">View recommendation →</a>
+    </div>
+    {% endif %}
     <a href="{% url 'contacts:detail' lead.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 

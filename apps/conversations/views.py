@@ -600,11 +600,14 @@ def conversation_detail(request, public_id: str):
         else ConversationForm.objects.none()
     )
 
+    active_recommendation = _active_recommendation_for(conversation)
+
     pane_context = {
         "account": account,
         "now": now,
         "automation_activity": automation_activity,
         "conversation": conversation,
+        "active_recommendation": active_recommendation,
         "chat_config": chat_config,
         "snapshot": snapshot,
         "notes": conversation.notes.select_related("author"),
@@ -1099,3 +1102,99 @@ def create_ticket_from_conversation(request, public_id: str):
         logger.exception("create_ticket_from_conversation failed for %s", public_id)
         messages.error(request, "Could not create ticket. Please try again.")
         return redirect("conversations:detail", public_id=public_id)
+
+
+# ---------------------------------------------------------------------------
+# Recommendation context — Steps 2 & 3 of the Instagram intelligence UI
+# ---------------------------------------------------------------------------
+
+
+def _active_recommendation_for(conversation: Conversation):
+    """Return the most relevant RecommendationLog for the conversation sidebar.
+
+    Selection order (deterministic, no proximity-based inference):
+    1. A RecommendationLog already linked to this conversation (accepted/in-progress).
+    2. The latest presented recommendation for the contact with no conversation yet.
+    3. None — show nothing rather than guess.
+    """
+    try:
+        from apps.insights.models import RecommendationLog
+
+        # 1. Already executed against this conversation
+        linked = (
+            RecommendationLog.objects.filter(conversation=conversation)
+            .select_related("insight")
+            .order_by("-acted_at")
+            .first()
+        )
+        if linked:
+            return linked
+
+        # 2. Latest presented (not yet acted on) whose Insight evidence references
+        #    this contact's prior conversations. Since Insight has no direct contact FK
+        #    yet, we scope via RecommendationLog rows whose policy_execution ran in the
+        #    context of one of this contact's conversations (policy_execution →
+        #    conversation → contact).  Fall back to account-scope only if that join
+        #    yields nothing, so a contact with zero history still gets nothing rather
+        #    than a stranger's recommendation.
+        if conversation.contact_id:
+            contact_rec = (
+                RecommendationLog.objects.filter(
+                    account=conversation.account,
+                    status=RecommendationLog.Status.PRESENTED,
+                    conversation__isnull=True,
+                    insight__isnull=False,
+                    policy_execution__conversation__contact=conversation.contact,
+                )
+                .select_related("insight")
+                .order_by("-recommended_at")
+                .first()
+            )
+            return contact_rec  # None if no contact-scoped rec exists — show nothing
+    except Exception:
+        logger.debug("_active_recommendation_for: insights app unavailable")
+    return None
+
+
+@login_required
+@require_POST
+def recommendation_act(request, pk: int):
+    """Execute a recommendation from the conversation sidebar.
+
+    POST /inbox/recommendations/<pk>/act/
+    Payload: conversation_id (Conversation.pk)
+
+    Returns the updated _recommendation_context.html partial for HTMX swap.
+    """
+    from apps.insights.actions import execute_recommendation, record_outcome_signal
+    from apps.insights.models import RecommendationLog
+
+    account = get_current_account(request)
+    rec_log = get_object_or_404(RecommendationLog, pk=pk, account=account)
+
+    raw_cid = (request.POST.get("conversation_id") or "").strip()
+    try:
+        conversation_id = int(raw_cid)
+    except (ValueError, TypeError):
+        return HttpResponse(status=400)
+    conversation = get_object_or_404(Conversation, pk=conversation_id, account=account)
+
+    try:
+        execute_recommendation(
+            rec_log,
+            conversation=conversation,
+            action_type=rec_log.action_type or conversation.channel,
+        )
+        # Only record the signal after confirmed execution; both calls share
+        # the same try/except so a failure in either is logged and returns 500.
+        record_outcome_signal(rec_log, "dm_sent_at")
+    except Exception:
+        logger.exception("recommendation_act failed for rec_log=%s", pk)
+        return HttpResponse(status=500)
+
+    html = render_to_string(
+        "conversations/_recommendation_context.html",
+        {"rec": rec_log, "conversation": conversation},
+        request=request,
+    )
+    return HttpResponse(html)

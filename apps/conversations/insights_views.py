@@ -80,11 +80,23 @@ def insights(request):
         Insight.Severity.OPPORTUNITY: 2,
         Insight.Severity.INFO: 3,
     }
+    from django.db.models import Prefetch
+
     raw_insights = list(
         Insight.objects.filter(
             account=account,
             status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
-        ).order_by("-created_at")
+        )
+        .prefetch_related(
+            Prefetch(
+                "recommendation_logs",
+                queryset=RecommendationLog.objects.filter(
+                    status=RecommendationLog.Status.ACCEPTED
+                ).order_by("-acted_at"),
+                to_attr="accepted_recs",
+            )
+        )
+        .order_by("-created_at")
     )
     raw_insights.sort(key=lambda i: severity_order.get(i.severity, 9))
 

@@ -6,6 +6,8 @@ teaching empty states.
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -18,6 +20,38 @@ from apps.conversations import attribution
 from apps.core.actions import ActionError, run_action
 from apps.core.module_gate import module_required
 from apps.crm.models import Deal, Lead, Pipeline
+
+logger = logging.getLogger(__name__)
+
+
+def _origin_recommendation_for_lead(lead):
+    """Return the RecommendationLog that originated this Lead, or None.
+
+    Traversal: Lead → lead.conversation → ConversationAttribution.originated_from
+    → RecommendationLog → Insight.
+
+    Only returns a result when the full chain exists. Never infers by proximity
+    (contact + status + first()) — that would be wrong when a contact has multiple
+    recommendations.
+    """
+    if lead.conversation_id is None:
+        return None
+    try:
+        from apps.conversations.models import ConversationAttribution
+
+        attribution_row = (
+            ConversationAttribution.objects.filter(
+                conversation=lead.conversation, originated_from__isnull=False
+            )
+            .select_related("originated_from__insight")
+            .first()
+        )
+        if attribution_row is None:
+            return None
+        return attribution_row.originated_from
+    except Exception:
+        logger.debug("_origin_recommendation_for_lead unavailable for lead=%s", lead.pk)
+        return None
 
 
 @login_required
@@ -177,6 +211,8 @@ def lead_detail(request, public_id: str):
 
     from apps.crm.services import SETTABLE_LEAD_STATUSES
 
+    origin_recommendation = _origin_recommendation_for_lead(lead)
+
     return render(
         request,
         "crm/lead_detail.html",
@@ -184,6 +220,7 @@ def lead_detail(request, public_id: str):
             "account": account,
             "lead": lead,
             "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
+            "origin_recommendation": origin_recommendation,
         },
     )
 
