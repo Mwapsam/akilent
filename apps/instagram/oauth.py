@@ -1,0 +1,155 @@
+"""Instagram Business Login OAuth helpers.
+
+Uses Meta's Instagram Login for Business API:
+  Auth dialog:    https://www.instagram.com/oauth/authorize
+  Token exchange: https://api.instagram.com/oauth/access_token  (POST, short-lived)
+  Long-lived:     https://graph.instagram.com/access_token      (GET, 60 days)
+  Account info:   https://graph.instagram.com/me
+
+This is distinct from the Facebook Login flow used by WhatsApp.  The token
+returned here is scoped directly to the Instagram Business Account — no Facebook
+Page intermediary is required.
+"""
+
+import logging
+
+import requests
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+GRAPH_IG = "https://graph.instagram.com"
+API_IG = "https://api.instagram.com"
+_TIMEOUT = 15
+
+SCOPES = (
+    "instagram_business_basic,"
+    "instagram_business_manage_messages,"
+    "instagram_business_manage_comments,"
+    "instagram_business_content_publish,"
+    "instagram_business_manage_insights"
+)
+
+
+class InstagramOAuthError(Exception):
+    pass
+
+
+def exchange_code_for_token(code: str, redirect_uri: str) -> str:
+    """Exchange an OAuth authorization code for a short-lived Instagram access token.
+
+    Meta requires a POST (not GET) to api.instagram.com for this step.
+    ``redirect_uri`` must be byte-identical to the one used in the auth dialog.
+    """
+    if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
+        raise InstagramOAuthError(
+            "INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET must be configured."
+        )
+    resp = requests.post(
+        f"{API_IG}/oauth/access_token",
+        data={
+            "client_id": settings.INSTAGRAM_APP_ID,
+            "client_secret": settings.INSTAGRAM_APP_SECRET,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri,
+            "code": code,
+        },
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code != 200 or "access_token" not in data:
+        raise InstagramOAuthError(
+            (data.get("error_message") or "")
+            or (data.get("error") or {}).get("message")
+            or f"Token exchange failed ({resp.status_code})"
+        )
+    return data["access_token"]
+
+
+def get_long_lived_token(short_lived_token: str) -> str:
+    """Exchange a short-lived token for a long-lived one (60 days).
+
+    Returns the original token unchanged if the exchange fails, so the connect
+    flow is never blocked on this best-effort step.
+    """
+    if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
+        return short_lived_token
+    resp = requests.get(
+        f"{GRAPH_IG}/access_token",
+        params={
+            "grant_type": "ig_exchange_token",
+            "client_id": settings.INSTAGRAM_APP_ID,
+            "client_secret": settings.INSTAGRAM_APP_SECRET,
+            "access_token": short_lived_token,
+        },
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code == 200 and "access_token" in data:
+        return data["access_token"]
+    logger.warning(
+        "get_long_lived_token: failed (%s): %s", resp.status_code, resp.text[:300]
+    )
+    return short_lived_token
+
+
+def discover_instagram_account(access_token: str) -> dict:
+    """Return the Instagram Business Account linked to this token.
+
+    With Instagram Login for Business the token is scoped directly to one
+    Instagram account — no page walk is needed.  Returns a dict:
+        {instagram_business_account_id, name, username, page_id, page_access_token}
+
+    ``page_id`` is blank when not available; callers must handle that gracefully.
+
+    Raises InstagramOAuthError if the /me call fails or returns no ID.
+    """
+    resp = requests.get(
+        f"{GRAPH_IG}/me",
+        params={"fields": "id,name,username", "access_token": access_token},
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code != 200 or not data.get("id"):
+        raise InstagramOAuthError(
+            (data.get("error") or {}).get("message")
+            or f"Could not retrieve Instagram account ({resp.status_code})"
+        )
+    return {
+        "instagram_business_account_id": data["id"],
+        "name": data.get("name", ""),
+        "username": data.get("username", ""),
+        "page_id": "",
+        "page_access_token": access_token,
+    }
+
+
+def subscribe_page_to_webhooks(page_id: str, page_access_token: str) -> bool:
+    """Subscribe to Instagram webhook fields via the connected Facebook Page.
+
+    This endpoint is only reachable when the account has a linked Facebook Page
+    (``page_id`` non-empty).  When ``page_id`` is empty the subscription must be
+    configured manually in Meta's App Dashboard.
+
+    Returns True on success; False otherwise (non-blocking).
+    """
+    if not page_id:
+        logger.info(
+            "subscribe_page_to_webhooks: no page_id — skipping programmatic subscription"
+        )
+        return False
+    resp = requests.post(
+        f"https://graph.facebook.com/{page_id}/subscribed_apps",
+        headers={"Authorization": f"Bearer {page_access_token}"},
+        params={"subscribed_fields": "messages,comments,mentions,feed"},
+        timeout=_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        logger.warning(
+            "subscribe_page_to_webhooks: failed for page=%s (%s): %s",
+            page_id,
+            resp.status_code,
+            resp.text[:300],
+        )
+        return False
+    return True

@@ -8,8 +8,24 @@
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Instagram</h1>
     <p class="mt-1 text-sm text-gray-600">Connect Instagram Business Accounts to receive comments, mentions, and direct messages.</p>
   </div>
+  {% if oauth_enabled %}
+  <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm shrink-0">Connect Instagram</a>
+  {% else %}
   <a href="{% url 'instagram-account-connect' %}" class="btn btn-primary btn-sm shrink-0">Connect account</a>
+  {% endif %}
 </header>
+
+{% comment %}Setup error from a failed OAuth attempt{% endcomment %}
+{% if setup_error %}
+<div class="mb-4 card p-4 tone-coral-border border">
+  <p class="font-medium text-sm text-ink">{{ setup_error.title }}</p>
+  {% if setup_error.message %}<p class="mt-1 text-sm text-gray-600">{{ setup_error.message }}</p>{% endif %}
+  {% if setup_error.detail %}<p class="mt-1 text-xs text-gray-400 font-mono">{{ setup_error.detail }}</p>{% endif %}
+  {% if setup_error.action_url %}
+  <a href="{{ setup_error.action_url }}" class="mt-3 inline-block btn btn-secondary btn-sm">{{ setup_error.action_label }}</a>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if messages %}
 <div class="mb-4 space-y-2">
@@ -55,23 +71,6 @@
       </div>
     </div>
 
-    {% comment %}Webhook setup details{% endcomment %}
-    <div class="mt-4 pt-4 border-t border-border text-sm space-y-2">
-      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Webhook setup</p>
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs text-gray-500">Callback URL</span>
-        <code class="text-xs font-mono bg-canvas px-2 py-0.5 rounded text-ink break-all">{{ webhook_url_hint }}</code>
-      </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs text-gray-500">Verify token</span>
-        <code class="text-xs font-mono bg-canvas px-2 py-0.5 rounded text-ink break-all">{{ iba.verify_token }}</code>
-      </div>
-      {% if iba.webhook_subscribed_at %}
-      <p class="text-xs text-emerald-600">Webhook active since {{ iba.webhook_subscribed_at|date:"j M Y" }}</p>
-      {% else %}
-      <p class="text-xs text-amber-600">Webhook not yet verified — configure it in Meta's App Dashboard using the values above.</p>
-      {% endif %}
-    </div>
   </li>
   {% endfor %}
 </ul>
@@ -85,11 +84,40 @@
     <p class="font-medium text-ink">No Instagram accounts connected</p>
     <p class="mt-1 text-sm text-gray-500">Connect your Instagram Business Account to start receiving messages and comments.</p>
   </div>
+  {% if oauth_enabled %}
+  <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm mt-1">Connect Instagram</a>
+  {% else %}
   <a href="{% url 'instagram-account-connect' %}" class="btn btn-primary btn-sm mt-1">Connect account</a>
+  {% endif %}
 </div>
 {% endif %}
 
-<div class="mt-6">
+{% comment %}App-level webhook setup — configured once in Meta's App Dashboard{% endcomment %}
+<div class="mt-6 card p-5 text-sm space-y-2">
+  <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Webhook configuration (Meta App Dashboard)</p>
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="text-xs text-gray-500 w-24 shrink-0">Callback URL</span>
+    <code class="text-xs font-mono bg-canvas px-2 py-0.5 rounded text-ink break-all">{{ webhook_url_hint }}</code>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="text-xs text-gray-500 w-24 shrink-0">Verify token</span>
+    {% if webhook_verify_token %}
+    <code class="text-xs font-mono bg-canvas px-2 py-0.5 rounded text-ink break-all">{{ webhook_verify_token }}</code>
+    {% else %}
+    <span class="text-xs text-amber-600">INSTAGRAM_VERIFY_TOKEN not set — add it to your environment variables.</span>
+    {% endif %}
+  </div>
+  <p class="text-xs text-gray-400">These values are entered once in Meta's App Dashboard → Webhooks → Instagram. The verify token comes from your <code class="font-mono">INSTAGRAM_VERIFY_TOKEN</code> environment variable.</p>
+</div>
+
+{% if oauth_enabled %}
+<div class="mt-4 text-sm text-gray-500">
+  Developer or operator?
+  <a href="{% url 'instagram-account-connect' %}" class="underline hover:text-ink">Manual token entry</a>
+</div>
+{% endif %}
+
+<div class="mt-4">
   <a href="{% url 'channels' %}" class="text-sm text-gray-500 hover:text-ink">← Back to Channels</a>
 </div>
 

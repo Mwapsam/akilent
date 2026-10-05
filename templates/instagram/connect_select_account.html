@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Choose an Instagram account — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Choose an Instagram account</h1>
+  <p class="mt-1 text-sm text-gray-600">
+    More than one Instagram Business Account was found. Pick the one you want to connect to Akilent.
+  </p>
+</header>
+
+<div class="card p-6 max-w-lg">
+  {% if candidates %}
+  <form method="post" action="{% url 'instagram-connect-oauth-select' %}" class="space-y-3">
+    {% csrf_token %}
+    {% for candidate in candidates %}
+    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3 cursor-pointer hover:border-brand-400">
+      <input
+        type="radio"
+        name="instagram_business_account_id"
+        value="{{ candidate.instagram_business_account_id }}"
+        {% if forloop.first %}checked{% endif %}
+        class="mt-1"
+      >
+      <span class="min-w-0">
+        <span class="block font-medium text-ink">
+          {% if candidate.username %}{{ candidate.username }}{% elif candidate.name %}{{ candidate.name }}{% else %}{{ candidate.instagram_business_account_id }}{% endif %}
+        </span>
+        {% if candidate.name and candidate.username %}
+        <span class="block text-sm text-gray-500">{{ candidate.name }}</span>
+        {% endif %}
+        <details class="mt-1">
+          <summary class="text-xs text-gray-400 cursor-pointer select-none">Details</summary>
+          <span class="block text-xs text-gray-500 font-mono">Instagram account ID: {{ candidate.instagram_business_account_id }}</span>
+          <span class="block text-xs text-gray-500 font-mono">Facebook Page ID: {{ candidate.page_id }}</span>
+          {% if candidate.page_name %}<span class="block text-xs text-gray-500">Page: {{ candidate.page_name }}</span>{% endif %}
+        </details>
+      </span>
+    </label>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary mt-2">Connect this account</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-gray-500">
+    No Instagram Business Accounts were found. Connect a professional Instagram account to a
+    Facebook Page in Meta Business Suite, then
+    <a href="{% url 'instagram-connect-oauth-start' %}" class="underline">try again</a>.
+  </p>
+  {% endif %}
+</div>
+
+<div class="mt-4">
+  <a href="{% url 'instagram-accounts' %}" class="text-sm text-gray-500 hover:text-ink">← Cancel</a>
+</div>
+{% endblock %}

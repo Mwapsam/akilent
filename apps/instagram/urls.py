@@ -6,11 +6,31 @@ from .views import (
     instagram_account_delete,
     instagram_account_edit,
     instagram_accounts,
+    instagram_connect_oauth_callback,
+    instagram_connect_oauth_select,
+    instagram_connect_oauth_start,
 )
 
 urlpatterns = [
     path("webhook/", InstagramWebhookView.as_view(), name="instagram-webhook"),
     path("accounts/", instagram_accounts, name="instagram-accounts"),
+    # OAuth (Business Login) connect flow
+    path(
+        "accounts/connect/oauth/",
+        instagram_connect_oauth_start,
+        name="instagram-connect-oauth-start",
+    ),
+    path(
+        "accounts/connect/oauth/callback/",
+        instagram_connect_oauth_callback,
+        name="instagram-connect-oauth-callback",
+    ),
+    path(
+        "accounts/connect/oauth/select/",
+        instagram_connect_oauth_select,
+        name="instagram-connect-oauth-select",
+    ),
+    # Manual / operator connect flow
     path(
         "accounts/connect/", instagram_account_connect, name="instagram-account-connect"
     ),

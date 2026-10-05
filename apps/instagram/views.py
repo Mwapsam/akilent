@@ -17,15 +17,20 @@ import hmac
 import json
 import logging
 import secrets
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.instagram.models.account import (
@@ -47,12 +52,18 @@ logger = logging.getLogger(__name__)
 @login_required
 def instagram_accounts(request):
     """List all Instagram Business Accounts connected to this tenant."""
+    from apps.instagram.setup_errors import get_setup_error
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
     iba_list = list(
         InstagramBusinessAccount.objects.filter(account=account).order_by("created_at")
+    )
+    oauth_enabled = bool(
+        getattr(settings, "INSTAGRAM_APP_ID", "")
+        and getattr(settings, "INSTAGRAM_APP_SECRET", None)
     )
     return render(
         request,
@@ -61,6 +72,9 @@ def instagram_accounts(request):
             "account": account,
             "iba_list": iba_list,
             "webhook_url_hint": request.build_absolute_uri("/instagram/webhook/"),
+            "webhook_verify_token": getattr(settings, "INSTAGRAM_VERIFY_TOKEN", ""),
+            "oauth_enabled": oauth_enabled,
+            "setup_error": get_setup_error(request),
         },
     )
 
@@ -188,6 +202,199 @@ def instagram_account_delete(request, pk: int):
     )
 
 
+@login_required
+def instagram_connect_oauth_start(request):
+    """Kick off Instagram Business Login — redirect to Meta's OAuth dialog."""
+    from apps.instagram.setup_errors import (
+        SetupError,
+        clear_setup_error,
+        redirect_with_setup_error,
+    )
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    if not (
+        getattr(settings, "INSTAGRAM_APP_ID", "")
+        and getattr(settings, "INSTAGRAM_APP_SECRET", None)
+    ):
+        return redirect_with_setup_error(request, SetupError.NOT_CONFIGURED)
+
+    clear_setup_error(request)
+    nonce = secrets.token_urlsafe(24)
+    redirect_uri = request.build_absolute_uri(
+        reverse("instagram-connect-oauth-callback")
+    )
+    request.session["instagram_connect_state"] = nonce
+    request.session["instagram_connect_redirect_uri"] = redirect_uri
+
+    from apps.instagram.oauth import SCOPES
+
+    params = {
+        "client_id": settings.INSTAGRAM_APP_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": SCOPES,
+        "state": nonce,
+    }
+    oauth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
+    return redirect(oauth_url)
+
+
+@login_required
+def instagram_connect_oauth_callback(request):
+    """Handle Meta's redirect back from the Business Login dialog."""
+    from apps.instagram.oauth import (
+        InstagramOAuthError,
+        discover_instagram_account,
+        exchange_code_for_token,
+        get_long_lived_token,
+        subscribe_page_to_webhooks,
+    )
+    from apps.instagram.setup_errors import (
+        SetupError,
+        clear_setup_error,
+        redirect_with_setup_error,
+    )
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    expected_state = request.session.pop("instagram_connect_state", None)
+    redirect_uri = request.session.pop("instagram_connect_redirect_uri", None)
+    state = request.GET.get("state")
+    if not state or not expected_state or state != expected_state:
+        return redirect_with_setup_error(request, SetupError.STATE_EXPIRED)
+
+    error = request.GET.get("error_description") or request.GET.get("error")
+    if error:
+        return redirect_with_setup_error(request, SetupError.CANCELLED, str(error))
+
+    code = (request.GET.get("code") or "").strip()
+    if not code:
+        return redirect_with_setup_error(request, SetupError.NO_CODE)
+
+    try:
+        token = exchange_code_for_token(code, redirect_uri=redirect_uri)
+        token = get_long_lived_token(token)
+        chosen = discover_instagram_account(token)
+    except InstagramOAuthError as exc:
+        logger.error("instagram_connect_oauth_callback: %s", exc)
+        return redirect_with_setup_error(
+            request, SetupError.TOKEN_EXCHANGE_FAILED, str(exc)
+        )
+
+    ok, error_msg = _finish_instagram_oauth(
+        request, account, chosen, subscribe_page_to_webhooks
+    )
+    if not ok:
+        return redirect_with_setup_error(
+            request, SetupError.CONNECT_REJECTED, error_msg
+        )
+    clear_setup_error(request)
+    return redirect("instagram-accounts")
+
+
+@login_required
+@require_POST
+def instagram_connect_oauth_select(request):
+    """Complete the OAuth flow after the owner picks one of multiple accounts."""
+    from apps.instagram.oauth import subscribe_page_to_webhooks
+    from apps.instagram.setup_errors import (
+        SetupError,
+        clear_setup_error,
+        redirect_with_setup_error,
+    )
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    token = request.session.pop("instagram_connect_token", None)
+    candidates = request.session.pop("instagram_connect_candidates", None)
+    iba_id = (request.POST.get("instagram_business_account_id") or "").strip()
+
+    chosen = next(
+        (
+            c
+            for c in (candidates or [])
+            if c.get("instagram_business_account_id") == iba_id
+        ),
+        None,
+    )
+    if not token or not chosen:
+        return redirect_with_setup_error(request, SetupError.SELECTION_EXPIRED)
+
+    ok, error_msg = _finish_instagram_oauth(
+        request, account, chosen, subscribe_page_to_webhooks
+    )
+    if not ok:
+        return redirect_with_setup_error(
+            request, SetupError.CONNECT_REJECTED, error_msg
+        )
+    clear_setup_error(request)
+    return redirect("instagram-accounts")
+
+
+def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tuple:
+    """Shared tail of the OAuth flow: save the account and subscribe webhooks.
+
+    ``chosen`` is a dict from ``discover_instagram_accounts``.
+    Returns (ok: bool, error_message: str).
+    """
+    iba_id = chosen["instagram_business_account_id"]
+    page_id = chosen["page_id"]
+    page_access_token = chosen["page_access_token"]
+
+    existing = InstagramBusinessAccount.objects.filter(
+        instagram_business_account_id=iba_id
+    ).first()
+    if existing and existing.account_id != account.pk:
+        return False, (
+            "That Instagram Business Account is already connected to another workspace."
+        )
+
+    try:
+        subscribed = subscribe_fn(page_id, page_access_token)
+    except Exception as exc:
+        logger.warning("_finish_instagram_oauth: subscribe failed: %s", exc)
+        subscribed = False
+
+    verify_token = secrets.token_hex(32)
+    now = timezone.now() if subscribed else None
+
+    InstagramBusinessAccount.objects.update_or_create(
+        account=account,
+        instagram_business_account_id=iba_id,
+        defaults={
+            "page_id": page_id,
+            "name": chosen.get("name", ""),
+            "username": chosen.get("username", ""),
+            "access_token": page_access_token,
+            "token_expired": False,
+            "verify_token": verify_token,
+            "webhook_subscribed_at": now,
+            "is_active": True,
+        },
+    )
+
+    label = chosen.get("username") or iba_id
+    if subscribed:
+        messages.success(
+            request,
+            f"Instagram account @{label} connected and webhooks activated.",
+        )
+    else:
+        messages.warning(
+            request,
+            f"Instagram account @{label} connected. "
+            "Webhook subscription failed — configure it manually in Meta's App Dashboard.",
+        )
+    return True, ""
+
+
 def _verify_signature(request, access_token: str) -> bool:
     """Verify Meta's X-Hub-Signature-256 header using the page access token as secret."""
     signature_header = request.META.get("HTTP_X_HUB_SIGNATURE_256", "")
@@ -240,18 +447,17 @@ class InstagramWebhookView(View):
         token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge", "")
 
-        if mode != "subscribe" or not token:
-            return HttpResponse(status=403)
+        verify_token = settings.INSTAGRAM_VERIFY_TOKEN
+        if (
+            mode == "subscribe"
+            and verify_token
+            and token
+            and hmac.compare_digest(token, verify_token)
+        ):
+            return HttpResponse(challenge, content_type="text/plain")
 
-        # Match the verify_token against any active Instagram account
-        match = InstagramBusinessAccount.objects.filter(
-            verify_token=token, is_active=True
-        ).first()
-        if not match:
-            logger.warning("Instagram webhook: verify_token not recognised")
-            return HttpResponse(status=403)
-
-        return HttpResponse(challenge, content_type="text/plain")
+        logger.warning("Instagram webhook: verify_token mismatch or missing")
+        return HttpResponse(status=403)
 
     def post(self, request):
         """Receive and store an Instagram webhook event, then enqueue processing."""

@@ -356,6 +356,12 @@ WHATSAPP_APP_ID = os.getenv("WHATSAPP_APP_ID", "")
 WHATSAPP_CONFIG_ID = os.getenv("WHATSAPP_CONFIG_ID", "")
 WHATSAPP_GRAPH_VERSION = os.getenv("WHATSAPP_GRAPH_VERSION", "v21.0")
 
+# Instagram Business Login (OAuth connect flow)
+INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID", "")
+INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET")
+INSTAGRAM_GRAPH_VERSION = os.getenv("INSTAGRAM_GRAPH_VERSION", "v21.0")
+INSTAGRAM_VERIFY_TOKEN = os.getenv("INSTAGRAM_VERIFY_TOKEN", "")
+
 # Inbound keyword handling for messaging consent. A single-word inbound text
 # matching (case-insensitively) one of these opts the contact out / back in.
 WHATSAPP_STOP_KEYWORDS = [

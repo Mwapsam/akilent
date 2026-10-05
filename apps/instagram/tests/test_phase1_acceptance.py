@@ -20,7 +20,7 @@ Each test proves one of the twelve Phase 1 acceptance criteria:
 import secrets
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.instagram.tests.helpers import (
@@ -64,6 +64,7 @@ class TestWebhookSignature(TestCase):
         resp = self._post(payload, secret="wrong_secret")
         self.assertEqual(resp.status_code, 403)
 
+    @override_settings(INSTAGRAM_VERIFY_TOKEN="test_verify_token")
     def test_get_verification_handshake(self):
         from django.test import RequestFactory
 
@@ -72,7 +73,7 @@ class TestWebhookSignature(TestCase):
             "/instagram/webhook/",
             {
                 "hub.mode": "subscribe",
-                "hub.verify_token": self.ig_account.verify_token,
+                "hub.verify_token": "test_verify_token",
                 "hub.challenge": "abc123",
             },
         )
