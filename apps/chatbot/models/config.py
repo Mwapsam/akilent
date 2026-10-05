@@ -44,7 +44,7 @@ class ChatbotConfig(models.Model):
     )
     # Empty list = no origins authorized (not "allow all").
     # Development mode is a separate flag, not an empty list.
-    allowed_domains = models.JSONField(default=list)
+    allowed_domains = models.JSONField(default=list, blank=True)
     # The action slug to invoke on handoff — configured per chatbot.
     # e.g. "create_support_ticket" for support bots, "create_sales_lead" for sales bots.
     handoff_action = models.ForeignKey(

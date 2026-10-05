@@ -113,11 +113,13 @@ def send_weekly_reports() -> int:
     """
     from django.utils import timezone
 
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+
     from apps.accounts.notifications import recipients
     from apps.billing.limits import LimitChecker
     from apps.conversations import weekly_report
     from apps.conversations.models import Event, InsightSettings
-    from apps.email.services.send import send_system_email
     from apps.whatsapp import api as whatsapp_api
 
     now = timezone.now()
@@ -143,13 +145,15 @@ def send_weekly_reports() -> int:
             for user in recipients(account, "owners"):
                 if not user.email:
                     continue
-                send_system_email(
-                    to_email=user.email,
+                msg = EmailMultiAlternatives(
                     subject=email["subject"],
-                    text_body=email["text_body"],
-                    html_body=email.get("html_body", ""),
-                    sender_label="Reports",
+                    body=email["text_body"],
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[user.email],
                 )
+                if email.get("html_body"):
+                    msg.attach_alternative(email["html_body"], "text/html")
+                msg.send()
             Event.objects.create(
                 account=account,
                 type="weekly_report_sent",
