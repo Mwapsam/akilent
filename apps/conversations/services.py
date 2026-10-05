@@ -87,8 +87,10 @@ def record_inbound_whatsapp_message(
     """
     from apps.whatsapp.interactive import reply_for_log
 
-    is_new = not Conversation.objects.filter(
-        whatsapp_conversation=whatsapp_conversation
+    from apps.conversations.models import ChannelConversation
+    is_new = not ChannelConversation.objects.filter(
+        channel=Conversation.Channel.WHATSAPP,
+        object_id=whatsapp_conversation.pk,
     ).exists()
     conversation = Conversation.get_or_create_for_whatsapp(whatsapp_conversation)
     if is_new:
@@ -148,6 +150,82 @@ def record_inbound_whatsapp_message(
     _record_customer_activity(contact, message_log)
     _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, message_log.content)
+    return conversation
+
+
+def record_inbound_instagram_message(
+    *,
+    contact,
+    instagram_conversation,
+    instagram_message,
+    enroll_workflows: bool = True,
+) -> "Conversation | None":
+    """Project an already-created inbound InstagramMessage onto the spine.
+
+    Mirrors ``record_inbound_whatsapp_message``: idempotent on the
+    ``instagram_message`` FK — a replayed webhook returns None.
+    """
+    from apps.conversations.models import ChannelConversation, Conversation
+
+    is_new = not ChannelConversation.objects.filter(
+        channel=Conversation.Channel.INSTAGRAM,
+        object_id=instagram_conversation.pk,
+    ).exists()
+    conversation = Conversation.get_or_create_for_instagram(instagram_conversation)
+    if is_new:
+        route_new_conversation(conversation)
+    conversation.register_inbound(instagram_message.timestamp)
+
+    message, created = Message.objects.get_or_create(
+        instagram_message=instagram_message,
+        defaults={
+            "account": conversation.account,
+            "conversation": conversation,
+            "direction": Message.Direction.INBOUND,
+            "body": instagram_message.body,
+            "timestamp": instagram_message.timestamp,
+            "metadata": {"message_type": "text"},
+        },
+    )
+    if not created:
+        return None
+
+    event = emit_event(
+        account=conversation.account,
+        type="conversation.message_received",
+        occurred_at=instagram_message.timestamp,
+        source="instagram",
+        source_event_id=instagram_message.message_id or "",
+        payload={
+            "conversation_id": conversation.public_id,
+            "message_id": message.id,
+            "body": instagram_message.body,
+            "message_type": "text",
+        },
+        subject_type="conversation",
+        subject_id=conversation.public_id,
+    )
+    if event is None:
+        return conversation
+
+    if enroll_workflows:
+        try:
+            from apps.automation.workflow_engine import enroll_for_trigger
+            enroll_for_trigger(
+                conversation.account_id,
+                "conversation.message_received",
+                contact,
+                context={
+                    "conversation_id": conversation.public_id,
+                    "message": {"body": instagram_message.body, "type": "text"},
+                },
+            )
+        except Exception:
+            logger.exception(
+                "record_inbound_instagram_message: workflow enrollment failed for conversation=%s",
+                conversation.pk,
+            )
+    _announce_processed(conversation, message, False)
     return conversation
 
 

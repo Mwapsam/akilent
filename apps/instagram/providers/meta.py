@@ -112,6 +112,50 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram get_user_profile failed for %s", igsid)
         return {}
 
+    def hide_comment(self, comment_id: str) -> bool:
+        """Hide a comment on the business's media. Reversible."""
+        try:
+            self._post(comment_id, {"hide": True})
+            return True
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram hide_comment failed: code=%s msg=%s", exc.code, exc.message
+            )
+            return False
+        except Exception:
+            logger.exception("Instagram hide_comment unexpected error for %s", comment_id)
+            return False
+
+    def delete_comment(self, comment_id: str) -> bool:
+        """Permanently delete a comment. Requires instagram_basic permission."""
+        url = f"{GRAPH_API_BASE}/{comment_id}"
+        try:
+            resp = requests.delete(
+                url,
+                params={"access_token": self._token},
+                timeout=10,
+            )
+            if not resp.ok:
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = {}
+                error = data.get("error", {})
+                raise InstagramAPIError(
+                    code=error.get("code", resp.status_code),
+                    message=error.get("message", resp.text[:200]),
+                    http_status=resp.status_code,
+                )
+            return True
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram delete_comment failed: code=%s msg=%s", exc.code, exc.message
+            )
+            return False
+        except Exception:
+            logger.exception("Instagram delete_comment unexpected error for %s", comment_id)
+            return False
+
 
 class InstagramAPIError(Exception):
     # Meta error codes that mean we must not retry

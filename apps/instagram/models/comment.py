@@ -51,6 +51,10 @@ class CommentThread(models.Model):
         related_name="instagram_comment_threads",
     )
 
+    # Set when a CommentTrigger fires; used as idempotency anchor so repeated
+    # webhook deliveries do not send multiple private replies.
+    trigger_fired_at = models.DateTimeField(null=True, blank=True)
+
     received_at = models.DateTimeField()
 
     class Meta:

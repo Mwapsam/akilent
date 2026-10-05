@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from apps.instagram.models.account import InstagramBusinessAccount
 from apps.instagram.models.message import OutboundMessage
@@ -25,13 +25,14 @@ def enqueue_reply(
     exists (meaning this send was already enqueued or sent — safe to ignore).
     """
     try:
-        msg = OutboundMessage.objects.create(
-            instagram_account=instagram_account,
-            idempotency_key=idempotency_key,
-            recipient_igsid=recipient_igsid,
-            action_type=action_type,
-            body=body,
-        )
+        with transaction.atomic():
+            msg = OutboundMessage.objects.create(
+                instagram_account=instagram_account,
+                idempotency_key=idempotency_key,
+                recipient_igsid=recipient_igsid,
+                action_type=action_type,
+                body=body,
+            )
         return msg
     except IntegrityError:
         logger.debug(

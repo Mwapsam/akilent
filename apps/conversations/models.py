@@ -66,24 +66,6 @@ class Conversation(models.Model):
     )
     channel = models.CharField(max_length=20, choices=Channel.choices)
 
-    # Channel-specific backing record. Only one of these is set, matching
-    # ``channel``. Nullable/one-to-one so the channel app's own lifecycle
-    # (e.g. WhatsApp's 24h window) remains authoritative there.
-    whatsapp_conversation = models.OneToOneField(
-        "whatsapp.Conversation",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="generic_conversation",
-    )
-    instagram_conversation = models.OneToOneField(
-        "instagram.InstagramConversation",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="generic_conversation",
-    )
-
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.OPEN
     )
@@ -124,25 +106,13 @@ class Conversation(models.Model):
             models.Index(fields=["account", "assigned_to"]),
             models.Index(fields=["account", "assigned_team"]),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["whatsapp_conversation"],
-                condition=models.Q(whatsapp_conversation__isnull=False),
-                name="unique_generic_conversation_per_whatsapp_conversation",
-            ),
-            models.UniqueConstraint(
-                fields=["instagram_conversation"],
-                condition=models.Q(instagram_conversation__isnull=False),
-                name="unique_generic_conversation_per_instagram_conversation",
-            ),
-        ]
         ordering = ["-last_message_at", "-created_at"]
 
     def __str__(self):
         return f"{self.get_channel_display()} conversation with {self.contact}"
 
     @classmethod
-    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> Conversation:
+    def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> "Conversation":
         """Idempotently get/create the generic wrapper for a whatsapp.Conversation.
 
         ``whatsapp_conversation.contact.contact`` (the linked ``apps.contacts.Contact``)
@@ -155,15 +125,11 @@ class Conversation(models.Model):
                 "whatsapp_conversation.contact.contact must be resolved before "
                 "creating a generic Conversation"
             )
-        convo, _ = cls.objects.get_or_create(
-            whatsapp_conversation=whatsapp_conversation,
-            defaults={
-                "account": whatsapp_conversation.account,
-                "contact": contact,
-                "channel": cls.Channel.WHATSAPP,
-            },
+        return cls._bind_channel(
+            whatsapp_conversation, cls.Channel.WHATSAPP,
+            account=whatsapp_conversation.account,
+            contact=contact,
         )
-        return convo
 
     @classmethod
     def get_or_create_for_instagram(cls, instagram_conversation) -> "Conversation":
@@ -178,15 +144,78 @@ class Conversation(models.Model):
                 "instagram_conversation.instagram_contact.contact must be resolved "
                 "before creating a generic Conversation"
             )
-        convo, _ = cls.objects.get_or_create(
-            instagram_conversation=instagram_conversation,
-            defaults={
-                "account": instagram_conversation.instagram_account.account,
-                "contact": contact,
-                "channel": cls.Channel.INSTAGRAM,
-            },
+        return cls._bind_channel(
+            instagram_conversation, cls.Channel.INSTAGRAM,
+            account=instagram_conversation.instagram_account.account,
+            contact=contact,
         )
-        return convo
+
+    @classmethod
+    def get_or_create_for_channel(cls, channel_obj, channel: str) -> "Conversation":
+        """Generic factory: get/create the spine Conversation for any channel-specific record.
+
+        Dispatches to the channel-specific method so contact/account resolution
+        stays in one place per channel. New channels register here.
+        """
+        if channel == cls.Channel.WHATSAPP:
+            return cls.get_or_create_for_whatsapp(channel_obj)
+        if channel == cls.Channel.INSTAGRAM:
+            return cls.get_or_create_for_instagram(channel_obj)
+        raise ValueError(f"Unsupported channel for get_or_create_for_channel: {channel!r}")
+
+    @classmethod
+    def _bind_channel(cls, channel_obj, channel: str, *, account, contact) -> "Conversation":
+        """Core implementation: find-or-create the spine Conversation via ChannelConversation.
+
+        Uses the ChannelConversation UNIQUE(channel, object_id) constraint as the
+        idempotency anchor. Handles races gracefully: if two workers create
+        concurrently, the winner's Conversation survives and the loser's is deleted.
+        """
+        cc = (
+            ChannelConversation.objects
+            .select_related("conversation")
+            .filter(channel=channel, object_id=channel_obj.pk)
+            .first()
+        )
+        if cc is not None:
+            return cc.conversation
+
+        convo = cls.objects.create(account=account, contact=contact, channel=channel)
+        cc, winner = ChannelConversation.objects.get_or_create(
+            channel=channel,
+            object_id=channel_obj.pk,
+            defaults={"conversation": convo},
+        )
+        if not winner:
+            # Race: another worker bound this channel_obj first; discard our Conversation.
+            convo.delete()
+        return cc.conversation
+
+    @property
+    def whatsapp_conversation(self):
+        """The WhatsApp backing record for this conversation, or None.
+
+        Reads through ChannelConversation rather than a direct FK; the old
+        field was removed in migration 0017. Callers that need performance-
+        critical bulk access should use select_related("channel_conversations").
+        """
+        cc = self.channel_conversations.filter(channel=self.Channel.WHATSAPP).first()
+        if cc is None:
+            return None
+        from apps.whatsapp.models import Conversation as WaConversation
+        return WaConversation.objects.filter(pk=cc.object_id).first()
+
+    @property
+    def instagram_conversation(self):
+        """The Instagram backing record for this conversation, or None.
+
+        Reads through ChannelConversation rather than a direct FK.
+        """
+        cc = self.channel_conversations.filter(channel=self.Channel.INSTAGRAM).first()
+        if cc is None:
+            return None
+        from apps.instagram.models import InstagramConversation
+        return InstagramConversation.objects.filter(pk=cc.object_id).first()
 
     def register_inbound(self, at) -> None:
         self.last_message_at = at
@@ -309,6 +338,46 @@ class Conversation(models.Model):
         )
 
 
+class ChannelConversation(models.Model):
+    """Join table binding the channel-agnostic Conversation spine to a channel-specific record.
+
+    One row per channel-side backing record. UNIQUE(channel, object_id) enforces
+    that a channel conversation maps to at most one spine Conversation. There is
+    no FK from object_id to the channel table because Django cannot express a
+    polymorphic FK without ContentTypes; referential integrity is maintained by
+    the application — each channel's factory ensures the backing record exists
+    before creating this row.
+
+    This replaces the per-channel OneToOne FKs on Conversation
+    (``whatsapp_conversation``, ``instagram_conversation``) which require a
+    schema migration for every new channel. A third channel adds a row type here,
+    not a new FK column.
+    """
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="channel_conversations",
+    )
+    channel = models.CharField(max_length=20, choices=Conversation.Channel.choices)
+    object_id = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["channel", "object_id"],
+                name="unique_channel_conversation_binding",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["channel", "object_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.channel}:{self.object_id} → conversation {self.conversation_id}"
+
+
 class Message(models.Model):
     """A generic, provider-neutral message.
 
@@ -343,6 +412,13 @@ class Message(models.Model):
 
     whatsapp_message = models.OneToOneField(
         "whatsapp.MessageLog",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="generic_message",
+    )
+    instagram_message = models.OneToOneField(
+        "instagram.InstagramMessage",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -737,6 +813,15 @@ class ConversationAttribution(models.Model):
     )
     workflow_run = models.ForeignKey(
         "automation.WorkflowRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
+    # The recommendation that originated this conversation, if any.
+    # Gives the backward chain: Order → attribution → originated_from → Insight.
+    originated_from = models.ForeignKey(
+        "insights.RecommendationLog",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

@@ -40,3 +40,11 @@ class BaseInstagramProvider(ABC):
     @abstractmethod
     def get_user_profile(self, igsid: str) -> dict:
         """Fetch username and name for an IGSID."""
+
+    @abstractmethod
+    def hide_comment(self, comment_id: str) -> bool:
+        """Hide a comment (reversible). Returns True on success."""
+
+    @abstractmethod
+    def delete_comment(self, comment_id: str) -> bool:
+        """Permanently delete a comment. Returns True on success."""

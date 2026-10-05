@@ -4,6 +4,8 @@ from .conversation import InstagramConversation
 from .comment import Comment, CommentThread
 from .message import InstagramMessage, OutboundMessage
 from .webhook import WebhookEventLog
+from .moderation import ModerationLog, ModerationRule
+from .trigger import CommentTrigger
 
 __all__ = [
     "InstagramBusinessAccount",
@@ -14,4 +16,7 @@ __all__ = [
     "InstagramMessage",
     "OutboundMessage",
     "WebhookEventLog",
+    "ModerationRule",
+    "ModerationLog",
+    "CommentTrigger",
 ]

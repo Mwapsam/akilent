@@ -19,5 +19,5 @@ def get_or_create_instagram_conversation(
     from apps.conversations.models import Conversation
 
     ig_convo = InstagramConversation.get_or_open(ig_contact)
-    spine = Conversation.get_or_create_for_instagram(ig_convo)
+    spine = Conversation.get_or_create_for_channel(ig_convo, Conversation.Channel.INSTAGRAM)
     return ig_convo, spine

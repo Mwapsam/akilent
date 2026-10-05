@@ -585,6 +585,89 @@ def sales(account, period: Period) -> dict:
     }
 
 
+# ---- instagram attribution funnel -----------------------------------------------------------
+
+
+def instagram_funnel(account, period: Period) -> dict:
+    """Social-commerce funnel for the Instagram channel: comment → DM → lead → order.
+
+    All counts are scoped to the period. Conversion rates use ``pct()`` so a zero denominator
+    always returns 0 rather than raising ZeroDivisionError.
+    """
+    try:
+        from apps.instagram.models import CommentThread
+    except ImportError:
+        return _empty_instagram_funnel()
+
+    from apps.commerce.models import Order
+    from apps.conversations.models import ConversationAttribution as A
+    from apps.crm.models import Lead
+
+    threads = CommentThread.objects.filter(
+        instagram_account__account=account,
+        received_at__gte=period.start,
+        received_at__lt=period.end,
+    )
+    comments_received = threads.count()
+    threads_triggered = threads.filter(trigger_fired_at__isnull=False).count()
+    dms_opened = threads.filter(conversation__isnull=False).count()
+
+    leads_confirmed = Lead.objects.filter(
+        account=account,
+        source="instagram",
+        created_at__gte=period.start,
+        created_at__lt=period.end,
+    ).count()
+
+    paid_qs = Order.objects.filter(
+        account=account,
+        status=Order.Status.PAID,
+        paid_at__gte=period.start,
+        paid_at__lt=period.end,
+        attribution__channel=Conversation.Channel.INSTAGRAM,
+    )
+    paid_rows = (
+        paid_qs.values("currency")
+        .annotate(orders=Count("id"), total=Sum("total"))
+        .order_by("currency")
+    )
+    revenue_rows = [
+        {
+            "currency": r["currency"],
+            "orders": r["orders"],
+            "total": str(r["total"] or Decimal("0")),
+        }
+        for r in paid_rows
+    ]
+    paid_orders = sum(r["orders"] for r in revenue_rows)
+
+    return {
+        "comments_received": comments_received,
+        "threads_triggered": threads_triggered,
+        "dms_opened": dms_opened,
+        "leads_confirmed": leads_confirmed,
+        "paid_orders": paid_orders,
+        "revenue": revenue_rows,
+        "conversion": {
+            "comment_to_dm": pct(dms_opened, comments_received),
+            "dm_to_lead": pct(leads_confirmed, dms_opened),
+            "lead_to_order": pct(paid_orders, leads_confirmed),
+        },
+    }
+
+
+def _empty_instagram_funnel() -> dict:
+    return {
+        "comments_received": 0,
+        "threads_triggered": 0,
+        "dms_opened": 0,
+        "leads_confirmed": 0,
+        "paid_orders": 0,
+        "revenue": [],
+        "conversion": {"comment_to_dm": None, "dm_to_lead": None, "lead_to_order": None},
+    }
+
+
 # ---- pillar 4: channels ----------------------------------------------------------------------
 
 UNATTRIBUTED = "none"
@@ -923,6 +1006,7 @@ def period_metrics(account, start: datetime, end: datetime) -> dict:
         "revenue": [
             {"currency": r["currency"], "total": str(r["total"])} for r in money
         ],
+        "instagram": instagram_funnel(account, period),
     }
 
 

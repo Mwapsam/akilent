@@ -256,10 +256,138 @@ def rule_campaign_opportunity(account):
     )
 
 
+def rule_instagram_unanswered_intent(account):
+    """Instagram comment threads with buying intent that never became a DM conversation.
+
+    A thread lands here when intent was detected but the private-reply trigger
+    either wasn't configured, fired and failed, or was suppressed.  Each such
+    thread is a warm prospect the business hasn't yet reached.
+    """
+    try:
+        from apps.instagram.models.comment import CommentThread
+    except ImportError:
+        return None
+
+    cutoff = timezone.now() - timedelta(days=7)
+    qs = CommentThread.objects.filter(
+        instagram_account__account=account,
+        intent__gt="",
+        conversation__isnull=True,
+        received_at__gte=cutoff,
+    )
+    count = qs.count()
+    if count == 0:
+        return None
+
+    sample = list(
+        qs.order_by("-received_at")
+        .values("instagram_contact__username", "intent", "body")[:5]
+    )
+    sample_items = [
+        {
+            "username": r["instagram_contact__username"] or "unknown",
+            "intent": r["intent"],
+            "comment": (r["body"] or "")[:80],
+        }
+        for r in sample
+    ]
+
+    from apps.insights.models import Insight
+
+    return Insight(
+        account=account,
+        type="instagram_unanswered_intent",
+        severity=Insight.Severity.OPPORTUNITY if count < 10 else Insight.Severity.WARNING,
+        title=f"{count} Instagram comment{'s' if count != 1 else ''} with buying intent, no DM sent",
+        body=(
+            f"{count} Instagram comment{'s show' if count != 1 else ' shows'} buying intent "
+            f"in the past 7 days but {'have' if count != 1 else 'has'} not triggered a private reply. "
+            f"Each is a warm prospect who hasn't heard from you yet."
+        ),
+        evidence={
+            "count": count,
+            "window_days": 7,
+            "sample": sample_items,
+        },
+        evidence_count=count,
+        suggested_action={
+            "action": "instagram_trigger",
+            "label": f"Set up a buying-intent trigger to auto-reply to {count} comment{'s' if count != 1 else ''}",
+            "filter": "instagram_intent_no_dm",
+        },
+    )
+
+
+def rule_instagram_high_engagement_contact(account):
+    """Instagram contacts who have commented on 3+ threads in the past 14 days.
+
+    Multiple comments across different posts is a strong engagement signal —
+    these are warm prospects worth a proactive DM before they move on.
+    """
+    try:
+        from apps.instagram.models.comment import CommentThread
+    except ImportError:
+        return None
+
+    from django.db.models import Count
+
+    cutoff = timezone.now() - timedelta(days=14)
+    qs = (
+        CommentThread.objects.filter(
+            instagram_account__account=account,
+            received_at__gte=cutoff,
+        )
+        .values("instagram_contact_id", "instagram_contact__username")
+        .annotate(thread_count=Count("id"))
+        .filter(thread_count__gte=3)
+        .order_by("-thread_count")
+    )
+    rows = list(qs[:50])
+    count = len(rows)
+    if count == 0:
+        return None
+
+    sample_items = [
+        {
+            "username": r["instagram_contact__username"] or "unknown",
+            "thread_count": r["thread_count"],
+        }
+        for r in rows[:5]
+    ]
+
+    from apps.insights.models import Insight
+
+    return Insight(
+        account=account,
+        type="instagram_high_engagement_contact",
+        severity=Insight.Severity.OPPORTUNITY,
+        title=f"{count} highly engaged Instagram contact{'s' if count != 1 else ''} worth a DM",
+        body=(
+            f"{count} Instagram contact{'s have' if count != 1 else ' has'} commented on 3 or more "
+            f"posts in the past 14 days. High comment frequency predicts purchase intent — "
+            f"{'they are' if count != 1 else 'this person is'} prime candidates for a proactive message."
+        ),
+        evidence={
+            "count": count,
+            "window_days": 14,
+            "min_threads": 3,
+            "sample": sample_items,
+        },
+        evidence_count=count,
+        suggested_action={
+            "action": "instagram_dm_outreach",
+            "label": f"Send a DM to {count} highly engaged contact{'s' if count != 1 else ''}",
+            "filter": "instagram_high_engagement",
+        },
+    )
+
+
 # Registry of all rules.  generate_insights iterates this list.
 RULES = [
     rule_unanswered_conversations,
     rule_lead_followup_gap,
     rule_inactive_customers,
     rule_campaign_opportunity,
+    rule_instagram_unanswered_intent,
+    rule_instagram_high_engagement_contact,
 ]

@@ -136,9 +136,13 @@ def process_whatsapp_event(self, event_id: int):
 
 def _close_spine_conversation(whatsapp_conversation) -> None:
     """Keep the inbox in step when a WhatsApp conversation is closed (e.g. STOP)."""
-    spine = getattr(whatsapp_conversation, "generic_conversation", None)
-    if spine is not None:
-        spine.close()
+    from apps.conversations.models import ChannelConversation, Conversation
+    cc = ChannelConversation.objects.select_related("conversation").filter(
+        channel=Conversation.Channel.WHATSAPP,
+        object_id=whatsapp_conversation.pk,
+    ).first()
+    if cc is not None:
+        cc.conversation.close()
 
 
 def _apply_consent_keyword(
@@ -254,20 +258,8 @@ def project_to_inbox(
 
 
 def _canonical_contact(account, wa_contact):
-    """The ``apps.contacts.Contact`` behind a WhatsApp identity, created (phone-only) if missing."""
-    from apps.contacts.services import upsert_contact_by_phone
-
-    contact = wa_contact.contact
-    if contact is None:
-        contact, created = upsert_contact_by_phone(
-            account, wa_contact.phone_number, source="whatsapp"
-        )
-        if created and wa_contact.display_name and not contact.first_name:
-            contact.first_name = wa_contact.display_name[:150]
-            contact.save(update_fields=["first_name", "updated_at"])
-        wa_contact.contact = contact
-        wa_contact.save(update_fields=["contact"])
-    return contact
+    from apps.whatsapp.services.contacts import resolve_channel_contact
+    return resolve_channel_contact(account, wa_contact)
 
 
 def _sender_of(outbound) -> str:
@@ -387,146 +379,11 @@ def _handle_inbound_message(event: WebhookEventLog) -> None:
 def _process_inbound_message(
     event: WebhookEventLog, value: dict, message: dict
 ) -> None:
-    phone_number_id = value["metadata"]["phone_number_id"]
-
-    account = get_account_for_webhook(phone_number_id)
     # Invariant: a commercial limit never drops what a *customer* sent. The message is always
-    # stored; the conversation limit is only counted (below) and warned about. Limits may hold
+    # stored; the conversation limit is only counted and warned about. Limits may hold
     # what the business sends, never what it receives.
-
-    wa_id = message["from"]
-    profile_name = (value.get("contacts") or [{}])[0].get("profile", {}).get("name")
-
-    # Meta sends wa_id without "+", but contacts are stored normalized (E.164).
-    # Looking up the raw value misses an existing contact and then violates the
-    # unique constraint on create, so the message would never be logged.
-    try:
-        phone = normalize_phone(wa_id)
-    except ValidationError:
-        phone = wa_id
-    contact, _ = WhatsAppContact.objects.get_or_create(
-        account=account,
-        phone_number=phone,
-        defaults={"display_name": profile_name},
-    )
-    if profile_name and contact.display_name != profile_name:
-        contact.display_name = profile_name
-        contact.save(update_fields=["display_name"])
-
-    msg_ts = datetime.fromtimestamp(int(message["timestamp"]), tz=UTC)
-    conversation = Conversation.get_or_open(contact)
-    # A conversation is counted once per 24h customer-service window, not once per message. A
-    # replayed webhook finds the window already open, so it isn't counted twice.
-    opens_window = (
-        conversation.window_expires_at is None
-        or conversation.window_expires_at <= msg_ts
-    )
-    conversation.register_inbound(msg_ts)
-
-    if opens_window:
-        try:
-            from apps.billing import api as billing_api
-
-            billing_api.count_conversation(account)
-        except Exception as exc:
-            logger.warning(
-                "_handle_inbound_message: conversation not counted for account %s: %s",
-                account.pk,
-                exc,
-            )
-
-    msg_type = message.get("type", "unknown")
-    content = ""
-    media_id = media_mime_type = None
-    reply = extract_reply(message)
-
-    if reply is not None:
-        # A tap on a button or list choice. Its title is what the customer saw, so it is the
-        # message text; it is stored as text so the inbox shows it, while ``msg_type`` stays
-        # "interactive"/"button" so STOP-keyword handling still only reads typed messages.
-        content = reply["title"]
-    elif msg_type == "text":
-        content = message.get("text", {}).get("body", "")
-    elif msg_type in ("image", "audio", "video", "document", "sticker"):
-        block = message.get(msg_type, {})
-        media_id = block.get("id")
-        media_mime_type = block.get("mime_type")
-        content = block.get("caption", "")
-    elif msg_type == "location":
-        loc = message.get("location", {})
-        content = f"{loc.get('latitude')},{loc.get('longitude')}"
-
-    valid_types = {c[0] for c in MessageLog.MessageType.choices}
-    message_log, created = MessageLog.objects.get_or_create(
-        account=account,
-        message_id=message.get("id"),
-        defaults={
-            "conversation": conversation,
-            "contact": contact,
-            "direction": MessageLog.Direction.INBOUND,
-            "message_type": (
-                MessageLog.MessageType.TEXT
-                if reply is not None
-                else msg_type
-                if msg_type in valid_types
-                else MessageLog.MessageType.UNKNOWN
-            ),
-            "content": content,
-            "media_id": media_id,
-            "media_mime_type": media_mime_type,
-            "status": MessageLog.Status.DELIVERED,
-            "timestamp": msg_ts,
-            "raw_payload": event.payload,
-        },
-    )
-
-    contact.last_message_at = msg_ts
-    contact.save(update_fields=["last_message_at"])
-
-    try:
-        enroll = _automation_events_enabled()
-    except Exception:
-        enroll = False
-    # Regardless of `created`: idempotent, and a replay repairs an earlier failed projection.
-    project_to_inbox(
-        account, contact, conversation, message_log, enroll_workflows=enroll
-    )
-
-    if created and msg_type == "text":
-        _apply_consent_keyword(
-            contact, conversation, content, inbound_log_id=message_log.pk
-        )
-
-    if created and not contact.is_opted_out:
-        _auto_reply_during_setup(phone_number_id, contact)
-
-    if (
-        created
-        and message.get("id")
-        and getattr(settings, "WHATSAPP_MARK_READ_ENABLED", True)
-    ):
-        mark_read.delay(account.id, message["id"])
-
-    # Publish domain event for subscribers (automation, AI, analytics)
-    # IMPORTANT: Only publish for newly created messages to prevent duplicate automation
-    # evaluations when webhooks are replayed or messages are reprocessed.
-    # Gate behind a temporary SiteSettings flag until Phase 4's ModuleSubscription exists
-    if created:
-        try:
-            if _automation_events_enabled():
-                dispatcher.publish(
-                    MessageReceived(
-                        account_id=account.id,
-                        contact_id=contact.id,
-                        message_id=message.get("id") or "",
-                        channel="whatsapp",
-                        body=content,
-                        message_type=msg_type,
-                        occurred_at=msg_ts,
-                    )
-                )
-        except Exception as exc:
-            logger.debug("_handle_inbound_message: failed to publish event: %s", exc)
+    from apps.whatsapp.services.inbound import WhatsAppInboundService
+    WhatsAppInboundService(event, value, message).handle()
 
 
 def _handle_status_update(event: WebhookEventLog) -> None:

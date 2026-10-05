@@ -74,7 +74,7 @@ def test_record_inbound_message_creates_generic_conversation_and_message(
     assert conversation is not None
     assert conversation.contact_id == contact.id
     assert conversation.channel == Conversation.Channel.WHATSAPP
-    assert conversation.whatsapp_conversation_id == wa_conversation.id
+    assert conversation.whatsapp_conversation.id == wa_conversation.id
     assert conversation.is_unread is True
 
     message = Message.objects.get(whatsapp_message=message_log)

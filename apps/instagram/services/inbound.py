@@ -81,20 +81,12 @@ def _process_dm_entry(
         metadata=entry,
     )
 
-    # 4. Update spine
-    spine.register_inbound(timestamp)
-
-    # 5. Fire domain event (consumed by AI, automation, analytics)
-    dispatcher.publish(
-        MessageReceived(
-            account_id=instagram_account.account_id,
-            contact_id=ig_contact.contact_id,
-            message_id=ig_message.message_id,
-            channel="instagram",
-            body=body,
-            message_type="text",
-            occurred_at=timestamp,
-        )
+    # 4. Project onto the canonical spine (Message + Event + workflow enrollment)
+    from apps.conversations.services import record_inbound_instagram_message
+    record_inbound_instagram_message(
+        contact=ig_contact.contact,
+        instagram_conversation=ig_convo,
+        instagram_message=ig_message,
     )
 
     # 6. Intent detection → AIProposal (never auto-creates a Lead)
@@ -186,6 +178,18 @@ def _process_comment_entry(
         },
     )
 
+    # Run moderation rules (Phase 2) — moderation acts on Instagram content;
+    # automation triggers act on Akilent state. Both are evaluated here.
+    comment_obj = Comment.objects.filter(thread=thread, comment_id=comment_id).first()
+    if comment_obj:
+        from apps.instagram.services.moderation import moderate_comment
+        moderate_comment(comment_obj)
+
+    # Evaluate CommentTriggers (Phase 3) — root comments only; triggers open a DM.
+    if not parent_id and body:
+        from apps.instagram.services.triggers import evaluate_triggers
+        evaluate_triggers(thread, body)
+
     # Detect buying intent on root comments only
     if not parent_id and body:
         intent_phrase = detect_buying_intent(body)
@@ -195,8 +199,6 @@ def _process_comment_entry(
             logger.info(
                 "Buying intent detected in comment %s: %r", comment_id, intent_phrase
             )
-            # A DM-first private reply would be triggered here in Phase 3
-            # (CommentTrigger evaluation). For Phase 1, we log and stop.
 
 
 # ---------------------------------------------------------------------------
@@ -213,14 +215,33 @@ def _extract_dm_messaging(payload: dict) -> list[dict]:
 
 
 def _extract_comment_entries(payload: dict) -> list[dict]:
-    """Extract comment entries from an Instagram comment webhook payload."""
+    """Extract comment and mention entries from an Instagram webhook payload."""
     entries = []
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
-            value = change.get("value", {})
-            if change.get("field") == "comments":
+            field = change.get("field", "")
+            if field in {"comments", "mentions"}:
+                value = change.get("value", {})
+                # Normalise mention payloads to the same shape as comment entries.
+                # Mentions arrive with media.id being the media where the account
+                # was tagged. They're treated as comments for storage purposes.
+                if field == "mentions":
+                    value = _normalise_mention(value)
                 entries.append(value)
     return entries
+
+
+def _normalise_mention(value: dict) -> dict:
+    """Reshape a mention change.value to look like a comment entry."""
+    return {
+        "id": value.get("comment_id", ""),
+        "text": value.get("text", ""),
+        "from": value.get("from", {}),
+        "media": {"id": value.get("media_id", "")},
+        "timestamp": value.get("timestamp", ""),
+        "parent_id": value.get("parent_id", ""),
+        "_mention": True,
+    }
 
 
 def _synthetic_message_id(igsid: str, ts_ms: int) -> str:

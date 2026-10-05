@@ -107,9 +107,21 @@ class RecommendationLog(models.Model):
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PRESENTED
     )
+    # What kind of action was taken when this recommendation was accepted.
+    # E.g. "instagram_dm", "whatsapp_message", "manual_outreach".
+    action_type = models.CharField(max_length=64, blank=True, default="")
     recommended_at = models.DateTimeField(auto_now_add=True)
     accepted = models.BooleanField(null=True, blank=True)
     acted_at = models.DateTimeField(blank=True, null=True)
+    # The conversation this recommendation produced (set when action executes).
+    # Gives the forward chain: Insight → RecommendationLog → Conversation.
+    conversation = models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="originating_recommendations",
+    )
     # Set after the related BusinessPolicy executes — wires the explicit chain.
     # Null until execution happens (may remain null if no policy was created).
     policy_execution = models.ForeignKey(
@@ -120,8 +132,15 @@ class RecommendationLog(models.Model):
         related_name="recommendation_logs",
     )
     outcome_measured_at = models.DateTimeField(blank=True, null=True)
-    # Free-form outcome populated by future business-signal measurement (P1).
-    # E.g. {"metric": "response_time", "before": 45, "after": 12, "unit": "min"}
+    # Progressive outcome signals — updated as business events occur downstream.
+    # Schema: {
+    #   "dm_sent_at": ISO str | null,
+    #   "dm_replied_at": ISO str | null,
+    #   "lead_created_at": ISO str | null,
+    #   "order_created_at": ISO str | null,
+    #   "order_paid_at": ISO str | null,
+    #   "revenue": "0.00", "currency": "ZMW"
+    # }
     outcome_summary = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -160,6 +179,8 @@ class BusinessPolicy(models.Model):
         "lead_followup_gap": Trigger.LEAD_UNANSWERED,
         "inactive_customers": Trigger.CUSTOMER_INACTIVE,
         "campaign_opportunity": Trigger.REPURCHASE_DUE,
+        "instagram_unanswered_intent": Trigger.CONVERSATION_UNANSWERED,
+        "instagram_high_engagement_contact": Trigger.CONVERSATION_UNANSWERED,
     }
 
     class Status(models.TextChoices):

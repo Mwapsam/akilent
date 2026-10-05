@@ -132,12 +132,13 @@ class InstagramWebhookView(View):
         # Store raw payload (idempotency enforced by unique constraint)
         from django.db import IntegrityError
         try:
-            event = WebhookEventLog.objects.create(
-                instagram_account=instagram_account,
-                event_id=event_id_key,
-                event_type=event_type,
-                raw_payload=payload,
-            )
+            with transaction.atomic():
+                event = WebhookEventLog.objects.create(
+                    instagram_account=instagram_account,
+                    event_id=event_id_key,
+                    event_type=event_type,
+                    raw_payload=payload,
+                )
         except IntegrityError:
             logger.debug(
                 "Instagram webhook: duplicate event_id=%s — skipping", event_id_key

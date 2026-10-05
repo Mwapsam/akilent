@@ -65,12 +65,7 @@ def test_action_step_resolves_object_kwarg_by_id_from_context(account, contact):
         account=account, phone_number="+260971111111", contact=contact
     )
     wa_conversation = WhatsAppConversation.get_or_open(wa_contact)
-    conversation = Conversation.objects.create(
-        account=account,
-        contact=contact,
-        channel=Conversation.Channel.WHATSAPP,
-        whatsapp_conversation=wa_conversation,
-    )
+    conversation = Conversation.get_or_create_for_whatsapp(wa_conversation)
 
     wf = _wf(
         account,

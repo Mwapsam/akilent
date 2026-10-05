@@ -90,12 +90,7 @@ def test_recipient_comes_from_the_conversations_whatsapp_identity(setup):
     person = Contact.objects.create(account=account, phone="+260979999999")
     wa_contact.contact = person
     wa_contact.save(update_fields=["contact"])
-    spine = SpineConversation.objects.create(
-        account=account,
-        contact=person,
-        channel=SpineConversation.Channel.WHATSAPP,
-        whatsapp_conversation=lapsed,
-    )
+    spine = SpineConversation.get_or_create_for_whatsapp(lapsed)
 
     run_action(
         "send_whatsapp",

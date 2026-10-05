@@ -10,11 +10,19 @@ def on_message_received(event: MessageReceived, **kwargs) -> None:
     from apps.accounts import api as accounts_api
     from apps.automation.models import AutomationRule
     from apps.automation.tasks import evaluate_rules_for_message
+    from apps.contacts.models import Contact
 
-    # Get the contact details for context
+    # Resolve the canonical Contact — channel-neutral path via contact_id.
+    # For WhatsApp, also attempt the channel-specific enrichment path below.
     try:
         account = accounts_api.get_account(event.account_id)
-        contact = whatsapp_api.get_contact(account, event.contact_id)
+        contact = Contact.objects.filter(
+            account=account, pk=event.contact_id
+        ).first()
+        if contact is None:
+            # Fallback for WhatsApp events that may carry a WhatsAppContact pk
+            # rather than a canonical Contact pk (legacy path).
+            contact = whatsapp_api.get_contact(account, event.contact_id)
     except Exception:
         logger.warning(
             "on_message_received: contact %s not found for account %s",
@@ -23,8 +31,16 @@ def on_message_received(event: MessageReceived, **kwargs) -> None:
         )
         return
 
+    if contact is None:
+        logger.warning(
+            "on_message_received: contact %s not found for account %s",
+            event.contact_id,
+            event.account_id,
+        )
+        return
+
     context = {
-        "phone_number": contact.phone_number,
+        "phone_number": getattr(contact, "phone_number", getattr(contact, "phone", "")),
         "message_type": event.message_type,
         "message_contains": event.body,
     }
@@ -36,17 +52,20 @@ def on_message_received(event: MessageReceived, **kwargs) -> None:
         context,
     )
 
-    # Modern Workflow engine: enroll on a "whatsapp.received" trigger. Kept in
-    # its own try/except — a failure here must never affect the legacy
-    # AutomationRule dispatch above, which has already been queued by this point.
-    try:
-        _enroll_workflows_for_reply(event, contact)
-    except Exception:
-        logger.exception(
-            "on_message_received: _enroll_workflows_for_reply failed for account=%s contact=%s",
-            event.account_id,
-            event.contact_id,
-        )
+    # Modern Workflow engine: enroll on a "whatsapp.received" trigger for
+    # WhatsApp events; other channels are handled at the service layer already
+    # (record_inbound_instagram_message calls enroll_for_trigger directly).
+    if event.channel == "whatsapp":
+        try:
+            wa_contact = whatsapp_api.get_contact(account, event.contact_id)
+            if wa_contact is not None:
+                _enroll_workflows_for_reply(event, wa_contact)
+        except Exception:
+            logger.exception(
+                "on_message_received: _enroll_workflows_for_reply failed for account=%s contact=%s",
+                event.account_id,
+                event.contact_id,
+            )
 
 
 def _enroll_workflows_for_reply(event: MessageReceived, wa_contact) -> None:

@@ -290,7 +290,7 @@ def test_send_template_from_composer(logged_in, open_conversation):
     ]
     # Pinned to the conversation it was sent from, so the reply can't surface
     # in a new thread once the 24h window has lapsed.
-    assert msg.payload["_conversation_id"] == open_conversation.whatsapp_conversation_id
+    assert msg.payload["_conversation_id"] == open_conversation.whatsapp_conversation.id
 
 
 @pytest.mark.django_db
