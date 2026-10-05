@@ -55,7 +55,24 @@ def exchange_code_for_token(code: str, redirect_uri: str) -> str:
             "code": code,
         },
         timeout=_TIMEOUT,
+        allow_redirects=False,  # prevent HTTP→HTTPS redirect converting POST to GET
     )
+    # If we get a redirect (3xx), follow it manually as POST to preserve the method
+    if resp.is_redirect:
+        location = resp.headers.get("Location", "")
+        logger.info("exchange_code_for_token: following redirect to %s", location)
+        resp = requests.post(
+            location,
+            data={
+                "client_id": settings.INSTAGRAM_APP_ID,
+                "client_secret": settings.INSTAGRAM_APP_SECRET,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+                "code": code,
+            },
+            timeout=_TIMEOUT,
+            allow_redirects=False,
+        )
     data = resp.json() if resp.content else {}
     if resp.status_code != 200 or "access_token" not in data:
         raise InstagramOAuthError(
