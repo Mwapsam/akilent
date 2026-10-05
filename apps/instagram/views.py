@@ -33,6 +33,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.core.utils import is_operator
 from apps.instagram.models.account import (
     InstagramBusinessAccount,
     TenantResolutionError,
@@ -71,10 +72,15 @@ def instagram_accounts(request):
         {
             "account": account,
             "iba_list": iba_list,
-            "webhook_url_hint": request.build_absolute_uri("/instagram/webhook/"),
-            "webhook_verify_token": getattr(settings, "INSTAGRAM_VERIFY_TOKEN", ""),
             "oauth_enabled": oauth_enabled,
             "setup_error": get_setup_error(request),
+            "show_webhook_setup": is_operator(request.user),
+            "webhook_url_hint": request.build_absolute_uri("/instagram/webhook/"),
+            "webhook_verify_token": (
+                getattr(settings, "INSTAGRAM_VERIFY_TOKEN", "")
+                if is_operator(request.user)
+                else ""
+            ),
         },
     )
 

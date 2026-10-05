@@ -92,7 +92,8 @@
 </div>
 {% endif %}
 
-{% comment %}App-level webhook setup — configured once in Meta's App Dashboard{% endcomment %}
+{% comment %}App-level webhook setup — operator-only; never shown to regular business users{% endcomment %}
+{% if show_webhook_setup %}
 <div class="mt-6 card p-5 text-sm space-y-2">
   <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Webhook configuration (Meta App Dashboard)</p>
   <div class="flex items-center gap-2 flex-wrap">
@@ -109,6 +110,7 @@
   </div>
   <p class="text-xs text-gray-400">These values are entered once in Meta's App Dashboard → Webhooks → Instagram. The verify token comes from your <code class="font-mono">INSTAGRAM_VERIFY_TOKEN</code> environment variable.</p>
 </div>
+{% endif %}
 
 {% if oauth_enabled %}
 <div class="mt-4 text-sm text-gray-500">
