@@ -3,7 +3,7 @@
 Uses Meta's Instagram Login for Business API:
   Auth dialog:    https://www.instagram.com/oauth/authorize
   Token exchange: https://api.instagram.com/oauth/access_token  (POST, short-lived)
-  Long-lived:     https://graph.instagram.com/access_token      (GET, 60 days)
+  Long-lived:     https://graph.instagram.com/access_token      (GET with query params, 60 days)
   Account info:   https://graph.instagram.com/me
 
 This is distinct from the Facebook Login flow used by WhatsApp.  The token
@@ -91,16 +91,14 @@ def get_long_lived_token(short_lived_token: str) -> str:
     """
     if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
         return short_lived_token
-    resp = requests.post(
+    resp = requests.get(
         f"{GRAPH_IG}/access_token",
-        data={
+        params={
             "grant_type": "ig_exchange_token",
-            "client_id": settings.INSTAGRAM_APP_ID,
             "client_secret": settings.INSTAGRAM_APP_SECRET,
             "access_token": short_lived_token,
         },
         timeout=_TIMEOUT,
-        allow_redirects=False,
     )
     data = resp.json() if resp.content else {}
     if resp.status_code == 200 and "access_token" in data:
