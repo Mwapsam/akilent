@@ -168,14 +168,14 @@ def subscribe_ig_account_to_webhooks(ig_user_id: str, access_token: str) -> bool
         timeout=_TIMEOUT,
     )
     data = resp.json() if resp.content else {}
-    if resp.status_code == 200 and data.get("success"):
-        return True
-    logger.warning(
-        "subscribe_ig_account_to_webhooks: failed for ig_user_id=%s (%s): %s",
+    logger.info(
+        "subscribe_ig_account_to_webhooks: ig_user_id=%s status=%s body=%s",
         ig_user_id,
         resp.status_code,
-        resp.text[:300],
+        resp.text[:500],
     )
+    if resp.status_code == 200 and data.get("success"):
+        return True
     return False
 
 
