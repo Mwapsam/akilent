@@ -174,9 +174,7 @@ def subscribe_ig_account_to_webhooks(ig_user_id: str, access_token: str) -> bool
         resp.status_code,
         resp.text[:500],
     )
-    if resp.status_code == 200 and data.get("success"):
-        return True
-    return False
+    return resp.status_code == 200 and bool(data.get("success"))
 
 
 def subscribe_page_to_webhooks(page_id: str, page_access_token: str) -> bool:
