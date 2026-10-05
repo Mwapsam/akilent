@@ -364,6 +364,10 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
 
     try:
         subscribed = subscribe_fn(page_id, page_access_token)
+        # For Instagram Business Login accounts (no page_id), subscribe via IG API directly
+        if not subscribed and not page_id:
+            from apps.instagram.oauth import subscribe_ig_account_to_webhooks
+            subscribed = subscribe_ig_account_to_webhooks(iba_id, page_access_token)
     except Exception as exc:
         logger.warning("_finish_instagram_oauth: subscribe failed: %s", exc)
         subscribed = False

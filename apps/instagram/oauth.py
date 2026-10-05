@@ -152,13 +152,38 @@ def discover_instagram_account(access_token: str) -> dict:
     }
 
 
+def subscribe_ig_account_to_webhooks(ig_user_id: str, access_token: str) -> bool:
+    """Subscribe an Instagram Business Account to webhook fields.
+
+    Uses the Instagram Graph API — works for Instagram Business Login accounts
+    that have no linked Facebook Page.  Returns True on success.
+    """
+    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    resp = requests.post(
+        f"{GRAPH_IG}/{version}/{ig_user_id}/subscribed_apps",
+        params={
+            "subscribed_fields": "messages,comments,mentions",
+            "access_token": access_token,
+        },
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code == 200 and data.get("success"):
+        return True
+    logger.warning(
+        "subscribe_ig_account_to_webhooks: failed for ig_user_id=%s (%s): %s",
+        ig_user_id,
+        resp.status_code,
+        resp.text[:300],
+    )
+    return False
+
+
 def subscribe_page_to_webhooks(page_id: str, page_access_token: str) -> bool:
     """Subscribe to Instagram webhook fields via the connected Facebook Page.
 
-    This endpoint is only reachable when the account has a linked Facebook Page
-    (``page_id`` non-empty).  When ``page_id`` is empty the subscription must be
-    configured manually in Meta's App Dashboard.
-
+    Only used for Facebook Login flow accounts that have a linked Facebook Page.
+    For Instagram Business Login accounts use subscribe_ig_account_to_webhooks.
     Returns True on success; False otherwise (non-blocking).
     """
     if not page_id:
