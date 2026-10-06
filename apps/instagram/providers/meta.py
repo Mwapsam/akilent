@@ -9,6 +9,10 @@ from .base import BaseInstagramProvider, EligibilityResult, SendResult
 logger = logging.getLogger(__name__)
 
 GRAPH_API_VERSION = "v21.0"
+# Instagram Business Login tokens (IGAA…) only work with graph.instagram.com.
+# graph.facebook.com requires a Facebook User/Page token (EAA…).
+GRAPH_IG_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
+# Kept for comment/media operations that may still need the Facebook Graph API.
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
 
@@ -28,8 +32,8 @@ class MetaInstagramProvider(BaseInstagramProvider):
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token}"}
 
-    def _post(self, endpoint: str, payload: dict) -> dict:
-        url = f"{GRAPH_API_BASE}/{endpoint}"
+    def _post(self, endpoint: str, payload: dict, *, base: str = GRAPH_IG_BASE) -> dict:
+        url = f"{base}/{endpoint}"
         resp = requests.post(url, json=payload, headers=self._headers(), timeout=10)
         try:
             data = resp.json()
@@ -61,7 +65,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             "messaging_type": "RESPONSE",
         }
         try:
-            data = self._post(f"{self._account_id}/messages", payload)
+            data = self._post("me/messages", payload)
             return SendResult(
                 success=True,
                 provider_message_id=data.get("message_id", ""),
@@ -86,7 +90,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             "messaging_type": "RESPONSE",
         }
         try:
-            data = self._post(f"{self._account_id}/messages", payload)
+            data = self._post("me/messages", payload)
             return SendResult(
                 success=True,
                 provider_message_id=data.get("message_id", ""),
@@ -101,7 +105,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             return SendResult(success=False, error=str(exc), terminal=False)
 
     def get_user_profile(self, igsid: str) -> dict:
-        url = f"{GRAPH_API_BASE}/{igsid}"
+        url = f"{GRAPH_IG_BASE}/{igsid}"
         params = {
             "fields": "name,username",
             "access_token": self._token,
@@ -117,7 +121,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
     def hide_comment(self, comment_id: str) -> bool:
         """Hide a comment on the business's media. Reversible."""
         try:
-            self._post(comment_id, {"hide": True})
+            self._post(comment_id, {"hide": True}, base=GRAPH_IG_BASE)
             return True
         except InstagramAPIError as exc:
             logger.warning(
@@ -132,7 +136,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
 
     def delete_comment(self, comment_id: str) -> bool:
         """Permanently delete a comment. Requires instagram_basic permission."""
-        url = f"{GRAPH_API_BASE}/{comment_id}"
+        url = f"{GRAPH_IG_BASE}/{comment_id}"
         try:
             resp = requests.delete(
                 url,
