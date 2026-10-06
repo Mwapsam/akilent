@@ -88,7 +88,8 @@ on these pages, and a lawyer should review them.
 </style>
 
 {# ─── Public top navbar ───────────────────────────────────────────────── #}
-<header class="public-nav sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur">
+<header class="public-nav sticky top-0 border-b border-border bg-surface/95 backdrop-blur"
+        style="z-index: var(--z-sticky)">
   <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
     <a href="{% url 'core:home' %}" class="flex items-center gap-2 font-semibold text-ink shrink-0">
       {% include "components/brand_mark.html" with class="w-7 h-7" %}
