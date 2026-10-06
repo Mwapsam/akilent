@@ -17,6 +17,28 @@ atpublic = "*"
 attrs = "*"
 
 [[package]]
+name = "amazon-s3-encryption-client-python"
+version = "4.0.0"
+description = "This library provides an S3 client that supports client-side encryption."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "amazon_s3_encryption_client_python-4.0.0-py3-none-any.whl", hash = "sha256:5559b049a055d27d20c57bbac2c2fa306deb3b218cb7d3caaa93eac11bfb4810"},
+    {file = "amazon_s3_encryption_client_python-4.0.0.tar.gz", hash = "sha256:8ef6b28a267d8de89fc09798a65433144fa67e33e26ce4fb50199b580eeb4c4d"},
+]
+
+[package.dependencies]
+attrs = ">=26.1.0,<27"
+boto3 = ">=1.43.6,<2"
+cryptography = ">=48.0.0,<49"
+
+[package.extras]
+dev = ["boto3-stubs (>=1.43.6,<1.44.0)", "ruff (>=0.15.12)"]
+docs = ["sphinx (>=7.0,<8)", "sphinx-rtd-theme (>=2.0,<3)"]
+test = ["pytest (>=9.0.3)", "pytest-cov (>=7.1.0)"]
+
+[[package]]
 name = "amqp"
 version = "5.4.0"
 description = "Low-level AMQP client for Python (fork of amqplib)."
@@ -833,6 +855,33 @@ tzdata = {version = "*", markers = "sys_platform == \"win32\""}
 [package.extras]
 argon2 = ["argon2-cffi (>=23.1.0)"]
 bcrypt = ["bcrypt (>=4.1.1)"]
+
+[[package]]
+name = "django-anymail"
+version = "15.2"
+description = "Django email backends and webhooks for Amazon SES, Brevo,  MailerSend, Mailgun, Mailjet, Mailtrap, Mandrill, Postal, Postmark, Resend,  Scaleway TEM, SendGrid, SparkPost, and Unisender Go  (EmailBackend, transactional email tracking and inbound email signals)"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "django_anymail-15.2-py3-none-any.whl", hash = "sha256:866ed547e9d3110210e6fad343a2311eead55dbd4d544195fb628d06ae25d737"},
+    {file = "django_anymail-15.2.tar.gz", hash = "sha256:65b26b1c99e6a09051b71b012ac4dfdd75a33aeb057315944dd9fb872cae57cf"},
+]
+
+[package.dependencies]
+amazon-s3-encryption-client-python = {version = "*", optional = true, markers = "extra == \"amazon-ses\""}
+boto3 = {version = ">=1.43.6", optional = true, markers = "extra == \"amazon-ses\""}
+django = ">=5.0"
+idna = "*"
+requests = ">=2.4.3"
+urllib3 = ">=1.25.0"
+
+[package.extras]
+amazon-ses = ["amazon-s3-encryption-client-python", "boto3 (>=1.43.6)"]
+postal = ["cryptography"]
+resend = ["svix"]
+sendgrid = ["cryptography"]
+uts46 = ["uts46"]
 
 [[package]]
 name = "django-filter"
@@ -3277,4 +3326,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "85b9e32dbb02ce40908b9d7c4da91cb5892016b33fb63b82c148922dfe2949bf"
+content-hash = "432f2d53fa1d0d57f7caf3532496cb0b84118dfe30f0a3110d056043713ed27b"

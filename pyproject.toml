@@ -36,7 +36,8 @@ dependencies = [
     "uvicorn-worker (>=0.3,<1.0)",
     "django-otp (>=1.7.3,<2.0.0)",
     "segno (>=1.6.6,<2.0.0)",
-    "bandit (>=1.9.4,<2.0.0)"
+    "bandit (>=1.9.4,<2.0.0)",
+    "django-anymail[amazon-ses,mailtrap] (>=15.2,<16.0)"
 ]
 
 [build-system]
