@@ -37,6 +37,7 @@ from apps.instagram.views import InstagramWebhookView
 # ---------------------------------------------------------------------------
 
 
+@override_settings(INSTAGRAM_APP_SECRET="test_token")
 class TestWebhookSignature(TestCase):
     def setUp(self):
         self.account, _ = make_account()
