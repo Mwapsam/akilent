@@ -58,7 +58,7 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
 
     message = entry.get("message", {})
     message_id = message.get("mid", "")
-    body = message.get("text", "")
+    body = message.get("text", "") or _extract_message_body(message)
     ts_ms = entry.get("timestamp", 0)
     timestamp = (
         datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else timezone.now()
@@ -252,6 +252,28 @@ def _normalise_mention(value: dict) -> dict:
         "parent_id": value.get("parent_id", ""),
         "_mention": True,
     }
+
+
+def _extract_message_body(message: dict) -> str:
+    """Return a human-readable body for non-text Instagram message types."""
+    if message.get("attachments"):
+        types = [a.get("type", "attachment") for a in message["attachments"]]
+        labels = {
+            "image": "[Photo]",
+            "video": "[Video]",
+            "audio": "[Audio]",
+            "file": "[File]",
+        }
+        return " ".join(labels.get(t, "[Attachment]") for t in types)
+    if message.get("sticker_id"):
+        return "[Sticker]"
+    if message.get("reactions"):
+        r = message["reactions"]
+        emoji = r[0].get("emoji", "") if isinstance(r, list) else r.get("emoji", "")
+        return f"[Reaction: {emoji}]" if emoji else "[Reaction]"
+    if message.get("reply_to"):
+        return "[Reply]"
+    return ""
 
 
 def _synthetic_message_id(igsid: str, ts_ms: int) -> str:
