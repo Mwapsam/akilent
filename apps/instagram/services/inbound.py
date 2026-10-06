@@ -61,7 +61,9 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
     # not a new customer message. Processing them would create a duplicate record
     # in the wrong direction.
     if message.get("is_echo"):
-        logger.debug("_process_dm_entry: skipping echo message mid=%s", message.get("mid"))
+        logger.debug(
+            "_process_dm_entry: skipping echo message mid=%s", message.get("mid")
+        )
         return
     message_id = message.get("mid", "")
     body = message.get("text", "") or _extract_message_body(message)
