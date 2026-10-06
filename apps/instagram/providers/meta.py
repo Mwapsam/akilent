@@ -65,7 +65,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             "messaging_type": "RESPONSE",
         }
         try:
-            data = self._post("me/messages", payload)
+            data = self._post(f"{self._account_id}/messages", payload)
             return SendResult(
                 success=True,
                 provider_message_id=data.get("message_id", ""),
@@ -90,7 +90,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             "messaging_type": "RESPONSE",
         }
         try:
-            data = self._post("me/messages", payload)
+            data = self._post(f"{self._account_id}/messages", payload)
             return SendResult(
                 success=True,
                 provider_message_id=data.get("message_id", ""),

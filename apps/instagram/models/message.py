@@ -110,7 +110,7 @@ class OutboundMessage(models.Model):
         max_length=20, choices=Status.choices, default=Status.QUEUED
     )
     # Message ID returned by Meta after a successful send
-    provider_message_id = models.CharField(max_length=100, blank=True, default="")
+    provider_message_id = models.CharField(max_length=500, blank=True, default="")
     attempts = models.PositiveSmallIntegerField(default=0)
     next_attempt_at = models.DateTimeField(blank=True, null=True)
     last_error = models.TextField(blank=True, default="")
