@@ -71,21 +71,29 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
     ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
     ig_convo.register_inbound(timestamp)
 
-    # 3. Persist the message (idempotent on message_id)
-    if message_id and InstagramMessage.objects.filter(message_id=message_id).exists():
-        logger.debug("Duplicate Instagram message %s — skipping", message_id)
-        return
-
-    ig_message = InstagramMessage.objects.create(
-        conversation=ig_convo,
-        message_id=message_id or _synthetic_message_id(igsid, ts_ms),
-        direction=InstagramMessage.Direction.INBOUND,
-        body=body,
-        timestamp=timestamp,
-        metadata=entry,
+    # 3. Persist the message — get_or_create ensures idempotency across retries.
+    # A previous attempt may have created the InstagramMessage but failed before
+    # completing the Message spine; always fall through to record_inbound so the
+    # spine is created on the next retry even if ig_message already exists.
+    effective_mid = message_id or _synthetic_message_id(igsid, ts_ms)
+    ig_message, ig_created = InstagramMessage.objects.get_or_create(
+        message_id=effective_mid,
+        defaults={
+            "conversation": ig_convo,
+            "direction": InstagramMessage.Direction.INBOUND,
+            "body": body,
+            "timestamp": timestamp,
+            "metadata": entry,
+        },
     )
+    if not ig_created:
+        logger.debug(
+            "Duplicate Instagram message %s — ensuring spine exists", effective_mid
+        )
 
-    # 4. Project onto the canonical spine (Message + Event + workflow enrollment)
+    # 4. Project onto the canonical spine (Message + Event + workflow enrollment).
+    # record_inbound_instagram_message is idempotent: it uses get_or_create on the
+    # instagram_message OneToOne FK, so a second call is a safe no-op.
     from apps.conversations.services import record_inbound_instagram_message
 
     record_inbound_instagram_message(
