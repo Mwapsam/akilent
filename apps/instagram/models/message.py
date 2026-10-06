@@ -39,8 +39,8 @@ class InstagramMessage(models.Model):
         related_name="messages",
     )
 
-    # Instagram's external message ID — unique per account
-    message_id = models.CharField(max_length=100)
+    # Instagram's external message ID — unique per account (base64, ~200+ chars)
+    message_id = models.CharField(max_length=500)
     direction = models.CharField(max_length=10, choices=Direction.choices)
     body = models.TextField(blank=True, default="")
     status = models.CharField(
