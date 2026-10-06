@@ -116,6 +116,42 @@ class ReplyAction(Action):
             conversation.whatsapp_conversation.register_outbound(msg.created_at)
             return {"outbound_message_id": msg.id}
 
+        if conversation.channel == conversation.Channel.INSTAGRAM:
+            import uuid
+
+            from django.utils import timezone
+
+            from apps.conversations.services import record_outbound_message
+            from apps.instagram.models.message import OutboundMessage
+            from apps.instagram.services.outbound import enqueue_reply, send_outbound
+
+            ig_convo = conversation.instagram_conversation
+            if ig_convo is None:
+                raise ActionError("Instagram conversation record not found")
+            igsid = ig_convo.instagram_contact.instagram_scoped_id
+            instagram_account = ig_convo.instagram_account
+            key = idempotency_key or f"reply:{conversation.pk}:{uuid.uuid4()}"
+            outbound = enqueue_reply(
+                instagram_account,
+                igsid,
+                body,
+                action_type=OutboundMessage.ActionType.DM_REPLY,
+                idempotency_key=key,
+            )
+            if outbound is None:
+                outbound = OutboundMessage.objects.get(idempotency_key=key)
+            ok = send_outbound(outbound)
+            if not ok:
+                raise ActionError(f"Instagram send failed: {outbound.last_error}")
+            msg, _ = record_outbound_message(
+                conversation=conversation,
+                body=body,
+                timestamp=outbound.sent_at or timezone.now(),
+                status="sent",
+            )
+            ig_convo.register_inbound(msg.timestamp)
+            return {"outbound_message_id": msg.id}
+
         raise ActionError(
             f"reply not yet implemented for channel {conversation.channel!r}"
         )

@@ -90,6 +90,11 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
         logger.debug(
             "Duplicate Instagram message %s — ensuring spine exists", effective_mid
         )
+        # Backfill body if the first attempt created the record before body
+        # extraction was in place.
+        if body and not ig_message.body:
+            ig_message.body = body
+            ig_message.save(update_fields=["body"])
 
     # 4. Project onto the canonical spine (Message + Event + workflow enrollment).
     # record_inbound_instagram_message is idempotent: it uses get_or_create on the

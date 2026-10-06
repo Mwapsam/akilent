@@ -188,6 +188,9 @@ def record_inbound_instagram_message(
         },
     )
     if not created:
+        if instagram_message.body and not message.body:
+            message.body = instagram_message.body
+            message.save(update_fields=["body"])
         return None
 
     event = emit_event(
