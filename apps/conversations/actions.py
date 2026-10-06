@@ -143,14 +143,15 @@ class ReplyAction(Action):
             ok = send_outbound(outbound)
             if not ok:
                 raise ActionError(f"Instagram send failed: {outbound.last_error}")
-            msg, _ = record_outbound_message(
+            sent_at = outbound.sent_at or timezone.now()
+            spine_msg, _ = record_outbound_message(
                 conversation=conversation,
                 body=body,
-                timestamp=outbound.sent_at or timezone.now(),
+                timestamp=sent_at,
                 status="sent",
             )
-            ig_convo.register_inbound(msg.timestamp)
-            return {"outbound_message_id": msg.id}
+            ig_convo.register_inbound(sent_at)
+            return {"outbound_message_id": spine_msg.id}
 
         raise ActionError(
             f"reply not yet implemented for channel {conversation.channel!r}"
