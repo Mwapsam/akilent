@@ -406,13 +406,21 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
     return True, ""
 
 
-def _verify_signature(request, access_token: str) -> bool:
-    """Verify Meta's X-Hub-Signature-256 header using the page access token as secret."""
+def _verify_signature(request) -> bool:
+    """Verify Meta's X-Hub-Signature-256 header using the app secret as the key.
+
+    Meta signs all webhook payloads with HMAC-SHA256(app_secret, body), not the
+    per-account access token.  If the app secret is not configured, skip verification
+    so development environments without secrets still work.
+    """
+    app_secret = getattr(settings, "INSTAGRAM_APP_SECRET", "") or ""
+    if not app_secret:
+        return True
     signature_header = request.META.get("HTTP_X_HUB_SIGNATURE_256", "")
     if not signature_header.startswith("sha256="):
         return False
     received = signature_header[7:]
-    expected = hmac.new(access_token.encode(), request.body, hashlib.sha256).hexdigest()
+    expected = hmac.new(app_secret.encode(), request.body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(received, expected)
 
 
@@ -490,13 +498,12 @@ class InstagramWebhookView(View):
                     page_id,
                 )
 
-        if instagram_account and instagram_account.access_token:
-            if not _verify_signature(request, instagram_account.access_token):
-                logger.warning(
-                    "Instagram webhook: bad signature from %s",
-                    request.META.get("REMOTE_ADDR"),
-                )
-                return HttpResponse(status=403)
+        if not _verify_signature(request):
+            logger.warning(
+                "Instagram webhook: bad signature from %s",
+                request.META.get("REMOTE_ADDR"),
+            )
+            return HttpResponse(status=403)
 
         event_type = _classify_event(payload)
         event_id_key = _deterministic_event_id(
