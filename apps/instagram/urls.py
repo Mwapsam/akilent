@@ -9,10 +9,16 @@ from .views import (
     instagram_connect_oauth_callback,
     instagram_connect_oauth_select,
     instagram_connect_oauth_start,
+    instagram_data_deletion,
+    instagram_deauthorize,
 )
 
 urlpatterns = [
     path("webhook/", InstagramWebhookView.as_view(), name="instagram-webhook"),
+    # Meta callbacks, entered in Instagram > API setup with Instagram Login >
+    # Business login settings.
+    path("deauthorize/", instagram_deauthorize, name="instagram-deauthorize"),
+    path("data-deletion/", instagram_data_deletion, name="instagram-data-deletion"),
     path("accounts/", instagram_accounts, name="instagram-accounts"),
     # OAuth (Business Login) connect flow
     path(

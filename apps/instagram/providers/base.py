@@ -10,6 +10,14 @@ class SendResult:
     provider_message_id: str = ""
     error: str = ""
     terminal: bool = False  # True = non-retryable (permissions, policy violations)
+    # Meta's error code and HTTP status, when the API answered with an error.
+    error_code: int | None = None
+    http_status: int = 0
+
+    @property
+    def token_invalid(self) -> bool:
+        """The access token is expired, revoked or otherwise unusable (reconnect needed)."""
+        return self.error_code == 190 or self.http_status == 401
 
 
 @dataclass
@@ -23,9 +31,10 @@ class BaseInstagramProvider(ABC):
     def can_send(self, recipient_igsid: str, action_type: str) -> EligibilityResult:
         """Check whether a DM or private reply can be sent to this IGSID.
 
-        Meta distinguishes ordinary DM messaging (user must have messaged first,
-        within their applicable window) from private replies to comments (7-day
-        window from the comment). The provider owns this reasoning.
+        Meta distinguishes ordinary DM messaging (user must have messaged first;
+        free-text replies within 24 hours of their last message) from private
+        replies to comments (7 days from the comment). The provider owns this
+        reasoning.
         """
 
     @abstractmethod

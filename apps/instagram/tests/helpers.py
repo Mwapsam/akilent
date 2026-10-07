@@ -128,7 +128,9 @@ def comment_payload(
 # ---------------------------------------------------------------------------
 
 
-def signed_post(payload: dict, secret: str = "test_token") -> HttpRequest:
+def signed_post(payload: dict, secret: str = "test_app_secret") -> HttpRequest:
+    # Default = WHATSAPP_APP_SECRET in settings_test: the Meta app secret, which the
+    # Instagram webhook accepts alongside INSTAGRAM_APP_SECRET.
     body = json.dumps(payload).encode()
     sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     request = HttpRequest()

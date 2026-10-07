@@ -22,8 +22,8 @@ def handle_dm(event: WebhookEventLog) -> None:
     """
     Process an inbound Instagram DM webhook event.
 
-    Order: persist contact → persist conversation → persist message → fire
-    MessageReceived → run intent detection.
+    Order: persist contact → persist conversation → persist message → project
+    onto the spine (workflows, lead capture, AI) → publish MessageReceived.
     """
     payload = event.raw_payload
     instagram_account = event.instagram_account
@@ -45,43 +45,71 @@ def handle_dm(event: WebhookEventLog) -> None:
 
 
 def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) -> None:
-    from apps.instagram.services.contacts import resolve_or_create_contact
-    from apps.instagram.services.conversations import (
-        get_or_create_instagram_conversation,
-    )
-    from apps.instagram.services.intent import evaluate_intent
-
     sender = entry.get("sender", {})
     igsid = sender.get("id", "")
     if not igsid:
         return
 
-    message = entry.get("message", {})
-    # Echo messages are Meta's notification that the business sent a DM — they are
-    # not a new customer message. Processing them would create a duplicate record
-    # in the wrong direction.
-    if message.get("is_echo"):
+    # Only "message" entries are messages. Read receipts, reactions, postbacks,
+    # referrals and edits arrive in the same "messaging" array; treating them as
+    # messages put blank customer messages in the inbox and triggered AI replies.
+    message = entry.get("message")
+    if not message:
         logger.debug(
-            "_process_dm_entry: skipping echo message mid=%s", message.get("mid")
+            "_process_dm_entry: ignoring non-message event keys=%s",
+            sorted(k for k in entry if k not in {"sender", "recipient", "timestamp"}),
         )
         return
-    message_id = message.get("mid", "")
-    body = message.get("text", "") or _extract_message_body(message)
+    if message.get("is_deleted") or message.get("is_unsupported"):
+        logger.debug(
+            "_process_dm_entry: skipping deleted/unsupported mid=%s", message.get("mid")
+        )
+        return
+
     ts_ms = entry.get("timestamp", 0)
     timestamp = (
         datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else timezone.now()
     )
 
-    # 1. Resolve channel identity → canonical Contact
+    # Echoes are Meta's copy of a message the business sent. One sent through
+    # Akilent is already recorded; one sent from the Instagram app is recorded
+    # here, so the inbox shows the whole conversation.
+    if message.get("is_echo"):
+        _record_echo(instagram_account, entry, message, timestamp)
+        return
+
+    _record_inbound_dm(instagram_account, igsid, entry, message, ts_ms, timestamp)
+
+
+def _record_inbound_dm(
+    instagram_account: InstagramBusinessAccount,
+    igsid: str,
+    entry: dict,
+    message: dict,
+    ts_ms: int,
+    timestamp,
+) -> None:
+    from apps.conversations.services import record_inbound_instagram_message
+    from apps.instagram.services.contacts import resolve_or_create_contact
+    from apps.instagram.services.conversations import (
+        get_or_create_instagram_conversation,
+    )
+
+    message_id = message.get("mid", "")
+    message_type, body = describe_message(message)
+
+    # 1. Resolve channel identity -> canonical Contact
     ig_contact = resolve_or_create_contact(instagram_account, igsid)
 
-    # 2. Resolve/create DM conversation + spine
-    ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
+    # 2. Resolve/create DM conversation + spine (routed once, when created)
+    ig_convo, _spine = get_or_create_instagram_conversation(
+        ig_contact, instagram_account
+    )
     ig_convo.register_inbound(timestamp)
 
     # 3. Persist the message — get_or_create ensures idempotency across retries.
     # A previous attempt may have created the InstagramMessage but failed before
-    # completing the Message spine; always fall through to record_inbound so the
+    # completing the Message spine; always fall through to the projection so the
     # spine is created on the next retry even if ig_message already exists.
     effective_mid = message_id or _synthetic_message_id(igsid, ts_ms)
     ig_message, ig_created = InstagramMessage.objects.get_or_create(
@@ -91,38 +119,115 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
             "direction": InstagramMessage.Direction.INBOUND,
             "body": body,
             "timestamp": timestamp,
-            "metadata": entry,
+            "metadata": {**entry, "message_type": message_type},
         },
     )
     if not ig_created:
         logger.debug(
             "Duplicate Instagram message %s — ensuring spine exists", effective_mid
         )
-        # Backfill body if the first attempt created the record before body
-        # extraction was in place.
         if body and not ig_message.body:
             ig_message.body = body
             ig_message.save(update_fields=["body"])
 
-    # 4. Project onto the canonical spine (Message + Event + workflow enrollment).
-    # record_inbound_instagram_message is idempotent: it uses get_or_create on the
-    # instagram_message OneToOne FK, so a second call is a safe no-op.
-    from apps.conversations.services import record_inbound_instagram_message
-
-    record_inbound_instagram_message(
+    # 4. Project onto the canonical spine: Message + Event, then the same
+    # forms/workflows/lead capture/AI pipeline WhatsApp uses. Idempotent.
+    conversation = record_inbound_instagram_message(
         contact=ig_contact.contact,
         instagram_conversation=ig_convo,
         instagram_message=ig_message,
+        enroll_workflows=_automation_events_enabled(),
     )
 
-    # 6. Intent detection → AIProposal (never auto-creates a Lead)
-    if body and ig_contact.contact_id:
-        evaluate_intent(
-            instagram_account.account,
-            spine,
-            body,
-            source_description="DM",
+    # 5. Legacy AutomationRules listen for MessageReceived (new messages only).
+    if conversation is not None and ig_contact.contact_id:
+        _publish_message_received(
+            instagram_account, ig_contact.contact_id, ig_message, message_type
         )
+
+
+def _record_echo(
+    instagram_account: InstagramBusinessAccount,
+    entry: dict,
+    message: dict,
+    timestamp,
+) -> None:
+    """Record a business message sent outside Akilent (e.g. the Instagram app)."""
+    from apps.conversations.services import record_outbound_message
+    from apps.instagram.services.contacts import resolve_or_create_contact
+    from apps.instagram.services.conversations import (
+        get_or_create_instagram_conversation,
+    )
+
+    mid = message.get("mid", "")
+    customer_igsid = (entry.get("recipient") or {}).get("id", "")
+    if not mid or not customer_igsid:
+        return
+    if InstagramMessage.objects.filter(message_id=mid).exists():
+        # Sent through Akilent — already recorded when the send succeeded.
+        logger.debug("_record_echo: mid=%s already recorded", mid)
+        return
+
+    message_type, body = describe_message(message)
+    ig_contact = resolve_or_create_contact(instagram_account, customer_igsid)
+    ig_convo, spine = get_or_create_instagram_conversation(
+        ig_contact, instagram_account
+    )
+    ig_message, created = InstagramMessage.objects.get_or_create(
+        message_id=mid,
+        defaults={
+            "conversation": ig_convo,
+            "direction": InstagramMessage.Direction.OUTBOUND,
+            "status": InstagramMessage.Status.SENT,
+            "body": body,
+            "timestamp": timestamp,
+            "metadata": {**entry, "message_type": message_type},
+        },
+    )
+    if not created:
+        return
+    ig_convo.register_outbound(timestamp)
+    record_outbound_message(
+        conversation=spine,
+        body=body,
+        timestamp=timestamp,
+        status="sent",
+        metadata={"message_type": message_type, "sent_by": "instagram_app"},
+        instagram_message=ig_message,
+    )
+
+
+def _automation_events_enabled() -> bool:
+    """Same switch the WhatsApp inbound path uses to decide whether to enroll workflows."""
+    try:
+        from apps.whatsapp.tasks import _automation_events_enabled as enabled
+
+        return enabled()
+    except Exception:
+        return False
+
+
+def _publish_message_received(
+    instagram_account, contact_id: int, ig_message, message_type: str
+) -> None:
+    try:
+        from apps.core.events import MessageReceived, dispatcher
+
+        if not _automation_events_enabled():
+            return
+        dispatcher.publish(
+            MessageReceived(
+                account_id=instagram_account.account_id,
+                contact_id=contact_id,
+                message_id=ig_message.message_id,
+                channel="instagram",
+                body=ig_message.body,
+                message_type=message_type,
+                occurred_at=ig_message.timestamp,
+            )
+        )
+    except Exception as exc:
+        logger.debug("instagram: failed to publish MessageReceived: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +266,10 @@ def _process_comment_entry(
     commenter = entry.get("from", {})
     igsid = commenter.get("id", "")
     if not igsid:
+        return
+    if igsid == instagram_account.instagram_business_account_id:
+        # The business replying on its own post: not a customer, never a trigger.
+        logger.debug("_process_comment_entry: skipping own comment %s", entry.get("id"))
         return
 
     comment_id = entry.get("id", "")
@@ -275,26 +384,35 @@ def _normalise_mention(value: dict) -> dict:
     }
 
 
-def _extract_message_body(message: dict) -> str:
-    """Return a human-readable body for non-text Instagram message types."""
-    if message.get("attachments"):
-        types = [a.get("type", "attachment") for a in message["attachments"]]
-        labels = {
-            "image": "[Photo]",
-            "video": "[Video]",
-            "audio": "[Audio]",
-            "file": "[File]",
-        }
-        return " ".join(labels.get(t, "[Attachment]") for t in types)
+_ATTACHMENT_LABELS = {
+    "image": "[Photo]",
+    "video": "[Video]",
+    "audio": "[Audio]",
+    "file": "[File]",
+    "share": "[Shared post]",
+    "ig_reel": "[Reel]",
+    "reel": "[Reel]",
+    "story_mention": "[Mentioned you in their story]",
+}
+
+
+def describe_message(message: dict) -> tuple[str, str]:
+    """``(message_type, body)`` for an Instagram message: its text, or a readable label."""
+    text = message.get("text", "") or ""
+    reply_to = message.get("reply_to") or {}
+    if reply_to.get("story"):
+        return "story_reply", f"[Replied to your story] {text}".strip()
+    attachments = message.get("attachments") or []
+    if attachments:
+        types = [a.get("type", "attachment") for a in attachments]
+        labels = " ".join(_ATTACHMENT_LABELS.get(t, "[Attachment]") for t in types)
+        kind = types[0] if types[0] in _ATTACHMENT_LABELS else "attachment"
+        return kind, f"{text} {labels}".strip()
+    if text:
+        return "text", text
     if message.get("sticker_id"):
-        return "[Sticker]"
-    if message.get("reactions"):
-        r = message["reactions"]
-        emoji = r[0].get("emoji", "") if isinstance(r, list) else r.get("emoji", "")
-        return f"[Reaction: {emoji}]" if emoji else "[Reaction]"
-    if message.get("reply_to"):
-        return "[Reply]"
-    return ""
+        return "sticker", "[Sticker]"
+    return "unknown", ""
 
 
 def _synthetic_message_id(igsid: str, ts_ms: int) -> str:

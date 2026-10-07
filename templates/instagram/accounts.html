@@ -10,7 +10,7 @@
   </div>
   {% if oauth_enabled %}
   <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm shrink-0">Connect Instagram</a>
-  {% else %}
+  {% elif can_manage_tokens %}
   <a href="{% url 'instagram-account-connect' %}" class="btn btn-primary btn-sm shrink-0">Connect account</a>
   {% endif %}
 </header>
@@ -56,21 +56,28 @@
         {% if iba.is_ready %}
           {% include "components/status.html" with state="sent" badge=True %}
         {% elif iba.token_expired %}
-          <span class="badge badge-danger">Token expired</span>
+          <span class="badge badge-danger">Connection expired</span>
         {% else %}
           <span class="badge badge-neutral">Not ready</span>
         {% endif %}
+        {% if not iba.is_ready and oauth_enabled %}
+        <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm">Reconnect</a>
+        {% endif %}
+        {% if can_manage_tokens %}
         <a href="{% url 'instagram-account-edit' iba.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+        {% endif %}
         <form method="post" action="{% url 'instagram-account-delete' iba.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-ghost btn-sm text-red-600"
-                  onclick="return confirm('Disconnect {{ iba.username|default:iba.instagram_business_account_id }}? This cannot be undone.')">
+                  onclick="return confirm('Disconnect {{ iba.username|default:iba.instagram_business_account_id }}? New messages will stop arriving; past conversations stay in your inbox.')">
             Disconnect
           </button>
         </form>
       </div>
     </div>
-
+    {% if iba.token_expired %}
+    <p class="mt-3 text-sm text-gray-600">Instagram stopped accepting this connection, so messages can't be sent or received. Reconnect to fix it — your conversations are kept.</p>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>
@@ -86,8 +93,10 @@
   </div>
   {% if oauth_enabled %}
   <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm mt-1">Connect Instagram</a>
-  {% else %}
+  {% elif can_manage_tokens %}
   <a href="{% url 'instagram-account-connect' %}" class="btn btn-primary btn-sm mt-1">Connect account</a>
+  {% else %}
+  <p class="text-sm text-gray-500">Instagram isn't available yet. We'll let you know when you can connect it.</p>
   {% endif %}
 </div>
 {% endif %}
@@ -112,9 +121,9 @@
 </div>
 {% endif %}
 
-{% if oauth_enabled %}
+{% if oauth_enabled and can_manage_tokens %}
 <div class="mt-4 text-sm text-gray-500">
-  Developer or operator?
+  Operator:
   <a href="{% url 'instagram-account-connect' %}" class="underline hover:text-ink">Manual token entry</a>
 </div>
 {% endif %}

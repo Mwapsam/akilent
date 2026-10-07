@@ -1,4 +1,3 @@
-import hashlib
 import hmac
 import json
 import logging
@@ -609,21 +608,9 @@ def campaign_detail(request, pk: int):
 
 
 def _verify_meta_signature(request) -> bool:
-    secret = settings.WHATSAPP_APP_SECRET
-    if not secret:
-        return False
-    header = request.headers.get("X-Hub-Signature-256", "")
-    if not header.startswith("sha256="):
-        return False
-    their_digest = header.removeprefix("sha256=")
+    from apps.core.meta_signature import verify_meta_signature
 
-    expected = hmac.new(
-        key=secret.encode(),
-        msg=request.body,
-        digestmod=hashlib.sha256,
-    ).hexdigest()
-
-    return hmac.compare_digest(their_digest, expected)
+    return verify_meta_signature(request, [settings.WHATSAPP_APP_SECRET])
 
 
 def _classify_event(payload: dict) -> str:
@@ -660,11 +647,15 @@ class WhatsAppWebhookView(View):
         return HttpResponse(status=403)
 
     def post(self, request):
-        if not _verify_meta_signature(request):
-            logger.warning(
-                "WhatsApp webhook: bad signature from %s",
-                request.META.get("REMOTE_ADDR"),
+        if not settings.WHATSAPP_APP_SECRET:
+            logger.error(
+                "WhatsApp webhook: WHATSAPP_APP_SECRET is not configured — rejecting every POST"
             )
+            return HttpResponse(status=403)
+        if not _verify_meta_signature(request):
+            from apps.core.meta_signature import log_signature_failure
+
+            log_signature_failure(request, "WhatsApp")
             return HttpResponse(status=403)
 
         try:

@@ -343,65 +343,65 @@ class TestSendEligibility(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — Buying intent creates AIProposal, not a Lead
+# Test 6 — A buying-intent DM opens one Lead, exactly like WhatsApp
+# (and never leaves a never-finishing "purchase_intent" AI card behind)
 # ---------------------------------------------------------------------------
 
 
-class TestBuyingIntentProposal(TestCase):
+def _deliver_dm(ig_account, igsid, body, *, ts=None):
+    from apps.instagram.models.webhook import WebhookEventLog
+    from apps.instagram.tasks import process_instagram_event
+
+    payload = dm_payload(
+        ig_account.page_id, igsid, body, msg_id=f"mid.{secrets.token_hex(4)}", ts=ts
+    )
+    with patch("apps.instagram.views.process_instagram_event"):
+        InstagramWebhookView.as_view()(signed_post(payload))
+    event = WebhookEventLog.objects.filter(status="received").last()
+    process_instagram_event(event.pk)
+
+
+@patch("apps.instagram.services.inbound._automation_events_enabled", return_value=True)
+class TestBuyingIntentOpensLead(TestCase):
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
 
-    def test_intent_dm_creates_proposal_not_lead(self):
+    def test_intent_dm_opens_a_lead_and_no_purchase_intent_proposal(
+        self, automation_switch
+    ):
         from apps.ai.models import AIProposal
+        from apps.conversations.models import Conversation
         from apps.crm.models import Lead
-        from apps.instagram.models.webhook import WebhookEventLog
-        from apps.instagram.tasks import process_instagram_event
 
-        # "How much does it cost?" contains a buying-intent phrase
-        igsid = f"igsid_{secrets.token_hex(4)}"
-        payload = dm_payload(self.ig_account.page_id, igsid, "How much does it cost?")
-        view = InstagramWebhookView.as_view()
-        with patch("apps.instagram.views.process_instagram_event"):
-            view(signed_post(payload))
-        event = WebhookEventLog.objects.first()
-        process_instagram_event(event.pk)
+        _deliver_dm(
+            self.ig_account, f"igsid_{secrets.token_hex(4)}", "How much does it cost?"
+        )
 
-        self.assertEqual(Lead.objects.count(), 0)
-        proposal = AIProposal.objects.filter(
-            account=self.account, action="purchase_intent"
-        ).first()
-        self.assertIsNotNone(proposal)
-        self.assertEqual(proposal.status, AIProposal.Status.PENDING)
-
-    def test_duplicate_intent_in_same_conversation_creates_one_proposal(self):
-        from apps.ai.models import AIProposal
-        from apps.instagram.models.webhook import WebhookEventLog
-        from apps.instagram.tasks import process_instagram_event
-
-        igsid = f"igsid_{secrets.token_hex(4)}"
-        view = InstagramWebhookView.as_view()
-
-        base_ts = int(timezone.now().timestamp() * 1000)
-        for i, body in enumerate(["How much?", "What is the price?"]):
-            with patch("apps.instagram.views.process_instagram_event"):
-                payload = dm_payload(
-                    self.ig_account.page_id,
-                    igsid,
-                    body,
-                    msg_id=f"mid.{secrets.token_hex(4)}",
-                    ts=base_ts + (i * 2000),
-                )
-                view(signed_post(payload))
-            event = WebhookEventLog.objects.filter(status="received").last()
-            process_instagram_event(event.pk)
-
-        self.assertEqual(
+        spine = Conversation.objects.get(account=self.account, channel="instagram")
+        lead = Lead.objects.get(account=self.account)
+        self.assertEqual(lead.contact, spine.contact)
+        self.assertFalse(
             AIProposal.objects.filter(
                 account=self.account, action="purchase_intent"
-            ).count(),
-            1,
+            ).exists()
         )
+
+    def test_several_intent_dms_stay_one_lead(self, automation_switch):
+        from apps.crm.models import Lead
+
+        igsid = f"igsid_{secrets.token_hex(4)}"
+        base_ts = int(timezone.now().timestamp() * 1000)
+        for i, body in enumerate(["How much?", "What is the price?"]):
+            _deliver_dm(self.ig_account, igsid, body, ts=base_ts + i * 2000)
+
+        self.assertEqual(Lead.objects.filter(account=self.account).count(), 1)
+
+    def test_small_talk_opens_no_lead(self, automation_switch):
+        from apps.crm.models import Lead
+
+        _deliver_dm(self.ig_account, f"igsid_{secrets.token_hex(4)}", "Good morning")
+        self.assertEqual(Lead.objects.filter(account=self.account).count(), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -442,131 +442,26 @@ class TestCommentDoesNotCreateConversation(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Test 8 — Staff confirmation creates exactly one Lead
+# Test 8 — Workflows off: the message is still in the inbox, no lead is opened
 # ---------------------------------------------------------------------------
 
 
-class TestStaffConfirmedLead(TestCase):
+@patch("apps.instagram.services.inbound._automation_events_enabled", return_value=False)
+class TestAutomationSwitchedOff(TestCase):
     def setUp(self):
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
 
-    def _setup_conversation_with_proposal(self):
-        from apps.instagram.models.webhook import WebhookEventLog
-        from apps.instagram.tasks import process_instagram_event
-
-        igsid = f"igsid_{secrets.token_hex(4)}"
-        payload = dm_payload(
-            self.ig_account.page_id, igsid, "How much is the solar system?"
-        )
-        view = InstagramWebhookView.as_view()
-        with patch("apps.instagram.views.process_instagram_event"):
-            view(signed_post(payload))
-        event = WebhookEventLog.objects.first()
-        process_instagram_event(event.pk)
-
-        from apps.ai.models import AIProposal
-        from apps.conversations.models import Conversation
-
-        proposal = AIProposal.objects.filter(
-            account=self.account, action="purchase_intent"
-        ).first()
-        spine = Conversation.objects.filter(
-            account=self.account, channel="instagram"
-        ).first()
-        return proposal, spine
-
-    def test_staff_confirm_creates_one_lead(self):
+    def test_message_recorded_without_lead(self, automation_switch):
+        from apps.conversations.models import Message
         from apps.crm.models import Lead
 
-        proposal, spine = self._setup_conversation_with_proposal()
-        self.assertIsNotNone(proposal)
+        _deliver_dm(self.ig_account, f"igsid_{secrets.token_hex(4)}", "How much is it?")
 
-        # Simulate staff confirming the proposal
-        Lead.objects.create(
-            account=self.account,
-            contact=spine.contact,
-            conversation=spine,
-            source="instagram",
-            status=Lead.Status.NEW,
+        self.assertEqual(
+            Message.objects.filter(account=self.account, direction="inbound").count(), 1
         )
-        proposal.status = "used"
-        proposal.save()
-
-        self.assertEqual(Lead.objects.filter(account=self.account).count(), 1)
-        lead = Lead.objects.first()
-        self.assertEqual(lead.source, "instagram")
-        self.assertEqual(lead.conversation, spine)
-
-    def test_double_confirm_does_not_duplicate_lead(self):
-        from apps.crm.models import Lead
-
-        _, spine = self._setup_conversation_with_proposal()
-
-        # Create once
-        Lead.objects.create(
-            account=self.account,
-            contact=spine.contact,
-            conversation=spine,
-            source="instagram",
-            status=Lead.Status.NEW,
-        )
-
-        # The Lead model enforces at most one open lead per contact per account
-        from django.db import transaction
-
-        try:
-            with transaction.atomic():
-                Lead.objects.create(
-                    account=self.account,
-                    contact=spine.contact,
-                    conversation=spine,
-                    source="instagram",
-                    status=Lead.Status.NEW,
-                )
-            duplicate_allowed = True
-        except Exception:
-            duplicate_allowed = False
-
-        self.assertFalse(duplicate_allowed)
-        self.assertEqual(Lead.objects.filter(account=self.account).count(), 1)
-
-
-# ---------------------------------------------------------------------------
-# Test 9 — Staff dismissal does not create a Lead
-# ---------------------------------------------------------------------------
-
-
-class TestStaffDismissal(TestCase):
-    def setUp(self):
-        self.account, _ = make_account()
-        self.ig_account = make_instagram_account(self.account)
-
-    def test_dismiss_proposal_creates_no_lead(self):
-        from apps.ai.models import AIProposal
-        from apps.crm.models import Lead
-        from apps.instagram.models.webhook import WebhookEventLog
-        from apps.instagram.tasks import process_instagram_event
-
-        igsid = f"igsid_{secrets.token_hex(4)}"
-        payload = dm_payload(self.ig_account.page_id, igsid, "What is the price?")
-        view = InstagramWebhookView.as_view()
-        with patch("apps.instagram.views.process_instagram_event"):
-            view(signed_post(payload))
-        event = WebhookEventLog.objects.first()
-        process_instagram_event(event.pk)
-
-        # Staff dismisses
-        proposal = AIProposal.objects.filter(
-            account=self.account, action="purchase_intent"
-        ).first()
-        self.assertIsNotNone(proposal)
-        proposal.status = AIProposal.Status.DISMISSED
-        proposal.save()
-
         self.assertEqual(Lead.objects.count(), 0)
-        proposal.refresh_from_db()
-        self.assertEqual(proposal.status, AIProposal.Status.DISMISSED)
 
 
 # ---------------------------------------------------------------------------

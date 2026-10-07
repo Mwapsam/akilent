@@ -137,7 +137,12 @@ def record_inbound_whatsapp_message(
     handled = False
     if enroll_workflows:
         try:
-            handled = _enroll_workflows(conversation, contact, message_log)
+            handled = _enroll_workflows(
+                conversation,
+                contact,
+                {"body": message_log.content, "type": message_log.message_type},
+                reply,
+            )
         except Exception:
             logger.exception(
                 "record_inbound_whatsapp_message: workflow enrollment failed for conversation=%s",
@@ -147,7 +152,7 @@ def record_inbound_whatsapp_message(
     if not enroll_workflows:
         return conversation
 
-    _record_customer_activity(contact, message_log)
+    _record_customer_activity(contact, message_log.timestamp, message_log.content)
     _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, message_log.content)
     return conversation
@@ -162,8 +167,11 @@ def record_inbound_instagram_message(
 ) -> Conversation | None:
     """Project an already-created inbound InstagramMessage onto the spine.
 
-    Mirrors ``record_inbound_whatsapp_message``: idempotent on the
-    ``instagram_message`` FK — a replayed webhook returns None.
+    Mirrors ``record_inbound_whatsapp_message`` step for step — routing, forms,
+    wait-for-reply, keyword workflows, customer timeline, follow-ups, lead
+    capture, then the AI hand-off — so a business gets the same behaviour
+    whichever channel the customer writes on. Idempotent on the
+    ``instagram_message`` FK: a replayed webhook returns None.
     """
     from apps.conversations.models import ChannelConversation, Conversation
 
@@ -176,6 +184,7 @@ def record_inbound_instagram_message(
         route_new_conversation(conversation)
     conversation.register_inbound(instagram_message.timestamp)
 
+    message_type = (instagram_message.metadata or {}).get("message_type") or "text"
     message, created = Message.objects.get_or_create(
         instagram_message=instagram_message,
         defaults={
@@ -184,7 +193,7 @@ def record_inbound_instagram_message(
             "direction": Message.Direction.INBOUND,
             "body": instagram_message.body,
             "timestamp": instagram_message.timestamp,
-            "metadata": {"message_type": "text"},
+            "metadata": {"message_type": message_type},
         },
     )
     if not created:
@@ -203,7 +212,7 @@ def record_inbound_instagram_message(
             "conversation_id": conversation.public_id,
             "message_id": message.id,
             "body": instagram_message.body,
-            "message_type": "text",
+            "message_type": message_type,
         },
         subject_type="conversation",
         subject_id=conversation.public_id,
@@ -211,25 +220,28 @@ def record_inbound_instagram_message(
     if event is None:
         return conversation
 
+    handled = False
     if enroll_workflows:
         try:
-            from apps.automation.workflow_engine import enroll_for_trigger
-
-            enroll_for_trigger(
-                conversation.account_id,
-                "conversation.message_received",
+            handled = _enroll_workflows(
+                conversation,
                 contact,
-                context={
-                    "conversation_id": conversation.public_id,
-                    "message": {"body": instagram_message.body, "type": "text"},
-                },
+                {"body": instagram_message.body, "type": message_type},
             )
         except Exception:
             logger.exception(
                 "record_inbound_instagram_message: workflow enrollment failed for conversation=%s",
                 conversation.pk,
             )
-    _announce_processed(conversation, message, False)
+    _announce_processed(conversation, message, handled)
+    if not enroll_workflows:
+        return conversation
+
+    _record_customer_activity(
+        contact, instagram_message.timestamp, instagram_message.body
+    )
+    _clear_obsolete_followups(conversation, contact)
+    capture_opportunity(conversation, contact, instagram_message.body)
     return conversation
 
 
@@ -256,7 +268,7 @@ def route_new_conversation(conversation: Conversation) -> None:
         )
 
 
-def _record_customer_activity(contact, message_log) -> None:
+def _record_customer_activity(contact, timestamp, body: str) -> None:
     """Put the customer's message on their own timeline, and stamp them as
     recently engaged.
 
@@ -271,8 +283,8 @@ def _record_customer_activity(contact, message_log) -> None:
         record_contact_event(
             contact,
             "conversation.message_received",
-            occurred_at=message_log.timestamp,
-            data={"body": (message_log.content or "")[:280]},
+            occurred_at=timestamp,
+            data={"body": (body or "")[:280]},
         )
     except Exception:
         logger.exception(
@@ -368,14 +380,18 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
         )
 
 
-def _enroll_workflows(conversation: Conversation, contact, message_log) -> bool:
-    """Start or resume workflows for this message. True if one started or resumed."""
+def _enroll_workflows(
+    conversation: Conversation, contact, message: dict, reply: dict | None = None
+) -> bool:
+    """Start or resume workflows for this message. True if one started or resumed.
+
+    Channel-neutral: ``message`` is ``{"body", "type"}``; ``reply`` is a tapped
+    button/list choice (WhatsApp interactive), if any.
+    """
     from apps.automation.workflow_engine import enroll_for_trigger, resume_on_reply
     from apps.conversations import forms as conversation_forms
-    from apps.whatsapp.interactive import reply_for_log
 
-    message = {"body": message_log.content, "type": message_log.message_type}
-    reply = reply_for_log(message_log)
+    message = dict(message)
     if reply:
         message["reply_id"] = reply["id"]
         message["reply_title"] = reply["title"]
@@ -448,6 +464,7 @@ def record_outbound_message(
     status: str,
     metadata: dict | None = None,
     whatsapp_message=None,
+    instagram_message=None,
 ) -> tuple[Message, bool]:
     """Record a business message (human reply, template or workflow send) on the spine.
 
@@ -457,9 +474,16 @@ def record_outbound_message(
     as the business having *responded* is decided by ``state.py`` from ``status``.
     """
     metrics.incr("outbound_projection_attempts")
-    if whatsapp_message is not None:
+    provider_link = (
+        {"whatsapp_message": whatsapp_message}
+        if whatsapp_message is not None
+        else {"instagram_message": instagram_message}
+        if instagram_message is not None
+        else None
+    )
+    if provider_link is not None:
         message, created = Message.objects.get_or_create(
-            whatsapp_message=whatsapp_message,
+            **provider_link,
             defaults={
                 "account": conversation.account,
                 "conversation": conversation,

@@ -10,7 +10,10 @@ Invariants:
   - The idempotency key is deterministic: private_reply:{account_id}:{comment_id}
     so repeated webhook deliveries produce exactly one OutboundMessage.
   - The Instagram conversation is only created AFTER the Meta API call succeeds.
-  - On API failure the OutboundMessage stays FAILED; no conversation is created.
+  - On API failure the OutboundMessage stays FAILED (or QUEUED for a retry by
+    the outbox drain); no conversation is created until it is sent.
+  - A sent private reply is recorded on the inbox thread (send_outbound does
+    this), so the business sees what the customer received.
 """
 
 from __future__ import annotations
@@ -174,7 +177,9 @@ def _ensure_conversation(thread: CommentThread, ig_contact) -> None:
         get_or_create_instagram_conversation,
     )
 
-    _ig_convo, spine = get_or_create_instagram_conversation(ig_contact)
+    _ig_convo, spine = get_or_create_instagram_conversation(
+        ig_contact, thread.instagram_account
+    )
 
     if thread.conversation_id != spine.pk:
         CommentThread.objects.filter(pk=thread.pk).update(conversation=spine)

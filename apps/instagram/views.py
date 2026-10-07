@@ -7,9 +7,14 @@ Webhook responsibilities:
 
 Settings responsibilities:
   /instagram/accounts/            — list connected Instagram Business Accounts
-  /instagram/accounts/connect/    — connect a new account (manual token entry)
-  /instagram/accounts/<pk>/edit/  — update credentials for an existing account
-  /instagram/accounts/<pk>/delete/ — disconnect an account
+  /instagram/accounts/connect/oauth/ — connect via Instagram Business Login (businesses)
+  /instagram/accounts/connect/    — manual token entry (operators only)
+  /instagram/accounts/<pk>/edit/  — update credentials (operators only)
+  /instagram/accounts/<pk>/delete/ — disconnect an account (history is kept)
+
+Meta callbacks (Instagram Business Login settings):
+  /instagram/deauthorize/   — a business removed Akilent from its Instagram account
+  /instagram/data-deletion/ — a business asked Meta to delete its data
 """
 
 import hashlib
@@ -17,13 +22,14 @@ import hmac
 import json
 import logging
 import secrets
+from datetime import timedelta
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -33,6 +39,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.core.module_gate import module_required
 from apps.core.utils import is_operator
 from apps.instagram.models.account import (
     InstagramBusinessAccount,
@@ -51,6 +58,7 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+@module_required("instagram")
 def instagram_accounts(request):
     """List all Instagram Business Accounts connected to this tenant."""
     from apps.instagram.setup_errors import get_setup_error
@@ -60,7 +68,9 @@ def instagram_accounts(request):
         return redirect("dashboard")
 
     iba_list = list(
-        InstagramBusinessAccount.objects.filter(account=account).order_by("created_at")
+        InstagramBusinessAccount.objects.filter(
+            account=account, is_active=True
+        ).order_by("created_at")
     )
     oauth_enabled = bool(
         getattr(settings, "INSTAGRAM_APP_ID", "")
@@ -74,6 +84,9 @@ def instagram_accounts(request):
             "iba_list": iba_list,
             "oauth_enabled": oauth_enabled,
             "setup_error": get_setup_error(request),
+            # Businesses connect through Instagram login only; pasting tokens and
+            # the app-level webhook settings are for Akilent operators.
+            "can_manage_tokens": is_operator(request.user),
             "show_webhook_setup": is_operator(request.user),
             "webhook_url_hint": request.build_absolute_uri("/instagram/webhook/"),
             "webhook_verify_token": (
@@ -85,9 +98,17 @@ def instagram_accounts(request):
     )
 
 
+def _require_operator(request) -> None:
+    """Manual token entry is an operator tool: a business connects through Instagram login."""
+    if not is_operator(request.user):
+        raise Http404
+
+
 @login_required
+@module_required("instagram")
 def instagram_account_connect(request):
-    """Connect a new Instagram Business Account via manual token entry."""
+    """Connect a new Instagram Business Account via manual token entry (operators only)."""
+    _require_operator(request)
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -141,10 +162,7 @@ def instagram_account_connect(request):
             },
         )
         action = "connected" if created else "updated"
-        messages.success(
-            request,
-            f"Instagram account {action}. Copy the verify token below and configure your Meta webhook.",
-        )
+        messages.success(request, f"Instagram account {action}.")
         return redirect("instagram-accounts")
 
     return render(
@@ -155,8 +173,10 @@ def instagram_account_connect(request):
 
 
 @login_required
+@module_required("instagram")
 def instagram_account_edit(request, pk: int):
-    """Update credentials for an existing Instagram Business Account."""
+    """Update credentials for an existing Instagram Business Account (operators only)."""
+    _require_operator(request)
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -193,11 +213,13 @@ def instagram_account_delete(request, pk: int):
     if account is None:
         return redirect("dashboard")
 
-    iba = get_object_or_404(InstagramBusinessAccount, pk=pk, account=account)
+    iba = get_object_or_404(
+        InstagramBusinessAccount, pk=pk, account=account, is_active=True
+    )
 
     if request.method == "POST":
         label = iba.username or iba.instagram_business_account_id
-        iba.delete()
+        disconnect_instagram_account(iba, unsubscribe=True)
         messages.success(request, f"Instagram account @{label} disconnected.")
         return redirect("instagram-accounts")
 
@@ -209,6 +231,7 @@ def instagram_account_delete(request, pk: int):
 
 
 @login_required
+@module_required("instagram")
 def instagram_connect_oauth_start(request):
     """Kick off Instagram Business Login — redirect to Meta's OAuth dialog."""
     from apps.instagram.setup_errors import (
@@ -249,6 +272,7 @@ def instagram_connect_oauth_start(request):
 
 
 @login_required
+@module_required("instagram")
 def instagram_connect_oauth_callback(request):
     """Handle Meta's redirect back from the Business Login dialog."""
     from apps.instagram.oauth import (
@@ -284,8 +308,9 @@ def instagram_connect_oauth_callback(request):
 
     try:
         token = exchange_code_for_token(code, redirect_uri=redirect_uri)
-        token = get_long_lived_token(token)
+        token, expires_in = get_long_lived_token(token)
         chosen = discover_instagram_account(token)
+        chosen["expires_in"] = expires_in
     except InstagramOAuthError as exc:
         logger.error("instagram_connect_oauth_callback: %s", exc)
         return redirect_with_setup_error(
@@ -304,6 +329,7 @@ def instagram_connect_oauth_callback(request):
 
 
 @login_required
+@module_required("instagram")
 @require_POST
 def instagram_connect_oauth_select(request):
     """Complete the OAuth flow after the owner picks one of multiple accounts."""
@@ -375,6 +401,10 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
 
     verify_token = secrets.token_hex(32)
     now = timezone.now() if subscribed else None
+    expires_in = chosen.get("expires_in")
+    token_expires_at = (
+        timezone.now() + timedelta(seconds=int(expires_in)) if expires_in else None
+    )
 
     InstagramBusinessAccount.objects.update_or_create(
         account=account,
@@ -384,6 +414,7 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
             "name": chosen.get("name", ""),
             "username": chosen.get("username", ""),
             "access_token": page_access_token,
+            "token_expires_at": token_expires_at,
             "token_expired": False,
             "verify_token": verify_token,
             "webhook_subscribed_at": now,
@@ -401,27 +432,28 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
         messages.warning(
             request,
             f"Instagram account @{label} connected. "
-            "Webhook subscription failed — configure it manually in Meta's App Dashboard.",
+            "We couldn't switch on message delivery yet — try Reconnect, or contact support "
+            "if this keeps happening.",
         )
     return True, ""
 
 
 def _verify_signature(request) -> bool:
-    """Verify Meta's X-Hub-Signature-256 header using the app secret as the key.
+    """Verify Meta's X-Hub-Signature-256 header.
 
-    Meta signs all webhook payloads with HMAC-SHA256(app_secret, body), not the
-    per-account access token.  If the app secret is not configured, skip verification
-    so development environments without secrets still work.
+    Instagram Business Login webhooks may be signed with the Instagram app secret
+    or the Meta app secret, so either is accepted. If neither is configured,
+    verification is skipped so development environments without secrets still work.
     """
-    app_secret = getattr(settings, "INSTAGRAM_APP_SECRET", "") or ""
-    if not app_secret:
+    from apps.core.meta_signature import verify_meta_signature
+
+    candidates = [
+        getattr(settings, "INSTAGRAM_APP_SECRET", "") or "",
+        getattr(settings, "WHATSAPP_APP_SECRET", "") or "",
+    ]
+    if not any(candidates):
         return True
-    signature_header = request.META.get("HTTP_X_HUB_SIGNATURE_256", "")
-    if not signature_header.startswith("sha256="):
-        return False
-    received = signature_header[7:]
-    expected = hmac.new(app_secret.encode(), request.body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(received, expected)
+    return verify_meta_signature(request, candidates)
 
 
 def _classify_event(payload: dict) -> str:
@@ -444,18 +476,44 @@ def _classify_event(payload: dict) -> str:
 def _deterministic_event_id(
     instagram_account_id: int, payload: dict, event_type: str
 ) -> str:
-    """Build a stable idempotency key for the event."""
-    try:
-        entries = payload.get("entry", [])
-        if entries:
-            platform_id = entries[0].get("id", "")
-            time_val = entries[0].get("time", "")
-            return f"{instagram_account_id}:{platform_id}:{time_val}:{event_type}"
-    except (KeyError, TypeError, IndexError):
-        pass
-    import secrets
+    """Build a stable idempotency key for the event: the same delivery always maps to
+    the same key, while two different messages never share one.
 
-    return f"{instagram_account_id}:{event_type}:{secrets.token_hex(8)}"
+    Keyed on what Meta identifies the item by (a DM's ``mid``, a comment's id). An
+    entry's ``time`` is not unique — two messages in the same second used to collide,
+    and the second one was silently dropped as a "duplicate".
+    """
+    item_id = ""
+    try:
+        for entry in payload.get("entry", []):
+            for item in entry.get("messaging", []):
+                message = item.get("message") or {}
+                kinds = ",".join(
+                    sorted(
+                        k for k in item if k not in {"sender", "recipient", "timestamp"}
+                    )
+                )
+                item_id = message.get("mid") or (
+                    f"{(item.get('sender') or {}).get('id', '')}:"
+                    f"{item.get('timestamp', '')}:{kinds}"
+                )
+                break
+            for change in entry.get("changes", []):
+                value = change.get("value") or {}
+                item_id = item_id or value.get("id") or value.get("comment_id") or ""
+            if item_id:
+                break
+    except (AttributeError, TypeError):
+        item_id = ""
+    if not item_id:
+        item_id = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+    key = f"{instagram_account_id}:{event_type}:{item_id}"
+    if len(key) > 255:
+        digest = hashlib.sha256(item_id.encode()).hexdigest()
+        key = f"{instagram_account_id}:{event_type}:{digest}"
+    return key
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -499,10 +557,9 @@ class InstagramWebhookView(View):
                 )
 
         if not _verify_signature(request):
-            logger.warning(
-                "Instagram webhook: bad signature from %s",
-                request.META.get("REMOTE_ADDR"),
-            )
+            from apps.core.meta_signature import log_signature_failure
+
+            log_signature_failure(request, "Instagram")
             return HttpResponse(status=403)
 
         event_type = _classify_event(payload)
@@ -539,3 +596,99 @@ def _extract_page_id(payload: dict) -> str:
         return payload.get("entry", [{}])[0].get("id", "")
     except (IndexError, TypeError, AttributeError):
         return ""
+
+
+# ---------------------------------------------------------------------------
+# Disconnect + Meta deauthorize / data-deletion callbacks
+# ---------------------------------------------------------------------------
+
+
+def disconnect_instagram_account(
+    iba: InstagramBusinessAccount, *, unsubscribe: bool
+) -> None:
+    """Stop using an Instagram account without losing its conversations.
+
+    The row is kept (inactive, token cleared) because deleting it would cascade into
+    the business's Instagram conversations and their inbox history. Reconnecting the
+    same account later reactivates this row.
+    """
+    if unsubscribe and iba.access_token:
+        from apps.instagram.oauth import unsubscribe_ig_account_from_webhooks
+
+        unsubscribe_ig_account_from_webhooks(
+            iba.instagram_business_account_id, iba.access_token
+        )
+    iba.is_active = False
+    iba.access_token = None
+    iba.token_expires_at = None
+    iba.webhook_subscribed_at = None
+    iba.save(
+        update_fields=[
+            "is_active",
+            "access_token",
+            "token_expires_at",
+            "webhook_subscribed_at",
+            "updated_at",
+        ]
+    )
+
+
+def _signed_request_account(request):
+    """The (payload, InstagramBusinessAccount or None) a Meta signed_request names."""
+    from apps.instagram.oauth import parse_signed_request
+
+    data = parse_signed_request(request.POST.get("signed_request", ""))
+    if data is None:
+        return None, None
+    user_id = str(data.get("user_id") or "")
+    iba = (
+        InstagramBusinessAccount.objects.filter(instagram_business_account_id=user_id)
+        .order_by("-is_active")
+        .first()
+        if user_id
+        else None
+    )
+    return data, iba
+
+
+@csrf_exempt
+@require_POST
+def instagram_deauthorize(request):
+    """Meta calls this when a business removes Akilent from its Instagram settings."""
+    data, iba = _signed_request_account(request)
+    if data is None:
+        logger.warning("instagram_deauthorize: invalid signed_request")
+        return HttpResponse(status=400)
+    if iba is not None and iba.is_active:
+        # The token is already revoked on Meta's side, so there's nothing to unsubscribe.
+        disconnect_instagram_account(iba, unsubscribe=False)
+        logger.info("instagram_deauthorize: disconnected instagram_account=%s", iba.pk)
+    return HttpResponse(status=200)
+
+
+@csrf_exempt
+@require_POST
+def instagram_data_deletion(request):
+    """Meta's data-deletion request callback: delete what we hold for this account.
+
+    Responds with the status URL and confirmation code Meta shows the person.
+    """
+    from apps.instagram.tasks import delete_instagram_account_data
+
+    data, iba = _signed_request_account(request)
+    if data is None:
+        logger.warning("instagram_data_deletion: invalid signed_request")
+        return HttpResponse(status=400)
+    code = secrets.token_hex(8)
+    if iba is not None:
+        disconnect_instagram_account(iba, unsubscribe=False)
+        iba_pk = iba.pk
+        transaction.on_commit(lambda: delete_instagram_account_data.delay(iba_pk, code))
+    logger.info(
+        "instagram_data_deletion: user_id=%s instagram_account=%s code=%s",
+        data.get("user_id"),
+        iba.pk if iba else None,
+        code,
+    )
+    status_url = request.build_absolute_uri(reverse("data-deletion")) + f"?code={code}"
+    return JsonResponse({"url": status_url, "confirmation_code": code})

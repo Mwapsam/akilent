@@ -595,6 +595,8 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.rotate_dkim_async": {"queue": "email"},
     "apps.email.tasks.provision_domain_async": {"queue": "email"},
     "apps.email.tasks.deliver_webhook": {"queue": "webhooks"},
+    # Instagram
+    "apps.instagram.tasks.drain_instagram_outbox": {"queue": "outbound"},
     # Automation (rule evaluation)
     "apps.automation.tasks.evaluate_rules_for_message": {"queue": "automation"},
     # Maintenance
@@ -733,6 +735,14 @@ CELERY_BEAT_SCHEDULE = {
     "evaluate-support-sla": {
         "task": "apps.support.tasks.evaluate_sla",
         "schedule": 300.0,  # every 5 min — SLA breach detection + at-risk escalation
+    },
+    "drain-instagram-outbox": {
+        "task": "apps.instagram.tasks.drain_instagram_outbox",
+        "schedule": 30.0,  # retries transiently-failed Instagram sends after backoff
+    },
+    "refresh-instagram-tokens": {
+        "task": "apps.instagram.tasks.refresh_instagram_tokens",
+        "schedule": 86400.0,  # daily — long-lived tokens last 60 days
     },
 }
 

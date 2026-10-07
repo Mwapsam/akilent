@@ -24,6 +24,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Team
 from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
+from apps.conversations.api import conversation_window_is_open
 from apps.conversations.models import (
     Conversation,
     ConversationForm,
@@ -193,13 +194,11 @@ def _is_ajax(request) -> bool:
 def _window_is_open(conversation) -> bool:
     """Whether a free-text reply is currently allowed (R0: composer warning).
 
-    Only WhatsApp has a 24h customer-service window today; a channel without
-    one is reported open so its composer is unaffected.
+    WhatsApp and Instagram both allow free text for 24h after the customer's last
+    message; a channel without a window is reported open so its composer is
+    unaffected.
     """
-    if conversation.channel != Conversation.Channel.WHATSAPP:
-        return True
-    wa = conversation.whatsapp_conversation
-    return bool(wa and wa.window_is_open)
+    return conversation_window_is_open(conversation)
 
 
 def _automate_offers(account, messages) -> dict:

@@ -11,6 +11,10 @@ returned here is scoped directly to the Instagram Business Account — no Facebo
 Page intermediary is required.
 """
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
 
 import requests
@@ -22,12 +26,11 @@ GRAPH_IG = "https://graph.instagram.com"
 API_IG = "https://api.instagram.com"
 _TIMEOUT = 15
 
+# Only what Akilent uses — App Review rejects permissions the product doesn't need.
 SCOPES = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
-    "instagram_business_manage_comments,"
-    "instagram_business_content_publish,"
-    "instagram_business_manage_insights"
+    "instagram_business_manage_comments"
 )
 
 
@@ -83,14 +86,15 @@ def exchange_code_for_token(code: str, redirect_uri: str) -> str:
     return data["access_token"]
 
 
-def get_long_lived_token(short_lived_token: str) -> str:
+def get_long_lived_token(short_lived_token: str) -> tuple[str, int | None]:
     """Exchange a short-lived token for a long-lived one (60 days).
 
-    Returns the original token unchanged if the exchange fails, so the connect
-    flow is never blocked on this best-effort step.
+    Returns ``(token, expires_in_seconds)``. On failure returns the original
+    token with ``None`` so the connect flow is never blocked on this best-effort
+    step (the short-lived token still works for about an hour).
     """
     if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
-        return short_lived_token
+        return short_lived_token, None
     resp = requests.get(
         f"{GRAPH_IG}/access_token",
         params={
@@ -102,11 +106,38 @@ def get_long_lived_token(short_lived_token: str) -> str:
     )
     data = resp.json() if resp.content else {}
     if resp.status_code == 200 and "access_token" in data:
-        return data["access_token"]
+        return data["access_token"], _as_int(data.get("expires_in"))
     logger.warning(
         "get_long_lived_token: failed (%s): %s", resp.status_code, resp.text[:300]
     )
-    return short_lived_token
+    return short_lived_token, None
+
+
+def refresh_long_lived_token(access_token: str) -> tuple[str, int | None]:
+    """Refresh a long-lived token for another 60 days.
+
+    Meta allows this once the token is at least 24 hours old and still valid.
+    Raises InstagramOAuthError when Meta refuses (expired or revoked token).
+    """
+    resp = requests.get(
+        f"{GRAPH_IG}/refresh_access_token",
+        params={"grant_type": "ig_refresh_token", "access_token": access_token},
+        timeout=_TIMEOUT,
+    )
+    data = resp.json() if resp.content else {}
+    if resp.status_code == 200 and "access_token" in data:
+        return data["access_token"], _as_int(data.get("expires_in"))
+    raise InstagramOAuthError(
+        (data.get("error") or {}).get("message")
+        or f"Token refresh failed ({resp.status_code})"
+    )
+
+
+def _as_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def discover_instagram_account(access_token: str) -> dict:
@@ -175,6 +206,59 @@ def subscribe_ig_account_to_webhooks(ig_user_id: str, access_token: str) -> bool
         resp.text[:500],
     )
     return resp.status_code == 200 and bool(data.get("success"))
+
+
+def unsubscribe_ig_account_from_webhooks(ig_user_id: str, access_token: str) -> bool:
+    """Stop Meta sending this account's events to Akilent (used on disconnect).
+
+    Best-effort: returns False instead of raising, so a dead token never blocks
+    a business from disconnecting.
+    """
+    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    try:
+        resp = requests.delete(
+            f"{GRAPH_IG}/{version}/{ig_user_id}/subscribed_apps",
+            params={"access_token": access_token},
+            timeout=_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("unsubscribe_ig_account_from_webhooks: %s", exc)
+        return False
+    if resp.status_code != 200:
+        logger.warning(
+            "unsubscribe_ig_account_from_webhooks: ig_user_id=%s status=%s body=%s",
+            ig_user_id,
+            resp.status_code,
+            resp.text[:300],
+        )
+        return False
+    return True
+
+
+def parse_signed_request(signed_request: str) -> dict | None:
+    """Verify and decode a Meta ``signed_request`` (deauthorize / data-deletion callbacks).
+
+    Format: ``base64url(signature).base64url(json payload)``, where the signature is
+    HMAC-SHA256 of the encoded payload keyed with the app secret. Returns the payload,
+    or None if it is malformed or not signed by one of our secrets.
+    """
+    try:
+        encoded_sig, payload = signed_request.split(".", 1)
+        sig = _b64url_decode(encoded_sig)
+        data = json.loads(_b64url_decode(payload))
+    except (ValueError, AttributeError):
+        return None
+    for secret in (settings.INSTAGRAM_APP_SECRET, settings.WHATSAPP_APP_SECRET):
+        if not secret:
+            continue
+        expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
+        if hmac.compare_digest(sig, expected):
+            return data
+    return None
+
+
+def _b64url_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
 def subscribe_page_to_webhooks(page_id: str, page_access_token: str) -> bool:

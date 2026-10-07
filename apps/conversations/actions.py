@@ -80,11 +80,11 @@ class SendWhatsAppAction(Action):
 class ReplyAction(Action):
     """Send a free-text reply in an open conversation.
 
-    Channel-agnostic entry point: for Phase 1 (WhatsApp only) it resolves the
-    conversation's WhatsApp identity and sends via the free-text path (valid
-    only inside the 24h customer-service window — ``apps.whatsapp`` already
-    enforces that at send time). Later channels register their own resolution
-    here without callers (Inbox UI, Workflow steps) needing to change.
+    Channel-agnostic entry point: resolves the conversation's channel identity
+    (WhatsApp or Instagram) and sends via that channel's free-text path, valid
+    only inside its 24h customer-service window (each channel enforces that at
+    send time). Callers (Inbox UI, Workflow steps, AI) don't need to change per
+    channel.
     """
 
     name = "reply"
@@ -119,17 +119,22 @@ class ReplyAction(Action):
         if conversation.channel == conversation.Channel.INSTAGRAM:
             import uuid
 
-            from django.utils import timezone
-
-            from apps.conversations.services import record_outbound_message
             from apps.instagram.models.message import OutboundMessage
-            from apps.instagram.services.outbound import enqueue_reply, send_outbound
+            from apps.instagram.services.outbound import (
+                enqueue_reply,
+                record_sent_message,
+                send_outbound,
+            )
 
             ig_convo = conversation.instagram_conversation
             if ig_convo is None:
                 raise ActionError("Instagram conversation record not found")
-            igsid = ig_convo.instagram_contact.instagram_scoped_id
             instagram_account = ig_convo.instagram_account
+            if instagram_account is None or not instagram_account.is_ready:
+                raise ActionError(
+                    "Instagram isn't connected — reconnect it in Settings → Instagram."
+                )
+            igsid = ig_convo.instagram_contact.instagram_scoped_id
             key = idempotency_key or f"reply:{conversation.pk}:{uuid.uuid4()}"
             outbound = enqueue_reply(
                 instagram_account,
@@ -140,18 +145,11 @@ class ReplyAction(Action):
             )
             if outbound is None:
                 outbound = OutboundMessage.objects.get(idempotency_key=key)
-            ok = send_outbound(outbound)
-            if not ok:
+            if not send_outbound(outbound):
                 raise ActionError(f"Instagram send failed: {outbound.last_error}")
-            sent_at = outbound.sent_at or timezone.now()
-            spine_msg, _ = record_outbound_message(
-                conversation=conversation,
-                body=body,
-                timestamp=sent_at,
-                status="sent",
-            )
-            ig_convo.register_inbound(sent_at)
-            return {"outbound_message_id": spine_msg.id}
+            # send_outbound already recorded it; this returns that same Message.
+            spine_msg = record_sent_message(outbound)
+            return {"outbound_message_id": spine_msg.id if spine_msg else None}
 
         raise ActionError(
             f"reply not yet implemented for channel {conversation.channel!r}"

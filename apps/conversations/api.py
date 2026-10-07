@@ -117,10 +117,7 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
         .order_by("-timestamp", "-id")
         .values("id", "direction", "body")[:recent]
     )[::-1]
-    window_open = True
-    if conversation.channel == Conversation.Channel.WHATSAPP:
-        wa = conversation.whatsapp_conversation
-        window_open = bool(wa and wa.window_is_open)
+    window_open = conversation_window_is_open(conversation)
     templates = (
         [
             {
@@ -352,3 +349,18 @@ from apps.conversations.reporting import (  # noqa: E402, F401
     last_days,
     proof,
 )
+
+
+def conversation_window_is_open(conversation) -> bool:
+    """Whether a free-text reply is allowed now: inside the channel's 24h window.
+
+    WhatsApp and Instagram each track it on their channel record; any other
+    channel has no window and is always open.
+    """
+    if conversation.channel == Conversation.Channel.WHATSAPP:
+        wa = conversation.whatsapp_conversation
+        return bool(wa and wa.window_is_open)
+    if conversation.channel == Conversation.Channel.INSTAGRAM:
+        ig = conversation.instagram_conversation
+        return bool(ig and ig.window_is_open)
+    return True

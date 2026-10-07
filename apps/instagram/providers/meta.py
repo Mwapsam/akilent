@@ -50,8 +50,9 @@ class MetaInstagramProvider(BaseInstagramProvider):
 
     def can_send(self, recipient_igsid: str, action_type: str) -> EligibilityResult:
         # Meta's rules:
-        # - Standard DM: user must have messaged the business first; 7-day window
-        #   after the last customer message (standard_messaging permission).
+        # - Standard DM: user must have messaged the business first; free-text
+        #   replies are allowed for 24 hours after their last message (the 7-day
+        #   HUMAN_AGENT tag needs its own App Review and isn't used).
         # - Private reply: 7-day window from the comment timestamp.
         # We rely on the API returning an error for ineligible sends and treat
         # that as non-retryable; this method provides a best-effort pre-flight
@@ -74,8 +75,13 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.warning(
                 "Instagram send_message failed: code=%s msg=%s", exc.code, exc.message
             )
-            terminal = exc.is_terminal
-            return SendResult(success=False, error=str(exc), terminal=terminal)
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
         except Exception as exc:
             logger.exception("Instagram send_message unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)
@@ -99,7 +105,13 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.warning(
                 "Instagram private_reply failed: code=%s msg=%s", exc.code, exc.message
             )
-            return SendResult(success=False, error=str(exc), terminal=exc.is_terminal)
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
         except Exception as exc:
             logger.exception("Instagram private_reply unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)

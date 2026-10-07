@@ -424,6 +424,7 @@
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <p class="flex-1">
             {% if approved_templates %}The 24-hour window is closed — send an approved template below.
+            {% elif conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
             {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
           </p>
         </div>

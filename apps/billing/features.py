@@ -109,6 +109,13 @@ FEATURES: tuple[Feature, ...] = (
         "Communication",
     ),
     Feature(
+        "instagram",
+        "Instagram",
+        "Connect your Instagram account: DMs in the inbox, comment auto-replies.",
+        "Communication",
+        nav_paths=("/instagram/",),
+    ),
+    Feature(
         "verification_codes",
         "Verification codes",
         "Send one-time login codes over WhatsApp from your own system.",
@@ -211,6 +218,7 @@ ISSUED_KEYS = frozenset(
         "insights",
         "webhooks",
         "priority_support",
+        "instagram",
     }
 )
 

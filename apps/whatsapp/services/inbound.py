@@ -149,7 +149,12 @@ class WhatsAppInboundService:
 
         if created:
             self._publish_message_received(
-                account, contact_record, msg_ts, msg_type, content
+                account,
+                contact_record,
+                msg_ts,
+                msg_type,
+                content,
+                message_id=self.message.get("id") or "",
             )
 
     # ------------------------------------------------------------------
@@ -190,7 +195,7 @@ class WhatsAppInboundService:
 
     @staticmethod
     def _publish_message_received(
-        account, contact_record, msg_ts, msg_type, content
+        account, contact_record, msg_ts, msg_type, content, *, message_id: str
     ) -> None:
         from apps.core.events import MessageReceived, dispatcher
         from apps.whatsapp.tasks import _automation_events_enabled
@@ -201,7 +206,7 @@ class WhatsAppInboundService:
                     MessageReceived(
                         account_id=account.id,
                         contact_id=contact_record.id,
-                        message_id="",
+                        message_id=message_id,
                         channel="whatsapp",
                         body=content,
                         message_type=msg_type,

@@ -22,32 +22,34 @@ def on_message_received(event: MessageReceived, **kwargs) -> None:
         )
         return
 
-    contact: Contact | None = Contact.objects.filter(
-        account=account, pk=event.contact_id
-    ).first()
+    # For WhatsApp, event.contact_id is a WhatsAppContact pk, not a canonical Contact
+    # pk — looking it up as a Contact would pick an unrelated customer whose id
+    # happens to match. Other channels publish the canonical Contact pk.
+    contact: Contact | None = None
+    if event.channel != "whatsapp":
+        contact = Contact.objects.filter(account=account, pk=event.contact_id).first()
 
     # WhatsApp workflow enrollment runs before the canonical-contact guard because
     # _enroll_workflows_for_reply is responsible for creating the canonical Contact
-    # for brand-new phone numbers (WhatsApp-first customer path). For WhatsApp,
-    # event.contact_id is a WhatsAppContact pk, not a canonical Contact pk.
+    # for brand-new phone numbers (WhatsApp-first customer path).
     if event.channel == "whatsapp":
-        try:
-            from apps.whatsapp.models.contact import WhatsAppContact
+        from apps.whatsapp.models.contact import WhatsAppContact
 
-            wa_contact = WhatsAppContact.objects.filter(
-                account=account, pk=event.contact_id
-            ).first()
+        wa_contact = WhatsAppContact.objects.filter(
+            account=account, pk=event.contact_id
+        ).first()
+        try:
             if wa_contact is not None:
                 _enroll_workflows_for_reply(event, wa_contact)
-                # After enrollment, the canonical Contact is guaranteed to exist.
-                if contact is None:
-                    contact = wa_contact.contact
         except Exception:
             logger.exception(
                 "on_message_received: _enroll_workflows_for_reply failed for account=%s contact=%s",
                 event.account_id,
                 event.contact_id,
             )
+        # After enrollment the canonical Contact normally exists.
+        if wa_contact is not None:
+            contact = wa_contact.contact
 
     if contact is None:
         logger.warning(
