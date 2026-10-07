@@ -269,13 +269,16 @@ class VerifyViewTest(VerifyBase):
         self.other = Account.objects.create(company_name="Other", slug="other")
         self.user = User.objects.create_user("u", password="p")
 
-    def _post(self, pk, recipient=TESTER):
+    def _post(self, pk, recipient=TESTER, *, ajax=True):
+        # The setup card's script sends X-Requested-With; a plain form post doesn't.
+        headers = {"X-Requested-With": "XMLHttpRequest"} if ajax else {}
         request = RequestFactory().post(
-            f"/whatsapp/numbers/{pk}/verify/", {"recipient": recipient}
+            f"/whatsapp/numbers/{pk}/verify/", {"recipient": recipient}, headers=headers
         )
         request.user = self.user
         request.session = {}
         request._messages = FallbackStorage(request)
+        self.last_request = request
         with patch(
             "apps.whatsapp.numbers.get_current_account", return_value=self.account
         ):
@@ -293,6 +296,25 @@ class VerifyViewTest(VerifyBase):
         body = json.loads(r.content)
         self.assertEqual(r.status_code, 400)
         self.assertEqual(set(body), {"ok", "error_code", "message", "action"})
+
+    def test_plain_form_post_redirects_with_a_message_not_json(self):
+        from django.contrib.messages import get_messages
+        from django.http import HttpResponseRedirect
+
+        # WhatsApp URLs aren't mounted in test settings, so stub the redirect target.
+        with (
+            patch(SEND, return_value=fail("131058")),
+            patch(
+                "apps.whatsapp.numbers.redirect",
+                return_value=HttpResponseRedirect("/whatsapp/numbers/"),
+            ) as redirect,
+        ):
+            r = self._post(self.number.pk, ajax=False)
+        redirect.assert_called_once_with("whatsapp-numbers")
+        self.assertEqual(r.status_code, 302)
+        shown = [str(m) for m in get_messages(self.last_request)]
+        self.assertEqual(len(shown), 1)
+        self.assertIn("Message this WhatsApp number", shown[0])
 
     def test_other_accounts_number_404(self):
         from django.http import Http404

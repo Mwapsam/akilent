@@ -530,7 +530,17 @@ def numbers_verify(request, pk):
 
     number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)
     result = verify_connection(number, request.POST.get("recipient", ""))
-    return JsonResponse(result, status=200 if result["ok"] else 400)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse(result, status=200 if result["ok"] else 400)
+    # A plain form post (the page script didn't run): never leave the person
+    # looking at raw JSON — go back to the setup card with the same message.
+    if result["ok"]:
+        messages.success(request, "Test message sent — check your WhatsApp.")
+    else:
+        messages.error(
+            request, result.get("message") or "Could not send the test message."
+        )
+    return redirect("whatsapp-numbers")
 
 
 @login_required

@@ -1,5 +1,5 @@
 {# Send-a-test-message form. Context: url, label, prefill. Handled by the [data-wa-verify] script in numbers.html. #}
-<form class="mt-3 flex flex-wrap items-start gap-2" data-wa-verify action="{{ url }}" method="post">
+<form class="mt-3 flex flex-wrap items-start gap-2" data-wa-verify action="{{ url }}" method="post" hx-boost="false">
   {% csrf_token %}
   <input name="recipient" type="tel" required value="{{ prefill }}" placeholder="+260 97 XXX XXXX"
          aria-label="Phone number to send the test to" class="input w-56">
