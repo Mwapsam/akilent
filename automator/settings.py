@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.ChannelGateMiddleware",
     "apps.core.middleware.BrowserSessionMiddleware",
     "apps.core.middleware.SuspendedAccountMiddleware",
     "apps.core.middleware.ViewAsReadOnlyMiddleware",
@@ -344,6 +345,8 @@ FIELD_ENCRYPTION_KEYS = [FIELD_ENCRYPTION_KEY]
 # Celery schedule and startup secret validation. Flip to True to re-enable.
 
 WHATSAPP_ENABLED = os.getenv("WHATSAPP_ENABLED", "False").lower() == "true"
+INSTAGRAM_ENABLED = os.getenv("INSTAGRAM_ENABLED", "True").lower() == "true"
+EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "True").lower() == "true"
 
 # --- WhatsApp ---
 
@@ -736,19 +739,31 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.support.tasks.evaluate_sla",
         "schedule": 300.0,  # every 5 min — SLA breach detection + at-risk escalation
     },
-    "drain-instagram-outbox": {
-        "task": "apps.instagram.tasks.drain_instagram_outbox",
-        "schedule": 30.0,  # retries transiently-failed Instagram sends after backoff
-    },
-    "download-instagram-media": {
-        "task": "apps.instagram.tasks.download_instagram_media",
-        "schedule": 60.0,  # sweep attachments the on-arrival download missed
-    },
-    "refresh-instagram-tokens": {
-        "task": "apps.instagram.tasks.refresh_instagram_tokens",
-        "schedule": 86400.0,  # daily — long-lived tokens last 60 days
-    },
 }
+
+if INSTAGRAM_ENABLED:
+    CELERY_BEAT_SCHEDULE.update(
+        {
+            "drain-instagram-outbox": {
+                "task": "apps.instagram.tasks.drain_instagram_outbox",
+                "schedule": 30.0,  # retries transiently-failed Instagram sends after backoff
+            },
+            "download-instagram-media": {
+                "task": "apps.instagram.tasks.download_instagram_media",
+                "schedule": 60.0,  # sweep attachments the on-arrival download missed
+            },
+            "refresh-instagram-tokens": {
+                "task": "apps.instagram.tasks.refresh_instagram_tokens",
+                "schedule": 86400.0,  # daily — long-lived tokens last 60 days
+            },
+        }
+    )
+    CELERY_TASK_ROUTES.update(
+        {
+            "apps.instagram.tasks.download_instagram_media": {"queue": "celery"},
+            "apps.instagram.tasks.refresh_instagram_tokens": {"queue": "celery"},
+        }
+    )
 
 # Every queue a production worker consumes (docker-compose.yml). The Pilot Command Center sends a
 # heartbeat through each one, so a queue without a worker shows up as late.

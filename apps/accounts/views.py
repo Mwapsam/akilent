@@ -192,10 +192,12 @@ def _plan_feature_bullets(plan) -> list:
     features the pricing page shows (``billing_api.plan_card``), as plain strings for the
     wizard's JSON config."""
     from apps.billing import api as billing_api
+    from apps.core.channels import enabled_channels
 
-    card = billing_api.plan_card(
-        plan, whatsapp=plan.service_type in ("whatsapp", "both")
-    )
+    channels = enabled_channels()
+    if plan.service_type not in ("whatsapp", "both"):
+        channels = channels - {"whatsapp"}
+    card = billing_api.plan_card(plan, channels=channels)
     return card["limits"] + card["feature_names"]
 
 
@@ -217,9 +219,9 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         for p in Plan.objects.filter(is_active=True).order_by("price_monthly")
     ]
 
-    whatsapp_enabled = bool(
-        settings.WHATSAPP_ENABLED
-    )  # the server setting, as everywhere else
+    from apps.core.channels import is_enabled
+
+    whatsapp_enabled = is_enabled("whatsapp")
 
     # Figure out where the wizard should open.
     services = (form_data or {}).get("selected_services", "")
@@ -535,10 +537,7 @@ def landing(request):
     from apps.billing.models import Plan
 
     plans = Plan.objects.filter(is_active=True).order_by("price_monthly")
-    cards = [
-        billing_api.plan_card(p, whatsapp=bool(settings.WHATSAPP_ENABLED))
-        for p in plans
-    ]
+    cards = [billing_api.plan_card(p) for p in plans]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
     resp = render(
@@ -652,10 +651,10 @@ def dashboard_panels(request):
 
     from typing import Any
 
-    from django.conf import settings
+    from apps.core.channels import is_enabled
 
     numbers: list[Any] = []
-    if settings.WHATSAPP_ENABLED:
+    if is_enabled("whatsapp"):
         from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
         numbers = list(
@@ -743,10 +742,10 @@ def channels(request):
     if account is None:
         return redirect("dashboard")
 
-    from django.conf import settings
+    from apps.core.channels import is_enabled
 
     numbers = []
-    if settings.WHATSAPP_ENABLED:
+    if is_enabled("whatsapp"):
         from apps.whatsapp.models.tenant import WhatsAppBusinessNumber
 
         numbers = list(
@@ -756,24 +755,26 @@ def channels(request):
         )
 
     email_domains = []
-    try:
-        from apps.email.models import EmailDomain
+    if is_enabled("email"):
+        try:
+            from apps.email.models import EmailDomain
 
-        email_domains = list(
-            EmailDomain.objects.filter(account=account).order_by("domain")
-        )
-    except Exception:
-        pass
+            email_domains = list(
+                EmailDomain.objects.filter(account=account).order_by("domain")
+            )
+        except Exception:
+            pass
 
     instagram_accounts = []
-    try:
-        from apps.instagram.models.account import InstagramBusinessAccount
+    if is_enabled("instagram"):
+        try:
+            from apps.instagram.models.account import InstagramBusinessAccount
 
-        instagram_accounts = list(
-            InstagramBusinessAccount.objects.filter(account=account)
-        )
-    except Exception:
-        pass
+            instagram_accounts = list(
+                InstagramBusinessAccount.objects.filter(account=account)
+            )
+        except Exception:
+            pass
 
     return render(
         request,
@@ -782,7 +783,6 @@ def channels(request):
             "account": account,
             "email_domains": email_domains,
             "email_connected": any(d.status == "verified" for d in email_domains),
-            "whatsapp_enabled": settings.WHATSAPP_ENABLED,
             "whatsapp_numbers": numbers,
             "whatsapp_connected": bool(numbers),
             "instagram_accounts": instagram_accounts,
@@ -824,16 +824,17 @@ def _upcoming_sends(account, limit=5):
 
 def _attention_items(account, stats, numbers, email_domains, subscription):
     """Actionable "needs attention" rows — only those that currently apply."""
-    from django.conf import settings
+    from apps.core.channels import is_enabled
 
     items = []
+    email_on = is_enabled("email")
     verified = stats.get("domains_verified") or 0
     total_domains = len(email_domains)
-    if total_domains == 0:
+    if email_on and total_domains == 0:
         items.append(
             {"text": "Add and verify a sending domain", "url": "/email/domains/"}
         )
-    elif verified < total_domains:
+    elif email_on and verified < total_domains:
         pending = total_domains - verified
         items.append(
             {
@@ -842,11 +843,11 @@ def _attention_items(account, stats, numbers, email_domains, subscription):
             }
         )
 
-    if settings.WHATSAPP_ENABLED and not list(numbers):
+    if is_enabled("whatsapp") and not list(numbers):
         items.append({"text": "Connect a WhatsApp number", "url": "/whatsapp/numbers/"})
 
     usage_pct = stats.get("usage_pct")
-    if usage_pct is not None and usage_pct >= 80:
+    if email_on and usage_pct is not None and usage_pct >= 80:
         items.append(
             {
                 "text": f"You've used {usage_pct}% of this month's email quota",

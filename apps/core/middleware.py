@@ -325,3 +325,58 @@ class RequestIdMiddleware:
             reset_request_id(token)
         response[_RESPONSE_HEADER] = request_id
         return response
+
+
+class ChannelGateMiddleware:
+    """404 the pages of a switched-off channel (see ``apps.core.channels``).
+
+    Its public endpoints stay reachable, pages it shares with another enabled
+    channel stay reachable, and webhook POSTs are acknowledged and dropped.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import Http404, HttpResponse, JsonResponse
+
+        from apps.core.channels import CHANNEL_REGISTRY, enabled_channels
+
+        path = request.path_info.lstrip("/")
+        if path.startswith("api/"):
+            resource = path.split("/", 2)[2] if path.count("/") >= 2 else ""
+            enabled = enabled_channels()
+            for ch in CHANNEL_REGISTRY.values():
+                if ch.key not in enabled and any(
+                    resource == p.rstrip("/")
+                    or resource.startswith(p.rstrip("/") + "/")
+                    for p in ch.api_paths
+                ):
+                    return JsonResponse(
+                        {
+                            "error": {
+                                "code": "not_found",
+                                "message": f"{ch.label} is not enabled.",
+                            }
+                        },
+                        status=404,
+                    )
+            return self.get_response(request)
+
+        for ch in CHANNEL_REGISTRY.values():
+            if not path.startswith(ch.url_prefix):
+                continue
+            enabled = enabled_channels()
+            if ch.key in enabled:
+                break
+            rest = path[len(ch.url_prefix) :]
+            if any(rest.startswith(p) for p in ch.public_paths):
+                break
+            if ch.hub_paths.get(rest) in enabled:
+                break
+            if ch.webhook_path and rest == ch.webhook_path:
+                if request.method == "GET":
+                    break
+                return HttpResponse(status=200)
+            raise Http404(f"{ch.label} is not enabled")
+        return self.get_response(request)

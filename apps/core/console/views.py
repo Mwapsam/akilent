@@ -934,7 +934,7 @@ def settings_page(request):
                 "bounce_halt": f"{mail.reputation_bounce_halt * 100:g}",
                 "complaint_halt": f"{mail.reputation_complaint_halt * 100:g}",
             },
-            "whatsapp_env": settings.WHATSAPP_ENABLED,
+            "whatsapp_env": settings.WHATSAPP_ENABLED,  # kept as raw setting for the ops console
         },
     )
 

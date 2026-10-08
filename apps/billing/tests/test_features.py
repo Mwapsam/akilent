@@ -413,7 +413,9 @@ def test_signup_bullets_match_the_pricing_card(plan):
     from apps.accounts.views import _plan_feature_bullets
 
     PlanFeature.objects.create(plan=plan, key="insights")
-    card = billing_api.plan_card(plan, whatsapp=False)
+    from apps.core.channels import enabled_channels
+
+    card = billing_api.plan_card(plan, channels=enabled_channels() - {"whatsapp"})
     assert _plan_feature_bullets(plan) == card["limits"] + ["Detailed insights"]
 
 

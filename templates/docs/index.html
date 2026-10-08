@@ -1,5 +1,6 @@
 {% extends "docs/_layout.html" %}
 {% block docs_content %}
+{% if "email" in enabled_channels %}
 <p>
   {{ site.app_name|default:"Automator" }}'s Developer Platform lets you send transactional email four ways: a
   versioned REST API, reusable templates, bulk campaigns, direct SMTP relay,
@@ -13,6 +14,12 @@
   <li>Generate an API key from the same page (see <a href="{% url 'docs-page' 'authentication' %}">Authentication</a>).</li>
   <li>Send your first message with <a href="{% url 'docs-page' 'messages' %}">POST /api/v1/messages</a>.</li>
 </ol>
+{% else %}
+<p>
+  {{ site.app_name|default:"Automator" }}'s Developer Platform is a versioned REST API
+  authenticated with API keys (see <a href="{% url 'docs-page' 'authentication' %}">Authentication</a>).
+</p>
+{% endif %}
 
 <h2>What's here</h2>
 <div class="docs-cards">
@@ -33,7 +40,5 @@
   request (shown in curl and a few common server languages), and any
   language with an HTTP client and HMAC-SHA256 (for webhook verification) can
   integrate directly. There's no published OpenAPI/Swagger spec yet, either.
-  WhatsApp isn't part of the public API — this platform currently covers
-  email only.
 </p>
 {% endblock %}

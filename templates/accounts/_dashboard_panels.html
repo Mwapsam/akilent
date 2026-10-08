@@ -16,8 +16,8 @@ hx-trigger of its own, so it loads exactly once.
     <div class="card overflow-hidden lg:col-span-2">
       <div class="flex items-center justify-between card-pad pb-3">
         <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
-        <a href="/email/campaigns/?status=scheduled"
-           class="text-sm text-accent hover:text-accent-strong">View all</a>
+        {% if CAMPAIGNS_ENABLED %}<a href="/email/campaigns/?status=scheduled"
+           class="text-sm text-accent hover:text-accent-strong">View all</a>{% endif %}
       </div>
       {% if upcoming_sends %}
         <ul class="divide-y divide-border">
@@ -39,7 +39,11 @@ hx-trigger of its own, so it loads exactly once.
           {% endfor %}
         </ul>
       {% else %}
+        {% if "email" in enabled_channels %}
         {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign and it will show up here." action_url="/email/campaigns/new/" action_label="Schedule a send" %}
+        {% else %}
+        {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Scheduled sends will show up here." %}
+        {% endif %}
       {% endif %}
     </div>
 

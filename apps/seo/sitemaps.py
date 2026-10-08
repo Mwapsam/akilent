@@ -24,7 +24,7 @@ class HelpArticlesSitemap(Sitemap):
     def items(self):
         from apps.core import help as help_kb
 
-        return list(help_kb.ARTICLES)
+        return help_kb.visible_articles()
 
     def location(self, article):
         return f"/help/{article.slug}/"
@@ -37,7 +37,7 @@ class DocsPagesSitemap(Sitemap):
     def items(self):
         from apps.core import docs as docs_kb
 
-        return [p for p in docs_kb.PAGES if p.slug != "index"]
+        return [p for p in docs_kb.visible_pages() if p.slug != "index"]
 
     def location(self, page):
         return f"/docs/{page.slug}/"

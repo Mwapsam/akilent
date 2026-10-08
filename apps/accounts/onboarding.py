@@ -8,9 +8,11 @@ add a domain → verify DNS → start using email → invite the team.
 
 from django.conf import settings
 
+from apps.core.channels import is_enabled
+
 
 def _wants_whatsapp(account) -> bool:
-    return bool(settings.WHATSAPP_ENABLED) and account.selected_services in (
+    return is_enabled("whatsapp") and account.selected_services in (
         account.Services.WHATSAPP,
         account.Services.BOTH,
     )
@@ -20,6 +22,8 @@ def _wants_email(account) -> bool:
     # Email steps also cover the fallback case where a WhatsApp-only tenant
     # landed on an instance where WhatsApp is switched off — otherwise the
     # checklist would have no required steps at all.
+    if not is_enabled("email"):
+        return False
     return account.selected_services in (
         account.Services.EMAIL,
         account.Services.BOTH,

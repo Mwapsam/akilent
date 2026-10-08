@@ -53,7 +53,9 @@ def pricing_page(request):
     from apps.billing import api as billing_api
 
     plans = list(Plan.objects.filter(is_active=True).order_by("price_monthly"))
-    whatsapp = settings.WHATSAPP_ENABLED
+    from apps.core.channels import enabled_channels, limit_visible
+
+    channels = enabled_channels()
     subscription = getattr(account, "subscription", None) if account else None
     current_plan_slug = subscription.plan.slug if subscription else None
     site = SiteSettings.load()
@@ -72,8 +74,8 @@ def pricing_page(request):
         "billing/plans.html",
         {
             "plans": plans,
-            "cards": [billing_api.plan_card(p, whatsapp=whatsapp) for p in plans],
-            "compare_rows": billing_api.compare_plans(plans, whatsapp=whatsapp),
+            "cards": [billing_api.plan_card(p, channels=channels) for p in plans],
+            "compare_rows": billing_api.compare_plans(plans, channels=channels),
             "core_features": billing_api.core_features(),
             "account": account,
             "subscription": subscription,
@@ -82,13 +84,7 @@ def pricing_page(request):
             "usage": [
                 u
                 for u in billing_api.usage_report(account)
-                if u["period"] != "per_use"
-                and (
-                    whatsapp
-                    or not u["key"].startswith(
-                        ("whatsapp", "verification", "conversations")
-                    )
-                )
+                if u["period"] != "per_use" and limit_visible(u["key"], channels)
             ],
             "usage_warnings": billing_api.usage_warnings(account),
             "payments_enabled": site.payments_enabled,

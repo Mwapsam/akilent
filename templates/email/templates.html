@@ -36,7 +36,7 @@
 </header>
 
 
-{% if whatsapp_enabled %}
+{% if whatsapp_enabled and email_enabled %}
 <div class="tabs mb-4" role="tablist" aria-label="Channel">
   <a href="?channel=email" role="tab" aria-selected="{% if channel != 'whatsapp' %}true{% else %}false{% endif %}"
      class="tab{% if channel != 'whatsapp' %} tab-active{% endif %}">Email</a>

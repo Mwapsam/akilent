@@ -16,6 +16,8 @@ class DocPage:
     title: str
     summary: str
     section: str
+    # Channel key this page documents, or None for channel-agnostic pages.
+    channel: str | None = None
 
     @property
     def template(self) -> str:
@@ -42,36 +44,42 @@ PAGES = [
         "Send a message",
         "POST /api/v1/messages — request, response, and status codes.",
         "API reference",
+        channel="email",
     ),
     DocPage(
         "templates",
         "Templates",
         "Create and manage reusable email templates for /api/v1/templates.",
         "API reference",
+        channel="email",
     ),
     DocPage(
         "campaigns",
         "Campaigns",
         "Send to many recipients at once with POST /api/v1/campaigns.",
         "API reference",
+        channel="email",
     ),
     DocPage(
         "whatsapp-codes",
         "WhatsApp one-time codes",
         "Deliver login and confirmation codes on WhatsApp with POST /api/v1/whatsapp/verification-codes.",
         "API reference",
+        channel="whatsapp",
     ),
     DocPage(
         "smtp",
         "SMTP relay",
         "Send directly over SMTP using a per-domain relay credential.",
         "API reference",
+        channel="email",
     ),
     DocPage(
         "webhooks",
         "Webhooks",
         "Subscribe to delivery, open, and click events with signed callbacks.",
         "API reference",
+        channel="email",
     ),
     DocPage(
         "errors",
@@ -96,13 +104,22 @@ PAGES = [
 _BY_SLUG = {p.slug: p for p in PAGES}
 
 
+def visible_pages() -> list:
+    from apps.core.channels import enabled_channels
+
+    channels = enabled_channels()
+    return [p for p in PAGES if p.channel is None or p.channel in channels]
+
+
 def get_page(slug: str):
-    return _BY_SLUG.get(slug)
+    page = _BY_SLUG.get(slug)
+    return page if page is not None and page in visible_pages() else None
 
 
 def neighbors(page: DocPage):
     """Previous/next pages in reading order, for the pager at the foot of each page."""
-    i = PAGES.index(page)
-    prev_p = PAGES[i - 1] if i > 0 else None
-    next_p = PAGES[i + 1] if i < len(PAGES) - 1 else None
+    pages = visible_pages()
+    i = pages.index(page)
+    prev_p = pages[i - 1] if i > 0 else None
+    next_p = pages[i + 1] if i < len(pages) - 1 else None
     return prev_p, next_p

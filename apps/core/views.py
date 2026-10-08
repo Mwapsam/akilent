@@ -258,7 +258,7 @@ def docs_page(request, slug="index"):
     prev_page, next_page = docs_kb.neighbors(page)
     ctx = {
         "page": page,
-        "pages": docs_kb.PAGES,
+        "pages": docs_kb.visible_pages(),
         "prev_page": prev_page,
         "next_page": next_page,
         "smtp_relay_host": settings.SMTP_RELAY_HOST,

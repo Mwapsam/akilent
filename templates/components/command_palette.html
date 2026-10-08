@@ -82,24 +82,25 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       trigger: null, // Track the element that triggered open for focus return
       items: [
         { group: "Go to", label: "Dashboard", href: "/dashboard/" },
-        { group: "Go to", label: "Campaigns", href: "/email/campaigns/" },
-        { group: "Go to", label: "Scheduled campaigns", href: "/email/campaigns/?status=scheduled" },
+        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Campaigns", href: "/email/campaigns/" },
+        { group: "Go to", label: "Scheduled campaigns", href: "/email/campaigns/?status=scheduled" },{% endif %}
         { group: "Go to", label: "Automations", href: "/automations/" },
         { group: "Go to", label: "Contacts", href: "/contacts/" },
         { group: "Go to", label: "Insights", href: "/insights/" },
         { group: "Go to", label: "Activity log", href: "/logs/messages/" },
-        { group: "Go to", label: "Templates", href: "/email/templates/" },
-        { group: "Go to", label: "Channels", href: "/channels/" },
-        { group: "Go to", label: "Email domains", href: "/email/domains/" },
+        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Templates", href: "/email/templates/" },{% endif %}
+        {% if enabled_channels %}{ group: "Go to", label: "Channels", href: "/channels/" },{% endif %}
+        {% if "email" in enabled_channels %}{ group: "Go to", label: "Email domains", href: "/email/domains/" },{% endif %}
         {% if WHATSAPP_ENABLED %}{ group: "Go to", label: "WhatsApp", href: "/whatsapp/numbers/" },{% endif %}
         { group: "Go to", label: "Billing", href: "/billing/plans/" },
         { group: "Go to", label: "Settings", href: "{% url 'settings-profile' %}" },
         { group: "Go to", label: "Help & guides", href: "/help/" },
         { group: "Go to", label: "API docs", href: "/docs/" },
-        { group: "Action", label: "New campaign", href: "/email/campaigns/new/" },
+        {% if "email" in enabled_channels %}{ group: "Action", label: "New campaign", href: "/email/campaigns/new/" },
         { group: "Action", label: "Schedule a send", href: "/email/campaigns/new/" },
         { group: "Action", label: "Add domain", href: "/email/domains/create/" },
         { group: "Action", label: "New template", href: "/email/templates/create/" },
+        {% elif WHATSAPP_ENABLED %}{ group: "Action", label: "New campaign", href: "/whatsapp/campaigns/new/" },{% endif %}
         { group: "Action", label: "Invite teammate", href: "{% url 'settings-team' %}" },
       ],
       get filtered() {

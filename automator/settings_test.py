@@ -8,7 +8,7 @@ os.environ["DJANGO_SECRET_KEY"] = "test-secret-key"
 os.environ["FIELD_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 os.environ["FLUTTERWAVE_SECRET_KEY"] = "FLWSECK_TEST-testkey"
 os.environ["FLUTTERWAVE_WEBHOOK_HASH"] = "test-hash"
-os.environ["WHATSAPP_ENABLED"] = "false"
+os.environ["WHATSAPP_ENABLED"] = "true"
 os.environ["WHATSAPP_VERIFY_TOKEN"] = "test_verify_token"
 os.environ["WHATSAPP_APP_SECRET"] = "test_app_secret"
 

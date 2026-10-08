@@ -856,7 +856,6 @@ def api_send(request):
 
 @login_required
 def templates_list(request):
-    from django.conf import settings
 
     from apps.billing.limits import LimitChecker
     from apps.email.models import EmailTemplate
@@ -869,7 +868,12 @@ def templates_list(request):
     # R1.5c follow-up: Templates is channel-neutral like Campaigns — one page,
     # one nav entry, a tab per channel (see docs/plans). WhatsApp templates are
     # read-only here (Meta is the source of truth for approval/content).
-    channel = request.GET.get("channel") or "email"
+    from apps.core.channels import is_enabled
+
+    email_enabled = is_enabled("email")
+    whatsapp_enabled = is_enabled("whatsapp")
+    # The middleware only lets this page through with email off when WhatsApp is on.
+    channel = (request.GET.get("channel") or "email") if email_enabled else "whatsapp"
 
     templates_enabled = LimitChecker(account).has_feature("email_templates")
     templates = list(
@@ -914,7 +918,6 @@ def templates_list(request):
             ),
         }
 
-    whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
     whatsapp_templates = []
     if whatsapp_enabled:
         from apps.whatsapp.models import MessageTemplate
@@ -936,6 +939,7 @@ def templates_list(request):
             "starter_templates_json": json.dumps(starters),
             "ai_on": ai_on,
             "ai_draft": ai_draft,
+            "email_enabled": email_enabled,
             "whatsapp_enabled": whatsapp_enabled,
             "whatsapp_templates": whatsapp_templates,
         },
@@ -1644,7 +1648,6 @@ def _render_composer(request, account, *, form_data=None, errors=None, status=20
 
 @login_required
 def campaigns_list(request):
-    from django.conf import settings
 
     from apps.billing.limits import LimitChecker
     from apps.email.models import BulkEmailCampaign
@@ -1656,7 +1659,12 @@ def campaigns_list(request):
     # R1.5c: "Campaigns" is one channel-neutral concept with two sending paths
     # (see docs/plans) — Email keeps its existing wizard/model untouched;
     # WhatsApp is a new, deliberately smaller campaign type. One page, one tab.
-    channel = request.GET.get("channel") or "email"
+    from apps.core.channels import is_enabled
+
+    email_enabled = is_enabled("email")
+    whatsapp_enabled = is_enabled("whatsapp")
+    # The middleware only lets this page through with email off when WhatsApp is on.
+    channel = (request.GET.get("channel") or "email") if email_enabled else "whatsapp"
 
     bulk_enabled = LimitChecker(account).has_feature("bulk_email")
 
@@ -1673,7 +1681,6 @@ def campaigns_list(request):
     campaigns = campaigns[:50]
 
     whatsapp_campaigns = []
-    whatsapp_enabled = getattr(settings, "WHATSAPP_ENABLED", False)
     if whatsapp_enabled:
         from apps.whatsapp.models import WhatsAppCampaign
 
@@ -1699,6 +1706,7 @@ def campaigns_list(request):
                 ("sending", "Sending"),
                 ("completed", "Completed"),
             ],
+            "email_enabled": email_enabled,
             "whatsapp_enabled": whatsapp_enabled,
             "whatsapp_campaigns": whatsapp_campaigns,
         },

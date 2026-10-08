@@ -71,11 +71,13 @@
           <td data-label="Response" class="py-1.5">{{ d.response_code|default:"—" }}</td>
           <td data-label="Attempts" class="py-1.5 text-gray-400">{{ d.attempt_count }} attempt(s)</td>
           <td data-label="Action" class="py-1.5 text-right">
+            {% if "email" in enabled_channels %}
             <form method="post" action="/email/webhooks/deliveries/{{ d.pk }}/resend/">
               {% csrf_token %}
               <input type="hidden" name="next" value="/logs/messages/{{ msg.public_id }}/" />
               <button class="btn btn-ghost btn-sm" type="submit">Replay</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% empty %}

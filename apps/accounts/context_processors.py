@@ -1,13 +1,3 @@
-from django.conf import settings
-
-
-def feature_flags(request):
-    """Expose the soft-disable feature flags to all templates."""
-    return {
-        "WHATSAPP_ENABLED": settings.WHATSAPP_ENABLED,
-    }
-
-
 def plan_features(request):
     """What the nav needs from the business's entitlements:
 

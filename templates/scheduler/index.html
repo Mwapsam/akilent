@@ -61,7 +61,11 @@
   {% endfor %}
   {% else %}
   <div class="table-wrap">
+    {% if "email" in enabled_channels %}
     {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Schedule a campaign or a single send and it will show up here." action_url="/email/campaigns/new/" action_label="New campaign" %}
+    {% else %}
+    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled" message="Scheduled sends will show up here." %}
+    {% endif %}
   </div>
   {% endif %}
 

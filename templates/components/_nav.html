@@ -17,7 +17,7 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% if "orders" not in tools_off %}
     {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" feature="orders" collapsible=collapsible %}
     {% endif %}
-    {% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled whatsapp/campaigns" collapsible=collapsible %}
+    {% if CAMPAIGNS_ENABLED %}{% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled whatsapp/campaigns" collapsible=collapsible %}{% endif %}
     {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="clock" match="inbox/followups" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/support/" label="Support" icon="life-buoy" match="support" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" feature="automations" collapsible=collapsible %}
@@ -26,14 +26,16 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% include "components/_nav_item.html" with href="/logs/messages/" label="Message history" icon="list" match="logs" collapsible=collapsible %}
   </div>
 
+  {% if CAMPAIGNS_ENABLED %}
   <div role="group" aria-label="Tools">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Tools</p>
     {% include "components/_nav_item.html" with href="/email/templates/" label="Templates" icon="layout-template" collapsible=collapsible %}
   </div>
+  {% endif %}
 
   <div role="group" aria-label="Settings">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Settings</p>
-    {% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp" collapsible=collapsible %}
+    {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram" collapsible=collapsible %}{% endif %}
     {% include "components/_nav_item.html" with href="/billing/plans/" label="Billing" icon="card" match="billing" collapsible=collapsible %}
     {% url 'settings-profile' as settings_url %}
     {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings" collapsible=collapsible %}

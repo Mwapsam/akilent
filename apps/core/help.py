@@ -18,6 +18,8 @@ class Article:
     keywords: tuple = ()
     # Slugs of related guides shown at the foot of the article.
     related: tuple = ()
+    # Channel key this article belongs to, or None for channel-agnostic articles.
+    channel: str | None = None
 
     @property
     def template(self) -> str:
@@ -29,7 +31,7 @@ class Article:
         ).lower()
 
 
-# Display order for the index.
+# Display order for the index; a category with no visible articles is skipped.
 CATEGORIES = [
     "Getting started",
     "Email setup",
@@ -47,6 +49,7 @@ ARTICLES = [
         icon="sparkles",
         keywords=("intro", "setup", "quickstart", "begin", "first", "overview"),
         related=("domains", "dns-setup"),
+        channel="email",
     ),
     Article(
         "domains",
@@ -64,6 +67,7 @@ ARTICLES = [
             "disable",
         ),
         related=("dns-setup", "troubleshooting"),
+        channel="email",
     ),
     Article(
         "dns-setup",
@@ -87,6 +91,7 @@ ARTICLES = [
             "host",
         ),
         related=("domains", "troubleshooting"),
+        channel="email",
     ),
     Article(
         "whatsapp-setup",
@@ -109,6 +114,7 @@ ARTICLES = [
             "phone number",
         ),
         related=("troubleshooting", "getting-started"),
+        channel="whatsapp",
     ),
     Article(
         "team",
@@ -174,21 +180,34 @@ ARTICLES = [
             "pending",
         ),
         related=("dns-setup", "domains"),
+        channel="email",
     ),
 ]
 
 _BY_SLUG = {a.slug: a for a in ARTICLES}
 
 
+def _is_visible(article: "Article") -> bool:
+    from apps.core.channels import is_enabled
+
+    return article.channel is None or is_enabled(article.channel)
+
+
+def visible_articles() -> list:
+    return [a for a in ARTICLES if _is_visible(a)]
+
+
 def get_article(slug: str):
-    return _BY_SLUG.get(slug)
+    article = _BY_SLUG.get(slug)
+    return article if article is not None and _is_visible(article) else None
 
 
 def grouped():
     """Return ``[(category, [articles]), ...]`` in display order."""
+    visible = visible_articles()
     out = []
     for cat in CATEGORIES:
-        items = [a for a in ARTICLES if a.category == cat]
+        items = [a for a in visible if a.category == cat]
         if items:
             out.append((cat, items))
     return out
@@ -199,8 +218,8 @@ def search(query: str):
     terms = query.lower().split()
     if not terms:
         return []
-    return [a for a in ARTICLES if all(t in a.haystack() for t in terms)]
+    return [a for a in visible_articles() if all(t in a.haystack() for t in terms)]
 
 
 def related_to(article: "Article"):
-    return [_BY_SLUG[s] for s in article.related if s in _BY_SLUG]
+    return [_BY_SLUG[s] for s in article.related if get_article(s) is not None]

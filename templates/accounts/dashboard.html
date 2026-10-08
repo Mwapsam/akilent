@@ -67,10 +67,12 @@
       {% include "components/icon.html" with name="message-circle" class="w-5 h-5 text-accent shrink-0" %}
       <span class="text-sm font-medium text-ink">Go to Inbox</span>
     </a>
-    <a href="/email/campaigns/new/" class="card card-pad flex items-center gap-3 card-hover">
+    {% if "email" in enabled_channels or WHATSAPP_ENABLED %}
+    <a href="{% if "email" in enabled_channels %}/email/campaigns/new/{% else %}/whatsapp/campaigns/new/{% endif %}" class="card card-pad flex items-center gap-3 card-hover">
       {% include "components/icon.html" with name="send" class="w-5 h-5 text-accent shrink-0" %}
       <span class="text-sm font-medium text-ink">Send campaign</span>
     </a>
+    {% endif %}
     <a href="/contacts/" class="card card-pad flex items-center gap-3 card-hover">
       {% include "components/icon.html" with name="users" class="w-5 h-5 text-accent shrink-0" %}
       <span class="text-sm font-medium text-ink">Add contacts</span>

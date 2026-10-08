@@ -111,8 +111,9 @@ def test_the_client_nav_has_one_console_link_and_no_admin_group(
 
 @pytest.mark.django_db
 def test_suspending_locks_the_business_out_everywhere_and_is_audited(
-    op_client, business, client
+    op_client, business, client, settings
 ):
+    settings.WHATSAPP_ENABLED = True
     op_client.post(f"/manage/businesses/{business.pk}/do/suspend/")
     business.refresh_from_db()
     assert business.is_active is False

@@ -485,33 +485,37 @@ def _limit_line(value: int, unit: str) -> str:
     return f"Unlimited {unit}" if value == -1 else f"{value:,} {unit}"
 
 
-# (limit key, pricing label, WhatsApp only, shown even when unlimited). Others show only if capped.
+# (limit key, pricing label, shown even when unlimited). Others show only if capped.
 _PRICING_LIMITS = (
-    ("whatsapp_numbers", "WhatsApp numbers", True, True),
-    ("conversations_month", "conversations/mo", True, True),
-    ("whatsapp_marketing_msgs", "WhatsApp marketing messages/mo", True, False),
-    ("whatsapp_utility_msgs", "WhatsApp utility messages/mo", True, False),
-    ("verification_codes_month", "verification codes/mo", True, False),
-    ("emails_month", "emails/mo", False, True),
-    ("emails_day", "emails/day", False, False),
-    ("ai_actions_day", "AI actions/day", False, False),
-    ("automation_rules", "active automations", False, False),
-    ("contacts", "customers", False, False),
-    ("team_members", "team members", False, False),
+    ("whatsapp_numbers", "WhatsApp numbers", True),
+    ("conversations_month", "conversations/mo", True),
+    ("whatsapp_marketing_msgs", "WhatsApp marketing messages/mo", False),
+    ("whatsapp_utility_msgs", "WhatsApp utility messages/mo", False),
+    ("verification_codes_month", "verification codes/mo", False),
+    ("emails_month", "emails/mo", True),
+    ("emails_day", "emails/day", False),
+    ("ai_actions_day", "AI actions/day", False),
+    ("automation_rules", "active automations", False),
+    ("contacts", "customers", False),
+    ("team_members", "team members", False),
 )
 
 
-def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
+def plan_card(plan: Plan, *, channels=None) -> dict:
     """What a pricing card says about ``plan``: its limits, the features it includes in catalog
     order, and coming-soon teasers. The pricing page, signup wizard and landing page all use it,
-    so what's advertised is what the plan gives."""
+    so what's advertised is what the plan gives. ``channels`` defaults to the enabled ones."""
     from apps.billing.models import PlanLimit
+    from apps.core.channels import enabled_channels, feature_visible, limit_visible
+
+    if channels is None:
+        channels = enabled_channels()
 
     keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
     values = dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
     limits = []
-    for key, label, whatsapp_only, always in _PRICING_LIMITS:
-        if whatsapp_only and not whatsapp:
+    for key, label, always in _PRICING_LIMITS:
+        if not limit_visible(key, channels):
             continue
         value = values.get(key, limit_catalog.get(key).default)
         if always or value != limit_catalog.UNLIMITED:
@@ -521,8 +525,7 @@ def plan_card(plan: Plan, *, whatsapp: bool = True) -> dict:
     included = [
         f
         for f in catalog.matrix_features()
-        if f.key in keys
-        and (whatsapp or f.key not in ("whatsapp_campaigns", "verification_codes"))
+        if f.key in keys and feature_visible(f.key, channels)
     ]
     return {
         "plan": plan,
@@ -558,13 +561,18 @@ def core_features() -> list:
     ]
 
 
-def compare_plans(plans, *, whatsapp: bool = True) -> list[dict]:
+def compare_plans(plans, *, channels=None) -> list[dict]:
     """Rows for a features x plans comparison table: [{feature, cells: [bool per plan]}]."""
+    from apps.core.channels import enabled_channels, feature_visible
+
+    if channels is None:
+        channels = enabled_channels()
+
     plans = list(plans)
     matrix = plan_feature_matrix()
     rows = []
     for f in catalog.matrix_features():
-        if not whatsapp and f.key in ("whatsapp_campaigns", "verification_codes"):
+        if not feature_visible(f.key, channels):
             continue
         rows.append(
             {"feature": f, "cells": [f.key in matrix.get(p.pk, set()) for p in plans]}

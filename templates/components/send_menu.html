@@ -42,6 +42,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
           </div>
 
           <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% if "email" in enabled_channels %}
             <a href="/email/campaigns/new/"
                class="card card-hover card-pad flex flex-col gap-2 no-underline">
               <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-amber">
@@ -50,8 +51,9 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
               <span class="font-semibold text-ink">Email</span>
               <span class="text-sm text-gray-600">Send an email campaign</span>
             </a>
+            {% endif %}
 
-            {% if WHATSAPP_ENABLED %}
+            {% if "whatsapp" in enabled_channels %}
             <a href="/whatsapp/numbers/"
                class="card card-hover card-pad flex flex-col gap-2 no-underline">
               <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-teal">
@@ -60,22 +62,16 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
               <span class="font-semibold text-ink">WhatsApp</span>
               <span class="text-sm text-gray-600">Send a WhatsApp message</span>
             </a>
-            {% else %}
-            <div class="card card-pad flex flex-col gap-2 opacity-60">
-              <span class="inline-flex w-10 h-10 items-center justify-center rounded-xl tone-neutral-bg text-gray-400">
-                {% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}
-              </span>
-              <span class="font-semibold text-ink">WhatsApp</span>
-              <span class="badge badge-neutral w-fit">Not connected</span>
-            </div>
             {% endif %}
           </div>
 
+          {% if "email" in enabled_channels %}
           <a href="/email/campaigns/new/"
              class="mt-3 nav-link w-full justify-start no-underline">
             {% include "components/icon.html" with name="clock" class="w-5 h-5 shrink-0" %}
             <span>Schedule a message</span>
           </a>
+          {% endif %}
         </div>
       </div>
     </div>

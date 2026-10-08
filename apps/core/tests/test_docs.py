@@ -4,6 +4,13 @@ from django.utils.html import escape
 from apps.core import docs as docs_kb
 
 
+@pytest.fixture(autouse=True)
+def all_channels(settings):
+    settings.WHATSAPP_ENABLED = True
+    settings.INSTAGRAM_ENABLED = True
+    settings.EMAIL_ENABLED = True
+
+
 @pytest.mark.django_db
 def test_docs_index_renders_for_anonymous(client):
     resp = client.get("/docs/")
@@ -79,3 +86,13 @@ def test_smtp_page_shows_relay_host_and_port(client, settings):
     assert resp.status_code == 200
     assert b"mail.example.com" in resp.content
     assert b"587" in resp.content
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "page", [p for p in docs_kb.PAGES if p.channel], ids=lambda p: p.slug
+)
+def test_disabled_channel_hides_its_docs(client, settings, page):
+    setattr(settings, f"{page.channel.upper()}_ENABLED", False)
+    assert client.get(f"/docs/{page.slug}/").status_code == 404
+    assert f'href="/docs/{page.slug}/"'.encode() not in client.get("/docs/").content

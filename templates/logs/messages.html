@@ -10,7 +10,7 @@
   <a href="/logs/requests/" class="btn btn-secondary btn-sm">API request logs</a>
 </header>
 
-{% if show_quickstart %}
+{% if show_quickstart and "email" in enabled_channels %}
 <div class="alert alert-info mb-6"
      x-data="{ poll() { setTimeout(() => location.reload(), 15000) } }" x-init="poll()">
   {% include "components/icon.html" with name="sparkles" %}

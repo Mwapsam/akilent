@@ -77,6 +77,14 @@ class SendWhatsAppAction(Action):
         return {"outbound_message_id": msg.id}
 
 
+def _require_channel_enabled(conversation) -> None:
+    from apps.core.channels import CHANNEL_REGISTRY, is_enabled
+
+    ch = CHANNEL_REGISTRY.get(conversation.channel)
+    if ch is not None and not is_enabled(ch.key):
+        raise ActionError(f"{ch.label} is switched off, so replies can't be sent.")
+
+
 class ReplyAction(Action):
     """Send a free-text reply in an open conversation.
 
@@ -103,6 +111,7 @@ class ReplyAction(Action):
     ) -> dict:
         if not body:
             raise ActionError("reply requires a body")
+        _require_channel_enabled(conversation)
 
         if conversation.channel == conversation.Channel.WHATSAPP:
             from apps.whatsapp import api as whatsapp_api
@@ -184,6 +193,7 @@ class ReplyMediaAction(Action):
     ) -> dict:
         import uuid
 
+        _require_channel_enabled(conversation)
         key = idempotency_key or f"media:{conversation.pk}:{uuid.uuid4()}"
 
         if conversation.channel == conversation.Channel.WHATSAPP:

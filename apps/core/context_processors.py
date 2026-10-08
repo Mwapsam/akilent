@@ -2,12 +2,7 @@ from django.conf import settings
 
 
 def site_context(request):
-    """Expose branding + feature flags to every template.
-
-    WhatsApp follows the WHATSAPP_ENABLED environment setting only: URLs and Celery routes are
-    wired from it at boot, so a database switch could only hide parts of the screens, never really
-    turn WhatsApp off. Defensive: never breaks rendering if the table isn't migrated yet.
-    """
+    """Expose branding + feature flags to every template."""
     site = None
     signups = True
     try:
@@ -18,9 +13,15 @@ def site_context(request):
     except Exception:
         pass
 
+    from apps.core.channels import enabled_channels
+
+    ec = enabled_channels()
     return {
         "site": site,
-        "WHATSAPP_ENABLED": settings.WHATSAPP_ENABLED,
+        "enabled_channels": ec,
+        "WHATSAPP_ENABLED": "whatsapp" in ec,  # backward compat for existing templates
+        # Campaigns and Templates are shared pages under /email/ that WhatsApp also uses.
+        "CAMPAIGNS_ENABLED": bool(ec & {"email", "whatsapp"}),
         "SIGNUPS_ENABLED": signups,
         "REALTIME_SSE_ENABLED": settings.REALTIME_SSE_ENABLED,
     }

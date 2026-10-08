@@ -2,7 +2,7 @@
 {% block docs_content %}
 <h2>API keys</h2>
 <p>
-  Generate a key from the <a href="/email/domains/">Domains</a> page. Keys look
+  Generate a key from the {% if "email" in enabled_channels %}<a href="/email/domains/">Domains</a>{% elif WHATSAPP_ENABLED %}<a href="/whatsapp/codes/">WhatsApp codes</a>{% else %}API keys{% endif %} page. Keys look
   like <code>ak_live_&hellip;</code> and are shown to you <strong>once</strong>,
   at creation — {{ site.app_name|default:"Automator" }} stores only a hash, not the plaintext, so if you lose
   it you'll need to regenerate rather than retrieve it.

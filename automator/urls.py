@@ -82,6 +82,7 @@ urlpatterns = [
     path("docs/", core_views.docs_page, name="docs"),
     path("docs/<slug:slug>/", core_views.docs_page, name="docs-page"),
     path("", include("apps.accounts.urls")),
+    # Channel modules are always mounted; ChannelGateMiddleware hides a disabled one.
     path("email/", include("apps.email.urls")),
     path("logs/", include("apps.logs.urls", namespace="logs")),
     path("contacts/", include("apps.contacts.urls", namespace="contacts")),
@@ -102,13 +103,9 @@ urlpatterns = [
     path("api/chat/", include("apps.chatbot.api.urls")),
     path("chatbot/", include("apps.chatbot.urls", namespace="chatbot")),
     path("support/", include("apps.support.urls", namespace="support")),
+    path("whatsapp/", include("apps.whatsapp.urls")),
+    path("instagram/", include("apps.instagram.urls")),
 ]
-
-# Soft-disabled verticals — only routed when their feature flag is on.
-if settings.WHATSAPP_ENABLED:
-    urlpatterns += [path("whatsapp/", include("apps.whatsapp.urls"))]
-
-urlpatterns += [path("instagram/", include("apps.instagram.urls"))]
 
 # Internal debug API — off by default; see settings.INTERNAL_DEBUG_ENABLED.
 if settings.INTERNAL_DEBUG_ENABLED:
