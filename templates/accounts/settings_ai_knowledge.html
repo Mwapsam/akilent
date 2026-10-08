@@ -5,23 +5,132 @@
     <p class="text-sm"><a href="{% url 'settings-ai' %}" class="text-accent underline">AI settings</a></p>
     <h2 class="font-semibold mb-1">Knowledge base</h2>
     <p class="text-sm text-gray-600">
-      FAQs and policies AI may answer from, alongside your <a class="underline" href="{% url 'settings-ai' %}">business notes</a>.
-      Written by your team only — nothing here is uploaded or ingested automatically.
+      The questions your customers ask and your answers. AI answers from these, alongside your <a class="underline" href="{% url 'settings-ai' %}">business notes</a>.
+      Anything imported or found on your website waits under <strong>Needs review</strong> until you approve it.
     </p>
   </div>
+
+  <div class="rounded-xl border border-border p-4 space-y-3"
+       x-data="aiDraft({kind: 'playground', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
+    {% csrf_token %}
+    <div>
+      <h3 class="font-semibold">Try a question</h3>
+      <p class="text-sm text-gray-600">Ask what a customer might ask and see what AI would reply, which entries it used, and whether it would send the reply on its own. Nothing is sent to anyone.</p>
+    </div>
+    {% if off_reason %}
+    <p class="text-sm text-gray-600">{{ off_reason }} <a class="underline" href="{% url 'settings-ai' %}">AI settings</a></p>
+    {% else %}
+    <form class="flex flex-wrap gap-2" x-data="{ q: '', channel: 'whatsapp' }"
+          @submit.prevent="q.trim() && start({prompt: q, channel})">
+      <label class="sr-only" for="pg-question">Customer question</label>
+      <input id="pg-question" class="input flex-1 min-w-0" style="min-width:12rem" maxlength="500" x-model="q" placeholder="e.g. How do I join as a freelancer?">
+      <label class="sr-only" for="pg-channel">Channel</label>
+      <select id="pg-channel" class="select w-auto" x-model="channel">
+        <option value="whatsapp">WhatsApp</option>
+        <option value="instagram">Instagram</option>
+      </select>
+      <button class="btn btn-primary btn-sm" :disabled="busy">
+        <span x-show="!busy">Ask</span><span x-show="busy" x-cloak>Thinking…</span>
+      </button>
+    </form>
+    <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+    <template x-if="draft && draft.result">
+      <div class="rounded-xl bg-surface-muted p-3 text-sm space-y-2" aria-live="polite">
+        <template x-if="draft.result.action === 'reply'">
+          <div>
+            <p class="text-xs font-semibold text-gray-500">AI would reply</p>
+            <p class="mt-1 text-ink whitespace-pre-line" x-text="draft.result.text"></p>
+          </div>
+        </template>
+        <template x-if="draft.result.action !== 'reply'">
+          <div>
+            <p class="text-xs font-semibold text-gray-500">AI would hand this to your team</p>
+            <p class="mt-1 text-ink" x-text="draft.result.note"></p>
+          </div>
+        </template>
+        <dl class="grid gap-x-3 gap-y-1 text-xs" style="grid-template-columns:auto 1fr">
+          <dt class="text-gray-500">About</dt><dd class="text-ink" x-text="draft.result.intent_label"></dd>
+          <dt class="text-gray-500">Sure</dt><dd class="text-ink" x-text="draft.result.confidence === null ? 'Unknown' : draft.result.confidence + '%'"></dd>
+          <dt class="text-gray-500">Used</dt>
+          <dd class="text-ink" x-text="draft.result.sources.length ? draft.result.sources.map(s => s.title).join('; ') : 'No knowledge base entry'"></dd>
+          <dt class="text-gray-500">On its own</dt>
+          <dd class="text-ink">
+            <span x-show="draft.result.would_send">Yes, AI would send this.</span>
+            <span x-show="!draft.result.would_send" x-text="'No: ' + draft.result.why"></span>
+          </dd>
+        </dl>
+        <p class="text-xs text-gray-600" x-show="draft.result.holding">
+          The customer would get: “<span x-text="draft.result.holding"></span>”, then your team takes over.
+        </p>
+        <p class="text-xs text-gray-500" x-show="draft.result.would_send">
+          In a real conversation AI also waits if a teammate has taken it or replied in the last few minutes, or the 24-hour window has closed.
+        </p>
+      </div>
+    </template>
+    {% endif %}
+  </div>
+
+  {% if review %}
+  <section class="rounded-xl border border-border p-4 space-y-3" aria-labelledby="kb-review">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h3 id="kb-review" class="font-semibold">Needs review <span class="badge badge-neutral">{{ review|length }}</span></h3>
+      {% if can_edit %}
+      <form method="post" action="{% url 'settings-ai-knowledge-approve-all' %}">
+        {% csrf_token %}
+        <button class="btn btn-ghost btn-sm">Approve all with answers</button>
+      </form>
+      {% endif %}
+    </div>
+    <p class="text-xs text-gray-500">AI doesn't use these yet. Check each answer, fix anything that's wrong, then approve.</p>
+    <ul class="divide-y divide-border">
+      {% for entry in review %}
+      <li class="py-3">
+        <form method="post" action="{% url 'settings-ai-knowledge-edit' entry.pk %}" class="space-y-2">
+          {% csrf_token %}
+          <p class="text-xs text-gray-500">{{ entry.get_origin_display }}{% if entry.source_url %} · <a class="underline" href="{{ entry.source_url }}" target="_blank" rel="noopener noreferrer">{{ entry.source_url|truncatechars:60 }}</a>{% endif %}</p>
+          <label class="label" for="rv-q-{{ entry.pk }}">Question</label>
+          <input id="rv-q-{{ entry.pk }}" name="title" class="input" maxlength="200" value="{{ entry.title }}" {% if not can_edit %}disabled{% endif %} required>
+          <label class="label" for="rv-a-{{ entry.pk }}">Answer</label>
+          <textarea id="rv-a-{{ entry.pk }}" name="content" class="textarea" rows="3" {% if not can_edit %}disabled{% endif %}
+                    placeholder="AI couldn't answer this from what you've told it. Write the answer.">{{ entry.content }}</textarea>
+          {% if can_edit %}
+          <div class="flex flex-wrap gap-2">
+            <button name="approve" value="1" class="btn btn-primary btn-sm">Approve</button>
+            <button class="btn btn-ghost btn-sm">Save without approving</button>
+            <button class="btn btn-ghost btn-sm" formaction="{% url 'settings-ai-knowledge-delete' entry.pk %}" formnovalidate
+                    onclick="return confirm('Delete this entry?');">Delete</button>
+          </div>
+          {% endif %}
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 
   {% if entries %}
   <div class="table-wrap">
     <table class="table table--cards">
-      <thead><tr><th>Title</th><th>Type</th><th>Content</th><th></th></tr></thead>
+      <thead><tr><th>Question</th><th>Answer</th><th></th></tr></thead>
       <tbody>
         {% for entry in entries %}
         <tr>
-          <td data-label="Title">{{ entry.title }}{% if not entry.is_active %} <span class="badge badge-neutral">Off</span>{% endif %}</td>
-          <td data-label="Type">{{ entry.get_source_type_display }}</td>
-          <td data-label="Content" class="text-gray-600">{{ entry.content|truncatechars:80 }}</td>
+          <td data-label="Question">{{ entry.title }}{% if not entry.is_active %} <span class="badge badge-neutral">Off</span>{% endif %}
+            {% if entry.origin != "manual" %}<span class="block text-xs text-gray-500">{{ entry.get_origin_display }}</span>{% endif %}</td>
+          <td data-label="Answer" class="text-gray-600">{{ entry.content|truncatechars:80 }}</td>
           <td class="whitespace-nowrap">
             {% if can_edit %}
+            <details class="inline-block">
+              <summary class="btn btn-ghost btn-sm">Edit</summary>
+              <form method="post" action="{% url 'settings-ai-knowledge-edit' entry.pk %}" class="mt-2 space-y-2" style="min-width:16rem;text-align:left;white-space:normal">
+                {% csrf_token %}
+                <label class="label" for="ed-q-{{ entry.pk }}">Question</label>
+                <input id="ed-q-{{ entry.pk }}" name="title" class="input" maxlength="200" value="{{ entry.title }}" required>
+                <label class="label" for="ed-a-{{ entry.pk }}">Answer</label>
+                <textarea id="ed-a-{{ entry.pk }}" name="content" class="textarea" rows="4" required>{{ entry.content }}</textarea>
+                <button class="btn btn-primary btn-sm">Save</button>
+              </form>
+            </details>
             <form method="post" action="{% url 'settings-ai-knowledge-toggle' entry.pk %}" class="inline">
               {% csrf_token %}
               <button class="btn btn-ghost btn-sm">{% if entry.is_active %}Turn off{% else %}Turn on{% endif %}</button>
@@ -38,20 +147,26 @@
       </tbody>
     </table>
   </div>
-  {% else %}
+  {% elif not review %}
   <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="book-open" title="No knowledge base entries yet" message="Add your first FAQ or policy below so AI can answer from it." %}
+    {% include "components/empty_state.html" with icon="book-open" title="No questions and answers yet" message="Add your customers' common questions below so AI can answer them." %}
   </div>
   {% endif %}
 
   {% if can_edit %}
-  <div class="rounded-xl border border-border p-4">
-    <h3 class="font-semibold mb-3">Add an entry</h3>
-    <form method="post" class="space-y-3">
+  <section class="rounded-xl border border-border p-4 space-y-3" x-data="{ how: 'write' }" aria-labelledby="kb-add">
+    <h3 id="kb-add" class="font-semibold">Add knowledge</h3>
+    <div class="flex flex-wrap gap-3 text-sm" role="radiogroup" aria-label="How to add knowledge">
+      <label class="flex items-center gap-1.5"><input type="radio" value="write" x-model="how"> Write one</label>
+      <label class="flex items-center gap-1.5"><input type="radio" value="import" x-model="how"> Import questions &amp; answers</label>
+      <label class="flex items-center gap-1.5"><input type="radio" value="website" x-model="how"> Import from your website</label>
+    </div>
+
+    <form method="post" class="space-y-3" x-show="how === 'write'">
       {% csrf_token %}
       <div>
-        <label class="label" for="kb-title">Title</label>
-        <input id="kb-title" name="title" class="input" maxlength="200" placeholder="e.g. Return policy" required />
+        <label class="label" for="kb-title">Question</label>
+        <input id="kb-title" name="title" class="input" maxlength="200" placeholder="e.g. Do you charge freelancers to join?" required />
       </div>
       <div>
         <label class="label" for="kb-type">Type</label>
@@ -62,12 +177,41 @@
         </select>
       </div>
       <div>
-        <label class="label" for="kb-content">Content</label>
-        <textarea id="kb-content" name="content" class="textarea" rows="5" placeholder="We accept returns within 14 days with a receipt..." required></textarea>
+        <label class="label" for="kb-content">Answer</label>
+        <textarea id="kb-content" name="content" class="textarea" rows="5" placeholder="No, joining is free. We take a small fee only when you're paid for a job." required></textarea>
       </div>
-      <button class="btn btn-primary btn-sm">Add entry</button>
+      <button class="btn btn-primary btn-sm">Add</button>
     </form>
-  </div>
+
+    <div class="space-y-3" x-show="how === 'import'" x-cloak>
+      <form method="post" action="{% url 'settings-ai-knowledge-import' %}" class="space-y-2">
+        {% csrf_token %}
+        <label class="label" for="kb-paste">Paste your questions, with or without answers</label>
+        <textarea id="kb-paste" name="text" class="textarea" rows="8" required
+                  placeholder="How do I create an account?&#10;Sign up and confirm your email.&#10;&#10;Does it cost anything?&#10;No, joining is free."></textarea>
+        <p class="text-xs text-gray-500">Put each question on its own line with its answer underneath, and a blank line between questions. A list of questions on their own works too: AI drafts answers from what you've already told it, and you check them before they're used.</p>
+        <button class="btn btn-primary btn-sm">Import</button>
+      </form>
+      <form method="post" action="{% url 'settings-ai-knowledge-import' %}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-2">
+        {% csrf_token %}
+        <div class="flex-1 min-w-0">
+          <label class="label" for="kb-file">Or upload a CSV (question, answer)</label>
+          <input id="kb-file" name="file" type="file" accept=".csv,text/csv" class="input" required>
+        </div>
+        <button class="btn btn-ghost btn-sm">Upload</button>
+      </form>
+    </div>
+
+    <form method="post" action="{% url 'settings-ai-knowledge-website' %}" class="space-y-2" x-show="how === 'website'" x-cloak>
+      {% csrf_token %}
+      <label class="label" for="kb-url">Your website</label>
+      <input id="kb-url" name="url" type="url" class="input" placeholder="https://yourbusiness.com" value="{{ website_hint }}" required>
+      <p class="text-xs text-gray-500">AI reads up to 10 pages of your site and suggests questions and answers from them. Nothing is used until you approve it.</p>
+      <button class="btn btn-primary btn-sm">Read my website</button>
+    </form>
+
+    <p class="text-xs text-gray-500">You can also teach AI from the inbox: when your team answers a question AI handed over, choose <strong>Save as answer</strong>.</p>
+  </section>
   {% endif %}
 </div>
 {% endblock %}

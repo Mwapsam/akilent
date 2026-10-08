@@ -216,10 +216,6 @@ def evaluate(
     def check(name, ok, detail, **extra):
         checks.append({"name": name, "ok": bool(ok), "detail": detail, **extra})
 
-    topics = set(ai_settings.auto_topics or []) if ai_settings else set()
-    intent = proposal.get("intent") or "other"
-    confidence = proposal.get("confidence")
-    threshold = ai_settings.auto_min_confidence if ai_settings else 1.0
     on = is_auto_mode(ai_settings)
     check(
         "switched_on",
@@ -233,34 +229,7 @@ def evaluate(
         if automatic
         else "A teammate asked for this suggestion.",
     )
-    check(
-        "plain_reply",
-        proposal.get("action") == "reply",
-        "A normal reply."
-        if proposal.get("action") == "reply"
-        else "Templates and hand-offs always need a person.",
-    )
-    locked = locked_topics(conversation.account, facts)
-    allowed = intent in topics and intent in TOPICS and intent not in locked
-    if allowed:
-        topic_detail = f"About {TOPICS[intent].lower()}, which you allowed."
-    elif intent in topics and intent in locked:
-        topic_detail = f"About {TOPICS[intent].lower()}, which can't be checked yet."
-    else:
-        _default = "something you haven't chosen"
-        topic_detail = (
-            f"About {TOPICS.get(intent, _default).lower()}, which isn't on your list."
-        )
-    check("allowed_topic", allowed, topic_detail, value=intent)
-    sure = confidence is not None and confidence >= threshold
-    check(
-        "confident",
-        sure,
-        "AI was sure enough."
-        if sure
-        else f"AI wasn't sure enough for “{confidence_label(threshold)}”.",
-        value={"confidence": confidence, "needed": threshold},
-    )
+    _answer_checks(check, ai_settings, proposal, conversation.account, facts)
     check(
         "window_open",
         window_open,
@@ -318,6 +287,51 @@ def evaluate(
         else f"AI has answered {in_a_row} times in a row. Time for a person.",
         value=in_a_row,
     )
+    _content_checks(check, proposal, facts, extra_text, customer_text)
+    return Decision(send=all(c["ok"] for c in checks), checks=checks)
+
+
+def _answer_checks(check, ai_settings, proposal: dict, account, facts: dict) -> None:
+    """Is it a plain reply, about a topic the owner allowed, and was AI sure enough?"""
+    topics = set(ai_settings.auto_topics or []) if ai_settings else set()
+    intent = proposal.get("intent") or "other"
+    confidence = proposal.get("confidence")
+    threshold = ai_settings.auto_min_confidence if ai_settings else 1.0
+    check(
+        "plain_reply",
+        proposal.get("action") == "reply",
+        "A normal reply."
+        if proposal.get("action") == "reply"
+        else "Templates and hand-offs always need a person.",
+    )
+    locked = locked_topics(account, facts)
+    allowed = intent in topics and intent in TOPICS and intent not in locked
+    if allowed:
+        topic_detail = f"About {TOPICS[intent].lower()}, which you allowed."
+    elif intent in topics and intent in locked:
+        topic_detail = f"About {TOPICS[intent].lower()}, which can't be checked yet."
+    else:
+        _default = "something you haven't chosen"
+        topic_detail = (
+            f"About {TOPICS.get(intent, _default).lower()}, which isn't on your list."
+        )
+    check("allowed_topic", allowed, topic_detail, value=intent)
+    sure = confidence is not None and confidence >= threshold
+    check(
+        "confident",
+        sure,
+        "AI was sure enough."
+        if sure
+        else f"AI wasn't sure enough for “{confidence_label(threshold)}”.",
+        value={"confidence": confidence, "needed": threshold},
+    )
+
+
+def _content_checks(
+    check, proposal: dict, facts: dict, extra_text: str, customer_text: str
+) -> None:
+    """Does every fact check out, is it free of sensitive topics, and is an FAQ answer backed?"""
+    intent = proposal.get("intent") or "other"
     missing = unsupported_facts(
         (proposal.get("payload") or {}).get("text", ""), facts, extra_text
     )
@@ -350,6 +364,32 @@ def evaluate(
             else "No entry in your knowledge base backs this answer.",
             value=cited,
         )
+
+
+def preview(
+    *,
+    ai_settings,
+    proposal: dict,
+    account,
+    facts: dict,
+    extra_text="",
+    customer_text="",
+) -> Decision:
+    """The checks about the answer itself, for the owner's playground: whether AI would send this
+    on its own, setting aside the live conversation (window, teammates, how often AI replied)."""
+    checks: list = []
+
+    def check(name, ok, detail, **extra):
+        checks.append({"name": name, "ok": bool(ok), "detail": detail, **extra})
+
+    on = is_auto_mode(ai_settings)
+    check(
+        "switched_on",
+        on,
+        "Automatic replies are on." if on else "Automatic replies are off.",
+    )
+    _answer_checks(check, ai_settings, proposal, account, facts)
+    _content_checks(check, proposal, facts, extra_text, customer_text)
     return Decision(send=all(c["ok"] for c in checks), checks=checks)
 
 
@@ -357,6 +397,12 @@ def holding_reply_text(ai_settings) -> str:
     return (getattr(ai_settings, "holding_reply_text", "") or "").strip() or (
         DEFAULT_HOLDING_REPLY
     )
+
+
+def would_hold(decision: Decision) -> bool:
+    """AI couldn't answer this itself, and nothing makes it unsafe to say a person will reply."""
+    failed = {c["name"] for c in decision.checks if not c["ok"]}
+    return bool(failed & _HOLD_WHEN) and not failed & _SAFE_TO_SPEAK
 
 
 def should_hold(decision: Decision, ai_settings, conversation) -> bool:
@@ -372,8 +418,7 @@ def should_hold(decision: Decision, ai_settings, conversation) -> bool:
 
     if decision.send or not getattr(ai_settings, "holding_reply_enabled", False):
         return False
-    failed = {c["name"] for c in decision.checks if not c["ok"]}
-    if not failed & _HOLD_WHEN or failed & _SAFE_TO_SPEAK:
+    if not would_hold(decision):
         return False
     held = AIProposal.objects.filter(
         conversation=conversation, auto_decision__holding_sent=True

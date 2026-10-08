@@ -78,9 +78,33 @@ class KnowledgeBaseEntry(models.Model):
     source_type = models.CharField(
         max_length=20, choices=SourceType.choices, default=SourceType.FAQ
     )
+
+    class Origin(models.TextChoices):
+        MANUAL = "manual", "Written by hand"
+        INBOX = "inbox", "From a conversation"
+        IMPORT = "import", "Imported"
+        WEBSITE = "website", "From your website"
+        AI_DRAFT = "ai_draft", "Drafted by AI"
+
     title = models.CharField(max_length=200)
     content = models.TextField()
+    # Imported, scraped and AI-drafted entries start off (is_active=False) until a person
+    # approves them: "Needs review" on the knowledge page.
     is_active = models.BooleanField(default=True)
+    origin = models.CharField(
+        max_length=20, choices=Origin.choices, default=Origin.MANUAL
+    )
+    source_url = models.URLField(max_length=500, blank=True, default="")
+    # When a person approved an imported, scraped or AI-drafted entry. Until then it sits under
+    # "Needs review" and AI never sees it.
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    REVIEW_ORIGINS = ("import", "website", "ai_draft")
+
+    @property
+    def needs_review(self) -> bool:
+        return self.origin in self.REVIEW_ORIGINS and self.reviewed_at is None
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -194,6 +218,10 @@ class AIDraft(models.Model):
         TEMPLATE_EDIT = "template_edit", "Template edit"
         EMAIL_TEMPLATE = "email_template", "Email template"
         EMAIL_EDIT = "email_edit", "Email edit"
+        # Not a setup draft: the owner trying a customer question (apps.ai.drafting).
+        PLAYGROUND = "playground", "Try a question"
+        KNOWLEDGE_ANSWERS = "knowledge_answers", "Draft knowledge answers"
+        WEBSITE = "website", "Read a website"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

@@ -76,6 +76,7 @@ def settings_ai(request):
             "ai": ai,
             "max_notes": ai_api.MAX_NOTES,
             "off_reason": ai_api.unavailable_reason(account),
+            "website_hint": _website_hint(account),
             "topics": [
                 {
                     "key": k,
@@ -142,7 +143,7 @@ def settings_ai_knowledge(request):
             )
             messages.success(request, "Added to the knowledge base.")
         return redirect("settings-ai-knowledge")
-    entries = KnowledgeBaseEntry.objects.filter(account=account).order_by("title")
+    entries = list(KnowledgeBaseEntry.objects.filter(account=account).order_by("title"))
     return render(
         request,
         "accounts/settings_ai_knowledge.html",
@@ -150,8 +151,10 @@ def settings_ai_knowledge(request):
             "account": account,
             "active_tab": "ai",
             "can_edit": can_edit,
-            "entries": entries,
+            "entries": [e for e in entries if not e.needs_review],
+            "review": [e for e in entries if e.needs_review],
             "source_types": KnowledgeBaseEntry.SourceType.choices,
+            "off_reason": ai_api.unavailable_reason(account),
         },
     )
 
@@ -166,8 +169,151 @@ def knowledge_entry_toggle(request, pk):
         messages.error(request, "Only an owner or admin can change AI settings.")
         return redirect("settings-ai-knowledge")
     entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
+    if entry.needs_review:
+        messages.error(request, "Check this entry and approve it first.")
+        return redirect("settings-ai-knowledge")
     entry.is_active = not entry.is_active
     entry.save(update_fields=["is_active", "updated_at"])
+    return redirect("settings-ai-knowledge")
+
+
+def _website_hint(account) -> str:
+    from apps.accounts import api as accounts_api
+
+    site = (accounts_api.business_facts(account) or {}).get("website", "")
+    return site if site.startswith(("http://", "https://")) else ""
+
+
+def _knowledge_admin(request):
+    """``(account, None)`` for someone who may change AI's knowledge, else ``(None, redirect)``."""
+    account = get_current_account(request)
+    if account is None:
+        return None, redirect("dashboard")
+    if not _can_edit(request, account):
+        messages.error(request, "Only an owner or admin can change AI settings.")
+        return None, redirect("settings-ai-knowledge")
+    return account, None
+
+
+@login_required
+@require_POST
+def knowledge_entry_edit(request, pk):
+    """Save an entry's question and answer; ``approve`` also turns a reviewed entry on."""
+    from django.utils import timezone
+
+    account, stop = _knowledge_admin(request)
+    if stop:
+        return stop
+    entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
+    title = " ".join(request.POST.get("title", "").split())[:200]
+    content = request.POST.get("content", "").strip()
+    if not title or not content:
+        messages.error(request, "An entry needs both a question and an answer.")
+        return redirect("settings-ai-knowledge")
+    entry.title, entry.content = title, content
+    fields = ["title", "content", "updated_at"]
+    if request.POST.get("approve"):
+        entry.is_active, entry.reviewed_at = True, timezone.now()
+        fields += ["is_active", "reviewed_at"]
+        messages.success(request, "Approved. AI can answer from it now.")
+    else:
+        messages.success(request, "Saved.")
+    entry.save(update_fields=fields)
+    return redirect("settings-ai-knowledge")
+
+
+@login_required
+@require_POST
+def knowledge_approve_all(request):
+    """Approve every entry waiting for review that has an answer."""
+    from django.utils import timezone
+
+    account, stop = _knowledge_admin(request)
+    if stop:
+        return stop
+    count = (
+        KnowledgeBaseEntry.objects.filter(
+            account=account,
+            origin__in=KnowledgeBaseEntry.REVIEW_ORIGINS,
+            reviewed_at__isnull=True,
+        )
+        .exclude(content="")
+        .update(is_active=True, reviewed_at=timezone.now())
+    )
+    messages.success(request, f"Approved {count} entr{'y' if count == 1 else 'ies'}.")
+    return redirect("settings-ai-knowledge")
+
+
+MAX_IMPORT_FILE = 512 * 1024
+
+
+@login_required
+@require_POST
+def knowledge_import(request):
+    """Pasted or uploaded questions and answers, added under Needs review."""
+    from apps.ai import knowledge
+
+    account, stop = _knowledge_admin(request)
+    if stop:
+        return stop
+    upload = request.FILES.get("file")
+    if upload is not None:
+        if upload.size > MAX_IMPORT_FILE:
+            messages.error(request, "That file is too big. Keep it under 500 KB.")
+            return redirect("settings-ai-knowledge")
+        pairs = knowledge.parse_csv(upload.read())
+    else:
+        pairs = knowledge.parse_pasted(request.POST.get("text", ""))
+    if not pairs:
+        messages.error(
+            request, "Couldn't find any questions in that. Put one per line."
+        )
+        return redirect("settings-ai-knowledge")
+    out = knowledge.import_pairs(account, request.user, pairs)
+    if not out["added"]:
+        messages.info(
+            request, "Your knowledge base already has all of those questions."
+        )
+    elif out["draft"] is not None:
+        messages.success(
+            request,
+            f"Added {out['added']} for review. AI is drafting answers to {out['to_draft']} of "
+            "them from what you've told it; refresh in a minute.",
+        )
+    elif out["to_draft"]:
+        messages.success(
+            request,
+            f"Added {out['added']} for review. Write the answers to the "
+            f"{out['to_draft']} questions without one.",
+        )
+    else:
+        messages.success(request, f"Added {out['added']} for review.")
+    return redirect("settings-ai-knowledge")
+
+
+@login_required
+@require_POST
+def knowledge_website(request):
+    """Read the business's website in the background; what it finds lands under Needs review."""
+    from apps.ai import knowledge
+
+    account, stop = _knowledge_admin(request)
+    if stop:
+        return stop
+    try:
+        url = knowledge.normalise_url(request.POST.get("url", ""))
+    except knowledge.WebsiteError as exc:
+        messages.error(request, str(exc))
+        return redirect("settings-ai-knowledge")
+    draft = ai_api.request_draft(account, request.user, "website", url, {"url": url})
+    if draft is None:
+        messages.error(request, "Turn AI on first (Settings, AI).")
+    else:
+        messages.success(
+            request,
+            "Reading your website. What AI finds will appear under Needs review in a minute "
+            "or two; refresh to see it.",
+        )
     return redirect("settings-ai-knowledge")
 
 
@@ -194,6 +340,9 @@ def draft_create(request):
     if account is None:
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
     kind = request.POST.get("kind", "")
+    if kind in ("knowledge_answers", "website"):
+        # Started from the knowledge page, which checks the person may change AI's knowledge.
+        return JsonResponse({"ok": False, "error": "Not available here."}, status=400)
     prompt = (request.POST.get("prompt") or "").strip()
     context = {}
     if kind == "automation":
@@ -227,6 +376,13 @@ def draft_create(request):
             return JsonResponse(
                 {"ok": False, "error": "Describe the email you need."}, status=400
             )
+    elif kind == "playground":
+        if not prompt:
+            return JsonResponse(
+                {"ok": False, "error": "Type a question a customer might ask."},
+                status=400,
+            )
+        context = {"channel": request.POST.get("channel", "whatsapp")}
     elif kind == "email_edit":
         context, error = _email_edit_context(request)
         if error:

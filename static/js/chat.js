@@ -248,6 +248,20 @@ function registerChat() {
         if (window.toast) window.toast('danger', e.message);
       }
     },
+    // Keep the team's reply as a knowledge-base answer, so AI can answer it next time.
+    async aiLearn(question, answer) {
+      const p = this.ai.proposal;
+      if (!p) return false;
+      try {
+        const data = await this.aiPost(this.ai.learnUrl, { proposal: p.id, question, answer });
+        if (data.proposal) this.ai.proposal = data.proposal;
+        if (window.toast) window.toast('success', data.message);
+        return true;
+      } catch (e) {
+        if (window.toast) window.toast('danger', e.message);
+        return false;
+      }
+    },
     aiUseReply() {
       const p = this.ai.proposal;
       if (!p) return;

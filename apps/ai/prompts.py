@@ -73,39 +73,13 @@ def mask(text: str) -> str:
     return _PHONE.sub("[phone]", _EMAIL.sub("[email]", text or ""))
 
 
-def build(
-    *,
-    business_name: str,
-    business_notes: str,
-    hours_text: str,
-    templates: list[dict],
-    customer: dict,
-    thread: list[dict],
-    window_open: bool,
-    memory=None,
-    tools_text: str = "",
-    business_tags=(),
-    structured_facts: dict | None = None,
-    channel: str = "",
-) -> tuple[str, list[ChatMessage]]:
-    """``(system, messages)`` ready for ``AIProvider.chat``.
-
-    ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
-    and outbound entries are used. ``templates`` is the approved templates as ``{"name", "body",
-    "blanks"}``. ``memory`` is ``{"summary", "facts"}`` for the part of the thread before ``thread``.
-    ``tools_text`` describes the look-ups the model may ask for. ``channel`` is the conversation's
-    channel ("whatsapp", "instagram"...), named in the rules.
-
-    Business knowledge comes in three parts: Questions and answers (explained in the model's own
-    words, each with the id it cites), Business information (the owner's notes and profile
-    answers), and Exact facts (hours, products and prices, quoted as written).
-    """
-    facts = structured_facts or {}
-    lines = [
-        system_rules(business_name, CHANNEL_LABELS.get(channel, "")),
-        "",
-        "## Business knowledge",
-    ]
+def knowledge_lines(
+    *, business_name: str, business_notes: str, hours_text: str, facts: dict
+) -> list[str]:
+    """The "## Business knowledge" section: Questions and answers (each with the id the model
+    cites), Business information (notes and profile answers), and Exact facts (hours, products,
+    prices). Shared by replies and by drafting answers for the knowledge base."""
+    lines = ["## Business knowledge"]
     if facts.get("knowledge"):
         lines += ["", "### Questions and answers"]
         for entry in facts["knowledge"]:
@@ -136,6 +110,46 @@ def build(
             lines.append(f"Opening hours: {hours_text}")
         if exact:
             lines.append(json.dumps(exact, ensure_ascii=False))
+    return lines
+
+
+def build(
+    *,
+    business_name: str,
+    business_notes: str,
+    hours_text: str,
+    templates: list[dict],
+    customer: dict,
+    thread: list[dict],
+    window_open: bool,
+    memory=None,
+    tools_text: str = "",
+    business_tags=(),
+    structured_facts: dict | None = None,
+    channel: str = "",
+) -> tuple[str, list[ChatMessage]]:
+    """``(system, messages)`` ready for ``AIProvider.chat``.
+
+    ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
+    and outbound entries are used. ``templates`` is the approved templates as ``{"name", "body",
+    "blanks"}``. ``memory`` is ``{"summary", "facts"}`` for the part of the thread before ``thread``.
+    ``tools_text`` describes the look-ups the model may ask for. ``channel`` is the conversation's
+    channel ("whatsapp", "instagram"...), named in the rules.
+
+    Business knowledge comes in three parts: Questions and answers (explained in the model's own
+    words, each with the id it cites), Business information (the owner's notes and profile
+    answers), and Exact facts (hours, products and prices, quoted as written).
+    """
+    lines = [
+        system_rules(business_name, CHANNEL_LABELS.get(channel, "")),
+        "",
+        *knowledge_lines(
+            business_name=business_name,
+            business_notes=business_notes,
+            hours_text=hours_text,
+            facts=structured_facts or {},
+        ),
+    ]
 
     lines += [
         "",

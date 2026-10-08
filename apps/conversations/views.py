@@ -221,8 +221,9 @@ def _automate_offers(account, messages) -> dict:
         return {}
 
 
-def _ai_config(account, conversation) -> dict:
+def _ai_config(account, conversation, user=None) -> dict:
     """What the composer needs to show AI proposals. ``enabled`` is False whenever AI is off."""
+    from apps.accounts import api as accounts_api
     from apps.ai import api as ai_api
 
     if not ai_api.is_available(account):
@@ -236,6 +237,9 @@ def _ai_config(account, conversation) -> dict:
             "conversations:ai_dismiss", args=[conversation.public_id]
         ),
         "applyUrl": reverse("conversations:ai_apply", args=[conversation.public_id]),
+        "learnUrl": reverse("conversations:ai_learn", args=[conversation.public_id]),
+        # Saving an answer changes what AI tells every customer, so only owners and admins.
+        "canLearn": user is not None and accounts_api.is_account_admin(user, account),
         "proposal": _ai_proposal_json(account, conversation),
     }
 
@@ -324,6 +328,41 @@ def ai_apply(request, public_id: str):
         {
             "ok": True,
             "message": message,
+            "proposal": ai_api.serialize(
+                ai_api.current_proposal(account, conversation), conversation
+            ),
+        }
+    )
+
+
+@login_required
+@require_POST
+def ai_learn(request, public_id: str):
+    """Save the team's reply to a customer question as a knowledge-base answer for AI."""
+    from apps.accounts import api as accounts_api
+    from apps.ai import api as ai_api
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    if not accounts_api.is_account_admin(request.user, account):
+        return JsonResponse(
+            {"ok": False, "error": "Only an owner or admin can teach AI new answers."},
+            status=403,
+        )
+    entry, error = ai_api.save_answer(
+        account,
+        request.POST.get("proposal"),
+        request.POST.get("question", ""),
+        request.POST.get("answer", ""),
+    )
+    if entry is None:
+        return JsonResponse({"ok": False, "error": error}, status=400)
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": "Saved. AI can answer this from now on.",
             "proposal": ai_api.serialize(
                 ai_api.current_proposal(account, conversation), conversation
             ),
@@ -502,7 +541,7 @@ def conversation_detail(request, public_id: str):
         # Only WhatsApp enforces a messaging window today; other channels report
         # it open so the composer behaves as it always has for them.
         "windowOpen": _window_is_open(conversation),
-        "ai": _ai_config(account, conversation),
+        "ai": _ai_config(account, conversation, request.user),
         "messages": [
             {
                 "id": m.id,

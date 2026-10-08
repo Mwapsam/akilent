@@ -444,6 +444,16 @@ def run(draft, provider) -> None:
         system, user = email_prompt(account, notes), draft.prompt
     elif draft.kind == "email_edit":
         return _run_email_edit(draft, provider)
+    elif draft.kind == "playground":
+        return _run_playground(draft, provider, notes)
+    elif draft.kind == "knowledge_answers":
+        from apps.ai import knowledge
+
+        return knowledge.run_answers(draft, provider, notes)
+    elif draft.kind == "website":
+        from apps.ai import knowledge
+
+        return knowledge.run_website(draft, provider)
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (
@@ -562,6 +572,76 @@ def _run_email_edit(draft, provider) -> None:
             account, parts, extract_json(result.text)
         )
     draft.model = (result.model or "")[:80]
+
+
+PLAYGROUND_CHANNELS = ("whatsapp", "instagram")
+_INTENT_LABELS = {
+    "faq": "A question your knowledge base answers",
+    "sensitive": "A complaint, refund, cancellation or dispute",
+    "other": "Something else",
+}
+
+
+def _run_playground(draft, provider, notes: str) -> None:
+    """The owner asked "what would AI say to this?": the real prompt and checks, nothing sent."""
+    from apps.ai import agent, autonomy
+    from apps.ai.models import AISettings
+
+    account = draft.account
+    channel = draft.context.get("channel", "whatsapp")
+    try:
+        out = agent.preview(
+            account,
+            draft.prompt,
+            channel=channel if channel in PLAYGROUND_CHANNELS else "whatsapp",
+            business_notes=notes,
+            provider=provider,
+        )
+    except ProposalError as exc:
+        raise DraftError(str(exc)) from exc
+    p = out["proposal"]
+    ai_settings = AISettings.objects.filter(account=account).first()
+    decision = autonomy.preview(
+        ai_settings=ai_settings,
+        proposal=p,
+        account=account,
+        facts=out["facts"],
+        extra_text=out["sources"],
+        customer_text=out["customer_text"],
+    )
+    titles = {e["id"]: e["title"] for e in out["facts"]["knowledge"]}
+    failed = decision.first_failure
+    holds = autonomy.would_hold(decision) and bool(
+        getattr(ai_settings, "holding_reply_enabled", False)
+    )
+    intent = p.get("intent") or "other"
+    payload = p.get("payload") or {}
+    draft.result = {
+        "question": draft.prompt,
+        "channel": channel,
+        "action": p["action"],
+        "text": payload.get("text", ""),
+        "note": payload.get("note", ""),
+        "intent": intent,
+        "intent_label": _INTENT_LABELS.get(intent)
+        or autonomy.TOPICS.get(intent, intent),
+        "confidence": None
+        if p.get("confidence") is None
+        else round(p["confidence"] * 100),
+        "sources": [
+            {"id": sid, "title": titles.get(sid, sid)} for sid in p.get("sources") or []
+        ],
+        "auto_mode": autonomy.is_auto_mode(ai_settings),
+        "would_send": decision.send,
+        "why": "Every check passes." if failed is None else failed["detail"],
+        "checks": [
+            {"name": c["name"], "ok": c["ok"], "detail": c["detail"]}
+            for c in decision.checks
+        ],
+        "holding": autonomy.holding_reply_text(ai_settings) if holds else "",
+    }
+    draft.warnings = []
+    draft.model = (out.get("model") or "")[:80]
 
 
 def clean_prompt(text: str) -> str:

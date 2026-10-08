@@ -73,6 +73,9 @@ DRAFT_KINDS = (
     "template_edit",
     "email_template",
     "email_edit",
+    "playground",
+    "knowledge_answers",
+    "website",
 )
 
 
@@ -272,7 +275,78 @@ def serialize(proposal, conversation) -> dict | None:
     out["lookups"] = [
         LOOKUP_LABELS.get(name, name) for name in (proposal.tools_used or [])
     ]
+    out["learn"] = learnable_answer(proposal, conversation)
     return out
+
+
+# --- Learning from the team's replies --------------------------------------------------------
+MAX_LEARN_QUESTION = 200
+
+
+def learnable_answer(proposal, conversation) -> dict | None:
+    """``{"question", "answer", "saved"}`` when a person answered the customer message AI didn't
+    (or couldn't) answer itself, so the team can keep that answer for next time. Else None.
+
+    The question is the customer's message the proposal was for; the answer is the first reply
+    after it written by a person (not AI, not an automation).
+    """
+    from apps.conversations.models import Message
+
+    if proposal is None or not proposal.trigger_message_id:
+        return None
+    if (proposal.payload or {}).get("learned_entry_id"):
+        return {"question": "", "answer": "", "saved": True}
+    trigger = (
+        Message.objects.filter(pk=proposal.trigger_message_id)
+        .values_list("body", flat=True)
+        .first()
+    )
+    if not (trigger or "").strip():
+        return None
+    for body, meta in (
+        conversation.messages.filter(
+            direction=Message.Direction.OUTBOUND, pk__gt=proposal.trigger_message_id
+        )
+        .exclude(body="")
+        .order_by("id")
+        .values_list("body", "metadata")[:5]
+    ):
+        if (meta or {}).get("sent_by") in ("ai", "automation", "system"):
+            continue
+        from apps.ai.prompts import mask
+
+        return {
+            "question": mask(trigger or "").strip()[:MAX_LEARN_QUESTION],
+            "answer": body.strip(),
+            "saved": False,
+        }
+    return None
+
+
+def save_answer(account, proposal_id, question: str, answer: str):
+    """Keep a team's answer as an active knowledge-base entry. Returns ``(entry, error)``."""
+    from apps.ai.models import AIProposal, KnowledgeBaseEntry
+
+    question = " ".join((question or "").split())[:MAX_LEARN_QUESTION]
+    answer = (answer or "").strip()
+    if not question or not answer:
+        return None, "Both the question and the answer are needed."
+    try:
+        proposal = AIProposal.objects.get(account=account, pk=int(proposal_id))
+    except (AIProposal.DoesNotExist, TypeError, ValueError):
+        return None, "That suggestion is no longer available."
+    if (proposal.payload or {}).get("learned_entry_id"):
+        return None, "This answer is already saved."
+    entry = KnowledgeBaseEntry.objects.create(
+        account=account,
+        title=question,
+        content=answer,
+        source_type=KnowledgeBaseEntry.SourceType.FAQ,
+        origin=KnowledgeBaseEntry.Origin.INBOX,
+    )
+    proposal.payload = {**(proposal.payload or {}), "learned_entry_id": entry.pk}
+    proposal.save(update_fields=["payload"])
+    return entry, ""
 
 
 def _auto_note(decision: dict | None) -> str:

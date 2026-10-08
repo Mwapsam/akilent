@@ -51,6 +51,26 @@ urlpatterns = [
         ai_views.knowledge_entry_delete,
         name="settings-ai-knowledge-delete",
     ),
+    path(
+        "settings/ai/knowledge/<int:pk>/edit/",
+        ai_views.knowledge_entry_edit,
+        name="settings-ai-knowledge-edit",
+    ),
+    path(
+        "settings/ai/knowledge/approve-all/",
+        ai_views.knowledge_approve_all,
+        name="settings-ai-knowledge-approve-all",
+    ),
+    path(
+        "settings/ai/knowledge/import/",
+        ai_views.knowledge_import,
+        name="settings-ai-knowledge-import",
+    ),
+    path(
+        "settings/ai/knowledge/website/",
+        ai_views.knowledge_website,
+        name="settings-ai-knowledge-website",
+    ),
     path("settings/team/invite/", settings_views.invite_create, name="invite-create"),
     path(
         "settings/team/invitations/<int:pk>/revoke/",

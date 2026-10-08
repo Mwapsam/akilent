@@ -95,3 +95,11 @@ def test_search_matches_keywords_and_titles(all_channels):
 def test_grouped_covers_all_articles(all_channels):
     grouped_slugs = {a.slug for _, items in help_kb.grouped() for a in items}
     assert grouped_slugs == {a.slug for a in help_kb.ARTICLES}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("slug", ["whatsapp-setup", "instagram-setup"])
+def test_each_channel_guide_explains_ai_replies(client, all_channels, slug):
+    html = client.get(f"/help/{slug}/").content.decode()
+    assert "<h2>AI replies</h2>" in html
+    assert 'href="/settings/ai/knowledge/"' in html

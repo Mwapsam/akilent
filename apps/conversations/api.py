@@ -95,6 +95,22 @@ def revenue_by_channel(
     return result
 
 
+def opening_hours_line(account) -> str:
+    """The business's opening hours on one line, as an assistant is shown them, or ""."""
+    from apps.accounts import business_hours
+
+    hours = business_hours.get_hours(account)
+    if not (hours and hours.schedule):
+        return ""
+    return (
+        "; ".join(
+            f"{day.title()} {slot.get('open')}-{slot.get('close')}"
+            for day, slot in hours.schedule.items()
+        )
+        + f" ({hours.timezone})"
+    )
+
+
 def assistant_context(conversation, *, recent: int = 8) -> dict:
     """Everything an assistant (AI or otherwise) may know about one conversation, and nothing more.
 
@@ -103,7 +119,6 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
     tracked as interested, whether a normal reply is allowed right now, the business's approved
     WhatsApp templates and its opening hours.
     """
-    from apps.accounts import business_hours
     from apps.crm.models import Lead
     from apps.whatsapp.models import MessageTemplate
 
@@ -133,16 +148,7 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
         if conversation.channel == Conversation.Channel.WHATSAPP
         else []
     )
-    hours = business_hours.get_hours(account)
-    hours_text = ""
-    if hours and hours.schedule:
-        hours_text = (
-            "; ".join(
-                f"{day.title()} {slot.get('open')}-{slot.get('close')}"
-                for day, slot in hours.schedule.items()
-            )
-            + f" ({hours.timezone})"
-        )
+    hours_text = opening_hours_line(account)
     from apps.contacts.models import Tag
 
     return {

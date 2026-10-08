@@ -554,6 +554,35 @@
               <div class="mt-2 flex gap-2"><button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button></div>
             </div>
           </template>
+          {% comment %}
+            Learning loop: a teammate answered the message AI didn't. Offer to keep that answer in
+            the knowledge base (owners and admins only), editable before it's saved.
+          {% endcomment %}
+          <template x-if="ai.canLearn && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.learn">
+            <div class="mt-2 rounded-xl border border-border p-3 text-sm" x-data="{ editing: false, q: '', a: '' }">
+              <p class="text-xs text-gray-500" x-show="ai.proposal.learn.saved">Saved to your knowledge base. AI can answer this next time.</p>
+              <div x-show="!ai.proposal.learn.saved && !editing" class="flex flex-wrap items-center gap-2">
+                <p class="text-xs text-gray-600 flex-1">Your team answered this. Save it so AI can answer it next time?</p>
+                <button type="button" class="btn btn-ghost btn-sm"
+                        @click="q = ai.proposal.learn.question; a = ai.proposal.learn.answer; editing = true">Save as answer</button>
+              </div>
+              <form x-show="!ai.proposal.learn.saved && editing" x-cloak class="space-y-2"
+                    @submit.prevent="aiLearn(q, a).then(ok => { if (ok) editing = false })">
+                <div>
+                  <label class="label" :for="'learn-q-' + ai.proposal.id">Question</label>
+                  <input :id="'learn-q-' + ai.proposal.id" class="input" maxlength="200" x-model="q" required>
+                </div>
+                <div>
+                  <label class="label" :for="'learn-a-' + ai.proposal.id">Answer</label>
+                  <textarea :id="'learn-a-' + ai.proposal.id" class="textarea" rows="3" x-model="a" required></textarea>
+                </div>
+                <div class="flex gap-2">
+                  <button class="btn btn-primary btn-sm">Save answer</button>
+                  <button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </template>
           <template x-if="ai.proposal && ai.proposal.status === 'ready' && ((ai.proposal.extras || []).length || (ai.proposal.lookups || []).length || ai.proposal.autoNote)">
             <div class="mt-2 text-xs">
               <p class="text-gray-500" x-show="ai.proposal.autoNote" x-text="ai.proposal.autoNote"></p>

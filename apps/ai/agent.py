@@ -42,7 +42,8 @@ def last_customer_message(thread: list[dict]) -> str:
 
 
 def run(conversation, *, business_notes: str = "", provider=None) -> dict:
-    """``{"proposal", "model", "provider", "latency_ms", "tools_used", "route", "window_open", "facts", "sources", "customer_text"}``.
+    """``{"proposal", "model", "provider", "latency_ms", "tools_used", "route", "window_open",
+    "facts", "sources", "customer_text"}``.
 
     ``facts`` is the business's structured facts (``apps.ai.facts``) and ``sources`` the other text
     a reply may take facts from (look-up results and the business's own recent replies); together
@@ -53,10 +54,65 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
     """
     from apps.conversations.api import assistant_context
 
-    account = conversation.account
     ctx = assistant_context(conversation, recent=prompts.RECENT_MESSAGES)
-    mem = ai_memory.memory_for(conversation)
-    allowed = tools.available(account)
+    return _propose(
+        conversation.account,
+        ctx,
+        channel=conversation.channel,
+        business_notes=business_notes,
+        memory=ai_memory.memory_for(conversation),
+        conversation=conversation,
+        provider=provider,
+    )
+
+
+def preview(
+    account,
+    question: str,
+    *,
+    channel: str = "whatsapp",
+    business_notes: str = "",
+    provider=None,
+) -> dict:
+    """What AI would propose if a new customer wrote ``question`` now, as ``run`` returns it.
+
+    For an owner testing their AI: the same prompt, knowledge and checks as a real conversation,
+    but a customer with no history, an open reply window and no look-ups (they need a real
+    customer). Nothing is stored or sent.
+    """
+    from apps.conversations.api import opening_hours_line
+
+    ctx = {
+        "business_name": account.company_name or "",
+        "hours_text": opening_hours_line(account),
+        "business_tags": [],
+        "thread": [{"direction": "inbound", "body": question}],
+        "window_open": True,
+        "templates": [],
+        "customer": {"first_name": "", "tags": [], "interested": False},
+    }
+    return _propose(
+        account,
+        ctx,
+        channel=channel,
+        business_notes=business_notes,
+        provider=provider,
+    )
+
+
+def _propose(
+    account,
+    ctx: dict,
+    *,
+    channel: str,
+    business_notes: str,
+    memory=None,
+    conversation=None,
+    provider=None,
+) -> dict:
+    """Build the prompt from ``ctx`` (``assistant_context``'s shape), ask the model, check its
+    answer. Look-ups are offered only with a real ``conversation`` to look things up in."""
+    allowed = tools.available(account) if conversation is not None else []
     question = last_customer_message(ctx["thread"])
     facts = business_facts.build(account, business_notes=business_notes, query=question)
     system, messages = prompts.build(
@@ -68,14 +124,14 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
         thread=ctx["thread"],
         window_open=ctx["window_open"],
         business_tags=ctx["business_tags"],
-        memory={"summary": mem.summary, "facts": mem.facts} if mem else None,
+        memory={"summary": memory.summary, "facts": memory.facts} if memory else None,
         tools_text=tools.describe(allowed),
         structured_facts=facts,
-        channel=conversation.channel,
+        channel=channel,
     )
     route, _why = router.choose(
         ctx,
-        has_memory=mem is not None,
+        has_memory=memory is not None,
         knowledge_hit=business_facts.matches_question(facts["knowledge"], question),
     )
     provider = provider or get_ai_provider(account, tier=route)
