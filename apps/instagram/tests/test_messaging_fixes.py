@@ -215,7 +215,7 @@ class TestWorkflowsAndAi(InstagramCase):
             patch(
                 "apps.automation.workflow_engine.resume_on_reply", return_value=True
             ) as resume,
-            patch("apps.automation.workflow_engine.enroll_for_trigger") as enroll,
+            patch("apps.automation.workflow_engine.answer_message") as enroll,
         ):
             _deliver(self.dm("Prices"))
         resume.assert_called_once()
@@ -233,7 +233,7 @@ class TestWorkflowsAndAi(InstagramCase):
         conversation_message_processed.connect(receiver)
         try:
             with patch(
-                "apps.automation.workflow_engine.enroll_for_trigger", return_value=1
+                "apps.automation.workflow_engine.answer_message", return_value=True
             ):
                 _deliver(self.dm("hello"))
         finally:

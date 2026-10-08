@@ -1376,10 +1376,50 @@ def enroll_for_trigger(
     ``email.opened``, …). ``business_event`` has its own richer path in
     ``on_business_event``.
     """
+    return len(
+        _enroll_matching(
+            account_id, trigger_type, contact, context=context, subject_key=subject_key
+        )
+    )
+
+
+# Steps that put a message in front of the customer.
+_CUSTOMER_REPLY_STEPS = frozenset(
+    {"reply_text", "send_whatsapp", "send_buttons", "send_list"}
+)
+
+
+def answer_message(account_id: int, contact, *, context: dict) -> bool:
+    """Enroll ``contact`` into the message-received workflows; True only if one answered.
+
+    "Answered" means a run sent the customer something, or is now waiting for their
+    reply. A run that started but ended without a word (e.g. a welcome workflow for
+    someone already welcomed) leaves the message for AI.
+    """
+    runs = _enroll_matching(
+        account_id, "conversation.message_received", contact, context=context
+    )
+    if not runs:
+        return False
+    if any(run.status == WorkflowRun.Status.WAITING for run in runs):
+        return True
+    return WorkflowStepRun.objects.filter(
+        run__in=runs, step_type__in=_CUSTOMER_REPLY_STEPS, status="ok"
+    ).exists()
+
+
+def _enroll_matching(
+    account_id: int,
+    trigger_type: str,
+    contact,
+    *,
+    context: dict | None = None,
+    subject_key: str = "",
+) -> list[WorkflowRun]:
     workflows = Workflow.objects.filter(
         account_id=account_id, status=Workflow.Status.PUBLISHED
     )
-    n = 0
+    runs: list[WorkflowRun] = []
     for wf in workflows:
         trigger = (wf.definition or {}).get("trigger", {})
         if trigger.get("type") != trigger_type:
@@ -1388,16 +1428,16 @@ def enroll_for_trigger(
             continue
         try:
             with transaction.atomic():
-                if (
-                    enroll(wf, contact, context=context or {}, subject_key=subject_key)
-                    is not None
-                ):
-                    n += 1
+                run = enroll(
+                    wf, contact, context=context or {}, subject_key=subject_key
+                )
+                if run is not None:
+                    runs.append(run)
         except Exception:
             logger.exception(
                 "enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type
             )
-    return n
+    return runs
 
 
 def _trigger_allows(workflow: Workflow, trigger: dict, contact, context: dict) -> bool:

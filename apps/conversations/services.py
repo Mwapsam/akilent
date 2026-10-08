@@ -383,12 +383,12 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
 def _enroll_workflows(
     conversation: Conversation, contact, message: dict, reply: dict | None = None
 ) -> bool:
-    """Start or resume workflows for this message. True if one started or resumed.
+    """Start or resume workflows for this message. True if one resumed or answered it.
 
     Channel-neutral: ``message`` is ``{"body", "type"}``; ``reply`` is a tapped
     button/list choice (WhatsApp interactive), if any.
     """
-    from apps.automation.workflow_engine import enroll_for_trigger, resume_on_reply
+    from apps.automation.workflow_engine import answer_message, resume_on_reply
     from apps.conversations import forms as conversation_forms
 
     message = dict(message)
@@ -421,14 +421,12 @@ def _enroll_workflows(
     if resume_on_reply(conversation.account_id, contact, message):
         return True
 
-    return (
-        enroll_for_trigger(
-            conversation.account_id,
-            "conversation.message_received",
-            contact,
-            context={"conversation_id": conversation.public_id, "message": message},
-        )
-        > 0
+    # Only a workflow that actually answered keeps AI out; one that ran and said nothing
+    # (a welcome for someone already welcomed) must not silence AI for good.
+    return answer_message(
+        conversation.account_id,
+        contact,
+        context={"conversation_id": conversation.public_id, "message": message},
     )
 
 
