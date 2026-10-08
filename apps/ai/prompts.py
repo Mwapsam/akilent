@@ -21,40 +21,51 @@ RECENT_MESSAGES = 8
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)")
 
-SYSTEM_RULES = """You help a small business answer its customers on WhatsApp. You never send anything: \
-you propose what a person on the team should send, and they decide.
+CHANNEL_LABELS = {"whatsapp": "WhatsApp", "instagram": "Instagram"}
+SENSITIVE_TOPICS = (
+    "complaints, refunds, payment disputes, cancellations, account restrictions, legal threats, "
+    "custom pricing or deals, and service disputes"
+)
+_PROFILE_LABELS = {
+    "what_you_sell": "What we offer",
+    "location": "Where we are",
+    "payment_methods": "How to pay",
+    "delivery": "Delivery",
+    "website": "Website",
+}
+
+
+def system_rules(business_name: str, channel_label: str = "") -> str:
+    """The product rules, spoken from the business's side so the model never confuses whose
+    customer this is (it answers *for* the business, never for Akilent)."""
+    name = business_name or "the business"
+    where = f" on {channel_label}" if channel_label else ""
+    return f"""You reply to customers on behalf of {name}{where}. Speak as the business using "we", "our" and "us". Never mention Akilent, the AI system, the software running you, or another company as the business you represent. Your job is to help customers of {name}. The information under "Business knowledge" belongs to {name} and is its source of truth. You never send anything yourself: you propose what the team should send.
 
 Rules:
-- Use ONLY the facts in "About the business" and "About this customer". If the answer needs a fact \
-that isn't there (a price, a date, stock, a policy), don't guess: say a teammate will confirm, or \
-propose a handoff.
-- Never invent prices, discounts, delivery times or promises.
-- Write like a friendly person from the business: short, plain, in the customer's language. No \
-markdown, no lists unless the customer asked for options.
+- If anything under "Business knowledge" answers the customer, even in different words, answer it fully and helpfully in your own words, and list the ids of the entries you used in "sources".
+- Use ONLY "Business knowledge" and "About this customer". If the answer needs a fact that isn't there (a price, a date, stock, a policy), don't guess: propose a handoff.
+- Quote prices, times, numbers and links exactly as written under "Exact facts" or in the text you used. Never invent prices, discounts, delivery times or promises.
+- Sensitive topics ({SENSITIVE_TOPICS}): you may explain a policy written in the business knowledge, but never promise or commit to an outcome (no "we'll refund you", "we'll cancel it"); use intent "sensitive".
+- Write like a friendly person from the business: short, plain, in the customer's language. No markdown, no lists unless the customer asked for options.
 - If the reply window is CLOSED, you may only propose one of the approved templates, or a handoff.
 
 Answer with ONE JSON object and nothing else:
-{"version": 1, "action": "reply" | "send_template" | "handoff", "confidence": 0.0-1.0,
- "intent": "greeting" | "hours" | "location" | "product_info" | "price" | "delivery" | "payment" | "other",
- "reason": "<one short sentence for the team>", "payload": {...}}
+{{"version": 1, "action": "reply" | "send_template" | "handoff", "confidence": 0.0-1.0,
+ "intent": "greeting" | "hours" | "location" | "product_info" | "price" | "delivery" | "payment" | "faq" | "sensitive" | "other",
+ "sources": ["<id of each Questions and answers entry you used, e.g. k12>"],
+ "reason": "<one short sentence for the team>", "payload": {{...}}}}
 
-intent is what the customer's latest message is mainly about; use "other" for anything else, \
-including complaints, refunds, custom requests and anything you are unsure of. confidence is how \
-sure you are that your proposal is correct and complete using only the facts given.
+intent is what the customer's latest message is mainly about: "faq" when a Questions and answers entry answers it, "sensitive" for the sensitive topics above, "other" when nothing fits. confidence is how sure you are that your proposal is correct and complete using only the business knowledge given; when unsure, give a low confidence rather than a vague answer.
 
-payload for "reply": {"text": "<the message>"}
-payload for "send_template": {"template": "<exact approved template name>", "variables": \
-{"<blank>": "<value>"}}. Fill EVERY blank listed for that template. For a name blank use \
-"contact.first_name". For the business name use "account.company_name". Otherwise use short text \
-taken from the facts above. If you can't fill a blank from the facts, propose a handoff instead.
-payload for "handoff": {"note": "<what the teammate should know>"}
+payload for "reply": {{"text": "<the message>"}}
+payload for "send_template": {{"template": "<exact approved template name>", "variables": {{"<blank>": "<value>"}}}}. Fill EVERY blank listed for that template. For a name blank use "contact.first_name". For the business name use "account.company_name". Otherwise use short text taken from the business knowledge. If you can't fill a blank from it, propose a handoff instead.
+payload for "handoff": {{"note": "<what the teammate should know>"}}
 
-Optionally add "extras": up to 3 small next steps the team can apply with one click. Only when \
-clearly useful:
-- {"kind": "tag", "tag": "<one of the business's tags listed below>"}
-- {"kind": "track_interest"} when the customer shows real buying interest and isn't tracked yet
-- {"kind": "follow_up", "in_days": 1-14, "note": "<what to check back on>"} when something is \
-left open (a quote, a decision, a delivery)"""
+Optionally add "extras": up to 3 small next steps the team can apply with one click. Only when clearly useful:
+- {{"kind": "tag", "tag": "<one of the business's tags listed below>"}}
+- {{"kind": "track_interest"}} when the customer shows real buying interest and isn't tracked yet
+- {{"kind": "follow_up", "in_days": 1-14, "note": "<what to check back on>"}} when something is left open (a quote, a decision, a delivery)"""
 
 
 def mask(text: str) -> str:
@@ -75,36 +86,56 @@ def build(
     tools_text: str = "",
     business_tags=(),
     structured_facts: dict | None = None,
+    channel: str = "",
 ) -> tuple[str, list[ChatMessage]]:
     """``(system, messages)`` ready for ``AIProvider.chat``.
 
     ``thread`` is the recent conversation, oldest first, as ``{"direction", "body"}``; only inbound
     and outbound entries are used. ``templates`` is the approved templates as ``{"name", "body",
     "blanks"}``. ``memory`` is ``{"summary", "facts"}`` for the part of the thread before ``thread``.
-    ``tools_text`` describes the look-ups the model may ask for.
+    ``tools_text`` describes the look-ups the model may ask for. ``channel`` is the conversation's
+    channel ("whatsapp", "instagram"...), named in the rules.
+
+    Business knowledge comes in three parts: Questions and answers (explained in the model's own
+    words, each with the id it cites), Business information (the owner's notes and profile
+    answers), and Exact facts (hours, products and prices, quoted as written).
     """
+    facts = structured_facts or {}
     lines = [
-        SYSTEM_RULES,
+        system_rules(business_name, CHANNEL_LABELS.get(channel, "")),
         "",
-        "## About the business",
+        "## Business knowledge",
+    ]
+    if facts.get("knowledge"):
+        lines += ["", "### Questions and answers"]
+        for entry in facts["knowledge"]:
+            lines += [
+                f"[{entry['id']}] Q: {entry['title']}",
+                f"A: {entry['content']}",
+            ]
+    lines += [
+        "",
+        "### Business information",
         f"Name: {business_name or 'the business'}",
     ]
-    if hours_text:
-        lines.append(f"Opening hours: {hours_text}")
-    lines.append(
-        business_notes.strip()
-        if business_notes.strip()
-        else "(The owner hasn't added any facts yet.)"
-    )
-    structured = {
-        k: v for k, v in (structured_facts or {}).items() if k != "notes" and v
+    for key, label in _PROFILE_LABELS.items():
+        if (facts.get("business") or {}).get(key):
+            lines.append(f"{label}: {facts['business'][key]}")
+    if business_notes.strip():
+        lines.append(business_notes.strip())
+    elif not facts.get("knowledge") and not facts.get("business"):
+        lines.append("(The owner hasn't added any facts yet.)")
+    exact = {
+        k: v
+        for k, v in facts.items()
+        if k not in ("notes", "knowledge", "business") and v
     }
-    if structured:
-        lines += [
-            "",
-            "## Facts (exact; quote prices and times only from here or the notes)",
-            json.dumps(structured, ensure_ascii=False),
-        ]
+    if hours_text or exact:
+        lines += ["", "### Exact facts (quote prices, times and links only as written)"]
+        if hours_text:
+            lines.append(f"Opening hours: {hours_text}")
+        if exact:
+            lines.append(json.dumps(exact, ensure_ascii=False))
 
     lines += [
         "",

@@ -278,12 +278,17 @@ def serialize(proposal, conversation) -> dict | None:
 def _auto_note(decision: dict | None) -> str:
     if not decision or decision.get("send"):
         return ""
+    held = (
+        " AI told the customer someone from your team will reply."
+        if decision.get("holding_sent")
+        else ""
+    )
     if decision.get("error"):
-        return f"Not sent automatically: {decision['error']}"
+        return f"Not sent automatically: {decision['error']}{held}"
     failed = next((c for c in decision.get("checks", []) if not c.get("ok")), None)
     if failed is None or failed.get("name") == "switched_on":
-        return ""
-    return f"Not sent automatically: {failed.get('detail', '')}"
+        return held.strip()
+    return f"Not sent automatically: {failed.get('detail', '')}{held}"
 
 
 LOOKUP_LABELS = {
@@ -432,6 +437,8 @@ def save_settings(
     auto_topics=None,
     auto_min_confidence=None,
     auto_only_when_closed: bool = False,
+    holding_reply_enabled: bool | None = None,
+    holding_reply_text: str | None = None,
 ):
     """Turn AI on or off for a business, and choose between suggestions and automatic replies.
 
@@ -471,6 +478,14 @@ def save_settings(
             confidence = ai_settings.auto_min_confidence
         ai_settings.auto_min_confidence = confidence if confidence in allowed else 0.85
         ai_settings.auto_only_when_closed = bool(auto_only_when_closed)
+        if holding_reply_enabled is not None:
+            ai_settings.holding_reply_enabled = bool(holding_reply_enabled)
+        if holding_reply_text is not None:
+            text = " ".join(holding_reply_text.split())[:300]
+            # Saving the default unchanged keeps it the default, so a better default reaches them.
+            ai_settings.holding_reply_text = (
+                "" if text == autonomy.DEFAULT_HOLDING_REPLY else text
+            )
     ai_settings.save()
     return ai_settings
 

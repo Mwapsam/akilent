@@ -10,8 +10,15 @@ SHORT_MESSAGE = 160  # characters in the customer's latest message
 SHORT_THREAD = 4  # messages in the recent window
 
 
-def choose(ctx: dict, *, has_memory: bool) -> tuple[str, str]:
-    """``(tier, reason)`` for drafting a reply to this conversation."""
+def choose(
+    ctx: dict, *, has_memory: bool, knowledge_hit: bool = False
+) -> tuple[str, str]:
+    """``(tier, reason)`` for drafting a reply to this conversation.
+
+    ``knowledge_hit``: the customer's message matches one of the business's own questions. Those
+    answers are what a business switches automatic replies on for, so they get the stronger model
+    however short the message is.
+    """
     thread = ctx.get("thread") or []
     last_inbound = next(
         (
@@ -27,6 +34,8 @@ def choose(ctx: dict, *, has_memory: bool) -> tuple[str, str]:
         return "standard", "long conversation"
     if len(thread) > SHORT_THREAD:
         return "standard", "several messages to take into account"
+    if knowledge_hit:
+        return "standard", "answered from the business's questions and answers"
     if len(last_inbound) > SHORT_MESSAGE or last_inbound.count("?") > 1:
         return "standard", "long or multi-part question"
     return "fast", "short, simple message"

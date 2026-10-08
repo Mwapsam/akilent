@@ -20,6 +20,10 @@ Actions in version 1:
   never write one customer's name into another's message.
 * ``handoff``: ``payload.note`` for the team; AI thinks a person should take this.
 
+``sources`` lists the ids of the business's Questions and answers entries a reply used (``k12``,
+``f0``...). Only ids that were actually in the prompt survive; ``apps.ai.autonomy`` sends an
+"faq" answer on its own only when it cites one.
+
 Optional ``extras`` (at most three) are side suggestions shown as one-click chips next to the main
 proposal. A person's click applies one; AI never does:
 
@@ -50,8 +54,11 @@ INTENTS = (
     "price",
     "delivery",
     "payment",
+    "faq",  # answered from the business's own Questions and answers
+    "sensitive",  # complaints, refunds, disputes...: never answered automatically
     "other",
 )
+MAX_SOURCES = 5
 EXTRA_KINDS = ("tag", "track_interest", "follow_up")
 _SOURCES = ("contact.", "account.", "context.", "business.")
 
@@ -127,15 +134,33 @@ def clean_extras(raw, *, tags=(), can_track: bool = False) -> list[dict]:
     return out
 
 
+def clean_sources(raw, known_ids) -> list[str]:
+    """The cited entry ids that were really offered to the model, in order, without repeats."""
+    known = set(known_ids or ())
+    out: list[str] = []
+    for item in raw if isinstance(raw, list) else []:
+        sid = str(item or "").strip().strip("[]")
+        if sid in known and sid not in out:
+            out.append(sid)
+    return out[:MAX_SOURCES]
+
+
 def validate(
-    data: dict, *, templates: dict, window_open: bool, tags=(), can_track: bool = False
+    data: dict,
+    *,
+    templates: dict,
+    window_open: bool,
+    tags=(),
+    can_track: bool = False,
+    knowledge_ids=(),
 ) -> dict:
     """A clean, checked proposal, or ``ProposalError``.
 
     ``templates`` maps each **approved** template name to its list of blanks. ``window_open`` is
     whether a normal message may be sent to this customer right now. ``tags`` are the business's
     existing tags and ``can_track`` whether "track as interested" makes sense for this customer;
-    both only shape the optional extras.
+    both only shape the optional extras. ``knowledge_ids`` are the Q&A ids that were in the
+    prompt; ``sources`` keeps only those.
     """
     from apps.automation.variables import looks_like_name
 
@@ -165,6 +190,11 @@ def validate(
                 "template can be sent now."
             )
         clean = {"text": text[:MAX_REPLY]}
+        sources = clean_sources(
+            data.get("sources") or payload.get("sources"), knowledge_ids
+        )
+        if sources:
+            clean["sources"] = sources  # type: ignore[assignment]
     elif action == "send_template":
         name = str(payload.get("template") or "").strip()
         if name not in templates:
@@ -200,12 +230,19 @@ def validate(
         "reason": reason,
         "payload": clean,
         "intent": intent if intent in INTENTS else "other",
+        "sources": list(clean.get("sources") or []),
         "extras": clean_extras(data.get("extras"), tags=tags, can_track=can_track),
     }
 
 
 def parse(
-    text: str, *, templates: dict, window_open: bool, tags=(), can_track: bool = False
+    text: str,
+    *,
+    templates: dict,
+    window_open: bool,
+    tags=(),
+    can_track: bool = False,
+    knowledge_ids=(),
 ) -> dict:
     return validate(
         extract_json(text),
@@ -213,4 +250,5 @@ def parse(
         window_open=window_open,
         tags=tags,
         can_track=can_track,
+        knowledge_ids=knowledge_ids,
     )

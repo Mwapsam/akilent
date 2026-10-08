@@ -52,6 +52,8 @@ def settings_ai(request):
             auto_topics=request.POST.getlist("auto_topics"),
             auto_min_confidence=request.POST.get("auto_min_confidence"),
             auto_only_when_closed=request.POST.get("auto_only_when_closed") == "on",
+            holding_reply_enabled=request.POST.get("holding_reply_enabled") == "on",
+            holding_reply_text=request.POST.get("holding_reply_text"),
         )
         if saved.reply_mode == "auto" and not saved.auto_topics:
             messages.warning(
@@ -84,6 +86,7 @@ def settings_ai(request):
                 for k, v in autonomy.TOPICS.items()
             ],
             "confidence_choices": autonomy.CONFIDENCE_CHOICES,
+            "holding_reply": autonomy.holding_reply_text(ai),
             "autonomy_site_on": autonomy_site_on(),
             "auto_replies": ai_api.recent_auto_replies(account),
         },

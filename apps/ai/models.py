@@ -40,6 +40,10 @@ class AISettings(models.Model):
     auto_topics = models.JSONField(default=list, blank=True)
     auto_min_confidence = models.FloatField(default=0.85)
     auto_only_when_closed = models.BooleanField(default=False)
+    # In automatic mode, when AI can't answer a message itself: tell the customer once that a
+    # person will reply, then leave it to the team (apps.ai.autonomy.should_hold).
+    holding_reply_enabled = models.BooleanField(default=True)
+    holding_reply_text = models.CharField(max_length=300, blank=True, default="")
     auto_consented_at = models.DateTimeField(null=True, blank=True)
     auto_consented_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

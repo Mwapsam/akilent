@@ -29,7 +29,7 @@
     <ul class="list-disc pl-5 mt-1 space-y-0.5">
       <li>The last few messages of the one conversation being answered, and a short summary of its earlier messages. Phone numbers and email addresses in them are hidden.</li>
       <li>The customer's first name and tags, whether they're tracked as interested, and, when AI asks, their open follow-up and last few orders.</li>
-      <li>Your business name, opening hours, approved templates, tag names, the notes below and your <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> entries, and, when AI asks, matching products and prices from your catalogue.</li>
+      <li>Your business name, opening hours, approved templates, tag names, the notes below, your <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> entries (the ones closest to the customer's question when you have many), and products and prices from your catalogue.</li>
     </ul>
     <p class="mt-1">Internal notes, other customers and other conversations are never sent.</p>
   </div>
@@ -60,7 +60,7 @@
       <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
         <input type="radio" name="reply_mode" value="auto" class="mt-1" x-model="mode">
         <span class="text-sm text-ink"><span class="font-medium">Reply automatically to the questions I choose</span>
-          <span class="block text-xs text-gray-500 mt-0.5">AI answers simple questions straight away, like a customer asking when you're open at 9 pm. Everything else stays a suggestion for your team.</span>
+          <span class="block text-xs text-gray-500 mt-0.5">AI answers on WhatsApp and Instagram straight away, like a customer asking when you're open at 9 pm or a question your knowledge base answers. Everything else stays a suggestion for your team.</span>
           {% if ai.auto_consented_at %}<span class="block text-xs text-gray-500 mt-0.5">Chosen {{ ai.auto_consented_at|date:"j M Y" }}{% if ai.auto_consented_by %} by {{ ai.auto_consented_by.get_full_name|default:ai.auto_consented_by.email }}{% endif %}.</span>{% endif %}
         </span>
       </label>
@@ -92,12 +92,22 @@
           <input type="checkbox" name="auto_only_when_closed" {% if ai.auto_only_when_closed %}checked{% endif %}>
           Only when we're closed (your team answers during <a href="{% url 'settings-hours' %}" class="underline">opening hours</a>)
         </label>
+        <div class="space-y-1">
+          <label class="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="holding_reply_enabled" {% if ai.holding_reply_enabled %}checked{% endif %}>
+            When AI can't answer, tell the customer your team will reply
+          </label>
+          <input type="text" name="holding_reply_text" class="input w-full" maxlength="300" value="{{ holding_reply }}" aria-label="Message AI sends when it hands the conversation to your team">
+          <p class="text-xs text-gray-500">Sent once, then AI stays quiet until someone on your team replies.</p>
+        </div>
         <div class="text-xs text-gray-600">
           <p class="font-medium text-ink">AI still hands it to your team when:</p>
           <ul class="list-disc pl-5 mt-0.5 space-y-0.5">
             <li>a price isn't in your catalogue or notes, a time isn't one of your opening hours, or a number or link can't be checked (so it can't invent a price or date);</li>
             <li>a teammate has taken the conversation or replied in the last few minutes;</li>
             <li>the 24-hour window has closed, or a template is needed;</li>
+            <li>the customer has a complaint, wants a refund or a cancellation, or disputes something;</li>
+            <li>the answer isn't in your knowledge base or notes;</li>
             <li>it has already answered 5 times in a row without your team.</li>
           </ul>
           <p class="mt-1">Replies AI sends are marked “Sent by AI” in the inbox. The <a class="underline" href="{% url 'settings-ai-autopilot' %}">autopilot report</a> shows every reply it sent or held back, and why.</p>

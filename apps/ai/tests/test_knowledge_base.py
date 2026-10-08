@@ -29,12 +29,12 @@ def owner(client, account):
 @pytest.mark.django_db
 class TestFactsIntegration:
     def test_active_entries_are_included_in_facts(self, account):
-        KnowledgeBaseEntry.objects.create(
+        e = KnowledgeBaseEntry.objects.create(
             account=account, title="Returns", content="14 days with a receipt."
         )
         facts = business_facts.build(account)
         assert facts["knowledge"] == [
-            {"title": "Returns", "content": "14 days with a receipt."}
+            {"id": f"k{e.pk}", "title": "Returns", "content": "14 days with a receipt."}
         ]
 
     def test_inactive_entries_are_excluded(self, account):
@@ -52,15 +52,37 @@ class TestFactsIntegration:
         facts = business_facts.build(account)
         assert facts["knowledge"] == []
 
-    def test_capped_at_max_entries(self, account):
-        from apps.ai.facts import MAX_KNOWLEDGE_ENTRIES
-
-        for i in range(MAX_KNOWLEDGE_ENTRIES + 5):
+    def test_everything_goes_in_while_it_fits(self, account):
+        for i in range(40):
             KnowledgeBaseEntry.objects.create(
                 account=account, title=f"Entry {i:03d}", content="x"
             )
         facts = business_facts.build(account)
-        assert len(facts["knowledge"]) == MAX_KNOWLEDGE_ENTRIES
+        assert len(facts["knowledge"]) == 40
+
+    def test_past_the_budget_the_entry_being_asked_about_still_goes_in(self, account):
+        """Not the first N by title: the 200th entry wins when it's the one asked about."""
+        from apps.ai.facts import MAX_KNOWLEDGE_CHARS
+
+        filler = "y" * (MAX_KNOWLEDGE_CHARS // 50)
+        for i in range(200):
+            KnowledgeBaseEntry.objects.create(
+                account=account, title=f"Topic {i:03d}", content=filler
+            )
+        wanted = KnowledgeBaseEntry.objects.create(
+            account=account,
+            title="Zz How do I join TaskCentro as a freelancer?",
+            content="Create an account, then set up your freelancer profile.",
+        )
+        facts = business_facts.build(
+            account, query="How can I join TaskCentro as a freelancer?"
+        )
+        ids = [e["id"] for e in facts["knowledge"]]
+        assert ids[0] == f"k{wanted.pk}"
+        assert (
+            sum(len(e["content"]) for e in facts["knowledge"])
+            <= MAX_KNOWLEDGE_CHARS + 100
+        )
 
     def test_knowledge_content_is_part_of_written_text(self, account):
         KnowledgeBaseEntry.objects.create(

@@ -30,8 +30,19 @@ def _can_track(account, customer: dict) -> bool:
     return billing_api.usable(account, "sales") and not customer.get("interested")
 
 
+def last_customer_message(thread: list[dict]) -> str:
+    return next(
+        (
+            m.get("body") or ""
+            for m in reversed(thread or [])
+            if m.get("direction") == "inbound"
+        ),
+        "",
+    )
+
+
 def run(conversation, *, business_notes: str = "", provider=None) -> dict:
-    """``{"proposal", "model", "provider", "latency_ms", "tools_used", "route", "window_open", "sources"}``.
+    """``{"proposal", "model", "provider", "latency_ms", "tools_used", "route", "window_open", "facts", "sources", "customer_text"}``.
 
     ``facts`` is the business's structured facts (``apps.ai.facts``) and ``sources`` the other text
     a reply may take facts from (look-up results and the business's own recent replies); together
@@ -46,7 +57,8 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
     ctx = assistant_context(conversation, recent=prompts.RECENT_MESSAGES)
     mem = ai_memory.memory_for(conversation)
     allowed = tools.available(account)
-    facts = business_facts.build(account, business_notes=business_notes)
+    question = last_customer_message(ctx["thread"])
+    facts = business_facts.build(account, business_notes=business_notes, query=question)
     system, messages = prompts.build(
         business_name=ctx["business_name"],
         business_notes=business_notes,
@@ -59,8 +71,13 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
         memory={"summary": mem.summary, "facts": mem.facts} if mem else None,
         tools_text=tools.describe(allowed),
         structured_facts=facts,
+        channel=conversation.channel,
     )
-    route, _why = router.choose(ctx, has_memory=mem is not None)
+    route, _why = router.choose(
+        ctx,
+        has_memory=mem is not None,
+        knowledge_hit=business_facts.matches_question(facts["knowledge"], question),
+    )
     provider = provider or get_ai_provider(account, tier=route)
     # Beyond the structured facts: what the business itself has said (its earlier replies) and what
     # look-ups return. Never the customer's words, or "Is it K5,000?" -> "Yes, K5,000" would pass.
@@ -72,6 +89,7 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
         "window_open": ctx["window_open"],
         "tags": ctx["business_tags"],
         "can_track": _can_track(account, ctx["customer"]),
+        "knowledge_ids": [e["id"] for e in facts["knowledge"]],
     }
 
     started, used, model = time.monotonic(), [], ""
@@ -107,4 +125,5 @@ def run(conversation, *, business_notes: str = "", provider=None) -> dict:
         "window_open": ctx["window_open"],
         "facts": facts,
         "sources": "\n".join(evidence),
+        "customer_text": question,
     }

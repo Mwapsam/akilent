@@ -134,6 +134,7 @@ def test_a_reply_proposal_is_parsed_even_inside_a_code_fence():
         "reason": "Asked price",
         "payload": {"text": "From K18,000."},
         "intent": "other",
+        "sources": [],
         "extras": [],
     }
 

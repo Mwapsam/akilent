@@ -37,6 +37,7 @@ TOPICS = {
     "location": "Where you are and how to find you",
     "payment": "How to pay",
     "greeting": "Greetings and thank-yous",
+    "faq": "Questions your knowledge base answers",
     "product_info": "What you sell (without prices)",
     "price": "Prices from your product catalogue",
     "delivery": "Delivery areas and times",
@@ -47,6 +48,37 @@ TOPIC_LOCKS = {
     "delivery": "Coming later: delivery rules aren't structured yet, so AI can't check them.",
     "location": "Tell Akilent where you are first (Build, step 1), so AI answers from your own words.",
     "payment": "Tell Akilent how customers pay first (Build, step 1), so AI answers from your own words.",
+    "faq": "Add questions and answers to your knowledge base first, so AI answers from your own words.",
+}
+# A customer writing about one of these always reaches a person, whatever the model classed it as:
+# AI may explain a written policy in a suggestion, never settle one of these on its own.
+SENSITIVE = re.compile(
+    r"\b(refund\w*|money back|chargeback|complain\w*|dispute\w*|cancel\w*|lawyer|legal action|"
+    r"sue|suing|court|scam\w*|fraud\w*|stole\w*|unauthori[sz]ed|overcharg\w*|charged twice|"
+    r"suspend\w*|banned|blocked my|deactivat\w*)\b",
+    re.I,
+)
+DEFAULT_HOLDING_REPLY = (
+    "Thanks for your message! Someone from our team will get back to you shortly."
+)
+# Checks that, when they fail, mean "AI can't answer this itself" -> holding reply + a person.
+_HOLD_WHEN = {
+    "plain_reply",
+    "allowed_topic",
+    "confident",
+    "grounded",
+    "facts",
+    "not_sensitive",
+}
+# Checks that must pass before AI says anything at all, even "someone will get back to you".
+_SAFE_TO_SPEAK = {
+    "switched_on",
+    "automatic",
+    "window_open",
+    "not_assigned",
+    "team_quiet",
+    "closed_now",
+    "one_per_message",
 }
 # Owners see the words; the numbers stay behind the scenes and in the audit record.
 CONFIDENCE_CHOICES = ((0.9, "Very careful"), (0.85, "Careful"), (0.75, "Balanced"))
@@ -88,6 +120,8 @@ def locked_topics(account, facts: dict | None = None) -> dict:
     locks = {"delivery": TOPIC_LOCKS["delivery"]}
     if not facts.get("products"):
         locks["price"] = TOPIC_LOCKS["price"]
+    if not facts.get("knowledge"):
+        locks["faq"] = TOPIC_LOCKS["faq"]
     if not profile.get("location"):
         locks["location"] = TOPIC_LOCKS["location"]
     if not profile.get("payment_methods"):
@@ -166,8 +200,12 @@ def evaluate(
     extra_text: str = "",
     trigger_message_id=None,
     now=None,
+    customer_text: str = "",
 ) -> Decision:
-    """Every check, in order, for sending ``proposal`` (the validated contract) without a person."""
+    """Every check, in order, for sending ``proposal`` (the validated contract) without a person.
+
+    ``customer_text`` is the message being answered, checked for sensitive topics.
+    """
     from apps.accounts import business_hours
     from apps.ai.models import AIProposal
     from apps.conversations.api import last_team_reply_at
@@ -293,7 +331,57 @@ def evaluate(
         + ", which couldn't be checked against your facts.",
         value=missing[:10],
     )
+    sensitive = intent == "sensitive" or bool(SENSITIVE.search(customer_text or ""))
+    check(
+        "not_sensitive",
+        not sensitive,
+        "Not a complaint, refund or dispute."
+        if not sensitive
+        else "A complaint, refund, cancellation or dispute: a person should handle it.",
+    )
+    if intent == "faq":
+        offered = {e.get("id") for e in facts.get("knowledge") or []}
+        cited = [s for s in proposal.get("sources") or [] if s in offered]
+        check(
+            "grounded",
+            bool(cited),
+            "Answered from your knowledge base."
+            if cited
+            else "No entry in your knowledge base backs this answer.",
+            value=cited,
+        )
     return Decision(send=all(c["ok"] for c in checks), checks=checks)
+
+
+def holding_reply_text(ai_settings) -> str:
+    return (getattr(ai_settings, "holding_reply_text", "") or "").strip() or (
+        DEFAULT_HOLDING_REPLY
+    )
+
+
+def should_hold(decision: Decision, ai_settings, conversation) -> bool:
+    """Whether to tell the customer a person will reply, instead of answering.
+
+    Only when AI couldn't answer this itself (a hand-off, a topic it may not answer, not sure,
+    nothing in the knowledge base, a sensitive topic), every check that makes it safe to speak at
+    all passed, and AI hasn't already said so since the team last replied: one holding message
+    per wait, never a string of "someone will get back to you".
+    """
+    from apps.ai.models import AIProposal
+    from apps.conversations.api import last_team_reply_at
+
+    if decision.send or not getattr(ai_settings, "holding_reply_enabled", False):
+        return False
+    failed = {c["name"] for c in decision.checks if not c["ok"]}
+    if not failed & _HOLD_WHEN or failed & _SAFE_TO_SPEAK:
+        return False
+    held = AIProposal.objects.filter(
+        conversation=conversation, auto_decision__holding_sent=True
+    )
+    team_at = last_team_reply_at(conversation)
+    if team_at is not None:
+        held = held.filter(created_at__gt=team_at)
+    return not held.exists()
 
 
 # What the autopilot report calls each reason a reply was held back.
@@ -303,6 +391,8 @@ HELD_REASONS = {
     "not_assigned": "A teammate had taken over",
     "team_quiet": "A teammate had taken over",
     "allowed_topic": "Not a topic you allowed",
+    "not_sensitive": "A complaint, refund or dispute",
+    "grounded": "Not in your knowledge base",
     "window_open": "The 24-hour window had closed",
     "plain_reply": "Needed a template or a person",
     "closed_now": "You were open",

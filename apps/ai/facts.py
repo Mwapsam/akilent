@@ -12,7 +12,94 @@ import re
 from decimal import Decimal, InvalidOperation
 
 MAX_PRODUCTS = 30
-MAX_KNOWLEDGE_ENTRIES = 30
+# How much of the business's Q&A goes into one prompt. When everything fits it all goes; past
+# that, the entries closest to the customer's question win (see ``select_knowledge``).
+MAX_KNOWLEDGE_CHARS = 12000
+MAX_KNOWLEDGE_ENTRIES = 60
+_TITLE_WEIGHT = 3
+_WORD = re.compile(r"[^\W_]+", re.U)
+_STOPWORDS = frozenset(
+    [
+        "a",
+        "about",
+        "after",
+        "all",
+        "also",
+        "am",
+        "an",
+        "and",
+        "any",
+        "are",
+        "as",
+        "at",
+        "be",
+        "been",
+        "but",
+        "by",
+        "can",
+        "could",
+        "did",
+        "do",
+        "does",
+        "for",
+        "from",
+        "get",
+        "got",
+        "had",
+        "has",
+        "have",
+        "hello",
+        "hi",
+        "how",
+        "i",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "just",
+        "me",
+        "my",
+        "no",
+        "not",
+        "of",
+        "on",
+        "or",
+        "our",
+        "please",
+        "so",
+        "than",
+        "that",
+        "the",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "to",
+        "too",
+        "up",
+        "us",
+        "was",
+        "we",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "will",
+        "with",
+        "would",
+        "you",
+        "your",
+        "yours",
+    ]
+)
+_SUFFIXES = ("ing", "ers", "er", "ed", "es", "s")
 
 # "K18,000", "ZMW 250", "$12.50", "250 kwacha", "1,200 USD"
 _CURRENCY = r"(?:K|ZMW|USD|US\$|\$|KES|KSh|NGN|₦|R|ZAR|GHS|£|€|TZS|UGX|MWK)"
@@ -58,17 +145,104 @@ def times_in(text: str) -> set:
     return {t for m in TIME.finditer(text or "") if (t := minutes_of(m)) is not None}
 
 
-def build(account, *, business_notes: str = "") -> dict:
+def _stem(word: str) -> str:
+    for suffix in _SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            word = word[: -len(suffix)]
+            break
+    return word[:-1] if word.endswith("e") and len(word) > 4 else word
+
+
+def terms(text: str) -> set:
+    """The words in ``text`` that say what it's about: lowercased, stopwords out, lightly stemmed,
+    so "joining as a freelancer" and "join as freelancers" share their terms."""
+    return {
+        _stem(w)
+        for w in _WORD.findall((text or "").lower())
+        if w not in _STOPWORDS and len(w) > 1
+    }
+
+
+def all_knowledge(account) -> list[dict]:
+    """Every active Q&A the business has written, as ``{"id", "title", "content"}``.
+
+    ``KnowledgeBaseEntry`` rows (ids ``k<pk>``), then the FAQs and common questions on
+    ``accounts.BusinessKnowledge`` (``f<n>`` / ``q<n>``). An id is what the model cites in a
+    proposal's ``sources``.
+    """
+    from apps.accounts.models import BusinessKnowledge
+    from apps.ai.models import KnowledgeBaseEntry
+
+    out = [
+        {"id": f"k{pk}", "title": title, "content": content}
+        for pk, title, content in KnowledgeBaseEntry.objects.filter(
+            account=account, is_active=True
+        )
+        .order_by("title", "pk")
+        .values_list("pk", "title", "content")
+    ]
+    bk = BusinessKnowledge.objects.filter(account=account).first()
+    if bk is not None:
+        for prefix, items in (("f", bk.faqs), ("q", bk.common_questions)):
+            for n, item in enumerate(items if isinstance(items, list) else []):
+                if not isinstance(item, dict):
+                    continue
+                q = str(item.get("q") or item.get("question") or "").strip()
+                a = str(item.get("a") or item.get("answer") or "").strip()
+                if q and a:
+                    out.append({"id": f"{prefix}{n}", "title": q, "content": a})
+    return out
+
+
+def select_knowledge(entries: list[dict], query: str = "") -> list[dict]:
+    """The entries to put in front of the model for a customer asking ``query``.
+
+    All of them when they fit ``MAX_KNOWLEDGE_CHARS``; otherwise the best word matches with the
+    question (a match in the question/title counts three times one in the answer), then the rest
+    by title until the budget is used. Plain, deterministic matching: the 200th entry still wins
+    when it's the one being asked about.
+    """
+    size = sum(len(e["title"]) + len(e["content"]) for e in entries)
+    if size <= MAX_KNOWLEDGE_CHARS and len(entries) <= MAX_KNOWLEDGE_ENTRIES:
+        return list(entries)
+    wanted = terms(query)
+
+    def score(e):
+        return _TITLE_WEIGHT * len(wanted & terms(e["title"])) + len(
+            wanted & terms(e["content"])
+        )
+
+    ranked = sorted(enumerate(entries), key=lambda pair: (-score(pair[1]), pair[0]))
+    chosen: list[dict] = []
+    used = 0
+    for _i, e in ranked:
+        cost = len(e["title"]) + len(e["content"])
+        if used + cost > MAX_KNOWLEDGE_CHARS and chosen:
+            continue
+        chosen.append(e)
+        used += cost
+        if len(chosen) == MAX_KNOWLEDGE_ENTRIES:
+            break
+    return chosen
+
+
+def matches_question(entries: list[dict], query: str) -> bool:
+    """Whether any entry's question shares a meaningful word with the customer's message."""
+    wanted = terms(query)
+    return bool(wanted) and any(wanted & terms(e["title"]) for e in entries)
+
+
+def build(account, *, business_notes: str = "", query: str = "") -> dict:
     """``{"opening_hours", "timezone", "products", "knowledge", "business", "notes"}`` for this
     business.
 
     ``business`` is the owner's profile answers (location, payment methods, delivery, website).
-    Products only when Commerce is on. ``knowledge`` is the owner's written FAQ/policy entries
-    (``apps.ai.models.KnowledgeBaseEntry``) — the same trust level as ``notes``, just organized.
+    Products only when Commerce is on. ``knowledge`` is the owner's written Q&A
+    (``all_knowledge``) — the same trust level as ``notes``, just organized — chosen for the
+    customer's message ``query`` when there's too much to send it all.
     """
     from apps.accounts import api as accounts_api
     from apps.accounts import business_hours
-    from apps.ai.models import KnowledgeBaseEntry
     from apps.billing import api as billing_api
 
     hours = business_hours.get_hours(account)
@@ -86,12 +260,7 @@ def build(account, *, business_notes: str = "") -> dict:
             ).get("products", [])
         except ActionError:
             products = []
-    knowledge = [
-        {"title": e.title, "content": e.content}
-        for e in KnowledgeBaseEntry.objects.filter(
-            account=account, is_active=True
-        ).order_by("title")[:MAX_KNOWLEDGE_ENTRIES]
-    ]
+    knowledge = select_knowledge(all_knowledge(account), query)
     return {
         "opening_hours": dict(hours.schedule) if hours and hours.schedule else {},
         "timezone": hours.timezone if hours and hours.schedule else "",
@@ -103,8 +272,8 @@ def build(account, *, business_notes: str = "") -> dict:
 
 
 def written_text(facts: dict) -> str:
-    """Everything the owner wrote themselves (notes, profile answers, and knowledge-base entries),
-    for text-level checks."""
+    """Everything the owner wrote themselves (notes, profile answers, and Q&A), for text-level
+    checks."""
     return "\n".join(
         [
             facts.get("notes", ""),

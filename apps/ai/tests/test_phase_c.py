@@ -295,10 +295,16 @@ def test_an_allowed_simple_question_is_answered_on_its_own(account, sent):
 )
 @pytest.mark.django_db
 def test_anything_that_fails_a_check_stays_a_suggestion(account, sent, change, why):
+    from apps.ai.autonomy import DEFAULT_HOLDING_REPLY
+
     Fake.answer = answer(**change)
     p, result = draft(convo(account))
-    assert result == "ready" and p.status == "ready" and sent == []
+    assert result == "ready" and p.status == "ready" and p.auto_sent_at is None
     assert p.auto_decision["send"] is False
+    # AI couldn't answer it, so the customer only hears that a person will reply.
+    assert [kw["body"] for _name, kw in sent] == [DEFAULT_HOLDING_REPLY]
+    assert sent[0][1]["idempotency_key"] == f"ai-auto:hold:{p.pk}"
+    assert p.auto_decision["holding_sent"] is True
     from apps.ai import api as ai_api
 
     assert why in ai_api.serialize(p, p.conversation)["autoNote"]

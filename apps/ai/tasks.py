@@ -188,33 +188,50 @@ def _maybe_send_on_its_own(proposal, contract: dict, out: dict, ai_settings) -> 
         facts=out.get("facts") or {},
         extra_text=out.get("sources", ""),
         trigger_message_id=proposal.trigger_message_id,
+        customer_text=out.get("customer_text", ""),
     )
     record = decision.as_dict()
-    if decision.send:
+
+    def moved_on() -> bool:
         # Drafting took a while: re-check nobody replied and the customer didn't write again.
         newest_inbound, newest_outbound = newest_message_ids(conversation)
-        if newest_inbound != proposal.trigger_message_id or (
+        return newest_inbound != proposal.trigger_message_id or bool(
             newest_outbound and newest_outbound > proposal.trigger_message_id
-        ):
+        )
+
+    def send(body: str, key: str) -> str:
+        """ "" when sent, else why not."""
+        try:
+            # The "ai-auto:" key is how both channels mark the message as sent by AI.
+            run_action(
+                "reply",
+                {"account": proposal.account},
+                conversation=conversation,
+                body=body,
+                idempotency_key=key,
+            )
+        except ActionError as exc:
+            return str(exc)[:300]
+        except Exception:
+            logger.exception("automatic AI reply failed for proposal=%s", proposal.pk)
+            return "Sending failed."
+        return ""
+
+    if decision.send:
+        if moved_on():
             record.update(
                 send=False, error="The conversation moved on while AI was drafting."
             )
-        else:
-            try:
-                run_action(
-                    "reply",
-                    {"account": proposal.account},
-                    conversation=conversation,
-                    body=contract["payload"]["text"],
-                    idempotency_key=f"ai-auto:{proposal.pk}",
-                )
-            except ActionError as exc:
-                record.update(send=False, error=str(exc)[:300])
-            except Exception:
-                logger.exception(
-                    "automatic AI reply failed for proposal=%s", proposal.pk
-                )
-                record.update(send=False, error="Sending failed.")
+        elif error := send(contract["payload"]["text"], f"ai-auto:{proposal.pk}"):
+            record.update(send=False, error=error)
+    elif autonomy.should_hold(decision, ai_settings, conversation) and not moved_on():
+        # AI can't answer this itself: tell the customer a person will, once, and keep the
+        # proposal as the hand-off card for the team.
+        text = autonomy.holding_reply_text(ai_settings)
+        error = send(text, f"ai-auto:hold:{proposal.pk}")
+        record.update(holding_sent=not error, holding_text=text)
+        if error:
+            record["holding_error"] = error
     proposal.auto_decision = record
     fields = ["auto_decision"]
     if record["send"]:
