@@ -12,9 +12,12 @@ check), never by a public storage URL: they are customers' private messages.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from django.db.models.fields.files import FieldFile
 from django.urls import reverse
+
+if TYPE_CHECKING:
+    from django.db.models.fields.files import FieldFile
 
 # How many download attempts before a file is reported unavailable (both
 # channels' media tasks stop retrying at 5).

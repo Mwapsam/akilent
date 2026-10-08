@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -45,6 +46,9 @@ from apps.conversations.state import (
     with_activity,
 )
 from apps.core.htmx import is_background
+
+if TYPE_CHECKING:
+    from django.http.response import HttpResponseBase
 
 logger = logging.getLogger(__name__)
 
@@ -1093,9 +1097,7 @@ def message_media(request, public_id: str, message_id: int):
         raise Http404 from exc
     mime = media.mime or "application/octet-stream"
     playable = mime.split("/", 1)[0] in {"image", "video", "audio"}
-    filename = media.file.name.rsplit("/", 1)[-1]
-
-    from django.http.response import HttpResponseBase
+    filename = (media.file.name or "file").rsplit("/", 1)[-1]
 
     # Safari only plays audio/video when the server honours byte ranges.
     response: HttpResponseBase
