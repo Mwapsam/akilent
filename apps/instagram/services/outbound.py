@@ -126,8 +126,21 @@ def send_outbound(outbound: OutboundMessage) -> bool:
             "send_outbound: token for instagram_account %s is invalid — reconnect needed",
             instagram_account.pk,
         )
-    outbound.mark_failed(result.error, terminal=result.terminal)
+    outbound.mark_failed(_readable_error(result), terminal=result.terminal)
     return False
+
+
+def _readable_error(result) -> str:
+    """Meta's error, with what to do about it when we know."""
+    if result.error_code == 100 and "cannot be found" in (result.error or ""):
+        # What Meta answers when the app lacks Advanced Access to
+        # instagram_business_manage_messages and the customer has no role on it.
+        return (
+            "Instagram didn't deliver this: until Meta approves Akilent's Instagram "
+            "messaging permission, replies only reach accounts added as testers "
+            f"on the Akilent app. ({result.error})"
+        )
+    return result.error
 
 
 # Our media kinds -> Instagram Send API attachment types.

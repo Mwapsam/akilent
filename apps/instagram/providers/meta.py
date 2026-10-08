@@ -44,7 +44,11 @@ class MetaInstagramProvider(BaseInstagramProvider):
             code = error.get("code", resp.status_code)
             msg = error.get("message", resp.text[:200])
             raise InstagramAPIError(
-                code=code, message=msg, http_status=resp.status_code
+                code=code,
+                message=msg,
+                http_status=resp.status_code,
+                subcode=error.get("error_subcode"),
+                fbtrace_id=error.get("fbtrace_id", ""),
             )
         return data
 
@@ -73,7 +77,14 @@ class MetaInstagramProvider(BaseInstagramProvider):
             )
         except InstagramAPIError as exc:
             logger.warning(
-                "Instagram send_message failed: code=%s msg=%s", exc.code, exc.message
+                "Instagram send_message failed: code=%s subcode=%s msg=%s "
+                "recipient=%s account=%s fbtrace_id=%s",
+                exc.code,
+                exc.subcode,
+                exc.message,
+                recipient_igsid,
+                self._account_id,
+                exc.fbtrace_id,
             )
             return SendResult(
                 success=False,
@@ -100,9 +111,15 @@ class MetaInstagramProvider(BaseInstagramProvider):
             )
         except InstagramAPIError as exc:
             logger.warning(
-                "Instagram send_attachment failed: code=%s msg=%s",
+                "Instagram send_attachment failed: code=%s subcode=%s msg=%s "
+                "kind=%s recipient=%s account=%s fbtrace_id=%s",
                 exc.code,
+                exc.subcode,
                 exc.message,
+                kind,
+                recipient_igsid,
+                self._account_id,
+                exc.fbtrace_id,
             )
             return SendResult(
                 success=False,
@@ -212,10 +229,19 @@ class InstagramAPIError(Exception):
     # Meta error codes that mean we must not retry
     _TERMINAL_CODES = {10, 200, 190, 368, 100}
 
-    def __init__(self, code: int, message: str, http_status: int = 0):
+    def __init__(
+        self,
+        code: int,
+        message: str,
+        http_status: int = 0,
+        subcode: int | None = None,
+        fbtrace_id: str = "",
+    ):
         self.code = code
         self.message = message
         self.http_status = http_status
+        self.subcode = subcode
+        self.fbtrace_id = fbtrace_id
         super().__init__(f"[{code}] {message}")
 
     @property
