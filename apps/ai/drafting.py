@@ -595,7 +595,9 @@ def _run_playground(draft, provider, notes: str) -> None:
             draft.prompt,
             channel=channel if channel in PLAYGROUND_CHANNELS else "whatsapp",
             business_notes=notes,
-            provider=provider,
+            # Not the draft's default-tier provider: the agent picks the tier the router would
+            # pick for a real customer, so the owner sees the model customers would get.
+            provider=None,
         )
     except ProposalError as exc:
         raise DraftError(str(exc)) from exc

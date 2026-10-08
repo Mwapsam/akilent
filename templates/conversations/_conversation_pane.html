@@ -575,6 +575,7 @@
                 <div>
                   <label class="label" :for="'learn-a-' + ai.proposal.id">Answer</label>
                   <textarea :id="'learn-a-' + ai.proposal.id" class="textarea" rows="3" x-model="a" required></textarea>
+                  <p class="text-xs text-gray-500 mt-1">AI will give this answer to every customer who asks. Take out anything about this one customer, like their name, order number or address. Phone numbers and email addresses are removed for you.</p>
                 </div>
                 <div class="flex gap-2">
                   <button class="btn btn-primary btn-sm">Save answer</button>

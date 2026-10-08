@@ -13,16 +13,20 @@ an automatic answer on its own.
 
 from __future__ import annotations
 
+import codecs
 import csv
 import io
 import ipaddress
 import logging
 import re
 import socket
+import time
 from html.parser import HTMLParser
-from urllib.parse import urldefrag, urljoin, urlsplit
+from urllib.parse import urldefrag, urljoin, urlsplit, urlunsplit
 
 import requests
+from django.utils import timezone
+from requests.adapters import HTTPAdapter
 
 from apps.ai.proposals import ProposalError, extract_json
 from apps.ai.types import ChatMessage
@@ -39,7 +43,8 @@ MAX_PAGE_BYTES = 2 * 1024 * 1024
 MAX_PAGE_TEXT = 8000
 MAX_SITE_TEXT = 30000
 MAX_REDIRECTS = 3
-TIMEOUT_SECONDS = 8
+TIMEOUT_SECONDS = 8  # to connect, and between bytes
+PAGE_DEADLINE_SECONDS = 20  # for a whole page, however slowly it trickles in
 USER_AGENT = "AkilentKnowledgeImport/1.0 (+reads pages the business asked it to)"
 
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d{1,3}[.)])\s+")
@@ -151,28 +156,38 @@ def add_for_review(account, pairs, *, origin: str, source_url: str = "") -> list
 def import_pairs(account, user, pairs) -> dict:
     """Add pasted or uploaded Q&A for review, and ask AI to draft the missing answers.
 
-    ``{"added", "to_draft", "draft"}``: ``draft`` is the queued ``AIDraft`` (None when every
-    question had an answer or AI is off; the owner then writes the answers).
+    ``{"added", "to_draft", "to_write", "draft"}``: ``draft`` is the queued ``AIDraft`` for the
+    first ``MAX_DRAFTED`` unanswered questions (None when every question had an answer or AI is
+    off); ``to_write`` counts the unanswered questions left for the owner.
     """
     from apps.ai import api as ai_api
     from apps.ai.models import KnowledgeBaseEntry
 
-    answered = [(q, a) for q, a in pairs if a]
-    unanswered = [(q, "") for q, a in pairs if not a]
-    created = add_for_review(
-        account, answered, origin=KnowledgeBaseEntry.Origin.IMPORT
-    ) + add_for_review(account, unanswered, origin=KnowledgeBaseEntry.Origin.AI_DRAFT)
-    blank = [e.pk for e in created if not e.content][:MAX_DRAFTED]
+    created = add_for_review(account, pairs, origin=KnowledgeBaseEntry.Origin.IMPORT)
+    blank = [e.pk for e in created if not e.content]
+    queued = blank[:MAX_DRAFTED]
     draft = None
-    if blank:
+    if queued:
         draft = ai_api.request_draft(
             account,
             user,
             "knowledge_answers",
-            f"Draft answers to {len(blank)} questions",
-            {"entry_ids": blank},
+            f"Draft answers to {len(queued)} questions",
+            {"entry_ids": queued},
         )
-    return {"added": len(created), "to_draft": len(blank), "draft": draft}
+    if draft is None:
+        queued = []
+    else:
+        # Labelled "Drafted by AI" only when AI really is drafting them.
+        KnowledgeBaseEntry.objects.filter(pk__in=queued).update(
+            origin=KnowledgeBaseEntry.Origin.AI_DRAFT
+        )
+    return {
+        "added": len(created),
+        "to_draft": len(queued),
+        "to_write": len(blank) - len(queued),
+        "draft": draft,
+    }
 
 
 # ---- drafting answers -----------------------------------------------------------------------
@@ -233,20 +248,23 @@ Answer with ONE JSON object and nothing else:
         from apps.ai.drafting import DraftError
 
         raise DraftError(str(exc)) from exc
-    by_id = {e.pk: e for e in entries}
+    ids = {e.pk for e in entries}
     answered = 0
     for item in data.get("answers") or []:
         if not isinstance(item, dict):
             continue
         try:
-            entry = by_id.get(int(item.get("id") or 0))
+            pk = int(item.get("id") or 0)
         except (TypeError, ValueError):
             continue
         text = str(item.get("answer") or "").strip()[:MAX_ANSWER]
-        if entry is not None and text and not entry.content:
-            entry.content = text
-            entry.save(update_fields=["content", "updated_at"])
-            answered += 1
+        if pk not in ids or not text:
+            continue
+        # The model took a while: the owner may have written (or approved) an answer meanwhile.
+        # Only an answer that is still blank and unreviewed is filled.
+        answered += KnowledgeBaseEntry.objects.filter(
+            pk=pk, content="", reviewed_at__isnull=True
+        ).update(content=text, updated_at=timezone.now())
     draft.result = {"answered": answered, "unanswered": len(entries) - answered}
     draft.model = (result.model or "")[:80]
 
@@ -268,8 +286,9 @@ def normalise_url(url: str) -> str:
     return urldefrag(url)[0]
 
 
-def _assert_public(url: str) -> None:
-    """Refuse addresses that resolve to private, loopback or otherwise internal networks."""
+def _public_ip(url: str) -> str:
+    """The address to connect to for ``url``, after checking every address its host resolves to
+    is public. Refuses private, loopback, link-local and otherwise internal networks."""
     parts = urlsplit(url)
     host = parts.hostname or ""
     try:
@@ -278,39 +297,135 @@ def _assert_public(url: str) -> None:
         )
     except (socket.gaierror, UnicodeError) as exc:
         raise WebsiteError(f"Couldn't find {host}. Check the address.") from exc
+    addresses = []
     for *_rest, sockaddr in infos:
         ip = ipaddress.ip_address(sockaddr[0])
         if not ip.is_global or ip.is_multicast:
             raise WebsiteError("That address isn't a public website.")
+        addresses.append(str(ip))
+    if not addresses:
+        raise WebsiteError(f"Couldn't find {host}. Check the address.")
+    return addresses[0]
 
 
-def _get(url: str) -> tuple[str, str]:
-    """``(final url, html)`` for one page. Each redirect is checked like the first address."""
+class _PinnedTLS(HTTPAdapter):
+    """Connect to an IP address while checking the certificate (and sending SNI) for the
+    host name, so the address that was checked is the one that is used."""
+
+    def __init__(self, host: str, **kwargs):
+        self._host = host
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["server_hostname"] = self._host
+        kwargs["assert_hostname"] = self._host
+        super().init_poolmanager(*args, **kwargs)
+
+
+def _open(url: str, *, ip: str, accept: str):
+    """A streamed response for ``url`` fetched from ``ip`` (already checked by ``_public_ip``).
+
+    Never resolves the host again, so a DNS answer that changes between the check and the
+    connection (DNS rebinding) can't send the request inside the network. Environment proxies
+    are ignored for the same reason.
+    """
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = f"[{ip}]" if ":" in ip else ip
+    if parts.port:
+        netloc += f":{parts.port}"
+    session = requests.Session()
+    session.trust_env = False
+    session.mount("https://", _PinnedTLS(host))
+    try:
+        resp = session.get(
+            urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, "")),
+            timeout=TIMEOUT_SECONDS,
+            stream=True,
+            allow_redirects=False,
+            headers={
+                "Host": parts.netloc.rsplit("@", 1)[-1],
+                "User-Agent": USER_AGENT,
+                "Accept": accept,
+            },
+        )
+    except BaseException:
+        session.close()
+        raise
+    # The body is still streaming: the session (and its pooled connection) goes with the response.
+    close_response = resp.close
+
+    def close():
+        close_response()
+        session.close()
+
+    resp.close = close  # type: ignore[method-assign]
+    return resp
+
+
+def _read_body(resp) -> bytes:
+    """At most ``MAX_PAGE_BYTES``, within ``PAGE_DEADLINE_SECONDS`` overall."""
+    deadline = time.monotonic() + PAGE_DEADLINE_SECONDS
+    chunks, size = [], 0
+    for chunk in resp.iter_content(64 * 1024):
+        chunks.append(chunk)
+        size += len(chunk)
+        if size > MAX_PAGE_BYTES:
+            break
+        if time.monotonic() > deadline:
+            raise WebsiteError("The website is too slow to read. Try again later.")
+    return b"".join(chunks)[:MAX_PAGE_BYTES]
+
+
+_HEADER_CHARSET = re.compile(r"charset=[\"']?([\w.:-]+)", re.I)
+_META_CHARSET = re.compile(rb"<meta[^>]+charset=[\"']?([\w.:-]+)", re.I)
+
+
+def _decode(body: bytes, content_type: str) -> str:
+    """The page as text. Charset from the header, else the page's own <meta>, else UTF-8 (not
+    requests' ISO-8859-1 default, which garbles "€20" into "â‚¬20")."""
+    found = _HEADER_CHARSET.search(content_type or "")
+    name = found.group(1) if found else ""
+    if not name:
+        meta = _META_CHARSET.search(body[:4096])
+        name = meta.group(1).decode("ascii", "ignore") if meta else ""
+    try:
+        codecs.lookup(name or "utf-8")
+    except LookupError:
+        name = "utf-8"
+    return body.decode(name or "utf-8", "replace")
+
+
+def _get(url: str, *, html: bool = True) -> tuple[str, str]:
+    """``(final url, text)`` for one page (``html=False`` for robots.txt, served as plain text).
+    Each redirect is checked like the first address."""
+    accept = "text/html" if html else "text/plain"
     for _hop in range(MAX_REDIRECTS + 1):
-        _assert_public(url)
+        ip = _public_ip(url)
         try:
-            resp = requests.get(
-                url,
-                timeout=TIMEOUT_SECONDS,
-                stream=True,
-                allow_redirects=False,
-                headers={"User-Agent": USER_AGENT, "Accept": "text/html"},
-            )
+            resp = _open(url, ip=ip, accept=accept)
         except requests.RequestException as exc:
             raise WebsiteError("Couldn't reach the website. Try again later.") from exc
-        if resp.is_redirect and resp.headers.get("location"):
-            url = normalise_url(urljoin(url, resp.headers["location"]))
+        try:
+            if resp.is_redirect and resp.headers.get("location"):
+                url = normalise_url(urljoin(url, resp.headers["location"]))
+                continue
+            if resp.status_code >= 400:
+                raise WebsiteError(
+                    f"The website answered with an error ({resp.status_code})."
+                )
+            content_type = resp.headers.get("content-type", "")
+            if html and content_type and "html" not in content_type.lower():
+                raise WebsiteError("That address isn't a web page.")
+            try:
+                body = _read_body(resp)
+            except requests.RequestException as exc:
+                raise WebsiteError(
+                    "Couldn't read the website. Try again later."
+                ) from exc
+            return url, _decode(body, content_type)
+        finally:
             resp.close()
-            continue
-        if resp.status_code >= 400:
-            raise WebsiteError(
-                f"The website answered with an error ({resp.status_code})."
-            )
-        if "html" not in resp.headers.get("content-type", "html").lower():
-            raise WebsiteError("That address isn't a web page.")
-        body = resp.raw.read(MAX_PAGE_BYTES + 1, decode_content=True) or b""
-        resp.close()
-        return url, body[:MAX_PAGE_BYTES].decode(resp.encoding or "utf-8", "replace")
     raise WebsiteError("The website redirected too many times.")
 
 
@@ -376,19 +491,25 @@ def page_text(html: str) -> tuple[str, list[str]]:
     return parser.text(), parser.links
 
 
+def _robots(page_url: str):
+    """The site's robots.txt rules (served as plain text); none when it has no robots.txt."""
+    from urllib.robotparser import RobotFileParser
+
+    robots = RobotFileParser()
+    try:
+        _url, text = _get(urljoin(page_url, "/robots.txt"), html=False)
+        robots.parse(text.splitlines())
+    except WebsiteError:
+        robots.parse([])
+    return robots
+
+
 def read_site(url: str) -> list[tuple[str, str]]:
     """``[(url, text)]`` for the start page and up to ``MAX_PAGES`` - 1 pages it links to on the
     same site, honouring robots.txt. Raises ``WebsiteError``."""
-    from urllib.robotparser import RobotFileParser
-
     start = normalise_url(url)
-    host = urlsplit(start).hostname
-    robots = RobotFileParser()
-    try:
-        _url, robots_txt = _get(urljoin(start, "/robots.txt"))
-        robots.parse(robots_txt.splitlines())
-    except WebsiteError:
-        robots.parse([])  # no robots.txt: nothing is disallowed
+    robots = _robots(start)
+    hosts = {urlsplit(start).hostname}
 
     pages: list[tuple[str, str]] = []
     queue, seen = [start], {start}
@@ -402,6 +523,13 @@ def read_site(url: str) -> list[tuple[str, str]]:
             if not pages and target == start:
                 raise
             continue
+        if target == start:
+            # example.com often redirects to www.example.com: its links are on that host, and
+            # its robots.txt is the one that applies.
+            final_host = urlsplit(final).hostname
+            if final_host not in hosts:
+                hosts.add(final_host)
+                robots = _robots(final)
         text, links = page_text(html)
         if text:
             pages.append((final, text[:MAX_PAGE_TEXT]))
@@ -410,7 +538,7 @@ def read_site(url: str) -> list[tuple[str, str]]:
             parts = urlsplit(link)
             if (
                 parts.scheme in ("http", "https")
-                and parts.hostname == host
+                and parts.hostname in hosts
                 and link not in seen
                 and not re.search(
                     r"\.(?:pdf|jpe?g|png|gif|zip|mp4|webp|svg)$", parts.path, re.I
@@ -429,10 +557,16 @@ def run_website(draft, provider) -> None:
     from apps.ai.models import KnowledgeBaseEntry
 
     account = draft.account
-    try:
-        pages = read_site(draft.context.get("url") or draft.prompt)
-    except WebsiteError as exc:
-        raise DraftError(str(exc)) from exc
+    pages = [tuple(p) for p in draft.context.get("pages") or []]
+    if not pages:
+        try:
+            pages = read_site(draft.context.get("url") or draft.prompt)
+        except WebsiteError as exc:
+            raise DraftError(str(exc)) from exc
+        # Kept until the model has answered: a retry after a model timeout reuses these instead
+        # of reading the whole site again.
+        draft.context = {**draft.context, "pages": [list(p) for p in pages]}
+        draft.save(update_fields=["context"])
     budget, chunks = MAX_SITE_TEXT, []
     for url, text in pages:
         if budget <= 0:
@@ -480,3 +614,5 @@ Answer with ONE JSON object and nothing else:
         )
     draft.result = {"added": created, "pages": len(pages)}
     draft.model = (result.model or "")[:80]
+    draft.context = {k: v for k, v in draft.context.items() if k != "pages"}
+    draft.save(update_fields=["context"])

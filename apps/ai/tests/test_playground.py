@@ -22,7 +22,7 @@ JOIN_A = "Create a TaskCentro account, then set up your freelancer profile."
 
 
 class Fake(AIProvider):
-    answer, systems = "", []
+    answer, systems, tiers = "", [], []
 
     def chat(self, messages, system="", max_tokens=1024, temperature=0.3, timeout=None):
         Fake.systems.append(system)
@@ -47,7 +47,15 @@ def answer(text=JOIN_A, intent="faq", confidence=0.95, action="reply", sources=(
 @pytest.fixture(autouse=True)
 def fake(settings, monkeypatch):
     settings.AI_PROVIDER_BACKEND = "ollama"
-    monkeypatch.setattr("apps.ai.providers.get_ai_provider", lambda *a, **k: Fake())
+
+    def provider(*a, tier="standard", **k):
+        Fake.tiers.append(tier)
+        return Fake()
+
+    monkeypatch.setattr("apps.ai.providers.get_ai_provider", provider)
+    # The playground routes like a real conversation: the agent picks the provider and tier.
+    monkeypatch.setattr("apps.ai.agent.get_ai_provider", provider)
+    Fake.tiers = []
     Fake.answer, Fake.systems = answer(), []
     cache.clear()
 
@@ -147,3 +155,11 @@ def test_the_owner_asks_from_the_knowledge_page(client, account, entry):
     assert r.status_code == 200 and r.json()["ok"]
     d = AIDraft.objects.get(pk=r.json()["draft"]["id"])
     assert d.kind == "playground" and d.context == {"channel": "instagram"}
+
+
+@pytest.mark.django_db
+def test_the_preview_uses_the_model_tier_a_customer_would_get(account, entry):
+    Fake.answer = answer(sources=[f"k{entry.pk}"])
+    ask(account)  # matches a knowledge-base question: the standard model
+    ask(account, question="hi")  # short and simple: the fast model, as in a real chat
+    assert Fake.tiers[-2:] == ["standard", "fast"]

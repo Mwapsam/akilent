@@ -292,6 +292,116 @@ def test_agents_cant_change_what_ai_knows(client, account):
     assert r.status_code == 403 and not KnowledgeBaseEntry.objects.exists()
 
 
+def message(c, direction, body, sent_by=None):
+    return Message.objects.create(
+        account=c.account,
+        conversation=c,
+        direction=direction,
+        body=body,
+        timestamp=timezone.now(),
+        metadata={"sent_by": sent_by} if sent_by else {},
+    )
+
+
+@pytest.mark.django_db
+def test_a_reply_after_the_customer_asked_something_else_isnt_offered(account):
+    """'Do you deliver?' then 'What's your number?': a reply now may answer the second one."""
+    contact = Contact.objects.create(account=account, phone="+260971000002")
+    c = Conversation.objects.create(
+        account=account,
+        contact=contact,
+        channel="whatsapp",
+        last_message_at=timezone.now(),
+    )
+    q = message(c, Message.Direction.INBOUND, "Do you deliver?")
+    p = AIProposal.objects.create(
+        account=account,
+        conversation=c,
+        trigger_message=q,
+        action="handoff",
+        status="ready",
+    )
+    message(c, Message.Direction.INBOUND, "And what's your phone number?")
+    message(c, Message.Direction.OUTBOUND, "It's 0977 123 456.")
+    assert ai_api.learnable_answer(p, c) is None
+
+
+@pytest.mark.django_db
+def test_customer_details_are_kept_out_of_saved_answers(client, account):
+    c, p = convo_with_handoff(account)
+    Message.objects.filter(conversation=c, direction="outbound").update(
+        body="Yes! Call me on 0977123456 or jane@example.com"
+    )
+    learn = ai_api.serialize(p, c)["learn"]
+    assert learn["answer"] == "Yes! Call me on [phone] or [email]"
+
+    login(client, account)
+    client.post(
+        f"/inbox/{c.public_id}/ai/learn/",
+        {
+            "proposal": p.pk,
+            "question": "Q?",
+            "answer": "Ring +260 97 7123456 any time.",
+        },
+    )
+    assert KnowledgeBaseEntry.objects.get().content == "Ring [phone] any time."
+
+
+# ---- import edge cases ------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_only_questions_ai_is_drafting_are_labelled_drafted_by_ai(client, account):
+    login(client, account)
+    questions = "\n".join(f"Question number {i}?" for i in range(35))
+    client.post("/settings/ai/knowledge/import/", {"text": questions})
+    origins = list(
+        KnowledgeBaseEntry.objects.order_by("pk").values_list("origin", flat=True)
+    )
+    assert origins == ["ai_draft"] * 30 + ["import"] * 5
+
+    AISettings.objects.filter(account=account).update(enabled=False)
+    client.post("/settings/ai/knowledge/import/", {"text": "Is parking free?"})
+    assert KnowledgeBaseEntry.objects.get(title="Is parking free?").origin == "import"
+
+
+@pytest.mark.django_db
+def test_drafting_never_overwrites_an_answer_the_owner_wrote_meanwhile(
+    monkeypatch, account
+):
+    entry = KnowledgeBaseEntry.objects.create(
+        account=account,
+        title="Is it free?",
+        content="",
+        origin="ai_draft",
+        is_active=False,
+    )
+    draft = AIDraft.objects.create(
+        account=account,
+        kind="knowledge_answers",
+        prompt="x",
+        context={"entry_ids": [entry.pk]},
+    )
+
+    class OwnerIsFaster(Fake):
+        def chat(self, *a, **k):
+            # While the model thinks, the owner writes and approves an answer.
+            KnowledgeBaseEntry.objects.filter(pk=entry.pk).update(
+                content="Yes, always.", is_active=True, reviewed_at=timezone.now()
+            )
+            return CompletionResult(
+                text=json.dumps({"answers": [{"id": entry.pk, "answer": "AI text"}]}),
+                model="fake-k",
+            )
+
+    monkeypatch.setattr(
+        "apps.ai.providers.get_ai_provider", lambda *a, **k: OwnerIsFaster()
+    )
+    run(draft)
+    entry.refresh_from_db()
+    assert entry.content == "Yes, always." and draft.result["answered"] == 0
+
+
 # ---- reading a website ------------------------------------------------------------------------
 
 
@@ -301,21 +411,36 @@ def resolves_to(ip):
     ]
 
 
-def page(html, status=200, location=None):
-    r = MagicMock(status_code=status, encoding="utf-8")
+def page(body, status=200, location=None, content_type="text/html; charset=utf-8"):
+    r = MagicMock(status_code=status)
     r.is_redirect = location is not None
-    r.headers = {"content-type": "text/html; charset=utf-8"}
+    r.headers = {"content-type": content_type}
     if location:
         r.headers["location"] = location
-    r.raw.read.return_value = html.encode()
+    data = body if isinstance(body, bytes) else body.encode()
+    r.iter_content.return_value = [data]
     return r
+
+
+def site(monkeypatch, pages, ip="93.184.216.34"):
+    """``pages`` maps a URL to ``page()`` arguments. Returns the URLs fetched, with the IP used."""
+    monkeypatch.setattr(knowledge.socket, "getaddrinfo", resolves_to(ip))
+    fetched = []
+
+    def open_(url, *, ip, accept):
+        fetched.append((url, ip))
+        return page(*pages[url]) if url in pages else page("", 404)
+
+    monkeypatch.setattr(knowledge, "_open", open_)
+    return fetched
 
 
 @pytest.mark.parametrize("ip", ["127.0.0.1", "10.0.0.5", "169.254.169.254", "::1"])
 def test_internal_addresses_are_refused(monkeypatch, ip):
-    monkeypatch.setattr(knowledge.socket, "getaddrinfo", resolves_to(ip))
+    fetched = site(monkeypatch, {}, ip=ip)
     with pytest.raises(knowledge.WebsiteError, match="public website"):
         knowledge.read_site("https://intranet.example")
+    assert fetched == []
 
 
 def test_a_redirect_into_the_network_is_refused(monkeypatch):
@@ -323,37 +448,69 @@ def test_a_redirect_into_the_network_is_refused(monkeypatch):
         ip = "10.0.0.1" if host == "internal.example" else "93.184.216.34"
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
 
-    monkeypatch.setattr(knowledge.socket, "getaddrinfo", getaddrinfo)
-    monkeypatch.setattr(
-        knowledge.requests,
-        "get",
-        lambda url, **k: (
-            page("", 404)
-            if url.endswith("robots.txt")
-            else page("", 302, "http://internal.example/")
-        ),
+    fetched = site(
+        monkeypatch, {"https://shop.example": ("", 302, "http://internal.example/")}
     )
+    monkeypatch.setattr(knowledge.socket, "getaddrinfo", getaddrinfo)
     with pytest.raises(knowledge.WebsiteError, match="public website"):
         knowledge.read_site("https://shop.example")
+    assert not any("internal" in url for url, _ip in fetched)
 
 
-def site(monkeypatch, pages):
+def test_the_connection_goes_to_the_address_that_was_checked(monkeypatch):
+    """DNS rebinding: the host is never resolved again after the check."""
+    calls = {}
+
+    class Session:
+        trust_env = True
+
+        def mount(self, prefix, adapter):
+            calls["sni"] = adapter._host
+
+        def get(self, url, **kw):
+            calls.update(url=url, headers=kw["headers"], trust_env=self.trust_env)
+            return page("<p>hi</p>")
+
+        def close(self):
+            calls["closed"] = True
+
+    monkeypatch.setattr(knowledge.requests, "Session", Session)
+    resp = knowledge._open(
+        "https://shop.example:8443/faq?x=1", ip="93.184.216.34", accept="text/html"
+    )
+    assert calls["url"] == "https://93.184.216.34:8443/faq?x=1"
+    assert calls["headers"]["Host"] == "shop.example:8443"
+    assert calls["sni"] == "shop.example"
+    assert calls["trust_env"] is False  # no environment proxies
+    resp.close()
+    assert calls["closed"]
+
+
+def test_responses_are_closed_even_on_errors(monkeypatch):
+    responses = []
+
+    def open_(url, *, ip, accept):
+        r = page("", 500)
+        responses.append(r)
+        return r
+
     monkeypatch.setattr(knowledge.socket, "getaddrinfo", resolves_to("93.184.216.34"))
-    fetched = []
-
-    def get(url, **k):
-        fetched.append(url)
-        return page(*pages[url]) if url in pages else page("", 404)
-
-    monkeypatch.setattr(knowledge.requests, "get", get)
-    return fetched
+    monkeypatch.setattr(knowledge, "_open", open_)
+    with pytest.raises(knowledge.WebsiteError):
+        knowledge._get("https://shop.example")
+    assert responses[0].close.called
 
 
-def test_reading_a_site_follows_its_own_links_and_robots(monkeypatch):
+def test_reading_a_site_follows_its_own_links_and_plain_text_robots(monkeypatch):
     fetched = site(
         monkeypatch,
         {
-            "https://shop.example/robots.txt": ("User-agent: *\nDisallow: /admin",),
+            "https://shop.example/robots.txt": (
+                "User-agent: *\nDisallow: /admin",
+                200,
+                None,
+                "text/plain",
+            ),
             "https://shop.example": (
                 "<html><head><title>x</title><script>var a=1</script></head><body>"
                 "<nav>Menu</nav><h1>Welcome</h1><p>We deliver in Lusaka.</p>"
@@ -372,8 +529,50 @@ def test_reading_a_site_follows_its_own_links_and_robots(monkeypatch):
         ),
         ("https://shop.example/faq", "Is delivery free? Yes, over K500."),
     ]
-    assert "https://shop.example/admin" not in fetched
-    assert not any("other.example" in u or u.endswith(".pdf") for u in fetched)
+    urls = [url for url, _ip in fetched]
+    assert "https://shop.example/admin" not in urls
+    assert not any("other.example" in u or u.endswith(".pdf") for u in urls)
+
+
+def test_a_site_that_redirects_to_www_is_read_beyond_its_first_page(monkeypatch):
+    fetched = site(
+        monkeypatch,
+        {
+            "https://example.com": ("", 301, "https://www.example.com/"),
+            "https://www.example.com/robots.txt": (
+                "User-agent: *\nDisallow: /private",
+                200,
+                None,
+                "text/plain",
+            ),
+            "https://www.example.com/": (
+                '<p>Home</p><a href="/faq">FAQ</a><a href="/private">P</a>',
+            ),
+            "https://www.example.com/faq": ("<p>Answers</p>",),
+        },
+    )
+    pages = knowledge.read_site("example.com")
+    assert [url for url, _text in pages] == [
+        "https://www.example.com/",
+        "https://www.example.com/faq",
+    ]
+    assert "https://www.example.com/private" not in [u for u, _ip in fetched]
+
+
+@pytest.mark.parametrize(
+    "body,content_type",
+    [
+        ("<p>From €20 — “fresh”</p>".encode(), "text/html"),
+        ('<meta charset="utf-8"><p>From €20 — “fresh”</p>'.encode(), "text/html"),
+        (
+            "<p>From €20 — “fresh”</p>".encode("cp1252"),
+            "text/html; charset=windows-1252",
+        ),
+    ],
+)
+def test_pages_are_decoded_in_their_own_charset(monkeypatch, body, content_type):
+    site(monkeypatch, {"https://shop.example": (body, 200, None, content_type)})
+    assert knowledge.read_site("https://shop.example")[0][1] == "From €20 — “fresh”"
 
 
 @pytest.mark.django_db
@@ -401,10 +600,45 @@ def test_what_ai_finds_on_the_website_waits_for_review(client, monkeypatch, acco
     run(draft)
     assert draft.status == "ready", draft.error
     assert draft.result == {"added": 1, "pages": 1}
+    assert draft.context == {"url": "https://shop.example"}  # pages aren't kept
     entry = KnowledgeBaseEntry.objects.get(account=account)
     assert entry.origin == "website" and entry.source_url == "https://shop.example"
     assert entry.needs_review and not entry.is_active
     assert "Is delivery free? Yes, over K500." in Fake.calls[-1]["user"]
+
+
+@pytest.mark.django_db
+def test_a_retry_after_a_model_timeout_doesnt_read_the_site_again(monkeypatch, account):
+    from apps.ai.providers import AIProviderError
+
+    fetched = site(monkeypatch, {"https://shop.example": ("<p>Open daily.</p>",)})
+    draft = AIDraft.objects.create(
+        account=account,
+        kind="website",
+        prompt="x",
+        context={"url": "https://shop.example"},
+    )
+
+    class Flaky(Fake):
+        tries = 0
+
+        def chat(self, *a, **k):
+            Flaky.tries += 1
+            if Flaky.tries == 1:
+                raise AIProviderError("timeout")
+            return CompletionResult(text='{"entries": []}', model="fake-k")
+
+    monkeypatch.setattr("apps.ai.providers.get_ai_provider", lambda *a, **k: Flaky())
+    from celery.exceptions import Retry
+
+    with pytest.raises(Retry):  # the model times out: the task asks Celery to retry
+        build_draft.apply(args=(draft.pk,), throw=True)
+    draft.refresh_from_db()
+    assert draft.status == "pending" and len(draft.context["pages"]) == 1
+    run(draft)  # the retry
+    assert draft.status == "ready", draft.error
+    assert Flaky.tries == 2
+    assert [u for u, _ip in fetched].count("https://shop.example") == 1
 
 
 @pytest.mark.django_db

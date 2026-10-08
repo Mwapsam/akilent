@@ -274,20 +274,20 @@ def knowledge_import(request):
         messages.info(
             request, "Your knowledge base already has all of those questions."
         )
-    elif out["draft"] is not None:
-        messages.success(
-            request,
-            f"Added {out['added']} for review. AI is drafting answers to {out['to_draft']} of "
-            "them from what you've told it; refresh in a minute.",
+        return redirect("settings-ai-knowledge")
+    parts = [f"Added {out['added']} for review."]
+    if out["to_draft"]:
+        parts.append(
+            f"AI is drafting answers to {out['to_draft']} of them from what you've told it; "
+            "refresh in a minute."
         )
-    elif out["to_draft"]:
-        messages.success(
-            request,
-            f"Added {out['added']} for review. Write the answers to the "
-            f"{out['to_draft']} questions without one.",
+    if out["to_write"]:
+        parts.append(
+            f"Write the answer{'s' if out['to_write'] != 1 else ''} to the "
+            f"{out['to_write']} question{'s' if out['to_write'] != 1 else ''} AI isn't "
+            "drafting."
         )
-    else:
-        messages.success(request, f"Added {out['added']} for review.")
+    messages.success(request, " ".join(parts))
     return redirect("settings-ai-knowledge")
 
 

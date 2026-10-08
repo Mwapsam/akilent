@@ -288,8 +288,12 @@ def learnable_answer(proposal, conversation) -> dict | None:
     (or couldn't) answer itself, so the team can keep that answer for next time. Else None.
 
     The question is the customer's message the proposal was for; the answer is the first reply
-    after it written by a person (not AI, not an automation).
+    after it written by a person (not AI, not an automation), before the customer wrote again:
+    once they've asked something else, a reply may answer that instead. Phone numbers and email
+    addresses are masked in both, since an answer AI repeats to everyone mustn't carry one
+    customer's details.
     """
+    from apps.ai.prompts import mask
     from apps.conversations.models import Message
 
     if proposal is None or not proposal.trigger_message_id:
@@ -303,21 +307,22 @@ def learnable_answer(proposal, conversation) -> dict | None:
     )
     if not (trigger or "").strip():
         return None
-    for body, meta in (
+    for direction, body, meta in (
         conversation.messages.filter(
-            direction=Message.Direction.OUTBOUND, pk__gt=proposal.trigger_message_id
+            direction__in=[Message.Direction.INBOUND, Message.Direction.OUTBOUND],
+            pk__gt=proposal.trigger_message_id,
         )
         .exclude(body="")
         .order_by("id")
-        .values_list("body", "metadata")[:5]
+        .values_list("direction", "body", "metadata")[:10]
     ):
+        if direction == Message.Direction.INBOUND:
+            return None
         if (meta or {}).get("sent_by") in ("ai", "automation", "system"):
             continue
-        from apps.ai.prompts import mask
-
         return {
             "question": mask(trigger or "").strip()[:MAX_LEARN_QUESTION],
-            "answer": body.strip(),
+            "answer": mask(body).strip(),
             "saved": False,
         }
     return None
@@ -326,9 +331,11 @@ def learnable_answer(proposal, conversation) -> dict | None:
 def save_answer(account, proposal_id, question: str, answer: str):
     """Keep a team's answer as an active knowledge-base entry. Returns ``(entry, error)``."""
     from apps.ai.models import AIProposal, KnowledgeBaseEntry
+    from apps.ai.prompts import mask
 
-    question = " ".join((question or "").split())[:MAX_LEARN_QUESTION]
-    answer = (answer or "").strip()
+    # Masked again on save: the form could be edited (or posted) with a customer's details back in.
+    question = " ".join(mask(question or "").split())[:MAX_LEARN_QUESTION]
+    answer = mask(answer or "").strip()
     if not question or not answer:
         return None, "Both the question and the answer are needed."
     try:
