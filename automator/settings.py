@@ -298,10 +298,13 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
 # Emergency stop for AI sending on its own, for every business. Suggestions keep working.
-AI_AUTONOMY_ENABLED = os.getenv("AI_AUTONOMY_ENABLED", "true").lower() in (
+# Set "false" to stop. Unset *or empty* means on: the deploy writes every variable into .env, so
+# an unset secret arrives as "AI_AUTONOMY_ENABLED=" and must not switch autonomy off silently.
+AI_AUTONOMY_ENABLED = (os.getenv("AI_AUTONOMY_ENABLED") or "true").strip().lower() in (
     "1",
     "true",
     "yes",
+    "on",
 )
 AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "45"))
 AI_DAILY_CALL_LIMIT = int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
