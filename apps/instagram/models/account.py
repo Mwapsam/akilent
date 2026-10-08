@@ -56,6 +56,24 @@ class InstagramBusinessAccount(models.Model):
             and self.is_active
         )
 
+    @property
+    def uses_instagram_login(self) -> bool:
+        """Connected through Instagram Business Login (IGAA… token), with no Facebook Page."""
+        return (self.access_token or "").startswith("IG")
+
+    @property
+    def webhook_ids(self) -> set[str]:
+        """The ids Meta uses for this business in webhooks (entry, sender, recipient).
+
+        An Instagram Login account is only ever its Instagram account id. A Page id
+        stored on one is wrong, and matching on it files another account's
+        webhooks under this business.
+        """
+        ids = {self.instagram_business_account_id}
+        if self.page_id and not self.uses_instagram_login:
+            ids.add(self.page_id)
+        return ids
+
     def __str__(self):
         label = self.username or self.instagram_business_account_id
         return f"{self.account.company_name}: {label}"
@@ -83,17 +101,27 @@ def get_account_for_webhook(page_id: str):
 def get_instagram_account_for_webhook(page_id: str) -> "InstagramBusinessAccount":
     """Resolve a webhook entry ID to the InstagramBusinessAccount.
 
-    Tries page_id first (Facebook Login flow), then falls back to
-    instagram_business_account_id (Instagram Business Login flow, no page).
+    Matches the Instagram account id first (Instagram Business Login), then a
+    Facebook Page id, but only on accounts connected through Facebook Login.
+    When two connected professional accounts message each other, Meta sends a
+    webhook for each side; matching loosely would file the other account's copy
+    under this business, with the business itself as the "customer".
     """
-    from django.db.models import Q
-
-    try:
-        return InstagramBusinessAccount.objects.select_related("account").get(
-            Q(page_id=page_id) | Q(instagram_business_account_id=page_id),
-            is_active=True,
+    active = InstagramBusinessAccount.objects.select_related("account").filter(
+        is_active=True
+    )
+    match = active.filter(instagram_business_account_id=page_id).first()
+    if match is None:
+        match = next(
+            (
+                iba
+                for iba in active.filter(page_id=page_id)
+                if page_id in iba.webhook_ids
+            ),
+            None,
         )
-    except InstagramBusinessAccount.DoesNotExist as exc:
+    if match is None:
         raise TenantResolutionError(
             f"No active InstagramBusinessAccount found for page_id={page_id}."
-        ) from exc
+        )
+    return match

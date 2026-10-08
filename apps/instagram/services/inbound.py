@@ -71,6 +71,22 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
         datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else timezone.now()
     )
 
+    # The business must be a party: the sender of an echo, the recipient of a
+    # customer message. Anything else is another account's view of a chat and
+    # recording it would make the business its own customer.
+    business_id = (
+        sender.get("id")
+        if message.get("is_echo")
+        else entry.get("recipient", {}).get("id")
+    )
+    if business_id and business_id not in instagram_account.webhook_ids:
+        logger.warning(
+            "_process_dm_entry: skipping message for ig_id=%s on instagram_account=%s",
+            business_id,
+            instagram_account.pk,
+        )
+        return
+
     # Echoes are Meta's copy of a message the business sent. One sent through
     # Akilent is already recorded; one sent from the Instagram app is recorded
     # here, so the inbox shows the whole conversation.
