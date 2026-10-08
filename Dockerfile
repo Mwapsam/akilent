@@ -2,6 +2,12 @@ FROM python:3.13.1-slim
 
 WORKDIR /app
 
+# ffmpeg converts voice notes recorded in the inbox (browser webm/ogg) into the
+# formats WhatsApp (ogg/opus) and Instagram (m4a/aac) accept.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install poetry
 
 COPY pyproject.toml poetry.lock* ./

@@ -105,6 +105,51 @@ def send_message(
     return msg
 
 
+def send_media(
+    account: Account,
+    contact: WhatsAppContact,
+    *,
+    media_path: str,
+    mime_type: str,
+    kind: str,
+    caption: str = "",
+    filename: str = "",
+    conversation_id: int | None = None,
+    idempotency_key: str | None = None,
+    sent_by: str = "",
+) -> OutboundMessage:
+    """Queue a photo, video, document or voice note already saved in our storage.
+
+    ``kind`` is image / video / audio / document. The drain uploads the file to Meta and
+    sends it, through the same consent, opt-out and 24-hour-window checks as text.
+    """
+    key = idempotency_key or uuid.uuid4().hex
+    payload: dict[str, str | int] = {
+        "type": kind,
+        "media_path": media_path,
+        "mime_type": mime_type,
+        "caption": caption if kind in ("image", "video", "document") else "",
+    }
+    if kind == "document":
+        payload["filename"] = filename or media_path.rsplit("/", 1)[-1]
+    if conversation_id:
+        payload["_conversation_id"] = conversation_id
+    if sent_by:
+        payload["_sent_by"] = sent_by
+    msg, created = OutboundMessage.objects.get_or_create(
+        account=account,
+        idempotency_key=key,
+        defaults={"contact": contact, "payload": payload},
+    )
+    if not created:
+        return msg
+
+    from apps.whatsapp.tasks import drain_outbound_queue
+
+    drain_outbound_queue.delay()
+    return msg
+
+
 def send_interactive(
     account: Account,
     contact: WhatsAppContact,

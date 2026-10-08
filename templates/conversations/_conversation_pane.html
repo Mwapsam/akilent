@@ -164,6 +164,12 @@
   .cv-send { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; flex-shrink: 0;
              border-radius: 999px; color: #fff; background: var(--cv-accent); transition: opacity .15s; }
   .cv-send:disabled { opacity: .35; cursor: not-allowed; }
+  .cv-send--rec { background: #dc2626; }
+  .cv-rec { flex: 1; display: flex; align-items: center; gap: .5rem; min-height: 2.25rem; padding: 0 .25rem; font-size: .875rem; color: var(--cv-ink); }
+  .cv-rec-dot { width: .625rem; height: .625rem; border-radius: 999px; background: #dc2626; animation: cv-pulse 1s ease-in-out infinite; }
+  .cv-rec-cancel { margin-left: auto; font-size: .8125rem; color: var(--cv-ink-subtle); text-decoration: underline; }
+  @keyframes cv-pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .cv-rec-dot { animation: none; } }
   .cv-hint { margin: .375rem 0 0 .75rem; font-size: .6875rem; color: var(--cv-ink-subtle); }
   .cv-next { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin: .5rem 0 0 .75rem; font-size: .75rem;
              color: var(--cv-ink-subtle); }
@@ -378,7 +384,7 @@
                       <div class="cv-media">
                         <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'image'">
                           <a :href="item.m.media.url" target="_blank" rel="noopener" title="Open full size">
-                            <img :src="item.m.media.url" alt="Photo from the customer" loading="lazy" class="cv-media-img">
+                            <img :src="item.m.media.url" :alt="item.m.direction === 'outbound' ? 'Photo you sent' : 'Photo from the customer'" loading="lazy" class="cv-media-img">
                           </a>
                         </template>
                         <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'video'">
@@ -554,12 +560,34 @@
               </div>
             </div>
             {% endif %}
-            <textarea name="body" rows="1" x-ref="input" x-model="draft" class="input cv-input"
+            {% comment %} Attach a photo, video or document (sent via conversations:send_media). {% endcomment %}
+            <input type="file" x-ref="mediaInput" class="hidden" @change="onFile($event)"
+                   accept="image/jpeg,image/png,image/gif,video/mp4,audio/*,application/pdf,.doc,.docx,.xls,.xlsx">
+            <button type="button" class="cv-iconbtn self-end" title="Attach a photo, video or file" aria-label="Attach a file"
+                    x-show="!recording" :disabled="sending" @click="pickFile()">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>
+            </button>
+            <div class="cv-rec" x-show="recording" x-cloak role="status" aria-live="polite">
+              <span class="cv-rec-dot" aria-hidden="true"></span>
+              <span>Recording <span x-text="recLabel()"></span></span>
+              <button type="button" class="cv-rec-cancel" @click="stopRecording(false)">Cancel</button>
+            </div>
+            <textarea x-show="!recording" name="body" rows="1" x-ref="input" x-model="draft" class="input cv-input"
                       placeholder="Type a message" aria-label="Reply" aria-describedby="composer-hint"
                       @input="grow($event.target)" @keydown.enter="onEnter($event)"
                       x-on:saved-reply-insert.window="draft = $event.detail; $nextTick(() => { grow($refs.input); $refs.input.focus(); })"></textarea>
           </div>
-          <button class="cv-send" :disabled="!draft.trim() || sending" :aria-busy="sending" aria-label="Send">
+          {% comment %} Empty composer: the round button records a voice note instead (tap to start,
+             tap again to send), like WhatsApp. {% endcomment %}
+          <button type="button" class="cv-send" x-show="canRecord && !draft.trim() && !sending" x-cloak
+                  :class="{ 'cv-send--rec': recording }"
+                  :aria-label="recording ? 'Send voice note' : 'Record a voice note'"
+                  :title="recording ? 'Send voice note' : 'Record a voice note'"
+                  @click="recording ? stopRecording(true) : startRecording()">
+            <svg x-show="!recording" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            <svg x-show="recording" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a.99.99 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg>
+          </button>
+          <button class="cv-send" x-show="!(canRecord && !draft.trim() && !sending)" :disabled="!draft.trim() || sending" :aria-busy="sending" aria-label="Send">
             <svg x-show="!sending" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a.99.99 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg>
             <svg x-show="sending" x-cloak class="w-5 h-5 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
           </button>

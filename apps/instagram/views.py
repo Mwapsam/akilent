@@ -692,3 +692,28 @@ def instagram_data_deletion(request):
     )
     status_url = request.build_absolute_uri(reverse("data-deletion")) + f"?code={code}"
     return JsonResponse({"url": status_url, "confirmation_code": code})
+
+
+def instagram_outbound_media(request, token: str):
+    """Serve one attachment to Meta's fetcher, from a signed link that expires in an hour.
+
+    Public by necessity (Meta fetches it without our login), so it serves only a
+    path named inside a valid signature, never anything a caller chooses.
+    """
+    from django.core.files.storage import default_storage
+    from django.http import FileResponse
+
+    from apps.instagram.services.outbound import resolve_media_token
+
+    resolved = resolve_media_token(token)
+    if resolved is None:
+        raise Http404
+    path, mime = resolved
+    try:
+        handle = default_storage.open(path, "rb")
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404 from exc
+    response = FileResponse(handle, content_type=mime or "application/octet-stream")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response

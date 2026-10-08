@@ -156,6 +156,107 @@ class ReplyAction(Action):
         )
 
 
+class ReplyMediaAction(Action):
+    """Send a photo, video, document or voice note in an open conversation.
+
+    ``media`` is a ``conversations.outbound_media.PreparedMedia`` — already validated,
+    converted for this channel and stored. Same 24h window rules as a text reply.
+    """
+
+    name = "reply_media"
+    scope_kwarg = "conversation"
+
+    def input_schema(self) -> dict:
+        return {
+            "required": ["conversation", "media"],
+            "optional": ["caption", "idempotency_key", "sent_by"],
+        }
+
+    def execute(  # type: ignore[override]
+        self,
+        context: dict,
+        *,
+        conversation,
+        media,
+        caption: str = "",
+        idempotency_key: str | None = None,
+        sent_by: str = "",
+    ) -> dict:
+        import uuid
+
+        key = idempotency_key or f"media:{conversation.pk}:{uuid.uuid4()}"
+
+        if conversation.channel == conversation.Channel.WHATSAPP:
+            from apps.whatsapp import api as whatsapp_api
+
+            wa_conversation = conversation.whatsapp_conversation
+            if wa_conversation is None:
+                raise ActionError("WhatsApp conversation record not found")
+            msg = whatsapp_api.send_media(
+                conversation.account,
+                wa_conversation.contact,
+                media_path=media.path,
+                mime_type=media.mime,
+                kind=media.kind,
+                caption=caption,
+                filename=media.filename,
+                conversation_id=wa_conversation.pk,
+                idempotency_key=key,
+                sent_by=sent_by,
+            )
+            wa_conversation.register_outbound(msg.created_at)
+            return {"outbound_message_id": msg.id}
+
+        if conversation.channel == conversation.Channel.INSTAGRAM:
+            from apps.instagram.models.message import OutboundMessage
+            from apps.instagram.services.inbound import _ATTACHMENT_LABELS
+            from apps.instagram.services.outbound import (
+                enqueue_reply,
+                record_sent_message,
+                send_outbound,
+            )
+
+            ig_convo = conversation.instagram_conversation
+            if ig_convo is None:
+                raise ActionError("Instagram conversation record not found")
+            instagram_account = ig_convo.instagram_account
+            if instagram_account is None or not instagram_account.is_ready:
+                raise ActionError(
+                    "Instagram isn't connected — reconnect it in Settings → Instagram."
+                )
+            igsid = ig_convo.instagram_contact.instagram_scoped_id
+            label = {
+                "image": _ATTACHMENT_LABELS["image"],
+                "video": _ATTACHMENT_LABELS["video"],
+                "audio": _ATTACHMENT_LABELS["audio"],
+            }.get(media.kind, "[File]")
+            outbound = enqueue_reply(
+                instagram_account,
+                igsid,
+                label,
+                action_type=OutboundMessage.ActionType.DM_REPLY,
+                idempotency_key=key,
+                media=media,
+            ) or OutboundMessage.objects.get(idempotency_key=key)
+            if not send_outbound(outbound):
+                raise ActionError(f"Instagram send failed: {outbound.last_error}")
+            spine_msg = record_sent_message(outbound)
+            # An Instagram attachment can't carry text, so a caption follows it.
+            if caption.strip():
+                run_action(
+                    "reply",
+                    context,
+                    conversation=conversation,
+                    body=caption,
+                    idempotency_key=f"{key}:caption",
+                )
+            return {"outbound_message_id": spine_msg.id if spine_msg else None}
+
+        raise ActionError(
+            f"reply_media not yet implemented for channel {conversation.channel!r}"
+        )
+
+
 class AssignConversationAction(Action):
     """Assign a generic Conversation to a team member, or to nobody (``user=None``).
 
@@ -468,6 +569,7 @@ class LookupCustomerAction(Action):
 register(SendWhatsAppAction())
 register(LookupCustomerAction())
 register(ReplyAction())
+register(ReplyMediaAction())
 register(AssignConversationAction())
 register(AutoAssignConversationAction())
 register(RouteConversationAction())

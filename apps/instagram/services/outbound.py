@@ -25,6 +25,7 @@ def enqueue_reply(
     *,
     action_type: str,
     idempotency_key: str,
+    media=None,
 ) -> OutboundMessage | None:
     """
     Create an OutboundMessage record (outbox-first pattern).
@@ -40,6 +41,9 @@ def enqueue_reply(
                 recipient_igsid=recipient_igsid,
                 action_type=action_type,
                 body=body,
+                media_path=media.path if media else "",
+                media_mime_type=media.mime if media else "",
+                media_kind=media.kind if media else "",
             )
         return msg
     except IntegrityError:
@@ -92,6 +96,12 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         # private_reply expects a comment_id, not an igsid; the caller must
         # pass the comment_id as recipient_igsid for private reply actions.
         result = provider.private_reply(outbound.recipient_igsid, outbound.body)
+    elif outbound.media_path:
+        result = provider.send_attachment(
+            outbound.recipient_igsid,
+            _ATTACHMENT_TYPE.get(outbound.media_kind, "file"),
+            signed_media_url(outbound.media_path, outbound.media_mime_type),
+        )
     else:
         result = provider.send_message(outbound.recipient_igsid, outbound.body)
 
@@ -118,6 +128,44 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         )
     outbound.mark_failed(result.error, terminal=result.terminal)
     return False
+
+
+# Our media kinds -> Instagram Send API attachment types.
+_ATTACHMENT_TYPE = {
+    "image": "image",
+    "video": "video",
+    "audio": "audio",
+    "document": "file",
+}
+_MEDIA_LINK_SALT = "instagram.outbound-media"
+MEDIA_LINK_MAX_AGE = 3600  # seconds; Meta fetches the file within moments of the send
+
+
+def signed_media_url(path: str, mime: str) -> str:
+    """A public, expiring link to one stored file, for Meta to fetch an attachment from.
+
+    Signed so it can't be forged or altered, and short-lived so it stops working
+    soon after the send.
+    """
+    from django.conf import settings
+    from django.core import signing
+    from django.urls import reverse
+
+    token = signing.dumps({"p": path, "m": mime}, salt=_MEDIA_LINK_SALT, compress=True)
+    return settings.SITE_URL.rstrip("/") + reverse(
+        "instagram-outbound-media", args=[token]
+    )
+
+
+def resolve_media_token(token: str) -> tuple[str, str] | None:
+    """``(path, mime)`` for a valid, unexpired media link token, else None."""
+    from django.core import signing
+
+    try:
+        data = signing.loads(token, salt=_MEDIA_LINK_SALT, max_age=MEDIA_LINK_MAX_AGE)
+    except signing.BadSignature:
+        return None
+    return data.get("p", ""), data.get("m", "")
 
 
 def outbound_message_id(outbound: OutboundMessage) -> str:
@@ -182,10 +230,13 @@ def record_sent_message(outbound: OutboundMessage):
                 "outbound_id": outbound.pk,
                 "action_type": outbound.action_type,
             },
+            "media_type": outbound.media_kind,
+            "media_mime_type": outbound.media_mime_type,
+            "media_file": outbound.media_path or None,
         },
     )
     ig_convo.register_outbound(sent_at)
-    metadata = {"message_type": "text"}
+    metadata = {"message_type": outbound.media_kind or "text"}
     who = sender_of(outbound)
     if who:
         metadata["sent_by"] = who

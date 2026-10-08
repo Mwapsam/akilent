@@ -83,6 +83,7 @@ class WhatsAppProvider(ABC):
         media_type: str,
         media_id: str,
         caption: str = "",
+        filename: str = "",
     ) -> SendResult:
         """Send a media message (image, video, document, audio).
 

@@ -185,6 +185,8 @@ def download_instagram_media(instagram_message_id: int | None = None) -> dict:
         try:
             content, mime = _fetch_media(msg.media_source_url)
             ext = _ext_for_mime(mime)
+            if msg.conversation is None:
+                raise RuntimeError("Media message has no DM conversation.")
             account_id = msg.conversation.instagram_account.account_id
             digest = hashlib.sha256(msg.message_id.encode()).hexdigest()[:24]
             name = default_storage.save(

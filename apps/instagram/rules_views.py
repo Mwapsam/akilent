@@ -6,6 +6,8 @@ business (or Meta's App Reviewer) had no way to use comment features at all.
 
 from __future__ import annotations
 
+from typing import cast
+
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -38,7 +40,7 @@ class CommentTriggerForm(forms.ModelForm):
         }
 
     def clean(self):
-        data = super().clean()
+        data = super().clean() or {}
         if data.get("match_type") == CommentTrigger.MatchType.KEYWORD and not (
             data.get("keywords") or ""
         ).strip(" ,"):
@@ -70,7 +72,7 @@ class ModerationRuleForm(forms.ModelForm):
         widgets = {"keywords": forms.TextInput()}
 
     def clean(self):
-        data = super().clean()
+        data = super().clean() or {}
         if data.get("match_type") == ModerationRule.MatchType.KEYWORD and not (
             data.get("keywords") or ""
         ).strip(" ,"):
@@ -89,7 +91,7 @@ _KINDS = {
 }
 
 
-def _style(form: forms.Form) -> forms.Form:
+def _style(form: forms.BaseForm) -> forms.BaseForm:
     for field in form.fields.values():
         widget = field.widget
         css = "select w-full" if isinstance(widget, forms.Select) else "input w-full"
@@ -149,7 +151,10 @@ def comment_rule_toggle(request, kind: str, pk: int):
     account = get_current_account(request)
     if account is None or kind not in _KINDS:
         return redirect("instagram-comment-rules")
-    rule = get_object_or_404(_KINDS[kind][0], pk=pk, account=account)
+    rule = cast(
+        "CommentTrigger | ModerationRule",
+        get_object_or_404(_KINDS[kind][0], pk=pk, account=account),
+    )
     rule.is_active = not rule.is_active
     rule.save(update_fields=["is_active", "updated_at"])
     messages.success(
@@ -165,7 +170,10 @@ def comment_rule_delete(request, kind: str, pk: int):
     account = get_current_account(request)
     if account is None or kind not in _KINDS:
         return redirect("instagram-comment-rules")
-    rule = get_object_or_404(_KINDS[kind][0], pk=pk, account=account)
+    rule = cast(
+        "CommentTrigger | ModerationRule",
+        get_object_or_404(_KINDS[kind][0], pk=pk, account=account),
+    )
     name = rule.name
     rule.delete()
     messages.success(request, f"Rule “{name}” deleted.")

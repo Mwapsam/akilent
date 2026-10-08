@@ -119,6 +119,12 @@ class OutboundMessage(models.Model):
     action_type = models.CharField(max_length=20, choices=ActionType.choices)
     body = models.TextField()
 
+    # An attachment sent from the inbox (photo, video, voice note, PDF), already in
+    # our storage. Meta fetches it from a short-lived signed link at send time.
+    media_path = models.CharField(max_length=500, blank=True, default="")
+    media_mime_type = models.CharField(max_length=100, blank=True, default="")
+    media_kind = models.CharField(max_length=20, blank=True, default="")
+
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.QUEUED
     )

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.db.models.fields.files import FieldFile
 from django.urls import reverse
 
 # How many download attempts before a file is reported unavailable (both
@@ -22,14 +23,14 @@ _MAX_ATTEMPTS = 5
 
 @dataclass(frozen=True)
 class StoredMedia:
-    file: object  # a FieldFile
+    file: FieldFile
     mime: str
 
 
 def _source(message):
     """The channel record holding this message's media fields, or None."""
     wa = getattr(message, "whatsapp_message", None)
-    if wa is not None and wa.media_id:
+    if wa is not None and (wa.media_id or wa.media_file):
         return {
             "file": wa.media_file,
             "mime": wa.media_mime_type or "",
@@ -37,7 +38,7 @@ def _source(message):
             "attempts": wa.media_attempts,
         }
     ig = getattr(message, "instagram_message", None)
-    if ig is not None and ig.media_source_url:
+    if ig is not None and (ig.media_source_url or ig.media_file):
         return {
             "file": ig.media_file,
             "mime": ig.media_mime_type or "",

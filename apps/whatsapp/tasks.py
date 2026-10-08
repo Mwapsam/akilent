@@ -547,7 +547,11 @@ def _send_outbound(provider, contact, payload: dict) -> dict:
                 )
                 media_id = upload.media_id
             result = provider.send_media(
-                to, msg_type, media_id, payload.get("caption", "")
+                to,
+                msg_type,
+                media_id,
+                payload.get("caption", ""),
+                filename=payload.get("filename", ""),
             )
         elif msg_type == "interactive":
             result = provider.send_interactive(to, payload["interactive"])
@@ -707,6 +711,10 @@ def _ensure_outbound_log(msg: OutboundMessage) -> MessageLog:
         status=MessageLog.Status.QUEUED,
         timestamp=timezone.now(),
         raw_payload=msg.payload,
+        # Media sent from the inbox is already in our storage: point the log at it
+        # so the thread shows the photo / voice note the business sent.
+        media_file=payload.get("media_path") or None,
+        media_mime_type=payload.get("mime_type") or None,
     )
     msg.message_log = log
     msg.save(update_fields=["message_log"])

@@ -253,13 +253,20 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         media_type: str,
         media_id: str,
         caption: str = "",
+        filename: str = "",
     ) -> SendResult:
         """Send a media message (image, video, document, audio)."""
+        body = {"id": media_id}
+        if filename and media_type == "document":
+            body["filename"] = filename
+        # Meta rejects a caption on audio and stickers.
+        if caption and media_type in ("image", "video", "document"):
+            body["caption"] = caption
         payload = {
             "messaging_product": "whatsapp",
             "to": to.lstrip("+"),
             "type": media_type,
-            media_type: {"id": media_id, "caption": caption},
+            media_type: body,
         }
         try:
             result = self._post_message(payload)

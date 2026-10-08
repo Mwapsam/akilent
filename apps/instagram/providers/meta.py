@@ -86,6 +86,35 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram send_message unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)
 
+    def send_attachment(self, recipient_igsid: str, kind: str, url: str) -> SendResult:
+        """Send an image / video / audio / file DM that Meta fetches from ``url``."""
+        payload = {
+            "recipient": {"id": recipient_igsid},
+            "message": {"attachment": {"type": kind, "payload": {"url": url}}},
+            "messaging_type": "RESPONSE",
+        }
+        try:
+            data = self._post(f"{self._account_id}/messages", payload)
+            return SendResult(
+                success=True, provider_message_id=data.get("message_id", "")
+            )
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram send_attachment failed: code=%s msg=%s",
+                exc.code,
+                exc.message,
+            )
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
+        except Exception as exc:
+            logger.exception("Instagram send_attachment unexpected error")
+            return SendResult(success=False, error=str(exc), terminal=False)
+
     def private_reply(self, comment_id: str, body: str) -> SendResult:
         # Private Reply API — sends a DM in response to a comment.
         # Requires instagram_business_manage_messages permission.
@@ -147,7 +176,7 @@ class MetaInstagramProvider(BaseInstagramProvider):
             return False
 
     def delete_comment(self, comment_id: str) -> bool:
-        """Permanently delete a comment. Requires instagram_basic permission."""
+        """Permanently delete a comment. Requires instagram_business_manage_comments."""
         url = f"{GRAPH_IG_BASE}/{comment_id}"
         try:
             resp = requests.delete(

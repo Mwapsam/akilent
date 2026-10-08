@@ -489,6 +489,9 @@ def conversation_detail(request, public_id: str):
         "feedUrl": reverse(
             "conversations:messages_feed", args=[conversation.public_id]
         ),
+        "sendMediaUrl": reverse(
+            "conversations:send_media", args=[conversation.public_id]
+        ),
         "lastId": thread[-1].id if thread else 0,
         "open": conversation.status == Conversation.Status.OPEN,
         # Only WhatsApp enforces a messaging window today; other channels report
@@ -987,6 +990,46 @@ def form_delete(request, pk):
     return redirect("conversations:forms_list")
 
 
+@login_required
+@require_POST
+def send_media(request, public_id: str):
+    """Send a file or a recorded voice note from the composer. JSON for the inbox script."""
+    from apps.conversations import outbound_media
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "No account."}, status=403)
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    upload = request.FILES.get("file")
+    if upload is None:
+        return JsonResponse(
+            {"ok": False, "error": "Choose a file to send."}, status=400
+        )
+    channel = conversation.channel
+    if channel not in (outbound_media.WHATSAPP, outbound_media.INSTAGRAM):
+        return JsonResponse(
+            {"ok": False, "error": "Media can't be sent on this channel."}, status=400
+        )
+    try:
+        media = outbound_media.prepare(
+            upload,
+            channel,
+            account_id=account.pk,
+            voice=request.POST.get("voice") == "1",
+        )
+        result = run_action(
+            "reply_media",
+            {"account": account},
+            conversation=conversation,
+            media=media,
+            caption=(request.POST.get("caption") or "").strip(),
+        )
+    except (outbound_media.MediaError, ActionError) as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    conversation.mark_read()
+    return JsonResponse({"ok": True, **result})
+
+
 def _recent_media(conversation) -> dict:
     """``{message_id: media_json}`` for the latest inbound messages that carry media."""
     recent = (
@@ -1052,7 +1095,10 @@ def message_media(request, public_id: str, message_id: int):
     playable = mime.split("/", 1)[0] in {"image", "video", "audio"}
     filename = media.file.name.rsplit("/", 1)[-1]
 
+    from django.http.response import HttpResponseBase
+
     # Safari only plays audio/video when the server honours byte ranges.
+    response: HttpResponseBase
     byte_range = _parse_range(request.headers.get("Range", ""), size)
     if byte_range is not None:
         start, end = byte_range

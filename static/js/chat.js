@@ -27,6 +27,15 @@ function registerChat() {
     timer: null,
     coarse: window.matchMedia('(pointer: coarse)').matches,
     ai: Object.assign({ enabled: false, proposal: null }, cfg.ai || {}),
+    sendMediaUrl: cfg.sendMediaUrl || '',
+    // Voice note recording (MediaRecorder): idle → recording → sent or cancelled.
+    recording: false,
+    recSeconds: 0,
+    _recorder: null,
+    _recTimer: null,
+    _recChunks: [],
+    _recCancelled: false,
+    canRecord: !!(navigator.mediaDevices && window.MediaRecorder),
     aiUsedId: null,
 
     // "[Photo]" / "[Voice message]" placeholders say nothing once the media itself shows.
@@ -72,6 +81,8 @@ function registerChat() {
 
     destroy() {
       this._destroyed = true;
+      // Leaving mid-recording must release the microphone, not send a half note.
+      this.stopRecording(false);
       clearTimeout(this.timer);
       window.removeEventListener('resize', this._fit);
       document.removeEventListener('visibilitychange', this._onVisible);
@@ -251,6 +262,90 @@ function registerChat() {
       this.aiUsedId = p.id;
       if (this.$refs.tplPicker) this.$refs.tplPicker.open = true;
       window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values } }));
+    },
+
+    // ── media: files and voice notes ─────────────────────────────
+    pickFile() { this.$refs.mediaInput.click(); },
+    onFile(e) {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (file) this.uploadMedia(file, file.name, false);
+    },
+    async startRecording() {
+      if (this.recording || this.sending) return;
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        if (window.toast) window.toast('danger', 'Allow microphone access to record a voice note.');
+        return;
+      }
+      const type = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4']
+        .find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+      const rec = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+      this._recChunks = [];
+      this._recCancelled = false;
+      rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) this._recChunks.push(ev.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        clearInterval(this._recTimer);
+        this.recording = false;
+        if (this._recCancelled || !this._recChunks.length) return;
+        const mime = (rec.mimeType || 'audio/webm').split(';')[0];
+        const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm';
+        const blob = new Blob(this._recChunks, { type: mime });
+        this.uploadMedia(blob, 'voice-note.' + ext, true);
+      };
+      this._recorder = rec;
+      this.recSeconds = 0;
+      this.recording = true;
+      this._recTimer = setInterval(() => {
+        this.recSeconds += 1;
+        if (this.recSeconds >= 300) this.stopRecording(true); // 5-minute cap
+      }, 1000);
+      rec.start();
+    },
+    stopRecording(send) {
+      if (!this._recorder || this._recorder.state === 'inactive') return;
+      this._recCancelled = !send;
+      this._recorder.stop();
+    },
+    recLabel() {
+      const m = Math.floor(this.recSeconds / 60);
+      const s = String(this.recSeconds % 60).padStart(2, '0');
+      return m + ':' + s;
+    },
+    async uploadMedia(blob, filename, voice) {
+      if (this.sending || !this.sendMediaUrl) return;
+      const form = this.$refs.composer;
+      const fd = new FormData();
+      fd.set('csrfmiddlewaretoken', new FormData(form).get('csrfmiddlewaretoken'));
+      fd.set('file', blob, filename);
+      if (voice) fd.set('voice', '1');
+      const caption = voice ? '' : this.draft.trim();
+      if (caption) fd.set('caption', caption);
+      const label = voice ? '[Voice message]' : '[' + (filename || 'File') + ']';
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: new Date().toISOString(), status: '', pending: true };
+      this.messages.push(pending);
+      if (caption) this.draft = '';
+      this.$nextTick(() => this.scrollBottom());
+      this.sending = true;
+      try {
+        const r = await fetch(this.sendMediaUrl, {
+          method: 'POST', body: fd, credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Could not send that file.');
+        this.interval = BASE_INTERVAL;
+        this.schedule(300);
+      } catch (e) {
+        if (caption) this.draft = caption;
+        if (window.toast) window.toast('danger', e.message);
+      } finally {
+        this.messages = this.messages.filter((m) => m.id !== pending.id);
+        this.sending = false;
+      }
     },
 
     // ── composing ────────────────────────────────────────────────
