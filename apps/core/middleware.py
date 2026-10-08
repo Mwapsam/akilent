@@ -69,9 +69,13 @@ def _get_csp() -> str:
     return _csp_cache
 
 
+# The microphone is allowed for our own pages (inbox voice notes) and nothing
+# embedded. It has to be site-wide: hx-boost keeps the first page's policy for
+# the whole visit, so allowing it only on the inbox would still block a visit
+# that started elsewhere.
 _PERMISSIONS = (
     "accelerometer=(), camera=(), display-capture=(), geolocation=(), "
-    "gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+    "gyroscope=(), magnetometer=(), microphone=(self), payment=(), usb=()"
 )
 
 _INBOUND_HEADER = "HTTP_X_REQUEST_ID"
