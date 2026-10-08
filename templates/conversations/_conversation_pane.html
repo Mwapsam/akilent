@@ -124,7 +124,27 @@
   .cv-msg--failed .cv-bubble { background: color-mix(in srgb, var(--color-coral-500) 18%, var(--cv-in-bg)); }
   .cv-media { margin-bottom: .25rem; }
   .cv-media-img { display: block; max-width: min(18rem, 100%); max-height: 20rem; border-radius: .5rem; object-fit: cover; }
-  .cv-media-audio { display: block; width: min(16rem, 70vw); height: 2.25rem; }
+  /* Voice note player */
+  .cv-voice { display: flex; align-items: center; gap: .625rem; width: min(16.5rem, 68vw); padding: .125rem 0; }
+  .cv-voice-btn { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem;
+                  border-radius: 999px; background: var(--cv-accent); color: #fff; transition: transform .1s ease, filter .15s ease; }
+  .cv-voice-btn svg { width: 1.125rem; height: 1.125rem; }
+  .cv-voice-btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .cv-voice-btn:active:not(:disabled) { transform: scale(.94); }
+  .cv-voice-btn:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+  .cv-voice-btn:disabled { opacity: .45; cursor: default; }
+  .cv-voice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .125rem; }
+  .cv-voice-wave { display: flex; align-items: center; gap: 2px; height: 1.75rem; cursor: pointer; border-radius: .25rem; }
+  .cv-voice-wave:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+  .cv-voice-wave span { flex: 1; min-width: 2px; border-radius: 999px; background: color-mix(in srgb, currentColor 28%, transparent);
+                        transition: background-color .12s linear; }
+  .cv-voice-wave span.is-played { background: var(--cv-accent); }
+  .cv-voice-meta { display: flex; align-items: center; gap: .5rem; font-size: .6875rem; color: var(--cv-stamp); font-variant-numeric: tabular-nums; }
+  .cv-voice-rate { margin-left: auto; padding: 0 .375rem; border-radius: 999px; font-weight: 600; font-size: .6875rem; line-height: 1.25rem;
+                   background: color-mix(in srgb, currentColor 12%, transparent); color: var(--cv-stamp); }
+  .cv-voice-rate:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 1px; }
+  .cv-voice-dl { margin-left: auto; text-decoration: underline; color: inherit; }
+  @media (prefers-reduced-motion: reduce) { .cv-voice-btn, .cv-voice-wave span { transition: none; } }
   .cv-media-file { font-size: .875rem; text-decoration: underline; }
   .cv-text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .cv-stamp { display: flex; justify-content: flex-end; align-items: center; gap: .25rem; margin-top: .125rem; font-size: .6875rem; color: var(--cv-stamp); }
@@ -391,7 +411,35 @@
                           <video :src="item.m.media.url" controls preload="metadata" class="cv-media-img"></video>
                         </template>
                         <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'audio'">
-                          <audio :src="item.m.media.url" controls preload="none" class="cv-media-audio" aria-label="Voice message"></audio>
+                          {% comment %} Custom player (voiceNote in static/js/chat.js) instead of the
+                             browser's audio bar. {% endcomment %}
+                          <div class="cv-voice" x-data="voiceNote(item.m.media.url, item.m.id)" role="group" aria-label="Voice message">
+                            <button type="button" class="cv-voice-btn" @click="toggle()" :disabled="failed"
+                                    :aria-label="playing ? 'Pause voice message' : 'Play voice message'">
+                              <svg x-show="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+                              <svg x-show="playing" x-cloak viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1.25"/><rect x="13.5" y="5" width="4" height="14" rx="1.25"/></svg>
+                            </button>
+                            <div class="cv-voice-body">
+                              <div class="cv-voice-wave" role="slider" tabindex="0" aria-label="Seek"
+                                   aria-valuemin="0" :aria-valuemax="Math.round(duration)" :aria-valuenow="Math.round(current)"
+                                   :aria-valuetext="label + ' of ' + (duration ? Math.round(duration) + ' seconds' : 'unknown length')"
+                                   @click="seekClick($event)" @keydown.right.prevent="seekBy(5)" @keydown.left.prevent="seekBy(-5)"
+                                   @keydown.space.prevent="toggle()">
+                                <template x-for="(h, i) in bars" :key="i">
+                                  <span :style="`height:${h}%`" :class="{ 'is-played': (i + 0.5) / bars.length <= progress }"></span>
+                                </template>
+                              </div>
+                              <div class="cv-voice-meta">
+                                <span x-text="failed ? 'Can\'t play here' : label"></span>
+                                <a x-show="failed" x-cloak :href="url" download hx-boost="false" class="cv-voice-dl">Download</a>
+                                <button type="button" x-show="!failed && (playing || current > 0)" x-cloak class="cv-voice-rate"
+                                        @click="cycleRate()" :aria-label="'Playback speed ' + rate + 'x'" x-text="rate + '×'"></button>
+                              </div>
+                            </div>
+                            <audio x-ref="audio" :src="url" preload="metadata"
+                                   @loadedmetadata="onMeta()" @durationchange="onMeta()" @play="onPlay()" @pause="onPause()"
+                                   @ended="onEnded()" @error="failed = true"></audio>
+                          </div>
                         </template>
                         <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'file'">
                           <a :href="item.m.media.url" class="cv-media-file">Download file</a>

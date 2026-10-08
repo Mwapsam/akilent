@@ -392,6 +392,102 @@ function registerChat() {
       }
     },
   }));
+
+  /* Voice note player, styled like Instagram / WhatsApp instead of the browser's
+   * audio bar: play/pause, a waveform that fills as it plays (click or arrow keys
+   * to seek), elapsed / total time and a 1× / 1.5× / 2× speed toggle. The waveform
+   * shape is drawn from the message id, not the audio — decoding every note to
+   * draw it would download them all up front. One note plays at a time. */
+  const BAR_COUNT = 32;
+  const RATES = [1, 1.5, 2];
+  const clock = (s) => {
+    if (!isFinite(s) || s < 0) return '0:00';
+    s = Math.round(s);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  };
+
+  Alpine.data('voiceNote', (url, seed) => ({
+    url,
+    playing: false,
+    current: 0,
+    duration: 0,
+    rate: 1,
+    failed: false,
+    bars: (() => {
+      // Small deterministic PRNG so a note keeps its shape across re-renders.
+      let x = (Number(seed) || 1) * 2654435761 % 4294967296;
+      return Array.from({ length: BAR_COUNT }, (_, i) => {
+        x = (x * 1664525 + 1013904223) % 4294967296;
+        const edge = Math.min(i, BAR_COUNT - 1 - i) < 3 ? 0.6 : 1;  // softer at both ends
+        return Math.round((28 + (x / 4294967296) * 72) * edge);
+      });
+    })(),
+
+    init() {
+      this._onOther = (e) => { if (e.detail !== this && this.playing) this.$refs.audio.pause(); };
+      window.addEventListener('voice-note:play', this._onOther);
+    },
+    destroy() {
+      window.removeEventListener('voice-note:play', this._onOther);
+      cancelAnimationFrame(this._raf);
+      // A removed <audio> keeps playing in some browsers.
+      if (this.$refs.audio) this.$refs.audio.pause();
+    },
+
+    get progress() { return this.duration ? Math.min(this.current / this.duration, 1) : 0; },
+    get label() { return clock(this.playing || this.current ? this.current : this.duration); },
+
+    toggle() {
+      const a = this.$refs.audio;
+      if (this.failed) return;
+      if (a.paused) {
+        window.dispatchEvent(new CustomEvent('voice-note:play', { detail: this }));
+        a.playbackRate = this.rate;
+        a.play().catch(() => { this.failed = true; });
+      } else {
+        a.pause();
+      }
+    },
+    cycleRate() {
+      this.rate = RATES[(RATES.indexOf(this.rate) + 1) % RATES.length];
+      this.$refs.audio.playbackRate = this.rate;
+    },
+    seekTo(fraction) {
+      const a = this.$refs.audio;
+      if (!this.duration) return;
+      a.currentTime = Math.max(0, Math.min(fraction, 1)) * this.duration;
+      this.current = a.currentTime;
+    },
+    seekClick(e) {
+      const r = e.currentTarget.getBoundingClientRect();
+      this.seekTo((e.clientX - r.left) / r.width);
+    },
+    seekBy(seconds) {
+      if (this.duration) this.seekTo((this.current + seconds) / this.duration);
+    },
+
+    // <audio> events
+    onMeta() {
+      const d = this.$refs.audio.duration;
+      if (isFinite(d)) this.duration = d;
+    },
+    onPlay() {
+      this.playing = true;
+      const tick = () => {
+        this.current = this.$refs.audio.currentTime;
+        if (this.playing) this._raf = requestAnimationFrame(tick);
+      };
+      tick();
+    },
+    onPause() {
+      this.playing = false;
+      cancelAnimationFrame(this._raf);
+    },
+    onEnded() {
+      this.onPause();
+      this.current = 0;
+    },
+  }));
 }
 
 if (window.Alpine && window.Alpine.version) registerChat();
