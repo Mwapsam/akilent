@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.core.module_gate import module_required
-from apps.instagram.models import CommentTrigger, ModerationRule
+from apps.instagram.models import CommentTrigger, ModerationLog, ModerationRule
 
 
 class CommentTriggerForm(forms.ModelForm):
@@ -112,6 +112,11 @@ def comment_rules(request):
         {
             "triggers": CommentTrigger.objects.filter(account=account),
             "moderation_rules": ModerationRule.objects.filter(account=account),
+            # What the rules actually did, so a failure (e.g. a missing Meta
+            # permission) is visible to the business, not only in admin.
+            "moderation_logs": ModerationLog.objects.filter(account=account)
+            .select_related("rule", "comment__instagram_contact")
+            .order_by("-occurred_at")[:20],
             "has_account": account.instagram_accounts.filter(is_active=True).exists(),
         },
     )

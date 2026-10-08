@@ -55,6 +55,38 @@
   {% endif %}
 </section>
 
+{% comment %} What the moderation rules did, newest first (ModerationLog) {% endcomment %}
+{% if moderation_rules %}
+<section class="mb-8">
+  <div class="mb-3">
+    <h2 class="text-lg font-semibold text-ink">Recent moderation activity</h2>
+    <p class="text-sm text-gray-600">The last 20 comments your moderation rules acted on.</p>
+  </div>
+  {% if moderation_logs %}
+  <ul class="card divide-y divide-gray-100">
+    {% for log in moderation_logs %}
+    <li class="p-4 text-sm">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <span class="font-medium text-ink">
+          {% with contact=log.comment.instagram_contact %}{% if contact.username %}@{{ contact.username }}{% else %}{{ contact.name|default:"Someone" }}{% endif %}{% endwith %}
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="badge {% if log.outcome == 'applied' %}badge-success{% elif log.outcome == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">{{ log.get_outcome_display }}</span>
+          <span class="text-gray-500">{{ log.occurred_at|timesince }} ago</span>
+        </span>
+      </div>
+      <p class="mt-1 text-gray-700">“{{ log.comment.body|truncatechars:140 }}”</p>
+      <p class="mt-1 text-gray-500">{{ log.rule.name|default:"Deleted rule" }} · {{ log.moderation_action|capfirst }}{% if log.moderation_action == "flag" or log.automation_trigger == "notify_staff" %} · Team emailed{% endif %}{% if log.automation_trigger == "create_proposal" %} · Lead opened{% endif %}</p>
+      {% if log.error %}<p class="mt-1 text-red-600">{{ log.error }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="card p-5 text-sm text-gray-500">Nothing yet. Activity appears here when a new comment matches one of your rules.</div>
+  {% endif %}
+</section>
+{% endif %}
+
 <a href="{% url 'instagram-accounts' %}" class="text-sm text-gray-500 hover:text-ink">← Back to Instagram</a>
 
 {% endblock %}

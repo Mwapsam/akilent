@@ -4,7 +4,7 @@ Phase 2 Acceptance Tests — Instagram Engagement & Moderation
 Checklist (all must pass for Phase 2 sign-off):
   P2-01  ModerationRule keyword match hides a comment
   P2-02  ModerationRule keyword match deletes a comment
-  P2-03  ModerationRule FLAG action marks comment as pending (local only, no API)
+  P2-03  ModerationRule FLAG action marks comment as flagged (local only, no API)
   P2-04  Spam-detection heuristic matches expected patterns
   P2-05  Toxicity heuristic matches expected patterns
   P2-06  Complaint heuristic matches expected patterns
@@ -14,7 +14,7 @@ Checklist (all must pass for Phase 2 sign-off):
   P2-10  Comment already DELETED: delete action is skipped (idempotent)
   P2-11  hide_comment API failure → outcome=FAILED; comment state unchanged
   P2-12  delete_comment API failure → outcome=FAILED; comment state unchanged
-  P2-13  Automation trigger NOTIFY_STAFF: logs notification (no API call)
+  P2-13  Automation trigger NOTIFY_STAFF: emails the owners (no Instagram API call)
   P2-14  Automation trigger CREATE_PROPOSAL: opens a lead for the commenter
   P2-15  CREATE_PROPOSAL is idempotent: one open lead per customer
   P2-16  CREATE_PROPOSAL skipped when no canonical contact
@@ -99,7 +99,7 @@ class TestModerationActions(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_01_keyword_hide(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         make_rule(
             self.account,
             keywords="badword",
@@ -123,7 +123,7 @@ class TestModerationActions(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_02_keyword_delete(self, MockProvider):
-        MockProvider.return_value.delete_comment.return_value = True
+        MockProvider.return_value.delete_comment.return_value = (True, "")
         make_rule(
             self.account,
             keywords="spam",
@@ -160,7 +160,7 @@ class TestModerationActions(TestCase):
 
         self.assertEqual(log.outcome, ModerationLog.Outcome.APPLIED)
         comment.refresh_from_db()
-        self.assertEqual(comment.moderation_state, Comment.ModerationState.PENDING)
+        self.assertEqual(comment.moderation_state, Comment.ModerationState.FLAGGED)
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ class TestHeuristicMatchers(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_04_spam_detection(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         make_rule(
             self.account,
             match_type=ModerationRule.MatchType.SPAM_DETECTION,
@@ -191,7 +191,7 @@ class TestHeuristicMatchers(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_05_toxicity_detection(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         make_rule(
             self.account,
             match_type=ModerationRule.MatchType.TOXICITY,
@@ -258,7 +258,7 @@ class TestInboundPipelineOrder(TestCase):
         """Moderation service is invoked when a comment is processed."""
         from apps.instagram.services.inbound import _process_comment_entry
 
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         make_rule(
             self.account,
             keywords="buy",
@@ -336,7 +336,10 @@ class TestAPIFailures(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_11_hide_api_failure(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = False
+        MockProvider.return_value.hide_comment.return_value = (
+            False,
+            "[200] Permission denied",
+        )
         make_rule(
             self.account,
             keywords="bad",
@@ -347,13 +350,18 @@ class TestAPIFailures(TestCase):
         )
         log = moderate_comment(comment)
         self.assertEqual(log.outcome, ModerationLog.Outcome.FAILED)
+        # Meta's own error is kept so the business can see why
+        self.assertIn("Permission denied", log.error)
         comment.refresh_from_db()
         # State should not have changed on failure
         self.assertNotEqual(comment.moderation_state, Comment.ModerationState.HIDDEN)
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_12_delete_api_failure(self, MockProvider):
-        MockProvider.return_value.delete_comment.return_value = False
+        MockProvider.return_value.delete_comment.return_value = (
+            False,
+            "[200] Permission denied",
+        )
         make_rule(
             self.account,
             keywords="bad",
@@ -391,13 +399,15 @@ class TestAutomationTriggers(TestCase):
         _, comment = make_thread_and_comment(
             self.ig_account, self.ig_contact, "I need help please"
         )
-        with patch("apps.instagram.services.moderation.logger") as mock_logger:
+        with patch("apps.accounts.notifications.notify_team") as mock_notify:
             log = moderate_comment(comment)
         self.assertEqual(
             log.automation_trigger, ModerationRule.AutomationTrigger.NOTIFY_STAFF
         )
-        # Ensure the notification intent was logged (no API call)
-        mock_logger.info.assert_called()
+        # FLAG + NOTIFY_STAFF email the owners once, linking to the rules page
+        mock_notify.assert_called_once()
+        self.assertEqual(mock_notify.call_args.kwargs["to"], "owners")
+        self.assertIn("I need help please", mock_notify.call_args.kwargs["text"])
 
     def test_p2_14_create_proposal_trigger(self):
         from apps.ai.models import AIProposal
@@ -478,7 +488,7 @@ class TestModerationLogImmutability(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_17_moderation_log_is_immutable(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         make_rule(
             self.account,
             keywords="bad",
@@ -511,8 +521,8 @@ class TestRulePriorityOrdering(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_18_lower_priority_number_wins(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
-        MockProvider.return_value.delete_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
+        MockProvider.return_value.delete_comment.return_value = (True, "")
 
         # Both rules match "badword"; priority 1 (hide) should win over priority 20 (delete)
         hide_rule = make_rule(
@@ -578,7 +588,7 @@ class TestIntentWithModeration(TestCase):
 
     @patch("apps.instagram.providers.meta.MetaInstagramProvider")
     def test_p2_20_intent_detected_alongside_moderation(self, MockProvider):
-        MockProvider.return_value.hide_comment.return_value = True
+        MockProvider.return_value.hide_comment.return_value = (True, "")
         # Rule to hide comments containing "click here"
         make_rule(
             self.account,

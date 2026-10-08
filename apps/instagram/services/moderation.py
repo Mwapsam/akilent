@@ -35,6 +35,11 @@ def moderate_comment(comment: Comment) -> ModerationLog | None:
     matching rule's moderation action, fire its automation trigger, and
     return an immutable ModerationLog (or None if no rule matched).
     """
+    if comment.moderation_logs.exists():
+        # Already moderated: a redelivered or reprocessed webhook must not act,
+        # notify or open a lead a second time.
+        return None
+
     account = comment.thread.instagram_account.account
     rules = ModerationRule.objects.filter(account=account, is_active=True).order_by(
         "priority", "created_at"
@@ -54,6 +59,11 @@ def moderate_comment(comment: Comment) -> ModerationLog | None:
 
     outcome, error = _execute_moderation(comment, moderation_action)
     _fire_automation(comment, automation_trigger)
+    if (
+        moderation_action == ModerationRule.ModerationAction.FLAG
+        or automation_trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF
+    ):
+        _notify_staff(comment, matched_rule, outcome, error)
 
     log = ModerationLog(
         account=account,
@@ -141,8 +151,8 @@ def _execute_moderation(comment: Comment, action: str) -> tuple[str, str]:
         return ModerationLog.Outcome.SKIPPED, ""
 
     if action == ModerationRule.ModerationAction.FLAG:
-        # FLAG is a local-only action — no API call; update moderation_state.
-        comment.moderation_state = Comment.ModerationState.PENDING
+        # FLAG is a local-only action — no API call; the team is emailed.
+        comment.moderation_state = Comment.ModerationState.FLAGGED
         comment.save(update_fields=["moderation_state"])
         return ModerationLog.Outcome.APPLIED, ""
 
@@ -156,28 +166,31 @@ def _execute_moderation(comment: Comment, action: str) -> tuple[str, str]:
 
     account = comment.thread.instagram_account
     if not account.access_token:
-        return ModerationLog.Outcome.SKIPPED, "no access token"
+        return (
+            ModerationLog.Outcome.FAILED,
+            "The Instagram account has no access token — reconnect it.",
+        )
     provider = MetaInstagramProvider(
         access_token=account.access_token,
         instagram_account_id=account.instagram_business_account_id,
     )
 
     if action == ModerationRule.ModerationAction.HIDE:
-        success = provider.hide_comment(comment.comment_id)
+        success, error = provider.hide_comment(comment.comment_id)
         if success:
             comment.is_hidden = True
             comment.moderation_state = Comment.ModerationState.HIDDEN
             comment.save(update_fields=["is_hidden", "moderation_state"])
             return ModerationLog.Outcome.APPLIED, ""
-        return ModerationLog.Outcome.FAILED, "hide_comment API call failed"
+        return ModerationLog.Outcome.FAILED, f"Instagram refused to hide it: {error}"
 
     if action == ModerationRule.ModerationAction.DELETE:
-        success = provider.delete_comment(comment.comment_id)
+        success, error = provider.delete_comment(comment.comment_id)
         if success:
             comment.moderation_state = Comment.ModerationState.DELETED
             comment.save(update_fields=["moderation_state"])
             return ModerationLog.Outcome.APPLIED, ""
-        return ModerationLog.Outcome.FAILED, "delete_comment API call failed"
+        return ModerationLog.Outcome.FAILED, f"Instagram refused to delete it: {error}"
 
     return ModerationLog.Outcome.SKIPPED, f"unknown action: {action}"
 
@@ -192,26 +205,57 @@ def _fire_automation(comment: Comment, trigger: str) -> None:
     Fire the automation trigger. These affect Akilent state only — they do not
     touch Instagram content.
     """
-    if trigger == ModerationRule.AutomationTrigger.NONE:
-        return
-
-    if trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF:
-        _notify_staff(comment)
-    elif trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
+    # NOTIFY_STAFF is sent by moderate_comment, which knows the action's outcome.
+    if trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
         _open_lead(comment)
 
 
-def _notify_staff(comment: Comment) -> None:
-    """
-    Log a staff notification for the comment. Actual notification delivery
-    (email, in-app alert) is wired up by the notifications app in a separate
-    phase; this layer emits the intent.
-    """
-    logger.info(
-        "Staff notification triggered for comment %s on account %s",
-        comment.comment_id,
-        comment.thread.instagram_account.account_id,
-    )
+_ACTION_DONE: dict[str, str] = {
+    ModerationRule.ModerationAction.HIDE: "It was hidden.",
+    ModerationRule.ModerationAction.DELETE: "It was deleted.",
+    ModerationRule.ModerationAction.FLAG: "It was flagged for review.",
+}
+
+
+def _notify_staff(
+    comment: Comment, rule: ModerationRule, outcome: str, error: str
+) -> None:
+    """Email the business's owners about the comment. Never breaks inbound processing."""
+    from django.urls import reverse
+
+    from apps.accounts.notifications import notify_team
+
+    account = comment.thread.instagram_account.account
+    who = comment.instagram_contact.username or comment.instagram_contact.name
+    lines = [
+        f"{'@' + who if who else 'Someone'} commented on your Instagram post:",
+        f"“{(comment.body or '')[:300]}”",
+        f"It matched your moderation rule “{rule.name}”.",
+    ]
+    if outcome == ModerationLog.Outcome.APPLIED:
+        lines.append(_ACTION_DONE.get(rule.moderation_action, ""))
+    elif outcome == ModerationLog.Outcome.FAILED:
+        lines.append(f"Akilent could not act on it. {error}")
+    try:
+        sent = notify_team(
+            account,
+            to="owners",
+            subject="An Instagram comment needs a look",
+            text="\n\n".join(line for line in lines if line),
+            path=reverse("instagram-comment-rules"),
+        )
+        logger.info(
+            "Moderation notice for comment %s emailed to %s teammate(s) on account %s",
+            comment.comment_id,
+            sent,
+            account.pk,
+        )
+    except Exception:
+        logger.exception(
+            "Moderation notice failed for comment %s on account %s",
+            comment.comment_id,
+            account.pk,
+        )
 
 
 def _open_lead(comment: Comment) -> None:

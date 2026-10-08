@@ -86,6 +86,7 @@ class Comment(models.Model):
     class ModerationState(models.TextChoices):
         PENDING = "pending", "Pending"
         APPROVED = "approved", "Approved"
+        FLAGGED = "flagged", "Flagged for review"
         HIDDEN = "hidden", "Hidden"
         DELETED = "deleted", "Deleted"
 

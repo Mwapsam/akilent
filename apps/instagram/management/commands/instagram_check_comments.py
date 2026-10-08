@@ -1,4 +1,4 @@
-"""Explain why comment-to-DM (comment triggers) isn't firing.
+"""Explain why comment-to-DM (comment triggers) or comment moderation isn't working.
 
     python manage.py instagram_check_comments
 
@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.instagram.models import InstagramBusinessAccount
 from apps.instagram.models.comment import CommentThread
 from apps.instagram.models.message import OutboundMessage
+from apps.instagram.models.moderation import ModerationLog, ModerationRule
 from apps.instagram.models.trigger import CommentTrigger
 from apps.instagram.models.webhook import WebhookEventLog
 
@@ -82,6 +83,25 @@ class Command(BaseCommand):
                 out(
                     f"    - {t.name!r} active={t.is_active} match={t.match_type} "
                     f"keywords={t.keywords!r}"
+                )
+
+            mod_rules = ModerationRule.objects.filter(account=iba.account)
+            out(
+                f"  Moderation rules: {mod_rules.filter(is_active=True).count()} active / {mod_rules.count()} total"
+            )
+            for r in mod_rules.order_by("priority"):
+                out(
+                    f"    - {r.name!r} active={r.is_active} match={r.match_type} "
+                    f"keywords={r.keywords!r} action={r.moderation_action} "
+                    f"trigger={r.automation_trigger}"
+                )
+            out("  Latest moderation results:")
+            for log in ModerationLog.objects.filter(account=iba.account).order_by(
+                "-pk"
+            )[:5]:
+                out(
+                    f"    #{log.pk} {log.occurred_at:%Y-%m-%d %H:%M} {log.moderation_action} "
+                    f"{log.outcome} comment={log.comment.comment_id} error={log.error[:160]!r}"
                 )
 
             out("  Latest comment threads:")

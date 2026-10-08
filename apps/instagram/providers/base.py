@@ -50,9 +50,9 @@ class BaseInstagramProvider(ABC):
         """Fetch username and name for an IGSID."""
 
     @abstractmethod
-    def hide_comment(self, comment_id: str) -> bool:
-        """Hide a comment (reversible). Returns True on success."""
+    def hide_comment(self, comment_id: str) -> tuple[bool, str]:
+        """Hide a comment (reversible). Returns ``(ok, error)``."""
 
     @abstractmethod
-    def delete_comment(self, comment_id: str) -> bool:
-        """Permanently delete a comment. Returns True on success."""
+    def delete_comment(self, comment_id: str) -> tuple[bool, str]:
+        """Permanently delete a comment. Returns ``(ok, error)``."""

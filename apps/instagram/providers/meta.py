@@ -176,53 +176,58 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram get_user_profile failed for %s", igsid)
         return {}
 
-    def hide_comment(self, comment_id: str) -> bool:
-        """Hide a comment on the business's media. Reversible."""
-        try:
-            self._post(comment_id, {"hide": True}, base=GRAPH_IG_BASE)
-            return True
-        except InstagramAPIError as exc:
-            logger.warning(
-                "Instagram hide_comment failed: code=%s msg=%s", exc.code, exc.message
-            )
-            return False
-        except Exception:
-            logger.exception(
-                "Instagram hide_comment unexpected error for %s", comment_id
-            )
-            return False
+    def hide_comment(self, comment_id: str) -> tuple[bool, str]:
+        """Hide a comment on the business's media. Reversible.
 
-    def delete_comment(self, comment_id: str) -> bool:
+        Meta documents ``POST /{ig-comment-id}?hide=true``, so ``hide`` goes as a
+        query parameter, not a JSON body.
+        """
+        return self._comment_call("post", comment_id, {"hide": "true"})
+
+    def delete_comment(self, comment_id: str) -> tuple[bool, str]:
         """Permanently delete a comment. Requires instagram_business_manage_comments."""
-        url = f"{GRAPH_IG_BASE}/{comment_id}"
+        return self._comment_call("delete", comment_id, {})
+
+    def _comment_call(
+        self, method: str, comment_id: str, params: dict
+    ) -> tuple[bool, str]:
+        """Run a comment moderation call: ``(ok, error)``, error being Meta's own words."""
         try:
-            resp = requests.delete(
-                url,
-                params={"access_token": self._token},
+            resp = requests.request(
+                method,
+                f"{GRAPH_IG_BASE}/{comment_id}",
+                params=params,
+                headers=self._headers(),
                 timeout=10,
             )
-            if not resp.ok:
-                try:
-                    data = resp.json()
-                except Exception:
-                    data = {}
-                error = data.get("error", {})
-                raise InstagramAPIError(
-                    code=error.get("code", resp.status_code),
-                    message=error.get("message", resp.text[:200]),
-                    http_status=resp.status_code,
-                )
-            return True
-        except InstagramAPIError as exc:
+            if resp.ok:
+                return True, ""
+            try:
+                error = resp.json().get("error", {})
+            except Exception:
+                error = {}
+            exc = InstagramAPIError(
+                code=error.get("code", resp.status_code),
+                message=error.get("message", resp.text[:200]),
+                http_status=resp.status_code,
+                subcode=error.get("error_subcode"),
+                fbtrace_id=error.get("fbtrace_id", ""),
+            )
             logger.warning(
-                "Instagram delete_comment failed: code=%s msg=%s", exc.code, exc.message
+                "Instagram %s comment %s failed: code=%s subcode=%s msg=%s fbtrace_id=%s",
+                method,
+                comment_id,
+                exc.code,
+                exc.subcode,
+                exc.message,
+                exc.fbtrace_id,
             )
-            return False
-        except Exception:
+            return False, str(exc)
+        except Exception as exc:
             logger.exception(
-                "Instagram delete_comment unexpected error for %s", comment_id
+                "Instagram %s comment %s unexpected error", method, comment_id
             )
-            return False
+            return False, f"request failed: {exc}"
 
 
 class InstagramAPIError(Exception):
