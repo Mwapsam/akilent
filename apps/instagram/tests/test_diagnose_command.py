@@ -40,3 +40,29 @@ class DiagnoseCommandTest(TestCase):
         self.assertIn("customer_igsid=igsid_d1", text)
         self.assertIn("<- used for replies", text)
         self.assertNotIn(ig_account.access_token, text)
+
+
+class CheckCommentsCommandTest(TestCase):
+    def test_runs_and_reports_rules_and_webhooks(self):
+        from apps.instagram.models.trigger import CommentTrigger
+
+        account, _ = make_account()
+        ig_account = make_instagram_account(account)
+        CommentTrigger.objects.create(
+            account=account,
+            name="Price",
+            match_type=CommentTrigger.MatchType.KEYWORD,
+            keywords="price",
+            reply_template="Hi! Sending details by DM.",
+        )
+        out = StringIO()
+        with patch(
+            "apps.instagram.management.commands.instagram_check_comments.requests.get"
+        ) as get:
+            get.return_value.status_code = 200
+            get.return_value.text = '{"data": []}'
+            call_command("instagram_check_comments", stdout=out)
+        text = out.getvalue()
+        self.assertIn("Comment rules: 1 active / 1 total", text)
+        self.assertIn("'Price'", text)
+        self.assertNotIn(ig_account.access_token, text)

@@ -47,6 +47,7 @@ from apps.instagram.models.account import (
     get_instagram_account_for_webhook,
 )
 from apps.instagram.models.webhook import WebhookEventLog
+from apps.instagram.services.inbound import entry_changes
 from apps.instagram.tasks import process_instagram_event
 
 logger = logging.getLogger(__name__)
@@ -462,7 +463,7 @@ def _classify_event(payload: dict) -> str:
         for entry in payload.get("entry", []):
             if entry.get("messaging"):
                 return WebhookEventLog.EventType.MESSAGE
-            for change in entry.get("changes", []):
+            for change in entry_changes(entry):
                 field = change.get("field", "")
                 if field == "comments":
                     return WebhookEventLog.EventType.COMMENT
@@ -498,7 +499,7 @@ def _deterministic_event_id(
                     f"{item.get('timestamp', '')}:{kinds}"
                 )
                 break
-            for change in entry.get("changes", []):
+            for change in entry_changes(entry):
                 value = change.get("value") or {}
                 item_id = item_id or value.get("id") or value.get("comment_id") or ""
             if item_id:

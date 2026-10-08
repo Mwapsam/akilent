@@ -378,11 +378,24 @@ def _extract_dm_messaging(payload: dict) -> list[dict]:
     return messaging
 
 
+def entry_changes(entry: dict) -> list[dict]:
+    """The field changes in one webhook entry.
+
+    Usually ``entry["changes"]`` is a list of ``{field, value}``; Meta's Instagram
+    Login reference also shows ``field`` / ``value`` set on the entry itself.
+    """
+    if entry.get("changes"):
+        return entry["changes"]
+    if entry.get("field"):
+        return [{"field": entry["field"], "value": entry.get("value") or {}}]
+    return []
+
+
 def _extract_comment_entries(payload: dict) -> list[dict]:
     """Extract comment and mention entries from an Instagram webhook payload."""
     entries = []
     for entry in payload.get("entry", []):
-        for change in entry.get("changes", []):
+        for change in entry_changes(entry):
             field = change.get("field", "")
             if field in {"comments", "mentions"}:
                 value = change.get("value", {})
