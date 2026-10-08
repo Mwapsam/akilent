@@ -67,6 +67,33 @@ def emit_event(
         return None
 
 
+def delete_conversation(conversation: Conversation, *, actor) -> None:
+    """Delete a conversation for good: its messages, notes and form answers go with it.
+
+    Leads, deals and orders that came from it are kept (their link is cleared). The
+    WhatsApp/Instagram records stay, so if the customer writes again a fresh conversation
+    starts. An Event records who deleted it and when.
+    """
+    with transaction.atomic():
+        emit_event(
+            account=conversation.account,
+            type="conversation.deleted",
+            occurred_at=timezone.now(),
+            source="inbox",
+            source_event_id=f"deleted:{conversation.public_id}",
+            payload={
+                "conversation_id": conversation.public_id,
+                "channel": conversation.channel,
+                "contact_id": conversation.contact_id,
+                "messages": conversation.messages.count(),
+            },
+            actor=getattr(actor, "username", "") or "",
+            subject_type="conversation",
+            subject_id=conversation.public_id,
+        )
+        conversation.delete()
+
+
 def record_inbound_whatsapp_message(
     *,
     contact,

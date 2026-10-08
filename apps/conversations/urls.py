@@ -42,6 +42,7 @@ urlpatterns = [
     ),
     path("<str:public_id>/", views.conversation_detail, name="detail"),
     path("<str:public_id>/messages/", views.messages_feed, name="messages_feed"),
+    path("<str:public_id>/delete/", views.conversation_delete, name="delete"),
     path("<str:public_id>/media/send/", views.send_media, name="send_media"),
     path(
         "<str:public_id>/messages/<int:message_id>/media/",

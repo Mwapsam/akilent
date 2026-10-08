@@ -970,6 +970,17 @@
           <button class="btn btn-secondary btn-sm">Add</button>
         </form>
       </div>
+
+      {% if can_delete %}
+      <div class="p-4" style="border-top: 1px solid var(--cv-line)">
+        <form method="post" action="{% url 'conversations:delete' conversation.public_id %}"
+              onsubmit="return confirm('Delete this conversation with {{ display_name|escapejs }}? Its messages and notes are removed for good. Leads and orders from it are kept.');">
+          {% csrf_token %}
+          <button class="btn btn-ghost btn-sm text-red-600 w-full justify-center">Delete conversation</button>
+        </form>
+        <p class="text-xs text-gray-500 mt-1.5 text-center">If the customer writes again, a new conversation starts.</p>
+      </div>
+      {% endif %}
     </div>
   </aside>
 </div>

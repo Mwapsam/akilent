@@ -35,6 +35,7 @@ from apps.conversations.models import (
     RoutingRule,
     SavedReply,
 )
+from apps.conversations.services import delete_conversation
 from apps.conversations.state import (
     OVERDUE_WAITING,
     ConversationState,
@@ -633,6 +634,7 @@ def conversation_detail(request, public_id: str):
         "team_members": _team_members(account),
         "active_form_response": active_form_response,
         "published_forms": published_forms,
+        "can_delete": _can_delete(request, account),
     }
     # The inbox list (templates/conversations/inbox.html, ≥lg) loads a conversation into its
     # own pane via a plain background GET — see static/js/inbox_pane.js — rather than a full
@@ -645,6 +647,30 @@ def conversation_detail(request, public_id: str):
         return render(request, "conversations/_conversation_pane.html", pane_context)
 
     return render(request, "conversations/conversation_detail.html", pane_context)
+
+
+def _can_delete(request, account) -> bool:
+    """Owners and admins only, and never while an operator is viewing as the business."""
+    from apps.accounts import api as accounts_api
+
+    return viewing_as(request) is None and accounts_api.is_account_admin(
+        request.user, account
+    )
+
+
+@login_required
+@require_POST
+def conversation_delete(request, public_id: str):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    if not _can_delete(request, account):
+        messages.error(request, "Only owners and admins can delete conversations.")
+        return redirect("conversations:detail", public_id=public_id)
+    delete_conversation(conversation, actor=request.user)
+    messages.success(request, "Conversation deleted.")
+    return redirect("conversations:inbox")
 
 
 @login_required
