@@ -150,12 +150,15 @@ def test_nothing_is_queued_when_an_automation_answered_or_ai_is_off(
 
 
 @pytest.mark.django_db
-def test_the_plan_can_switch_ai_off(account):
+def test_an_operator_removal_switches_ai_off_and_says_so(account):
     from apps.billing import api as billing_api
 
     billing_api.set_override(account, "ai_assistant", grant=False, note="test")
     assert ai_api.is_available(account) is False
-    assert "plan" in ai_api.unavailable_reason(account)
+    # Not "not in your plan": the plan may include it, and that wording sent owners hunting.
+    assert "switched off for this business by Akilent" in ai_api.unavailable_reason(
+        account
+    )
 
 
 @pytest.mark.django_db
@@ -164,7 +167,7 @@ def test_settings_page_says_why_ai_is_off(agent, account):
 
     assert "AI is on." in agent.get("/settings/ai/").content.decode()
     billing_api.set_override(account, "ai_assistant", grant=False, note="test")
-    assert "isn't included in this business's plan" in agent.get(
+    assert "switched off for this business by Akilent" in agent.get(
         "/settings/ai/"
     ).content.decode().replace("&#x27;", "'")
 

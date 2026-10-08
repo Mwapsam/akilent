@@ -31,6 +31,15 @@ def unavailable_reason(account) -> str | None:
     if not is_configured():
         return "AI isn't set up on this Akilent installation yet."
     if not billing_api.usable(account, "ai_assistant"):
+        if (
+            billing_api.access(account, "ai_assistant")["source"]
+            == billing_api.SOURCE_REMOVED
+        ):
+            # The plan may well include it; blaming the plan sends the owner hunting there.
+            return (
+                "The AI assistant has been switched off for this business by Akilent. "
+                "Contact support to turn it back on."
+            )
         return "The AI assistant isn't included in this business's plan."
     if not AISettings.objects.filter(account=account, enabled=True).exists():
         return "AI suggestions aren't turned on below."
