@@ -182,6 +182,15 @@ def get_conversation_by_id(conversation_id):
     )
 
 
+def get_conversation_by_public_id(public_id: str):
+    """The conversation with this public id (``conv_…``), or None. For operator tools."""
+    return (
+        Conversation.objects.select_related("account", "contact")
+        .filter(public_id=public_id)
+        .first()
+    )
+
+
 def earlier_messages(
     conversation, *, keep_recent: int, after_id: int = 0, limit: int = 40
 ) -> list[dict]:

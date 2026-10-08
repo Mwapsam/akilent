@@ -13,7 +13,7 @@ import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.conversations.models import Conversation
+from apps.conversations import api as conversations_api
 from apps.instagram.models import InstagramBusinessAccount, InstagramConversation
 from apps.instagram.models.message import InstagramMessage
 
@@ -27,17 +27,17 @@ class Command(BaseCommand):
         parser.add_argument("public_id")
 
     def handle(self, *args, **options):
-        conversation = Conversation.objects.filter(
-            public_id=options["public_id"]
-        ).first()
+        conversation = conversations_api.get_conversation_by_public_id(
+            options["public_id"]
+        )
         if conversation is None:
             raise CommandError("No conversation with that id.")
         out = self.stdout.write
 
         out(f"Conversation {conversation.public_id} channel={conversation.channel}")
-        links = conversation.channel_conversations.filter(
-            channel=Conversation.Channel.INSTAGRAM
-        ).order_by("pk")
+        links = conversation.channel_conversations.filter(channel="instagram").order_by(
+            "pk"
+        )
         out(f"Instagram links (first one is used for replies): {links.count()}")
         for cc in links:
             ig_convo = (
