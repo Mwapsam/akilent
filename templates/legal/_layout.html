@@ -1,246 +1,101 @@
-{% extends "base.html" %}
-{% load static %}
+{% extends "public/_base.html" %}
 
 {% block title %}{{ page_title }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
-{# Public pages: give the main area full height and remove the default app padding #}
-{% block main_class %}min-h-full flex flex-col{% endblock %}
-
-{% block content %}
+{% block extra_head %}
 {% comment %}
 Legal pages (public). Text in [SQUARE BRACKETS] must be replaced before relying
 on these pages, and a lawyer should review them.
 {% endcomment %}
-
 <style>
-  .legal-doc {
-    color: var(--color-ink-muted);
-    font-size: 0.95rem;
-    line-height: 1.75;
+  .legal-wrap{ max-width:72rem; margin:0 auto; padding:2.5rem 1.25rem 0; display:grid; gap:2rem; }
+  @media (min-width:640px){ .legal-wrap{ padding:3.5rem 1.5rem 0; } }
+  @media (min-width:1024px){
+    .legal-wrap{ grid-template-columns:14rem minmax(0,1fr); column-gap:3rem; row-gap:1.75rem; }
+    .legal-head{ grid-column:2; grid-row:1; }
+    .legal-nav{ grid-column:1; grid-row:2; }
+    .legal-shell{ grid-column:2; grid-row:2; }
   }
-  .legal-doc > * + * { margin-top: 1.1rem; }
-  .legal-doc h2 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: var(--color-ink);
-    margin-top: 2.25rem;
-    margin-bottom: 0.35rem;
-    letter-spacing: -0.01em;
-  }
-  .legal-doc h3 {
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--color-ink);
-    margin-top: 1.75rem;
-    margin-bottom: 0.25rem;
-  }
-  .legal-doc p,
-  .legal-doc ul,
-  .legal-doc ol {
-    max-width: 65ch;
-  }
-  .legal-doc ul { list-style: disc; padding-left: 1.35rem; }
-  .legal-doc ol { list-style: decimal; padding-left: 1.35rem; }
-  .legal-doc li + li { margin-top: 0.4rem; }
-  .legal-doc li::marker { color: var(--color-ink-muted); }
-  .legal-doc a {
-    color: var(--color-accent);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  .legal-doc a:hover { text-decoration-thickness: 2px; }
-  .legal-doc strong { color: var(--color-ink); font-weight: 600; }
+  .legal-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:var(--color-teal-700); }
+  .legal-head h1{ margin:.375rem 0 0; font-size:1.875rem; line-height:1.2; font-weight:700; letter-spacing:-0.02em; color:var(--color-ink); }
+  @media (min-width:640px){ .legal-head h1{ font-size:2.25rem; } }
+  .legal-meta{ display:flex; flex-wrap:wrap; gap:.25rem .75rem; margin-top:.625rem; font-size:.875rem; color:var(--color-ink-subtle); }
 
-  .legal-shell {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 1rem;
-    box-shadow: var(--shadow-card, 0 1px 2px rgb(0 0 0 / 0.04));
+  .legal-nav{ align-self:start; }
+  @media (min-width:1024px){ .legal-nav{ position:sticky; top:5.5rem; } }
+  .legal-nav p{ margin:0 0 .5rem; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--color-ink-subtle); }
+  .legal-nav ul{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:.5rem; }
+  @media (min-width:1024px){ .legal-nav ul{ display:block; } }
+  .legal-nav a{ display:flex; align-items:center; min-height:40px; padding:.375rem .875rem; border-radius:999px; font-size:.875rem;
+    color:var(--color-ink-muted); text-decoration:none; border:1px solid var(--color-border); background:var(--color-surface);
+    transition:color .15s ease, border-color .15s ease, background .15s ease; }
+  @media (min-width:1024px){
+    .legal-nav a{ border:0; border-radius:8px; background:transparent; padding:.45rem .75rem; }
+    .legal-nav li + li{ margin-top:.125rem; }
   }
+  .legal-nav a:hover{ color:var(--color-ink); background:var(--color-surface); }
+  .legal-nav a[aria-current="page"]{ color:var(--color-ink); font-weight:600; border-color:var(--color-teal-500); background:var(--color-surface);
+    box-shadow:inset 2px 0 0 var(--color-teal-500); }
 
-  .legal-nav a {
-    color: var(--color-ink-muted);
-    transition: color 0.15s ease;
-  }
-  .legal-nav a:hover,
-  .legal-nav a[aria-current="page"] {
-    color: var(--color-accent);
-  }
-  .legal-nav a[aria-current="page"] {
-    font-weight: 600;
-  }
+  .legal-shell{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:16px; padding:1.5rem 1.25rem; }
+  @media (min-width:640px){ .legal-shell{ padding:2.25rem 2.5rem; } }
 
-  @media print {
-    .public-nav,
-    .public-footer,
-    .legal-nav { display: none !important; }
-    .legal-shell {
-      border: none;
-      box-shadow: none;
-      background: transparent;
-    }
-    .legal-doc {
-      font-size: 11pt;
-      line-height: 1.5;
-      color: #000;
-    }
+  .legal-doc{ color:var(--color-ink-muted); font-size:.975rem; line-height:1.75; }
+  .legal-doc > :first-child{ margin-top:0; }
+  .legal-doc > * + *{ margin-top:1.1rem; }
+  .legal-doc h2{ font-size:1.2rem; font-weight:600; color:var(--color-ink); margin-top:2.25rem; margin-bottom:.35rem; letter-spacing:-0.01em; }
+  .legal-doc h3{ font-size:1.05rem; font-weight:600; color:var(--color-ink); margin-top:1.75rem; margin-bottom:.25rem; }
+  .legal-doc p, .legal-doc ul, .legal-doc ol{ max-width:68ch; }
+  .legal-doc ul{ list-style:disc; padding-left:1.35rem; }
+  .legal-doc ol{ list-style:decimal; padding-left:1.35rem; }
+  .legal-doc li + li{ margin-top:.4rem; }
+  .legal-doc li::marker{ color:var(--color-ink-subtle); }
+  .legal-doc a{ color:var(--color-teal-700); text-decoration:underline; text-underline-offset:2px; }
+  .legal-doc a:hover{ text-decoration-thickness:2px; }
+  .legal-doc strong{ color:var(--color-ink); font-weight:600; }
+  .legal-doc table{ display:block; width:fit-content; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    border-collapse:collapse; font-size:.875rem; }
+  .legal-doc th, .legal-doc td{ text-align:left; padding:.5rem .75rem; border-bottom:1px solid var(--color-border); vertical-align:top; }
+  .legal-doc th{ color:var(--color-ink-subtle); font-weight:600; }
+
+  @media print{
+    .legal-nav{ display:none !important; }
+    .legal-wrap{ display:block; padding:0; }
+    .legal-shell{ border:none; padding:0; background:transparent; }
+    .legal-doc{ font-size:11pt; line-height:1.5; color:#000; }
   }
 </style>
+{% endblock %}
 
-{# ─── Public top navbar ───────────────────────────────────────────────── #}
-<header class="public-nav sticky top-0 border-b border-border bg-surface/95 backdrop-blur"
-        style="z-index: var(--z-sticky)">
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-    <a href="{% url 'core:home' %}" class="flex items-center gap-2 font-semibold text-ink shrink-0">
-      {% include "components/brand_mark.html" with class="w-7 h-7" %}
-      <span class="hidden sm:inline">{{ site.app_name|default:"Akilent" }}</span>
-    </a>
+{% block content %}
+{% with current=request.resolver_match.url_name %}
+<div class="legal-wrap">
+  <header class="legal-head">
+    <p class="legal-eyebrow">Legal</p>
+    <h1>{{ page_title }}</h1>
+    <div class="legal-meta">
+      <span>Last updated {{ updated }}</span>
+      {% if effective_date %}<span>Effective {{ effective_date }}</span>{% endif %}
+    </div>
+  </header>
 
-    <nav class="flex items-center gap-1 sm:gap-2 text-sm" aria-label="Primary">
-      <a href="{% url 'privacy' %}"
-         class="px-2.5 py-1.5 rounded-lg hover:bg-canvas text-ink-muted hover:text-ink transition
-                {% if request.resolver_match.url_name == 'privacy' %}text-ink font-medium{% endif %}">
-        Privacy
-      </a>
-      <a href="{% url 'terms' %}"
-         class="px-2.5 py-1.5 rounded-lg hover:bg-canvas text-ink-muted hover:text-ink transition
-                {% if request.resolver_match.url_name == 'terms' %}text-ink font-medium{% endif %}">
-        Terms
-      </a>
-      <a href="{% url 'cookies' %}"
-         class="px-2.5 py-1.5 rounded-lg hover:bg-canvas text-ink-muted hover:text-ink transition
-                {% if request.resolver_match.url_name == 'cookies' %}text-ink font-medium{% endif %}">
-        Cookies
-      </a>
-      <a href="{% url 'data-deletion' %}"
-         class="hidden sm:inline-flex px-2.5 py-1.5 rounded-lg hover:bg-canvas text-ink-muted hover:text-ink transition
-                {% if request.resolver_match.url_name == 'data-deletion' %}text-ink font-medium{% endif %}">
-        Data deletion
-      </a>
+  <nav class="legal-nav" aria-label="Legal documents">
+    <p>Legal</p>
+    <ul>
+      <li><a href="{% url 'privacy' %}" {% if current == 'privacy' %}aria-current="page"{% endif %}>Privacy policy</a></li>
+      <li><a href="{% url 'terms' %}" {% if current == 'terms' %}aria-current="page"{% endif %}>Terms of service</a></li>
+      <li><a href="{% url 'cookies' %}" {% if current == 'cookies' %}aria-current="page"{% endif %}>Cookie policy</a></li>
+      <li><a href="{% url 'data-deletion' %}" {% if current == 'data-deletion' %}aria-current="page"{% endif %}>Data deletion</a></li>
+    </ul>
+  </nav>
 
-      {% if user.is_authenticated %}
-        <a href="{% url 'core:home' %}"
-           class="ml-2 btn btn-sm btn-primary">
-          Go to app
-        </a>
-      {% else %}
-        <a href="{% url 'login' %}"
-           class="ml-2 btn btn-sm btn-primary">
-          Sign in
-        </a>
-      {% endif %}
-    </nav>
-  </div>
-</header>
-
-{# ─── Document ────────────────────────────────────────────────────────── #}
-<div class="flex-1 w-full">
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-
-    <header class="mb-8">
-      <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
-        Legal
-      </p>
-      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">
-        {{ page_title }}
-      </h1>
-      <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-        <span>Last updated {{ updated }}</span>
-        {% if effective_date %}
-          <span class="hidden sm:inline text-gray-300" aria-hidden="true">·</span>
-          <span>Effective {{ effective_date }}</span>
-        {% endif %}
-      </div>
-    </header>
-
-    <article class="legal-shell px-5 py-6 sm:px-8 sm:py-8">
-      <div class="legal-doc">
-        {% comment %}MARKDOWN_START{% endcomment %}
-        {% block legal_body %}{% endblock %}
-        {% comment %}MARKDOWN_END{% endcomment %}
-      </div>
-    </article>
-
-    {# In-page related links (still useful when the top nav is scrolled away) #}
-    <nav class="legal-nav mt-8 pt-6 border-t border-border" aria-label="Other legal documents">
-      <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Related</p>
-      <ul class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        <li>
-          <a href="{% url 'privacy' %}"
-             {% if request.resolver_match.url_name == 'privacy' %}aria-current="page"{% endif %}>
-            Privacy policy
-          </a>
-        </li>
-        <li>
-          <a href="{% url 'terms' %}"
-             {% if request.resolver_match.url_name == 'terms' %}aria-current="page"{% endif %}>
-            Terms of service
-          </a>
-        </li>
-        <li>
-          <a href="{% url 'cookies' %}"
-             {% if request.resolver_match.url_name == 'cookies' %}aria-current="page"{% endif %}>
-            Cookie policy
-          </a>
-        </li>
-        <li>
-          <a href="{% url 'data-deletion' %}"
-             {% if request.resolver_match.url_name == 'data-deletion' %}aria-current="page"{% endif %}>
-            Data deletion
-          </a>
-        </li>
-      </ul>
-    </nav>
-  </div>
+  <article class="legal-shell min-w-0">
+    <div class="legal-doc">
+      {% comment %}MARKDOWN_START{% endcomment %}
+      {% block legal_body %}{% endblock %}
+      {% comment %}MARKDOWN_END{% endcomment %}
+    </div>
+  </article>
 </div>
-
-{# ─── Public footer ───────────────────────────────────────────────────── #}
-<footer class="public-footer border-t border-border bg-surface mt-auto">
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
-
-      <div class="max-w-xs">
-        <a href="{% url 'core:home' %}" class="flex items-center gap-2 font-semibold text-ink mb-3">
-          {% include "components/brand_mark.html" with class="w-6 h-6" %}
-          {{ site.app_name|default:"Akilent" }}
-        </a>
-        <p class="text-sm text-ink-muted leading-relaxed">
-          {% if site.tagline %}
-            {{ site.tagline }}
-          {% else %}
-            Automation that respects your data and your time.
-          {% endif %}
-        </p>
-      </div>
-
-      <div class="grid grid-cols-2 gap-8 sm:gap-12 text-sm">
-        <div>
-          <p class="font-semibold text-ink mb-3">Legal</p>
-          <ul class="space-y-2 text-ink-muted">
-            <li><a href="{% url 'privacy' %}" class="hover:text-accent transition">Privacy policy</a></li>
-            <li><a href="{% url 'terms' %}" class="hover:text-accent transition">Terms of service</a></li>
-            <li><a href="{% url 'cookies' %}" class="hover:text-accent transition">Cookie policy</a></li>
-            <li><a href="{% url 'data-deletion' %}" class="hover:text-accent transition">Data deletion</a></li>
-          </ul>
-        </div>
-        <div>
-          <p class="font-semibold text-ink mb-3">Product</p>
-          <ul class="space-y-2 text-ink-muted">
-            <li><a href="{% url 'core:home' %}" class="hover:text-accent transition">Home</a></li>
-            {% if user.is_authenticated %}
-              <li><a href="{% url 'core:home' %}" class="hover:text-accent transition">Dashboard</a></li>
-            {% else %}
-              <li><a href="{% url 'login' %}" class="hover:text-accent transition">Sign in</a></li>
-            {% endif %}
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-gray-500">
-      <p>© {% now "Y" %} {{ site.app_name|default:"Akilent" }}. All rights reserved.</p>
-      <p class="text-gray-400">Questions? <a href="mailto:{{ site.support_email|default:'support@example.com' }}" class="underline hover:text-accent">Contact us</a></p>
-    </div>
-  </div>
-</footer>
+{% endwith %}
 {% endblock %}

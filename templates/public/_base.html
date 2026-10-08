@@ -1,0 +1,219 @@
+{% load static seo_tags %}<!DOCTYPE html>
+{% comment %}
+Shell for the public, signed-out-friendly pages: help centre, developer docs and
+legal pages. It never extends base.html, so these pages look the same signed in
+or out and never show the dashboard sidebar.
+
+Always light (data-theme="light" stops app.css's prefers-color-scheme override),
+like the landing page. Header and footer styles live here as .pub-* classes, so
+nothing depends on Tailwind utilities that may not be compiled.
+
+Blocks: title, extra_head, body_class, content, extra_js. The nav highlights
+Help centre or Developers from the request path.
+{% endcomment %}
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}{{ site.app_name|default:"Akilent" }}{% endblock %}</title>
+  {% seo_meta %}
+  {% google_analytics %}
+  <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script defer src="{% static 'js/alpine.min.js' %}"></script>
+  <style>
+    *{ box-sizing:border-box; }
+    html{ scroll-padding-top:5.5rem; }
+    html:focus-within{ scroll-behavior:smooth; }
+    body{ margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--color-canvas);
+      color:var(--color-ink); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
+    .pub-main{ flex:1 0 auto; width:100%; }
+    .pub-wrap{ max-width:72rem; margin:0 auto; padding-left:1.25rem; padding-right:1.25rem; }
+    @media (min-width:640px){ .pub-wrap{ padding-left:1.5rem; padding-right:1.5rem; } }
+
+    a:focus-visible, button:focus-visible, summary:focus-visible, label:focus-visible{
+      outline:2px solid var(--color-teal-500); outline-offset:3px; border-radius:6px; }
+    .pub-skip{ position:fixed; top:.75rem; left:.75rem; z-index:var(--z-toast); padding:.625rem 1rem; border-radius:10px;
+      background:var(--color-amber-400); color:var(--color-ink); font-size:.875rem; font-weight:600; text-decoration:none;
+      transform:translateY(-200%); }
+    .pub-skip:focus{ transform:none; }
+
+    /* Header */
+    .pub-header{ position:sticky; top:0; z-index:var(--z-sticky); background:rgba(14,21,38,.96);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border-bottom:1px solid #26314A; }
+    .pub-header-row{ height:4rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
+    .pub-brand{ display:flex; align-items:center; gap:.625rem; min-height:44px; font-weight:700; font-size:1.0625rem;
+      color:#FAFBFC; text-decoration:none; flex-shrink:0; }
+    .pub-nav{ display:none; align-items:center; gap:1.75rem; font-size:.875rem; font-weight:500; }
+    .pub-nav a{ position:relative; padding:.5rem 0; color:#A8B2C4; text-decoration:none; transition:color .15s ease; }
+    .pub-nav a::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
+      background:#74D4C4; transform:scaleX(0); transition:transform .2s ease; }
+    .pub-nav a:hover, .pub-nav a[aria-current="page"]{ color:#FAFBFC; }
+    .pub-nav a[aria-current="page"]::after{ transform:scaleX(1); }
+    .pub-actions{ display:none; align-items:center; gap:1.25rem; font-size:.875rem; }
+    .pub-signin{ color:#A8B2C4; font-weight:500; text-decoration:none; }
+    .pub-signin:hover{ color:#FAFBFC; }
+    .pub-cta{ display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:.5rem 1rem;
+      border-radius:10px; background:var(--color-amber-400); color:var(--color-ink); font-weight:600; font-size:.875rem;
+      text-decoration:none; white-space:nowrap; transition:background .15s ease; }
+    .pub-cta:hover{ background:var(--color-amber-500); }
+    .pub-burger{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+      width:44px; height:44px; margin-right:-.5rem; cursor:pointer; border-radius:8px; }
+    .pub-burger span{ display:block; width:20px; height:1.5px; background:#FAFBFC; }
+    .pub-mobile{ display:none; border-top:1px solid #26314A; padding:.75rem 0 1.25rem; }
+    .pub-mobile a{ display:flex; align-items:center; min-height:44px; color:#A8B2C4; text-decoration:none; font-size:.9375rem; }
+    .pub-mobile a:hover, .pub-mobile a[aria-current="page"]{ color:#FAFBFC; }
+    .pub-mobile a[aria-current="page"]{ font-weight:600; }
+    .pub-mobile .pub-cta{ justify-content:center; margin-top:.75rem; color:var(--color-ink); }
+    #pub-menu:checked ~ .pub-mobile{ display:block; }
+    #pub-menu:focus-visible ~ .pub-header-row .pub-burger{ outline:2px solid var(--color-teal-500); outline-offset:3px; }
+    @media (min-width:900px){
+      .pub-nav, .pub-actions{ display:flex; }
+      .pub-burger, .pub-mobile, #pub-menu:checked ~ .pub-mobile{ display:none; }
+    }
+
+    /* Footer */
+    .pub-footer{ flex-shrink:0; margin-top:4rem; background:#0E1526; color:#A8B2C4; border-top:1px solid #26314A; font-size:.875rem; }
+    .pub-footer-grid{ display:grid; gap:2rem; padding-top:3rem; padding-bottom:2.5rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    @media (min-width:768px){ .pub-footer-grid{ grid-template-columns:1.4fr 1fr 1fr 1fr; } }
+    .pub-footer-about{ grid-column:1 / -1; max-width:20rem; }
+    @media (min-width:768px){ .pub-footer-about{ grid-column:auto; } }
+    .pub-footer-about p{ margin:.75rem 0 0; line-height:1.6; }
+    .pub-footer h2{ font-size:.8125rem; font-weight:600; color:#FAFBFC; margin:0 0 .5rem; }
+    .pub-footer ul{ list-style:none; margin:0; padding:0; }
+    .pub-footer li a{ display:inline-flex; align-items:center; min-height:36px; color:#DCE1E8; text-decoration:none; }
+    .pub-footer li a:hover{ color:#FAFBFC; }
+    .pub-footer-base{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:.75rem; padding-top:1.25rem;
+      padding-bottom:2rem; border-top:1px solid #26314A; font-size:.8125rem; }
+    .pub-footer-base a{ color:#DCE1E8; text-decoration:underline; text-underline-offset:3px; }
+
+    /* Cookie notice */
+    .pub-cookie{ position:fixed; left:0; right:0; bottom:0; z-index:var(--z-toast); background:var(--color-surface);
+      border-top:1px solid var(--color-border); box-shadow:0 -8px 24px -16px rgba(14,21,38,.25); }
+    .pub-cookie-row{ display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding-top:.75rem; padding-bottom:.75rem; }
+    .pub-cookie p{ flex:1 1 16rem; margin:0; font-size:.875rem; color:var(--color-ink-muted); }
+    .pub-cookie a{ color:var(--color-teal-700); text-decoration:underline; }
+
+    @media print{ .pub-header, .pub-footer, .pub-cookie{ display:none !important; } }
+    @media (prefers-reduced-motion:reduce){
+      html:focus-within{ scroll-behavior:auto; }
+      *, *::before, *::after{ transition-duration:.01ms !important; animation-duration:.01ms !important; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% with app=site.app_name|default:"Akilent" section=request.path|slice:":6" %}
+
+  <a href="#main" class="pub-skip">Skip to content</a>
+
+  <header class="pub-header">
+    <input type="checkbox" id="pub-menu" class="sr-only" aria-label="Open menu">
+    <div class="pub-wrap pub-header-row">
+      <a href="/" class="pub-brand">
+        <img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="28" height="28">
+        {{ app }}
+      </a>
+
+      <nav class="pub-nav" aria-label="Primary">
+        <a href="/#how-it-works">Product</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
+        <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
+      </nav>
+
+      <div class="pub-actions">
+        {% if user.is_authenticated %}
+          <a href="/dashboard/" class="pub-cta">Open dashboard</a>
+        {% else %}
+          <a href="{% url 'login' %}" class="pub-signin">Sign in</a>
+          <a href="/signup/" class="pub-cta">Start free trial</a>
+        {% endif %}
+      </div>
+
+      <label for="pub-menu" class="pub-burger" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </label>
+    </div>
+
+    <nav class="pub-mobile pub-wrap" aria-label="Mobile">
+      <a href="/#how-it-works">Product</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
+      <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="pub-cta">Open dashboard</a>
+      {% else %}
+        <a href="{% url 'login' %}">Sign in</a>
+        <a href="/signup/" class="pub-cta">Start free trial</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main id="main" class="pub-main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="pub-footer">
+    <div class="pub-wrap pub-footer-grid">
+      <div class="pub-footer-about">
+        <a href="/" class="pub-brand">
+          <img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">
+          {{ app }}
+        </a>
+        <p>{% if site.tagline %}{{ site.tagline }}{% else %}Turn customer conversations into opportunities you don't miss.{% endif %}</p>
+      </div>
+      <div>
+        <h2>Product</h2>
+        <ul>
+          <li><a href="/#how-it-works">How it works</a></li>
+          <li><a href="/#pricing">Pricing</a></li>
+          {% if user.is_authenticated %}
+            <li><a href="/dashboard/">Dashboard</a></li>
+          {% else %}
+            <li><a href="{% url 'login' %}">Sign in</a></li>
+          {% endif %}
+        </ul>
+      </div>
+      <div>
+        <h2>Resources</h2>
+        <ul>
+          <li><a href="{% url 'help' %}">Help centre</a></li>
+          <li><a href="{% url 'docs' %}">Developer docs</a></li>
+          <li><a href="{% url 'docs-page' 'channels' %}">Channels &amp; the API</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Legal</h2>
+        <ul>
+          <li><a href="{% url 'privacy' %}">Privacy policy</a></li>
+          <li><a href="{% url 'terms' %}">Terms of service</a></li>
+          <li><a href="{% url 'cookies' %}">Cookie policy</a></li>
+          <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="pub-wrap pub-footer-base">
+      <span>© {% now "Y" %} {{ app }}. All rights reserved.</span>
+      {% if site.support_email %}<span>Questions? <a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a></span>{% endif %}
+    </div>
+  </footer>
+
+  {% if not user.is_authenticated %}
+  {% comment %}Cookie notice, same behaviour as base.html: a plain cookie flag, no consent library.{% endcomment %}
+  <div class="pub-cookie" role="region" aria-label="Cookie notice" style="display:none"
+       x-data="{ show: !document.cookie.split('; ').some(c => c === 'cookie_notice=1') }" x-show="show" x-transition>
+    <div class="pub-wrap pub-cookie-row">
+      <p>We use cookies to keep you signed in and to understand how the product is used. <a href="{% url 'cookies' %}">Cookie policy</a></p>
+      <button type="button" class="pub-cta"
+              @click="show=false; document.cookie='cookie_notice=1;path=/;max-age=31536000;SameSite=Lax' + (location.protocol === 'https:' ? ';Secure' : '')">OK</button>
+    </div>
+  </div>
+  {% endif %}
+
+{% endwith %}
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -50,6 +50,28 @@ def test_disabled_channel_hides_its_articles(client, all_channels, settings, art
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    "key, category", [("instagram", "Instagram"), ("whatsapp", "WhatsApp")]
+)
+def test_disabled_channel_drops_its_category(
+    client, all_channels, settings, key, category
+):
+    assert category in [c for c, _ in help_kb.grouped()]
+    setattr(settings, f"{key.upper()}_ENABLED", False)
+    assert category not in [c for c, _ in help_kb.grouped()]
+    assert f'id="{category.lower()}"'.encode() not in client.get("/help/").content
+
+
+@pytest.mark.django_db
+def test_whatsapp_guide_has_no_link_to_hidden_email_help(
+    client, all_channels, settings
+):
+    settings.EMAIL_ENABLED = False
+    html = client.get("/help/whatsapp-setup/").content.decode()
+    assert 'href="/help/troubleshooting/"' not in html
+
+
+@pytest.mark.django_db
 def test_unknown_article_is_404(client):
     assert client.get("/help/does-not-exist/").status_code == 404
 

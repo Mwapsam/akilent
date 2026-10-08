@@ -63,12 +63,14 @@ def test_tone_tokens_are_defined_and_overridden_for_dark():
 
 TEMPLATES = Path(settings.BASE_DIR) / "templates"
 
-# Deliberately exempt. The marketing and docs shells are their own always-light
-# design with a self-contained palette; example-embed.html is a plain HTML
+# Deliberately exempt. The marketing page and the public shell (public/_base.html,
+# used by docs, help and legal) are always light (data-theme="light"); example-embed.html is a plain HTML
 # sample with no Django tags at all.
 EXEMPT = (
     "docs/",
     "help/",
+    "legal/",
+    "public/",
     "accounts/landing.html",
     "example-embed.html",
 )

@@ -1,0 +1,68 @@
+{% extends "docs/_layout.html" %}
+{% block docs_content %}
+{% comment %}
+One section per channel, each shown only while that channel is switched on.
+Keep every claim here checked against apps/api/urls.py: say plainly what has
+no endpoint rather than implying it does.
+{% endcomment %}
+<p>
+  Each channel offers a different amount through the API. This page lists what you can call
+  for each one, and what you can only do in the app.
+</p>
+
+{% if "email" in enabled_channels %}
+<h2 id="email">Email</h2>
+<p>Everything you send by email can be done through the API:</p>
+<ul>
+  <li><a href="{% url 'docs-page' 'messages' %}">Send a message</a>: <code>POST /api/v1/messages</code>, then check its status and events.</li>
+  <li><a href="{% url 'docs-page' 'templates' %}">Templates</a>: create, version and render reusable email templates.</li>
+  <li><a href="{% url 'docs-page' 'campaigns' %}">Campaigns</a>: send to many recipients at once.</li>
+  <li><a href="{% url 'docs-page' 'smtp' %}">SMTP relay</a>: send over SMTP instead of HTTP.</li>
+  <li><a href="{% url 'docs-page' 'webhooks' %}">Webhooks</a>: get a signed callback when a message is sent, fails, is opened or is clicked.</li>
+</ul>
+{% endif %}
+
+{% if WHATSAPP_ENABLED %}
+<h2 id="whatsapp">WhatsApp</h2>
+<p>The API has one WhatsApp endpoint:</p>
+<ul>
+  <li><a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>: <code>POST /api/v1/whatsapp/verification-codes</code> delivers a login or confirmation code, and <code>GET</code> on the same path returns its delivery status.</li>
+</ul>
+<p>
+  These are only in the app for now: connecting numbers, WhatsApp templates, WhatsApp
+  campaigns, and replying to customers in the inbox. There's no endpoint to send a free-form
+  WhatsApp message.
+</p>
+<p>
+  People who message you on WhatsApp become contacts. The Contacts API returns them with
+  <code>"source": "whatsapp"</code>.
+</p>
+{% endif %}
+
+{% if "instagram" in enabled_channels %}
+<h2 id="instagram">Instagram</h2>
+<p>
+  There's no Instagram endpoint yet. Connecting accounts, replying to direct messages in the
+  inbox, and comment rules (automatic private replies and moderation) are only in the app.
+</p>
+<p>
+  People who message you on Instagram become contacts. The Contacts API returns them with
+  <code>"source": "instagram"</code>.
+</p>
+{% endif %}
+
+{% if WHATSAPP_ENABLED or "instagram" in enabled_channels %}
+<div class="callout callout--note">
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3.5"/><path d="M8 5h.01"/></svg>
+  <p>
+    The Contacts API (<code>/api/v1/contacts</code>) is available on plans that include the
+    email API. Contacts from every channel come back from it, each with the
+    <code>source</code> it was created from.
+  </p>
+</div>
+{% endif %}
+
+{% if not enabled_channels %}
+<p>No messaging channels are switched on for this workspace.</p>
+{% endif %}
+{% endblock %}

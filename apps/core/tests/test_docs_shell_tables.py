@@ -5,12 +5,13 @@ covers it better than a whole-file grep could: it looks only at the markup
 immediately around each ``<table>``, so a page with one wrapped table and one
 bare one is still caught.
 
-Docs and help articles extend neither base.html nor anything with a
-``.table-wrap``. They are hand-authored ``<table>`` markup that relies entirely
-on a rule in their shell:
+Docs, help articles and legal pages use the public shell (public/_base.html),
+not base.html, and have no ``.table-wrap``. They are hand-authored ``<table>``
+markup that relies entirely on a rule in their own stylesheet:
 
     .docs-body table,
-    .article-body table { display: block; overflow-x: auto; }
+    .article-body table,
+    .legal-doc table { display: block; overflow-x: auto; }
 
 Nothing connects those pages to that rule, so deleting it would quietly bring
 back the clipping that spec §11 forbids, on every table in the documentation at
@@ -27,7 +28,8 @@ TEMPLATES_DIR = Path(settings.BASE_DIR) / "templates"
 # shell template -> (pages it wraps, the class its body carries)
 SHELLS = {
     "docs/_layout.html": ("docs/", "docs-body"),
-    "help/article.html": ("help/", "article-body"),
+    "help/_styles.html": ("help/", "article-body"),
+    "legal/_layout.html": ("legal/", "legal-doc"),
 }
 
 

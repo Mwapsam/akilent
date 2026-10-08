@@ -69,7 +69,7 @@ def test_neighbors():
 @pytest.mark.django_db
 def test_prev_next_pagination_renders(client):
     resp = client.get("/docs/authentication/")
-    assert b"/docs/messages/" in resp.content  # next
+    assert b'href="/docs/channels/" rel="next"' in resp.content
     assert b'rel="prev"' in resp.content
     assert b'rel="next"' in resp.content
     # First page has no "previous"
@@ -86,6 +86,29 @@ def test_smtp_page_shows_relay_host_and_port(client, settings):
     assert resp.status_code == 200
     assert b"mail.example.com" in resp.content
     assert b"587" in resp.content
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "key, heading",
+    [("email", "Email"), ("whatsapp", "WhatsApp"), ("instagram", "Instagram")],
+)
+def test_channels_page_lists_only_enabled_channels(client, settings, key, heading):
+    marker = f'<h2 id="{key}">{heading}</h2>'.encode()
+    assert marker in client.get("/docs/channels/").content
+    setattr(settings, f"{key.upper()}_ENABLED", False)
+    resp = client.get("/docs/channels/")
+    assert resp.status_code == 200
+    assert marker not in resp.content
+
+
+@pytest.mark.django_db
+def test_authentication_page_has_no_links_to_hidden_email_docs(client, settings):
+    settings.EMAIL_ENABLED = False
+    html = client.get("/docs/authentication/").content.decode()
+    for slug in ("messages", "templates", "campaigns", "smtp"):
+        assert f'href="/docs/{slug}/"' not in html
+    assert 'href="/docs/whatsapp-codes/"' in html
 
 
 @pytest.mark.django_db

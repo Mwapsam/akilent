@@ -1,67 +1,70 @@
-{% extends "base.html" %}
-{% block title %}Help center — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% extends "public/_base.html" %}
+{% block title %}Help centre — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block extra_head %}{% include "help/_styles.html" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+<section class="help-hero">
+  <div class="help-hero-inner">
+    <p class="help-eyebrow">Help centre</p>
+    <h1>How can we help?</h1>
+    <p>Step-by-step guides for setting up and running {{ site.app_name|default:"your workspace" }}.</p>
 
-  <div class="text-center mb-8">
-    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-100 text-accent mb-4">
-      {% include "components/icon.html" with name="book-open" class="w-6 h-6" %}
-    </span>
-    <h1 class="text-2xl font-semibold tracking-tight">How can we help?</h1>
-    <p class="text-sm text-gray-500 mt-1">Guides for setting up and running {{ site.app_name|default:"your workspace" }}.</p>
+    {% comment %}Server-side search, so it works without JavaScript.{% endcomment %}
+    <form method="get" action="{% url 'help' %}" class="help-search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ q }}" {% if not q %}autofocus{% endif %}
+             placeholder="Search guides, e.g. “DNS” or “invite a teammate”"
+             aria-label="Search help">
+    </form>
+
+    {% if results is None and categories|length > 1 %}
+    <nav class="help-chips" aria-label="Guide categories">
+      {% for cat, items in categories %}<a href="#{{ cat|slugify }}">{{ cat }}</a>{% endfor %}
+    </nav>
+    {% endif %}
   </div>
+</section>
 
-  {# Search (server-side; works without JS) #}
-  <form method="get" action="{% url 'help' %}" class="relative max-w-xl mx-auto mb-10">
-    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
-      {% include "components/icon.html" with name="search" class="w-5 h-5" %}
-    </span>
-    <input type="search" name="q" value="{{ q }}" autofocus
-           placeholder="Search guides — e.g. “DNS”, “invite a teammate”, “verify domain”"
-           class="input !pl-11 !py-3 w-full" aria-label="Search help">
-  </form>
-
+<div class="help-body">
   {% if results is not None %}
-    {# Search results #}
-    <div class="mb-4 flex items-center justify-between">
-      <p class="text-sm text-gray-500">{{ results|length }} result{{ results|length|pluralize }} for “{{ q }}”</p>
-      <a href="{% url 'help' %}" class="text-sm text-accent hover:text-accent-strong">Clear</a>
+    <div class="help-results-bar">
+      <p>{{ results|length }} result{{ results|length|pluralize }} for “{{ q }}”</p>
+      <a href="{% url 'help' %}">Clear search</a>
     </div>
     {% if results %}
-      <div class="grid sm:grid-cols-2 gap-4">
+      <div class="help-grid">
         {% for a in results %}{% include "help/_card.html" with a=a %}{% endfor %}
       </div>
     {% else %}
-      <div class="card">
-        {% include "components/empty_state.html" with icon="search" title="No matching guides" message="Try a different word, or browse the categories below." %}
+      <div class="help-empty">
+        <strong>No matching guides</strong>
+        <p>Try a different word, or browse the categories below.</p>
       </div>
-      <div class="mt-6 space-y-8">
+      <div style="margin-top:3rem;">
         {% for cat, items in categories %}{% include "help/_category.html" with cat=cat items=items %}{% endfor %}
       </div>
     {% endif %}
   {% else %}
-    {# Browse by category #}
-    <div class="space-y-8">
-      {% for cat, items in categories %}{% include "help/_category.html" with cat=cat items=items %}{% endfor %}
-    </div>
+    {% for cat, items in categories %}{% include "help/_category.html" with cat=cat items=items %}{% endfor %}
   {% endif %}
 
-  {# Contact support #}
-  <div class="mt-12 card card-pad flex flex-wrap items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 text-gray-500">
-        {% include "components/icon.html" with name="life-buoy" class="w-5 h-5" %}
-      </span>
-      <div>
-        <p class="font-medium text-ink">Still need a hand?</p>
-        <p class="text-sm text-gray-500">Can't find what you're looking for? We're happy to help.</p>
+  <div class="help-cta-row">
+    <div class="help-cta">
+      <span class="help-card-icon">{% include "components/icon.html" with name="code-bracket" class="w-5 h-5" %}</span>
+      <div class="help-cta-text">
+        <strong>Building an integration?</strong>
+        <span>The developer docs cover the API, keys and what each channel supports.</span>
       </div>
+      <a href="{% url 'docs' %}" class="help-btn">Developer docs</a>
     </div>
-    {% if site.support_email %}
-      <a href="mailto:{{ site.support_email }}" class="btn btn-secondary btn-sm">Contact support</a>
-    {% endif %}
+    <div class="help-cta">
+      <span class="help-card-icon">{% include "components/icon.html" with name="life-buoy" class="w-5 h-5" %}</span>
+      <div class="help-cta-text">
+        <strong>Still need a hand?</strong>
+        <span>Can't find what you're looking for? We're happy to help.</span>
+      </div>
+      {% if site.support_email %}<a href="mailto:{{ site.support_email }}" class="help-btn">Contact support</a>{% endif %}
+    </div>
   </div>
-
 </div>
 {% endblock %}

@@ -1,4 +1,4 @@
-{% comment %}Body for the "Connect & troubleshoot WhatsApp" guide.{% endcomment %}
+{% comment %}Body for the "Connect & use WhatsApp" guide.{% endcomment %}
 <p>Set up WhatsApp from <a href="/whatsapp/numbers/">WhatsApp → Numbers</a>. The page always shows your next step; you're done when a number is registered and a test message is sent.</p>
 
 <h2>The steps</h2>
@@ -15,6 +15,26 @@
   <li><strong>App Review</strong> approval for <code>whatsapp_business_messaging</code> and <code>whatsapp_business_management</code>.</li>
   <li>A phone number that isn't already on WhatsApp, or Meta's free test number for a first run.</li>
 </ul>
+
+<h2>Replying in the inbox</h2>
+<ul>
+  <li>Messages customers send to your number arrive in your <a href="/inbox/">inbox</a>. Reply with text, photos or voice notes.</li>
+  <li>WhatsApp only allows free-form replies within 24 hours of the customer's last message. After that, the conversation shows that the window is closed, and you can send an approved template instead.</li>
+  <li>Everyone who messages you becomes a contact.</li>
+</ul>
+
+<h2>Templates</h2>
+<p>WhatsApp only lets businesses start a conversation, or write after the 24-hour window, with a template Meta has approved.</p>
+<ul>
+  <li>Create one under <a href="/email/templates/?channel=whatsapp">Templates → WhatsApp</a>. Meta reviews it, and it can be used once it's approved.</li>
+  <li>If you made templates in Meta Business Manager, sync them to bring them in.</li>
+</ul>
+
+<h2>Campaigns</h2>
+<p>Send an approved template to many contacts at once from <a href="/whatsapp/campaigns/new/">New WhatsApp campaign</a>. Customers who replied STOP don't receive it.</p>
+
+<h2>One-time codes</h2>
+<p>Your own system can send login and confirmation codes to customers on WhatsApp through the API. Set it up on <a href="/whatsapp/codes/">WhatsApp → Codes</a>; the developer guide is <a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>.</p>
 
 <h2>Common problems</h2>
 
@@ -42,4 +62,6 @@
 
 <div class="note">Sends that fail repeatedly turn the number to <strong>Attention needed</strong>; a successful send clears it.</div>
 
+{% if "email" in enabled_channels %}
 <p>For email problems, see <a href="{% url 'help-article' 'troubleshooting' %}">Troubleshooting &amp; FAQ</a>.</p>
+{% endif %}

@@ -30,10 +30,13 @@ Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
 </p>
 <table>
   <tr><th>Scope</th><th>Required by</th></tr>
-  <tr><td><code>messages:send</code></td><td><a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>. <a href="{% url 'docs-page' 'messages' %}">POST /api/v1/messages</a> doesn't check scopes. This is the default scope on every new key.</td></tr>
+  <tr><td><code>messages:send</code></td><td>{% if WHATSAPP_ENABLED %}<a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>. {% endif %}{% if "email" in enabled_channels %}<a href="{% url 'docs-page' 'messages' %}">POST /api/v1/messages</a> doesn't check scopes. {% endif %}This is the default scope on every new key.</td></tr>
+  {% if "email" in enabled_channels %}
   <tr><td><code>templates:manage</code></td><td>All of the <a href="{% url 'docs-page' 'templates' %}">templates</a> endpoints.</td></tr>
   <tr><td><code>messages:send:bulk</code></td><td>Both <a href="{% url 'docs-page' 'campaigns' %}">campaigns</a> endpoints.</td></tr>
+  {% endif %}
 </table>
+{% if "email" in enabled_channels %}
 <div class="callout">
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 1.8 13h12.4L8 2.5Z"/><path d="M8 6.5v3"/><path d="M8 11.5h.01"/></svg>
   <p>
@@ -53,5 +56,9 @@ Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
   for how to provision one. These authenticate an SMTP connection directly
   against the mail server, not calls to <code>/api/v1/</code>, and scopes
   don't apply to them.
+</p>
+{% endif %}
+<p>
+  To see what each channel offers through the API, read <a href="{% url 'docs-page' 'channels' %}">Channels</a>.
 </p>
 {% endblock %}

@@ -3,7 +3,7 @@
 Pages are curated, server-rendered guides (bodies live in
 ``templates/docs/<slug>.html``) covering the public Developer Platform: the
 versioned REST API, SMTP relay, and webhooks — plus the auth/error/rate-limit
-model shared across all of them. No database, no admin churn, same pattern
+model shared across all of them, and a per-channel overview (``channels``). No database, no admin churn, same pattern
 as ``apps.core.help``.
 """
 
@@ -37,6 +37,12 @@ PAGES = [
         "authentication",
         "Authentication",
         "API keys and SMTP relay credentials — creating, rotating, and revoking them.",
+        "Getting started",
+    ),
+    DocPage(
+        "channels",
+        "Channels",
+        "What each channel can do through the API today, and what's in the app only.",
         "Getting started",
     ),
     DocPage(
