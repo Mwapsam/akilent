@@ -740,6 +740,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.instagram.tasks.drain_instagram_outbox",
         "schedule": 30.0,  # retries transiently-failed Instagram sends after backoff
     },
+    "download-instagram-media": {
+        "task": "apps.instagram.tasks.download_instagram_media",
+        "schedule": 60.0,  # sweep attachments the on-arrival download missed
+    },
     "refresh-instagram-tokens": {
         "task": "apps.instagram.tasks.refresh_instagram_tokens",
         "schedule": 86400.0,  # daily — long-lived tokens last 60 days

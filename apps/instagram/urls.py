@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import rules_views
 from .views import (
     InstagramWebhookView,
     instagram_account_connect,
@@ -14,6 +15,28 @@ from .views import (
 )
 
 urlpatterns = [
+    # Comment rules: automatic private replies + moderation
+    path("rules/", rules_views.comment_rules, name="instagram-comment-rules"),
+    path(
+        "rules/<str:kind>/new/",
+        rules_views.comment_rule_edit,
+        name="instagram-comment-rule-new",
+    ),
+    path(
+        "rules/<str:kind>/<int:pk>/edit/",
+        rules_views.comment_rule_edit,
+        name="instagram-comment-rule-edit",
+    ),
+    path(
+        "rules/<str:kind>/<int:pk>/toggle/",
+        rules_views.comment_rule_toggle,
+        name="instagram-comment-rule-toggle",
+    ),
+    path(
+        "rules/<str:kind>/<int:pk>/delete/",
+        rules_views.comment_rule_delete,
+        name="instagram-comment-rule-delete",
+    ),
     path("webhook/", InstagramWebhookView.as_view(), name="instagram-webhook"),
     # Meta callbacks, entered in Instagram > API setup with Instagram Login >
     # Business login settings.

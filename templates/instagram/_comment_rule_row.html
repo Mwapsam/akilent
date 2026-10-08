@@ -1,0 +1,24 @@
+{% comment %} One comment rule. Context: kind ("reply"/"moderation"), rule, summary, detail. {% endcomment %}
+<li class="card p-4">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div class="min-w-0">
+      <p class="font-semibold text-ink">
+        {{ rule.name }}
+        {% if not rule.is_active %}<span class="badge badge-neutral ml-1">Paused</span>{% endif %}
+      </p>
+      <p class="text-sm text-gray-600">{{ summary }}{% if rule.keywords %}: <span class="font-mono text-xs">{{ rule.keywords }}</span>{% endif %}</p>
+      <p class="mt-1 text-sm text-gray-500 break-words">{{ detail }}</p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="{% url 'instagram-comment-rule-edit' kind rule.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+      <form method="post" action="{% url 'instagram-comment-rule-toggle' kind rule.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">{% if rule.is_active %}Pause{% else %}Switch on{% endif %}</button>
+      </form>
+      <form method="post" action="{% url 'instagram-comment-rule-delete' kind rule.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm text-red-600" onclick="return confirm('Delete this rule?')">Delete</button>
+      </form>
+    </div>
+  </div>
+</li>

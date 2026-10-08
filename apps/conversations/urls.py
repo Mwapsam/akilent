@@ -42,6 +42,11 @@ urlpatterns = [
     ),
     path("<str:public_id>/", views.conversation_detail, name="detail"),
     path("<str:public_id>/messages/", views.messages_feed, name="messages_feed"),
+    path(
+        "<str:public_id>/messages/<int:message_id>/media/",
+        views.message_media,
+        name="message_media",
+    ),
     path("<str:public_id>/ai/suggest/", views.ai_suggest, name="ai_suggest"),
     path("<str:public_id>/ai/dismiss/", views.ai_dismiss, name="ai_dismiss"),
     path("<str:public_id>/ai/apply/", views.ai_apply, name="ai_apply"),

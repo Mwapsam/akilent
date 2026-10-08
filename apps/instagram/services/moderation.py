@@ -9,7 +9,7 @@ Responsibilities (deliberately separated):
 
 Design invariant (from Phase 2 spec):
   Moderation actions (hide, delete, flag) affect Instagram content.
-  Automation triggers (notify_staff, create_proposal) affect Akilent state.
+  Automation triggers (notify_staff, create_proposal → opens a lead) affect Akilent state.
   They are separate concerns and evaluated independently.
 """
 
@@ -198,7 +198,7 @@ def _fire_automation(comment: Comment, trigger: str) -> None:
     if trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF:
         _notify_staff(comment)
     elif trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
-        _create_proposal(comment)
+        _open_lead(comment)
 
 
 def _notify_staff(comment: Comment) -> None:
@@ -214,55 +214,38 @@ def _notify_staff(comment: Comment) -> None:
     )
 
 
-def _create_proposal(comment: Comment) -> None:
-    """
-    Create an AIProposal for buying intent detected in a comment. Only creates
-    one if no pending proposal already exists for this comment thread.
+def _open_lead(comment: Comment) -> None:
+    """Open a lead for the commenter — the same path a buying-intent DM takes.
 
-    Comments don't have a conversation yet (that only exists after a private
-    reply triggers a DM). The proposal is stored with conversation=None and
-    the comment context in payload; staff review will link the eventual DM.
+    Goes through the action registry, so the "Track potential sales" module
+    switch and CRM's one-open-lead-per-customer rule apply. A comment has no
+    conversation yet; the lead links to the customer, and the DM a private reply
+    opens later lands on the same customer.
     """
-    from apps.ai.models import AIProposal
+    from apps.core.actions import ActionError, run_action
 
     thread = comment.thread
     account = thread.instagram_account.account
     ig_contact = thread.instagram_contact
-
-    # Skip if there is no canonical Contact: the proposal needs an account anchor
-    # but conversation is optional. We use the thread's comment_id as dedup key.
     if not ig_contact.contact_id:
         logger.debug(
-            "_create_proposal: no canonical contact for ig_contact %s", ig_contact.pk
+            "_open_lead: no canonical contact for ig_contact %s", ig_contact.pk
         )
         return
-
-    existing = AIProposal.objects.filter(
-        account=account,
-        action="purchase_intent",
-        status=AIProposal.Status.PENDING,
-        payload__comment_thread_id=thread.pk,
-    ).exists()
-    if existing:
-        logger.debug(
-            "_create_proposal: pending proposal already exists for thread %s", thread.pk
+    try:
+        run_action(
+            "capture_conversation_lead",
+            {"account": account},
+            account=account,
+            contact=ig_contact.contact,
+            conversation_id=thread.conversation.public_id
+            if thread.conversation
+            else "",
+            signal="instagram comment",
         )
-        return
-
-    AIProposal.objects.create(
-        account=account,
-        conversation=None,
-        action="purchase_intent",
-        confidence=0.8,
-        payload={
-            "source": "instagram_comment",
-            "comment_id": comment.comment_id,
-            "comment_thread_id": thread.pk,
-            "igsid": ig_contact.instagram_scoped_id,
-        },
-    )
-    logger.info(
-        "AIProposal created for comment %s on account %s",
-        comment.comment_id,
-        account.pk,
-    )
+    except ActionError as exc:
+        logger.info(
+            "_open_lead: not opened for comment %s: %s", comment.comment_id, exc
+        )
+    except Exception:
+        logger.exception("_open_lead failed for comment %s", comment.comment_id)

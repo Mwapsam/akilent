@@ -49,6 +49,19 @@ class InstagramMessage(models.Model):
     timestamp = models.DateTimeField()
     metadata = models.JSONField(default=dict, blank=True)
 
+    # First attachment of an inbound message (photo, video, voice note, file).
+    # Meta sends a short-lived CDN URL; the bytes are copied into our storage by
+    # ``tasks.download_instagram_media`` so they stay viewable in the inbox.
+    media_type = models.CharField(max_length=20, blank=True, default="")
+    media_source_url = models.TextField(blank=True, default="")
+    media_mime_type = models.CharField(max_length=100, blank=True, default="")
+    media_file = models.FileField(
+        upload_to="instagram/media/%Y/%m/", blank=True, null=True
+    )
+    media_size = models.PositiveIntegerField(blank=True, null=True)
+    media_attempts = models.PositiveSmallIntegerField(default=0)
+    media_error = models.CharField(max_length=500, blank=True, default="")
+
     class Meta:
         constraints = [
             models.CheckConstraint(

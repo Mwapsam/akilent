@@ -15,8 +15,8 @@ Checklist (all must pass for Phase 2 sign-off):
   P2-11  hide_comment API failure → outcome=FAILED; comment state unchanged
   P2-12  delete_comment API failure → outcome=FAILED; comment state unchanged
   P2-13  Automation trigger NOTIFY_STAFF: logs notification (no API call)
-  P2-14  Automation trigger CREATE_PROPOSAL: creates AIProposal if none pending
-  P2-15  CREATE_PROPOSAL is idempotent: does not create duplicate AIProposals
+  P2-14  Automation trigger CREATE_PROPOSAL: opens a lead for the commenter
+  P2-15  CREATE_PROPOSAL is idempotent: one open lead per customer
   P2-16  CREATE_PROPOSAL skipped when no canonical contact
   P2-17  ModerationLog is immutable (save/delete raise)
   P2-18  Priority ordering: lower priority rule wins when multiple rules match
@@ -401,6 +401,7 @@ class TestAutomationTriggers(TestCase):
 
     def test_p2_14_create_proposal_trigger(self):
         from apps.ai.models import AIProposal
+        from apps.crm.models import Lead
 
         make_rule(
             self.account,
@@ -412,16 +413,12 @@ class TestAutomationTriggers(TestCase):
             self.ig_account, self.ig_contact, "how much does this cost to buy?"
         )
         moderate_comment(comment)
-        self.assertEqual(
-            AIProposal.objects.filter(
-                account=self.account,
-                action="purchase_intent",
-            ).count(),
-            1,
-        )
+        lead = Lead.objects.get(account=self.account)
+        self.assertEqual(lead.contact_id, self.ig_contact.contact_id)
+        self.assertFalse(AIProposal.objects.filter(action="purchase_intent").exists())
 
     def test_p2_15_create_proposal_is_idempotent(self):
-        from apps.ai.models import AIProposal
+        from apps.crm.models import Lead
 
         make_rule(
             self.account,
@@ -429,7 +426,7 @@ class TestAutomationTriggers(TestCase):
             moderation_action=ModerationRule.ModerationAction.FLAG,
             automation_trigger=ModerationRule.AutomationTrigger.CREATE_PROPOSAL,
         )
-        # Two comments on the SAME thread — only one proposal should be created
+        # Two comments on the SAME thread — still one open lead for the customer
         thread, comment1 = make_thread_and_comment(
             self.ig_account, self.ig_contact, "buy this now, how much?"
         )
@@ -443,17 +440,10 @@ class TestAutomationTriggers(TestCase):
         )
         moderate_comment(comment1)
         moderate_comment(comment2)
-        self.assertEqual(
-            AIProposal.objects.filter(
-                account=self.account,
-                action="purchase_intent",
-                status="pending",
-            ).count(),
-            1,
-        )
+        self.assertEqual(Lead.objects.filter(account=self.account).count(), 1)
 
     def test_p2_16_create_proposal_skipped_without_canonical_contact(self):
-        from apps.ai.models import AIProposal
+        from apps.crm.models import Lead
         from apps.instagram.models.contact import InstagramContact
 
         # Create a contact with no canonical Contact linked
@@ -472,7 +462,7 @@ class TestAutomationTriggers(TestCase):
             self.ig_account, ig_contact_no_canonical, "how much to buy?"
         )
         moderate_comment(comment)
-        self.assertEqual(AIProposal.objects.count(), 0)
+        self.assertEqual(Lead.objects.count(), 0)
 
 
 # ---------------------------------------------------------------------------

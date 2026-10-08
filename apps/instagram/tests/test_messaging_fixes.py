@@ -389,6 +389,39 @@ class TestTokenRefresh(InstagramCase):
             self.ig_account.token_expires_at, timezone.now() + timedelta(days=59)
         )
 
+    def test_connection_without_recorded_expiry_is_refreshed_once_old_enough(self):
+        from apps.instagram.models import InstagramBusinessAccount
+        from apps.instagram.tasks import refresh_instagram_tokens
+
+        InstagramBusinessAccount.objects.filter(pk=self.ig_account.pk).update(
+            access_token="IGAA_old",
+            token_expires_at=None,
+            updated_at=timezone.now() - timedelta(days=2),
+        )
+        with patch(
+            "apps.instagram.oauth.refresh_long_lived_token",
+            return_value=("IGAA_new", 5184000),
+        ):
+            refresh_instagram_tokens()
+        self.ig_account.refresh_from_db()
+        self.assertEqual(self.ig_account.access_token, "IGAA_new")
+        self.assertIsNotNone(self.ig_account.token_expires_at)
+
+    def test_permanent_operator_token_is_left_alone(self):
+        from apps.instagram.models import InstagramBusinessAccount
+        from apps.instagram.tasks import refresh_instagram_tokens
+
+        InstagramBusinessAccount.objects.filter(pk=self.ig_account.pk).update(
+            access_token="EAA_system_user",
+            token_expires_at=None,
+            updated_at=timezone.now() - timedelta(days=2),
+        )
+        with patch("apps.instagram.oauth.refresh_long_lived_token") as refresh:
+            refresh_instagram_tokens()
+        refresh.assert_not_called()
+        self.ig_account.refresh_from_db()
+        self.assertFalse(self.ig_account.token_expired)
+
     def test_refused_refresh_asks_for_reconnect(self):
         from apps.instagram.oauth import InstagramOAuthError
         from apps.instagram.tasks import refresh_instagram_tokens

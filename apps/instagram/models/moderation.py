@@ -36,7 +36,9 @@ class ModerationRule(models.Model):
     class AutomationTrigger(models.TextChoices):
         NONE = "none", "No automation"
         NOTIFY_STAFF = "notify_staff", "Notify assigned staff / team"
-        CREATE_PROPOSAL = "create_proposal", "Create purchase intent proposal"
+        # Stored value kept for existing rules; it now opens a lead, the same way a
+        # buying-intent DM does (a proposal with no conversation was never shown).
+        CREATE_PROPOSAL = "create_proposal", "Open a lead (potential sale)"
 
     account = models.ForeignKey(
         "accounts.Account",

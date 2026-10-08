@@ -128,6 +128,16 @@
 </div>
 {% endif %}
 
+{% if iba_list %}
+<div class="mt-6 card p-5 flex items-center justify-between gap-4 flex-wrap">
+  <div>
+    <p class="font-medium text-ink">Comment rules</p>
+    <p class="text-sm text-gray-600">Reply privately to commenters automatically, and hide spam on your posts.</p>
+  </div>
+  <a href="{% url 'instagram-comment-rules' %}" class="btn btn-secondary btn-sm">Manage rules</a>
+</div>
+{% endif %}
+
 <div class="mt-4">
   <a href="{% url 'channels' %}" class="text-sm text-gray-500 hover:text-ink">← Back to Channels</a>
 </div>

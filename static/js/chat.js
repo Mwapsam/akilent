@@ -29,6 +29,13 @@ function registerChat() {
     ai: Object.assign({ enabled: false, proposal: null }, cfg.ai || {}),
     aiUsedId: null,
 
+    // "[Photo]" / "[Voice message]" placeholders say nothing once the media itself shows.
+    showText(m) {
+      if (!m.body) return !m.media;
+      if (!m.media || m.media.state !== 'ready') return true;
+      return !/^(\[[^\]]+\]\s*)+$/.test(m.body.trim());
+    },
+
     init() {
       this.$nextTick(() => this.scrollBottom(true));
       // --cv-top defaults to a fixed 7rem, which only holds when the app shell's topbar is the
@@ -164,10 +171,14 @@ function registerChat() {
         this.messages.push({
           id: raw.id, direction: raw.direction, body: raw.body, ts: raw.timestamp,
           status: raw.status, failureReason: raw.failureReason || null,
+          byAi: !!raw.byAi, media: raw.media || null,
         });
         this.lastId = Math.max(this.lastId, raw.id);
       }
       for (const m of this.messages) {
+        // A photo or voice note that was still downloading: swap in its current state.
+        const media = data.media && data.media[String(m.id)];
+        if (media && (!m.media || m.media.state !== media.state)) m.media = media;
         const s = data.statuses[String(m.id)];
         if (s !== undefined && s !== m.status) m.status = s;
         const reason = data.failureReasons && data.failureReasons[String(m.id)];

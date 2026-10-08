@@ -120,8 +120,16 @@ def _record_inbound_dm(
             "body": body,
             "timestamp": timestamp,
             "metadata": {**entry, "message_type": message_type},
+            **media_fields(message),
         },
     )
+    if ig_created and ig_message.media_source_url:
+        # Meta's attachment URLs expire, so fetch now rather than wait for the sweep.
+        from django.db import transaction
+
+        from apps.instagram.tasks import download_instagram_media
+
+        transaction.on_commit(lambda: download_instagram_media.delay(ig_message.pk))
     if not ig_created:
         logger.debug(
             "Duplicate Instagram message %s — ensuring spine exists", effective_mid
@@ -387,13 +395,27 @@ def _normalise_mention(value: dict) -> dict:
 _ATTACHMENT_LABELS = {
     "image": "[Photo]",
     "video": "[Video]",
-    "audio": "[Audio]",
+    "audio": "[Voice message]",
     "file": "[File]",
     "share": "[Shared post]",
     "ig_reel": "[Reel]",
     "reel": "[Reel]",
     "story_mention": "[Mentioned you in their story]",
 }
+
+
+# Attachment types whose payload.url is the media itself (a share/reel links to a post).
+_DOWNLOADABLE = {"image", "video", "audio", "file", "story_mention"}
+
+
+def media_fields(message: dict) -> dict:
+    """InstagramMessage media fields for the message's first downloadable attachment."""
+    for attachment in message.get("attachments") or []:
+        kind = attachment.get("type", "")
+        url = (attachment.get("payload") or {}).get("url", "")
+        if kind in _DOWNLOADABLE and url:
+            return {"media_type": kind, "media_source_url": url}
+    return {}
 
 
 def describe_message(message: dict) -> tuple[str, str]:

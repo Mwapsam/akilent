@@ -25,6 +25,7 @@ from apps.accounts.models import Team
 from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.api import conversation_window_is_open
+from apps.conversations.media import media_json
 from apps.conversations.models import (
     Conversation,
     ConversationForm,
@@ -475,7 +476,11 @@ def conversation_detail(request, public_id: str):
         viewing_as(request) is None
     ):  # support looking "as" the business mustn't clear its unread
         conversation.mark_read()
-    thread = list(conversation.messages.all().order_by("timestamp", "id"))
+    thread = list(
+        conversation.messages.select_related("whatsapp_message", "instagram_message")
+        .all()
+        .order_by("timestamp", "id")
+    )
     snapshot = get_conversation_state(conversation)
     now = timezone.now()
     offers = _automate_offers(account, thread)
@@ -500,6 +505,7 @@ def conversation_detail(request, public_id: str):
                 "failureReason": (m.metadata or {}).get("failure_reason") or None,
                 "byAi": (m.metadata or {}).get("sent_by") == "ai",
                 "automate": offers.get(m.id),
+                "media": media_json(m, conversation.public_id),
             }
             for m in thread
         ],
@@ -981,6 +987,92 @@ def form_delete(request, pk):
     return redirect("conversations:forms_list")
 
 
+def _recent_media(conversation) -> dict:
+    """``{message_id: media_json}`` for the latest inbound messages that carry media."""
+    recent = (
+        conversation.messages.filter(direction=Message.Direction.INBOUND)
+        .select_related("whatsapp_message", "instagram_message")
+        .order_by("-id")[:20]
+    )
+    out = {}
+    for m in recent:
+        media = media_json(m, conversation.public_id)
+        if media is not None:
+            out[str(m.id)] = media
+    return out
+
+
+def _parse_range(header: str, size: int) -> tuple[int, int] | None:
+    """``(start, end)`` for a single ``bytes=`` range within ``size``, else None."""
+    if not header.startswith("bytes=") or "," in header or size <= 0:
+        return None
+    first, _, last = header[6:].strip().partition("-")
+    try:
+        if first == "":  # suffix range: the last N bytes
+            start, end = max(size - int(last), 0), size - 1
+        else:
+            start = int(first)
+            end = min(int(last), size - 1) if last else size - 1
+    except ValueError:
+        return None
+    if start > end or start >= size:
+        return None
+    return start, end
+
+
+@login_required
+def message_media(request, public_id: str, message_id: int):
+    """Stream one message's photo / video / voice note / file to a signed-in teammate.
+
+    Customer media is private: it is never linked by a public storage URL, only
+    served here after checking the conversation belongs to the viewer's business.
+    """
+    from django.http import FileResponse, Http404
+
+    from apps.conversations.media import stored_media
+
+    account = get_current_account(request)
+    if account is None:
+        raise Http404
+    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    message = get_object_or_404(
+        Message.objects.select_related("whatsapp_message", "instagram_message"),
+        pk=message_id,
+        conversation=conversation,
+    )
+    media = stored_media(message)
+    if media is None:
+        raise Http404
+    try:
+        handle = media.file.open("rb")
+        size = media.file.size
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404 from exc
+    mime = media.mime or "application/octet-stream"
+    playable = mime.split("/", 1)[0] in {"image", "video", "audio"}
+    filename = media.file.name.rsplit("/", 1)[-1]
+
+    # Safari only plays audio/video when the server honours byte ranges.
+    byte_range = _parse_range(request.headers.get("Range", ""), size)
+    if byte_range is not None:
+        start, end = byte_range
+        handle.seek(start)
+        response = HttpResponse(
+            handle.read(end - start + 1), status=206, content_type=mime
+        )
+        handle.close()
+        response["Content-Range"] = f"bytes {start}-{end}/{size}"
+        response["Content-Length"] = str(end - start + 1)
+    else:
+        response = FileResponse(
+            handle, content_type=mime, as_attachment=not playable, filename=filename
+        )
+    response["Accept-Ranges"] = "bytes"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
 @login_required
 def messages_feed(request, public_id: str):
     """Messages newer than ``?after=<id>`` plus current delivery statuses and state badges."""
@@ -994,7 +1086,11 @@ def messages_feed(request, public_id: str):
     except ValueError:
         after = 0
 
-    new = list(conversation.messages.filter(id__gt=after).order_by("id")[:100])
+    new = list(
+        conversation.messages.select_related("whatsapp_message", "instagram_message")
+        .filter(id__gt=after)
+        .order_by("id")[:100]
+    )
     if (
         any(m.direction == Message.Direction.INBOUND for m in new)
         and viewing_as(request) is None
@@ -1019,10 +1115,14 @@ def messages_feed(request, public_id: str):
                     "status": m.status,
                     "failureReason": (m.metadata or {}).get("failure_reason") or None,
                     "byAi": (m.metadata or {}).get("sent_by") == "ai",
+                    "media": media_json(m, conversation.public_id),
                 }
                 for m in new
             ],
             "statuses": {str(m.id): m.status for m in recent_outbound},
+            # Media that was still downloading when first shown: its current state,
+            # so a photo or voice note appears without reloading the page.
+            "media": _recent_media(conversation),
             "failureReasons": {
                 str(m.id): (m.metadata or {}).get("failure_reason")
                 for m in recent_outbound

@@ -119,6 +119,15 @@ class WhatsAppInboundService:
         contact_record.last_message_at = msg_ts
         contact_record.save(update_fields=["last_message_at"])
 
+        if created and media_id:
+            # Fetch now so a photo or voice note shows in the inbox within seconds,
+            # not at the next once-a-minute sweep.
+            from django.db import transaction
+
+            from apps.whatsapp.tasks import download_media
+
+            transaction.on_commit(download_media.delay)
+
         # Step 5 — project to spine (canonical contact + Conversation + Message)
         try:
             enroll = _automation_events_enabled()

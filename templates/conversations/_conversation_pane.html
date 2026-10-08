@@ -122,6 +122,10 @@
   .cv-msg--out.cv-msg--last .cv-bubble::after { left: auto; right: -6px; clip-path: polygon(0 0, 100% 100%, 0 100%); }
   .cv-msg--pending .cv-bubble { opacity: .7; }
   .cv-msg--failed .cv-bubble { background: color-mix(in srgb, var(--color-coral-500) 18%, var(--cv-in-bg)); }
+  .cv-media { margin-bottom: .25rem; }
+  .cv-media-img { display: block; max-width: min(18rem, 100%); max-height: 20rem; border-radius: .5rem; object-fit: cover; }
+  .cv-media-audio { display: block; width: min(16rem, 70vw); height: 2.25rem; }
+  .cv-media-file { font-size: .875rem; text-decoration: underline; }
   .cv-text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .cv-stamp { display: flex; justify-content: flex-end; align-items: center; gap: .25rem; margin-top: .125rem; font-size: .6875rem; color: var(--cv-stamp); }
   .cv-ticks { display: inline-flex; color: var(--cv-stamp); }
@@ -368,7 +372,29 @@
               <template x-if="item.type === 'msg' && item.m.direction !== 'system'">
                 <div class="cv-msg" :class="{ 'cv-msg--out': item.m.direction === 'outbound', 'cv-msg--pending': item.m.pending, 'cv-msg--failed': item.m.status === 'failed', 'cv-msg--last': item.showMeta }">
                   <div class="cv-bubble">
-                    <p class="cv-text" :class="{ 'italic text-gray-500': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>
+                    {% comment %} Customer media (photos, videos, voice notes, files), streamed by
+                       conversations:message_media after an account check. {% endcomment %}
+                    <template x-if="item.m.media">
+                      <div class="cv-media">
+                        <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'image'">
+                          <a :href="item.m.media.url" target="_blank" rel="noopener" title="Open full size">
+                            <img :src="item.m.media.url" alt="Photo from the customer" loading="lazy" class="cv-media-img">
+                          </a>
+                        </template>
+                        <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'video'">
+                          <video :src="item.m.media.url" controls preload="metadata" class="cv-media-img"></video>
+                        </template>
+                        <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'audio'">
+                          <audio :src="item.m.media.url" controls preload="none" class="cv-media-audio" aria-label="Voice message"></audio>
+                        </template>
+                        <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'file'">
+                          <a :href="item.m.media.url" class="cv-media-file">Download file</a>
+                        </template>
+                        <p x-show="item.m.media.state === 'pending'" class="text-xs text-gray-500">Loading media…</p>
+                        <p x-show="item.m.media.state === 'unavailable'" class="text-xs text-gray-500">This media couldn't be loaded.</p>
+                      </div>
+                    </template>
+                    <p class="cv-text" x-show="showText(item.m)" :class="{ 'italic text-gray-500': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>
                     <div class="cv-stamp" x-show="item.showMeta" :title="new Date(item.m.ts).toLocaleString()">
                       {# Time is visible; the full status label ("Delivered", "Read"…) is kept for screen readers and hover. #}
                       <span x-show="item.m.byAi" class="font-medium">Sent by AI ·</span>

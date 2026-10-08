@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Instagram comment rules — {{ site.app_name|default:"Automator" }}{% endblock %}
+
+{% block content %}
+
+<header class="mb-6">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Comment rules</h1>
+  <p class="mt-1 text-sm text-gray-600">Reply privately to people who comment on your posts, and keep spam off them.</p>
+</header>
+
+{% if not has_account %}
+<div class="mb-6 card p-4 text-sm text-gray-600">
+  Rules start working once an Instagram account is connected.
+  <a href="{% url 'instagram-accounts' %}" class="underline font-medium text-ink">Connect Instagram</a>
+</div>
+{% endif %}
+
+{% comment %} Automatic private replies (CommentTrigger) {% endcomment %}
+<section class="mb-8">
+  <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">Automatic private replies</h2>
+      <p class="text-sm text-gray-600">When someone comments, send them one DM. Their reply lands in your inbox.</p>
+    </div>
+    <a href="{% url 'instagram-comment-rule-new' 'reply' %}" class="btn btn-primary btn-sm">Add reply rule</a>
+  </div>
+  {% if triggers %}
+  <ul class="space-y-3">
+    {% for rule in triggers %}
+    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template %}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="card p-5 text-sm text-gray-500">No reply rules yet. Example: a comment containing “price” gets “Thanks {username}! We've sent you the price in a DM.”</div>
+  {% endif %}
+</section>
+
+{% comment %} Moderation (ModerationRule) {% endcomment %}
+<section class="mb-8">
+  <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">Comment moderation</h2>
+      <p class="text-sm text-gray-600">Hide spam or abuse automatically, or flag comments for your team.</p>
+    </div>
+    <a href="{% url 'instagram-comment-rule-new' 'moderation' %}" class="btn btn-secondary btn-sm">Add moderation rule</a>
+  </div>
+  {% if moderation_rules %}
+  <ul class="space-y-3">
+    {% for rule in moderation_rules %}
+    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule summary=rule.get_match_type_display detail=rule.get_moderation_action_display %}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="card p-5 text-sm text-gray-500">No moderation rules yet.</div>
+  {% endif %}
+</section>
+
+<a href="{% url 'instagram-accounts' %}" class="text-sm text-gray-500 hover:text-ink">← Back to Instagram</a>
+
+{% endblock %}
