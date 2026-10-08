@@ -90,6 +90,7 @@ def settings_ai(request):
             "holding_reply": autonomy.holding_reply_text(ai),
             "autonomy_site_on": autonomy_site_on(),
             "auto_replies": ai_api.recent_auto_replies(account),
+            **_knowledge_counts(account),
         },
     )
 
@@ -175,6 +176,16 @@ def knowledge_entry_toggle(request, pk):
     entry.is_active = not entry.is_active
     entry.save(update_fields=["is_active", "updated_at"])
     return redirect("settings-ai-knowledge")
+
+
+def _knowledge_counts(account) -> dict:
+    entries = KnowledgeBaseEntry.objects.filter(account=account)
+    return {
+        "knowledge_active": entries.filter(is_active=True).count(),
+        "knowledge_review": entries.filter(
+            origin__in=KnowledgeBaseEntry.REVIEW_ORIGINS, reviewed_at__isnull=True
+        ).count(),
+    }
 
 
 def _website_hint(account) -> str:

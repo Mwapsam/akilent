@@ -652,3 +652,23 @@ def test_an_unreachable_site_fails_the_draft_with_a_reason(monkeypatch, account)
     )
     run(draft)
     assert draft.status == "error" and "public website" in draft.error
+
+
+@pytest.mark.django_db
+def test_the_knowledge_base_is_easy_to_find_and_explains_who_can_add(client, account):
+    login(client, account)
+    KnowledgeBaseEntry.objects.create(account=account, title="Q", content="A")
+    KnowledgeBaseEntry.objects.create(
+        account=account, title="Q2", content="", origin="import", is_active=False
+    )
+    ai_page = client.get("/settings/ai/").content.decode()
+    assert (
+        "Open knowledge base" in ai_page and 'href="/settings/ai/knowledge/"' in ai_page
+    )
+    assert "1 answer in use" in ai_page and "1 waiting for review" in ai_page
+    assert "Add knowledge" in client.get("/settings/ai/knowledge/").content.decode()
+
+    client.logout()
+    login(client, account, role=Membership.Role.MEMBER, name="member")
+    page = client.get("/settings/ai/knowledge/").content.decode()
+    assert "Add knowledge" not in page and "Only an owner or admin" in page

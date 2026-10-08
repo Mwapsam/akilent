@@ -24,6 +24,17 @@
   <div class="alert alert-success">AI is on. Open a conversation to see a suggestion above the message box.</div>
   {% endif %}
 
+  <div class="rounded-xl border border-border p-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex-1 min-w-0">
+      <p class="font-medium text-ink">Teach AI about your business</p>
+      <p class="text-sm text-gray-600">
+        Add your customers' questions and your answers: write them, paste or upload a list, or import them from your website. Then try a question to see how AI would reply.
+        <span class="block text-xs text-gray-500 mt-0.5">{{ knowledge_active }} answer{{ knowledge_active|pluralize }} in use{% if knowledge_review %} · {{ knowledge_review }} waiting for review{% endif %}</span>
+      </p>
+    </div>
+    <a href="{% url 'settings-ai-knowledge' %}" class="btn btn-primary btn-sm">Open knowledge base</a>
+  </div>
+
   <div class="rounded-xl border border-border p-4 text-sm text-gray-700">
     <p class="font-medium text-ink">What is sent to the AI service</p>
     <ul class="list-disc pl-5 mt-1 space-y-0.5">

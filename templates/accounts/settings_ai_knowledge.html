@@ -212,6 +212,10 @@
 
     <p class="text-xs text-gray-500">You can also teach AI from the inbox: when your team answers a question AI handed over, choose <strong>Save as answer</strong>.</p>
   </section>
+  {% else %}
+  <div class="alert alert-info">
+    Only an owner or admin of {{ account.company_name|default:"this business" }} can add, import or approve knowledge, because it changes what AI tells every customer. Ask one of them, or to be made an admin under <a class="underline" href="{% url 'settings-team' %}">Team</a>.
+  </div>
   {% endif %}
 </div>
 {% endblock %}
