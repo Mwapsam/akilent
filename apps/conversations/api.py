@@ -191,6 +191,33 @@ def get_conversation_by_public_id(public_id: str):
     )
 
 
+def conversation_for_channel_record(channel: str, object_id: int):
+    """The inbox conversation backed by a channel record (e.g. an InstagramConversation)."""
+    from apps.conversations.models import ChannelConversation
+
+    link = (
+        ChannelConversation.objects.filter(channel=channel, object_id=object_id)
+        .select_related("conversation")
+        .first()
+    )
+    return link.conversation if link else None
+
+
+def archive_as_misfiled(conversation, *, actor: str) -> int:
+    """Close a conversation that should never have existed, and drop its open leads.
+
+    Reversible: nothing is deleted. Returns how many leads were marked lost.
+    """
+    if conversation.status == Conversation.Status.OPEN:
+        conversation.close(resolution=Conversation.Resolution.SPAM, actor=actor)
+    if conversation.is_unread:
+        conversation.mark_read()
+    return Lead.objects.filter(
+        conversation=conversation,
+        status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+    ).update(status=Lead.Status.LOST)
+
+
 def earlier_messages(
     conversation, *, keep_recent: int, after_id: int = 0, limit: int = 40
 ) -> list[dict]:

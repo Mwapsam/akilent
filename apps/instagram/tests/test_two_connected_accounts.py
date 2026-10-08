@@ -8,6 +8,7 @@ business its own customer. Ids are from the 2026-10-08 production log.
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.conversations.models import Conversation
 from apps.instagram.models.account import (
@@ -46,7 +47,7 @@ def _dm(entry_id, sender, recipient, text, *, echo=False, mid):
     }
 
 
-class TwoConnectedAccountsTest(TestCase):
+class _ConnectedBusiness(TestCase):
     def setUp(self):
         from apps.instagram.models.account import InstagramBusinessAccount
 
@@ -71,6 +72,8 @@ class TwoConnectedAccountsTest(TestCase):
         if event.instagram_account_id:
             process_instagram_event(event.pk)
 
+
+class TwoConnectedAccountsTest(_ConnectedBusiness):
     def test_page_id_on_an_instagram_login_account_is_not_matched(self):
         with self.assertRaises(TenantResolutionError):
             get_instagram_account_for_webhook(OTHER)
@@ -128,3 +131,50 @@ class TwoConnectedAccountsTest(TestCase):
         entry = _dm(BUSINESS, BUSINESS_AS_SEEN_BY_OTHER, OTHER, "hi", mid="m3")
         _process_dm_entry(self.iba, entry["entry"][0]["messaging"][0])
         self.assertFalse(InstagramContact.objects.exists())
+
+
+class ArchiveMisfiledTest(_ConnectedBusiness):
+    """Conversations misfiled before the fix are archived; real ones are untouched."""
+
+    def _misfile(self, payload):
+        # What the old loose matching did: record the other side's copy as ours.
+        from apps.instagram.services.inbound import _record_inbound_dm
+
+        item = payload["entry"][0]["messaging"][0]
+        _record_inbound_dm(
+            self.iba, item["sender"]["id"], item, item["message"], 1, timezone.now()
+        )
+
+    def test_lists_then_archives_only_the_misfiled_conversation(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from apps.crm.models import Lead
+
+        self._deliver(
+            _dm(BUSINESS, CUSTOMER_AS_SEEN_BY_BUSINESS, BUSINESS, "hello", mid="r1")
+        )
+        self._misfile(
+            _dm(OTHER, BUSINESS_AS_SEEN_BY_OTHER, OTHER, "I'll take it", mid="f1")
+        )
+        real = Conversation.objects.get(
+            contact__instagram_contacts__instagram_scoped_id=CUSTOMER_AS_SEEN_BY_BUSINESS
+        )
+        fake = Conversation.objects.exclude(pk=real.pk).get()
+
+        out = StringIO()
+        call_command("instagram_archive_misfiled", stdout=out)
+        self.assertIn(fake.public_id, out.getvalue())
+        self.assertNotIn(real.public_id, out.getvalue())
+        fake.refresh_from_db()
+        self.assertEqual(fake.status, "open")  # listing changes nothing
+
+        call_command("instagram_archive_misfiled", "--apply", stdout=StringIO())
+        fake.refresh_from_db()
+        real.refresh_from_db()
+        self.assertEqual((fake.status, fake.resolution), ("closed", "spam"))
+        self.assertEqual(real.status, "open")
+        self.assertFalse(
+            Lead.objects.filter(conversation=fake).exclude(status="lost").exists()
+        )
