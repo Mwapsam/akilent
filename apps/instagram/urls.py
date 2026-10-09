@@ -19,6 +19,11 @@ urlpatterns = [
     # Comment rules: automatic private replies + moderation
     path("rules/", rules_views.comment_rules, name="instagram-comment-rules"),
     path(
+        "rules/moderation/recommended/",
+        rules_views.comment_rule_defaults,
+        name="instagram-comment-rule-defaults",
+    ),
+    path(
         "rules/<str:kind>/new/",
         rules_views.comment_rule_edit,
         name="instagram-comment-rule-new",

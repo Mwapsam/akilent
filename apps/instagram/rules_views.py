@@ -17,6 +17,10 @@ from django.views.decorators.http import require_POST
 from apps.accounts.utils import get_current_account
 from apps.core.module_gate import module_required
 from apps.instagram.models import CommentTrigger, ModerationLog, ModerationRule
+from apps.instagram.services.default_rules import (
+    add_default_moderation_rules,
+    missing_default_rules,
+)
 
 
 class CommentTriggerForm(forms.ModelForm):
@@ -66,7 +70,7 @@ class ModerationRuleForm(forms.ModelForm):
             "priority": "Order",
         }
         help_texts = {
-            "keywords": "Comma-separated. Used with “keyword / phrase match”.",
+            "keywords": "Comma-separated. Required for “keyword / phrase match”; on the other types they're checked as well as the built-in detection.",
             "priority": "Lower runs first.",
         }
         widgets = {"keywords": forms.TextInput()}
@@ -117,6 +121,7 @@ def comment_rules(request):
             "moderation_logs": ModerationLog.objects.filter(account=account)
             .select_related("rule", "comment__instagram_contact")
             .order_by("-occurred_at")[:20],
+            "missing_defaults": missing_default_rules(account),
             "has_account": account.instagram_accounts.filter(is_active=True).exists(),
         },
     )
@@ -147,6 +152,25 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
         "instagram/comment_rule_form.html",
         {"form": _style(form), "kind": kind, "rule": instance},
     )
+
+
+@login_required
+@module_required("instagram")
+@require_POST
+def comment_rule_defaults(request):
+    """Add the recommended moderation rules the account doesn't have yet."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("instagram-comment-rules")
+    added = add_default_moderation_rules(account)
+    if added:
+        messages.success(
+            request,
+            f"Added {added} recommended rule{'s' if added != 1 else ''}. Edit or pause them any time.",
+        )
+    else:
+        messages.info(request, "You already have all the recommended rules.")
+    return redirect("instagram-comment-rules")
 
 
 @login_required

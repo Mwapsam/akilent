@@ -127,13 +127,15 @@ _COMPILED: dict[str, list[re.Pattern]] = {
 
 def _rule_matches(rule: ModerationRule, comment: Comment) -> bool:
     body = comment.body or ""
-    match_type = rule.match_type
 
-    if match_type == ModerationRule.MatchType.KEYWORD:
-        body_lower = body.lower()
-        return any(kw in body_lower for kw in rule.keyword_list())
+    # Keywords count on every rule type: on a heuristic rule they add to the
+    # built-in patterns. Ignoring them there silently broke rules businesses
+    # wrote as "Spam detection" + their own spam phrases.
+    body_lower = body.lower()
+    if any(kw in body_lower for kw in rule.keyword_list()):
+        return True
 
-    patterns = _COMPILED.get(match_type, [])
+    patterns = _COMPILED.get(rule.match_type, [])
     return any(p.search(body) for p in patterns)
 
 

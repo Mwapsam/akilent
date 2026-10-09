@@ -117,6 +117,44 @@ class ModerationBehaviourTest(TestCase):
         )
 
 
+class HeuristicRuleKeywordsTest(TestCase):
+    """A "Spam detection" rule with the business's own phrases uses those phrases."""
+
+    def setUp(self):
+        self.account, _ = make_account()
+        self.ig_account = make_instagram_account(self.account)
+        self.ig_contact, _ = make_instagram_contact(self.account, self.ig_account)
+        make_rule(
+            self.account,
+            match_type=ModerationRule.MatchType.SPAM_DETECTION,
+            keywords="DM me, whatsapp me, earn money, crypto, claim your prize",
+            moderation_action=ModerationRule.ModerationAction.HIDE,
+        )
+
+    @patch("apps.instagram.providers.meta.MetaInstagramProvider")
+    def test_business_keywords_match_on_a_heuristic_rule(self, MockProvider):
+        MockProvider.return_value.hide_comment.return_value = (True, "")
+        for body in ("DM me now!", "Earn money fast", "Invest in CRYPTO today"):
+            _, comment = make_thread_and_comment(self.ig_account, self.ig_contact, body)
+            log = moderate_comment(comment)
+            self.assertIsNotNone(log, body)
+            self.assertEqual(log.outcome, ModerationLog.Outcome.APPLIED, body)
+
+    @patch("apps.instagram.providers.meta.MetaInstagramProvider")
+    def test_builtin_spam_patterns_still_match(self, MockProvider):
+        MockProvider.return_value.hide_comment.return_value = (True, "")
+        _, comment = make_thread_and_comment(
+            self.ig_account, self.ig_contact, "follow back pls"
+        )
+        self.assertIsNotNone(moderate_comment(comment))
+
+    def test_ordinary_comment_is_left_alone(self):
+        _, comment = make_thread_and_comment(
+            self.ig_account, self.ig_contact, "Love this dress!"
+        )
+        self.assertIsNone(moderate_comment(comment))
+
+
 class ModerationActivityPageTest(TestCase):
     def setUp(self):
         self.account, self.user = make_account()

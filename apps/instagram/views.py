@@ -162,6 +162,12 @@ def instagram_account_connect(request):
                 "is_active": True,
             },
         )
+        if created:
+            from apps.instagram.services.default_rules import (
+                add_default_moderation_rules,
+            )
+
+            add_default_moderation_rules(account, only_if_none=True)
         action = "connected" if created else "updated"
         messages.success(request, f"Instagram account {action}.")
         return redirect("instagram-accounts")
@@ -407,7 +413,7 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
         timezone.now() + timedelta(seconds=int(expires_in)) if expires_in else None
     )
 
-    InstagramBusinessAccount.objects.update_or_create(
+    _iba, created = InstagramBusinessAccount.objects.update_or_create(
         account=account,
         instagram_business_account_id=iba_id,
         defaults={
@@ -422,6 +428,11 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
             "is_active": True,
         },
     )
+
+    if created:
+        from apps.instagram.services.default_rules import add_default_moderation_rules
+
+        add_default_moderation_rules(account, only_if_none=True)
 
     label = chosen.get("username") or iba_id
     if subscribed:

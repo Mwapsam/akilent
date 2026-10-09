@@ -42,7 +42,15 @@
       <h2 class="text-lg font-semibold text-ink">Comment moderation</h2>
       <p class="text-sm text-gray-600">Hide spam or abuse automatically, or flag comments for your team.</p>
     </div>
-    <a href="{% url 'instagram-comment-rule-new' 'moderation' %}" class="btn btn-secondary btn-sm">Add moderation rule</a>
+    <div class="flex items-center gap-2 flex-wrap">
+      {% if missing_defaults %}
+      <form method="post" action="{% url 'instagram-comment-rule-defaults' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary btn-sm" title="{% for r in missing_defaults %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% endfor %}">Add recommended rules</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'instagram-comment-rule-new' 'moderation' %}" class="btn btn-secondary btn-sm">Add moderation rule</a>
+    </div>
   </div>
   {% if moderation_rules %}
   <ul class="space-y-3">
@@ -51,7 +59,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <div class="card p-5 text-sm text-gray-500">No moderation rules yet.</div>
+  <div class="card p-5 text-sm text-gray-500">No moderation rules yet. “Add recommended rules” hides spam and flags abuse and complaints for your team — you can change any of them.</div>
   {% endif %}
 </section>
 
