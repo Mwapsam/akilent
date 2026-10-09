@@ -223,13 +223,19 @@ def validate(
         }
 
     intent = str(data.get("intent") or "").strip().lower()
+    if intent not in INTENTS:
+        intent = "other"
+    # A reply that cites offered Q&A entries is a knowledge-base answer whatever label the model
+    # gave it; relabelling here keeps every check, the stored intent and the UI in agreement.
+    if action == "reply" and intent == "other" and clean.get("sources"):
+        intent = "faq"
     return {
         "version": VERSION,
         "action": action,
         "confidence": confidence,
         "reason": reason,
         "payload": clean,
-        "intent": intent if intent in INTENTS else "other",
+        "intent": intent,
         "sources": list(clean.get("sources") or []),
         "extras": clean_extras(data.get("extras"), tags=tags, can_track=can_track),
     }
