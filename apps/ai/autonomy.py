@@ -86,6 +86,8 @@ TEAM_QUIET_MINUTES = 10
 MAX_IN_A_ROW = 5
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+# Step numbers ("1️⃣", or "1." / "2)" starting a line) order a reply; they aren't facts to check.
+_LIST_MARKER = re.compile(r"\d️?⃣|^[ \t]*\d{1,2}[.)](?=\s)", re.M)
 _LINK = re.compile(r"(?:https?://|www\.)\S+", re.I)
 
 
@@ -155,7 +157,7 @@ def unsupported_facts(reply: str, facts: dict, extra_text: str = "") -> list[str
     for m in business_facts.TIME.finditer(rest):
         if business_facts.minutes_of(m) not in times:
             problems.append(m.group(0).strip())
-    rest = business_facts.TIME.sub(" ", rest)
+    rest = _LIST_MARKER.sub(" ", business_facts.TIME.sub(" ", rest))
     written = "\n".join(
         [
             business_facts.written_text(facts),

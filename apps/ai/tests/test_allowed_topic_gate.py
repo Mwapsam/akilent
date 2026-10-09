@@ -97,6 +97,50 @@ class TestCitedOtherBecomesFaq:
         assert not checks["grounded"]["ok"]
         assert not decision.send
 
+    def test_mixed_valid_and_made_up_ids_keep_only_the_valid_one(self, account, entry):
+        facts = business_facts.build(account)
+        proposal = _validated(
+            facts, intent="other", sources=["k9999", f"k{entry.pk}", f"k{entry.pk}"]
+        )
+        assert proposal["sources"] == [f"k{entry.pk}"]
+        assert proposal["intent"] == "faq"
+
+    def test_relabel_does_not_bypass_low_confidence(self, account, entry):
+        facts = business_facts.build(account)
+        proposal = _validated(facts, intent="other", sources=[f"k{entry.pk}"])
+        proposal["confidence"] = 0.5
+        decision, checks = _checks(account, proposal, facts)
+        assert not checks["confident"]["ok"]
+        assert not decision.send
+
+    def test_relabel_does_not_bypass_sensitive_customer_text(self, account, entry):
+        facts = business_facts.build(account)
+        proposal = _validated(facts, intent="other", sources=[f"k{entry.pk}"])
+        decision = preview(
+            ai_settings=AISettings.objects.get(account=account),
+            proposal=proposal,
+            account=account,
+            facts=facts,
+            customer_text="I want a refund, this is a scam",
+        )
+        assert not decision.send
+
+    def test_relabel_does_not_bypass_faq_switched_off(self, account, entry):
+        AISettings.objects.filter(account=account).update(auto_topics=["greeting"])
+        facts = business_facts.build(account)
+        proposal = _validated(facts, intent="other", sources=[f"k{entry.pk}"])
+        decision, checks = _checks(account, proposal, facts)
+        assert not checks["allowed_topic"]["ok"]
+        assert not decision.send
+
+    def test_relabel_does_not_bypass_unchecked_facts(self, account, entry):
+        facts = business_facts.build(account)
+        proposal = _validated(facts, intent="other", sources=[f"k{entry.pk}"])
+        proposal["payload"]["text"] = "Sign up today, it costs K450."
+        decision, checks = _checks(account, proposal, facts)
+        assert not checks["facts"]["ok"]
+        assert not decision.send
+
     def test_handoff_keeps_its_intent(self, account, entry):
         facts = business_facts.build(account)
         proposal = _validated(

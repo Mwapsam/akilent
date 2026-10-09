@@ -113,6 +113,27 @@ class TestFactsIntegration:
         reply = "Delivery is K999 within Lusaka."
         assert "K999" in unsupported_facts(reply, facts)
 
+    def test_step_numbers_are_not_facts(self, account):
+        KnowledgeBaseEntry.objects.create(
+            account=account,
+            title="How does booking work?",
+            content="1️⃣ Browse, 2️⃣ view profiles, 3️⃣ book.",
+        )
+        facts = business_facts.build(account)
+        emoji = "1️⃣ Browse. 4️⃣ They do the job. 5️⃣ You pay."
+        plain = "Here's how:\n1. Browse\n4) They do the job\n 5. You pay"
+        assert unsupported_facts(emoji, facts) == []
+        assert unsupported_facts(plain, facts) == []
+
+    def test_numbers_inside_a_step_are_still_checked(self, account):
+        KnowledgeBaseEntry.objects.create(
+            account=account, title="Booking", content="1. Browse 2. Book."
+        )
+        facts = business_facts.build(account)
+        reply = "1. Browse\n2. Pay K450 and we start in 3 days"
+        assert unsupported_facts(reply, facts) == ["K450", "3"]
+        assert unsupported_facts("We have 5 pros.", facts) == ["5"]
+
 
 @pytest.mark.django_db
 class TestSettingsView:
