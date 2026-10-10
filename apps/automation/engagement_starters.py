@@ -168,6 +168,22 @@ for _starter in _REPLY_STARTERS:
     _starter.update({"reply": True, "suggested_template": ""})
 ENGAGEMENT_STARTERS.extend(_REPLY_STARTERS)
 
+# Lead-qualification questionnaire — uses ask_question steps; installed programmatically.
+_QUALIFICATION_STARTER = {
+    "key": "lead-qualification-questionnaire",
+    "name": "Qualify new leads with questions",
+    "goal": "Know what every interested customer wants before you talk to them.",
+    "explain": (
+        "When someone becomes a lead, ask them up to three quick questions "
+        "(budget, timeline, needs). Their answers are saved automatically so "
+        "your team starts every conversation prepared."
+    ),
+    "stop_condition": "Asks once per lead and respects the 24-hour messaging window.",
+    "trigger": "lead.created",
+    "qualification": True,
+}
+ENGAGEMENT_STARTERS.append(_QUALIFICATION_STARTER)
+
 STARTERS_BY_KEY = {s["key"]: s for s in ENGAGEMENT_STARTERS}
 
 # How the Automations home groups them: by what the owner wants help with, not by mechanism.
@@ -191,7 +207,13 @@ GOAL_GROUPS = (
             "reply-when-closed",
         ),
     ),
-    ("Keep your team informed", ("route-new-leads",)),
+    (
+        "Keep your team informed",
+        (
+            "route-new-leads",
+            "lead-qualification-questionnaire",
+        ),
+    ),
 )
 assert {k for _, keys in GOAL_GROUPS for k in keys} == set(STARTERS_BY_KEY), (
     "every starter belongs to a goal"
@@ -395,6 +417,98 @@ def build_definition(
             {"id": "stop", "type": "stop"},
         ],
     }
+
+
+def build_lead_qualification_definition() -> dict:
+    """Workflow definition for the lead-qualification-questionnaire starter.
+
+    Asks three questions in sequence (budget, timeline, needs) and saves answers
+    as lead attributes. On window-closed or error, notifies the team instead.
+    The trigger is ``lead.created``; every step that sends a free-text question
+    requires a resolvable conversation, so on_error goes to notify_team.
+    """
+    return {
+        "trigger": {"type": "lead.created"},
+        "steps": [
+            {
+                "id": "q_budget",
+                "type": "ask_question",
+                "question": "Hi {first_name}! To help us understand what you need — what is your approximate budget?",
+                "attribute": "budget",
+                "target": "lead",
+                "max_attempts": 2,
+                "timeout_seconds": 86400,
+                "next": "q_timeline",
+                "on_timeout": "notify_team",
+                "on_invalid": "notify_team",
+                "on_error": "notify_team",
+            },
+            {
+                "id": "q_timeline",
+                "type": "ask_question",
+                "question": "Great, thanks! When are you hoping to get started?",
+                "attribute": "timeline",
+                "target": "lead",
+                "max_attempts": 2,
+                "timeout_seconds": 86400,
+                "next": "q_needs",
+                "on_timeout": "notify_team",
+                "on_invalid": "notify_team",
+                "on_error": "notify_team",
+            },
+            {
+                "id": "q_needs",
+                "type": "ask_question",
+                "question": "And finally — what is the main thing you are looking for help with?",
+                "attribute": "needs",
+                "target": "lead",
+                "max_attempts": 2,
+                "timeout_seconds": 86400,
+                "next": "notify_team",
+                "on_timeout": "notify_team",
+                "on_invalid": "notify_team",
+                "on_error": "notify_team",
+            },
+            {
+                "id": "notify_team",
+                "type": "notify_team",
+                "to": "owners",
+                "text": "{contact} has answered your qualification questions. Check their lead record.",
+                "next": "stop",
+            },
+            {"id": "stop", "type": "stop"},
+        ],
+    }
+
+
+def install_lead_qualification_questionnaire(account) -> object:
+    """Create attribute defs + publish the lead-qualification-questionnaire workflow.
+
+    Idempotent: safe to call multiple times. The three ``CustomAttributeDef`` rows
+    and the workflow are created-or-updated in one transaction so nothing is
+    half-installed.
+    """
+    from django.db import transaction as _tx
+
+    from apps.automation import api as automation_api
+    from apps.contacts.models import CustomAttributeDef
+
+    with _tx.atomic():
+        for key in ("budget", "timeline", "needs"):
+            CustomAttributeDef.objects.get_or_create(
+                account=account,
+                entity="lead",
+                key=key,
+                defaults={"type": "string"},
+            )
+
+    starter = STARTERS_BY_KEY["lead-qualification-questionnaire"]
+    return automation_api.upsert_published_workflow(
+        account,
+        slug=starter["key"],
+        name=starter["name"],
+        definition=build_lead_qualification_definition(),
+    )
 
 
 def _welcome_definition(

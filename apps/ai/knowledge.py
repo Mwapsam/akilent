@@ -158,9 +158,9 @@ def import_pairs(account, user, pairs) -> dict:
         queued = []
     else:
         # Labelled "Drafted by AI" only when AI really is drafting them.
-        KnowledgeBaseEntry.objects.filter(pk__in=queued).update(
-            origin=KnowledgeBaseEntry.Origin.AI_DRAFT
-        )
+        from apps.ai import knowledge_write
+        qs = KnowledgeBaseEntry.objects.filter(pk__in=queued)
+        knowledge_write.bulk_update_entries(account, qs, origin=KnowledgeBaseEntry.Origin.AI_DRAFT)
     return {
         "added": len(created),
         "to_draft": len(queued),

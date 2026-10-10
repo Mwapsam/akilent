@@ -90,6 +90,9 @@ _STEP_TYPES = {
     # and anything Phase 5/6 adds) are usable from a Workflow the moment
     # they're registered — no workflow_engine change needed.
     "action",
+    # B — asks the contact a free-text question, validates the answer against a
+    # CustomAttributeDef (C), and saves it. Supports re-prompts on invalid answers.
+    "ask_question",
 }
 _TRIGGER_TYPES = {
     "business_event",
@@ -457,6 +460,8 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     step_id=sid,
                     field="timeout_seconds",
                 )
+        if step.get("type") == "ask_question":
+            _validate_ask_question_step(step, trig, steps, ids, sid, _error, account)
         if step.get("type") in ("add_tag", "remove_tag"):
             from apps.contacts import tags as contact_tags
 
@@ -502,6 +507,11 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 _check(target, sid, "routes")
             _check(step.get("default"), sid, "default")
             _check(step.get("on_timeout"), sid, "on_timeout")
+        elif step.get("type") == "ask_question":
+            _check(step.get("next"), sid, "next")
+            _check(step.get("on_timeout"), sid, "on_timeout")
+            _check(step.get("on_invalid"), sid, "on_invalid")
+            _check(step.get("on_error"), sid, "on_error")
         elif step.get("type") not in ("stop", "exit"):
             _check(step.get("next"), sid, "next")
     return errors
@@ -946,6 +956,231 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
             )
 
     return {"_parked": True, "ig_outbound_message_id": ig_outbound_id, "interaction_token": token}
+
+
+# ── B — ask_question step ─────────────────────────────────────────────────────
+
+_ASK_MAX_TIMEOUT = 604800   # 7 days
+_ASK_MIN_TIMEOUT = 300      # 5 minutes
+_ASK_DEFAULT_TIMEOUT = 86400
+
+
+def _validate_ask_question_step(step, trig, steps, ids, sid, _error, account):
+    """Publish-time validation for ask_question steps."""
+    if not (step.get("question") or "").strip():
+        _error(f"step {sid!r}: ask_question needs a question", step_id=sid, field="question")
+    if not (step.get("attribute") or "").strip():
+        _error(f"step {sid!r}: ask_question needs an attribute key", step_id=sid, field="attribute")
+
+    timeout = step.get("timeout_seconds", _ASK_DEFAULT_TIMEOUT)
+    if (
+        not isinstance(timeout, int)
+        or isinstance(timeout, bool)
+        or not _ASK_MIN_TIMEOUT <= timeout <= _ASK_MAX_TIMEOUT
+    ):
+        _error(
+            f"step {sid!r}: timeout_seconds must be between {_ASK_MIN_TIMEOUT} and {_ASK_MAX_TIMEOUT}",
+            step_id=sid, field="timeout_seconds",
+        )
+    max_attempts = step.get("max_attempts", 1)
+    if (
+        not isinstance(max_attempts, int)
+        or isinstance(max_attempts, bool)
+        or not 1 <= max_attempts <= 3
+    ):
+        _error(f"step {sid!r}: max_attempts must be 1, 2, or 3", step_id=sid, field="max_attempts")
+
+    target = step.get("target", "contact")
+    if target not in ("contact", "lead", "deal"):
+        _error(f"step {sid!r}: target must be contact, lead or deal", step_id=sid, field="target")
+
+    # For lead/deal targets, verify a create_lead step is reachable before this step
+    # (or the trigger is lead.* / deal.*).
+    if target in ("lead", "deal"):
+        trig_type = trig.get("type", "")
+        if not (trig_type.startswith("lead.") or trig_type.startswith("deal.")):
+            # Walk backwards: any path from any trigger must pass through create_lead.
+            steps_by_id = {s.get("id"): s for s in steps if s.get("id")}
+            if not _lead_reachable_before(steps_by_id, sid, steps):
+                _error(
+                    f"step {sid!r}: target='{target}' requires a create_lead step on every "
+                    "path before this step, or a lead.* / deal.* trigger",
+                    step_id=sid, field="target",
+                )
+
+
+def _lead_reachable_before(steps_by_id: dict, target_sid: str, all_steps: list) -> bool:
+    """Return True if a create_lead step precedes target_sid on every reachable path."""
+    # Simple forward reachability: find all steps that can reach target_sid,
+    # then check that every path to it passes through a create_lead.
+    # We use a backwards DFS: find predecessors of target_sid.
+    predecessors: dict[str, list[str]] = {s["id"]: [] for s in all_steps if s.get("id")}
+    for step in all_steps:
+        sid = step.get("id")
+        if not sid:
+            continue
+        for field in ("next", "on_true", "on_false", "on_timeout", "on_invalid", "on_error", "default"):
+            ref = step.get(field)
+            if ref and ref in predecessors:
+                predecessors[ref].append(sid)
+        for ref in (step.get("routes") or {}).values():
+            if ref and ref in predecessors:
+                predecessors[ref].append(sid)
+
+    # BFS back from target_sid; stop at create_lead nodes.
+    from collections import deque
+    visited = set()
+    queue = deque([target_sid])
+    while queue:
+        node = queue.popleft()
+        if node in visited:
+            continue
+        visited.add(node)
+        for pred in predecessors.get(node, []):
+            s = steps_by_id.get(pred)
+            if s and s.get("type") == "create_lead":
+                continue  # this path is covered
+            queue.append(pred)
+    # If any predecessor has no predecessors itself (it's a start step) and isn't create_lead,
+    # then there's a path without create_lead. A rough check: if any visited node has no
+    # predecessors and isn't a create_lead, return False.
+    for node in visited:
+        if not predecessors.get(node) and node != target_sid:
+            s = steps_by_id.get(node)
+            if not s or s.get("type") != "create_lead":
+                return False
+    return True
+
+
+def _messaging_window_open(conversation) -> bool:
+    """True if the conversation's channel window allows free-text replies."""
+    from apps.conversations.models import Conversation as SpineConversation
+
+    ch = conversation.channel
+    if ch == SpineConversation.Channel.WHATSAPP:
+        wa_convo = getattr(conversation, "whatsapp_conversation", None)
+        if wa_convo is None:
+            return False
+        return bool(getattr(wa_convo, "window_is_open", lambda: True)())
+    if ch == SpineConversation.Channel.INSTAGRAM:
+        ig_convo = getattr(conversation, "instagram_conversation", None)
+        if ig_convo is None:
+            return False
+        return bool(getattr(ig_convo, "window_is_open", lambda: True)())
+    # Other channels: assume open.
+    return True
+
+
+def _run_ask_question(run: WorkflowRun, step: dict) -> dict:
+    """Entry point for the ask_question step.
+
+    Idempotent: if an open interaction already exists for (run, step_id),
+    re-park only and correct next_due_at if it drifted.
+
+    Otherwise (first entry): check messaging window, then in one transaction:
+      open WorkflowInteraction, send the question, park the run (WAITING + deadline).
+    Window closed → route to on_error without opening an interaction.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from apps.automation.models import WorkflowInteraction
+
+    step_id = step.get("id") or ""
+    timeout = int(step.get("timeout_seconds", _ASK_DEFAULT_TIMEOUT))
+    target = step.get("target", "contact")
+    attribute = step.get("attribute") or ""
+    question = _first_name_merge(run, step.get("question") or "")
+
+    # ── Idempotent re-entry: open interaction already exists ──────────────────
+    existing = WorkflowInteraction.objects.filter(
+        run=run, step_id=step_id, status=WorkflowInteraction.Status.OPEN
+    ).first()
+
+    if existing is not None:
+        # The run was re-entered (worker retry). Re-park: ensure WAITING + correct deadline.
+        update_fields = []
+        if run.status != WorkflowRun.Status.WAITING:
+            run.status = WorkflowRun.Status.WAITING
+            update_fields.append("status")
+        if existing.deadline_at and run.next_due_at != existing.deadline_at:
+            run.next_due_at = existing.deadline_at
+            update_fields.append("next_due_at")
+        if update_fields:
+            run.save(update_fields=update_fields)
+        return {"_parked": True, "interaction_token": existing.token}
+
+    # ── Resolve conversation ──────────────────────────────────────────────────
+    on_error = step.get("on_error") or ""
+    try:
+        conversation = _conversation_for_run(run, step, fallback=True)
+    except ValueError:
+        if on_error:
+            return {"_routed_to": on_error, "reason": "no_conversation"}
+        raise
+
+    # ── Messaging window check ────────────────────────────────────────────────
+    if not _messaging_window_open(conversation):
+        if on_error:
+            return {"_routed_to": on_error, "reason": "window_closed"}
+        raise ValueError(
+            f"ask_question step {step_id!r}: messaging window is closed "
+            "and no on_error step is configured"
+        )
+
+    deadline = timezone.now() + timedelta(seconds=timeout)
+
+    # ── Open interaction + park run (atomic) ──────────────────────────────────
+    with transaction.atomic():
+        interaction = WorkflowInteraction.objects.create(
+            run=run,
+            step_id=step_id,
+            conversation=conversation,
+            expected={"free_text": True, "attribute": attribute, "target": target},
+            deadline_at=deadline,
+        )
+        run.status = WorkflowRun.Status.WAITING
+        run.next_due_at = deadline
+        run.save(update_fields=["status", "next_due_at"])
+
+    # ── Send the question (after commit, so a crash is recoverable) ───────────
+    try:
+        _send_ask_question_text(run, conversation, question, step_id, attempt=0)
+    except Exception:
+        logger.exception(
+            "_run_ask_question: send raised for run=%s step=%s", run.pk, step_id
+        )
+
+    return {"_parked": True, "interaction_token": interaction.token}
+
+
+def _send_ask_question_text(
+    run: WorkflowRun, conversation, text: str, step_id: str, *, attempt: int
+) -> None:
+    """Send the question (or re-prompt) as a plain-text reply in the conversation.
+
+    Uses the ``reply`` action so window/opt-out/consent rules apply.
+    The idempotency key is unique per step + attempt so a re-prompt after
+    an invalid answer gets a fresh send, but a worker retry of the same
+    attempt is deduplicated.
+    """
+    from apps.core.actions import ActionError, run_action
+
+    idem_key = f"wf:{run.pk}:{step_id}:aq:{attempt}"
+    try:
+        run_action(
+            "reply",
+            {"account": run.workflow.account},
+            conversation=conversation,
+            body=text,
+            idempotency_key=idem_key,
+        )
+    except ActionError as exc:
+        raise ValueError(
+            f"ask_question step {step_id!r}: could not send question: {exc}"
+        ) from exc
 
 
 def _route_for_reply(step: dict, message: dict) -> str | None:
@@ -1454,10 +1689,10 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.save(update_fields=["status", "next_due_at"])
             return run
 
-        # IG send_buttons parks the run (WAITING) with a deadline. On re-entry,
+        # send_buttons / ask_question park the run (WAITING) with a deadline. On re-entry,
         # if the deadline has passed, take the timeout path and cancel interactions.
         if (
-            stype in ("send_buttons", "send_list")
+            stype in ("send_buttons", "send_list", "ask_question")
             and run.status == WorkflowRun.Status.WAITING
             and run.next_due_at
             and run.next_due_at <= timezone.now()
@@ -1518,6 +1753,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = {"matched": matched}
             elif stype == "set_attribute":
                 result = _apply_set_attribute(run, step)
+            elif stype == "ask_question":
+                result = _run_ask_question(run, step)
             elif stype in ("stop", "exit"):
                 _record(run, step, {})
                 return _complete(run)
@@ -1535,9 +1772,14 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             return run
 
         _record(run, step, result, ig_outbound_message_id=result.get("ig_outbound_message_id"))
-        # IG interactive steps park the run inside _run_interactive (atomically).
+        # Interactive and ask_question steps park the run (WAITING + deadline).
         if result.get("_parked"):
             return run
+        # ask_question: window closed or no conversation → routed to on_error.
+        if result.get("_routed_to"):
+            run.current_step = result["_routed_to"]
+            run.save(update_fields=["current_step"])
+            continue
         run.current_step = _next_after(step, run, branch_result=result)
         run.save(update_fields=["current_step"])
         if not run.current_step:

@@ -301,6 +301,11 @@ def _commit_claim(
     steps = _steps_by_id(run.workflow)
     step = steps.get(interaction.step_id)
 
+    # ask_question steps have their own answer-processing path.
+    if (step or {}).get("type") == "ask_question":
+        _commit_ask_question_answer(run, interaction, body, step)
+        return
+
     # Determine the next step via the existing route helper.
     from apps.automation.workflow_engine import _route_for_reply
 
@@ -365,6 +370,183 @@ def _commit_claim(
     run.current_step = target
     run.next_due_at = timezone.now()  # sweeper trigger
     run.save(update_fields=["context", "status", "current_step", "next_due_at"])
+
+
+def _commit_ask_question_answer(
+    run: WorkflowRun,
+    interaction: WorkflowInteraction,
+    body: str,
+    step: dict,
+) -> None:
+    """Handle a free-text answer for an ask_question step.
+
+    All of the following are committed in the outer transaction (the same
+    ``transaction.atomic()`` in ``claim_reply``):
+    - Attribute write + attribute.changed event (valid path)
+    - Interaction state transition (answered or invalid_answer_count++)
+    - Re-prompt OutboundMessage row (invalid + attempts remaining)
+    - WorkflowStepRun (terminal answer only)
+    - Run durable-continuation fields
+
+    The ``InteractionAnswer`` row was already inserted (savepoint) before this
+    function is called.
+    """
+    from apps.contacts.attributes import _coerce, set_attributes
+    from apps.contacts.models import CustomAttributeDef
+
+    step_id = interaction.step_id
+    attribute_key = step.get("attribute", "")
+    target_entity = step.get("target", "contact")
+    max_attempts = int(step.get("max_attempts", 1))
+    timeout_seconds = int(step.get("timeout_seconds", 86400))
+    on_invalid = step.get("on_invalid") or step.get("next") or ""
+    on_next = step.get("next") or ""
+
+    # Resolve the target object (contact / lead / deal).
+    target_obj = _resolve_ask_target(run, target_entity)
+
+    # Attempt coercion (no lock here; set_attributes takes the authoritative lock below).
+    coerced = None
+    coerce_error = None
+    if target_obj is not None and attribute_key:
+        try:
+            defn = CustomAttributeDef.objects.get(
+                account=run.workflow.account,
+                entity=target_entity,
+                key=attribute_key,
+                archived_at__isnull=True,
+            )
+            coerced = _coerce(body, defn)
+        except CustomAttributeDef.DoesNotExist:
+            coerce_error = f"attribute def {attribute_key!r} not found for entity {target_entity!r}"
+        except ValueError as exc:
+            coerce_error = str(exc)
+    else:
+        coerce_error = "no target object or attribute key"
+
+    invalid_count = interaction.invalid_answer_count
+    is_valid = coerce_error is None
+
+    if is_valid:
+        # ── Valid answer ──────────────────────────────────────────────────────
+        set_attributes(target_obj, {attribute_key: coerced}, source="workflow")
+
+        interaction.status = WorkflowInteraction.Status.ANSWERED
+        interaction.closed_at = timezone.now()
+        interaction.save(update_fields=["status", "closed_at"])
+
+        WorkflowStepRun.objects.get_or_create(
+            run=run,
+            step_id=step_id,
+            defaults={
+                "step_type": "ask_question",
+                "status": "ok",
+                "result": {
+                    "attribute": attribute_key,
+                    "target": target_entity,
+                    "went_to": on_next,
+                },
+            },
+        )
+
+        run.status = WorkflowRun.Status.ACTIVE
+        run.current_step = on_next
+        run.next_due_at = timezone.now()
+        run.save(update_fields=["status", "current_step", "next_due_at"])
+
+    elif invalid_count < max_attempts - 1:
+        # ── Invalid, re-prompt ────────────────────────────────────────────────
+        # invalid_answer_count counts answers seen so far (0-indexed).
+        # With max_attempts=2: first invalid → re-prompt; second → on_invalid.
+        new_count = invalid_count + 1
+        interaction.invalid_answer_count = new_count
+        # Reset deadline to now + timeout (only re-prompts reset the deadline).
+        new_deadline = timezone.now() + __import__("datetime").timedelta(seconds=timeout_seconds)
+        interaction.deadline_at = new_deadline
+        interaction.save(update_fields=["invalid_answer_count", "deadline_at"])
+
+        # Enqueue the re-prompt message (DB-backed; delivered once by the worker).
+        # Use the interaction's own conversation — not a freshly resolved one —
+        # so the re-prompt arrives in the same thread as the original question.
+        reprompt_text = step.get("reprompt", step.get("question", ""))
+        if reprompt_text and interaction.conversation_id:
+            from apps.automation.workflow_engine import _send_ask_question_text
+            from apps.conversations.models import Conversation
+
+            try:
+                conv = Conversation.objects.get(pk=interaction.conversation_id)
+                _send_ask_question_text(run, conv, reprompt_text, step_id, attempt=new_count)
+            except Conversation.DoesNotExist:
+                logger.warning(
+                    "claim_reply ask_question re-prompt: conversation %s not found run=%s",
+                    interaction.conversation_id, run.pk,
+                )
+
+        # Keep the run WAITING; sync next_due_at to the new deadline invariant.
+        run.next_due_at = new_deadline
+        run.save(update_fields=["next_due_at"])
+
+        logger.info(
+            "claim_reply ask_question re-prompt: run=%s step=%s attempt=%s reason=%s",
+            run.pk, step_id, new_count, coerce_error,
+        )
+
+    else:
+        # ── Invalid, exhausted ────────────────────────────────────────────────
+        interaction.status = WorkflowInteraction.Status.ANSWERED
+        interaction.closed_at = timezone.now()
+        interaction.save(update_fields=["status", "closed_at"])
+
+        WorkflowStepRun.objects.get_or_create(
+            run=run,
+            step_id=step_id,
+            defaults={
+                "step_type": "ask_question",
+                "status": "ok",
+                "result": {
+                    "attribute": attribute_key,
+                    "target": target_entity,
+                    "invalid": True,
+                    "went_to": on_invalid,
+                },
+            },
+        )
+
+        run.status = WorkflowRun.Status.ACTIVE
+        run.current_step = on_invalid
+        run.next_due_at = timezone.now()
+        run.save(update_fields=["status", "current_step", "next_due_at"])
+
+        logger.info(
+            "claim_reply ask_question exhausted: run=%s step=%s reason=%s → %s",
+            run.pk, step_id, coerce_error, on_invalid,
+        )
+
+
+def _resolve_ask_target(run: WorkflowRun, target_entity: str):
+    """Return the target object (contact/lead/deal) for attribute writes."""
+    if target_entity == "contact":
+        return run.contact
+    if target_entity == "lead":
+        try:
+            from apps.crm.models import Lead
+
+            return Lead.objects.filter(
+                contact=run.contact, account=run.workflow.account
+            ).order_by("-created_at").first()
+        except Exception:
+            return None
+    if target_entity == "deal":
+        try:
+            from apps.crm.models import Deal
+
+            return Deal.objects.filter(
+                contact=run.contact, account=run.workflow.account
+            ).order_by("-created_at").first()
+        except Exception:
+            return None
+    return None
+
 
 
 def _advance_after_commit(run: WorkflowRun) -> None:
