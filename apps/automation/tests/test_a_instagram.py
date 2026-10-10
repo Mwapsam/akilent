@@ -22,10 +22,13 @@ from apps.automation.models import (
     WorkflowRun,
     WorkflowStepRun,
 )
-from apps.automation.workflow_engine import advance_run, enroll, run_due, validate_definition
+from apps.automation.workflow_engine import (
+    enroll,
+    run_due,
+    validate_definition,
+)
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -136,7 +139,9 @@ def test_ig_send_buttons_creates_interaction_and_parks_run(
     with patch("apps.instagram.services.outbound.enqueue_reply") as mock_enqueue:
         mock_enqueue.return_value = None  # no real OutboundMessage in test DB
 
-        run = enroll(wf, contact, context={"conversation_id": spine_ig_conversation.public_id})
+        run = enroll(
+            wf, contact, context={"conversation_id": spine_ig_conversation.public_id}
+        )
 
     assert run is not None
     run.refresh_from_db()
@@ -170,7 +175,9 @@ def test_ig_tap_resumes_run_via_claim_reply(
 
     with patch("apps.instagram.services.outbound.enqueue_reply") as mock_enqueue:
         mock_enqueue.return_value = None
-        run = enroll(wf, contact, context={"conversation_id": spine_ig_conversation.public_id})
+        run = enroll(
+            wf, contact, context={"conversation_id": spine_ig_conversation.public_id}
+        )
 
     run.refresh_from_db()
     assert run.status == WorkflowRun.Status.WAITING
@@ -208,7 +215,9 @@ def test_ig_timeout_takes_on_timeout_path(
 
     with patch("apps.instagram.services.outbound.enqueue_reply") as mock_enqueue:
         mock_enqueue.return_value = None
-        run = enroll(wf, contact, context={"conversation_id": spine_ig_conversation.public_id})
+        run = enroll(
+            wf, contact, context={"conversation_id": spine_ig_conversation.public_id}
+        )
 
     run.refresh_from_db()
     assert run.status == WorkflowRun.Status.WAITING
@@ -245,7 +254,9 @@ def test_ig_outbound_failure_cancels_interaction_and_fails_run(
 
     with patch("apps.instagram.services.outbound.enqueue_reply") as mock_enqueue:
         mock_enqueue.return_value = None
-        run = enroll(wf, contact, context={"conversation_id": spine_ig_conversation.public_id})
+        run = enroll(
+            wf, contact, context={"conversation_id": spine_ig_conversation.public_id}
+        )
 
     run.refresh_from_db()
     step_run = WorkflowStepRun.objects.get(run=run, step_id="ask")
@@ -302,7 +313,9 @@ def test_publish_validation_rejects_too_many_buttons(account):
     errors = validate_definition(
         {
             "trigger": {"type": "conversation.message_received"},
-            "steps": [{"id": "ask", "type": "send_buttons", "text": "?", "buttons": buttons}],
+            "steps": [
+                {"id": "ask", "type": "send_buttons", "text": "?", "buttons": buttons}
+            ],
         },
         account,
     )
@@ -358,7 +371,7 @@ def test_wa_send_buttons_creates_no_interaction(db):
         status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
-    pn = WhatsAppBusinessNumber.objects.create(
+    WhatsAppBusinessNumber.objects.create(
         account=acc,
         phone_number_id="PNID_WA",
         access_token="tok",

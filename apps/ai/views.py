@@ -157,6 +157,7 @@ def settings_ai_knowledge(request):
             messages.error(request, "That's not a valid entry type.")
         else:
             from apps.ai import knowledge_write
+
             knowledge_write.create_entry(
                 account, title=title, content=content, source_type=source_type
             )
@@ -191,6 +192,7 @@ def knowledge_entry_toggle(request, pk):
         messages.error(request, "Check this entry and approve it first.")
         return redirect("settings-ai-knowledge")
     from apps.ai import knowledge_write
+
     entry.is_active = not entry.is_active
     knowledge_write.save_entry(entry, update_fields=["is_active", "updated_at"])
     return redirect("settings-ai-knowledge")
@@ -248,6 +250,7 @@ def knowledge_entry_edit(request, pk):
     else:
         messages.success(request, "Saved.")
     from apps.ai import knowledge_write
+
     knowledge_write.save_entry(entry, update_fields=fields)
     return redirect("settings-ai-knowledge")
 
@@ -262,14 +265,12 @@ def knowledge_approve_all(request):
     if stop:
         return stop
     from apps.ai import knowledge_write
-    qs = (
-        KnowledgeBaseEntry.objects.filter(
-            account=account,
-            origin__in=KnowledgeBaseEntry.REVIEW_ORIGINS,
-            reviewed_at__isnull=True,
-        )
-        .exclude(content="")
-    )
+
+    qs = KnowledgeBaseEntry.objects.filter(
+        account=account,
+        origin__in=KnowledgeBaseEntry.REVIEW_ORIGINS,
+        reviewed_at__isnull=True,
+    ).exclude(content="")
     count = knowledge_write.bulk_update_entries(
         account, qs, is_active=True, reviewed_at=timezone.now()
     )
@@ -361,6 +362,7 @@ def knowledge_entry_delete(request, pk):
         return redirect("settings-ai-knowledge")
     entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
     from apps.ai import knowledge_write
+
     knowledge_write.delete_entry(entry)
     messages.success(request, "Removed from the knowledge base.")
     return redirect("settings-ai-knowledge")

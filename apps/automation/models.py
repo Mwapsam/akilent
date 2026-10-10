@@ -208,8 +208,12 @@ class WorkflowInteraction(models.Model):
         EXPIRED = "expired", "Expired"
         CANCELLED = "cancelled", "Cancelled"
 
-    token = models.CharField(max_length=22, unique=True, default=_workflow_interaction_token, editable=False)
-    run = models.ForeignKey(WorkflowRun, on_delete=models.CASCADE, related_name="interactions")
+    token = models.CharField(
+        max_length=22, unique=True, default=_workflow_interaction_token, editable=False
+    )
+    run = models.ForeignKey(
+        WorkflowRun, on_delete=models.CASCADE, related_name="interactions"
+    )
     step_id = models.CharField(max_length=64)
     conversation = models.ForeignKey(
         "conversations.Conversation",
@@ -219,7 +223,9 @@ class WorkflowInteraction(models.Model):
     # The options the contact is expected to pick from. Shape:
     # {"option_ids": ["prices", "book", ...], "free_text": False}
     expected = models.JSONField(default=dict, blank=True)
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.OPEN
+    )
     invalid_answer_count = models.PositiveSmallIntegerField(default=0)
     # deadline_at is authoritative for expiry; run.next_due_at is kept equal to it.
     deadline_at = models.DateTimeField(null=True, blank=True)

@@ -642,8 +642,9 @@ def workflow_publish(request, slug: str):
     except automation_api.AutomationLimitReached as exc:
         messages.error(request, str(exc))
         return redirect("automation:editor", slug=wf.slug)
-    from apps.contacts.attributes import verify_defs_for_publish
     from django.db import transaction as _tx
+
+    from apps.contacts.attributes import verify_defs_for_publish
 
     try:
         with _tx.atomic():
@@ -717,8 +718,9 @@ def workflow_resume(request, slug: str):
         except automation_api.AutomationLimitReached as exc:
             messages.error(request, str(exc))
             return redirect("automation:list")
-        from apps.contacts.attributes import verify_defs_for_publish
         from django.db import transaction as _tx
+
+        from apps.contacts.attributes import verify_defs_for_publish
 
         try:
             with _tx.atomic():

@@ -345,6 +345,7 @@ def save_answer(account, proposal_id, question: str, answer: str):
     if (proposal.payload or {}).get("learned_entry_id"):
         return None, "This answer is already saved."
     from apps.ai import knowledge_write
+
     entry = knowledge_write.create_entry(
         account,
         title=question,
@@ -570,12 +571,23 @@ def save_settings(
             )
     # Use update_fields to avoid overwriting knowledge_version (bumped independently
     # by knowledge mutation transactions) and bm25_enabled (a separate admin toggle).
-    ai_settings.save(update_fields=[
-        "enabled", "business_notes", "consented_at", "consented_by",
-        "reply_mode", "auto_topics", "auto_min_confidence", "auto_only_when_closed",
-        "holding_reply_enabled", "holding_reply_text", "auto_consented_at",
-        "auto_consented_by", "updated_at",
-    ])
+    ai_settings.save(
+        update_fields=[
+            "enabled",
+            "business_notes",
+            "consented_at",
+            "consented_by",
+            "reply_mode",
+            "auto_topics",
+            "auto_min_confidence",
+            "auto_only_when_closed",
+            "holding_reply_enabled",
+            "holding_reply_text",
+            "auto_consented_at",
+            "auto_consented_by",
+            "updated_at",
+        ]
+    )
     return ai_settings
 
 

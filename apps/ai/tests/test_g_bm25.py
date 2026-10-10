@@ -5,6 +5,7 @@ code was written (Revision 6 discipline). Baseline uses ``facts.select_knowledge
 term overlap; BM25 uses ``ranking.BM25Ranker``. Pass rule: top-1 ≥ baseline AND
 top-3 > baseline.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -13,65 +14,217 @@ import pytest
 from django.core.cache import cache
 from django.utils import timezone
 
-from apps.ai.models import AISettings, KnowledgeBaseEntry
 from apps.ai import knowledge_write, ranking
-
+from apps.ai.models import AISettings, KnowledgeBaseEntry
 
 # ── Eval dataset (frozen) ────────────────────────────────────────────────────
 
 EVAL_ENTRIES: list[tuple[str, str]] = [
     # (title/question, answer/content)
-    ("What are your delivery charges?", "We charge K50 for standard delivery within Lusaka and K100 for outside Lusaka."),
-    ("Do you deliver outside Zambia?", "Currently we only deliver within Zambia. International shipping is not available."),
-    ("How long does delivery take?", "Standard delivery takes 2-3 business days within Lusaka and 5-7 days nationwide."),
-    ("Can I track my order?", "Yes, once your order is dispatched you receive an SMS with a tracking link."),
-    ("What payment methods do you accept?", "We accept Airtel Money, MTN Mobile Money, Visa/Mastercard, and cash on delivery."),
-    ("Do you accept mobile money?", "Yes, we accept both Airtel Money and MTN Mobile Money."),
-    ("What is your refund policy?", "We offer a full refund within 7 days of purchase if the item is unused and in its original packaging."),
-    ("How do I return an item?", "Contact us within 7 days of delivery. We collect the item and process your refund within 3 business days."),
-    ("Are your products genuine?", "All products are 100% genuine and sourced directly from authorised distributors."),
-    ("Do you offer warranties?", "Most electronics come with a 12-month manufacturer warranty. Check your product page for details."),
-    ("What are your business hours?", "We are open Monday to Saturday, 08:00 to 18:00. Closed on Sundays and public holidays."),
-    ("Do you have a physical store?", "Our showroom is at Cairo Road, Lusaka, opposite the Lusaka Square shopping mall."),
-    ("Can I visit your shop?", "Yes, our showroom at Cairo Road is open Monday to Saturday 08:00-18:00. Walk-ins welcome."),
-    ("How do I place an order?", "Browse our catalogue, add items to your cart, and check out. You will receive a confirmation SMS."),
-    ("Can I order by phone?", "Yes, call us on +260 97 123 4567 and our team will place the order for you."),
-    ("What is the minimum order amount?", "There is no minimum order amount. You can order any single item."),
-    ("Do you offer bulk discounts?", "Yes, orders above K5,000 receive a 10% discount. Contact us for larger volumes."),
-    ("Can I cancel my order?", "You can cancel within 2 hours of placing the order. After dispatch, cancellation is not possible."),
-    ("Do you offer gift wrapping?", "Gift wrapping is available for K20 per item. Add a note at checkout."),
-    ("What happens if my item arrives damaged?", "Take photos immediately and WhatsApp them to us. We replace damaged items at no extra cost."),
-    ("Do you sell second-hand goods?", "No, we sell only brand-new items. All stock is sourced from authorised suppliers."),
-    ("Can I negotiate the price?", "Prices are fixed, but we run regular promotions. Follow our WhatsApp channel for deals."),
-    ("How do I know when a product is back in stock?", "Send us a WhatsApp message with the product name and we will notify you when it is restocked."),
-    ("Do you have a loyalty programme?", "Yes, every purchase earns points. 100 points = K10 discount on your next order."),
-    ("How do I redeem my loyalty points?", "At checkout, enter your phone number to see your points balance and apply them automatically."),
-    ("What is your privacy policy?", "We collect only your name, phone and address for order fulfilment. We never share your data with third parties."),
-    ("Do you store my card details?", "No, card payments are processed by our payment partner and we never store your card details."),
-    ("Is my personal data safe?", "Your data is encrypted and stored securely. We comply with all applicable data protection laws."),
-    ("Can I change my delivery address after ordering?", "Contact us within 1 hour of placing the order. After that, the address cannot be changed."),
-    ("Do you deliver to rural areas?", "We deliver nationwide. Delivery to rural areas may take up to 10 business days."),
-    ("What is the weight limit for delivery?", "Our standard service covers items up to 20 kg. Heavier items are quoted separately."),
-    ("Can two items be delivered in the same box?", "We pack multiple items together when possible to reduce packaging."),
-    ("Do you offer same-day delivery?", "Same-day delivery is available within Lusaka for orders placed before 10:00. A K100 express fee applies."),
-    ("Can I pick up my order in person?", "Yes, click-and-collect is available at our Cairo Road showroom. Select 'collect in store' at checkout."),
-    ("What if I miss my delivery?", "The courier will try once more the next business day. After two failed attempts the order is returned."),
-    ("Do you sell gift vouchers?", "Digital gift vouchers are available in K100, K250 and K500 denominations. WhatsApp us to purchase."),
-    ("Can a gift voucher expire?", "Gift vouchers are valid for 12 months from the date of purchase."),
-    ("How do I use a gift voucher?", "Enter the voucher code at checkout. The value is deducted from your order total automatically."),
-    ("Do you have an app?", "We do not have a dedicated app yet. You can shop via our website or WhatsApp us directly."),
-    ("Can I order from outside Zambia?", "You can browse and pay online from abroad, but delivery is within Zambia only."),
-    ("What currency do you use?", "All prices are in Zambian Kwacha (ZMW). Mobile money and card payments are converted at the current rate."),
-    ("Do you charge VAT?", "VAT is included in the displayed price. Your receipt shows the VAT component."),
-    ("Can businesses order on credit?", "We offer 30-day credit accounts to registered businesses. Contact our sales team for an application form."),
-    ("How do I complain about an order?", "WhatsApp us on +260 97 123 4567 or email orders@example.com. We aim to resolve all complaints within 24 hours."),
-    ("What is your social media?", "Follow us on Facebook and Instagram @AkilentShop for promotions and new arrivals."),
-    ("Do you sponsor events?", "We consider sponsorship requests case by case. Email partnerships@example.com with your proposal."),
-    ("Are you hiring?", "Vacancies are posted on our Facebook page and website. Send your CV to careers@example.com."),
-    ("What brands do you stock?", "We stock over 50 brands including Samsung, LG, Philips, HP, Dell, and local Zambian brands."),
-    ("Do you price-match?", "We do not formally price-match, but we strive to offer the best value. Let us know if you find a lower price."),
-    ("How do I subscribe to your newsletter?", "Enter your email on our website homepage or ask our team to add you to the WhatsApp broadcast list."),
-    ("Do you offer installation services?", "Installation is available for large appliances at K150 within Lusaka. Book at checkout."),
+    (
+        "What are your delivery charges?",
+        "We charge K50 for standard delivery within Lusaka and K100 for outside Lusaka.",
+    ),
+    (
+        "Do you deliver outside Zambia?",
+        "Currently we only deliver within Zambia. International shipping is not available.",
+    ),
+    (
+        "How long does delivery take?",
+        "Standard delivery takes 2-3 business days within Lusaka and 5-7 days nationwide.",
+    ),
+    (
+        "Can I track my order?",
+        "Yes, once your order is dispatched you receive an SMS with a tracking link.",
+    ),
+    (
+        "What payment methods do you accept?",
+        "We accept Airtel Money, MTN Mobile Money, Visa/Mastercard, and cash on delivery.",
+    ),
+    (
+        "Do you accept mobile money?",
+        "Yes, we accept both Airtel Money and MTN Mobile Money.",
+    ),
+    (
+        "What is your refund policy?",
+        "We offer a full refund within 7 days of purchase if the item is unused and in its original packaging.",
+    ),
+    (
+        "How do I return an item?",
+        "Contact us within 7 days of delivery. We collect the item and process your refund within 3 business days.",
+    ),
+    (
+        "Are your products genuine?",
+        "All products are 100% genuine and sourced directly from authorised distributors.",
+    ),
+    (
+        "Do you offer warranties?",
+        "Most electronics come with a 12-month manufacturer warranty. Check your product page for details.",
+    ),
+    (
+        "What are your business hours?",
+        "We are open Monday to Saturday, 08:00 to 18:00. Closed on Sundays and public holidays.",
+    ),
+    (
+        "Do you have a physical store?",
+        "Our showroom is at Cairo Road, Lusaka, opposite the Lusaka Square shopping mall.",
+    ),
+    (
+        "Can I visit your shop?",
+        "Yes, our showroom at Cairo Road is open Monday to Saturday 08:00-18:00. Walk-ins welcome.",
+    ),
+    (
+        "How do I place an order?",
+        "Browse our catalogue, add items to your cart, and check out. You will receive a confirmation SMS.",
+    ),
+    (
+        "Can I order by phone?",
+        "Yes, call us on +260 97 123 4567 and our team will place the order for you.",
+    ),
+    (
+        "What is the minimum order amount?",
+        "There is no minimum order amount. You can order any single item.",
+    ),
+    (
+        "Do you offer bulk discounts?",
+        "Yes, orders above K5,000 receive a 10% discount. Contact us for larger volumes.",
+    ),
+    (
+        "Can I cancel my order?",
+        "You can cancel within 2 hours of placing the order. After dispatch, cancellation is not possible.",
+    ),
+    (
+        "Do you offer gift wrapping?",
+        "Gift wrapping is available for K20 per item. Add a note at checkout.",
+    ),
+    (
+        "What happens if my item arrives damaged?",
+        "Take photos immediately and WhatsApp them to us. We replace damaged items at no extra cost.",
+    ),
+    (
+        "Do you sell second-hand goods?",
+        "No, we sell only brand-new items. All stock is sourced from authorised suppliers.",
+    ),
+    (
+        "Can I negotiate the price?",
+        "Prices are fixed, but we run regular promotions. Follow our WhatsApp channel for deals.",
+    ),
+    (
+        "How do I know when a product is back in stock?",
+        "Send us a WhatsApp message with the product name and we will notify you when it is restocked.",
+    ),
+    (
+        "Do you have a loyalty programme?",
+        "Yes, every purchase earns points. 100 points = K10 discount on your next order.",
+    ),
+    (
+        "How do I redeem my loyalty points?",
+        "At checkout, enter your phone number to see your points balance and apply them automatically.",
+    ),
+    (
+        "What is your privacy policy?",
+        "We collect only your name, phone and address for order fulfilment. We never share your data with third parties.",
+    ),
+    (
+        "Do you store my card details?",
+        "No, card payments are processed by our payment partner and we never store your card details.",
+    ),
+    (
+        "Is my personal data safe?",
+        "Your data is encrypted and stored securely. We comply with all applicable data protection laws.",
+    ),
+    (
+        "Can I change my delivery address after ordering?",
+        "Contact us within 1 hour of placing the order. After that, the address cannot be changed.",
+    ),
+    (
+        "Do you deliver to rural areas?",
+        "We deliver nationwide. Delivery to rural areas may take up to 10 business days.",
+    ),
+    (
+        "What is the weight limit for delivery?",
+        "Our standard service covers items up to 20 kg. Heavier items are quoted separately.",
+    ),
+    (
+        "Can two items be delivered in the same box?",
+        "We pack multiple items together when possible to reduce packaging.",
+    ),
+    (
+        "Do you offer same-day delivery?",
+        "Same-day delivery is available within Lusaka for orders placed before 10:00. A K100 express fee applies.",
+    ),
+    (
+        "Can I pick up my order in person?",
+        "Yes, click-and-collect is available at our Cairo Road showroom. Select 'collect in store' at checkout.",
+    ),
+    (
+        "What if I miss my delivery?",
+        "The courier will try once more the next business day. After two failed attempts the order is returned.",
+    ),
+    (
+        "Do you sell gift vouchers?",
+        "Digital gift vouchers are available in K100, K250 and K500 denominations. WhatsApp us to purchase.",
+    ),
+    (
+        "Can a gift voucher expire?",
+        "Gift vouchers are valid for 12 months from the date of purchase.",
+    ),
+    (
+        "How do I use a gift voucher?",
+        "Enter the voucher code at checkout. The value is deducted from your order total automatically.",
+    ),
+    (
+        "Do you have an app?",
+        "We do not have a dedicated app yet. You can shop via our website or WhatsApp us directly.",
+    ),
+    (
+        "Can I order from outside Zambia?",
+        "You can browse and pay online from abroad, but delivery is within Zambia only.",
+    ),
+    (
+        "What currency do you use?",
+        "All prices are in Zambian Kwacha (ZMW). Mobile money and card payments are converted at the current rate.",
+    ),
+    (
+        "Do you charge VAT?",
+        "VAT is included in the displayed price. Your receipt shows the VAT component.",
+    ),
+    (
+        "Can businesses order on credit?",
+        "We offer 30-day credit accounts to registered businesses. Contact our sales team for an application form.",
+    ),
+    (
+        "How do I complain about an order?",
+        "WhatsApp us on +260 97 123 4567 or email orders@example.com. We aim to resolve all complaints within 24 hours.",
+    ),
+    (
+        "What is your social media?",
+        "Follow us on Facebook and Instagram @AkilentShop for promotions and new arrivals.",
+    ),
+    (
+        "Do you sponsor events?",
+        "We consider sponsorship requests case by case. Email partnerships@example.com with your proposal.",
+    ),
+    (
+        "Are you hiring?",
+        "Vacancies are posted on our Facebook page and website. Send your CV to careers@example.com.",
+    ),
+    (
+        "What brands do you stock?",
+        "We stock over 50 brands including Samsung, LG, Philips, HP, Dell, and local Zambian brands.",
+    ),
+    (
+        "Do you price-match?",
+        "We do not formally price-match, but we strive to offer the best value. Let us know if you find a lower price.",
+    ),
+    (
+        "How do I subscribe to your newsletter?",
+        "Enter your email on our website homepage or ask our team to add you to the WhatsApp broadcast list.",
+    ),
+    (
+        "Do you offer installation services?",
+        "Installation is available for large appliances at K150 within Lusaka. Book at checkout.",
+    ),
 ]
 
 EVAL_QUERIES: list[tuple[str, str]] = [
@@ -140,11 +293,17 @@ def account(db):
 
     acc = Account.objects.create(company_name="EvalCo")
     plan = Plan.objects.create(
-        slug="ep", name="Eval", price_monthly=Decimal("0"),
-        max_emails_per_month=0, email_apis=False, api_rate_per_min=0,
+        slug="ep",
+        name="Eval",
+        price_monthly=Decimal("0"),
+        max_emails_per_month=0,
+        email_apis=False,
+        api_rate_per_min=0,
     )
     Subscription.objects.create(
-        account=acc, plan=plan, status=Subscription.ACTIVE,
+        account=acc,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     return acc
@@ -161,8 +320,11 @@ def entries(account):
     created = []
     for title, content in EVAL_ENTRIES:
         e = KnowledgeBaseEntry.objects.create(
-            account=account, title=title, content=content,
-            source_type=KnowledgeBaseEntry.SourceType.FAQ, is_active=True,
+            account=account,
+            title=title,
+            content=content,
+            source_type=KnowledgeBaseEntry.SourceType.FAQ,
+            is_active=True,
         )
         created.append(e)
     return created
@@ -181,7 +343,9 @@ def test_version_bumps_on_create(account, ai_settings):
 
 @pytest.mark.django_db
 def test_version_bumps_on_save_entry(account, ai_settings):
-    entry = KnowledgeBaseEntry.objects.create(account=account, title="Q", content="A", is_active=True)
+    entry = KnowledgeBaseEntry.objects.create(
+        account=account, title="Q", content="A", is_active=True
+    )
     v0 = ai_settings.knowledge_version
     entry.content = "Updated answer."
     knowledge_write.save_entry(entry, update_fields=["content", "updated_at"])
@@ -191,7 +355,9 @@ def test_version_bumps_on_save_entry(account, ai_settings):
 
 @pytest.mark.django_db
 def test_version_bumps_on_delete(account, ai_settings):
-    entry = KnowledgeBaseEntry.objects.create(account=account, title="Q", content="A", is_active=True)
+    entry = KnowledgeBaseEntry.objects.create(
+        account=account, title="Q", content="A", is_active=True
+    )
     v0 = ai_settings.knowledge_version
     knowledge_write.delete_entry(entry)
     ai_settings.refresh_from_db()
@@ -200,7 +366,9 @@ def test_version_bumps_on_delete(account, ai_settings):
 
 @pytest.mark.django_db
 def test_version_bumps_on_toggle(account, ai_settings):
-    entry = KnowledgeBaseEntry.objects.create(account=account, title="Q", content="A", is_active=True)
+    entry = KnowledgeBaseEntry.objects.create(
+        account=account, title="Q", content="A", is_active=True
+    )
     v0 = ai_settings.knowledge_version
     entry.is_active = False
     knowledge_write.save_entry(entry, update_fields=["is_active", "updated_at"])
@@ -210,12 +378,14 @@ def test_version_bumps_on_toggle(account, ai_settings):
 
 @pytest.mark.django_db
 def test_version_bumps_on_bulk_update(account, ai_settings):
-    KnowledgeBaseEntry.objects.create(account=account, title="Q", content="A",
-                                       origin="import", is_active=False)
+    KnowledgeBaseEntry.objects.create(
+        account=account, title="Q", content="A", origin="import", is_active=False
+    )
     v0 = ai_settings.knowledge_version
     qs = KnowledgeBaseEntry.objects.filter(account=account, is_active=False)
-    knowledge_write.bulk_update_entries(account, qs, is_active=True,
-                                         reviewed_at=timezone.now())
+    knowledge_write.bulk_update_entries(
+        account, qs, is_active=True, reviewed_at=timezone.now()
+    )
     ai_settings.refresh_from_db()
     assert ai_settings.knowledge_version == v0 + 1
 
@@ -235,7 +405,9 @@ def test_bulk_import_bumps_version_once(account, ai_settings):
 @pytest.mark.django_db
 def test_bulk_import_duplicate_questions_skipped(account, ai_settings):
     """Entries already in the knowledge base are not re-created."""
-    KnowledgeBaseEntry.objects.create(account=account, title="Existing?", content="Yes.")
+    KnowledgeBaseEntry.objects.create(
+        account=account, title="Existing?", content="Yes."
+    )
     pairs = [("Existing?", "New answer."), ("Brand new?", "Yes.")]
     created = knowledge_write.bulk_create_for_review(
         account, pairs, origin=KnowledgeBaseEntry.Origin.IMPORT
@@ -253,7 +425,9 @@ def test_cross_account_isolation(account, ai_settings):
     other = Account.objects.create(company_name="OtherCo")
     plan = Plan.objects.get(slug="ep")
     Subscription.objects.create(
-        account=other, plan=plan, status=Subscription.ACTIVE,
+        account=other,
+        plan=plan,
+        status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
     )
     other_settings = AISettings.objects.create(account=other)
@@ -328,7 +502,11 @@ def test_bm25_ranker_empty_query():
 
 def test_bm25_ranker_exact_title_match():
     docs = [
-        {"id": "k1", "title": "Delivery charges", "content": "K50 for standard delivery."},
+        {
+            "id": "k1",
+            "title": "Delivery charges",
+            "content": "K50 for standard delivery.",
+        },
         {"id": "k2", "title": "Return policy", "content": "7-day returns."},
     ]
     r = ranking.BM25Ranker(docs)
@@ -339,10 +517,22 @@ def test_bm25_ranker_exact_title_match():
 def test_bm25_ranker_idf_downweights_common_terms():
     """A term in every document gives less lift than a term in only one."""
     docs = [
-        {"id": "k1", "title": "Delivery policy", "content": "We deliver everywhere policy."},
+        {
+            "id": "k1",
+            "title": "Delivery policy",
+            "content": "We deliver everywhere policy.",
+        },
         {"id": "k2", "title": "Return policy", "content": "Returns accepted policy."},
-        {"id": "k3", "title": "Price policy", "content": "Prices shown include policy."},
-        {"id": "k4", "title": "Delivery timing", "content": "2 business days for delivery."},
+        {
+            "id": "k3",
+            "title": "Price policy",
+            "content": "Prices shown include policy.",
+        },
+        {
+            "id": "k4",
+            "title": "Delivery timing",
+            "content": "2 business days for delivery.",
+        },
     ]
     r = ranking.BM25Ranker(docs)
     # "delivery" appears in k1 and k4; "timing" only in k4 — k4 should rank high for "delivery timing"
@@ -353,10 +543,10 @@ def test_bm25_ranker_idf_downweights_common_terms():
 
 def test_tokenize_stems_and_strips_stopwords():
     toks = set(ranking.tokenize("How do I get a refund for the item?"))
-    assert "how" not in toks      # stopword
-    assert "i" not in toks        # stopword
-    assert "refund" in toks       # kept
-    assert "item" in toks         # kept
+    assert "how" not in toks  # stopword
+    assert "i" not in toks  # stopword
+    assert "refund" in toks  # kept
+    assert "item" in toks  # kept
 
 
 # ── Evaluation set: BM25 vs baseline ─────────────────────────────────────────
@@ -364,7 +554,7 @@ def test_tokenize_stems_and_strips_stopwords():
 
 def _baseline_top_k(entries_data, query: str, k: int) -> list[str]:
     """Top-k titles using the existing term-overlap baseline (facts.select_knowledge)."""
-    from apps.ai.facts import select_knowledge, terms
+    from apps.ai.facts import terms
 
     wanted = terms(query)
 
@@ -382,10 +572,7 @@ def _bm25_top_k(ranker: ranking.BM25Ranker, query: str, k: int) -> list[str]:
 @pytest.mark.django_db
 def test_bm25_beats_baseline_on_eval_set(account, ai_settings, entries):
     """BM25 top-1 ≥ baseline top-1 AND BM25 top-3 > baseline top-3."""
-    docs = [
-        {"id": f"k{e.pk}", "title": e.title, "content": e.content}
-        for e in entries
-    ]
+    docs = [{"id": f"k{e.pk}", "title": e.title, "content": e.content} for e in entries]
     entries_data = [{"title": e.title, "content": e.content} for e in entries]
     ranker = ranking.BM25Ranker(docs)
 
@@ -449,8 +636,11 @@ def test_facts_and_chatbot_use_same_ranking(account, ai_settings, entries):
     # chatbot path — need a ChatbotConfig and linked entries
     chatbot = ChatbotConfig.objects.create(account=account, name="Test")
     from apps.chatbot.models import ChatbotKnowledgeSource
+
     for e in entries:
-        ChatbotKnowledgeSource.objects.create(chatbot=chatbot, knowledge_entry=e, is_active=True)
+        ChatbotKnowledgeSource.objects.create(
+            chatbot=chatbot, knowledge_entry=e, is_active=True
+        )
 
     chatbot_results = retrieve(chatbot, query, max_results=3)
     chatbot_titles = [r["title"] for r in chatbot_results]

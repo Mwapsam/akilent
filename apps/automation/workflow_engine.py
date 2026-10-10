@@ -54,7 +54,12 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from apps.automation.models import Workflow, WorkflowInteraction, WorkflowRun, WorkflowStepRun
+from apps.automation.models import (
+    Workflow,
+    WorkflowInteraction,
+    WorkflowRun,
+    WorkflowStepRun,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +432,7 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
             if step["type"] == "send_list":
                 try:
                     from apps.instagram.models.account import InstagramBusinessAccount
+
                     _has_ig = (
                         account is not None
                         and InstagramBusinessAccount.objects.filter(
@@ -857,9 +863,11 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
 
     # Workflows authored for WhatsApp put timeout_seconds/on_timeout on the following
     # wait_for_reply step. Inherit those settings when the send_buttons step omits them.
-    _next_step = _steps_by_id(run.workflow).get(step.get("next") or "")
-    _next_is_wait = _next_step and _next_step.get("type") == "wait_for_reply"
-    _timeout_src = step if "timeout_seconds" in step else (_next_step if _next_is_wait else step)
+    _next_step = _steps_by_id(run.workflow).get(step.get("next") or "") or {}
+    _next_is_wait = _next_step.get("type") == "wait_for_reply"
+    _timeout_src = (
+        step if "timeout_seconds" in step else (_next_step if _next_is_wait else step)
+    )
     timeout = int(_timeout_src.get("timeout_seconds", _IG_DEFAULT_TIMEOUT))
     deadline = timezone.now() + timedelta(seconds=timeout)
 
@@ -873,16 +881,12 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
                 f"step {step_id!r}: button title {title!r} exceeds {_IG_MAX_TITLE} chars"
             )
         # Prefer an explicit id (keeps parity with WA routes); fall back to slug.
-        option_ids.append(
-            str(btn.get("id") or slugify(title) or title.lower())[:200]
-        )
+        option_ids.append(str(btn.get("id") or slugify(title) or title.lower())[:200])
 
     # If the following wait_for_reply step has a `default` route (accept any typed answer),
     # set free_text so _pick_target routes typed replies that don't match a button label.
     _free_text = bool(
-        _next_is_wait and (
-            _next_step.get("free_text") or _next_step.get("default")
-        )
+        _next_is_wait and (_next_step.get("free_text") or _next_step.get("default"))
     )
 
     with transaction.atomic():
@@ -915,11 +919,13 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
                     f"step {step_id!r}: quick-reply payload for {btn.get('title')!r} "
                     f"exceeds {_IG_MAX_PAYLOAD} chars"
                 )
-            quick_replies.append({
-                "content_type": "text",
-                "title": str(btn.get("title") or ""),
-                "payload": payload,
-            })
+            quick_replies.append(
+                {
+                    "content_type": "text",
+                    "title": str(btn.get("title") or ""),
+                    "payload": payload,
+                }
+            )
 
         # 3. Enqueue the outbound message.
         outbound = enqueue_reply(
@@ -947,30 +953,44 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
     # sees the quick-reply chips without a multi-minute delay.
     if outbound is not None:
         from apps.instagram.services.outbound import send_outbound
+
         try:
             send_outbound(outbound)
         except Exception:
             logger.exception(
                 "_run_interactive_instagram: send_outbound raised outbound=%s run=%s",
-                outbound.pk, run.pk,
+                outbound.pk,
+                run.pk,
             )
 
-    return {"_parked": True, "ig_outbound_message_id": ig_outbound_id, "interaction_token": token}
+    return {
+        "_parked": True,
+        "ig_outbound_message_id": ig_outbound_id,
+        "interaction_token": token,
+    }
 
 
 # ── B — ask_question step ─────────────────────────────────────────────────────
 
-_ASK_MAX_TIMEOUT = 604800   # 7 days
-_ASK_MIN_TIMEOUT = 300      # 5 minutes
+_ASK_MAX_TIMEOUT = 604800  # 7 days
+_ASK_MIN_TIMEOUT = 300  # 5 minutes
 _ASK_DEFAULT_TIMEOUT = 86400
 
 
 def _validate_ask_question_step(step, trig, steps, ids, sid, _error, account):
     """Publish-time validation for ask_question steps."""
     if not (step.get("question") or "").strip():
-        _error(f"step {sid!r}: ask_question needs a question", step_id=sid, field="question")
+        _error(
+            f"step {sid!r}: ask_question needs a question",
+            step_id=sid,
+            field="question",
+        )
     if not (step.get("attribute") or "").strip():
-        _error(f"step {sid!r}: ask_question needs an attribute key", step_id=sid, field="attribute")
+        _error(
+            f"step {sid!r}: ask_question needs an attribute key",
+            step_id=sid,
+            field="attribute",
+        )
 
     timeout = step.get("timeout_seconds", _ASK_DEFAULT_TIMEOUT)
     if (
@@ -980,7 +1000,8 @@ def _validate_ask_question_step(step, trig, steps, ids, sid, _error, account):
     ):
         _error(
             f"step {sid!r}: timeout_seconds must be between {_ASK_MIN_TIMEOUT} and {_ASK_MAX_TIMEOUT}",
-            step_id=sid, field="timeout_seconds",
+            step_id=sid,
+            field="timeout_seconds",
         )
     max_attempts = step.get("max_attempts", 1)
     if (
@@ -988,11 +1009,19 @@ def _validate_ask_question_step(step, trig, steps, ids, sid, _error, account):
         or isinstance(max_attempts, bool)
         or not 1 <= max_attempts <= 3
     ):
-        _error(f"step {sid!r}: max_attempts must be 1, 2, or 3", step_id=sid, field="max_attempts")
+        _error(
+            f"step {sid!r}: max_attempts must be 1, 2, or 3",
+            step_id=sid,
+            field="max_attempts",
+        )
 
     target = step.get("target", "contact")
     if target not in ("contact", "lead", "deal"):
-        _error(f"step {sid!r}: target must be contact, lead or deal", step_id=sid, field="target")
+        _error(
+            f"step {sid!r}: target must be contact, lead or deal",
+            step_id=sid,
+            field="target",
+        )
 
     # For lead/deal targets, verify a create_lead step is reachable before this step
     # (or the trigger is lead.* / deal.*).
@@ -1005,7 +1034,8 @@ def _validate_ask_question_step(step, trig, steps, ids, sid, _error, account):
                 _error(
                     f"step {sid!r}: target='{target}' requires a create_lead step on every "
                     "path before this step, or a lead.* / deal.* trigger",
-                    step_id=sid, field="target",
+                    step_id=sid,
+                    field="target",
                 )
 
 
@@ -1019,7 +1049,15 @@ def _lead_reachable_before(steps_by_id: dict, target_sid: str, all_steps: list) 
         sid = step.get("id")
         if not sid:
             continue
-        for field in ("next", "on_true", "on_false", "on_timeout", "on_invalid", "on_error", "default"):
+        for field in (
+            "next",
+            "on_true",
+            "on_false",
+            "on_timeout",
+            "on_invalid",
+            "on_error",
+            "default",
+        ):
             ref = step.get(field)
             if ref and ref in predecessors:
                 predecessors[ref].append(sid)
@@ -1029,6 +1067,7 @@ def _lead_reachable_before(steps_by_id: dict, target_sid: str, all_steps: list) 
 
     # BFS back from target_sid; stop at create_lead nodes.
     from collections import deque
+
     visited = set()
     queue = deque([target_sid])
     while queue:
@@ -1212,7 +1251,6 @@ def resume_on_reply(account_id: int, contact, message: dict) -> bool:
     scan-and-lock loop is used as a fallback, but ordered deterministically by
     ``(started_at, pk)`` so the result is repeatable under concurrency.
     """
-    from apps.conversations.models import Conversation
 
     # Try interaction-based routing first (A0 path).
     # We need the conversation to call claim_reply. The message dict carries it
@@ -1622,6 +1660,7 @@ def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
         set_attributes(contact, {key: value}, source="workflow")
     else:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "_apply_set_attribute: no CustomAttributeDef for key=%r entity=%s — "
             "falling back to legacy direct write; create a definition to enforce typing",
@@ -1767,11 +1806,17 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "completed_at"])
             from apps.automation.interaction import cancel_open_interactions_for_run
+
             cancel_open_interactions_for_run(run)
             _alert_failure(run, str(exc))
             return run
 
-        _record(run, step, result, ig_outbound_message_id=result.get("ig_outbound_message_id"))
+        _record(
+            run,
+            step,
+            result,
+            ig_outbound_message_id=result.get("ig_outbound_message_id"),
+        )
         # Interactive and ask_question steps park the run (WAITING + deadline).
         if result.get("_parked"):
             return run

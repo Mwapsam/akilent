@@ -8,6 +8,7 @@ The index is cached in Redis under ``kb_bm25:{account_id}:{version}``. The versi
 incremented in the same transaction as every knowledge mutation (``apps.ai.knowledge_write``),
 so an old key is never read after data changes — it just expires quietly after 1 hour.
 """
+
 from __future__ import annotations
 
 import math
@@ -18,12 +19,12 @@ from django.core.cache import cache
 # BM25 hyperparameters
 _K1 = 1.5
 _B = 0.75
-_TITLE_WEIGHT = 2   # title terms count this many times in per-document TF
-_MIN_SCORE = 0.1    # entries scoring below this are not returned
-_CACHE_TTL = 3600   # 1 hour
+_TITLE_WEIGHT = 2  # title terms count this many times in per-document TF
+_MIN_SCORE = 0.1  # entries scoring below this are not returned
+_CACHE_TTL = 3600  # 1 hour
 
 # Import tokenization primitives from facts so both paths share the same vocabulary.
-from apps.ai.facts import _WORD, _STOPWORDS, _stem  # noqa: E402
+from apps.ai.facts import _STOPWORDS, _WORD, _stem  # noqa: E402
 
 
 def tokenize(text: str) -> list[str]:

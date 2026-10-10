@@ -8,10 +8,16 @@ before any reader can build a stale index from the new data.
 If ``AISettings`` does not exist for the account (AI not yet enabled), the
 version bump is a no-op — there is no index to invalidate.
 """
+
 from __future__ import annotations
 
-from django.db import models as _m, transaction
-from django.utils import timezone as _tz
+from typing import TYPE_CHECKING
+
+from django.db import models as _m
+from django.db import transaction
+
+if TYPE_CHECKING:
+    from apps.ai.models import KnowledgeBaseEntry
 
 
 def bump_version(account_id: int) -> None:
@@ -36,7 +42,7 @@ def create_entry(
     is_active: bool = True,
     origin: str = "manual",
     source_url: str = "",
-) -> "KnowledgeBaseEntry":
+) -> KnowledgeBaseEntry:
     from apps.ai.models import KnowledgeBaseEntry
 
     with transaction.atomic():

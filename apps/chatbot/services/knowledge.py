@@ -68,8 +68,8 @@ def retrieve(
     Each item: {"title": str, "content": str, "source_type": str, "score": float}
     Returns an empty list if no entries match.
     """
-    from apps.ai.models import KnowledgeBaseEntry
     from apps.ai import ranking
+    from apps.ai.models import KnowledgeBaseEntry
     from apps.chatbot.models import ChatbotKnowledgeSource
 
     entry_ids = list(
@@ -106,11 +106,12 @@ def retrieve(
     # linked entry regardless of how other chatbots' entries rank, then filter down.
     ranker = ranking.get_cached_ranker(chatbot.account)
     if ranker is not None:
-        # top_k = all linked entries × some headroom so none are cut before the filter.
         # top_k = full corpus size so no linked entry is cut before the filter,
         # regardless of how other chatbots' entries rank in the account index.
         all_results = ranker.query(query, top_k=max(len(ranker._docs), len(docs)))
-        results = [(doc, score) for doc, score in all_results if doc["id"] in doc_ids][:max_results]
+        results = [(doc, score) for doc, score in all_results if doc["id"] in doc_ids][
+            :max_results
+        ]
         if results:
             return [
                 {
@@ -131,7 +132,8 @@ def retrieve(
     # select_knowledge ranks by overlap when entries don't fit the budget; here we run it
     # over the full linked set so the best-matching entry wins regardless of its DB order.
     chosen = [
-        e for e in select_knowledge(docs, query)
+        e
+        for e in select_knowledge(docs, query)
         if wanted & (_terms(e["title"]) | _terms(e["content"]))
     ][:max_results]
     return [

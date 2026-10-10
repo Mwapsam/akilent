@@ -75,10 +75,7 @@ def set_attributes(
         locked_obj = _lock_obj(obj)
 
         # Lock every referenced definition in pk order.
-        defs = {
-            d.key: d
-            for d in _lock_defs(obj.account, entity, keys)
-        }
+        defs = {d.key: d for d in _lock_defs(obj.account, entity, keys)}
 
         # Validate all keys up front before writing anything.
         for key in keys:
@@ -88,9 +85,7 @@ def set_attributes(
                     f"(account {obj.account_id})"
                 )
             if defs[key].is_archived:
-                raise ValueError(
-                    f"Attribute {key!r} is archived and cannot be written"
-                )
+                raise ValueError(f"Attribute {key!r} is archived and cannot be written")
 
         # Read from the locked DB row, not the potentially-stale in-memory obj.
         current = dict(locked_obj.attributes or {})
@@ -141,11 +136,7 @@ def archive_attribute_def(defn, *, actor: str = "") -> None:
 
     with transaction.atomic():
         # Lock the definition row first (pk order is trivially satisfied for one row).
-        locked = (
-            CustomAttributeDef.objects.select_for_update()
-            .filter(pk=defn.pk)
-            .get()
-        )
+        locked = CustomAttributeDef.objects.select_for_update().filter(pk=defn.pk).get()
 
         if locked.is_archived:
             raise ValueError(f"Attribute {locked.key!r} is already archived.")
@@ -213,10 +204,10 @@ def _coerce(value: Any, defn) -> Any:
     if t == "number":
         try:
             return str(Decimal(str(value)).quantize(Decimal("0.01")))
-        except InvalidOperation:
+        except InvalidOperation as exc:
             raise ValueError(
                 f"Attribute {defn.key!r}: {value!r} cannot be converted to a number"
-            )
+            ) from exc
 
     if t == "boolean":
         if isinstance(value, bool):
@@ -241,10 +232,10 @@ def _coerce(value: Any, defn) -> Any:
         # Validate format.
         try:
             datetime.date.fromisoformat(s)
-        except ValueError:
+        except ValueError as exc:
             raise ValueError(
                 f"Attribute {defn.key!r}: {value!r} is not a valid date (YYYY-MM-DD)"
-            )
+            ) from exc
         return s
 
     if t == "choice":
@@ -292,8 +283,7 @@ def _emit_changed(obj, entity: str, diff: dict, *, actor: str, source: str) -> N
 def _check_not_referenced(defn) -> None:
     """Raise ValueError if any published workflow or active/waiting run
     references defn.key for defn.entity."""
-    from apps.automation.models import WorkflowRun
-    from apps.automation.models import Workflow
+    from apps.automation.models import Workflow, WorkflowRun
 
     key = defn.key
     entity = defn.entity
@@ -310,13 +300,10 @@ def _check_not_referenced(defn) -> None:
             )
 
     # Check active or waiting runs.
-    active_refs = (
-        WorkflowRun.objects.filter(
-            workflow__account=account,
-            status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
-        )
-        .select_related("workflow")
-    )
+    active_refs = WorkflowRun.objects.filter(
+        workflow__account=account,
+        status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
+    ).select_related("workflow")
     for run in active_refs:
         if _definition_references_key(run.workflow.definition, key, entity):
             raise ValueError(

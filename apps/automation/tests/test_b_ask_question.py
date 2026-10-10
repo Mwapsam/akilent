@@ -31,7 +31,6 @@ from apps.automation.workflow_engine import advance_run, run_due
 from apps.contacts.models import Contact, CustomAttributeDef
 from apps.conversations.models import Conversation
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -62,12 +61,16 @@ def account(db):
 
 @pytest.fixture
 def contact(account):
-    return Contact.objects.create(account=account, phone="+260977000001", first_name="Mwape")
+    return Contact.objects.create(
+        account=account, phone="+260977000001", first_name="Mwape"
+    )
 
 
 @pytest.fixture
 def conversation(account, contact):
-    return Conversation.objects.create(account=account, contact=contact, channel="whatsapp")
+    return Conversation.objects.create(
+        account=account, contact=contact, channel="whatsapp"
+    )
 
 
 @pytest.fixture
@@ -80,6 +83,7 @@ def budget_def(account):
 @pytest.fixture
 def lead(account, contact):
     from apps.crm.models import Lead
+
     return Lead.objects.create(account=account, contact=contact)
 
 
@@ -128,7 +132,9 @@ def _ask_question_steps(
     ]
 
 
-def _park_run_on_ask(wf, contact, conversation, step_id="q_budget", deadline_offset=3600):
+def _park_run_on_ask(
+    wf, contact, conversation, step_id="q_budget", deadline_offset=3600
+):
     """Create a WAITING run with an open ask_question interaction."""
     run = WorkflowRun.objects.create(
         workflow=wf,
@@ -159,7 +165,9 @@ def _make_key(msg_id="msgB001"):
 
 
 @pytest.mark.django_db
-def test_valid_answer_writes_attribute_and_advances(account, contact, conversation, lead, budget_def):
+def test_valid_answer_writes_attribute_and_advances(
+    account, contact, conversation, lead, budget_def
+):
     """A valid free-text answer is coerced, saved, and the run advances to next."""
     wf = _wf(account, _ask_question_steps())
     run, interaction = _park_run_on_ask(wf, contact, conversation)
@@ -189,7 +197,9 @@ def test_valid_answer_writes_attribute_and_advances(account, contact, conversati
 
 
 @pytest.mark.django_db
-def test_duplicate_answer_is_already_claimed(account, contact, conversation, lead, budget_def):
+def test_duplicate_answer_is_already_claimed(
+    account, contact, conversation, lead, budget_def
+):
     """The same message_key is rejected on the second call."""
     wf = _wf(account, _ask_question_steps())
     _park_run_on_ask(wf, contact, conversation)
@@ -207,9 +217,11 @@ def test_duplicate_answer_is_already_claimed(account, contact, conversation, lea
 
 
 @pytest.mark.django_db
-def test_invalid_answer_reprompts_and_stays_waiting(account, contact, conversation, lead):
+def test_invalid_answer_reprompts_and_stays_waiting(
+    account, contact, conversation, lead
+):
     """A number def rejects a non-numeric answer; invalid_answer_count increments."""
-    number_def = CustomAttributeDef.objects.create(
+    CustomAttributeDef.objects.create(
         account=account, entity="lead", key="budget", type="number"
     )
     steps = _ask_question_steps(max_attempts=2)
@@ -293,7 +305,7 @@ def test_timeout_routes_to_on_timeout(account, contact, conversation):
         deadline_at=timezone.now() - timedelta(seconds=10),
     )
 
-    with patch("apps.automation.workflow_engine.advance_run") as mock_advance:
+    with patch("apps.automation.workflow_engine.advance_run"):
         run_due()
 
     run.refresh_from_db()
@@ -306,7 +318,9 @@ def test_timeout_routes_to_on_timeout(account, contact, conversation):
 
 
 @pytest.mark.django_db
-def test_next_due_at_equals_deadline_at(account, contact, conversation, lead, budget_def):
+def test_next_due_at_equals_deadline_at(
+    account, contact, conversation, lead, budget_def
+):
     """After a valid claim, next_due_at is reset; after a re-prompt it equals deadline_at."""
     CustomAttributeDef.objects.create(
         account=account, entity="lead", key="budget2", type="number"
@@ -395,14 +409,19 @@ def test_window_closed_routes_to_on_error(account, contact, conversation):
     run.refresh_from_db()
     # Run should have advanced to on_error (notify/stop) without opening an interaction.
     assert WorkflowInteraction.objects.filter(run=run).count() == 0
-    assert run.current_step in ("notify", "done") or run.status == WorkflowRun.Status.COMPLETED
+    assert (
+        run.current_step in ("notify", "done")
+        or run.status == WorkflowRun.Status.COMPLETED
+    )
 
 
 # ── B.9  Idempotent re-entry: existing open interaction → park only ───────────
 
 
 @pytest.mark.django_db
-def test_reentry_with_open_interaction_does_not_resend(account, contact, conversation, lead, budget_def):
+def test_reentry_with_open_interaction_does_not_resend(
+    account, contact, conversation, lead, budget_def
+):
     """If an open interaction already exists, _run_ask_question parks only (no new send)."""
     steps = _ask_question_steps()
     wf = _wf(account, steps)
@@ -428,7 +447,9 @@ def test_reentry_with_open_interaction_does_not_resend(account, contact, convers
 @pytest.mark.django_db
 def test_install_lead_qualification_questionnaire(account):
     """Starter creates three lead attribute defs and a published workflow, idempotently."""
-    from apps.automation.engagement_starters import install_lead_qualification_questionnaire
+    from apps.automation.engagement_starters import (
+        install_lead_qualification_questionnaire,
+    )
     from apps.automation.models import Workflow
 
     wf = install_lead_qualification_questionnaire(account)
@@ -443,4 +464,6 @@ def test_install_lead_qualification_questionnaire(account):
     # Idempotency: calling again must not raise or create duplicates.
     wf2 = install_lead_qualification_questionnaire(account)
     assert wf2.pk == wf.pk
-    assert CustomAttributeDef.objects.filter(account=account, entity="lead").count() == 3
+    assert (
+        CustomAttributeDef.objects.filter(account=account, entity="lead").count() == 3
+    )

@@ -20,7 +20,6 @@ import pytest
 from django.utils import timezone
 
 from apps.automation.interaction import (
-    ClaimResult,
     cancel_open_interactions_for_run,
     claim_reply,
 )
@@ -34,7 +33,6 @@ from apps.automation.models import (
 from apps.automation.workflow_engine import advance_run, enroll, run_due
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -103,7 +101,14 @@ def _wait_for_reply_steps(step_id="ask", *, next_step="done"):
     ]
 
 
-def _open_interaction(run, conversation, step_id="ask", option_ids=None, free_text=False, deadline_offset=3600):
+def _open_interaction(
+    run,
+    conversation,
+    step_id="ask",
+    option_ids=None,
+    free_text=False,
+    deadline_offset=3600,
+):
     """Create an open WorkflowInteraction for a WAITING run."""
     return WorkflowInteraction.objects.create(
         run=run,
@@ -139,12 +144,18 @@ def test_tap_resumes_correct_run_only(account, contact, conversation):
 
     # Create two WAITING runs manually.
     run1 = WorkflowRun.objects.create(
-        workflow=wf1, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask1", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf1,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask1",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     run2 = WorkflowRun.objects.create(
-        workflow=wf2, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask2", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf2,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask2",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
 
     ix1 = _open_interaction(run1, conversation, "ask1", option_ids=["yes"])
@@ -173,8 +184,11 @@ def test_duplicate_delivery_returns_already_claimed(account, contact, conversati
     """The same provider message id (message_key) is a no-op the second time."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, conversation, "ask")
 
@@ -198,8 +212,11 @@ def test_wrong_conversation_token_rejected(account, contact, conversation):
     )
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=other_contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=other_contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, other_conv, "ask")
 
@@ -218,8 +235,11 @@ def test_stale_run_interaction_cancelled(account, contact, conversation):
     """If the run already advanced before claim, the interaction is cancelled."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, conversation, "ask")
 
@@ -248,8 +268,11 @@ def test_expiry_wins_late_reply_unmatched(account, contact, conversation):
     """Expiry commits first; a late reply after expiry returns unmatched."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() - timedelta(seconds=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() - timedelta(seconds=1),
     )
     ix = _open_interaction(run, conversation, "ask", deadline_offset=-1)
 
@@ -273,13 +296,19 @@ def test_crash_recovery_run_due_advances_once(account, contact, conversation):
     """After a crash right after claim commit, run_due advances the run exactly once."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, conversation, "ask")
 
     # Patch out the fast-path advance so it crashes as if the process died.
-    with patch("apps.automation.interaction._advance_after_commit", side_effect=Exception("crash")):
+    with patch(
+        "apps.automation.interaction._advance_after_commit",
+        side_effect=Exception("crash"),
+    ):
         result = claim_reply(conversation, _make_key("cr1"), f"{ix.token}:yes", "")
 
     assert result == "claimed"
@@ -294,11 +323,11 @@ def test_crash_recovery_run_due_advances_once(account, contact, conversation):
     run.save(update_fields=["next_due_at"])
 
     # run_due twice — must advance exactly once.
-    n1 = run_due()
+    run_due()
     run.refresh_from_db()
     assert run.status == WorkflowRun.Status.COMPLETED
 
-    n2 = run_due()
+    run_due()
     # Second run_due doesn't double-advance (run already COMPLETED).
     assert WorkflowStepRun.objects.filter(run=run, step_id="ask").count() == 1
 
@@ -308,8 +337,11 @@ def test_cancel_open_interactions_for_run(account, contact, conversation):
     """cancel_open_interactions_for_run cancels all open interactions for a run."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, conversation, "ask")
 
@@ -324,12 +356,17 @@ def test_cancel_open_interactions_for_run(account, contact, conversation):
 
 
 @pytest.mark.django_db
-def test_typed_reply_routes_to_interaction_with_free_text(account, contact, conversation):
+def test_typed_reply_routes_to_interaction_with_free_text(
+    account, contact, conversation
+):
     """A typed reply routes to the first free-text interaction."""
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     ix = _open_interaction(run, conversation, "ask", free_text=True)
 
@@ -348,7 +385,9 @@ def test_complete_cancels_open_interactions(account, contact, conversation):
     """When advance_run completes a run, open interactions are cancelled."""
     wf = _wf(account, [{"id": "stop", "type": "stop"}])
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.ACTIVE,
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.ACTIVE,
         current_step="stop",
     )
     # Create an open interaction on this run (shouldn't happen in practice, but
@@ -370,14 +409,19 @@ def test_complete_cancels_open_interactions(account, contact, conversation):
 
 
 @pytest.mark.django_db
-def test_legacy_fallback_used_for_runs_without_interactions(account, contact, conversation):
+def test_legacy_fallback_used_for_runs_without_interactions(
+    account, contact, conversation
+):
     """resume_on_reply legacy path handles runs with no WorkflowInteraction rows."""
     from apps.automation.workflow_engine import resume_on_reply
 
     wf = _wf(account, _wait_for_reply_steps())
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.WAITING,
-        current_step="ask", next_due_at=timezone.now() + timedelta(hours=1),
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.WAITING,
+        current_step="ask",
+        next_due_at=timezone.now() + timedelta(hours=1),
     )
     # No WorkflowInteraction rows for this run → legacy path.
     assert not WorkflowInteraction.objects.filter(run=run).exists()
@@ -401,7 +445,9 @@ def test_run_due_sweeps_stalled_active_run(account, contact, conversation):
     """run_due picks up an ACTIVE run with a past next_due_at (stalled continuation)."""
     wf = _wf(account, [{"id": "s", "type": "stop"}])
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.ACTIVE,
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.ACTIVE,
         current_step="s",
         next_due_at=timezone.now() - timedelta(seconds=120),  # stalled
     )

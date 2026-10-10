@@ -1,9 +1,8 @@
-from django.db import migrations, models
 import django.db.models.deletion
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("automation", "0008_a0_workflow_interaction"),
         ("instagram", "0013_a_outbound_quick_replies"),

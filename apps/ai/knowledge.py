@@ -127,6 +127,7 @@ def add_for_review(account, pairs, *, origin: str, source_url: str = "") -> list
     """Create an inactive entry per new question (one the knowledge base doesn't already have).
     Returns the entries created."""
     from apps.ai import knowledge_write
+
     return knowledge_write.bulk_create_for_review(
         account, pairs, origin=origin, source_url=source_url
     )
@@ -159,8 +160,11 @@ def import_pairs(account, user, pairs) -> dict:
     else:
         # Labelled "Drafted by AI" only when AI really is drafting them.
         from apps.ai import knowledge_write
+
         qs = KnowledgeBaseEntry.objects.filter(pk__in=queued)
-        knowledge_write.bulk_update_entries(account, qs, origin=KnowledgeBaseEntry.Origin.AI_DRAFT)
+        knowledge_write.bulk_update_entries(
+            account, qs, origin=KnowledgeBaseEntry.Origin.AI_DRAFT
+        )
     return {
         "added": len(created),
         "to_draft": len(queued),
@@ -243,8 +247,10 @@ Answer with ONE JSON object and nothing else:
 
     answered = 0
     if updates:
-        from apps.ai import knowledge_write
         from django.db import transaction
+
+        from apps.ai import knowledge_write
+
         now = timezone.now()
         with transaction.atomic():
             for pk, text in updates:

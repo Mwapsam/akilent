@@ -164,7 +164,9 @@ def _data_fields_json(account) -> str:
     ]
     custom_contact_fields = [
         {"key": a.key, "label": a.label or a.key, "sample": a.sample_value}
-        for a in CustomAttributeDef.objects.filter(account=account, entity=CustomAttributeDef.Entity.CONTACT).order_by("key")
+        for a in CustomAttributeDef.objects.filter(
+            account=account, entity=CustomAttributeDef.Entity.CONTACT
+        ).order_by("key")
     ]
     return json.dumps(
         {

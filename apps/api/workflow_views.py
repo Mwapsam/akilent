@@ -314,6 +314,7 @@ class WorkflowRunDetailView(BaseApiView):
     )
     def delete(self, request, run_id, *args, **kwargs):
         from django.db import transaction
+
         from apps.automation.interaction import cancel_open_interactions_for_run
 
         run = self._get(request, run_id)

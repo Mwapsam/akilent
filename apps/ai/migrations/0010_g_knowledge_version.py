@@ -1,9 +1,9 @@
 """G — BM25 knowledge retrieval: add knowledge_version and bm25_enabled to AISettings."""
+
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("ai", "0009_knowledge_review"),
     ]

@@ -43,7 +43,9 @@ from apps.automation.models import (
 
 logger = logging.getLogger(__name__)
 
-ClaimResult = Literal["claimed", "already_claimed", "unmatched", "stale_run", "wrong_conversation"]
+ClaimResult = Literal[
+    "claimed", "already_claimed", "unmatched", "stale_run", "wrong_conversation"
+]
 
 # A stalled continuation: ACTIVE run with next_due_at in the past by more than this.
 _STALL_SECONDS = 60
@@ -73,7 +75,9 @@ def claim_reply(
     # This is a best-effort fast path; the savepoint inside the transaction is the
     # real idempotency backstop.
     if InteractionAnswer.objects.filter(message_key=message_key).exists():
-        logger.info("claim_reply already_claimed (pre-check): message_key=%s", message_key)
+        logger.info(
+            "claim_reply already_claimed (pre-check): message_key=%s", message_key
+        )
         return "already_claimed"
 
     with transaction.atomic():
@@ -81,14 +85,14 @@ def claim_reply(
         from apps.conversations.models import Conversation
 
         conversation = (
-            Conversation.objects.select_for_update()
-            .filter(pk=conversation.pk)
-            .get()
+            Conversation.objects.select_for_update().filter(pk=conversation.pk).get()
         )
 
         # Re-check inside the transaction (under the conversation lock).
         if InteractionAnswer.objects.filter(message_key=message_key).exists():
-            logger.info("claim_reply already_claimed (post-lock): message_key=%s", message_key)
+            logger.info(
+                "claim_reply already_claimed (post-lock): message_key=%s", message_key
+            )
             return "already_claimed"
 
         # ── Step 2: lock all open interactions on this conversation ──────────────
@@ -111,7 +115,8 @@ def claim_reply(
                     if other.conversation_id != conversation.pk:
                         logger.info(
                             "claim_reply wrong_conversation (no open): token=%s interaction=%s",
-                            token, other.pk,
+                            token,
+                            other.pk,
                         )
                         return "wrong_conversation"
                 except WorkflowInteraction.DoesNotExist:
@@ -302,7 +307,7 @@ def _commit_claim(
     step = steps.get(interaction.step_id)
 
     # ask_question steps have their own answer-processing path.
-    if (step or {}).get("type") == "ask_question":
+    if step is not None and step.get("type") == "ask_question":
         _commit_ask_question_answer(run, interaction, body, step)
         return
 
@@ -461,7 +466,9 @@ def _commit_ask_question_answer(
         new_count = invalid_count + 1
         interaction.invalid_answer_count = new_count
         # Reset deadline to now + timeout (only re-prompts reset the deadline).
-        new_deadline = timezone.now() + __import__("datetime").timedelta(seconds=timeout_seconds)
+        new_deadline = timezone.now() + __import__("datetime").timedelta(
+            seconds=timeout_seconds
+        )
         interaction.deadline_at = new_deadline
         interaction.save(update_fields=["invalid_answer_count", "deadline_at"])
 
@@ -475,11 +482,14 @@ def _commit_ask_question_answer(
 
             try:
                 conv = Conversation.objects.get(pk=interaction.conversation_id)
-                _send_ask_question_text(run, conv, reprompt_text, step_id, attempt=new_count)
+                _send_ask_question_text(
+                    run, conv, reprompt_text, step_id, attempt=new_count
+                )
             except Conversation.DoesNotExist:
                 logger.warning(
                     "claim_reply ask_question re-prompt: conversation %s not found run=%s",
-                    interaction.conversation_id, run.pk,
+                    interaction.conversation_id,
+                    run.pk,
                 )
 
         # Keep the run WAITING; sync next_due_at to the new deadline invariant.
@@ -488,7 +498,10 @@ def _commit_ask_question_answer(
 
         logger.info(
             "claim_reply ask_question re-prompt: run=%s step=%s attempt=%s reason=%s",
-            run.pk, step_id, new_count, coerce_error,
+            run.pk,
+            step_id,
+            new_count,
+            coerce_error,
         )
 
     else:
@@ -519,7 +532,10 @@ def _commit_ask_question_answer(
 
         logger.info(
             "claim_reply ask_question exhausted: run=%s step=%s reason=%s → %s",
-            run.pk, step_id, coerce_error, on_invalid,
+            run.pk,
+            step_id,
+            coerce_error,
+            on_invalid,
         )
 
 
@@ -531,22 +547,25 @@ def _resolve_ask_target(run: WorkflowRun, target_entity: str):
         try:
             from apps.crm.models import Lead
 
-            return Lead.objects.filter(
-                contact=run.contact, account=run.workflow.account
-            ).order_by("-created_at").first()
+            return (
+                Lead.objects.filter(contact=run.contact, account=run.workflow.account)
+                .order_by("-created_at")
+                .first()
+            )
         except Exception:
             return None
     if target_entity == "deal":
         try:
             from apps.crm.models import Deal
 
-            return Deal.objects.filter(
-                contact=run.contact, account=run.workflow.account
-            ).order_by("-created_at").first()
+            return (
+                Deal.objects.filter(contact=run.contact, account=run.workflow.account)
+                .order_by("-created_at")
+                .first()
+            )
         except Exception:
             return None
     return None
-
 
 
 def _advance_after_commit(run: WorkflowRun) -> None:
@@ -594,7 +613,8 @@ def cancel_open_interactions_for_run(run: WorkflowRun) -> int:
     except NotSupportedError:
         # SQLite doesn't support skip_locked; plain update is safe in single-process tests.
         return WorkflowInteraction.objects.filter(
-            run=run, status=WorkflowInteraction.Status.OPEN,
+            run=run,
+            status=WorkflowInteraction.Status.OPEN,
         ).update(status=WorkflowInteraction.Status.CANCELLED, closed_at=now)
     if not locked_ids:
         return 0

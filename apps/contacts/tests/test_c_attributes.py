@@ -11,14 +11,11 @@ Covers:
 - _apply_set_attribute in the workflow engine goes through set_attributes.
 """
 
-from decimal import Decimal
-
 import pytest
 from django.utils import timezone
 
 from apps.contacts.attributes import archive_attribute_def, set_attributes
 from apps.contacts.models import CustomAttributeDef
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -317,7 +314,12 @@ def test_workflow_engine_set_attribute_compat_fallback(account, contact):
         definition={
             "trigger": {"type": "contact.created"},
             "steps": [
-                {"id": "s1", "type": "set_attribute", "key": "legacy_key", "value": "v"},
+                {
+                    "id": "s1",
+                    "type": "set_attribute",
+                    "key": "legacy_key",
+                    "value": "v",
+                },
                 {"id": "done", "type": "stop"},
             ],
         },
@@ -551,7 +553,10 @@ def test_workflow_set_attribute_uses_set_attributes(account, contact):
         },
     )
     run = WorkflowRun.objects.create(
-        workflow=wf, contact=contact, status=WorkflowRun.Status.ACTIVE, current_step="s1"
+        workflow=wf,
+        contact=contact,
+        status=WorkflowRun.Status.ACTIVE,
+        current_step="s1",
     )
     advance_run(run)
     contact.refresh_from_db()
@@ -569,7 +574,9 @@ def test_upsert_contact_is_intentional_exception(account):
     assert contact.attributes.get("raw_key") == "v"
     from apps.contacts.models import CustomAttributeDef
 
-    assert not CustomAttributeDef.objects.filter(account=account, key="raw_key").exists()
+    assert not CustomAttributeDef.objects.filter(
+        account=account, key="raw_key"
+    ).exists()
 
 
 # ── C.13  Migration completeness: old constraint is gone, new one exists ──────
@@ -597,7 +604,6 @@ def test_publish_blocked_by_archived_def(account, contact):
     This covers the 'archive before publish' ordering — the publish fails,
     so no workflow ends up referencing an archived def.
     """
-    from django.db import transaction
 
     from apps.automation.api import upsert_published_workflow
     from apps.contacts.attributes import archive_attribute_def
