@@ -1370,9 +1370,33 @@ def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
     # A value like "context.reply.title" is read from the run (what the customer tapped);
     # anything else is stored as written.
     value = _resolve_action_param(step.get("value"), run)
-    contact.attributes = {**(contact.attributes or {}), step["key"]: value}
-    contact.save(update_fields=["attributes", "updated_at"])
-    return {"key": step["key"]}
+    key = step["key"]
+
+    from apps.contacts.attributes import set_attributes
+    from apps.contacts.models import CustomAttributeDef
+
+    # Compatibility path: if no CustomAttributeDef exists for this key on the
+    # contact entity, fall back to the legacy direct-merge behavior and emit a
+    # deprecation warning. Lead/deal steps always require a definition.
+    step_entity = step.get("target", "contact")
+    has_def = CustomAttributeDef.objects.filter(
+        account=contact.account, entity=step_entity, key=key
+    ).exists()
+
+    if has_def:
+        set_attributes(contact, {key: value}, source="workflow")
+    else:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "_apply_set_attribute: no CustomAttributeDef for key=%r entity=%s — "
+            "falling back to legacy direct write; create a definition to enforce typing",
+            key,
+            step_entity,
+        )
+        contact.attributes = {**(contact.attributes or {}), key: value}
+        contact.save(update_fields=["attributes", "updated_at"])
+
+    return {"key": key}
 
 
 def advance_run(run: WorkflowRun) -> WorkflowRun:

@@ -337,6 +337,7 @@ _SAMPLE_VALUE_BY_ATTRIBUTE_TYPE = {
     "number": "123",
     "boolean": "Yes",
     "date": "2026-09-26",
+    "choice": "option_1",
 }
 
 
@@ -346,30 +347,47 @@ class CustomAttributeDef(models.Model):
         NUMBER = "number", "Number"
         BOOLEAN = "boolean", "Yes / no"
         DATE = "date", "Date"
+        CHOICE = "choice", "Choice"
+
+    class Entity(models.TextChoices):
+        CONTACT = "contact", "Contact"
+        LEAD = "lead", "Lead"
+        DEAL = "deal", "Deal"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="contact_attributes"
     )
+    entity = models.CharField(
+        max_length=10, choices=Entity.choices, default=Entity.CONTACT
+    )
     key = models.CharField(max_length=64)
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.STRING)
     label = models.CharField(max_length=150, blank=True, default="")
+    # For type="choice": list of {"key": str, "label": str} option objects.
+    options = models.JSONField(default=list, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["account", "key"], name="uniq_custom_attr_account_key"
+                fields=["account", "entity", "key"],
+                name="uniq_custom_attr_account_entity_key",
             )
         ]
-        ordering = ["key"]
+        ordering = ["entity", "key"]
 
     def __str__(self):
-        return f"{self.key} ({self.type})"
+        return f"{self.entity}.{self.key} ({self.type})"
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
 
     @property
     def sample_value(self) -> str:
         """A plausible display value for pickers/previews that have no real
         Contact to read from yet (e.g. apps.whatsapp's template builder)."""
-        return _SAMPLE_VALUE_BY_ATTRIBUTE_TYPE[self.type]
+        return _SAMPLE_VALUE_BY_ATTRIBUTE_TYPE.get(self.type, "Sample text")
 
 
 class ContactImport(models.Model):

@@ -307,7 +307,9 @@ def contact_edit(request, public_id: str):
 def _unique_attribute_key(account, base_key: str) -> str:
     key = base_key
     suffix = 2
-    while CustomAttributeDef.objects.filter(account=account, key=key).exists():
+    while CustomAttributeDef.objects.filter(
+        account=account, entity=CustomAttributeDef.Entity.CONTACT, key=key
+    ).exists():
         key = f"{base_key}_{suffix}"
         suffix += 1
     return key
@@ -340,13 +342,16 @@ def create_custom_field(request):
         return JsonResponse({"error": "Choose a valid field type."}, status=400)
 
     base_key = re.sub(r"-+", "_", slugify(label))[:64] or "field"
-    existing = CustomAttributeDef.objects.filter(account=account, key=base_key).first()
+    existing = CustomAttributeDef.objects.filter(
+        account=account, entity=CustomAttributeDef.Entity.CONTACT, key=base_key
+    ).first()
     if existing is not None and existing.label == label and existing.type == field_type:
         attribute = existing
     else:
         key = base_key if existing is None else _unique_attribute_key(account, base_key)
         attribute = CustomAttributeDef.objects.create(
             account=account,
+            entity=CustomAttributeDef.Entity.CONTACT,
             key=key,
             type=field_type,
             label=label,

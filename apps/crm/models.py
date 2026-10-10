@@ -141,6 +141,8 @@ class Lead(models.Model):
         related_name="leads",
     )
 
+    attributes = models.JSONField(default=dict, blank=True)
+
     converted_at = models.DateTimeField(blank=True, null=True)
     converted_to_deal = models.ForeignKey(
         "crm.Deal",
@@ -215,6 +217,8 @@ class Deal(models.Model):
         blank=True,
         related_name="deals",
     )
+
+    attributes = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
