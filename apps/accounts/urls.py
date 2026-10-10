@@ -37,6 +37,11 @@ urlpatterns = [
         name="settings-ai-autopilot",
     ),
     path(
+        "settings/ai/playground/",
+        ai_views.settings_ai_playground,
+        name="settings-ai-playground",
+    ),
+    path(
         "settings/ai/knowledge/",
         ai_views.settings_ai_knowledge,
         name="settings-ai-knowledge",

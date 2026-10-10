@@ -118,6 +118,23 @@ def settings_ai_autopilot(request):
 
 
 @login_required
+def settings_ai_playground(request):
+    """Standalone playground: ask a question, see what AI would reply and whether it would send."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    return render(
+        request,
+        "accounts/settings_ai_playground.html",
+        {
+            "account": account,
+            "active_tab": "ai",
+            "off_reason": ai_api.unavailable_reason(account),
+        },
+    )
+
+
+@login_required
 def settings_ai_knowledge(request):
     """FAQ/policy entries AI may answer from — see ``KnowledgeBaseEntry`` and
     ``apps.ai.facts.build``. Manually authored only, no document upload."""
@@ -155,7 +172,6 @@ def settings_ai_knowledge(request):
             "entries": [e for e in entries if not e.needs_review],
             "review": [e for e in entries if e.needs_review],
             "source_types": KnowledgeBaseEntry.SourceType.choices,
-            "off_reason": ai_api.unavailable_reason(account),
         },
     )
 
