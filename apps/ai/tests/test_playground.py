@@ -143,7 +143,9 @@ def test_the_owner_asks_from_the_knowledge_page(client, account, entry):
     client.force_login(user)
 
     page = client.get("/settings/ai/knowledge/").content.decode()
-    assert "Try a question" in page and "kind: 'playground'" in page
+    assert "Try a question" in page and 'href="/settings/ai/playground/"' in page
+    page = client.get("/settings/ai/playground/").content.decode()
+    assert "kind: 'playground'" in page
 
     empty = client.post("/ai/drafts/", {"kind": "playground", "prompt": " "})
     assert empty.status_code == 400
