@@ -275,8 +275,8 @@ def test_ig_outbound_failure_cancels_interaction_and_fails_run(
 
 
 @pytest.mark.django_db
-def test_publish_validation_rejects_send_list_for_ig_trigger(account):
-    """send_list is not supported on Instagram; the validator must reject it."""
+def test_publish_validation_rejects_send_list_for_ig_trigger(account, ig_account):
+    """send_list is not supported on Instagram; the validator must reject it for IG accounts."""
     errors = validate_definition(
         {
             "trigger": {"type": "conversation.message_received"},

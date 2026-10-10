@@ -568,7 +568,14 @@ def save_settings(
             ai_settings.holding_reply_text = (
                 "" if text == autonomy.DEFAULT_HOLDING_REPLY else text
             )
-    ai_settings.save()
+    # Use update_fields to avoid overwriting knowledge_version (bumped independently
+    # by knowledge mutation transactions) and bm25_enabled (a separate admin toggle).
+    ai_settings.save(update_fields=[
+        "enabled", "business_notes", "consented_at", "consented_by",
+        "reply_mode", "auto_topics", "auto_min_confidence", "auto_only_when_closed",
+        "holding_reply_enabled", "holding_reply_text", "auto_consented_at",
+        "auto_consented_by", "updated_at",
+    ])
     return ai_settings
 
 

@@ -326,10 +326,17 @@ def _commit_claim(
             if threaded:
                 target = threaded
 
-    # Record the step result.
+    # Record the step result with the real button title (not the slugified option id).
+    _option_ids = (interaction.expected or {}).get("option_ids", [])
+    _option_titles = (interaction.expected or {}).get("option_titles", [])
+    _real_title = option_id
+    for _oid, _t in zip(_option_ids, _option_titles):
+        if _oid == option_id and _t:
+            _real_title = _t
+            break
     reply_ctx = {
         "id": option_id,
-        "title": option_id,
+        "title": _real_title,
         "text": body,
     }
     # The send_buttons row was already created at enrollment; merge the reply result in.

@@ -107,7 +107,9 @@ def retrieve(
     ranker = ranking.get_cached_ranker(chatbot.account)
     if ranker is not None:
         # top_k = all linked entries × some headroom so none are cut before the filter.
-        all_results = ranker.query(query, top_k=max(len(docs) * 2, 60))
+        # top_k = full corpus size so no linked entry is cut before the filter,
+        # regardless of how other chatbots' entries rank in the account index.
+        all_results = ranker.query(query, top_k=max(len(ranker._docs), len(docs)))
         results = [(doc, score) for doc, score in all_results if doc["id"] in doc_ids][:max_results]
         if results:
             return [
