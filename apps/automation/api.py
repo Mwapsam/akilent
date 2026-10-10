@@ -117,19 +117,23 @@ def upsert_published_workflow(account, *, slug: str, name: str, definition: dict
     boundary rule: cross-app model access goes through this public API).
     """
     from apps.automation.models import Workflow
+    from apps.contacts.attributes import verify_defs_for_publish
+    from django.db import transaction
 
     ensure_room_to_turn_on(
         account, Workflow.objects.filter(account=account, slug=slug).first()
     )
-    workflow, _ = Workflow.objects.update_or_create(
-        account=account,
-        slug=slug,
-        defaults={
-            "name": name,
-            "definition": definition,
-            "status": Workflow.Status.PUBLISHED,
-        },
-    )
+    with transaction.atomic():
+        verify_defs_for_publish(account, definition)
+        workflow, _ = Workflow.objects.update_or_create(
+            account=account,
+            slug=slug,
+            defaults={
+                "name": name,
+                "definition": definition,
+                "status": Workflow.Status.PUBLISHED,
+            },
+        )
     return workflow
 
 
@@ -188,12 +192,17 @@ def save_built_workflow(
         raise WorkflowNotReady(str(exc)) from exc
     if workflow.pk and workflow.status != Workflow.Status.PUBLISHED:
         workflow.version += 1
+    from apps.contacts.attributes import verify_defs_for_publish
+    from django.db import transaction
+
     workflow.name, workflow.definition, workflow.status = (
         name,
         definition,
         Workflow.Status.PUBLISHED,
     )
-    workflow.save()
+    with transaction.atomic():
+        verify_defs_for_publish(account, definition)
+        workflow.save()
     return workflow
 
 

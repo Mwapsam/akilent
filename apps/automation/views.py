@@ -642,10 +642,19 @@ def workflow_publish(request, slug: str):
     except automation_api.AutomationLimitReached as exc:
         messages.error(request, str(exc))
         return redirect("automation:editor", slug=wf.slug)
-    if wf.status != Workflow.Status.PUBLISHED:
-        wf.version += 1
-    wf.status = Workflow.Status.PUBLISHED
-    wf.save(update_fields=["status", "version", "updated_at"])
+    from apps.contacts.attributes import verify_defs_for_publish
+    from django.db import transaction as _tx
+
+    try:
+        with _tx.atomic():
+            verify_defs_for_publish(account, wf.definition)
+            if wf.status != Workflow.Status.PUBLISHED:
+                wf.version += 1
+            wf.status = Workflow.Status.PUBLISHED
+            wf.save(update_fields=["status", "version", "updated_at"])
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("automation:editor", slug=wf.slug)
     messages.success(request, f"Published {wf.name} (v{wf.version}).")
     return redirect("automation:editor", slug=wf.slug)
 
@@ -708,8 +717,17 @@ def workflow_resume(request, slug: str):
         except automation_api.AutomationLimitReached as exc:
             messages.error(request, str(exc))
             return redirect("automation:list")
-        wf.status = Workflow.Status.PUBLISHED
-        wf.save(update_fields=["status", "updated_at"])
+        from apps.contacts.attributes import verify_defs_for_publish
+        from django.db import transaction as _tx
+
+        try:
+            with _tx.atomic():
+                verify_defs_for_publish(account, wf.definition)
+                wf.status = Workflow.Status.PUBLISHED
+                wf.save(update_fields=["status", "updated_at"])
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("automation:list")
     messages.success(request, f"{wf.name} is on.")
     return redirect("automation:list")
 

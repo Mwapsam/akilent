@@ -325,15 +325,110 @@ def _check_not_referenced(defn) -> None:
             )
 
 
+def verify_defs_for_publish(account, definition: dict) -> None:
+    """Lock all attribute defs referenced by a workflow definition and verify none are archived.
+
+    Must be called **inside** a ``transaction.atomic()`` block. The lock is held
+    until the transaction commits, which serialises this publish with any concurrent
+    ``archive_attribute_def`` call on the same definitions.
+
+    Raises:
+        ValueError: if any referenced definition is archived or does not exist.
+    """
+    refs = _collect_attribute_refs(definition)
+    required = refs.get("required", {})
+    optional = refs.get("optional", {})
+    if not required and not optional:
+        return
+
+    from apps.contacts.models import CustomAttributeDef
+
+    # Collect all entities and keys to lock in one pass, in pk order.
+    all_entities = sorted(set(list(required.keys()) + list(optional.keys())))
+    for entity in all_entities:
+        req_keys = required.get(entity, [])
+        opt_keys = optional.get(entity, [])
+        all_keys = list({*req_keys, *opt_keys})
+        if not all_keys:
+            continue
+
+        # Lock ALL matching defs (including archived) to serialise with archive.
+        locked = list(
+            CustomAttributeDef.objects.select_for_update()
+            .filter(account=account, entity=entity, key__in=all_keys)
+            .order_by("pk")
+        )
+        found_keys = {d.key for d in locked}
+
+        # Required keys must have a live def.
+        for key in req_keys:
+            if key not in found_keys:
+                raise ValueError(
+                    f"Cannot publish: no attribute definition for key {key!r} "
+                    f"(entity={entity!r}). Create it before publishing."
+                )
+
+        # All found defs (required or optional) must not be archived.
+        for defn in locked:
+            if defn.is_archived:
+                raise ValueError(
+                    f"Cannot publish: attribute {defn.key!r} ({entity!r}) is archived. "
+                    "Remove or update the step that references it."
+                )
+
+
+def _collect_attribute_refs(definition: dict) -> dict:
+    """Extract {entity: [keys]} that MUST have a live CustomAttributeDef at publish time.
+
+    Rules (matching runtime behaviour):
+    - ``ask_question``: always requires a def (for any entity).
+    - ``set_attribute`` on lead/deal: always requires a def.
+    - ``set_attribute`` on contact: compatibility fallback — a missing def is allowed
+      at runtime (legacy direct write), so we do NOT require one here. We still check
+      that if a def EXISTS for that key it is not archived.
+    """
+    # Keys that must exist: ask_question (all entities) + set_attribute (lead/deal only)
+    required: dict = {}
+    # Keys that are optional but must not be archived if they do exist
+    optional: dict = {}
+
+    for step in (definition or {}).get("steps", []):
+        stype = step.get("type")
+        if stype == "set_attribute":
+            key = step.get("key", "")
+            entity = step.get("target", "contact")
+            if not key:
+                continue
+            if entity in ("lead", "deal"):
+                required.setdefault(entity, [])
+                if key not in required[entity]:
+                    required[entity].append(key)
+            else:
+                # contact: optional — only block if archived, not if missing
+                optional.setdefault(entity, [])
+                if key not in optional[entity]:
+                    optional[entity].append(key)
+        elif stype == "ask_question":
+            key = step.get("attribute", "")
+            entity = step.get("target", "contact")
+            if not key:
+                continue
+            required.setdefault(entity, [])
+            if key not in required[entity]:
+                required[entity].append(key)
+
+    return {"required": required, "optional": optional}
+
+
 def _definition_references_key(definition: dict, key: str, entity: str) -> bool:
-    """Return True if any set_attribute step in this definition targets key+entity."""
+    """Return True if any attribute-writing step in this definition targets key+entity."""
     steps = (definition or {}).get("steps", [])
     for step in steps:
-        if step.get("type") == "set_attribute":
-            if step.get("key") == key:
-                # set_attribute steps currently only write to contact; when
-                # ask_question (B) is built, it will specify target entity.
-                step_entity = step.get("target", "contact")
-                if step_entity == entity:
-                    return True
+        stype = step.get("type")
+        if stype == "set_attribute":
+            if step.get("key") == key and step.get("target", "contact") == entity:
+                return True
+        elif stype == "ask_question":
+            if step.get("attribute") == key and step.get("target", "contact") == entity:
+                return True
     return False
