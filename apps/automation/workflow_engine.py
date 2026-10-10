@@ -54,7 +54,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
+from apps.automation.models import Workflow, WorkflowInteraction, WorkflowRun, WorkflowStepRun
 
 logger = logging.getLogger(__name__)
 
@@ -410,13 +410,43 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     step_id=sid,
                     field="buttons" if step["type"] == "send_buttons" else "rows",
                 )
-            if trig.get("type") != "conversation.message_received":
+            _trig_type = trig.get("type")
+            _all_channels = _trig_type == "conversation.message_received"
+            if not _all_channels:
                 _error(
                     f"step {sid!r}: {step['type']} needs the 'customer messages you' trigger, "
                     "because it replies in that conversation",
                     step_id=sid,
                     field="type",
                 )
+            # send_list is WhatsApp-only and fails at runtime on IG conversations.
+            # Reject it at publish time so the owner gets a clear error instead of
+            # runtime failures on every IG contact.
+            if step["type"] == "send_list":
+                _error(
+                    f"step {sid!r}: Instagram doesn't support lists — use send_buttons instead",
+                    step_id=sid,
+                    field="type",
+                )
+            if step["type"] == "send_buttons":
+                buttons = [
+                    b if isinstance(b, dict) else {"title": b}
+                    for b in (step.get("buttons") or [])
+                ]
+                if len(buttons) > _IG_MAX_QUICK_REPLIES:
+                    _error(
+                        f"step {sid!r}: Instagram allows at most {_IG_MAX_QUICK_REPLIES} buttons",
+                        step_id=sid,
+                        field="buttons",
+                    )
+                for btn in buttons:
+                    title = str(btn.get("title") or "")
+                    if len(title) > _IG_MAX_TITLE:
+                        _error(
+                            f"step {sid!r}: button title {title!r} exceeds {_IG_MAX_TITLE} characters",
+                            step_id=sid,
+                            field="buttons",
+                        )
         if step.get("type") == "wait_for_reply":
             routes = step.get("routes")
             if not isinstance(routes, dict) or not routes:
@@ -724,21 +754,39 @@ def _first_name_merge(run: WorkflowRun, text: str) -> str:
 
 
 def _run_interactive(run: WorkflowRun, step: dict) -> dict:
-    """Send reply buttons or a list into the conversation that started this run.
+    """Send reply buttons (WhatsApp) or quick replies (Instagram) for this run.
 
-    WhatsApp-only, and like a plain reply it goes through the outbound queue, so opt-out,
-    consent and the 24-hour window apply. A tap comes back as an inbound message.
+    WhatsApp: unchanged — sends WA interactive message, run continues to the next
+    step (typically ``wait_for_reply``).
+
+    Instagram: in one ``transaction.atomic()``, creates a ``WorkflowInteraction``
+    (token embedded in quick-reply payloads), enqueues the IG outbound message,
+    and parks the run (WAITING + deadline_at). Returns ``{"_parked": True, ...}``
+    so ``advance_run`` stops looping after recording the step.
     """
+    from apps.conversations.models import Conversation
+
+    conversation = _conversation_for_run(run, step)
+
+    if conversation.channel == Conversation.Channel.WHATSAPP:
+        return _run_interactive_whatsapp(run, step, conversation)
+    if conversation.channel == Conversation.Channel.INSTAGRAM:
+        return _run_interactive_instagram(run, step, conversation)
+
+    raise ValueError(
+        f"{step['type']} step {step.get('id')!r}: channel {conversation.channel!r} "
+        "does not support interactive steps"
+    )
+
+
+def _run_interactive_whatsapp(run: WorkflowRun, step: dict, conversation) -> dict:
+    """WhatsApp interactive step — unchanged from the original implementation."""
     from apps.whatsapp import api as whatsapp_api
     from apps.whatsapp import interactive as wa_interactive
 
-    conversation = _conversation_for_run(run, step)
-    if (
-        conversation.channel != conversation.Channel.WHATSAPP
-        or conversation.whatsapp_conversation is None
-    ):
+    if conversation.whatsapp_conversation is None:
         raise ValueError(
-            f"{step['type']} step {step.get('id')!r}: buttons and lists are WhatsApp-only"
+            f"{step['type']} step {step.get('id')!r}: no WhatsApp conversation"
         )
     text = _first_name_merge(run, step.get("text") or "")
     try:
@@ -758,6 +806,142 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
     )
     conversation.whatsapp_conversation.register_outbound(msg.created_at)
     return {"outbound_message_id": msg.id}
+
+
+# IG quick-reply limits (from Meta's Messenger Platform docs, applies to IG too).
+_IG_MAX_QUICK_REPLIES = 13
+_IG_MAX_TITLE = 20
+_IG_MAX_PAYLOAD = 1000
+_IG_DEFAULT_TIMEOUT = 86400  # 24 h
+
+
+def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> dict:
+    """IG send_buttons step: one transaction opens interaction + enqueues message + parks run.
+
+    ``send_list`` is not supported on Instagram; publish validation rejects it before here.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+    from django.utils.text import slugify
+
+    from apps.automation.models import WorkflowInteraction
+    from apps.instagram.services.outbound import enqueue_reply
+
+    if step.get("type") == "send_list":
+        raise ValueError(
+            f"step {step.get('id')!r}: Instagram does not support lists — use send_buttons instead"
+        )
+
+    ig_convo = getattr(conversation, "instagram_conversation", None)
+    if ig_convo is None:
+        raise ValueError(
+            f"step {step.get('id')!r}: no Instagram conversation on this spine"
+        )
+    ig_account = ig_convo.instagram_account
+    ig_contact = ig_convo.instagram_contact
+    recipient_igsid = ig_contact.instagram_scoped_id
+
+    buttons = step.get("buttons") or []
+    if not buttons:
+        raise ValueError(f"step {step.get('id')!r}: at least one button is required")
+    if len(buttons) > _IG_MAX_QUICK_REPLIES:
+        raise ValueError(
+            f"step {step.get('id')!r}: Instagram allows at most {_IG_MAX_QUICK_REPLIES} quick replies"
+        )
+
+    text = _first_name_merge(run, step.get("text") or "")
+    step_id = step.get("id") or ""
+
+    # Workflows authored for WhatsApp put timeout_seconds/on_timeout on the following
+    # wait_for_reply step. Inherit those settings when the send_buttons step omits them.
+    _next_step = _steps_by_id(run.workflow).get(step.get("next") or "")
+    _next_is_wait = _next_step and _next_step.get("type") == "wait_for_reply"
+    _timeout_src = step if "timeout_seconds" in step else (_next_step if _next_is_wait else step)
+    timeout = int(_timeout_src.get("timeout_seconds", _IG_DEFAULT_TIMEOUT))
+    deadline = timezone.now() + timedelta(seconds=timeout)
+
+    # Collect option ids for the interaction expected set.
+    buttons = [b if isinstance(b, dict) else {"title": b} for b in buttons]
+    option_ids = []
+    for btn in buttons:
+        title = str(btn.get("title") or "")
+        if len(title) > _IG_MAX_TITLE:
+            raise ValueError(
+                f"step {step_id!r}: button title {title!r} exceeds {_IG_MAX_TITLE} chars"
+            )
+        # Prefer an explicit id (keeps parity with WA routes); fall back to slug.
+        option_ids.append(
+            str(btn.get("id") or slugify(title) or title.lower())[:200]
+        )
+
+    with transaction.atomic():
+        # 1. Open the interaction — idempotent: reuse any existing open row for this
+        # run+step so a concurrent sweeper/fast-path retry doesn't mint a second token
+        # that no quick-reply chip will ever carry.
+        option_titles = [str(btn.get("title") or "") for btn in buttons]
+        interaction, _ = WorkflowInteraction.objects.get_or_create(
+            run=run,
+            step_id=step_id,
+            status=WorkflowInteraction.Status.OPEN,
+            defaults={
+                "conversation": conversation,
+                "expected": {
+                    "option_ids": option_ids,
+                    "option_titles": option_titles,
+                    "free_text": False,
+                },
+                "deadline_at": deadline,
+            },
+        )
+        token = interaction.token
+
+        # 2. Build quick-reply chip list with token-encoded payloads.
+        quick_replies = []
+        for btn, oid in zip(buttons, option_ids):
+            payload = f"{token}:{oid}"
+            if len(payload) > _IG_MAX_PAYLOAD:
+                raise ValueError(
+                    f"step {step_id!r}: quick-reply payload for {btn.get('title')!r} "
+                    f"exceeds {_IG_MAX_PAYLOAD} chars"
+                )
+            quick_replies.append({
+                "content_type": "text",
+                "title": str(btn.get("title") or ""),
+                "payload": payload,
+            })
+
+        # 3. Enqueue the outbound message.
+        outbound = enqueue_reply(
+            ig_account,
+            recipient_igsid,
+            text,
+            action_type="dm_reply",
+            idempotency_key=f"wf:{run.pk}:{step_id}",
+            quick_replies=quick_replies,
+        )
+
+        # 4. Park the run.
+        run.status = WorkflowRun.Status.WAITING
+        run.next_due_at = deadline
+        run.save(update_fields=["status", "next_due_at"])
+
+    ig_outbound_id = outbound.id if outbound else None
+
+    # Send immediately (don't wait for the next drain tick) so the customer
+    # sees the quick-reply chips without a multi-minute delay.
+    if outbound is not None:
+        from apps.instagram.services.outbound import send_outbound
+        try:
+            send_outbound(outbound)
+        except Exception:
+            logger.exception(
+                "_run_interactive_instagram: send_outbound raised outbound=%s run=%s",
+                outbound.pk, run.pk,
+            )
+
+    return {"_parked": True, "ig_outbound_message_id": ig_outbound_id, "interaction_token": token}
 
 
 def _route_for_reply(step: dict, message: dict) -> str | None:
@@ -783,16 +967,53 @@ def _route_for_reply(step: dict, message: dict) -> str | None:
 def resume_on_reply(account_id: int, contact, message: dict) -> bool:
     """Continue a run that is waiting for this customer's answer. True if one took it.
 
-    Only runs parked on a ``wait_for_reply`` step are considered, and only if the step has a
-    place for this answer (a matching choice, or a ``default``), so an unrelated message
-    still reaches the normal keyword workflows.
+    For runs that have a ``WorkflowInteraction`` row (post-A0), routing is handled
+    by ``claim_reply`` from ``apps.automation.interaction``.  For legacy WAITING
+    runs that predate the migration (no interaction rows at all), the original
+    scan-and-lock loop is used as a fallback, but ordered deterministically by
+    ``(started_at, pk)`` so the result is repeatable under concurrency.
     """
-    waiting = WorkflowRun.objects.filter(
-        contact=contact,
-        workflow__account_id=account_id,
-        status=WorkflowRun.Status.WAITING,
-        next_due_at__isnull=False,
-    ).select_related("workflow")
+    from apps.conversations.models import Conversation
+
+    # Try interaction-based routing first (A0 path).
+    # We need the conversation to call claim_reply. The message dict carries it
+    # if this came from an inbound handler that already resolved it.
+    conversation = message.get("_conversation")  # set by inbound handlers post-A0
+    if conversation is not None:
+        from apps.automation.interaction import claim_reply
+
+        message_key = message.get("_message_key", "")
+        reply_id = message.get("reply_id", "")
+        body = message.get("body", "")
+
+        # Check whether any open interaction exists for this conversation — if so,
+        # use the interaction path exclusively.
+        if WorkflowInteraction.objects.filter(
+            conversation=conversation,
+            status=WorkflowInteraction.Status.OPEN,
+        ).exists():
+            result = claim_reply(conversation, message_key, reply_id, body)
+            # "claimed" and "already_claimed" both consumed the message from the
+            # interaction side; do not send to other runs or keyword pipeline.
+            return result in ("claimed", "already_claimed")
+
+    # ── Legacy fallback (pre-migration WAITING runs, no interaction rows) ────────
+    # Only used when the contact's WAITING runs have NO WorkflowInteraction rows at
+    # all (created before the A0 migration).  Once all such runs have timed out or
+    # completed, this branch becomes unreachable.
+    waiting = (
+        WorkflowRun.objects.filter(
+            contact=contact,
+            workflow__account_id=account_id,
+            status=WorkflowRun.Status.WAITING,
+            next_due_at__isnull=False,
+        )
+        .exclude(  # skip runs whose current step already has an open A0 interaction
+            interactions__status="open",
+        )
+        .order_by("started_at", "pk")  # deterministic under concurrency
+        .select_related("workflow")
+    )
     for run in waiting:
         step = _steps_by_id(run.workflow).get(run.current_step)
         if step is None or step.get("type") != "wait_for_reply":
@@ -1202,6 +1423,26 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.save(update_fields=["status", "next_due_at"])
             return run
 
+        # IG send_buttons parks the run (WAITING) with a deadline. On re-entry,
+        # if the deadline has passed, take the timeout path and cancel interactions.
+        if (
+            stype in ("send_buttons", "send_list")
+            and run.status == WorkflowRun.Status.WAITING
+            and run.next_due_at
+            and run.next_due_at <= timezone.now()
+        ):
+            from apps.automation.interaction import cancel_open_interactions_for_run
+
+            cancel_open_interactions_for_run(run)
+            _record(run, step, {"timed_out": True})
+            run.status = WorkflowRun.Status.ACTIVE
+            run.next_due_at = None
+            run.current_step = step.get("on_timeout") or ""
+            run.save(update_fields=["status", "next_due_at", "current_step"])
+            if not run.current_step:
+                return _complete(run)
+            continue
+
         # Non-wait step: skip if already executed (idempotent re-entry).
         if WorkflowStepRun.objects.filter(run=run, step_id=step["id"]).exists():
             nxt = _next_after(step, run)
@@ -1250,10 +1491,15 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run.status = WorkflowRun.Status.FAILED
             run.completed_at = timezone.now()
             run.save(update_fields=["status", "completed_at"])
+            from apps.automation.interaction import cancel_open_interactions_for_run
+            cancel_open_interactions_for_run(run)
             _alert_failure(run, str(exc))
             return run
 
-        _record(run, step, result)
+        _record(run, step, result, ig_outbound_message_id=result.get("ig_outbound_message_id"))
+        # IG interactive steps park the run inside _run_interactive (atomically).
+        if result.get("_parked"):
+            return run
         run.current_step = _next_after(step, run, branch_result=result)
         run.save(update_fields=["current_step"])
         if not run.current_step:
@@ -1273,21 +1519,29 @@ def _next_after(
     return step.get("next", "")
 
 
-def _record(run: WorkflowRun, step: dict, result: dict, *, status: str = "ok") -> None:
-    from django.db import IntegrityError
+def _record(
+    run: WorkflowRun,
+    step: dict,
+    result: dict,
+    *,
+    status: str = "ok",
+    ig_outbound_message_id: int | None = None,
+) -> None:
+    from django.db import IntegrityError, transaction
 
     try:
-        WorkflowStepRun.objects.create(
-            run=run,
-            step_id=step["id"],
-            step_type=step.get("type", ""),
-            status=status,
-            result=result,
-            # Keep the FK in sync with the legacy JSON key so both the
-            # reconciliation hook (apps.automation.integrations.whatsapp) and
-            # any existing code reading result["outbound_message_id"] work.
-            outbound_message_id=result.get("outbound_message_id"),
-        )
+        with transaction.atomic():  # savepoint so IntegrityError doesn't break outer tx
+            WorkflowStepRun.objects.create(
+                run=run,
+                step_id=step["id"],
+                step_type=step.get("type", ""),
+                status=status,
+                result=result,
+                # WA outbound FK (legacy key kept for reconciliation hook + existing readers).
+                outbound_message_id=result.get("outbound_message_id"),
+                # IG outbound FK (A workstream).
+                ig_outbound_message_id=ig_outbound_message_id,
+            )
     except IntegrityError:
         # uniq_workflowsteprun_run_step — a concurrent advance already recorded
         # this step. The .exists() guard in advance_run is best-effort; this
@@ -1329,10 +1583,14 @@ def _alert_failure(run: WorkflowRun, error: str) -> None:
 
 
 def _complete(run: WorkflowRun) -> WorkflowRun:
-    run.status = WorkflowRun.Status.COMPLETED
-    run.completed_at = timezone.now()
-    run.next_due_at = None
-    run.save(update_fields=["status", "completed_at", "next_due_at"])
+    from apps.automation.interaction import cancel_open_interactions_for_run
+
+    with transaction.atomic():
+        run.status = WorkflowRun.Status.COMPLETED
+        run.completed_at = timezone.now()
+        run.next_due_at = None
+        run.save(update_fields=["status", "completed_at", "next_due_at"])
+        cancel_open_interactions_for_run(run)
     _notify_workflow(run, "workflow.completed")
     return run
 
@@ -1578,12 +1836,20 @@ _RUN_DUE_BATCH = 200
 
 
 def run_due() -> int:
-    """Resume every WAITING run whose timer has elapsed. Called by a beat task.
+    """Resume every WAITING run whose timer has elapsed, and sweep stalled
+    ACTIVE runs (durable continuation recovery from A0 claim_reply crashes).
 
     Rows are claimed under ``select_for_update(skip_locked=True)`` (where the
     backend supports it) so parallel beat ticks / workers process disjoint
     batches rather than racing the same run into a double-send.
+
+    Stalled ACTIVE runs: ``claim_reply`` sets ``next_due_at = now`` after
+    committing the run state so the sweeper can find it.  If ``advance_run``
+    never ran (process crash), the run sits ACTIVE with ``next_due_at`` in the
+    past.  We pick those up after a 60-second grace period.
     """
+    from datetime import timedelta
+
     from django.db import connection
 
     lock_kwargs = (
@@ -1592,8 +1858,10 @@ def run_due() -> int:
         else {}
     )
     n = 0
+    stall_cutoff = timezone.now() - timedelta(seconds=60)
+
     with transaction.atomic():
-        due = (
+        waiting_due = (
             WorkflowRun.objects.select_for_update(**lock_kwargs)  # type: ignore[arg-type]
             .filter(
                 status=WorkflowRun.Status.WAITING,
@@ -1603,12 +1871,42 @@ def run_due() -> int:
             )  # suspended: waits resume on reactivation
             .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
         )
-        runs = list(due)
+        runs = list(waiting_due)
+
+    # Stalled ACTIVE runs: a claim_reply committed but advance_run never ran.
+    with transaction.atomic():
+        stalled_active = (
+            WorkflowRun.objects.select_for_update(**lock_kwargs)  # type: ignore[arg-type]
+            .filter(
+                status=WorkflowRun.Status.ACTIVE,
+                next_due_at__lte=stall_cutoff,
+                workflow__status=Workflow.Status.PUBLISHED,
+                workflow__account__is_active=True,
+            )
+            .order_by("next_due_at", "id")[:_RUN_DUE_BATCH]
+        )
+        runs += list(stalled_active)
 
     for run in runs:
         try:
             with transaction.atomic():
-                advance_run(run)
+                # Re-lock the run inside its own transaction so the fast-path
+                # and the sweeper can't both advance it.
+                locked = (
+                    WorkflowRun.objects.select_for_update()
+                    .select_related("workflow")
+                    .get(pk=run.pk)
+                )
+                if locked.status not in (
+                    WorkflowRun.Status.ACTIVE,
+                    WorkflowRun.Status.WAITING,
+                ):
+                    continue  # already advanced by the fast path
+                # Clear the stall marker so the run looks normal to advance_run.
+                if locked.status == WorkflowRun.Status.ACTIVE and locked.next_due_at:
+                    locked.next_due_at = None
+                    locked.save(update_fields=["next_due_at"])
+                advance_run(locked)
             n += 1
         except Exception:
             logger.exception("run_due: advance failed for run %s", run.pk)

@@ -156,8 +156,9 @@ def settings_ai_knowledge(request):
         elif source_type not in KnowledgeBaseEntry.SourceType.values:
             messages.error(request, "That's not a valid entry type.")
         else:
-            KnowledgeBaseEntry.objects.create(
-                account=account, title=title, content=content, source_type=source_type
+            from apps.ai import knowledge_write
+            knowledge_write.create_entry(
+                account, title=title, content=content, source_type=source_type
             )
             messages.success(request, "Added to the knowledge base.")
         return redirect("settings-ai-knowledge")
@@ -189,8 +190,9 @@ def knowledge_entry_toggle(request, pk):
     if entry.needs_review:
         messages.error(request, "Check this entry and approve it first.")
         return redirect("settings-ai-knowledge")
+    from apps.ai import knowledge_write
     entry.is_active = not entry.is_active
-    entry.save(update_fields=["is_active", "updated_at"])
+    knowledge_write.save_entry(entry, update_fields=["is_active", "updated_at"])
     return redirect("settings-ai-knowledge")
 
 
@@ -245,7 +247,8 @@ def knowledge_entry_edit(request, pk):
         messages.success(request, "Approved. AI can answer from it now.")
     else:
         messages.success(request, "Saved.")
-    entry.save(update_fields=fields)
+    from apps.ai import knowledge_write
+    knowledge_write.save_entry(entry, update_fields=fields)
     return redirect("settings-ai-knowledge")
 
 
@@ -258,14 +261,17 @@ def knowledge_approve_all(request):
     account, stop = _knowledge_admin(request)
     if stop:
         return stop
-    count = (
+    from apps.ai import knowledge_write
+    qs = (
         KnowledgeBaseEntry.objects.filter(
             account=account,
             origin__in=KnowledgeBaseEntry.REVIEW_ORIGINS,
             reviewed_at__isnull=True,
         )
         .exclude(content="")
-        .update(is_active=True, reviewed_at=timezone.now())
+    )
+    count = knowledge_write.bulk_update_entries(
+        account, qs, is_active=True, reviewed_at=timezone.now()
     )
     messages.success(request, f"Approved {count} entr{'y' if count == 1 else 'ies'}.")
     return redirect("settings-ai-knowledge")
@@ -354,7 +360,8 @@ def knowledge_entry_delete(request, pk):
         messages.error(request, "Only an owner or admin can change AI settings.")
         return redirect("settings-ai-knowledge")
     entry = get_object_or_404(KnowledgeBaseEntry, account=account, pk=pk)
-    entry.delete()
+    from apps.ai import knowledge_write
+    knowledge_write.delete_entry(entry)
     messages.success(request, "Removed from the knowledge base.")
     return redirect("settings-ai-knowledge")
 

@@ -164,10 +164,21 @@ def record_inbound_whatsapp_message(
     handled = False
     if enroll_workflows:
         try:
+            wa_account_id = (
+                whatsapp_conversation.contact.phone_number
+                if hasattr(whatsapp_conversation, "contact")
+                else ""
+            )
+            msg_id = message_log.message_id or ""
             handled = _enroll_workflows(
                 conversation,
                 contact,
-                {"body": message_log.content, "type": message_log.message_type},
+                {
+                    "body": message_log.content,
+                    "type": message_log.message_type,
+                    "_conversation": conversation,
+                    "_message_key": f"whatsapp:{wa_account_id}:{msg_id}",
+                },
                 reply,
             )
         except Exception:
@@ -250,11 +261,26 @@ def record_inbound_instagram_message(
     handled = False
     if enroll_workflows:
         try:
-            handled = _enroll_workflows(
-                conversation,
-                contact,
-                {"body": instagram_message.body, "type": message_type},
+            # Extract the IG quick_reply payload (if any) as the reply_id for
+            # token-based interaction routing (A workstream).
+            raw_meta = instagram_message.metadata or {}
+            ig_msg_raw = raw_meta.get("message") or {}
+            qr_payload = (ig_msg_raw.get("quick_reply") or {}).get("payload", "")
+            ig_account_id = (
+                instagram_conversation.instagram_account.instagram_business_account_id
+                if instagram_conversation
+                else ""
             )
+            ig_mid = instagram_message.message_id or ""
+            msg_dict: dict = {
+                "body": instagram_message.body,
+                "type": message_type,
+                "_conversation": conversation,
+                "_message_key": f"instagram:{ig_account_id}:{ig_mid}",
+            }
+            if qr_payload:
+                msg_dict["reply_id"] = qr_payload
+            handled = _enroll_workflows(conversation, contact, msg_dict)
         except Exception:
             logger.exception(
                 "record_inbound_instagram_message: workflow enrollment failed for conversation=%s",
@@ -450,10 +476,12 @@ def _enroll_workflows(
 
     # Only a workflow that actually answered keeps AI out; one that ran and said nothing
     # (a welcome for someone already welcomed) must not silence AI for good.
+    # Strip routing-only keys (prefixed with "_") before storing the message in the run context.
+    stored_message = {k: v for k, v in message.items() if not k.startswith("_")}
     return answer_message(
         conversation.account_id,
         contact,
-        context={"conversation_id": conversation.public_id, "message": message},
+        context={"conversation_id": conversation.public_id, "message": stored_message},
     )
 
 

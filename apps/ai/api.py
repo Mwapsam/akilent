@@ -344,8 +344,9 @@ def save_answer(account, proposal_id, question: str, answer: str):
         return None, "That suggestion is no longer available."
     if (proposal.payload or {}).get("learned_entry_id"):
         return None, "This answer is already saved."
-    entry = KnowledgeBaseEntry.objects.create(
-        account=account,
+    from apps.ai import knowledge_write
+    entry = knowledge_write.create_entry(
+        account,
         title=question,
         content=answer,
         source_type=KnowledgeBaseEntry.SourceType.FAQ,

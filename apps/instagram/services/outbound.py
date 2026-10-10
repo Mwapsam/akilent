@@ -26,12 +26,14 @@ def enqueue_reply(
     action_type: str,
     idempotency_key: str,
     media=None,
+    quick_replies: list | None = None,
 ) -> OutboundMessage | None:
     """
     Create an OutboundMessage record (outbox-first pattern).
 
     Returns the new OutboundMessage, or None if the idempotency key already
     exists (meaning this send was already enqueued or sent — safe to ignore).
+    ``quick_replies`` is a list of IG quick-reply chip dicts (A workstream).
     """
     try:
         with transaction.atomic():
@@ -44,6 +46,7 @@ def enqueue_reply(
                 media_path=media.path if media else "",
                 media_mime_type=media.mime if media else "",
                 media_kind=media.kind if media else "",
+                quick_replies=quick_replies or [],
             )
         return msg
     except IntegrityError:
@@ -75,6 +78,7 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         outbound.mark_failed(
             "Instagram isn't connected — reconnect it in Settings.", terminal=True
         )
+        _notify_automation_failed(outbound)
         return False
     provider = MetaInstagramProvider(
         access_token=instagram_account.access_token,
@@ -86,6 +90,7 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         outbound.mark_failed(
             f"Not eligible to send: {eligibility.reason}", terminal=True
         )
+        _notify_automation_failed(outbound)
         return False
 
     outbound.status = OutboundMessage.Status.SENDING
@@ -101,6 +106,10 @@ def send_outbound(outbound: OutboundMessage) -> bool:
             outbound.recipient_igsid,
             _ATTACHMENT_TYPE.get(outbound.media_kind, "file"),
             signed_media_url(outbound.media_path, outbound.media_mime_type),
+        )
+    elif outbound.quick_replies:
+        result = provider.send_quick_reply(
+            outbound.recipient_igsid, outbound.body, outbound.quick_replies
         )
     else:
         result = provider.send_message(outbound.recipient_igsid, outbound.body)
@@ -127,7 +136,21 @@ def send_outbound(outbound: OutboundMessage) -> bool:
             instagram_account.pk,
         )
     outbound.mark_failed(_readable_error(result), terminal=result.terminal)
+    if outbound.status == OutboundMessage.Status.FAILED:
+        _notify_automation_failed(outbound)
     return False
+
+
+def _notify_automation_failed(outbound: OutboundMessage) -> None:
+    """Call the automation reconciliation hook when an outbound message reaches FAILED."""
+    try:
+        from apps.automation.integrations.instagram import mark_outbound_message_failed
+
+        mark_outbound_message_failed(outbound)
+    except Exception:
+        logger.exception(
+            "send_outbound: automation hook raised outbound=%s", outbound.pk
+        )
 
 
 def _readable_error(result) -> str:

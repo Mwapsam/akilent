@@ -54,7 +54,6 @@ def unlink_knowledge(chatbot: ChatbotConfig, entry: KnowledgeBaseEntry) -> None:
 
 
 _MAX_ENTRIES = 5
-_MIN_OVERLAP = 1  # at least one keyword must match
 
 
 def retrieve(
@@ -62,51 +61,83 @@ def retrieve(
 ) -> list[dict]:
     """Return a ranked list of relevant knowledge entries for this query.
 
-    Each item: {"title": str, "content": str, "source_type": str, "score": int}
+    Uses BM25 (``apps.ai.ranking``) over the same candidate set as
+    ``apps.ai.facts.build`` — all active entries linked to the chatbot.
+    Falls back to keyword overlap when BM25 is not enabled for the account.
+
+    Each item: {"title": str, "content": str, "source_type": str, "score": float}
     Returns an empty list if no entries match.
     """
     from apps.ai.models import KnowledgeBaseEntry
+    from apps.ai import ranking
     from apps.chatbot.models import ChatbotKnowledgeSource
 
-    entry_ids = ChatbotKnowledgeSource.objects.filter(
-        chatbot=chatbot, is_active=True
-    ).values_list("knowledge_entry_id", flat=True)
-
+    entry_ids = list(
+        ChatbotKnowledgeSource.objects.filter(
+            chatbot=chatbot, is_active=True
+        ).values_list("knowledge_entry_id", flat=True)
+    )
     if not entry_ids:
         return []
 
-    entries = KnowledgeBaseEntry.objects.filter(
-        id__in=entry_ids,
-        is_active=True,
-        account=chatbot.account,
+    entries = list(
+        KnowledgeBaseEntry.objects.filter(
+            id__in=entry_ids, is_active=True, account=chatbot.account
+        ).values("pk", "title", "content", "source_type")
     )
-
-    query_tokens = _tokenise(query)
-    if not query_tokens:
+    if not entries:
         return []
 
-    ranked = []
-    for entry in entries:
-        score = _overlap(
-            query_tokens, _tokenise(entry.title) | _tokenise(entry.content)
-        )
-        if score >= _MIN_OVERLAP:
-            ranked.append(
+    doc_ids = {f"k{e['pk']}" for e in entries}
+    source_type_map = {f"k{e['pk']}": e["source_type"] for e in entries}
+    docs = [
+        {"id": f"k{e['pk']}", "title": e["title"], "content": e["content"]}
+        for e in entries
+    ]
+
+    # Empty query → nothing is relevant; return early.
+    from apps.ai.facts import terms as _terms
+
+    if not query or not _terms(query):
+        return []
+
+    # Use the account-level cached ranker (None when BM25 is disabled).
+    # Query the whole account index with a top_k large enough to always include every
+    # linked entry regardless of how other chatbots' entries rank, then filter down.
+    ranker = ranking.get_cached_ranker(chatbot.account)
+    if ranker is not None:
+        # top_k = all linked entries × some headroom so none are cut before the filter.
+        all_results = ranker.query(query, top_k=max(len(docs) * 2, 60))
+        results = [(doc, score) for doc, score in all_results if doc["id"] in doc_ids][:max_results]
+        if results:
+            return [
                 {
-                    "title": entry.title,
-                    "content": entry.content,
-                    "source_type": entry.source_type,
-                    "score": score,
+                    "title": doc["title"],
+                    "content": doc["content"],
+                    "source_type": source_type_map.get(doc["id"], ""),
+                    "score": round(score, 4),
                 }
-            )
+                for doc, score in results
+            ]
+        # BM25 returned nothing (all-stopword query or wording mismatch on small corpus);
+        # fall through to keyword overlap so entries are never silently dropped.
 
-    ranked.sort(key=lambda x: x["score"] or 0, reverse=True)  # type: ignore[arg-type, return-value]
-    return ranked[:max_results]
+    # Fallback: keyword overlap — rank first, then truncate, then filter to matches only.
+    from apps.ai.facts import select_knowledge
 
-
-def _tokenise(text: str) -> set[str]:
-    return {w.lower() for w in text.split() if len(w) >= 3}
-
-
-def _overlap(a: set[str], b: set[str]) -> int:
-    return len(a & b)
+    wanted = _terms(query)
+    # select_knowledge ranks by overlap when entries don't fit the budget; here we run it
+    # over the full linked set so the best-matching entry wins regardless of its DB order.
+    chosen = [
+        e for e in select_knowledge(docs, query)
+        if wanted & (_terms(e["title"]) | _terms(e["content"]))
+    ][:max_results]
+    return [
+        {
+            "title": doc["title"],
+            "content": doc["content"],
+            "source_type": source_type_map.get(doc["id"], ""),
+            "score": 0.0,
+        }
+        for doc in chosen
+    ]

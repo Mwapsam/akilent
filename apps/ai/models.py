@@ -53,6 +53,9 @@ class AISettings(models.Model):
         related_name="+",
     )
     updated_at = models.DateTimeField(auto_now=True)
+    # G — BM25 knowledge retrieval (per-account feature flag).
+    knowledge_version = models.PositiveIntegerField(default=1)
+    bm25_enabled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"AI settings for account {self.account_id} ({'on' if self.enabled else 'off'}, {self.reply_mode})"

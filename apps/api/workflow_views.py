@@ -313,9 +313,14 @@ class WorkflowRunDetailView(BaseApiView):
         tags=["Workflows"],
     )
     def delete(self, request, run_id, *args, **kwargs):
+        from django.db import transaction
+        from apps.automation.interaction import cancel_open_interactions_for_run
+
         run = self._get(request, run_id)
         if run.status in (WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING):
-            run.status = WorkflowRun.Status.CANCELLED
-            run.next_due_at = None
-            run.save(update_fields=["status", "next_due_at"])
+            with transaction.atomic():
+                run.status = WorkflowRun.Status.CANCELLED
+                run.next_due_at = None
+                run.save(update_fields=["status", "next_due_at"])
+                cancel_open_interactions_for_run(run)
         return Response(_run_dict(run))

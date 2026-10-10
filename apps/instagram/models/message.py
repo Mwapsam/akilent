@@ -135,6 +135,11 @@ class OutboundMessage(models.Model):
     last_error = models.TextField(blank=True, default="")
     sent_at = models.DateTimeField(blank=True, null=True)
 
+    # Instagram quick-reply chips sent with a DM. Shape per chip:
+    # {"content_type": "text", "title": str, "payload": str}
+    # Max 13 chips, title ≤ 20 chars, payload ≤ 1000 chars (A workstream).
+    quick_replies = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

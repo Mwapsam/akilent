@@ -126,31 +126,10 @@ def _tidy(pairs) -> list[tuple[str, str]]:
 def add_for_review(account, pairs, *, origin: str, source_url: str = "") -> list:
     """Create an inactive entry per new question (one the knowledge base doesn't already have).
     Returns the entries created."""
-    from apps.ai.models import KnowledgeBaseEntry
-
-    have = {
-        t.lower()
-        for t in KnowledgeBaseEntry.objects.filter(account=account).values_list(
-            "title", flat=True
-        )
-    }
-    created = []
-    for question, answer in pairs:
-        if question.lower() in have:
-            continue
-        have.add(question.lower())
-        created.append(
-            KnowledgeBaseEntry.objects.create(
-                account=account,
-                title=question,
-                content=answer,
-                source_type=KnowledgeBaseEntry.SourceType.FAQ,
-                origin=origin,
-                source_url=source_url[:500],
-                is_active=False,
-            )
-        )
-    return created
+    from apps.ai import knowledge_write
+    return knowledge_write.bulk_create_for_review(
+        account, pairs, origin=origin, source_url=source_url
+    )
 
 
 def import_pairs(account, user, pairs) -> dict:
@@ -249,7 +228,7 @@ Answer with ONE JSON object and nothing else:
 
         raise DraftError(str(exc)) from exc
     ids = {e.pk for e in entries}
-    answered = 0
+    updates: list[tuple[int, str]] = []
     for item in data.get("answers") or []:
         if not isinstance(item, dict):
             continue
@@ -260,11 +239,20 @@ Answer with ONE JSON object and nothing else:
         text = str(item.get("answer") or "").strip()[:MAX_ANSWER]
         if pk not in ids or not text:
             continue
-        # The model took a while: the owner may have written (or approved) an answer meanwhile.
-        # Only an answer that is still blank and unreviewed is filled.
-        answered += KnowledgeBaseEntry.objects.filter(
-            pk=pk, content="", reviewed_at__isnull=True
-        ).update(content=text, updated_at=timezone.now())
+        updates.append((pk, text))
+
+    answered = 0
+    if updates:
+        from apps.ai import knowledge_write
+        from django.db import transaction
+        now = timezone.now()
+        with transaction.atomic():
+            for pk, text in updates:
+                answered += KnowledgeBaseEntry.objects.filter(
+                    pk=pk, content="", reviewed_at__isnull=True
+                ).update(content=text, updated_at=now)
+            if answered:
+                knowledge_write.bump_version(account.pk)
     draft.result = {"answered": answered, "unanswered": len(entries) - answered}
     draft.model = (result.model or "")[:80]
 

@@ -162,6 +162,15 @@ class WorkflowStepRun(models.Model):
         on_delete=models.SET_NULL,
         related_name="workflow_step_runs",
     )
+    # Links a "send_buttons" IG step to the Instagram OutboundMessage it queued.
+    # See apps.automation.integrations.instagram.mark_outbound_message_failed.
+    ig_outbound_message = models.ForeignKey(
+        "instagram.OutboundMessage",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="workflow_step_runs",
+    )
 
     class Meta:
         indexes = [models.Index(fields=["run", "step_id"])]
@@ -173,6 +182,90 @@ class WorkflowStepRun(models.Model):
 
     def __str__(self):
         return f"{self.run_id}/{self.step_id} ({self.step_type})"
+
+
+def _workflow_interaction_token() -> str:
+    return _secrets.token_urlsafe(16)  # 128 bits, 22 URL-safe chars
+
+
+class WorkflowInteraction(models.Model):
+    """A pending reply request sent to a contact by a workflow step.
+
+    Created when a ``send_buttons``, ``send_list`` or ``ask_question`` step
+    parks the run and waits for the contact to respond. The ``token`` is
+    embedded in each interactive option payload so the inbound handler can
+    route the reply back to exactly the right interaction without scanning all
+    waiting runs.
+
+    Lock order (always): Conversation row → interactions (ascending
+    created_at, pk) → WorkflowRun. This order must be followed by every
+    operation that touches interactions (claim, open, cancel, expiry).
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ANSWERED = "answered", "Answered"
+        EXPIRED = "expired", "Expired"
+        CANCELLED = "cancelled", "Cancelled"
+
+    token = models.CharField(max_length=22, unique=True, default=_workflow_interaction_token, editable=False)
+    run = models.ForeignKey(WorkflowRun, on_delete=models.CASCADE, related_name="interactions")
+    step_id = models.CharField(max_length=64)
+    conversation = models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=models.CASCADE,
+        related_name="workflow_interactions",
+    )
+    # The options the contact is expected to pick from. Shape:
+    # {"option_ids": ["prices", "book", ...], "free_text": False}
+    expected = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    invalid_answer_count = models.PositiveSmallIntegerField(default=0)
+    # deadline_at is authoritative for expiry; run.next_due_at is kept equal to it.
+    deadline_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["conversation", "status"]),
+            models.Index(fields=["run", "step_id"]),
+        ]
+        constraints = [
+            # At most one open interaction per (run, step_id).
+            models.UniqueConstraint(
+                fields=["run", "step_id"],
+                condition=models.Q(status="open"),
+                name="uniq_open_interaction_run_step",
+            )
+        ]
+
+    def __str__(self):
+        return f"interaction {self.token} [{self.status}] run={self.run_id}"
+
+
+class InteractionAnswer(models.Model):
+    """The durable claim that a specific inbound message answered an interaction.
+
+    Keyed on ``message_key = "{channel}:{provider_account_id}:{provider_message_id}"``.
+    The unique constraint makes this the idempotency anchor: a duplicate
+    delivery of the same provider message id will hit IntegrityError, which
+    ``claim_reply`` interprets as ``already_claimed``.
+    """
+
+    message_key = models.CharField(max_length=255, unique=True)
+    interaction = models.OneToOneField(
+        WorkflowInteraction,
+        on_delete=models.CASCADE,
+        related_name="answer",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["interaction"])]
+
+    def __str__(self):
+        return f"answer {self.message_key} → interaction {self.interaction_id}"
 
 
 class WorkflowWebhookDelivery(models.Model):

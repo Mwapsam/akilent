@@ -97,6 +97,48 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram send_message unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)
 
+    def send_quick_reply(
+        self, recipient_igsid: str, body: str, quick_replies: list
+    ) -> SendResult:
+        """Send a text message with Instagram quick-reply chips.
+
+        ``quick_replies`` is a list of chip dicts, each:
+        ``{"content_type": "text", "title": str, "payload": str}``.
+        Meta enforces max 13 chips, title ≤ 20 chars, payload ≤ 1000 chars.
+        """
+        payload = {
+            "recipient": {"id": recipient_igsid},
+            "message": {"text": body, "quick_replies": quick_replies},
+            "messaging_type": "RESPONSE",
+        }
+        try:
+            data = self._post(f"{self._account_id}/messages", payload)
+            return SendResult(
+                success=True,
+                provider_message_id=data.get("message_id", ""),
+            )
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram send_quick_reply failed: code=%s subcode=%s msg=%s "
+                "recipient=%s account=%s fbtrace_id=%s",
+                exc.code,
+                exc.subcode,
+                exc.message,
+                recipient_igsid,
+                self._account_id,
+                exc.fbtrace_id,
+            )
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
+        except Exception as exc:
+            logger.exception("Instagram send_quick_reply unexpected error")
+            return SendResult(success=False, error=str(exc), terminal=False)
+
     def send_attachment(self, recipient_igsid: str, kind: str, url: str) -> SendResult:
         """Send an image / video / audio / file DM that Meta fetches from ``url``."""
         payload = {

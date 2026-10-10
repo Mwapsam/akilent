@@ -260,7 +260,38 @@ def build(account, *, business_notes: str = "", query: str = "") -> dict:
             ).get("products", [])
         except ActionError:
             products = []
-    knowledge = select_knowledge(all_knowledge(account), query)
+    from apps.ai import ranking as _ranking
+    _all = all_knowledge(account)
+    _ranker = _ranking.get_cached_ranker(account)
+    if _ranker is not None:
+        # BM25 ranks KnowledgeBaseEntry rows (id starts with "k"); FAQs/BusinessKnowledge
+        # are not indexed — they are appended after BM25 results below.
+        _raw = _ranker.query(query, top_k=MAX_KNOWLEDGE_ENTRIES)
+        _bm25_ids = {_doc["id"] for _doc, _ in _raw}
+        knowledge = []
+        _used = 0
+        for _doc, _ in _raw:
+            _cost = len(_doc["title"]) + len(_doc["content"])
+            if _used + _cost > MAX_KNOWLEDGE_CHARS and knowledge:
+                continue
+            if len(knowledge) >= MAX_KNOWLEDGE_ENTRIES:
+                break
+            knowledge.append(_doc)
+            _used += _cost
+
+        # Always include FAQs/BusinessKnowledge (not in the BM25 index) and any KB
+        # entries that BM25 scored zero (different wording) — use select_knowledge to
+        # rank the remainder so the most relevant gaps are filled first.
+        _unranked = [e for e in _all if e["id"] not in _bm25_ids]
+        for _doc in select_knowledge(_unranked, query):
+            if len(knowledge) >= MAX_KNOWLEDGE_ENTRIES:
+                break
+            _cost = len(_doc["title"]) + len(_doc["content"])
+            if _used + _cost <= MAX_KNOWLEDGE_CHARS:
+                knowledge.append(_doc)
+                _used += _cost
+    else:
+        knowledge = select_knowledge(_all, query)
     return {
         "opening_hours": dict(hours.schedule) if hours and hours.schedule else {},
         "timezone": hours.timezone if hours and hours.schedule else "",
