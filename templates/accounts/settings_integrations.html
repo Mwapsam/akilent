@@ -14,12 +14,12 @@
         <div class="flex items-center gap-2 mb-0.5">
           <h3 class="font-semibold text-ink">Instagram Publishing</h3>
           {% if ig_publish_scope %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
             Scope granted
           </span>
           {% else %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
             Pending App Review
           </span>
@@ -45,12 +45,12 @@
         <div class="flex items-center gap-2 mb-0.5">
           <h3 class="font-semibold text-ink">Facebook Page</h3>
           {% if fb_connected %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
             Connected
           </span>
           {% else %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
             Not connected
           </span>
@@ -66,7 +66,7 @@
       {% if fb_connected %}
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
                 onclick="return confirm('Disconnect Facebook Page?')">Disconnect</button>
       </form>
       {% else %}
@@ -85,12 +85,12 @@
         <div class="flex items-center gap-2 mb-0.5">
           <h3 class="font-semibold text-ink">HubSpot</h3>
           {% if hs_connected %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
             Connected
           </span>
           {% else %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
             Not connected
           </span>
@@ -109,7 +109,7 @@
       {% if hs_connected %}
       <form method="post" action="{% url 'hubspot:oauth-disconnect' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
                 onclick="return confirm('Disconnect HubSpot? Sync will stop but your data stays intact.')">
           Disconnect
         </button>

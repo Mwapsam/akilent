@@ -16,11 +16,11 @@
   <a href="{% url 'publishing:post-detail' post.pk %}"
      class="card card-pad flex items-start gap-4 hover:border-brand-300 transition-colors">
     <div class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center
-      {% if post.status == 'published' %}bg-green-50 text-green-600
-      {% elif post.status == 'failed' %}bg-red-50 text-red-500
-      {% elif post.status == 'scheduled' %}bg-blue-50 text-blue-600
-      {% elif post.status == 'publishing' %}bg-yellow-50 text-yellow-600
-      {% else %}bg-gray-100 text-gray-400{% endif %}">
+      {% if post.status == 'published' %}tone-teal-bg text-teal-600
+      {% elif post.status == 'failed' %}tone-coral-bg text-coral-500
+      {% elif post.status == 'scheduled' %}tone-info-bg text-blue-600
+      {% elif post.status == 'publishing' %}tone-amber-bg text-amber-600
+      {% else %}tone-neutral-bg text-ink-subtle{% endif %}">
       {% if post.media_type == 'video' or post.media_type == 'reel' %}
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.88v6.243a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
       {% else %}
@@ -31,11 +31,11 @@
       <div class="flex items-center gap-2 mb-0.5">
         <span class="font-medium text-ink truncate">{{ post.caption|truncatechars:80|default:"(no caption)" }}</span>
         <span class="text-xs px-2 py-0.5 rounded-full shrink-0
-          {% if post.status == 'published' %}bg-green-50 text-green-700
-          {% elif post.status == 'failed' %}bg-red-50 text-red-600
-          {% elif post.status == 'scheduled' %}bg-blue-50 text-blue-700
-          {% elif post.status == 'publishing' %}bg-yellow-50 text-yellow-700
-          {% else %}bg-gray-100 text-gray-500{% endif %}">
+          {% if post.status == 'published' %}tone-teal
+          {% elif post.status == 'failed' %}tone-coral
+          {% elif post.status == 'scheduled' %}tone-info
+          {% elif post.status == 'publishing' %}tone-amber
+          {% else %}tone-neutral{% endif %}">
           {{ post.get_status_display }}
         </span>
       </div>
