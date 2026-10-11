@@ -76,7 +76,11 @@ def get_page_token(user_access_token: str, page_id: str) -> str:
 
 
 def list_pages(user_access_token: str) -> list[dict]:
-    """Return [{id, name, access_token}] for pages the user manages."""
+    """Return [{id, name, access_token}] for pages the user manages.
+
+    Tries /me/accounts first (direct Page roles). Falls back to
+    /{business-id}/owned_pages for Business Manager-managed pages.
+    """
     r = requests.get(
         f"{_BASE}/me/accounts",
         params={"access_token": user_access_token, "fields": "id,name,access_token"},
@@ -85,4 +89,31 @@ def list_pages(user_access_token: str) -> list[dict]:
     data = r.json()
     if "error" in data:
         raise FacebookPublishError(data["error"].get("message", str(data)))
-    return data.get("data", [])
+    pages = data.get("data", [])
+    if pages:
+        return pages
+
+    # No direct Page roles — try Business Manager owned pages.
+    biz_r = requests.get(
+        f"{_BASE}/me/businesses",
+        params={"access_token": user_access_token, "fields": "id,name"},
+        timeout=30,
+    )
+    biz_data = biz_r.json()
+    if "error" in biz_data:
+        return []
+
+    for biz in biz_data.get("data", []):
+        biz_id = biz.get("id")
+        if not biz_id:
+            continue
+        p_r = requests.get(
+            f"{_BASE}/{biz_id}/owned_pages",
+            params={"access_token": user_access_token, "fields": "id,name,access_token"},
+            timeout=30,
+        )
+        p_data = p_r.json()
+        if "error" not in p_data:
+            pages.extend(p_data.get("data", []))
+
+    return pages
