@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
+from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
@@ -84,12 +85,10 @@ def fb_oauth_connect(request):
     redirect_uri = request.build_absolute_uri("/publishing/fb/callback/")
     request.session["fb_connect_redirect_uri"] = redirect_uri
 
+    graph_version = getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
     auth_url = (
-        f"https://www.facebook.com/dialog/oauth"
-        f"?client_id={app_id}"
-        f"&redirect_uri={redirect_uri}"
-        f"&scope={_FB_SCOPES}"
-        f"&state={state}"
+        f"https://www.facebook.com/{graph_version}/dialog/oauth"
+        f"?{urlencode({'client_id': app_id, 'redirect_uri': redirect_uri, 'scope': _FB_SCOPES, 'state': state})}"
     )
     return redirect(auth_url)
 
