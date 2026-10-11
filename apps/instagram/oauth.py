@@ -26,12 +26,12 @@ GRAPH_IG = "https://graph.instagram.com"
 API_IG = "https://api.instagram.com"
 _TIMEOUT = 15
 
-# Only what Akilent uses — App Review rejects permissions the product doesn't need.
+# instagram_content_publish is excluded until Meta App Review approves it.
+# The channels page shows a "publish scope pending" badge when it's absent.
 SCOPES = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
-    "instagram_business_manage_comments,"
-    "instagram_content_publish"
+    "instagram_business_manage_comments"
 )
 
 
