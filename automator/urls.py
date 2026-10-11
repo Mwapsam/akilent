@@ -106,6 +106,7 @@ urlpatterns = [
     path("whatsapp/", include("apps.whatsapp.urls")),
     path("instagram/", include("apps.instagram.urls")),
     path("hubspot/", include("apps.hubspot.urls", namespace="hubspot")),
+    path("publishing/", include("apps.publishing.urls", namespace="publishing")),
 ]
 
 # Internal debug API — off by default; see settings.INTERNAL_DEBUG_ENABLED.

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Post — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between gap-4">
+  <div>
+    <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Publishing</a>
+    <h1 class="text-2xl font-semibold tracking-tight mt-1">Post</h1>
+  </div>
+  {% if post.status in 'draft,scheduled' %}
+  <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:bg-red-50"
+            onclick="return confirm('Delete this post?')">Delete</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="max-w-2xl space-y-4">
+  <div class="card card-pad space-y-3">
+    <div class="flex items-center gap-2">
+      <span class="text-sm font-medium text-gray-500">Status</span>
+      <span class="text-sm px-2 py-0.5 rounded-full
+        {% if post.status == 'published' %}bg-green-50 text-green-700
+        {% elif post.status == 'failed' %}bg-red-50 text-red-600
+        {% elif post.status == 'scheduled' %}bg-blue-50 text-blue-700
+        {% elif post.status == 'publishing' %}bg-yellow-50 text-yellow-700
+        {% else %}bg-gray-100 text-gray-500{% endif %}">
+        {{ post.get_status_display }}
+      </span>
+    </div>
+
+    <div>
+      <p class="text-sm text-gray-500 mb-0.5">Platforms</p>
+      <p class="text-sm font-medium">{{ post.platforms|join:", "|capfirst }}</p>
+    </div>
+
+    <div>
+      <p class="text-sm text-gray-500 mb-0.5">Type</p>
+      <p class="text-sm font-medium">{{ post.get_media_type_display }}</p>
+    </div>
+
+    {% if post.scheduled_at %}
+    <div>
+      <p class="text-sm text-gray-500 mb-0.5">Scheduled</p>
+      <p class="text-sm font-medium">{{ post.scheduled_at|date:"N j, Y H:i" }}</p>
+    </div>
+    {% endif %}
+
+    {% if post.published_at %}
+    <div>
+      <p class="text-sm text-gray-500 mb-0.5">Published</p>
+      <p class="text-sm font-medium">{{ post.published_at|date:"N j, Y H:i" }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if post.media_urls %}
+  <div class="card card-pad">
+    <p class="text-sm text-gray-500 mb-2">Media</p>
+    <div class="space-y-1">
+      {% for url in post.media_urls %}
+      <a href="{{ url }}" target="_blank" class="block text-sm text-accent underline truncate">{{ url }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card card-pad">
+    <p class="text-sm text-gray-500 mb-2">Caption</p>
+    <p class="text-sm whitespace-pre-wrap">{{ post.full_caption|default:"(none)" }}</p>
+  </div>
+
+  {% if post.ig_media_id %}
+  <div class="card card-pad">
+    <p class="text-xs text-gray-400">Instagram media ID: {{ post.ig_media_id }}</p>
+  </div>
+  {% endif %}
+
+  {% if post.fb_post_id %}
+  <div class="card card-pad">
+    <p class="text-xs text-gray-400">Facebook post ID: {{ post.fb_post_id }}</p>
+  </div>
+  {% endif %}
+
+  {% if post.error %}
+  <div class="card card-pad border-red-200 bg-red-50">
+    <p class="text-sm text-red-700">{{ post.error }}</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

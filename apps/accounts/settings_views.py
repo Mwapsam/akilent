@@ -272,6 +272,27 @@ def settings_integrations(request):
         hs_connected = False
         hs_portal_id = ""
 
+    # Instagram publishing scope
+    ig_publish_scope = False
+    try:
+        ig_conn = account.instagram_connection
+        if ig_conn and ig_conn.scopes:
+            ig_publish_scope = "instagram_content_publish" in (ig_conn.scopes or [])
+    except Exception:
+        pass
+
+    # Facebook Page connection
+    fb_connected = False
+    fb_page_name = ""
+    try:
+        from apps.publishing.models import FacebookPageConnection
+
+        fb_conn = account.facebook_page_connection
+        fb_connected = fb_conn.status == FacebookPageConnection.Status.ACTIVE
+        fb_page_name = fb_conn.page_name
+    except Exception:
+        pass
+
     return render(
         request,
         "accounts/settings_integrations.html",
@@ -280,6 +301,9 @@ def settings_integrations(request):
             "active_tab": "integrations",
             "hs_connected": hs_connected,
             "hs_portal_id": hs_portal_id,
+            "ig_publish_scope": ig_publish_scope,
+            "fb_connected": fb_connected,
+            "fb_page_name": fb_page_name,
         },
     )
 

@@ -225,6 +225,7 @@ class AIDraft(models.Model):
         PLAYGROUND = "playground", "Try a question"
         KNOWLEDGE_ANSWERS = "knowledge_answers", "Draft knowledge answers"
         WEBSITE = "website", "Read a website"
+        CONTENT_CAPTION = "content_caption", "Content caption"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

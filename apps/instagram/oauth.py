@@ -30,7 +30,8 @@ _TIMEOUT = 15
 SCOPES = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
-    "instagram_business_manage_comments"
+    "instagram_business_manage_comments,"
+    "instagram_content_publish"
 )
 
 

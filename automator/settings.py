@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "apps.support",
     "apps.instagram",
     "apps.hubspot",
+    "apps.publishing",
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django.contrib.sitemaps",
@@ -768,6 +769,19 @@ if INSTAGRAM_ENABLED:
             "apps.instagram.tasks.refresh_instagram_tokens": {"queue": "celery"},
         }
     )
+
+CELERY_BEAT_SCHEDULE.update(
+    {
+        "publish-due-posts": {
+            "task": "apps.publishing.tasks.publish_due_posts",
+            "schedule": 60.0,
+        },
+        "poll-ig-containers": {
+            "task": "apps.publishing.tasks.poll_ig_containers",
+            "schedule": 30.0,
+        },
+    }
+)
 
 # Every queue a production worker consumes (docker-compose.yml). The Pilot Command Center sends a
 # heartbeat through each one, so a queue without a worker shows up as late.

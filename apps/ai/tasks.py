@@ -346,6 +346,24 @@ def build_draft(self, draft_id: int) -> str:
     return "ready"
 
 
+def build_caption_draft(
+    account_id: int, prompt: str, media_type: str, platform: str
+) -> str:
+    """Create a CONTENT_CAPTION AIDraft and enqueue it. Returns the draft public_id."""
+    from apps.accounts.models import Account
+    from apps.ai.models import AIDraft
+
+    account = Account.objects.get(pk=account_id)
+    draft = AIDraft.objects.create(
+        account=account,
+        kind=AIDraft.Kind.CONTENT_CAPTION,
+        prompt=prompt,
+        context={"media_type": media_type, "platform": platform},
+    )
+    build_draft.delay(draft.pk)
+    return str(draft.pk)
+
+
 def _finish(proposal, status: str, *, error: str = "") -> str:
     proposal.status = status
     proposal.error = error[:300]

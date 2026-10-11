@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}New post — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Publishing</a>
+  <h1 class="text-2xl font-semibold tracking-tight mt-1">New post</h1>
+</div>
+
+<div class="max-w-2xl space-y-6">
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    <div class="card card-pad space-y-4">
+      <h2 class="font-semibold">Platforms</h2>
+      <div class="flex gap-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="platforms" value="instagram" checked class="rounded">
+          <span class="text-sm font-medium">Instagram</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="platforms" value="facebook" class="rounded">
+          <span class="text-sm font-medium">Facebook</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card card-pad space-y-4">
+      <h2 class="font-semibold">Content type</h2>
+      <select name="media_type" class="input w-full">
+        {% for value, label in media_types %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="card card-pad space-y-4">
+      <h2 class="font-semibold">Media URLs</h2>
+      <p class="text-sm text-gray-500">One URL per line. Use your S3 or CDN URL for images/videos.</p>
+      <textarea name="media_urls" rows="3" class="input w-full font-mono text-sm"
+                placeholder="https://cdn.example.com/image.jpg"></textarea>
+    </div>
+
+    <div class="card card-pad space-y-4" x-data="{loading: false, caption: '', hashtags: []}">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">Caption</h2>
+        <button type="button"
+                class="btn btn-ghost text-sm gap-1.5"
+                @click="generateCaption($el)"
+                :disabled="loading">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          <span x-text="loading ? 'Generating…' : 'Generate with AI'"></span>
+        </button>
+      </div>
+
+      <div id="caption-prompt-row" class="space-y-2">
+        <label class="text-sm text-gray-600">Describe your content (for AI generation)</label>
+        <input type="text" id="caption-prompt" class="input w-full"
+               placeholder="e.g. New summer collection launch, bright colours, outdoor lifestyle">
+      </div>
+
+      <textarea name="caption" id="caption-field" rows="5" class="input w-full"
+                placeholder="Write your caption or generate one above..."
+                x-model="caption"></textarea>
+
+      <div class="space-y-2">
+        <label class="text-sm text-gray-600">Hashtags (space-separated, without #)</label>
+        <input type="text" name="hashtags" id="hashtags-field" class="input w-full"
+               placeholder="summer fashion newcollection"
+               :value="hashtags.join(' ')">
+      </div>
+    </div>
+
+    <div class="card card-pad space-y-4">
+      <h2 class="font-semibold">Schedule</h2>
+      <p class="text-sm text-gray-500">Leave blank to save as a draft.</p>
+      <input type="datetime-local" name="scheduled_at" class="input w-64">
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="btn btn-primary">Save post</button>
+      <a href="{% url 'publishing:index' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+async function generateCaption(btn) {
+  const xData = btn.closest('[x-data]').__x.$data;
+  const prompt = document.getElementById('caption-prompt').value.trim();
+  if (!prompt) { alert('Enter a description first.'); return; }
+
+  xData.loading = true;
+  const formData = new FormData();
+  formData.append('prompt', prompt);
+  formData.append('media_type', document.querySelector('[name=media_type]').value);
+  formData.append('platform', document.querySelector('[name="platforms"]:checked')?.value || 'instagram');
+  formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+  const res = await fetch('{% url "publishing:caption-generate" %}', {method: 'POST', body: formData});
+  const data = await res.json();
+  if (data.error) { alert(data.error); xData.loading = false; return; }
+
+  const draftId = data.draft_id;
+  // Poll for result
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 30) { clearInterval(poll); xData.loading = false; return; }
+    const r = await fetch(`{% url "publishing:caption-result" "PLACEHOLDER" %}`.replace('PLACEHOLDER', draftId));
+    const d = await r.json();
+    if (d.status === 'ready') {
+      clearInterval(poll);
+      xData.caption = d.caption;
+      xData.hashtags = d.hashtags || [];
+      xData.loading = false;
+    } else if (d.status === 'failed') {
+      clearInterval(poll);
+      alert(d.error || 'Generation failed.');
+      xData.loading = false;
+    }
+  }, 1500);
+}
+</script>
+{% endblock %}

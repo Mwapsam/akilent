@@ -100,6 +100,8 @@ _STEP_TYPES = {
     "ask_question",
     # D — BM25 product lookup; routes to on_found/on_not_found/on_ambiguous/on_no_price/on_error.
     "lookup_product",
+    # Publishing — publishes a ContentPost (apps.publishing) immediately.
+    "publish_post",
 }
 _TRIGGER_TYPES = {
     "business_event",
@@ -1229,6 +1231,47 @@ def _run_lookup_product(run: WorkflowRun, step: dict) -> dict:
     return {"reason": reason}
 
 
+def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
+    """Publish a ContentPost immediately.
+
+    Step shape:
+      {"type": "publish_post", "post_id": "<ContentPost pk>", "on_error": "notify_team"}
+
+    On success stores ig_media_id / fb_post_id in run.context.
+    On failure routes to on_error if provided, otherwise raises.
+    """
+    from apps.publishing.models import ContentPost
+    from apps.publishing.services import publish_post
+
+    step_id = step.get("id") or ""
+    post_id = step.get("post_id") or ""
+    on_error = step.get("on_error") or ""
+
+    try:
+        post = ContentPost.objects.get(pk=post_id, account=run.workflow.account)
+    except ContentPost.DoesNotExist:
+        msg = f"publish_post step {step_id!r}: ContentPost {post_id!r} not found"
+        if on_error:
+            return {"_routed_to": on_error, "reason": "not_found"}
+        raise ValueError(msg) from None
+
+    try:
+        publish_post(post)
+    except Exception as exc:
+        logger.exception("publish_post step %s failed: %s", step_id, exc)
+        if on_error:
+            return {"_routed_to": on_error, "reason": "error", "error": str(exc)}
+        raise
+
+    run.context = {
+        **(run.context or {}),
+        "ig_media_id": post.ig_media_id,
+        "fb_post_id": post.fb_post_id,
+    }
+    run.save(update_fields=["context"])
+    return {"ig_media_id": post.ig_media_id, "fb_post_id": post.fb_post_id}
+
+
 def _run_ask_question(run: WorkflowRun, step: dict) -> dict:
     """Entry point for the ask_question step.
 
@@ -1944,6 +1987,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_ask_question(run, step)
             elif stype == "lookup_product":
                 result = _run_lookup_product(run, step)
+            elif stype == "publish_post":
+                result = _run_publish_post(run, step)
             elif stype in ("stop", "exit"):
                 _record(run, step, {})
                 return _complete(run)

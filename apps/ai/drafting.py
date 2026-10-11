@@ -419,6 +419,44 @@ def check_subjects(allowed: set[str], data: dict) -> dict:
     return {"subjects": subjects[:MAX_SUBJECTS]}
 
 
+# ---- content caption prompt ------------------------------------------------------------------
+
+
+_CAPTION_LIMITS = {
+    "instagram": 2200,
+    "facebook": 2000,
+    "reel": 2200,
+    "story": 0,  # stories have no caption
+}
+
+_HASHTAG_GUIDANCE = {
+    "instagram": "Include 5-10 relevant hashtags.",
+    "facebook": "Include 2-3 relevant hashtags at most.",
+    "reel": "Include 5-10 relevant hashtags.",
+}
+
+
+def content_caption_prompt(account, media_type: str, platform: str, notes: str) -> str:
+    char_limit = _CAPTION_LIMITS.get(media_type, _CAPTION_LIMITS.get(platform, 2200))
+    hashtag_hint = _HASHTAG_GUIDANCE.get(platform, "Include 5-10 relevant hashtags.")
+    business = _business_block(account, notes)
+    return f"""You write social media captions for a small business.
+
+Platform: {platform}
+Media type: {media_type}
+Caption character limit: {char_limit if char_limit else "none (story — captions not shown)"}
+
+{hashtag_hint}
+Write a compelling, on-brand caption. Vary sentence length. Never invent facts about the business \
+that aren't mentioned below.
+
+Answer with ONE JSON object and nothing else:
+{{"caption": "<the caption text, without hashtags>", "hashtags": ["<tag without #>", ...]}}
+
+About the business:
+{business}"""
+
+
 # ---- running one draft ------------------------------------------------------------------------
 def run(draft, provider) -> None:
     """Fill ``draft`` (an ``AIDraft``) from the model. Raises ``AIProviderError`` / ``DraftError``."""
@@ -454,6 +492,11 @@ def run(draft, provider) -> None:
         from apps.ai import knowledge
 
         return knowledge.run_website(draft, provider)
+    elif draft.kind == "content_caption":
+        media_type = draft.context.get("media_type", "image")
+        platform = draft.context.get("platform", "instagram")
+        system = content_caption_prompt(account, media_type, platform, notes)
+        user = draft.prompt
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (
@@ -483,6 +526,12 @@ def run(draft, provider) -> None:
         )
     elif draft.kind == "email_template":
         draft.result, draft.warnings = check_email_template(account, data)
+    elif draft.kind == "content_caption":
+        caption = data.get("caption", "")
+        hashtags = data.get("hashtags", [])
+        if not caption:
+            raise DraftError("No caption came back. Try again.")
+        draft.result = {"caption": caption, "hashtags": hashtags}
     else:
         draft.result = check_edit(draft.context.get("body", ""), data)
         from apps.whatsapp.api import lint_template
