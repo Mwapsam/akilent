@@ -34,14 +34,21 @@ def publish_due_posts() -> int:
 
 @shared_task(bind=True, max_retries=3, queue="outbound")
 def publish_post_async(self, post_id: int) -> str:
+    from django.db import transaction
+
     from .models import ContentPost
     from .services import publish_post
 
-    post = ContentPost.objects.filter(pk=post_id).first()
-    if post is None:
-        return "not_found"
-    if post.status not in (ContentPost.Status.PUBLISHING, ContentPost.Status.SCHEDULED):
-        return "skipped"
+    with transaction.atomic():
+        try:
+            post = ContentPost.objects.select_for_update().get(pk=post_id)
+        except ContentPost.DoesNotExist:
+            return "not_found"
+        if post.status not in (
+            ContentPost.Status.PUBLISHING,
+            ContentPost.Status.SCHEDULED,
+        ):
+            return "skipped"
 
     try:
         publish_post(post)

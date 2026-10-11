@@ -1,0 +1,29 @@
+{% with path=request.path %}
+<nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2">
+  <a href="{% url 'publishing:index' %}"
+     class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
+       {% if path == '/publishing/' %}border-brand-500 text-brand-600{% else %}border-transparent text-gray-500 hover:text-ink hover:border-gray-300{% endif %}">
+    Overview
+  </a>
+  <a href="{% url 'publishing:planning' %}"
+     class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
+       {% if '/planning' in path %}border-brand-500 text-brand-600{% else %}border-transparent text-gray-500 hover:text-ink hover:border-gray-300{% endif %}">
+    Planning
+  </a>
+  <a href="{% url 'publishing:calendar' %}"
+     class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
+       {% if '/calendar' in path %}border-brand-500 text-brand-600{% else %}border-transparent text-gray-500 hover:text-ink hover:border-gray-300{% endif %}">
+    Calendar
+  </a>
+  <a href="{% url 'publishing:library' %}"
+     class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
+       {% if '/library' in path %}border-brand-500 text-brand-600{% else %}border-transparent text-gray-500 hover:text-ink hover:border-gray-300{% endif %}">
+    Library
+  </a>
+  <a href="{% url 'publishing:channels' %}"
+     class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
+       {% if '/channels' in path %}border-brand-500 text-brand-600{% else %}border-transparent text-gray-500 hover:text-ink hover:border-gray-300{% endif %}">
+    Channels
+  </a>
+</nav>
+{% endwith %}

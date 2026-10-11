@@ -1,128 +1,318 @@
 {% extends "base.html" %}
-{% block title %}New post — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if existing_post %}Edit draft{% else %}New post{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Publishing</a>
-  <h1 class="text-2xl font-semibold tracking-tight mt-1">New post</h1>
+<div class="mb-4">
+  <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">← Publishing</a>
+  <h1 class="text-xl font-semibold tracking-tight mt-1">{% if existing_post %}Edit draft{% else %}New post{% endif %}</h1>
 </div>
 
-<div class="max-w-2xl space-y-6">
-  <form method="post" class="space-y-6">
-    {% csrf_token %}
+<div class="max-w-2xl"
+     x-data="postEditor({{ existing_post.pk|default:'null' }}, '{{ existing_post.caption|default:''|escapejs }}', {{ existing_post.hashtags|default:'[]'|safe }})">
 
-    <div class="card card-pad space-y-4">
-      <h2 class="font-semibold">Platforms</h2>
-      <div class="flex gap-4">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" name="platforms" value="instagram" checked class="rounded">
-          <span class="text-sm font-medium">Instagram</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" name="platforms" value="facebook" class="rounded">
-          <span class="text-sm font-medium">Facebook</span>
-        </label>
+  {# Step 1: Starting point — only shown for a new post with no existing draft #}
+  {% if not existing_post %}
+  <div x-show="step === 1" class="grid grid-cols-2 gap-3 mb-6">
+    <button type="button"
+            @click="step = 2; mode = 'ai'"
+            class="card card-pad text-left hover:border-brand-400 transition-colors group">
+      <div class="w-8 h-8 rounded-lg tone-info-bg text-blue-600 flex items-center justify-center mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
       </div>
-    </div>
+      <p class="font-semibold text-ink text-sm">Generate with AI</p>
+      <p class="text-xs text-gray-400 mt-0.5">Create from a brief — get 3 caption options.</p>
+    </button>
+    <button type="button"
+            @click="step = 3; mode = 'scratch'"
+            class="card card-pad text-left hover:border-brand-400 transition-colors">
+      <div class="w-8 h-8 rounded-lg tone-neutral-bg text-ink flex items-center justify-center mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.172-8.172z"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-ink text-sm">Start from scratch</p>
+      <p class="text-xs text-gray-400 mt-0.5">Write your own caption and set up the post.</p>
+    </button>
+  </div>
+  {% endif %}
 
-    <div class="card card-pad space-y-4">
-      <h2 class="font-semibold">Content type</h2>
-      <select name="media_type" class="input w-full">
-        {% for value, label in media_types %}
-        <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="card card-pad space-y-4">
-      <h2 class="font-semibold">Media URLs</h2>
-      <p class="text-sm text-gray-500">One URL per line. Use your S3 or CDN URL for images/videos.</p>
-      <textarea name="media_urls" rows="3" class="input w-full font-mono text-sm"
-                placeholder="https://cdn.example.com/image.jpg"></textarea>
-    </div>
-
-    <div class="card card-pad space-y-4" x-data="{loading: false, caption: '', hashtags: []}">
+  {# Step 2: AI brief #}
+  <div x-show="step === 2 || '{{ existing_post.pk }}'" x-cloak>
+    {% if not existing_post %}
+    <div class="card card-pad space-y-4 mb-4">
       <div class="flex items-center justify-between">
-        <h2 class="font-semibold">Caption</h2>
-        <button type="button"
-                class="btn btn-ghost text-sm gap-1.5"
-                @click="generateCaption($el)"
-                :disabled="loading">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        <h2 class="font-semibold text-ink">Content brief</h2>
+        <button type="button" @click="step = 1" class="text-xs text-gray-400 hover:text-ink">← Back</button>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">What should this content be about?</label>
+        <input type="text" x-model="brief.topic"
+               placeholder="e.g. New summer collection launch, bright colours, outdoor lifestyle"
+               class="input w-full">
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+          <select x-model="brief.platform" class="input w-full">
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Media type</label>
+          <select x-model="brief.mediaType" class="input w-full">
+            {% for value, label in media_types %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Goal</label>
+        <div class="flex flex-wrap gap-2">
+          {% for val, lbl in goal_choices %}
+          <label class="flex items-center gap-1.5 text-sm cursor-pointer px-3 py-1.5 rounded-full border border-surface-subtle hover:border-brand-300 transition-colors"
+                 :class="brief.goal === '{{ val }}' ? 'border-brand-400 tone-info' : ''">
+            <input type="radio" name="brief_goal" value="{{ val }}" x-model="brief.goal" class="sr-only">
+            {{ lbl }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <button type="button"
+              @click="generateCaptions()"
+              :disabled="generating || !brief.topic"
+              class="btn btn-primary w-full gap-2">
+        <span x-show="!generating">Generate caption options</span>
+        <span x-show="generating" class="flex items-center gap-2">
+          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
           </svg>
-          <span x-text="loading ? 'Generating…' : 'Generate with AI'"></span>
-        </button>
+          Generating…
+        </span>
+      </button>
+
+      {# Error state #}
+      <div x-show="genError" class="tone-coral-bg p-3 rounded text-sm text-red-700 flex items-center justify-between">
+        <span x-text="genError"></span>
+        <button type="button" @click="genError = ''; generateCaptions()" class="text-xs underline ml-2">Retry</button>
       </div>
 
-      <div id="caption-prompt-row" class="space-y-2">
-        <label class="text-sm text-gray-600">Describe your content (for AI generation)</label>
-        <input type="text" id="caption-prompt" class="input w-full"
-               placeholder="e.g. New summer collection launch, bright colours, outdoor lifestyle">
-      </div>
-
-      <textarea name="caption" id="caption-field" rows="5" class="input w-full"
-                placeholder="Write your caption or generate one above..."
-                x-model="caption"></textarea>
-
-      <div class="space-y-2">
-        <label class="text-sm text-gray-600">Hashtags (space-separated, without #)</label>
-        <input type="text" name="hashtags" id="hashtags-field" class="input w-full"
-               placeholder="summer fashion newcollection"
-               :value="hashtags.join(' ')">
+      {# Caption options #}
+      <div x-show="captionOptions.length > 0" class="space-y-2">
+        <p class="text-sm font-medium text-gray-700">Choose an option:</p>
+        <template x-for="(opt, i) in captionOptions" :key="i">
+          <button type="button"
+                  @click="selectOption(opt)"
+                  class="w-full text-left p-3 rounded-lg border border-surface-subtle hover:border-brand-400 transition-colors"
+                  :class="caption === opt.caption ? 'border-brand-400 tone-info' : ''">
+            <p class="text-sm text-ink" x-text="opt.caption.slice(0, 150) + (opt.caption.length > 150 ? '…' : '')"></p>
+            <p class="text-xs text-gray-400 mt-1" x-text="opt.hashtags.slice(0,5).map(h => '#'+h).join(' ')"></p>
+          </button>
+        </template>
+        <button type="button" @click="captionOptions = []; genError = ''" class="text-xs text-gray-400 hover:text-ink">Regenerate</button>
       </div>
     </div>
+    {% endif %}
+  </div>
 
-    <div class="card card-pad space-y-4">
-      <h2 class="font-semibold">Schedule</h2>
-      <p class="text-sm text-gray-500">Leave blank to save as a draft.</p>
-      <input type="datetime-local" name="scheduled_at" class="input w-64">
-    </div>
+  {# Step 3: Editor (shown after option selected, or "start from scratch", or editing existing) #}
+  <div x-show="step === 3 || '{{ existing_post.pk }}'">
 
-    <div class="flex gap-3">
-      <button type="submit" class="btn btn-primary">Save post</button>
-      <a href="{% url 'publishing:index' %}" class="btn btn-ghost">Cancel</a>
-    </div>
-  </form>
+    <form method="post" class="space-y-4" @submit.prevent="submitForm($event)">
+      {% csrf_token %}
+      <input type="hidden" name="post_id" value="{{ existing_post.pk|default:'' }}" x-ref="postIdField">
+
+      {# Platforms #}
+      <div class="card card-pad space-y-3">
+        <h2 class="font-semibold text-ink">Platforms</h2>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="platforms" value="instagram"
+                   {% if not existing_post or 'instagram' in existing_post.platforms %}checked{% endif %}
+                   @change="updatePlatforms()" class="rounded">
+            <span class="text-sm font-medium">Instagram</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="platforms" value="facebook"
+                   {% if existing_post and 'facebook' in existing_post.platforms %}checked{% endif %}
+                   @change="updatePlatforms()" class="rounded">
+            <span class="text-sm font-medium">Facebook</span>
+          </label>
+        </div>
+      </div>
+
+      {# Media type #}
+      <div class="card card-pad">
+        <h2 class="font-semibold text-ink mb-2">Media type</h2>
+        <select name="media_type" class="input w-full">
+          {% for value, label in media_types %}
+          <option value="{{ value }}" {% if existing_post.media_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Caption #}
+      <div class="card card-pad space-y-3">
+        <h2 class="font-semibold text-ink">Caption</h2>
+        <textarea name="caption" rows="5" class="input w-full" x-model="caption"
+                  placeholder="Write your caption here…"></textarea>
+
+        {# Platform-specific overrides #}
+        <div class="space-y-2" id="platform-overrides">
+          <template x-for="plat in selectedPlatforms" :key="plat">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1" x-text="plat.charAt(0).toUpperCase() + plat.slice(1) + ' override (optional)'"></label>
+              <textarea :name="'caption_' + plat" rows="3" class="input w-full text-sm"
+                        :placeholder="'Leave blank to use the shared caption for ' + plat"
+                        x-model="platformCaptions[plat]"></textarea>
+            </div>
+          </template>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Hashtags (space-separated)</label>
+          <input type="text" name="hashtags" class="input w-full"
+                 :value="hashtags.join(' ')"
+                 @change="hashtags = $event.target.value.split(/\s+/).filter(Boolean)">
+        </div>
+      </div>
+
+      {# Media URLs #}
+      <div class="card card-pad space-y-3">
+        <h2 class="font-semibold text-ink">Media URLs</h2>
+        <p class="text-xs text-gray-400">One URL per line. Use S3 or CDN URLs for images and videos.</p>
+        <textarea name="media_urls" rows="3" class="input w-full font-mono text-sm"
+                  placeholder="https://cdn.example.com/image.jpg">{% if existing_post %}{{ existing_post.media_urls|join:'\n' }}{% endif %}</textarea>
+      </div>
+
+      {# Schedule #}
+      <div class="card card-pad space-y-3">
+        <h2 class="font-semibold text-ink">Schedule</h2>
+        <p class="text-xs text-gray-400">Leave blank to save as draft.</p>
+        <input type="datetime-local" name="scheduled_at"
+               value="{{ existing_post.scheduled_at|date:'Y-m-d\TH:i'|default:'' }}"
+               class="input w-64">
+      </div>
+
+      {# Actions #}
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" name="action" value="draft" class="btn btn-ghost">Save as draft</button>
+        <button type="submit" name="action" value="schedule" class="btn btn-primary">Schedule</button>
+        <button type="submit" name="action" value="publish_now" class="btn btn-ghost text-teal-700 hover:tone-teal-bg">Publish now</button>
+        <a href="{% url 'publishing:index' %}" class="btn btn-ghost text-gray-400">Cancel</a>
+      </div>
+
+    </form>
+  </div>
 </div>
 
 <script>
-async function generateCaption(btn) {
-  const xData = btn.closest('[x-data]').__x.$data;
-  const prompt = document.getElementById('caption-prompt').value.trim();
-  if (!prompt) { alert('Enter a description first.'); return; }
+function postEditor(existingPostId, existingCaption, existingHashtags) {
+  return {
+    step: existingPostId ? 3 : 1,
+    mode: existingPostId ? 'scratch' : '',
+    brief: { topic: '', platform: 'instagram', mediaType: 'image', goal: 'engagement' },
+    generating: false,
+    genError: '',
+    captionOptions: [],
+    caption: existingCaption || '',
+    hashtags: existingHashtags || [],
+    platformCaptions: {},
+    selectedPlatforms: ['instagram'],
 
-  xData.loading = true;
-  const formData = new FormData();
-  formData.append('prompt', prompt);
-  formData.append('media_type', document.querySelector('[name=media_type]').value);
-  formData.append('platform', document.querySelector('[name="platforms"]:checked')?.value || 'instagram');
-  formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    updatePlatforms() {
+      this.selectedPlatforms = [...document.querySelectorAll('[name=platforms]:checked')].map(cb => cb.value);
+    },
 
-  const res = await fetch('{% url "publishing:caption-generate" %}', {method: 'POST', body: formData});
-  const data = await res.json();
-  if (data.error) { alert(data.error); xData.loading = false; return; }
+    selectOption(opt) {
+      this.caption = opt.caption;
+      this.hashtags = opt.hashtags || [];
+      this.step = 3;
+    },
 
-  const draftId = data.draft_id;
-  // Poll for result
-  let attempts = 0;
-  const poll = setInterval(async () => {
-    attempts++;
-    if (attempts > 30) { clearInterval(poll); xData.loading = false; return; }
-    const r = await fetch(`{% url "publishing:caption-result" "PLACEHOLDER" %}`.replace('PLACEHOLDER', draftId));
-    const d = await r.json();
-    if (d.status === 'ready') {
-      clearInterval(poll);
-      xData.caption = d.caption;
-      xData.hashtags = d.hashtags || [];
-      xData.loading = false;
-    } else if (d.status === 'failed') {
-      clearInterval(poll);
-      alert(d.error || 'Generation failed.');
-      xData.loading = false;
-    }
-  }, 1500);
+    async generateCaptions() {
+      if (!this.brief.topic) return;
+      this.generating = true;
+      this.genError = '';
+      this.captionOptions = [];
+
+      const fd = new FormData();
+      fd.append('prompt', this.brief.topic);
+      fd.append('media_type', this.brief.mediaType);
+      fd.append('platform', this.brief.platform);
+      fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+      let res, data;
+      try {
+        res = await fetch('{% url "publishing:caption-generate" %}', { method: 'POST', body: fd });
+        data = await res.json();
+      } catch (e) {
+        this.genError = 'Network error. Please try again.';
+        this.generating = false;
+        return;
+      }
+      if (data.error) {
+        this.genError = data.error;
+        this.generating = false;
+        return;
+      }
+
+      const draftId = data.draft_id;
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        if (attempts > 40) {
+          clearInterval(poll);
+          this.genError = 'Generation timed out. Please try again.';
+          this.generating = false;
+          return;
+        }
+        let r, d;
+        try {
+          r = await fetch('{% url "publishing:caption-result" "PLACEHOLDER" %}'.replace('PLACEHOLDER', draftId));
+          d = await r.json();
+        } catch (e) {
+          return; // network blip — keep polling
+        }
+        if (d.status === 'ready') {
+          clearInterval(poll);
+          this.captionOptions = [{ caption: d.caption, hashtags: d.hashtags || [] }];
+          this.generating = false;
+        } else if (d.status === 'failed') {
+          clearInterval(poll);
+          this.genError = d.error || 'Generation failed. Please try again.';
+          this.generating = false;
+        }
+      }, 1500);
+    },
+
+    submitForm(event) {
+      // Ensure platform captions are injected as hidden fields before native submit
+      const form = event.target;
+      for (const [plat, val] of Object.entries(this.platformCaptions)) {
+        if (val) {
+          let field = form.querySelector(`[name="caption_${plat}"]`);
+          if (!field) {
+            field = document.createElement('textarea');
+            field.name = `caption_${plat}`;
+            field.style.display = 'none';
+            form.appendChild(field);
+          }
+          field.value = val;
+        }
+      }
+      form.submit();
+    },
+  };
 }
 </script>
+
 {% endblock %}

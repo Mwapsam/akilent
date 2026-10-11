@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Library — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex items-center justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+  </div>
+  <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+{# Filter form #}
+<form method="get" class="card card-pad mb-4">
+  <div class="flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+      <label class="block text-xs font-medium text-gray-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full text-sm py-1">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+      <select name="status" class="input text-sm py-1">
+        <option value="">All</option>
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Platform</label>
+      <select name="platform" class="input text-sm py-1">
+        <option value="">All</option>
+        <option value="instagram" {% if platform_filter == 'instagram' %}selected{% endif %}>Instagram</option>
+        <option value="facebook" {% if platform_filter == 'facebook' %}selected{% endif %}>Facebook</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Media type</label>
+      <select name="media_type" class="input text-sm py-1">
+        <option value="">All</option>
+        {% for val, label in media_type_choices %}
+        <option value="{{ val }}" {% if media_type_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
+      <input type="date" name="date_from" value="{{ date_from }}" class="input text-sm py-1">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
+      <input type="date" name="date_to" value="{{ date_to }}" class="input text-sm py-1">
+    </div>
+    <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
+    {% if q or status_filter or platform_filter or media_type_filter or date_from or date_to %}
+    <a href="{% url 'publishing:library' %}" class="btn btn-ghost text-sm py-1 text-gray-400">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+{# Bulk action form #}
+<form method="post" action="{% url 'publishing:library-bulk' %}" id="bulk-form">
+  {% csrf_token %}
+
+  {% if page_obj.object_list %}
+  <div class="flex items-center gap-3 mb-3">
+    <label class="text-sm text-gray-500 flex items-center gap-1.5">
+      <input type="checkbox" id="select-all" class="rounded"> Select all
+    </label>
+    <div class="flex gap-2">
+      <button type="submit" name="action" value="delete_drafts"
+              class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
+              onclick="return confirm('Delete selected drafts?')">Delete drafts</button>
+      <button type="submit" name="action" value="cancel_scheduled"
+              class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
+              onclick="return confirm('Cancel selected scheduled posts?')">Cancel scheduled</button>
+    </div>
+    <span class="text-xs text-gray-400 ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-surface-subtle">
+          <th class="w-8 px-3 py-2"></th>
+          <th class="text-left px-4 py-2 font-medium text-gray-500">Caption</th>
+          <th class="text-left px-4 py-2 font-medium text-gray-500">Platform</th>
+          <th class="text-left px-4 py-2 font-medium text-gray-500">Type</th>
+          <th class="text-left px-4 py-2 font-medium text-gray-500">Status</th>
+          <th class="text-left px-4 py-2 font-medium text-gray-500">Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for post in page_obj %}
+        <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
+          <td class="px-3 py-2 text-center">
+            <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox">
+          </td>
+          <td class="px-4 py-2">
+            <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">
+              {{ post.caption|truncatechars:70|default:"(no caption)" }}
+            </a>
+          </td>
+          <td class="px-4 py-2 text-gray-400">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="px-4 py-2 text-gray-400">{{ post.get_media_type_display }}</td>
+          <td class="px-4 py-2">
+            <span class="text-xs px-2 py-0.5 rounded-full
+              {% if post.status == 'published' %}tone-teal
+              {% elif post.status == 'failed' %}tone-coral
+              {% elif post.status == 'scheduled' %}tone-info
+              {% elif post.status == 'in_review' %}tone-amber
+              {% elif post.status == 'cancelled' %}tone-neutral
+              {% else %}tone-neutral{% endif %}">
+              {{ post.get_status_display }}
+            </span>
+          </td>
+          <td class="px-4 py-2 text-gray-400 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="card card-pad text-center py-12">
+    <p class="text-gray-400">No posts match your filters.</p>
+    <a href="{% url 'publishing:library' %}" class="text-sm text-accent mt-2 inline-block">Clear filters</a>
+  </div>
+  {% endif %}
+
+</form>
+
+{# Pagination #}
+{% if page_obj.has_other_pages %}
+<div class="flex items-center justify-center gap-2 mt-4">
+  {% if page_obj.has_previous %}
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.previous_page_number }}"
+     class="btn btn-ghost text-sm">← Prev</a>
+  {% endif %}
+  <span class="text-sm text-gray-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.next_page_number }}"
+     class="btn btn-ghost text-sm">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+document.getElementById('select-all')?.addEventListener('change', function() {
+  document.querySelectorAll('.post-checkbox').forEach(cb => cb.checked = this.checked);
+});
+</script>
+{% endblock %}

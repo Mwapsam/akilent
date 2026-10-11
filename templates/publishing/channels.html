@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Channels — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-xl space-y-4">
+
+  {# Instagram #}
+  <div class="card card-pad">
+    <div class="flex items-start gap-4">
+      <div class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#833ab4] flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-semibold text-ink">Instagram</h3>
+          {% if ig_connection %}
+            {% if ig_publish_scope %}
+            <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+              Publishing enabled
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              Connected — publish scope pending
+            </span>
+            {% endif %}
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            Not connected
+          </span>
+          {% endif %}
+        </div>
+        {% if ig_connection %}
+        <p class="text-sm text-gray-500">Connected via Instagram Business Account.</p>
+        {% if not ig_publish_scope %}
+        <p class="text-xs text-gray-400 mt-1">The <code>instagram_content_publish</code> permission is pending Meta App Review. Publishing posts will be enabled once Meta approves it.</p>
+        {% endif %}
+        {% else %}
+        <p class="text-sm text-gray-500">Connect Instagram to publish images, reels, and stories from Akilent.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Facebook Page #}
+  <div class="card card-pad">
+    <div class="flex items-start gap-4">
+      <div class="shrink-0 w-10 h-10 rounded-lg bg-[#1877F2] flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-semibold text-ink">Facebook Page</h3>
+          {% if fb_connection and fb_connection.status == 'active' %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+            Connected
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            Not connected
+          </span>
+          {% endif %}
+        </div>
+        <p class="text-sm text-gray-500">Publish posts, photos, and videos to your Facebook Page.</p>
+        {% if fb_connection and fb_connection.page_name %}
+        <p class="text-xs text-gray-400 mt-1">Page: {{ fb_connection.page_name }}</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="mt-4 flex gap-2">
+      {% if fb_connection and fb_connection.status == 'active' %}
+      <form method="post" action="{% url 'publishing:fb-disconnect' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
+                onclick="return confirm('Disconnect Facebook Page?')">Disconnect</button>
+      </form>
+      {% else %}
+      <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Publishing failures #}
+  {% if recent_failures %}
+  <div class="card card-pad">
+    <h3 class="font-semibold text-ink mb-3">Recent publishing failures</h3>
+    <div class="space-y-3">
+      {% for post in recent_failures %}
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <a href="{% url 'publishing:post-detail' post.pk %}"
+             class="text-sm font-medium text-ink hover:underline truncate block">
+            {{ post.caption|truncatechars:60|default:"(no caption)" }}
+          </a>
+          {% if post.error %}
+          <p class="text-xs text-red-700 mt-0.5 truncate">{{ post.error|truncatechars:100 }}</p>
+          {% endif %}
+          <p class="text-xs text-gray-400">{{ post.platforms|join:", "|capfirst }} · {{ post.updated_at|date:"N j, H:i" }}</p>
+        </div>
+        <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Retry</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

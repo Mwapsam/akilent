@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Planning — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex items-center justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+  </div>
+  <a href="{% url 'publishing:plan-new' %}" class="btn btn-primary">Add idea</a>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+{# Stat cards #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div class="card card-pad text-center">
+    <p class="text-2xl font-bold text-ink">{{ counts.idea }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">Ideas</p>
+  </div>
+  <div class="card card-pad text-center">
+    <p class="text-2xl font-bold text-ink">{{ counts.planned }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">Planned</p>
+  </div>
+  <div class="card card-pad text-center">
+    <p class="text-2xl font-bold text-ink">{{ counts.in_production }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">In production</p>
+  </div>
+  <div class="card card-pad text-center">
+    <p class="text-2xl font-bold text-ink">{{ counts.published }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">Published</p>
+  </div>
+</div>
+
+<div class="grid md:grid-cols-3 gap-4">
+
+  {# Upcoming 7 days #}
+  <div class="md:col-span-2 card card-pad">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-ink">Next 7 days</h2>
+      <a href="{% url 'publishing:calendar' %}" class="text-xs text-accent">Open calendar →</a>
+    </div>
+    {% if upcoming %}
+    <div class="space-y-2">
+      {% for item in upcoming %}
+      <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle group">
+        <div class="shrink-0 text-center min-w-[40px]">
+          {% if item.planned_date %}
+          <p class="text-xs text-gray-400">{{ item.planned_date|date:"D" }}</p>
+          <p class="text-sm font-semibold text-ink">{{ item.planned_date|date:"j" }}</p>
+          {% endif %}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            {% if item.pillar %}
+            <span class="w-2 h-2 rounded-full shrink-0" style="background:{{ item.pillar.color }}"></span>
+            {% endif %}
+            <p class="text-sm font-medium text-ink truncate">{{ item.topic }}</p>
+          </div>
+          <p class="text-xs text-gray-400 mt-0.5">
+            {{ item.get_media_type_display }}
+            {% if item.platforms %} · {{ item.platforms|join:", "|capfirst }}{% endif %}
+            {% if item.pillar %} · {{ item.pillar.name }}{% endif %}
+          </p>
+        </div>
+        <div class="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Create post</button>
+          </form>
+          <a href="{% url 'publishing:plan-edit' item.pk %}" class="btn btn-ghost text-xs py-0.5 px-2">Edit</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 text-center py-8">No content planned for the next 7 days.</p>
+    {% endif %}
+  </div>
+
+  {# Ideas backlog #}
+  <div class="card card-pad">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-ink">Ideas backlog</h2>
+    </div>
+    {% if backlog %}
+    <div class="space-y-2">
+      {% for item in backlog %}
+      <div class="flex items-start gap-2 group">
+        <div class="flex-1 min-w-0">
+          {% if item.pillar %}
+          <span class="inline-block w-2 h-2 rounded-full mr-1 align-middle" style="background:{{ item.pillar.color }}"></span>
+          {% endif %}
+          <span class="text-sm text-ink">{{ item.topic|truncatechars:60 }}</span>
+          <p class="text-xs text-gray-400 mt-0.5">{{ item.get_plan_status_display }}</p>
+        </div>
+        <div class="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="text-xs text-accent hover:underline">→ Post</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 text-center py-4">No ideas yet.</p>
+    {% endif %}
+    <div class="mt-4 pt-3 border-t border-surface-subtle">
+      <a href="{% url 'publishing:plan-new' %}" class="text-sm text-accent hover:underline">+ Add idea</a>
+    </div>
+  </div>
+
+</div>
+
+{# Pillars and campaigns quick links #}
+<div class="mt-4 flex gap-3 text-xs text-gray-400">
+  <a href="{% url 'publishing:pillars' %}" class="hover:text-ink">Manage pillars ({{ pillars|length }})</a>
+  <span>·</span>
+  <a href="{% url 'publishing:campaigns' %}" class="hover:text-ink">Manage campaigns ({{ campaigns|length }})</a>
+</div>
+{% endblock %}

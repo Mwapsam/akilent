@@ -19,6 +19,15 @@ from .providers.instagram import (
 logger = logging.getLogger(__name__)
 
 
+def _full_caption_for(post: ContentPost, platform: str) -> str:
+    """Return platform-specific caption with hashtags appended."""
+    base = post.caption_for(platform)
+    tags = " ".join(f"#{t.lstrip('#')}" for t in post.hashtags)
+    if tags:
+        return f"{base}\n\n{tags}".strip()
+    return base
+
+
 def _ig_account(post: ContentPost):
     """Return the active InstagramBusinessAccount for this post's account, or None."""
     return post.account.instagram_accounts.filter(is_active=True).first()
@@ -87,7 +96,7 @@ def _publish_instagram(post: ContentPost) -> None:
 
     ig = _ig_account(post)
     ig_user_id = ig.instagram_business_account_id if ig else ""  # type: ignore[union-attr]
-    caption = post.full_caption
+    caption = _full_caption_for(post, "instagram")
 
     mt = post.media_type
     url = post.media_urls[0] if post.media_urls else ""
@@ -128,7 +137,7 @@ def _publish_facebook(post: ContentPost) -> None:
     provider, _page_id = result
 
     mt = post.media_type
-    caption = post.full_caption
+    caption = _full_caption_for(post, "facebook")
     url = post.media_urls[0] if post.media_urls else ""
 
     if mt == ContentPost.MediaType.TEXT:
