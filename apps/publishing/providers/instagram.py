@@ -44,7 +44,7 @@ _ERROR_HINTS: list[tuple[str, str]] = [
     ),
     (
         "video duration",
-        "Video duration is outside Instagram's limits (3 s – 60 s for feed; up to 15 min for Reels).",
+        "Video duration is outside Instagram's limits (3 s - 60 s for feed; up to 15 min for Reels).",
     ),
 ]
 
