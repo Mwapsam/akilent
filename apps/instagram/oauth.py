@@ -2,9 +2,9 @@
 
 Uses Meta's Instagram Login for Business API:
   Auth dialog:    https://www.instagram.com/oauth/authorize
-  Token exchange: https://api.instagram.com/oauth/access_token  (POST, short-lived)
-  Long-lived:     https://graph.instagram.com/access_token      (GET with query params, 60 days)
-  Account info:   https://graph.instagram.com/me
+  Token exchange: https://api.instagram.com/oauth/access_token   (POST, short-lived)
+  Long-lived:     https://graph.instagram.com/access_token       (GET with query params, 60 days)
+  Account info:   https://graph.instagram.com/v21.0/me
 
 This is distinct from the Facebook Login flow used by WhatsApp.  The token
 returned here is scoped directly to the Instagram Business Account — no Facebook
@@ -26,12 +26,14 @@ GRAPH_IG = "https://graph.instagram.com"
 API_IG = "https://api.instagram.com"
 _TIMEOUT = 15
 
-# instagram_content_publish is excluded until Meta App Review approves it.
-# The channels page shows a "publish scope pending" badge when it's absent.
+# All four scopes are requested. instagram_business_content_publish requires App Review
+# for non-tester users; add pilot accounts as app testers in the Meta dashboard
+# (App Review → Testers) so all four work in development mode.
 SCOPES = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
-    "instagram_business_manage_comments"
+    "instagram_business_manage_comments,"
+    "instagram_business_content_publish"
 )
 
 
@@ -97,10 +99,9 @@ def get_long_lived_token(short_lived_token: str) -> tuple[str, int | None]:
     if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
         return short_lived_token, None
     resp = requests.get(
-        f"{GRAPH_IG}/oauth/access_token",
+        f"{GRAPH_IG}/access_token",
         params={
             "grant_type": "ig_exchange_token",
-            "client_id": settings.INSTAGRAM_APP_ID,
             "client_secret": settings.INSTAGRAM_APP_SECRET,
             "access_token": short_lived_token,
         },
@@ -122,7 +123,7 @@ def refresh_long_lived_token(access_token: str) -> tuple[str, int | None]:
     Raises InstagramOAuthError when Meta refuses (expired or revoked token).
     """
     resp = requests.get(
-        f"{GRAPH_IG}/oauth/access_token",
+        f"{GRAPH_IG}/refresh_access_token",
         params={"grant_type": "ig_refresh_token", "access_token": access_token},
         timeout=_TIMEOUT,
     )
