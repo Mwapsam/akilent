@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import full_page_load
 
 from .models import (
     ContentCampaign,
@@ -60,6 +61,7 @@ _TRANSITIONS = {
 # ---------------------------------------------------------------------------
 
 
+@full_page_load
 @login_required
 def fb_oauth_connect(request):
     account = get_current_account(request)

@@ -39,6 +39,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import full_page_load
 from apps.core.module_gate import module_required
 from apps.core.utils import is_operator
 from apps.instagram.models.account import (
@@ -237,6 +238,7 @@ def instagram_account_delete(request, pk: int):
     )
 
 
+@full_page_load
 @login_required
 @module_required("instagram")
 def instagram_connect_oauth_start(request):
