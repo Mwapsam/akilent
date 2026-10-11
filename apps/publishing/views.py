@@ -822,6 +822,10 @@ def post_media_upload(request):
         f"publishing/{account.pk}/{f.name}", ContentFile(f.read())
     )
     url = default_storage.url(path)
+    # Ensure the URL is absolute so Meta's API can fetch it.
+    # S3/CloudFront URLs are already absolute; local dev URLs need the host prepended.
+    if url.startswith("/"):
+        url = request.build_absolute_uri(url)
     return JsonResponse({"url": url, "name": f.name, "content_type": f.content_type})
 
 

@@ -126,7 +126,7 @@
   {# Step 3: Editor (shown after option selected, or "start from scratch", or editing existing) #}
   <div x-show="step === 3 || '{{ existing_post.pk }}'">
 
-    <form method="post" class="space-y-4" @submit.prevent="submitForm($event)">
+    <form method="post" class="space-y-4" hx-boost="false" @submit.prevent="submitForm($event)">
       {% csrf_token %}
       <input type="hidden" name="post_id" value="{{ existing_post.pk|default:'' }}" x-ref="postIdField">
 
