@@ -1,14 +1,12 @@
 """
 Ensure phone and email columns are nullable in the DB.
 
-The Django model already declares both as null=True, but the production schema
-may have them as NOT NULL if an older version of the initial migration was used
-to set up the database. This migration uses RunSQL to explicitly drop the NOT
-NULL constraint so that channel-only contacts (e.g. Instagram) can be created
-without an email address or phone number.
+The Django model already declares both as null=True. This migration uses
+AlterField (cross-database compatible) instead of raw SQL so it works on
+both SQLite (tests) and PostgreSQL (production).
 """
 
-from django.db import migrations
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -17,18 +15,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="""
-                ALTER TABLE contacts_contact
-                    ALTER COLUMN phone  DROP NOT NULL,
-                    ALTER COLUMN email  DROP NOT NULL;
-            """,
-            reverse_sql="""
-                UPDATE contacts_contact SET phone = '' WHERE phone IS NULL;
-                UPDATE contacts_contact SET email = '' WHERE email IS NULL;
-                ALTER TABLE contacts_contact
-                    ALTER COLUMN phone  SET NOT NULL,
-                    ALTER COLUMN email  SET NOT NULL;
-            """,
+        migrations.AlterField(
+            model_name="contact",
+            name="phone",
+            field=models.CharField(max_length=20, blank=True, null=True, default=None),
+        ),
+        migrations.AlterField(
+            model_name="contact",
+            name="email",
+            field=models.EmailField(blank=True, null=True, default=None),
         ),
     ]

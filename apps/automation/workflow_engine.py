@@ -98,6 +98,8 @@ _STEP_TYPES = {
     # B — asks the contact a free-text question, validates the answer against a
     # CustomAttributeDef (C), and saves it. Supports re-prompts on invalid answers.
     "ask_question",
+    # D — BM25 product lookup; routes to on_found/on_not_found/on_ambiguous/on_no_price/on_error.
+    "lookup_product",
 }
 _TRIGGER_TYPES = {
     "business_event",
@@ -468,6 +470,25 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 )
         if step.get("type") == "ask_question":
             _validate_ask_question_step(step, trig, steps, ids, sid, _error, account)
+        if step.get("type") == "lookup_product":
+            if not step.get("on_error"):
+                _error(
+                    f"step {sid!r}: lookup_product must have on_error",
+                    step_id=sid,
+                    field="on_error",
+                )
+        if step.get("type") in ("reply_text", "send_whatsapp", "send_email"):
+            import re as _re
+
+            _text = step.get("text") or step.get("body") or ""
+            _vars = _re.findall(r"\{([^{}]+)\}", _text)
+            if _vars and not step.get("on_error"):
+                _error(
+                    f"step {sid!r}: uses template variables {_vars!r} but has no on_error",
+                    step_id=sid,
+                    field="on_error",
+                    severity="warning",
+                )
         if step.get("type") in ("add_tag", "remove_tag"):
             from apps.contacts import tags as contact_tags
 
@@ -1110,6 +1131,104 @@ def _messaging_window_open(conversation) -> bool:
     return True
 
 
+def _run_lookup_product(run: WorkflowRun, step: dict) -> dict:
+    """Execute a ``lookup_product`` step.
+
+    The step resolves a query from ``query_variable`` (a ``{variable}`` or literal),
+    calls ``lookup_product``, and routes to the appropriate ``on_*`` branch:
+
+    * ``on_found``     — clear winner; product stored in run.context["product_id"]
+    * ``on_not_found`` — no product above threshold
+    * ``on_ambiguous`` — multiple equally-scored products; candidate ids stored
+    * ``on_no_price``  — winning product exists but price is NULL
+    * ``on_error``     — unexpected error (required at publish time)
+    """
+    from apps.commerce.lookup import lookup_product
+
+    step_id = step.get("id") or ""
+    on_found = step.get("on_found") or ""
+    on_not_found = step.get("on_not_found") or ""
+    on_ambiguous = step.get("on_ambiguous") or ""
+    on_no_price = step.get("on_no_price") or ""
+    on_error = step.get("on_error") or ""
+
+    # Resolve the query from query_variable (support simple {var} substitution)
+    raw_query = step.get("query_variable") or ""
+    if raw_query.startswith("{") and raw_query.endswith("}"):
+        key = raw_query[1:-1]
+        query = str((run.context or {}).get(key, ""))
+    else:
+        query = raw_query
+
+    try:
+        result = lookup_product(run.workflow.account, query)
+    except Exception as exc:
+        logger.exception("lookup_product step %s failed: %s", step_id, exc)
+        if on_error:
+            return {"_routed_to": on_error, "reason": "error", "error": str(exc)}
+        raise ValueError(f"lookup_product step {step_id!r}: {exc}") from exc
+
+    outcome = result.get("outcome")
+
+    if outcome == "found":
+        product = result["product"]
+        run.context = {
+            **(run.context or {}),
+            "product_id": str(product.pk),
+            "product_name": product.name,
+            "product_price": str(product.price),
+            "product_currency": product.currency or "",
+        }
+        run.save(update_fields=["context"])
+        if on_found:
+            return {"_routed_to": on_found, "product_id": str(product.pk)}
+        return {"product_id": str(product.pk)}
+
+    if outcome == "ambiguous":
+        candidates = result.get("candidates") or []
+        run.context = {
+            **(run.context or {}),
+            "candidate_product_ids": [str(p.pk) for p in candidates],
+            "candidate_product_names": [p.name for p in candidates],
+        }
+        run.save(update_fields=["context"])
+        if on_ambiguous:
+            return {
+                "_routed_to": on_ambiguous,
+                "reason": "ambiguous",
+                "candidates": [str(p.pk) for p in candidates],
+            }
+        if on_not_found:
+            return {"_routed_to": on_not_found, "reason": "ambiguous"}
+        if on_error:
+            return {"_routed_to": on_error, "reason": "ambiguous"}
+        return {"reason": "ambiguous"}
+
+    # not_found — may have sub-reason no_price
+    reason = result.get("reason", "no_match")
+    if reason == "no_price":
+        product = result.get("product")
+        if product:
+            run.context = {
+                **(run.context or {}),
+                "product_id": str(product.pk),
+                "product_name": product.name,
+            }
+            run.save(update_fields=["context"])
+        if on_no_price:
+            return {"_routed_to": on_no_price, "reason": "no_price"}
+        if on_error:
+            return {"_routed_to": on_error, "reason": "no_price"}
+        return {"reason": "no_price"}
+
+    # plain not_found
+    if on_not_found:
+        return {"_routed_to": on_not_found, "reason": reason}
+    if on_error:
+        return {"_routed_to": on_error, "reason": reason}
+    return {"reason": reason}
+
+
 def _run_ask_question(run: WorkflowRun, step: dict) -> dict:
     """Entry point for the ask_question step.
 
@@ -1335,10 +1454,39 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
     checks apply exactly as they do for a human reply in the inbox. A message trigger is
     always inside the window, which is why this needs no template.
     """
+    from apps.automation.template_render import TemplateRenderError, render_template
     from apps.core.actions import ActionError, run_action
 
     conversation = _conversation_for_run(run, step)
     text = _first_name_merge(run, step.get("text") or "")
+
+    # Apply allowlist template rendering if the text has {placeholders}.
+    if "{" in text:
+        on_error = step.get("on_error") or ""
+        ctx = run.context or {}
+        contact = run.contact
+        account = run.workflow.account
+        render_ctx = {
+            "contact.first_name": getattr(contact, "first_name", "") or "",
+            "contact.last_name": getattr(contact, "last_name", "") or "",
+            "contact.phone": getattr(contact, "phone", "") or "",
+            "lead.status": ctx.get("lead_status", ""),
+            "product.name": ctx.get("product_name", ""),
+            "product.price": ctx.get("product_price", ""),
+            "product.currency": ctx.get("product_currency", ""),
+            "business.name": getattr(account, "company_name", "") or "",
+        }
+        try:
+            text = render_template(text, render_ctx, step_id=step.get("id") or "")
+        except TemplateRenderError as exc:
+            if on_error:
+                return {
+                    "_routed_to": on_error,
+                    "reason": "template_error",
+                    "error": str(exc),
+                }
+            raise ValueError(str(exc)) from exc
+
     try:
         # A fixed key per run and step: a retried step returns the first message instead of sending
         # a second, and the inbox can tell this reply came from an automation, not a person.
@@ -1794,6 +1942,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _apply_set_attribute(run, step)
             elif stype == "ask_question":
                 result = _run_ask_question(run, step)
+            elif stype == "lookup_product":
+                result = _run_lookup_product(run, step)
             elif stype in ("stop", "exit"):
                 _record(run, step, {})
                 return _complete(run)

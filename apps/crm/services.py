@@ -11,7 +11,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.conversations.services import emit_event
-from apps.crm.models import Deal, Lead, Pipeline, Stage
+from apps.crm.models import Deal, Lead, Pipeline, Stage, StageTransition
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ def create_lead(
     owner=None,
     conversation_id: str = "",
     workflow_run=None,
+    actor=None,
 ) -> Lead:
     """Create a Lead for ``contact``, or return its existing open one.
 
@@ -68,7 +69,7 @@ def create_lead(
         raise
     attribution.record(lead, conversation, method, workflow_run=workflow_run)
 
-    emit_event(
+    event = emit_event(
         account=account,
         type="lead.created",
         occurred_at=lead.created_at,
@@ -76,6 +77,17 @@ def create_lead(
         subject_type="lead",
         subject_id=lead.public_id,
         payload={"contact_id": contact.public_id, "source": source},
+    )
+    StageTransition.objects.create(
+        account=account,
+        lead=lead,
+        from_value="",
+        to_value=lead.status,
+        occurred_at=lead.created_at,
+        actor=actor,
+        owner_at_transition=None,
+        provenance=StageTransition.Provenance.OBSERVED,
+        source_event_id=f"evt:{event.public_id}" if event else "",
     )
     _record_lead_outcome_signal(lead, conversation)
     _dispatch_legacy_lead_created(account, lead)
@@ -99,7 +111,7 @@ SETTABLE_LEAD_STATUSES = (
 )
 
 
-def set_lead_status(lead: Lead, status: str) -> bool:
+def set_lead_status(lead: Lead, status: str, *, actor=None) -> bool:
     """Move a lead to ``status``. Returns True if it changed (a repeat is a quiet no-op).
 
     Emits a durable event and starts workflows on ``lead.status_changed``, plus
@@ -115,18 +127,36 @@ def set_lead_status(lead: Lead, status: str) -> bool:
         return False
 
     previous = lead.status
+    owner_before = lead.owner
     lead.status = status
+    now = timezone.now()
     lead.save(update_fields=["status", "updated_at"])
 
-    emit_event(
-        account=lead.account,
-        type="lead.status_changed",
-        occurred_at=timezone.now(),
-        source="crm",
-        subject_type="lead",
-        subject_id=lead.public_id,
-        payload={"contact_id": lead.contact.public_id, "from": previous, "to": status},
-    )
+    with transaction.atomic():
+        event = emit_event(
+            account=lead.account,
+            type="lead.status_changed",
+            occurred_at=now,
+            source="crm",
+            subject_type="lead",
+            subject_id=lead.public_id,
+            payload={
+                "contact_id": lead.contact.public_id,
+                "from": previous,
+                "to": status,
+            },
+        )
+        StageTransition.objects.create(
+            account=lead.account,
+            lead=lead,
+            from_value=previous or "",
+            to_value=status,
+            occurred_at=now,
+            actor=actor,
+            owner_at_transition=owner_before,
+            provenance=StageTransition.Provenance.OBSERVED,
+            source_event_id=f"evt:{event.public_id}" if event else "",
+        )
     context = {"lead_id": lead.public_id, "status": status, "previous_status": previous}
     _enroll_workflows(lead.account, "lead.status_changed", lead.contact, context)
     if status == Lead.Status.QUALIFIED:
@@ -204,37 +234,51 @@ def convert_lead_to_deal(
     return deal
 
 
-def move_deal_stage(deal: Deal, stage: Stage) -> Deal:
+def move_deal_stage(deal: Deal, stage: Stage, *, actor=None) -> Deal:
     if stage.pipeline_id != deal.pipeline_id:
         raise ValueError("stage must belong to the deal's pipeline")
 
     previous_stage = deal.stage
+    owner_before = deal.owner
     deal.stage = stage
+    now = timezone.now()
     if stage.is_won:
         deal.status = Deal.Status.WON
-        deal.closed_at = timezone.now()
+        deal.closed_at = now
     elif stage.is_lost:
         deal.status = Deal.Status.LOST
-        deal.closed_at = timezone.now()
+        deal.closed_at = now
     else:
         deal.status = Deal.Status.OPEN
         deal.closed_at = None
     deal.save(update_fields=["stage", "status", "closed_at", "updated_at"])
 
-    emit_event(
-        account=deal.account,
-        type="deal.stage_changed",
-        occurred_at=timezone.now(),
-        source="crm",
-        subject_type="deal",
-        subject_id=deal.public_id,
-        payload={
-            "contact_id": deal.contact.public_id,
-            "from_stage": previous_stage.name,
-            "to_stage": stage.name,
-            "status": deal.status,
-        },
-    )
+    with transaction.atomic():
+        event = emit_event(
+            account=deal.account,
+            type="deal.stage_changed",
+            occurred_at=now,
+            source="crm",
+            subject_type="deal",
+            subject_id=deal.public_id,
+            payload={
+                "contact_id": deal.contact.public_id,
+                "from_stage": previous_stage.name,
+                "to_stage": stage.name,
+                "status": deal.status,
+            },
+        )
+        StageTransition.objects.create(
+            account=deal.account,
+            deal=deal,
+            from_value=previous_stage.name,
+            to_value=stage.name,
+            occurred_at=now,
+            actor=actor,
+            owner_at_transition=owner_before,
+            provenance=StageTransition.Provenance.OBSERVED,
+            source_event_id=f"evt:{event.public_id}" if event else "",
+        )
     _dispatch_legacy_deal_stage_changed(deal.account, deal, stage)
     _enroll_workflows(
         deal.account,

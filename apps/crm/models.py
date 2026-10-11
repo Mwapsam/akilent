@@ -18,6 +18,7 @@ import secrets
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 def _lead_public_id() -> str:
@@ -233,3 +234,126 @@ class Deal(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
+
+
+class OwnerChange(models.Model):
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="owner_changes"
+    )
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="owner_changes",
+    )
+    deal = models.ForeignKey(
+        Deal,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="owner_changes",
+    )
+    from_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="owner_changes_from",
+    )
+    to_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="owner_changes_to",
+    )
+    occurred_at = models.DateTimeField()
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="owner_changes_acted",
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(lead__isnull=False, deal__isnull=True)
+                    | Q(lead__isnull=True, deal__isnull=False)
+                ),
+                name="owner_change_exactly_one_of_lead_deal",
+            )
+        ]
+
+
+class StageTransition(models.Model):
+    class Provenance(models.TextChoices):
+        OBSERVED = "observed", "Observed"
+        BACKFILLED_EVENT = "backfilled_event", "Backfilled from event"
+        ESTIMATED = "estimated", "Estimated"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="stage_transitions"
+    )
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="stage_transitions",
+    )
+    deal = models.ForeignKey(
+        Deal,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="stage_transitions",
+    )
+    from_value = models.CharField(max_length=50, blank=True)
+    to_value = models.CharField(max_length=50)
+    occurred_at = models.DateTimeField()
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stage_transitions_made",
+    )
+    owner_at_transition = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stage_transitions_owned",
+    )
+    provenance = models.CharField(
+        max_length=20, choices=Provenance.choices, default=Provenance.OBSERVED
+    )
+    source_event_id = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["lead", "from_value"]),
+            models.Index(fields=["deal", "from_value"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(lead__isnull=False, deal__isnull=True)
+                    | Q(lead__isnull=True, deal__isnull=False)
+                ),
+                name="stage_transition_exactly_one_of_lead_deal",
+            ),
+            models.UniqueConstraint(
+                fields=["source_event_id"],
+                condition=Q(source_event_id__gt=""),
+                name="unique_stage_transition_source_event_id",
+            ),
+        ]
+
+    def __str__(self):
+        subject = f"lead:{self.lead_id}" if self.lead_id else f"deal:{self.deal_id}"
+        return f"{subject} {self.from_value!r} → {self.to_value!r} @ {self.occurred_at}"

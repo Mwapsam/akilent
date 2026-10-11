@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.chatbot",
     "apps.support",
     "apps.instagram",
+    "apps.hubspot",
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django.contrib.sitemaps",
