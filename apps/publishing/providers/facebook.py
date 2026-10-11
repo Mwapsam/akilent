@@ -71,7 +71,7 @@ class FacebookPublishProvider:
         r = requests.get(
             f"{_BASE}/{post_id}/insights",
             params={
-                "metric": "post_impressions,post_reach",
+                "metric": "post_impressions,post_impressions_unique",
                 "access_token": self._token,
             },
             timeout=30,
@@ -87,7 +87,7 @@ class FacebookPublishProvider:
                 val = values[-1].get("value", 0)
                 if name == "post_impressions":
                     result["impressions"] = int(val)
-                elif name == "post_reach":
+                elif name == "post_impressions_unique":
                     result["reach"] = int(val)
         return result
 

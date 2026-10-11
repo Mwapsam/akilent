@@ -150,6 +150,10 @@
     {% else %}
     <p class="text-xs text-gray-400">Engagement metrics will appear ~15 min after publish.</p>
     {% endif %}
+    <form method="post" action="{% url 'publishing:post-refresh-insights' post.pk %}" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost text-xs text-gray-500">Refresh metrics</button>
+    </form>
   </div>
   {% endif %}
 

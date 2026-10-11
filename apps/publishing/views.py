@@ -1038,6 +1038,25 @@ def post_reopen(request, pk):
     return redirect("publishing:post-detail", pk=post.pk)
 
 
+@login_required
+@require_POST
+def post_refresh_insights(request, pk):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+    if not post.fb_post_id:
+        messages.error(request, "No Facebook post ID — cannot fetch metrics.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    from .tasks import fetch_fb_post_insights
+
+    fetch_fb_post_insights.apply_async(args=[post.pk])
+    messages.success(request, "Refreshing metrics — reload in a moment.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
 # ---------------------------------------------------------------------------
 # AI caption generation (HTMX endpoint)
 # ---------------------------------------------------------------------------
