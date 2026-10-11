@@ -124,7 +124,7 @@
   </div>
 
   {# Step 3: Editor (shown after option selected, or "start from scratch", or editing existing) #}
-  <div x-show="step === 3 || '{{ existing_post.pk }}'">
+  <div x-show="step === 3 || '{{ existing_post.pk }}'" x-cloak>
 
     <form method="post" class="space-y-4" hx-boost="false" @submit.prevent="submitForm($event)">
       {% csrf_token %}
@@ -421,19 +421,19 @@ function postEditor(existingPostId, existingCaption, existingHashtags) {
     },
 
     submitForm(event) {
-      // Ensure platform captions are injected as hidden fields before native submit
       const form = event.target;
-      for (const [plat, val] of Object.entries(this.platformCaptions)) {
-        if (val) {
-          let field = form.querySelector(`[name="caption_${plat}"]`);
-          if (!field) {
-            field = document.createElement('textarea');
-            field.name = `caption_${plat}`;
-            field.style.display = 'none';
-            form.appendChild(field);
-          }
-          field.value = val;
+      // Inject the submitter button's name/value — form.submit() omits it
+      const btn = event.submitter;
+      if (btn && btn.name) {
+        let hidden = form.querySelector('input[data-action-btn]');
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.dataset.actionBtn = '1';
+          form.appendChild(hidden);
         }
+        hidden.name = btn.name;
+        hidden.value = btn.value;
       }
       form.submit();
     },
