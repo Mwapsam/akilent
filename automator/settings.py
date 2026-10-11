@@ -549,6 +549,7 @@ STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 HUBSPOT_CLIENT_ID = os.getenv("HUBSPOT_CLIENT_ID", "")
 HUBSPOT_CLIENT_SECRET = os.getenv("HUBSPOT_CLIENT_SECRET", "")
 
+
 # --- Cache ---
 # Backs DRF request-rate throttling and the API-key bad-attempt lockout
 # counter (apps.api.authentication) — must be shared across gunicorn workers,
