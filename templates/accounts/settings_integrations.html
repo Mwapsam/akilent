@@ -1,0 +1,52 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="max-w-xl space-y-4">
+  <div class="card card-pad">
+    <div class="flex items-start gap-4">
+      <div class="shrink-0 w-10 h-10 rounded-lg bg-[#FF7A59] flex items-center justify-center">
+        <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M18.164 7.93V6.044a1.72 1.72 0 0 0 .992-1.554 1.724 1.724 0 1 0-3.448 0c0 .668.38 1.245.992 1.554V7.93a4.888 4.888 0 0 0-2.326 1.02L7.62 4.297a1.92 1.92 0 0 0 .056-.435 1.924 1.924 0 1 0-1.924 1.924c.348 0 .672-.097.955-.259l6.672 4.585a4.903 4.903 0 0 0-.007 4.766L11.2 16.05a1.68 1.68 0 0 0-.437-.062 1.685 1.685 0 1 0 1.685 1.685 1.677 1.677 0 0 0-.267-.899l2.148-1.155a4.916 4.916 0 0 0 3.835 0v.001l.001-.001a4.92 4.92 0 1 0-4.92-7.689h.001Zm.919 7.157a2.61 2.61 0 1 1 0-5.22 2.61 2.61 0 0 1 0 5.22Z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-0.5">
+          <h3 class="font-semibold text-ink">HubSpot</h3>
+          {% if hs_connected %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+            Connected
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            Not connected
+          </span>
+          {% endif %}
+        </div>
+        <p class="text-sm text-gray-500">
+          Sync contacts and deals between Akilent and HubSpot CRM. Changes in either platform are kept in step automatically.
+        </p>
+        {% if hs_connected and hs_portal_id %}
+        <p class="text-xs text-gray-400 mt-1">Portal ID: {{ hs_portal_id }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-4 flex gap-2">
+      {% if hs_connected %}
+      <form method="post" action="{% url 'hubspot:oauth-disconnect' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+                onclick="return confirm('Disconnect HubSpot? Sync will stop but your data stays intact.')">
+          Disconnect
+        </button>
+      </form>
+      {% else %}
+      <a href="{% url 'hubspot:oauth-connect' %}" class="btn btn-primary text-sm">
+        Connect HubSpot
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

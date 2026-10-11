@@ -29,6 +29,11 @@ urlpatterns = [
     ),
     path("settings/team/", settings_views.settings_team, name="settings-team"),
     path("settings/tools/", settings_views.settings_tools, name="settings-tools"),
+    path(
+        "settings/integrations/",
+        settings_views.settings_integrations,
+        name="settings-integrations",
+    ),
     path("settings/hours/", settings_views.settings_hours, name="settings-hours"),
     path("settings/ai/", ai_views.settings_ai, name="settings-ai"),
     path(

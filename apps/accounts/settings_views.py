@@ -253,6 +253,37 @@ def settings_tools(request):
     )
 
 
+# --- Integrations -------------------------------------------------------------
+
+
+@login_required
+def settings_integrations(request):
+    from apps.hubspot.models import HubSpotConnection
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    try:
+        conn = account.hubspot_connection
+        hs_connected = conn.status == HubSpotConnection.Status.ACTIVE
+        hs_portal_id = conn.portal_id
+    except Exception:
+        hs_connected = False
+        hs_portal_id = ""
+
+    return render(
+        request,
+        "accounts/settings_integrations.html",
+        {
+            "account": account,
+            "active_tab": "integrations",
+            "hs_connected": hs_connected,
+            "hs_portal_id": hs_portal_id,
+        },
+    )
+
+
 # --- Opening hours ------------------------------------------------------------
 
 
