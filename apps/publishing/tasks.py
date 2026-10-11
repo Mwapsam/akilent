@@ -64,6 +64,44 @@ def publish_post_async(self, post_id: int) -> str:
 
 
 @shared_task(queue="outbound")
+def fetch_fb_post_insights(post_id: int) -> str:
+    """Fetch reach/impressions for a published Facebook post and store them.
+
+    Scheduled ~15 minutes after publish to allow Meta's insights to populate.
+    Uses pages_read_engagement scope on the stored page access token.
+    """
+    from django.utils import timezone
+
+    from .models import ContentPost
+    from .services import _fb_provider_for_post
+
+    try:
+        post = ContentPost.objects.get(pk=post_id)
+    except ContentPost.DoesNotExist:
+        return "not_found"
+
+    if not post.fb_post_id:
+        return "no_fb_post"
+
+    result = _fb_provider_for_post(post)
+    if result is None:
+        return "no_connection"
+
+    provider, _ = result
+    try:
+        insights = provider.fetch_post_insights(post.fb_post_id)
+    except Exception:
+        logger.exception("fetch_fb_post_insights failed for post=%s", post_id)
+        return "error"
+
+    post.fb_reach = insights.get("reach")
+    post.fb_impressions = insights.get("impressions")
+    post.fb_insights_fetched_at = timezone.now()
+    post.save(update_fields=["fb_reach", "fb_impressions", "fb_insights_fetched_at"])
+    return "ok"
+
+
+@shared_task(queue="outbound")
 def poll_ig_containers() -> int:
     """Poll in-progress IG video containers and publish them when FINISHED."""
     from .models import ContentPost

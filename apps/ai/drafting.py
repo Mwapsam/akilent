@@ -447,11 +447,13 @@ Media type: {media_type}
 Caption character limit: {char_limit if char_limit else "none (story — captions not shown)"}
 
 {hashtag_hint}
-Write a compelling, on-brand caption. Vary sentence length. Never invent facts about the business \
-that aren't mentioned below.
+Write three distinct, compelling captions — vary tone, length, and angle. \
+Never invent facts about the business that aren't mentioned below.
 
 Answer with ONE JSON object and nothing else:
-{{"caption": "<the caption text, without hashtags>", "hashtags": ["<tag without #>", ...]}}
+{{"options": [{{"caption": "<caption text, no hashtags>", "hashtags": ["<tag without #>", ...]}}, \
+{{"caption": "<caption text, no hashtags>", "hashtags": ["<tag without #>", ...]}}, \
+{{"caption": "<caption text, no hashtags>", "hashtags": ["<tag without #>", ...]}}]}}
 
 About the business:
 {business}"""
@@ -527,11 +529,16 @@ def run(draft, provider) -> None:
     elif draft.kind == "email_template":
         draft.result, draft.warnings = check_email_template(account, data)
     elif draft.kind == "content_caption":
-        caption = data.get("caption", "")
-        hashtags = data.get("hashtags", [])
-        if not caption:
+        options = data.get("options", [])
+        if not options:
+            # Fallback: single-caption format from older prompt versions
+            caption = data.get("caption", "")
+            if not caption:
+                raise DraftError("No caption came back. Try again.")
+            options = [{"caption": caption, "hashtags": data.get("hashtags", [])}]
+        if not isinstance(options, list) or not options:
             raise DraftError("No caption came back. Try again.")
-        draft.result = {"caption": caption, "hashtags": hashtags}
+        draft.result = {"options": options}
     else:
         draft.result = check_edit(draft.context.get("body", ""), data)
         from apps.whatsapp.api import lint_template

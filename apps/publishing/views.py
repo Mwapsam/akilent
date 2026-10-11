@@ -1099,10 +1099,13 @@ def caption_draft_result(request, draft_id):
         )
 
     result = draft.result or {}
+    options = result.get("options", [])
+    first = options[0] if options else {}
     return JsonResponse(
         {
             "status": "ready",
-            "caption": result.get("caption", ""),
-            "hashtags": result.get("hashtags", []),
+            "options": options,
+            "caption": first.get("caption", ""),
+            "hashtags": first.get("hashtags", []),
         }
     )

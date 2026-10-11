@@ -61,6 +61,36 @@ class FacebookPublishProvider:
         data = self._post("videos", **payload)
         return data["id"]
 
+    def fetch_post_insights(self, post_id: str) -> dict[str, int]:
+        """Fetch reach and impressions for a published Page post.
+
+        Returns {"reach": N, "impressions": N}. Values may be 0 if insights
+        haven't populated yet (Meta takes up to 15 min after publish).
+        Requires pages_read_engagement scope on the page access token.
+        """
+        r = requests.get(
+            f"{_BASE}/{post_id}/insights",
+            params={
+                "metric": "post_impressions,post_reach",
+                "access_token": self._token,
+            },
+            timeout=30,
+        )
+        data = r.json()
+        if "error" in data:
+            raise FacebookPublishError(data["error"].get("message", str(data["error"])))
+        result: dict[str, int] = {}
+        for item in data.get("data", []):
+            name = item.get("name", "")
+            values = item.get("values", [])
+            if values:
+                val = values[-1].get("value", 0)
+                if name == "post_impressions":
+                    result["impressions"] = int(val)
+                elif name == "post_reach":
+                    result["reach"] = int(val)
+        return result
+
 
 def get_page_token(user_access_token: str, page_id: str) -> str:
     """Exchange a short-lived user token for a long-lived page token."""

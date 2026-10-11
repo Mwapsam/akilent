@@ -88,6 +88,11 @@ def publish_post(post: ContentPost) -> None:
         ]
     )
 
+    if post.fb_post_id and post.status == ContentPost.Status.PUBLISHED:
+        from .tasks import fetch_fb_post_insights
+
+        fetch_fb_post_insights.apply_async(args=[post.pk], countdown=900)
+
 
 def _publish_instagram(post: ContentPost) -> None:
     provider = _ig_provider_for_post(post)

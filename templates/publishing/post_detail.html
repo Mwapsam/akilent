@@ -126,7 +126,30 @@
 
   {% if post.fb_post_id %}
   <div class="card card-pad">
-    <p class="text-xs text-gray-400">Facebook post ID: {{ post.fb_post_id }}</p>
+    <p class="text-xs text-gray-400 mb-2">Facebook post ID: {{ post.fb_post_id }}</p>
+    {% if post.fb_reach is not None or post.fb_impressions is not None %}
+    <div class="flex gap-6 mt-1">
+      {% if post.fb_reach is not None %}
+      <div>
+        <p class="text-xs text-gray-500">Reach</p>
+        <p class="text-sm font-semibold">{{ post.fb_reach|default:"—" }}</p>
+      </div>
+      {% endif %}
+      {% if post.fb_impressions is not None %}
+      <div>
+        <p class="text-xs text-gray-500">Impressions</p>
+        <p class="text-sm font-semibold">{{ post.fb_impressions|default:"—" }}</p>
+      </div>
+      {% endif %}
+      {% if post.fb_insights_fetched_at %}
+      <div class="ml-auto self-end">
+        <p class="text-xs text-gray-400">Updated {{ post.fb_insights_fetched_at|timesince }} ago</p>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400">Engagement metrics will appear ~15 min after publish.</p>
+    {% endif %}
   </div>
   {% endif %}
 

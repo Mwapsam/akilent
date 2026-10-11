@@ -107,7 +107,7 @@
 
       {# Caption options #}
       <div x-show="captionOptions.length > 0" class="space-y-2">
-        <p class="text-sm font-medium text-gray-700">Choose an option:</p>
+        <p class="text-sm font-medium text-gray-700">Choose a caption:</p>
         <template x-for="(opt, i) in captionOptions" :key="i">
           <button type="button"
                   @click="selectOption(opt)"
@@ -408,7 +408,9 @@ function postEditor(existingPostId, existingCaption, existingHashtags) {
         }
         if (d.status === 'ready') {
           clearInterval(poll);
-          this.captionOptions = [{ caption: d.caption, hashtags: d.hashtags || [] }];
+          this.captionOptions = d.options && d.options.length
+            ? d.options
+            : [{ caption: d.caption, hashtags: d.hashtags || [] }];
           this.generating = false;
         } else if (d.status === 'failed') {
           clearInterval(poll);

@@ -213,6 +213,11 @@ class ContentPost(models.Model):
     ig_container_id = models.CharField(max_length=64, blank=True, default="")
     fb_post_id = models.CharField(max_length=64, blank=True, default="")
 
+    # Facebook post engagement metrics (fetched after publish via pages_read_engagement)
+    fb_reach = models.PositiveIntegerField(null=True, blank=True)
+    fb_impressions = models.PositiveIntegerField(null=True, blank=True)
+    fb_insights_fetched_at = models.DateTimeField(null=True, blank=True)
+
     error = models.TextField(blank=True, default="")
 
     created_by = models.ForeignKey(
