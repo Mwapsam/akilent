@@ -18,6 +18,10 @@ def on_contact_saved(sender, instance, created, **kwargs):
     if not created:
         return
 
+    # Contact was imported from HubSpot — don't push it back.
+    if getattr(instance, "source", None) == "hubspot":
+        return
+
     # Avoid import-time circular imports by importing inside the handler.
     try:
         from apps.hubspot.create import create_hs_contact_from_local

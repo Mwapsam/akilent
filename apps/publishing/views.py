@@ -69,9 +69,7 @@ def fb_oauth_connect(request):
     if account is None:
         return redirect("dashboard")
 
-    app_id = getattr(settings, "FACEBOOK_APP_ID", "") or getattr(
-        settings, "INSTAGRAM_APP_ID", ""
-    )
+    app_id = getattr(settings, "WHATSAPP_APP_ID", "")
     if not app_id:
         messages.error(request, "Facebook App ID is not configured.")
         return redirect("settings-integrations")
@@ -125,12 +123,8 @@ def fb_oauth_callback(request):
         messages.error(request, "Invalid state parameter.")
         return redirect("settings-integrations")
 
-    app_id = getattr(settings, "FACEBOOK_APP_ID", "") or getattr(
-        settings, "INSTAGRAM_APP_ID", ""
-    )
-    app_secret = getattr(settings, "FACEBOOK_APP_SECRET", "") or getattr(
-        settings, "INSTAGRAM_APP_SECRET", ""
-    )
+    app_id = getattr(settings, "WHATSAPP_APP_ID", "")
+    app_secret = getattr(settings, "WHATSAPP_APP_SECRET", "")
 
     r = requests.get(
         f"{_FB_GRAPH}/oauth/access_token",

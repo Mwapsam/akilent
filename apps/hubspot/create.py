@@ -128,13 +128,10 @@ def create_local_contact_from_hs(account, hs_obj: dict) -> HubSpotContactLink | 
                 phone=phone,
                 source="hubspot",
             )
-            # The post_save signal may have already created the link (it fires
-            # synchronously inside Contact.objects.create). Use get_or_create so
-            # we don't race against ourselves.
-            link, _ = HubSpotContactLink.objects.get_or_create(
+            link = HubSpotContactLink.objects.create(
                 account=account,
                 contact=contact,
-                defaults={"hs_object_id": hs_id},
+                hs_object_id=hs_id,
             )
     except Exception as exc:
         logger.warning("create_local_contact: failed for hs %s: %s", hs_id, exc)
