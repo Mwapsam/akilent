@@ -23,6 +23,10 @@ class CommentTrigger(models.Model):
         BUYING_INTENT = "buying_intent", "Buying intent"
         ANY_COMMENT = "any_comment", "Any comment"
 
+    class ReplyType(models.TextChoices):
+        DM = "dm", "Private DM (Comment to DM)"
+        COMMENT = "comment", "Public comment reply"
+
     account = models.ForeignKey(
         "accounts.Account",
         on_delete=models.CASCADE,
@@ -39,7 +43,14 @@ class CommentTrigger(models.Model):
     )
 
     reply_template = models.TextField(
-        help_text="Private reply text. Use {username} to address the commenter."
+        help_text="Reply text. Use {username} to address the commenter."
+    )
+    reply_type = models.CharField(
+        max_length=10,
+        choices=ReplyType.choices,
+        default=ReplyType.DM,
+        blank=True,
+        help_text="How to send the reply: private DM or a public comment reply.",
     )
 
     # Priority: lower number fires first; only the first matching trigger fires.

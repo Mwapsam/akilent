@@ -230,6 +230,36 @@ class MetaInstagramProvider(BaseInstagramProvider):
         """Permanently delete a comment. Requires instagram_business_manage_comments."""
         return self._comment_call("delete", comment_id, {})
 
+    def reply_to_comment(self, comment_id: str, body: str) -> SendResult:
+        """Post a public threaded reply to an Instagram comment.
+
+        Requires instagram_manage_comments permission.
+        Uses POST /{ig-comment-id}/replies with message=<text>.
+        """
+        payload = {"message": body}
+        try:
+            data = self._post(f"{comment_id}/replies", payload)
+            return SendResult(
+                success=True,
+                provider_message_id=data.get("id", ""),
+            )
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram reply_to_comment failed: code=%s msg=%s",
+                exc.code,
+                exc.message,
+            )
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
+        except Exception as exc:
+            logger.exception("Instagram reply_to_comment unexpected error")
+            return SendResult(success=False, error=str(exc), terminal=False)
+
     def _comment_call(
         self, method: str, comment_id: str, params: dict
     ) -> tuple[bool, str]:

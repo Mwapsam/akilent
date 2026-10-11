@@ -117,11 +117,17 @@ def _fire_trigger(thread: CommentThread, trigger: CommentTrigger) -> None:
     from apps.instagram.models.message import OutboundMessage
     from apps.instagram.services.outbound import enqueue_reply
 
+    action_type = (
+        OutboundMessage.ActionType.COMMENT_REPLY
+        if trigger.reply_type == CommentTrigger.ReplyType.COMMENT
+        else OutboundMessage.ActionType.PRIVATE_REPLY
+    )
+
     outbound = enqueue_reply(
         ig_account,
-        recipient_igsid=thread.comment_id,  # private_reply uses comment_id as recipient
+        recipient_igsid=thread.comment_id,  # comment_id used as recipient for both reply types
         body=body,
-        action_type=OutboundMessage.ActionType.PRIVATE_REPLY,
+        action_type=action_type,
         idempotency_key=idempotency_key,
     )
 

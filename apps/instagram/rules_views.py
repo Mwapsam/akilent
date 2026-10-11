@@ -26,16 +26,24 @@ from apps.instagram.services.default_rules import (
 class CommentTriggerForm(forms.ModelForm):
     class Meta:
         model = CommentTrigger
-        fields = ["name", "match_type", "keywords", "reply_template", "priority"]
+        fields = [
+            "name",
+            "match_type",
+            "keywords",
+            "reply_type",
+            "reply_template",
+            "priority",
+        ]
         labels = {
             "match_type": "Reply when a comment…",
             "keywords": "Keywords",
-            "reply_template": "Private reply",
+            "reply_type": "Reply via",
+            "reply_template": "Reply text",
             "priority": "Order",
         }
         help_texts = {
-            "keywords": "Comma-separated, e.g. price, how much, cost. Used with “contains a keyword”.",
-            "reply_template": "Sent once as a DM to the commenter. {username} becomes their Instagram name.",
+            "keywords": "Comma-separated, e.g. price, how much, cost. Used with 'contains a keyword'.",
+            "reply_template": "{username} becomes their Instagram name. Sent once per comment thread.",
             "priority": "Lower runs first; only the first matching rule replies.",
         }
         widgets = {
@@ -70,7 +78,7 @@ class ModerationRuleForm(forms.ModelForm):
             "priority": "Order",
         }
         help_texts = {
-            "keywords": "Comma-separated. Required for “keyword / phrase match”; on the other types they're checked as well as the built-in detection.",
+            "keywords": "Comma-separated. Required for 'keyword / phrase match'; on the other types they're checked as well as the built-in detection.",
             "priority": "Lower runs first.",
         }
         widgets = {"keywords": forms.TextInput()}
@@ -143,7 +151,7 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
             rule = form.save(commit=False)
             rule.account = account
             rule.save()
-            messages.success(request, f"Rule “{rule.name}” saved.")
+            messages.success(request, f'Rule "{rule.name}" saved.')
             return redirect("instagram-comment-rules")
     else:
         form = form_class(instance=instance)
@@ -187,7 +195,7 @@ def comment_rule_toggle(request, kind: str, pk: int):
     rule.is_active = not rule.is_active
     rule.save(update_fields=["is_active", "updated_at"])
     messages.success(
-        request, f"Rule “{rule.name}” {'switched on' if rule.is_active else 'paused'}."
+        request, f'Rule "{rule.name}" {"switched on" if rule.is_active else "paused"}.'
     )
     return redirect("instagram-comment-rules")
 
@@ -205,5 +213,5 @@ def comment_rule_delete(request, kind: str, pk: int):
     )
     name = rule.name
     rule.delete()
-    messages.success(request, f"Rule “{name}” deleted.")
+    messages.success(request, f'Rule "{name}" deleted.')
     return redirect("instagram-comment-rules")

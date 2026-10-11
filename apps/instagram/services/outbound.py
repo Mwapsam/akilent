@@ -101,6 +101,10 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         # private_reply expects a comment_id, not an igsid; the caller must
         # pass the comment_id as recipient_igsid for private reply actions.
         result = provider.private_reply(outbound.recipient_igsid, outbound.body)
+    elif outbound.action_type == OutboundMessage.ActionType.COMMENT_REPLY:
+        # Post a public threaded reply on the comment. recipient_igsid holds
+        # the parent comment_id (same convention as PRIVATE_REPLY).
+        result = provider.reply_to_comment(outbound.recipient_igsid, outbound.body)
     elif outbound.media_path:
         result = provider.send_attachment(
             outbound.recipient_igsid,
@@ -291,7 +295,10 @@ def _recipient_contact(outbound: OutboundMessage):
     from apps.instagram.models.comment import CommentThread
     from apps.instagram.models.contact import InstagramContact
 
-    if outbound.action_type == OutboundMessage.ActionType.PRIVATE_REPLY:
+    if outbound.action_type in {
+        OutboundMessage.ActionType.PRIVATE_REPLY,
+        OutboundMessage.ActionType.COMMENT_REPLY,
+    }:
         thread = (
             CommentThread.objects.filter(
                 instagram_account=outbound.instagram_account,

@@ -27,7 +27,7 @@
   {% if triggers %}
   <ul class="space-y-3">
     {% for rule in triggers %}
-    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template %}
+    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display %}
     {% endfor %}
   </ul>
   {% else %}
