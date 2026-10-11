@@ -7,6 +7,7 @@ import logging
 from datetime import UTC
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
@@ -46,8 +47,6 @@ def oauth_connect(request):
     client_id = getattr(settings, "HUBSPOT_CLIENT_ID", "")
     if not client_id:
         logger.error("HUBSPOT_CLIENT_ID is not configured")
-        from django.contrib import messages
-
         messages.error(
             request, "HubSpot integration is not configured. Set HUBSPOT_CLIENT_ID."
         )
@@ -134,7 +133,8 @@ def oauth_callback(request):
         conn.portal_id = str(info_resp.json().get("hub_id", ""))
 
     conn.save()
-    return redirect("/settings/integrations/hubspot/")
+    messages.success(request, "HubSpot connected successfully.")
+    return redirect("settings-integrations")
 
 
 @login_required
