@@ -44,6 +44,12 @@ def oauth_connect(request):
     conn.save(update_fields=["oauth_state", "oauth_state_created_at", "updated_at"])
 
     client_id = getattr(settings, "HUBSPOT_CLIENT_ID", "")
+    if not client_id:
+        logger.error("HUBSPOT_CLIENT_ID is not configured")
+        from django.contrib import messages
+
+        messages.error(request, "HubSpot integration is not configured. Set HUBSPOT_CLIENT_ID.")
+        return redirect("/settings/integrations/")
     redirect_uri = request.build_absolute_uri("/hubspot/oauth/callback/")
     url = (
         f"{_OAUTH_AUTH_URL}?client_id={client_id}"

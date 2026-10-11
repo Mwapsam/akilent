@@ -544,6 +544,10 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 
+# --- HubSpot ---
+
+HUBSPOT_CLIENT_ID = os.getenv("HUBSPOT_CLIENT_ID", "")
+HUBSPOT_CLIENT_SECRET = os.getenv("HUBSPOT_CLIENT_SECRET", "")
 
 # --- Cache ---
 # Backs DRF request-rate throttling and the API-key bad-attempt lockout
