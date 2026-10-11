@@ -34,7 +34,11 @@ urlpatterns = [
     path("posts/<int:pk>/retry/", views.post_retry, name="post-retry"),
     path("posts/<int:pk>/cancel/", views.post_cancel, name="post-cancel"),
     path("posts/<int:pk>/reopen/", views.post_reopen, name="post-reopen"),
-    path("posts/<int:pk>/refresh-insights/", views.post_refresh_insights, name="post-refresh-insights"),
+    path(
+        "posts/<int:pk>/refresh-insights/",
+        views.post_refresh_insights,
+        name="post-refresh-insights",
+    ),
     # AI caption generation
     path("caption/generate/", views.generate_caption, name="caption-generate"),
     path(
