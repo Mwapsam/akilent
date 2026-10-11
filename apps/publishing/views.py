@@ -81,7 +81,6 @@ def fb_oauth_connect(request):
     conn.save(update_fields=["oauth_state", "oauth_state_created_at"])
 
     redirect_uri = request.build_absolute_uri("/publishing/fb/callback/")
-    request.session["fb_connect_redirect_uri"] = redirect_uri
 
     graph_version = getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
     auth_url = (
@@ -107,9 +106,10 @@ def fb_oauth_callback(request):
 
     code = request.GET.get("code")
     state = request.GET.get("state")
-    redirect_uri = request.session.pop("fb_connect_redirect_uri", None)
+    request.session.pop("fb_connect_redirect_uri", None)
+    redirect_uri = request.build_absolute_uri("/publishing/fb/callback/")
 
-    if not code or not redirect_uri:
+    if not code:
         messages.error(request, "Invalid Facebook callback.")
         return redirect("settings-integrations")
 
