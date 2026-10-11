@@ -90,14 +90,25 @@ def fetch_fb_post_insights(post_id: int) -> str:
     provider, _ = result
     try:
         insights = provider.fetch_post_insights(post.fb_post_id)
-    except Exception:
-        logger.exception("fetch_fb_post_insights failed for post=%s", post_id)
+    except Exception as exc:
+        logger.error(
+            "fetch_fb_post_insights failed for post=%s fb_post_id=%s: %s",
+            post_id,
+            post.fb_post_id,
+            exc,
+        )
         return "error"
 
     post.fb_reach = insights.get("reach")
     post.fb_impressions = insights.get("impressions")
     post.fb_insights_fetched_at = timezone.now()
     post.save(update_fields=["fb_reach", "fb_impressions", "fb_insights_fetched_at"])
+    logger.info(
+        "fetch_fb_post_insights ok post=%s reach=%s impressions=%s",
+        post_id,
+        post.fb_reach,
+        post.fb_impressions,
+    )
     return "ok"
 
 

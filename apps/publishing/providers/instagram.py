@@ -32,6 +32,31 @@ class InstagramPublishError(Exception):
     pass
 
 
+_ERROR_HINTS: list[tuple[str, str]] = [
+    (
+        "aspect ratio",
+        "Unsupported aspect ratio. Instagram accepts: square (1:1), portrait (4:5), "
+        "landscape (1.91:1), and Reels/Stories (9:16). Resize your image and try again.",
+    ),
+    (
+        "image size",
+        "Image too large for Instagram. Maximum file size is 8 MB.",
+    ),
+    (
+        "video duration",
+        "Video duration is outside Instagram's limits (3 s – 60 s for feed; up to 15 min for Reels).",
+    ),
+]
+
+
+def _friendly_error(api_message: str) -> str:
+    lower = api_message.lower()
+    for fragment, hint in _ERROR_HINTS:
+        if fragment in lower:
+            return hint
+    return api_message
+
+
 class InstagramPublishProvider:
     def __init__(self, access_token: str) -> None:
         self._token = access_token
@@ -41,9 +66,8 @@ class InstagramPublishProvider:
         r = requests.get(f"{_BASE}/{path}", params=params, timeout=30)
         data = r.json()
         if "error" in data:
-            raise InstagramPublishError(
-                data["error"].get("message", str(data["error"]))
-            )
+            msg = data["error"].get("message", str(data["error"]))
+            raise InstagramPublishError(_friendly_error(msg))
         return data
 
     def _post(self, path: str, **payload) -> dict:
@@ -51,9 +75,8 @@ class InstagramPublishProvider:
         r = requests.post(f"{_BASE}/{path}", data=payload, timeout=30)
         data = r.json()
         if "error" in data:
-            raise InstagramPublishError(
-                data["error"].get("message", str(data["error"]))
-            )
+            msg = data["error"].get("message", str(data["error"]))
+            raise InstagramPublishError(_friendly_error(msg))
         return data
 
     def create_image_container(
