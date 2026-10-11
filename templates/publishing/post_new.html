@@ -212,7 +212,7 @@
         <template x-for="(item, i) in items" :key="i">
           <div class="flex items-center gap-3 p-2 rounded-lg border border-surface-subtle text-sm">
             {# Thumbnail #}
-            <div class="w-10 h-10 rounded bg-gray-100 flex-shrink-0 overflow-hidden">
+            <div class="w-10 h-10 rounded tone-neutral-bg flex-shrink-0 overflow-hidden">
               <img x-show="item.thumb" :src="item.thumb" class="w-full h-full object-cover">
               <div x-show="!item.thumb" class="w-full h-full flex items-center justify-center text-gray-400">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,7 +224,7 @@
             {# Name + status #}
             <div class="flex-1 min-w-0">
               <p class="truncate text-ink" x-text="item.name"></p>
-              <div x-show="item.status === 'uploading'" class="mt-1 h-1 bg-gray-100 rounded overflow-hidden">
+              <div x-show="item.status === 'uploading'" class="mt-1 h-1 tone-neutral-bg rounded overflow-hidden">
                 <div class="h-full bg-brand-500 transition-all" :style="`width:${item.progress}%`"></div>
               </div>
               <p x-show="item.status === 'error'" class="text-xs text-red-500 mt-0.5" x-text="item.error"></p>
