@@ -785,6 +785,46 @@ def campaign_manage(request):
 # ---------------------------------------------------------------------------
 
 
+_ALLOWED_MEDIA_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo",
+}
+_MAX_MEDIA_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+@login_required
+@require_POST
+def post_media_upload(request):
+    """Upload a single media file for a post. Returns {url, name, content_type}."""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+
+    f = request.FILES.get("file")
+    if f is None:
+        return JsonResponse({"error": "No file provided."}, status=400)
+    if f.content_type not in _ALLOWED_MEDIA_TYPES:
+        return JsonResponse(
+            {"error": f'"{f.content_type}" is not a supported media type.'}, status=400
+        )
+    if f.size > _MAX_MEDIA_BYTES:
+        return JsonResponse({"error": "File exceeds the 100 MB limit."}, status=400)
+
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    path = default_storage.save(
+        f"publishing/{account.pk}/{f.name}", ContentFile(f.read())
+    )
+    url = default_storage.url(path)
+    return JsonResponse({"url": url, "name": f.name, "content_type": f.content_type})
+
+
 @login_required
 def post_new(request):
     account = get_current_account(request)
@@ -817,8 +857,22 @@ def post_new(request):
         hashtags = [t.lstrip("#").strip() for t in hashtags_raw.split() if t.strip()]
         platforms = request.POST.getlist("platforms")
         media_type = request.POST.get("media_type", ContentPost.MediaType.IMAGE)
-        media_urls_raw = request.POST.get("media_urls", "").strip()
-        media_urls = [u.strip() for u in media_urls_raw.splitlines() if u.strip()]
+        # Accept either a JSON array (from the uploader) or newline-separated URLs (legacy)
+        import json as _json
+
+        media_urls_json = request.POST.get("media_urls_json", "").strip()
+        if media_urls_json:
+            try:
+                media_urls = [
+                    u
+                    for u in _json.loads(media_urls_json)
+                    if isinstance(u, str) and u.strip()
+                ]
+            except (ValueError, TypeError):
+                media_urls = []
+        else:
+            media_urls_raw = request.POST.get("media_urls", "").strip()
+            media_urls = [u.strip() for u in media_urls_raw.splitlines() if u.strip()]
         scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
 
         # Platform-specific caption overrides

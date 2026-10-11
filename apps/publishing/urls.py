@@ -27,6 +27,7 @@ urlpatterns = [
     # Channels
     path("channels/", views.publishing_channels, name="channels"),
     # Posts
+    path("posts/media/upload/", views.post_media_upload, name="post-media-upload"),
     path("new/", views.post_new, name="post-new"),
     path("posts/<int:pk>/", views.post_detail, name="post-detail"),
     path("posts/<int:pk>/delete/", views.post_delete, name="post-delete"),

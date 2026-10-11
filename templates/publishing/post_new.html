@@ -185,12 +185,59 @@
         </div>
       </div>
 
-      {# Media URLs #}
-      <div class="card card-pad space-y-3">
-        <h2 class="font-semibold text-ink">Media URLs</h2>
-        <p class="text-xs text-gray-400">One URL per line. Use S3 or CDN URLs for images and videos.</p>
-        <textarea name="media_urls" rows="3" class="input w-full font-mono text-sm"
-                  placeholder="https://cdn.example.com/image.jpg">{% if existing_post %}{{ existing_post.media_urls|join:'\n' }}{% endif %}</textarea>
+      {# Media uploads #}
+      <div class="card card-pad space-y-3" x-data="mediaUploader('{% url "publishing:post-media-upload" %}', {{ existing_post.media_urls|default:'[]'|safe }})">
+        <h2 class="font-semibold text-ink">Media</h2>
+        <input type="hidden" name="media_urls_json" :value="JSON.stringify(urls)">
+
+        {# Drop zone #}
+        <div class="relative border-2 border-dashed border-surface-subtle rounded-lg p-6 text-center transition-colors"
+             :class="dragging ? 'border-brand-400 tone-info' : 'hover:border-gray-300'"
+             @dragover.prevent="dragging = true"
+             @dragleave.prevent="dragging = false"
+             @drop.prevent="onDrop($event)">
+          <input type="file" id="media-file-input" accept="image/*,video/*" multiple class="sr-only"
+                 @change="onFiles($event.target.files)">
+          <label for="media-file-input" class="cursor-pointer flex flex-col items-center gap-2">
+            <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="text-sm text-gray-500">Drag & drop or <span class="text-brand-600 underline">browse</span></span>
+            <span class="text-xs text-gray-400">JPEG, PNG, WebP, GIF, MP4 — up to 100 MB each</span>
+          </label>
+        </div>
+
+        {# Upload progress / errors #}
+        <template x-for="(item, i) in items" :key="i">
+          <div class="flex items-center gap-3 p-2 rounded-lg border border-surface-subtle text-sm">
+            {# Thumbnail #}
+            <div class="w-10 h-10 rounded bg-gray-100 flex-shrink-0 overflow-hidden">
+              <img x-show="item.thumb" :src="item.thumb" class="w-full h-full object-cover">
+              <div x-show="!item.thumb" class="w-full h-full flex items-center justify-center text-gray-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.362a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </div>
+            </div>
+            {# Name + status #}
+            <div class="flex-1 min-w-0">
+              <p class="truncate text-ink" x-text="item.name"></p>
+              <div x-show="item.status === 'uploading'" class="mt-1 h-1 bg-gray-100 rounded overflow-hidden">
+                <div class="h-full bg-brand-500 transition-all" :style="`width:${item.progress}%`"></div>
+              </div>
+              <p x-show="item.status === 'error'" class="text-xs text-red-500 mt-0.5" x-text="item.error"></p>
+              <p x-show="item.status === 'done'" class="text-xs text-gray-400 mt-0.5">Uploaded</p>
+            </div>
+            {# Remove #}
+            <button type="button" @click="remove(i)" class="text-gray-400 hover:text-red-500 flex-shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </template>
       </div>
 
       {# Schedule #}
@@ -215,6 +262,83 @@
 </div>
 
 <script>
+function mediaUploader(uploadUrl, existingUrls) {
+  return {
+    uploadUrl,
+    dragging: false,
+    // items: {name, thumb, status: 'uploading'|'done'|'error', progress, error, url}
+    items: (existingUrls || []).map(u => ({
+      name: u.split('/').pop(),
+      thumb: _isImage(u) ? u : null,
+      status: 'done',
+      progress: 100,
+      error: '',
+      url: u,
+    })),
+    get urls() {
+      return this.items.filter(i => i.status === 'done').map(i => i.url);
+    },
+    onDrop(e) {
+      this.dragging = false;
+      this.onFiles(e.dataTransfer.files);
+    },
+    onFiles(fileList) {
+      for (const file of fileList) {
+        this.upload(file);
+      }
+    },
+    async upload(file) {
+      const thumb = file.type.startsWith('image/') ? await _readThumb(file) : null;
+      const item = { name: file.name, thumb, status: 'uploading', progress: 0, error: '', url: '' };
+      this.items.push(item);
+      const idx = this.items.length - 1;
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) this.items[idx].progress = Math.round(e.loaded / e.total * 100);
+      };
+      xhr.onload = () => {
+        let data;
+        try { data = JSON.parse(xhr.responseText); } catch { data = {}; }
+        if (xhr.status === 200 && data.url) {
+          this.items[idx].url = data.url;
+          this.items[idx].status = 'done';
+          this.items[idx].progress = 100;
+        } else {
+          this.items[idx].status = 'error';
+          this.items[idx].error = data.error || `Upload failed (${xhr.status})`;
+        }
+      };
+      xhr.onerror = () => {
+        this.items[idx].status = 'error';
+        this.items[idx].error = 'Network error — please retry.';
+      };
+      xhr.open('POST', this.uploadUrl);
+      xhr.send(fd);
+    },
+    remove(i) {
+      this.items.splice(i, 1);
+    },
+  };
+}
+
+function _isImage(url) {
+  return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url);
+}
+
+async function _readThumb(file) {
+  return new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(file);
+  });
+}
+
 function postEditor(existingPostId, existingCaption, existingHashtags) {
   return {
     step: existingPostId ? 3 : 1,
