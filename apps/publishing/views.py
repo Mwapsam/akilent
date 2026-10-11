@@ -33,7 +33,9 @@ from .providers.facebook import FacebookPublishError, list_pages
 logger = logging.getLogger(__name__)
 
 _FB_GRAPH = "https://graph.facebook.com"
-_FB_SCOPES = "pages_show_list,pages_manage_posts,pages_read_engagement,business_management"
+_FB_SCOPES = (
+    "pages_show_list,pages_manage_posts,pages_read_engagement,business_management"
+)
 
 # Valid status transitions: {from_status: allowed_to_statuses}
 _TRANSITIONS = {

@@ -109,7 +109,10 @@ def list_pages(user_access_token: str) -> list[dict]:
             continue
         p_r = requests.get(
             f"{_BASE}/{biz_id}/owned_pages",
-            params={"access_token": user_access_token, "fields": "id,name,access_token"},
+            params={
+                "access_token": user_access_token,
+                "fields": "id,name,access_token",
+            },
             timeout=30,
         )
         p_data = p_r.json()
