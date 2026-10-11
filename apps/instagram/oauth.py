@@ -97,9 +97,10 @@ def get_long_lived_token(short_lived_token: str) -> tuple[str, int | None]:
     if not settings.INSTAGRAM_APP_ID or not settings.INSTAGRAM_APP_SECRET:
         return short_lived_token, None
     resp = requests.get(
-        f"{GRAPH_IG}/access_token",
+        f"{GRAPH_IG}/oauth/access_token",
         params={
             "grant_type": "ig_exchange_token",
+            "client_id": settings.INSTAGRAM_APP_ID,
             "client_secret": settings.INSTAGRAM_APP_SECRET,
             "access_token": short_lived_token,
         },
@@ -121,7 +122,7 @@ def refresh_long_lived_token(access_token: str) -> tuple[str, int | None]:
     Raises InstagramOAuthError when Meta refuses (expired or revoked token).
     """
     resp = requests.get(
-        f"{GRAPH_IG}/refresh_access_token",
+        f"{GRAPH_IG}/oauth/access_token",
         params={"grant_type": "ig_refresh_token", "access_token": access_token},
         timeout=_TIMEOUT,
     )
