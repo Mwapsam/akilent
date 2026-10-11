@@ -337,19 +337,37 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         return response.json()
 
     def update_flow_json(self, flow_id: str, flow_json: dict) -> dict:
-        """Attach/replace this Flow's JSON definition.
+        """Attach/replace this Flow's JSON definition via Meta's asset-upload endpoint.
 
-        UNVERIFIED against Meta's live API at the time this was written: Meta's
-        documented pattern for attaching a Flow JSON document to a Flow object is
-        (per the Flows API reference) a multipart asset upload rather than a plain
-        field on the Flow object — confirm the exact contract before relying on
-        this in production; this raises rather than guess a wrong shape silently.
+        Meta requires a multipart POST to ``/{flow_id}/assets`` with the Flow JSON
+        serialised as a file named ``flow.json`` and ``asset_type=FLOW_JSON``.
         """
-        raise WhatsAppProviderError(
-            "update_flow_json: endpoint/shape not yet confirmed against Meta's "
-            "live Flows API reference — see apps/conversations/flow_json.py and "
-            "the Phase C extension plan before implementing this."
-        )
+        import json as _json
+
+        url = self._url(f"{flow_id}/assets")
+        file_bytes = _json.dumps(flow_json).encode()
+        try:
+            response = self._session.post(
+                url,
+                data={"asset_type": "FLOW_JSON"},
+                files={"file": ("flow.json", file_bytes, "application/json")},
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to upload flow JSON: {e}") from e
+
+        if response.status_code >= 400:
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            code, message, _ = _classify_meta_error(response.status_code, body)
+            err = WhatsAppProviderError(
+                f"Meta API {response.status_code} [{code}]: {message}"
+            )
+            err.code = code
+            raise err
+        return response.json()
 
     def publish_flow(self, flow_id: str) -> dict:
         """Publish a Flow, making it sendable."""

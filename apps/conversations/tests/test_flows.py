@@ -141,11 +141,28 @@ class TestMetaProviderFlowMethods:
             with pytest.raises(WhatsAppProviderError, match="Meta API 400"):
                 provider.create_flow("WABA123", "Bad", ["OTHER"])
 
-    def test_update_flow_json_raises_intentional_placeholder(self):
-        """update_flow_json must raise until Meta's asset-upload endpoint is confirmed."""
+    def test_update_flow_json_success(self):
         provider = self._provider()
-        with pytest.raises(WhatsAppProviderError, match="not yet confirmed"):
-            provider.update_flow_json("flow_x", {"version": "3.0"})
+        with patch.object(
+            provider._session,
+            "post",
+            return_value=_mock_response(200, {"success": True}),
+        ) as mock_post:
+            result = provider.update_flow_json("flow_x", {"version": "3.0"})
+        assert result == {"success": True}
+        call_kwargs = mock_post.call_args
+        assert "FLOW_JSON" in str(call_kwargs)
+
+    def test_update_flow_json_4xx_raises_provider_error(self):
+        provider = self._provider()
+        error_body = {
+            "error": {"code": 100, "message": "Invalid flow JSON", "fbtrace_id": "z"}
+        }
+        with patch.object(
+            provider._session, "post", return_value=_mock_response(400, error_body)
+        ):
+            with pytest.raises(WhatsAppProviderError, match="Meta API 400"):
+                provider.update_flow_json("flow_x", {"version": "3.0"})
 
     def test_publish_flow_success(self):
         provider = self._provider()

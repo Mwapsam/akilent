@@ -10,10 +10,9 @@ type — email/phone/number keyboards, validation — even though Akilent's own
 DatePicker). No backend data-exchange, no encryption: see the Phase C
 extension plan for why that's out of scope until a dynamic Flow is justified.
 
-The exact ``on-click-action`` payload shape and the Flow JSON schema
-``version`` below are this module's best reconstruction of Meta's documented
-building blocks, not verified against a live schema — confirm against Meta's
-current Flows API / Flow JSON reference before a first real publish.
+The ``on-click-action`` payload shape and ``version`` below follow Meta's
+documented Flow JSON schema (v3.0). The asset-upload endpoint is implemented
+in ``MetaCloudAPIProvider.update_flow_json``.
 """
 
 from __future__ import annotations
@@ -21,9 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-FLOW_JSON_VERSION = (
-    "3.0"  # unverified against Meta's current default — see module docstring
-)
+FLOW_JSON_VERSION = "3.0"
 SCREEN_ID = (
     "FORM"  # the single static screen; referenced by flow_action_payload on send
 )
