@@ -49,13 +49,10 @@ def _apply_contact_event(event: HubSpotWebhookEvent) -> None:
             account=event.account, hs_object_id=event.object_id
         )
     except HubSpotContactLink.DoesNotExist:
-        # Unlinked remote object — log and ignore.
-        logger.info(
-            "HubSpot webhook for unlinked contact %s in account %s — skipped",
-            event.object_id,
-            event.account_id,
-        )
-        return
+        # Unlinked remote object — fetch full object from HubSpot and create locally.
+        link = _fetch_and_create_local_contact(event)
+        if link is None:
+            return
 
     if link.remote_archived:
         return
@@ -147,6 +144,42 @@ def _record_conflict(
             remote_source_ts=remote_ts,
         ),
     )
+
+
+def _fetch_and_create_local_contact(event: HubSpotWebhookEvent):
+    """Fetch the full HubSpot contact object and create an Akilent Contact."""
+    from apps.hubspot.client import HubSpotAPIError, get_fresh_client
+    from apps.hubspot.create import create_local_contact_from_hs
+    from apps.hubspot.field_map import CONTACT_FIELD_MAP
+
+    try:
+        connection = event.account.hubspot_connection
+    except Exception:
+        return None
+
+    try:
+        client = get_fresh_client(connection)
+        properties = ",".join(CONTACT_FIELD_MAP.values()) + ",email"
+        data = client.get(
+            f"/crm/v3/objects/contacts/{event.object_id}",
+            properties=properties,
+        )
+    except HubSpotAPIError as exc:
+        logger.warning(
+            "inbound: could not fetch hs contact %s for auto-create: %s",
+            event.object_id,
+            exc,
+        )
+        return None
+
+    link = create_local_contact_from_hs(event.account, data)
+    if link:
+        logger.info(
+            "inbound: auto-created local contact %s for hs %s",
+            link.contact_id,
+            event.object_id,
+        )
+    return link
 
 
 # Model fields that HubSpot maps to Contact model columns directly.

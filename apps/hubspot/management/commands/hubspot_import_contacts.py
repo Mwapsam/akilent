@@ -41,10 +41,19 @@ class Command(BaseCommand):
             default=200,
             help="Maximum pages to fetch per account (100 contacts/page).",
         )
+        parser.add_argument(
+            "--create",
+            action="store_true",
+            help=(
+                "Create Akilent contacts for HubSpot contacts that have no email match. "
+                "Without this flag, unmatched HubSpot contacts are only reported."
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         max_pages = options["max_pages"]
+        create = options["create"]
 
         qs = HubSpotConnection.objects.filter(
             status=HubSpotConnection.Status.ACTIVE
@@ -59,14 +68,17 @@ class Command(BaseCommand):
             self.stdout.write(f"\nAccount: {conn.account} (portal {conn.portal_id})")
             try:
                 total = self._import_for_connection(
-                    conn, dry_run=dry_run, max_pages=max_pages
+                    conn, dry_run=dry_run, max_pages=max_pages, create=create
                 )
                 self.stdout.write(self.style.SUCCESS(f"  {total} contacts linked."))
             except HubSpotAPIError as exc:
                 self.stderr.write(self.style.ERROR(f"  API error: {exc}"))
 
-    def _import_for_connection(self, conn, *, dry_run: bool, max_pages: int) -> int:
+    def _import_for_connection(
+        self, conn, *, dry_run: bool, max_pages: int, create: bool = False
+    ) -> int:
         from apps.contacts.models import Contact
+        from apps.hubspot.create import create_local_contact_from_hs
 
         client = get_fresh_client(conn)
         account = conn.account
@@ -103,7 +115,20 @@ class Command(BaseCommand):
                     account=account, email__iexact=email
                 ).first()
                 if contact is None:
-                    self.stdout.write(f"  no match: {email} (hs {hs_id})")
+                    if create:
+                        if dry_run:
+                            self.stdout.write(
+                                f"  [dry-run] would create contact for {email} (hs {hs_id})"
+                            )
+                        else:
+                            link = create_local_contact_from_hs(account, obj)
+                            if link:
+                                self.stdout.write(
+                                    f"  created contact {link.contact_id} for {email} (hs {hs_id})"
+                                )
+                        linked += 1
+                    else:
+                        self.stdout.write(f"  no match: {email} (hs {hs_id})")
                     continue
 
                 if dry_run:

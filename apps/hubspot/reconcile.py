@@ -129,7 +129,12 @@ def _apply_contact_object(account, obj: dict, cursor: ReconcileCursor) -> None:
     try:
         link = HubSpotContactLink.objects.get(account=account, hs_object_id=hs_id)
     except HubSpotContactLink.DoesNotExist:
-        return
+        from apps.hubspot.create import create_local_contact_from_hs
+
+        new_link = create_local_contact_from_hs(account, obj)
+        if new_link is None:
+            return
+        link = new_link
 
     if link.remote_archived:
         return
