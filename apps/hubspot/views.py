@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.accounts.utils import get_current_account
 from apps.hubspot.models import HubSpotConnection, HubSpotWebhookEvent
 from apps.hubspot.signature import SignatureError, verify_v3
 
@@ -33,7 +34,10 @@ def oauth_connect(request):
     """Start HubSpot OAuth flow."""
     import secrets as _secrets
 
-    conn, _ = HubSpotConnection.objects.get_or_create(account=request.account)
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    conn, _ = HubSpotConnection.objects.get_or_create(account=account)
     state = _secrets.token_urlsafe(32)
     conn.oauth_state = state
     conn.oauth_state_created_at = timezone.now()
@@ -62,8 +66,11 @@ def oauth_callback(request):
     if not code or not state:
         return HttpResponseBadRequest("Missing code or state")
 
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
     try:
-        conn = HubSpotConnection.objects.get(account=request.account)
+        conn = HubSpotConnection.objects.get(account=account)
     except HubSpotConnection.DoesNotExist:
         return HttpResponseBadRequest("No pending OAuth session")
 
@@ -126,8 +133,11 @@ def oauth_callback(request):
 @require_POST
 def oauth_disconnect(request):
     """Disconnect the HubSpot integration."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
     try:
-        conn = HubSpotConnection.objects.get(account=request.account)
+        conn = HubSpotConnection.objects.get(account=account)
         conn.status = HubSpotConnection.Status.DISCONNECTED
         conn.access_token = None
         conn.refresh_token = None

@@ -320,7 +320,7 @@ def test_oauth_callback_rejects_replayed_state(account, connection, rf):
     request = rf.get(
         "/hubspot/oauth/callback/", {"code": "abc", "state": "wrong-state"}
     )
-    request.account = account
+    request._current_account = account
 
     from django.contrib.auth.models import AnonymousUser
 
