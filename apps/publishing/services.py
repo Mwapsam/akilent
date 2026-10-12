@@ -18,6 +18,41 @@ from .providers.instagram import (
 
 logger = logging.getLogger(__name__)
 
+# Instagram accepted aspect ratio range: width/height must be between 0.8 (4:5)
+# and 1.91 (1.91:1). A 1% tolerance covers minor rounding in image dimensions.
+_IG_RATIO_MIN = 0.8 * 0.99
+_IG_RATIO_MAX = 1.91 * 1.01
+
+
+def _validate_ig_image_ratio(url: str) -> None:
+    """Raise InstagramPublishError before the API call if the aspect ratio is wrong."""
+    if not url:
+        return
+    try:
+        import io
+
+        import requests as _req
+        from PIL import Image
+
+        resp = _req.get(url, timeout=10, stream=True)
+        resp.raise_for_status()
+        img = Image.open(io.BytesIO(resp.content))
+        w, h = img.size
+        if h == 0:
+            return
+        ratio = w / h
+        if not (_IG_RATIO_MIN <= ratio <= _IG_RATIO_MAX):
+            raise InstagramPublishError(
+                f"Unsupported aspect ratio ({w}×{h}, ratio {ratio:.2f}). "
+                "Instagram accepts: square (1:1), portrait (4:5 = 0.8), "
+                "landscape (1.91:1). Crop the image before publishing."
+            )
+    except InstagramPublishError:
+        raise
+    except Exception as exc:
+        # If we can't fetch or open the image, skip the check and let the API decide.
+        logger.debug("_validate_ig_image_ratio: could not check %s: %s", url, exc)
+
 
 def _full_caption_for(post: ContentPost, platform: str) -> str:
     """Return platform-specific caption with hashtags appended."""
@@ -107,6 +142,7 @@ def _publish_instagram(post: ContentPost) -> None:
     url = post.media_urls[0] if post.media_urls else ""
 
     if mt == ContentPost.MediaType.IMAGE:
+        _validate_ig_image_ratio(url)
         container_id = provider.create_image_container(ig_user_id, url, caption)
         post.ig_container_id = container_id
         ig_media_id = provider.publish_container(ig_user_id, container_id)

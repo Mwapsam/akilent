@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{% if existing_post %}Edit draft{% else %}New post{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+{% endblock %}
+
 {% block content %}
 <div class="mb-4">
   <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">← Publishing</a>
@@ -261,6 +265,33 @@
   </div>
 </div>
 
+{% comment %} Crop modal — outside Alpine scope so Cropper.js can manage the <img> freely {% endcomment %}
+<div id="ig-crop-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl flex flex-col gap-4 p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="font-semibold text-ink">Crop for Instagram</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Pick a ratio, drag to reposition, then crop.</p>
+      </div>
+      <button id="ig-crop-skip" type="button" class="text-sm text-gray-500 hover:text-ink underline">Skip crop</button>
+    </div>
+    <div class="overflow-hidden rounded-lg bg-gray-100" style="max-height:380px">
+      <img id="ig-crop-img" class="block max-w-full" alt="">
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <span class="text-xs text-gray-500 self-center mr-1">Ratio:</span>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="_igCropSetRatio(1,1)">Square 1:1</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="_igCropSetRatio(4,5)">Portrait 4:5</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="_igCropSetRatio(191,100)">Landscape 1.91:1</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="_igCropSetRatio(9,16)">Reels 9:16</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="_igCropSetRatio(NaN,NaN)">Free</button>
+    </div>
+    <div class="flex gap-2 justify-end pt-1 border-t border-surface-subtle">
+      <button id="ig-crop-apply" type="button" class="btn btn-primary btn-sm">Crop &amp; upload</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function mediaUploader(uploadUrl, existingUrls) {
   return {
@@ -284,8 +315,27 @@ function mediaUploader(uploadUrl, existingUrls) {
     },
     onFiles(fileList) {
       for (const file of fileList) {
-        this.upload(file);
+        if (file.type.startsWith('image/')) {
+          this.startCrop(file);
+        } else {
+          this.upload(file);
+        }
       }
+    },
+    startCrop(file) {
+      const self = this;
+      const reader = new FileReader();
+      reader.onload = e => {
+        _igCropOpen(e.target.result, file.name, file.type, blob => {
+          if (blob) {
+            const cropped = new File([blob], file.name, { type: 'image/jpeg' });
+            self.upload(cropped);
+          } else {
+            self.upload(file);
+          }
+        });
+      };
+      reader.readAsDataURL(file);
     },
     async upload(file) {
       const thumb = file.type.startsWith('image/') ? await _readThumb(file) : null;
@@ -440,5 +490,59 @@ function postEditor(existingPostId, existingCaption, existingHashtags) {
   };
 }
 </script>
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<script>
+(function () {
+  let _cropper = null;
+  let _cropCb = null;
+
+  window._igCropOpen = function (src, name, type, callback) {
+    _cropCb = callback;
+    const modal = document.getElementById('ig-crop-modal');
+    const img = document.getElementById('ig-crop-img');
+    // Reset the img src to force Cropper to reinitialise on the new image.
+    img.src = '';
+    img.onload = function () {
+      if (_cropper) { _cropper.destroy(); _cropper = null; }
+      _cropper = new Cropper(img, {
+        aspectRatio: 1,
+        viewMode: 1,
+        autoCropArea: 0.9,
+        background: false,
+      });
+    };
+    img.src = src;
+    modal.classList.remove('hidden');
+  };
+
+  window._igCropSetRatio = function (w, h) {
+    if (_cropper) _cropper.setAspectRatio(w / h);
+  };
+
+  function _closeCrop(result) {
+    document.getElementById('ig-crop-modal').classList.add('hidden');
+    if (_cropper) { _cropper.destroy(); _cropper = null; }
+    if (_cropCb) { _cropCb(result); _cropCb = null; }
+  }
+
+  document.getElementById('ig-crop-apply').addEventListener('click', function () {
+    if (!_cropper) return;
+    _cropper.getCroppedCanvas({ maxWidth: 1440, maxHeight: 1800 })
+      .toBlob(blob => _closeCrop(blob), 'image/jpeg', 0.92);
+  });
+
+  document.getElementById('ig-crop-skip').addEventListener('click', function () {
+    _closeCrop(null);
+  });
+
+  // Close on backdrop click
+  document.getElementById('ig-crop-modal').addEventListener('click', function (e) {
+    if (e.target === this) _closeCrop(null);
+  });
+})();
+</script>
+{% endblock %}
 
 {% endblock %}
