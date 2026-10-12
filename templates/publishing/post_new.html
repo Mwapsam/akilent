@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{% if existing_post %}Edit draft{% else %}New post{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
+{% load static %}
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<link rel="stylesheet" href="{% static 'css/cropper.min.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -622,7 +623,7 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
 </script>
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<script src="{% static 'js/cropper.min.js' %}"></script>
 <script>
 (function () {
   let _cropper = null;
