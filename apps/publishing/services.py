@@ -43,7 +43,7 @@ def _validate_ig_image_ratio(url: str) -> None:
         ratio = w / h
         if not (_IG_RATIO_MIN <= ratio <= _IG_RATIO_MAX):
             raise InstagramPublishError(
-                f"Unsupported aspect ratio ({w}×{h}, ratio {ratio:.2f}). "
+                f"Unsupported aspect ratio ({w}x{h}, ratio {ratio:.2f}). "
                 "Instagram accepts: square (1:1), portrait (4:5 = 0.8), "
                 "landscape (1.91:1). Crop the image before publishing."
             )
