@@ -15,7 +15,6 @@
 <div class="max-w-6xl"
      x-data="postEditor({{ existing_post.pk|default:'null' }}, '{{ existing_post.caption|default:''|escapejs }}', {{ existing_post.hashtags|default:'[]'|safe }}, {{ existing_post.platform_captions|default:'{}'|safe }})"
      x-init="init()">
-<div>
 
   {# Step 1: Starting point — only shown for a new post with no existing draft #}
   {% if not existing_post %}
@@ -266,9 +265,6 @@
 
     </form>
   </div>
-</div>
-
-  </div>{# end editor #}
 
   {# Preview panel — below the form #}
   <div class="mt-6">
@@ -370,7 +366,7 @@
       </div>
     </div>
   </div>
-
+</div>{# end Alpine postEditor scope #}
 
 {% comment %} Crop modal — outside Alpine scope so Cropper.js can manage the <img> freely {% endcomment %}
 <div id="ig-crop-modal" class="hidden fixed inset-0 flex items-center justify-center bg-gray-900/50 p-4" style="z-index: var(--z-modal)" role="dialog" aria-modal="true">
