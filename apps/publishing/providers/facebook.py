@@ -67,11 +67,15 @@ class FacebookPublishProvider:
         Returns {"reach": N, "impressions": N}. Values may be 0 if insights
         haven't populated yet (Meta takes up to 15 min after publish).
         Requires pages_read_engagement scope on the page access token.
+
+        Uses v19+ metric names: post_impressions_organic_unique (reach) and
+        post_impressions_organic (impressions). Legacy post_impressions* were
+        removed in Graph API v19.
         """
         r = requests.get(
             f"{_BASE}/{post_id}/insights",
             params={
-                "metric": "post_impressions,post_impressions_unique",
+                "metric": "post_impressions_organic,post_impressions_organic_unique",
                 "access_token": self._token,
             },
             timeout=30,
@@ -79,15 +83,15 @@ class FacebookPublishProvider:
         data = r.json()
         if "error" in data:
             raise FacebookPublishError(data["error"].get("message", str(data["error"])))
-        result: dict[str, int] = {}
+        result: dict[str, int] = {"reach": 0, "impressions": 0}
         for item in data.get("data", []):
             name = item.get("name", "")
             values = item.get("values", [])
             if values:
                 val = values[-1].get("value", 0)
-                if name == "post_impressions":
+                if name == "post_impressions_organic":
                     result["impressions"] = int(val)
-                elif name == "post_impressions_unique":
+                elif name == "post_impressions_organic_unique":
                     result["reach"] = int(val)
         return result
 
