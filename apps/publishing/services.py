@@ -129,6 +129,26 @@ def publish_post(post: ContentPost) -> None:
         fetch_fb_post_insights.apply_async(args=[post.pk], countdown=900)
 
 
+def _wait_for_ig_container(
+    provider: InstagramPublishProvider,
+    container_id: str,
+    *,
+    max_attempts: int = 10,
+    delay: float = 2.0,
+) -> None:
+    """Poll until the container is FINISHED (or raise on ERROR/EXPIRED)."""
+    import time
+
+    for _ in range(max_attempts):
+        status = provider.poll_container_status(container_id)
+        if status == CONTAINER_STATUS_FINISHED:
+            return
+        if status in (CONTAINER_STATUS_ERROR, CONTAINER_STATUS_EXPIRED):
+            raise InstagramPublishError(f"Container {status.lower()} before publish.")
+        time.sleep(delay)
+    raise InstagramPublishError("Container did not finish processing in time.")
+
+
 def _publish_instagram(post: ContentPost) -> None:
     provider = _ig_provider_for_post(post)
     if provider is None:
@@ -145,6 +165,7 @@ def _publish_instagram(post: ContentPost) -> None:
         _validate_ig_image_ratio(url)
         container_id = provider.create_image_container(ig_user_id, url, caption)
         post.ig_container_id = container_id
+        _wait_for_ig_container(provider, container_id)
         ig_media_id = provider.publish_container(ig_user_id, container_id)
         post.ig_media_id = ig_media_id
 
@@ -167,6 +188,7 @@ def _publish_instagram(post: ContentPost) -> None:
             children.append(child_id)
         container_id = provider.create_carousel_container(ig_user_id, children, caption)
         post.ig_container_id = container_id
+        _wait_for_ig_container(provider, container_id)
         ig_media_id = provider.publish_container(ig_user_id, container_id)
         post.ig_media_id = ig_media_id
 
