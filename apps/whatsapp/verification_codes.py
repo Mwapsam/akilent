@@ -272,7 +272,9 @@ def forget_code(msg) -> None:
         if not is_verification_code(payload):
             continue
         payload = dict(payload)  # type: ignore[arg-type]
-        payload["components"] = components(HIDDEN, copy_code=payload.get("copy_code", False))
+        payload["components"] = components(
+            HIDDEN, copy_code=payload.get("copy_code", False)
+        )
         setattr(owner, field, payload)
         if owner is not None:
             owner.save(update_fields=[field])
