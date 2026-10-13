@@ -140,7 +140,11 @@
       {% for r in auto_replies %}
       <li class="p-3">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
+          {% if r.conversation_id %}
           <a href="{% url 'conversations:detail' r.conversation_id %}" class="font-medium text-ink underline">{{ r.customer }}</a>
+          {% else %}
+          <span class="font-medium text-ink">{{ r.customer }}</span>
+          {% endif %}
           <span class="text-xs text-gray-500">{{ r.sent_at|date:"j M, H:i" }} · {{ r.topic }}</span>
         </div>
         <p class="mt-0.5 text-gray-700 whitespace-pre-line">{{ r.text }}</p>

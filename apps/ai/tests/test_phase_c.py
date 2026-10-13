@@ -523,6 +523,19 @@ def test_the_inbox_labels_replies_ai_sent_and_settings_lists_them(owner, account
 
 
 @pytest.mark.django_db
+def test_settings_still_lists_an_automatic_reply_after_its_conversation_is_deleted(
+    owner, account, sent
+):
+    client, _ = owner
+    c = convo(account)
+    draft(c)
+    c.delete()  # the proposal keeps its row with conversation=NULL
+    resp = client.get("/settings/ai/")
+    assert resp.status_code == 200
+    assert "Recent automatic replies" in resp.content.decode()
+
+
+@pytest.mark.django_db
 def test_the_autopilot_report_counts_and_explains_each_decision(owner, account, sent):
     client, _ = owner
     draft(convo(account))  # sent
