@@ -37,11 +37,14 @@
     <h2 class="font-semibold flex items-center gap-2">
       {% include "components/icon.html" with name="key" class="w-4 h-4 text-gray-400" %} API key
     </h2>
-    <form method="post" action="/email/keys/create/" hx-confirm="Regenerate the API key? The current key stops working immediately." hx-confirm-label="Regenerate"
-          hx-post="/email/keys/create/" hx-swap="none">
+    {% if api_key or new_api_key_plaintext %}
+    <a href="{% url 'settings-api-keys' %}" class="btn btn-ghost btn-sm">Manage keys</a>
+    {% else %}
+    <form method="post" action="/email/keys/create/">
       {% csrf_token %}
-      <button class="btn btn-ghost btn-sm" type="submit">Regenerate</button>
+      <button class="btn btn-ghost btn-sm" type="submit">Create a key</button>
     </form>
+    {% endif %}
   </div>
   {% if new_api_key_plaintext %}
     <div class="rounded-xl border border-amber-300 tone-amber-bg px-4 py-3 mb-3">
@@ -53,9 +56,9 @@
     <p class="help mt-2">Send with header <code>X-Api-Key</code> to <code>POST /api/v1/messages</code> (legacy path: <code>POST /email/send/</code>).</p>
   {% elif api_key %}
     <p class="text-sm text-gray-600 font-mono">{{ api_key.key_prefix }}••••{{ api_key.last4 }}</p>
-    <p class="help mt-2">Send with header <code>X-Api-Key</code> to <code>POST /api/v1/messages</code> (legacy path: <code>POST /email/send/</code>). Regenerate to see the full key again.</p>
+    <p class="help mt-2">Send with header <code>X-Api-Key</code> to <code>POST /api/v1/messages</code> (legacy path: <code>POST /email/send/</code>). Lost it? Create a new key in <a href="{% url 'settings-api-keys' %}" class="underline">Settings › API keys</a> and revoke this one.</p>
   {% else %}
-    <p class="text-sm text-gray-400">No API key yet — generate one to start sending.</p>
+    <p class="text-sm text-gray-400">No API key yet. Create one to start sending.</p>
   {% endif %}
 </div>
 {% endif %}

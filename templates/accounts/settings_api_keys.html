@@ -1,0 +1,105 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="space-y-6 max-w-3xl">
+
+  {% if new_key %}
+  <div class="rounded-xl border border-amber-300 tone-amber-bg px-4 py-3" role="status">
+    <p class="text-sm font-medium text-amber-800">Copy your key now and keep it on your server. It won't be shown again.</p>
+    <div class="mt-2">
+      {% include "components/copy_field.html" with value=new_key label="Copy" %}
+    </div>
+    <p class="help mt-2">Send it in the <code>X-Api-Key</code> header. See <a href="{% url 'docs-page' 'authentication' %}" class="underline">API keys</a> in the docs.</p>
+  </div>
+  {% endif %}
+
+  <div class="card card-pad">
+    <h2 class="font-semibold mb-1">API keys</h2>
+    <p class="text-sm text-gray-500 mb-4">
+      Keys let your own website or app use Akilent. Give each place its own key, so you can
+      revoke one without breaking the others.
+    </p>
+
+    {% if keys %}
+    <ul class="divide-y divide-border rounded-xl border border-border text-sm">
+      {% for k in keys %}
+      <li class="p-3 flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0 space-y-1">
+          <p class="font-medium text-ink">
+            {{ k.name }}
+            {% if k.mode == "test" %}<span class="badge badge-neutral">Test: sends nothing</span>{% endif %}
+            {% if k.is_expired %}<span class="badge badge-danger">Expired</span>{% endif %}
+          </p>
+          <p class="font-mono text-xs text-gray-500">{{ k.key_prefix }}••••{{ k.last4 }}</p>
+          <p class="text-xs text-gray-600">{{ k.scope_labels|join:" · " }}</p>
+          <p class="text-xs text-gray-500">
+            Created {{ k.created_at|date:"j M Y" }}
+            · {% if k.last_used_at %}last used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}
+            {% if k.expires_at and not k.is_expired %}· expires {{ k.expires_at|date:"j M Y" }}{% endif %}
+          </p>
+        </div>
+        {% if can_edit %}
+        <form method="post" action="{% url 'settings-api-key-revoke' k.pk %}"
+              hx-confirm="Revoke “{{ k.name }}”? Anything using it stops working immediately."
+              hx-confirm-danger hx-confirm-label="Revoke"
+              hx-post="{% url 'settings-api-key-revoke' k.pk %}" hx-swap="none">
+          {% csrf_token %}
+          <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Revoke {{ k.name }}">Revoke</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-500">Your business doesn't have an API key yet.</p>
+    {% endif %}
+  </div>
+
+  {% if can_edit %}
+  <div class="card card-pad">
+    <h2 class="font-semibold mb-4">Create a key</h2>
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="label" for="id_name">Name</label>
+        <input id="id_name" name="name" maxlength="100" required class="input" placeholder="e.g. Online shop">
+        <p class="help">Where the key will be used. Only you see this.</p>
+      </div>
+
+      <fieldset>
+        <legend class="label">What it can do</legend>
+        <div class="space-y-1.5">
+          {% for s in scopes %}
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="scopes" value="{{ s.key }}" {% if s.key in default_scopes %}checked{% endif %}>
+            {{ s.label }} <code class="text-xs text-gray-500">{{ s.key }}</code>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label" for="id_mode">Type</label>
+          <select id="id_mode" name="mode" class="input">
+            <option value="live">Live: sends for real</option>
+            <option value="test">Test: sends nothing</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_expires_in">Expires</label>
+          <select id="id_expires_in" name="expires_in" class="input">
+            {% for value, label in expiry_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Create key</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-500">Only an owner or admin can create or revoke API keys.</p>
+  {% endif %}
+</div>
+{% endblock %}

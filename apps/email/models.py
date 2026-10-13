@@ -533,6 +533,16 @@ class EmailApiKey(models.Model):
         LIVE = "live", "Live"
         TEST = "test", "Test"
 
+    # Every scope some endpoint checks (``required_scope`` in apps.api), with the
+    # label the owner sees on Settings > API keys. ``channel`` hides a scope whose
+    # endpoints belong to a channel that's switched off.
+    SCOPES = {
+        "messages:send": {"label": "Send messages and one-time codes", "channel": ""},
+        "messages:send:bulk": {"label": "Launch campaigns", "channel": "email"},
+        "templates:manage": {"label": "Manage email templates", "channel": "email"},
+    }
+    DEFAULT_SCOPES = ["messages:send"]
+
     # Test keys route through the sandbox provider: nothing is delivered, no
     # SES quota / reputation impact, deterministic outcomes by magic recipient.
     mode = models.CharField(max_length=4, choices=Mode.choices, default=Mode.LIVE)
@@ -561,6 +571,7 @@ class EmailApiKey(models.Model):
         name: str = "default",
         scopes: list[str] | None = None,
         mode: str = "live",
+        expires_at=None,
     ):
         """Create a new key. Returns (instance, plaintext) — plaintext is shown once."""
         raw = cls.generate_key(mode)
@@ -571,27 +582,44 @@ class EmailApiKey(models.Model):
             key_hash=cls.hash_key(raw),
             key_prefix=raw.split("_")[0] + "_" + raw.split("_")[1] + "_",
             last4=raw[-4:],
-            scopes=scopes or ["messages:send"],
+            scopes=scopes or list(cls.DEFAULT_SCOPES),
+            expires_at=expires_at,
         )
         return obj, raw
 
     @classmethod
+    def usable(cls):
+        """Active keys that haven't passed their expiry date."""
+        return cls.objects.filter(is_active=True).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
+        )
+
+    @classmethod
     def authenticate(cls, raw_key: str):
-        """Look up an active key by hash, falling back to the legacy plaintext column."""
+        """Look up a usable key by hash, falling back to the legacy plaintext column."""
         if not raw_key:
             return None
         by_hash = (
-            cls.objects.filter(key_hash=cls.hash_key(raw_key), is_active=True)
+            cls.usable()
+            .filter(key_hash=cls.hash_key(raw_key))
             .select_related("account")
             .first()
         )
         if by_hash is not None:
             return by_hash
-        return (
-            cls.objects.filter(key=raw_key, is_active=True)
-            .select_related("account")
-            .first()
-        )
+        return cls.usable().filter(key=raw_key).select_related("account").first()
+
+    @property
+    def scope_labels(self) -> list[str]:
+        return [self.SCOPES.get(s, {}).get("label", s) for s in (self.scopes or [])]
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and self.expires_at <= timezone.now()
+
+    def revoke(self):
+        self.is_active = False
+        self.save(update_fields=["is_active"])
 
     def touch(self):
         self.last_used_at = timezone.now()

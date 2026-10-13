@@ -308,6 +308,128 @@ def settings_integrations(request):
     )
 
 
+# --- API keys -----------------------------------------------------------------
+
+# Expiry choices offered when creating a key, in days ("" never expires).
+API_KEY_EXPIRY_CHOICES = [
+    ("", "Never"),
+    ("30", "In 30 days"),
+    ("90", "In 90 days"),
+    ("365", "In a year"),
+]
+
+
+def _api_key_scopes():
+    """The scopes an owner can grant here: those whose channel is switched on."""
+    from apps.core.channels import enabled_channels
+    from apps.email.models import EmailApiKey
+
+    on = enabled_channels()
+    return [
+        {"key": k, "label": v["label"]}
+        for k, v in EmailApiKey.SCOPES.items()
+        if not v["channel"] or v["channel"] in on
+    ]
+
+
+@login_required
+def settings_api_keys(request):
+    from datetime import timedelta
+
+    from apps.email.models import EmailApiKey
+
+    account, membership = _account_and_membership(request)
+    if account is None:
+        return redirect("dashboard")
+    can_edit = _can_manage_team(membership)
+    scopes = _api_key_scopes()
+
+    if request.method == "POST":
+        if not can_edit:
+            messages.error(request, "Only an owner or admin can create API keys.")
+            return redirect("settings-api-keys")
+        name = (request.POST.get("name") or "").strip()[:100]
+        allowed = {s["key"] for s in scopes}
+        chosen = [s for s in request.POST.getlist("scopes") if s in allowed]
+        mode = request.POST.get("mode")
+        days = request.POST.get("expires_in", "")
+        if not name:
+            messages.error(request, "Give the key a name, so you know where it's used.")
+            return redirect("settings-api-keys")
+        if not chosen:
+            messages.error(request, "Tick at least one thing the key can do.")
+            return redirect("settings-api-keys")
+        if mode not in EmailApiKey.Mode.values:
+            mode = EmailApiKey.Mode.LIVE
+        if days not in {d for d, _ in API_KEY_EXPIRY_CHOICES}:
+            days = ""
+        key, raw_key = EmailApiKey.create_for_account(
+            account,
+            name=name,
+            scopes=chosen,
+            mode=mode,
+            expires_at=timezone.now() + timedelta(days=int(days)) if days else None,
+        )
+        platform_record(
+            action="api_key.created",
+            account=account,
+            actor=request.user,
+            resource_type="api_key",
+            resource_id=f"…{key.last4}",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            metadata={"name": name, "mode": mode, "scopes": chosen, "expires_in": days},
+        )
+        request.session["new_api_key"] = raw_key
+        messages.success(
+            request, "API key created. Copy it now: it won't be shown again."
+        )
+        return redirect("settings-api-keys")
+
+    keys = EmailApiKey.objects.filter(account=account, is_active=True).order_by(
+        "-created_at"
+    )
+    return render(
+        request,
+        "accounts/settings_api_keys.html",
+        {
+            "account": account,
+            "active_tab": "api_keys",
+            "can_edit": can_edit,
+            "keys": keys,
+            "scopes": scopes,
+            "default_scopes": EmailApiKey.DEFAULT_SCOPES,
+            "expiry_choices": API_KEY_EXPIRY_CHOICES,
+            "new_key": request.session.pop("new_api_key", None),
+        },
+    )
+
+
+@login_required
+@require_POST
+def api_key_revoke(request, pk):
+    from apps.email.models import EmailApiKey
+
+    account, membership = _account_and_membership(request)
+    if account is None or not _can_manage_team(membership):
+        messages.error(request, "Only an owner or admin can revoke API keys.")
+        return redirect("settings-api-keys")
+    key = get_object_or_404(EmailApiKey, pk=pk, account=account, is_active=True)
+    key.revoke()
+    platform_record(
+        action="api_key.revoked",
+        account=account,
+        actor=request.user,
+        resource_type="api_key",
+        resource_id=f"…{key.last4}",
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"name": key.name},
+    )
+    messages.success(request, f"“{key.name}” revoked. It stops working immediately.")
+    if is_ajax(request):
+        return ajax_redirect(reverse("settings-api-keys"))
+    return redirect("settings-api-keys")
+
+
 # --- Opening hours ------------------------------------------------------------
 
 

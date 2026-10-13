@@ -36,13 +36,13 @@
     {% else %}
     <p class="text-sm text-gray-600">Your business doesn't have an API key yet.</p>
     {% endif %}
-    {% if can_manage_key %}
-    <form method="post" action="{% url 'whatsapp-codes-key' %}"
-          {% if api_key %}onsubmit="return confirm('The current key will stop working, for email too. Create a new one?')"{% endif %}>
+    {% if api_key or new_key %}
+    <a href="{% url 'settings-api-keys' %}" class="btn btn-secondary btn-sm">Manage API keys</a>
+    {% elif can_manage_key %}
+    <form method="post" action="{% url 'whatsapp-codes-key' %}">
       {% csrf_token %}
-      <button class="btn btn-secondary btn-sm">{% if api_key %}Replace the key{% else %}Create an API key{% endif %}</button>
+      <button class="btn btn-secondary btn-sm">Create an API key</button>
     </form>
-    {% if api_key %}<p class="text-xs text-gray-500">The same key is used for the email API. Replacing it stops the old key everywhere.</p>{% endif %}
     {% else %}
     <p class="text-xs text-gray-500">Ask an owner or admin to create the key.</p>
     {% endif %}

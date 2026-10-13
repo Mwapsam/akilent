@@ -91,11 +91,7 @@ def domains_list(request):
         )
     )
     recent = _scoped(EmailMessage.objects, request, account)[:25]
-    api_key = (
-        EmailApiKey.objects.filter(account=account, is_active=True).first()
-        if account
-        else None
-    )
+    api_key = EmailApiKey.usable().filter(account=account).first() if account else None
     new_api_key_plaintext = (
         request.session.pop("new_api_key", None) if account else None
     )
@@ -324,15 +320,20 @@ def domain_delete(request, pk):
 @login_required
 @require_POST
 def key_create(request):
+    from apps.accounts.api import is_account_admin
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    EmailApiKey.objects.filter(account=account).update(is_active=False)
-    _, raw_key = EmailApiKey.create_for_account(account, name="default")
+    if not is_account_admin(request.user, account):
+        messages.error(request, "Only an owner or admin can create API keys.")
+        return redirect("email-domains")
+    # This page only makes the first key; naming, scopes and revoking live in Settings.
+    if EmailApiKey.usable().filter(account=account).exists():
+        return redirect("settings-api-keys")
+    _, raw_key = EmailApiKey.create_for_account(account, name="Email API")
     request.session["new_api_key"] = raw_key
-    messages.success(
-        request, "New API key generated — copy it now, it won't be shown again."
-    )
+    messages.success(request, "API key created. Copy it now: it won't be shown again.")
     return redirect("email-domains")
 
 

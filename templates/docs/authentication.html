@@ -2,18 +2,21 @@
 {% block docs_content %}
 <h2>API keys</h2>
 <p>
-  Generate a key from the {% if "email" in enabled_channels %}<a href="/email/domains/">Domains</a>{% elif WHATSAPP_ENABLED %}<a href="/whatsapp/codes/">WhatsApp codes</a>{% else %}API keys{% endif %} page. Keys look
-  like <code>ak_live_&hellip;</code> and are shown to you <strong>once</strong>,
+  Owners and admins create keys under <a href="/settings/api-keys/">Settings › API keys</a>.
+  Give each key a name, choose what it can do (its scopes), whether it's a live or
+  test key, and optionally when it expires. Keys look like <code>ak_live_&hellip;</code>
+  (or <code>ak_test_&hellip;</code>) and are shown to you <strong>once</strong>,
   at creation — {{ site.app_name|default:"Automator" }} stores only a hash, not the plaintext, so if you lose
-  it you'll need to regenerate rather than retrieve it.
+  it, create a new key and revoke the old one.
 </p>
 <p>Send it on every request as either header:</p>
 <pre><code>X-Api-Key: ak_live_xxxxxxxxxxxxxxxxxxxxxxxx
 # or
 Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
 <p>
-  Regenerating a key immediately deactivates the previous one — there's no
-  overlap window today, so update all callers before you rotate.
+  A business can have several keys at once. To rotate without downtime, create
+  the new key, update your callers, then revoke the old one. A revoked or expired
+  key stops working immediately.
 </p>
 <p>
   A missing or invalid key returns <code>401</code> with
@@ -40,11 +43,9 @@ Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
 <div class="callout">
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 1.8 13h12.4L8 2.5Z"/><path d="M8 6.5v3"/><path d="M8 11.5h.01"/></svg>
   <p>
-    Every key created from the Domains page today defaults to
-    <code>["messages:send"]</code>, and there's no self-service UI yet to
-    grant a key additional scopes. If you need a key that can manage
-    templates or launch campaigns, <a href="/help/">contact support</a> to
-    have the scope added — don't assume a key can call an endpoint just
+    New keys get <code>messages:send</code> unless you tick other scopes when
+    you create them. A key's scopes can't be changed afterwards: create a new
+    key with the scopes you need. Don't assume a key can call an endpoint just
     because your plan includes the feature; the key also needs the matching
     scope, or you'll get a <code>403 permission_denied</code>.
   </p>

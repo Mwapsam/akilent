@@ -34,6 +34,16 @@ urlpatterns = [
         settings_views.settings_integrations,
         name="settings-integrations",
     ),
+    path(
+        "settings/api-keys/",
+        settings_views.settings_api_keys,
+        name="settings-api-keys",
+    ),
+    path(
+        "settings/api-keys/<int:pk>/revoke/",
+        settings_views.api_key_revoke,
+        name="settings-api-key-revoke",
+    ),
     path("settings/hours/", settings_views.settings_hours, name="settings-hours"),
     path("settings/ai/", ai_views.settings_ai, name="settings-ai"),
     path(

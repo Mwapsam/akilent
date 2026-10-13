@@ -43,6 +43,10 @@
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
        {% if active_tab == 'integrations' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
        {% if active_tab == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
+    <a href="{% url 'settings-api-keys' %}"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
+       {% if active_tab == 'api_keys' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>
   </nav>
 </div>
 

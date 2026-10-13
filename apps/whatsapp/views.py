@@ -96,9 +96,7 @@ def codes_setup(request):
         "whatsapp/codes.html",
         {
             "templates": verification_codes.approved_templates(account),
-            "api_key": EmailApiKey.objects.filter(
-                account=account, is_active=True
-            ).first(),
+            "api_key": EmailApiKey.usable().filter(account=account).first(),
             "new_key": request.session.pop("new_api_key", None),
             "can_manage_key": is_account_admin(request.user, account),
             "endpoint": request.build_absolute_uri(
@@ -122,9 +120,10 @@ def codes_key_create(request):
     if not is_account_admin(request.user, account):
         messages.error(request, "Only an owner or admin can create the API key.")
         return redirect("whatsapp-codes")
-    # One key per business, as on the email Domains page: a new key replaces the old one.
-    EmailApiKey.objects.filter(account=account).update(is_active=False)
-    _, raw_key = EmailApiKey.create_for_account(account, name="default")
+    # This page only makes the first key; naming, scopes and revoking live in Settings.
+    if EmailApiKey.usable().filter(account=account).exists():
+        return redirect("settings-api-keys")
+    _, raw_key = EmailApiKey.create_for_account(account, name="One-time codes")
     request.session["new_api_key"] = raw_key
     messages.success(
         request, "New API key created. Copy it now: it won't be shown again."
