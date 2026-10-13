@@ -39,6 +39,10 @@ class MessageTemplate(models.Model):
         UTILITY = "utility", "Utility"
         AUTHENTICATION = "authentication", "Authentication"
 
+    class OtpButtonType(models.TextChoices):
+        URL = "url", "URL / autofill"
+        COPY_CODE = "copy_code", "Copy code"
+
     account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     whatsapp_template_name = models.CharField(max_length=255, blank=True, null=True)
@@ -78,6 +82,12 @@ class MessageTemplate(models.Model):
     )
     footer = models.CharField(max_length=60, blank=True, default="")
     buttons = models.JSONField(default=list, blank=True)  # Meta BUTTONS component shape
+    otp_button_type = models.CharField(
+        max_length=10,
+        choices=OtpButtonType.choices,
+        default=OtpButtonType.URL,
+        blank=True,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

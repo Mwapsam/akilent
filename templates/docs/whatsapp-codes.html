@@ -45,6 +45,47 @@ print(resp.json())</code></pre>
   <tr><td><code>language</code></td><td>No</td><td>The template's language code, e.g. <code>en</code>. Only needed when the same name exists in several languages.</td></tr>
 </table>
 
+<h3>Specifying a template</h3>
+<p>
+  If you have more than one approved Authentication template — for example one per language — pass
+  <code>template</code> and <code>language</code> to pin the exact one to use:
+</p>
+<div class="code-tabs">
+  <div class="tab-bar">
+    <button type="button" class="active" data-tab="curl2">curl</button>
+    <button type="button" data-tab="python2">Python</button>
+  </div>
+  <pre data-panel="curl2"><code>curl -X POST https://akilent.com/api/v1/whatsapp/verification-codes \
+  -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: login-8841-attempt-1" \
+  -d '{
+    "to": "+260971234567",
+    "code": "482913",
+    "template": "account_confirmation",
+    "language": "en_US"
+  }'</code></pre>
+  <pre data-panel="python2" hidden><code>resp = requests.post(
+    "https://akilent.com/api/v1/whatsapp/verification-codes",
+    headers={
+        "Authorization": "Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx",
+        "Idempotency-Key": "login-8841-attempt-1",
+    },
+    json={
+        "to": "+260971234567",
+        "code": "482913",
+        "template": "account_confirmation",
+        "language": "en_US",
+    },
+)</code></pre>
+</div>
+<p>
+  Omit both fields and Akilent picks your newest approved Authentication template automatically.
+  The template name and language code must match exactly what is shown in
+  <a href="/email/templates/?channel=whatsapp">Templates → WhatsApp</a> and in
+  Meta Business Manager. A mismatch returns <code>404 template_not_found</code>.
+</p>
+
 <h3>Response</h3>
 <pre><code>HTTP/1.1 202 Accepted
 

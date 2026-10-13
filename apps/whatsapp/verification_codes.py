@@ -100,21 +100,20 @@ def components(code: str, *, copy_code: bool = False) -> list[dict]:
     ``copy_code=True`` for templates with a Copy Code button (sub_type COPY_CODE);
     ``copy_code=False`` (default) for templates with a URL/autofill button.
     """
-    button = (
-        {
+    if copy_code:
+        button = {
             "type": "button",
             "sub_type": "COPY_CODE",
             "index": "0",
             "parameters": [{"type": "coupon_code", "coupon_code": code}],
         }
-        if copy_code
-        else {
+    else:
+        button = {
             "type": "button",
             "sub_type": "url",
             "index": "0",
             "parameters": [{"type": "text", "text": code}],
         }
-    )
     return [
         {"type": "body", "parameters": [{"type": "text", "text": code}]},
         button,
@@ -236,9 +235,12 @@ def send_code(
                 "kind": KIND,
                 "template_name": template.whatsapp_template_name,
                 "language": template.language_code,
-                "copy_code": "copy_code" in template.whatsapp_template_name,
+                "copy_code": template.otp_button_type
+                == template.OtpButtonType.COPY_CODE,
                 "components": components(
-                    code, copy_code="copy_code" in template.whatsapp_template_name
+                    code,
+                    copy_code=template.otp_button_type
+                    == template.OtpButtonType.COPY_CODE,
                 ),
                 "params": {"Verification code": HIDDEN},
                 "expires_at": (now + timedelta(minutes=minutes)).isoformat(),

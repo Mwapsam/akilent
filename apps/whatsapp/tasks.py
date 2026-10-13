@@ -1292,14 +1292,27 @@ def _upsert_meta_template(account, tpl: dict) -> None:
     if category not in _VALID_TEMPLATE_CATEGORIES:
         category = MessageTemplate.Category.UTILITY
 
+    otp_button_type = MessageTemplate.OtpButtonType.URL
+    for comp in tpl.get("components", []):
+        if comp.get("type", "").upper() == "BUTTONS":
+            for btn in comp.get("buttons", []):
+                if btn.get("otp_type") == "COPY_CODE" or btn.get("type") == "OTP":
+                    otp_button_type = MessageTemplate.OtpButtonType.COPY_CODE
+                    break
+
     MessageTemplate.objects.update_or_create(
         account=account,
         whatsapp_template_name=name,
         language_code=language,
-        defaults={"approval_status": status, "category": category},
+        defaults={
+            "approval_status": status,
+            "category": category,
+            "otp_button_type": otp_button_type,
+        },
         create_defaults={
             "approval_status": status,
             "category": category,
+            "otp_button_type": otp_button_type,
             "name": name,
             "content": "",
         },
