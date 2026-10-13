@@ -94,16 +94,30 @@ def expiry_minutes(template) -> int:
     return int(match.group(1)) if match else DEFAULT_EXPIRY_MINUTES
 
 
-def components(code: str) -> list[dict]:
-    """Meta's send shape for an authentication template: the code fills the body and the button."""
-    return [
-        {"type": "body", "parameters": [{"type": "text", "text": code}]},
+def components(code: str, *, copy_code: bool = False) -> list[dict]:
+    """Meta's send shape for an authentication template.
+
+    ``copy_code=True`` for templates with a Copy Code button (sub_type COPY_CODE);
+    ``copy_code=False`` (default) for templates with a URL/autofill button.
+    """
+    button = (
         {
+            "type": "button",
+            "sub_type": "COPY_CODE",
+            "index": "0",
+            "parameters": [{"type": "coupon_code", "coupon_code": code}],
+        }
+        if copy_code
+        else {
             "type": "button",
             "sub_type": "url",
             "index": "0",
             "parameters": [{"type": "text", "text": code}],
-        },
+        }
+    )
+    return [
+        {"type": "body", "parameters": [{"type": "text", "text": code}]},
+        button,
     ]
 
 
@@ -222,7 +236,10 @@ def send_code(
                 "kind": KIND,
                 "template_name": template.whatsapp_template_name,
                 "language": template.language_code,
-                "components": components(code),
+                "copy_code": "copy_code" in template.whatsapp_template_name,
+                "components": components(
+                    code, copy_code="copy_code" in template.whatsapp_template_name
+                ),
                 "params": {"Verification code": HIDDEN},
                 "expires_at": (now + timedelta(minutes=minutes)).isoformat(),
             },
@@ -255,7 +272,7 @@ def forget_code(msg) -> None:
         if not is_verification_code(payload):
             continue
         payload = dict(payload)  # type: ignore[arg-type]
-        payload["components"] = components(HIDDEN)
+        payload["components"] = components(HIDDEN, copy_code=payload.get("copy_code", False))
         setattr(owner, field, payload)
         if owner is not None:
             owner.save(update_fields=[field])
