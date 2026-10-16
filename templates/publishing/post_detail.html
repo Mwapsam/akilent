@@ -19,7 +19,7 @@
     <form method="post" action="{% url 'publishing:post-cancel' post.pk %}">
       {% csrf_token %}
       <button type="submit" class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
-              onclick="return confirm('Cancel this scheduled post?')">Cancel</button>
+              data-confirm="Cancel this scheduled post?" data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel</button>
     </form>
     {% endif %}
     {% if post.status == 'cancelled' %}
@@ -32,7 +32,7 @@
     <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
       {% csrf_token %}
       <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
-              onclick="return confirm('Delete this post?')">Delete</button>
+              data-confirm="Delete this post? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete</button>
     </form>
     {% endif %}
   </div>

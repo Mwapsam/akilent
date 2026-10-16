@@ -40,7 +40,7 @@
                 <button class="btn btn-ghost btn-sm">{% if rule.is_active %}Turn off{% else %}Turn on{% endif %}</button>
               </form>
               <form method="post" action="{% url 'conversations:routing_rule_delete' rule.pk %}" class="inline"
-                    onsubmit="return confirm('Delete this routing rule?');">
+                    data-confirm="Delete this routing rule?" data-confirm-danger data-confirm-label="Delete">
                 {% csrf_token %}
                 <button class="btn btn-ghost btn-sm">Delete</button>
               </form>

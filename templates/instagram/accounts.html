@@ -69,7 +69,7 @@
         <form method="post" action="{% url 'instagram-account-delete' iba.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-ghost btn-sm text-red-600"
-                  onclick="return confirm('Disconnect {{ iba.username|default:iba.instagram_business_account_id }}? New messages will stop arriving; past conversations stay in your inbox.')">
+                  data-confirm="Disconnect {{ iba.username|default:iba.instagram_business_account_id }}? New messages will stop arriving; past conversations stay in your inbox." data-confirm-danger data-confirm-label="Disconnect">
             Disconnect
           </button>
         </form>

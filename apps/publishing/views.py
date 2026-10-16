@@ -454,12 +454,20 @@ def publishing_library_bulk(request):
         return redirect("publishing:library")
 
     if action == "delete_drafts":
-        deleted, _ = ContentPost.objects.filter(
+        _, per_model = ContentPost.objects.filter(
             pk__in=pks,
             account=account,
             status__in=[ContentPost.Status.IDEA, ContentPost.Status.DRAFT],
         ).delete()
-        messages.success(request, f"Deleted {deleted} draft(s).")
+        deleted = per_model.get(ContentPost._meta.label, 0)
+        skipped = len(pks) - deleted
+        if deleted:
+            messages.success(request, f"Deleted {deleted} draft(s).")
+        if skipped:
+            messages.warning(
+                request,
+                f"{skipped} selected post(s) were not deleted. Only ideas and drafts can be deleted.",
+            )
 
     elif action == "cancel_scheduled":
         updated = ContentPost.objects.filter(
@@ -467,7 +475,14 @@ def publishing_library_bulk(request):
             account=account,
             status=ContentPost.Status.SCHEDULED,
         ).update(status=ContentPost.Status.CANCELLED)
-        messages.success(request, f"Cancelled {updated} scheduled post(s).")
+        if updated:
+            messages.success(request, f"Cancelled {updated} scheduled post(s).")
+        skipped = len(pks) - updated
+        if skipped:
+            messages.warning(
+                request,
+                f"{skipped} selected post(s) were not cancelled. Only scheduled posts can be cancelled.",
+            )
 
     else:
         messages.error(request, "Unknown action.")
@@ -1219,6 +1234,33 @@ def post_submit_for_review(request, pk):
     return redirect("publishing:post-detail", pk=post.pk)
 
 
+def _can_review(post, user, account, action="review") -> tuple[bool, str]:
+    """Review policy for approve and request-changes alike. The creator may review their own
+    post only in a solo workspace. An assigned reviewer who is still a member takes precedence
+    over everyone else; if that reviewer has left the workspace, or none is assigned, any
+    member may review."""
+    from django.db.models import Count, Q
+
+    from apps.accounts.models import Membership
+
+    reviewer_id = post.assigned_reviewer_id
+    counts = Membership.objects.filter(account=account).aggregate(
+        total=Count("pk"),
+        me=Count("pk", filter=Q(user_id=user.pk)),
+        reviewer=Count("pk", filter=Q(user_id=reviewer_id)),
+    )
+    if counts["me"] == 0:
+        return False, "You are not a member of this workspace."
+    if post.created_by_id == user.pk and counts["total"] > 1:
+        return (
+            False,
+            "You cannot review your own post in a team workspace. Ask a teammate to review it.",
+        )
+    if reviewer_id and counts["reviewer"] and reviewer_id != user.pk:
+        return False, f"Only the assigned reviewer can {action} this post."
+    return True, ""
+
+
 @login_required
 @require_POST
 def post_approve(request, pk):
@@ -1235,12 +1277,9 @@ def post_approve(request, pk):
         )
         return redirect("publishing:post-detail", pk=post.pk)
 
-    if post.created_by_id and post.created_by_id == request.user.pk:
-        messages.error(request, "You cannot approve your own post.")
-        return redirect("publishing:post-detail", pk=post.pk)
-
-    if post.assigned_reviewer and post.assigned_reviewer != request.user:
-        messages.error(request, "Only the assigned reviewer can approve this post.")
+    allowed, reason = _can_review(post, request.user, account, "approve")
+    if not allowed:
+        messages.error(request, reason)
         return redirect("publishing:post-detail", pk=post.pk)
 
     post.approval_status = "approved"
@@ -1280,8 +1319,9 @@ def post_request_changes(request, pk):
         messages.error(request, "Can only request changes on submitted posts.")
         return redirect("publishing:post-detail", pk=post.pk)
 
-    if post.assigned_reviewer and post.assigned_reviewer != request.user:
-        messages.error(request, "Only the assigned reviewer can request changes.")
+    allowed, reason = _can_review(post, request.user, account, "request changes on")
+    if not allowed:
+        messages.error(request, reason)
         return redirect("publishing:post-detail", pk=post.pk)
 
     feedback = request.POST.get("feedback", "").strip()

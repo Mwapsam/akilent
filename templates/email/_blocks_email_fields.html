@@ -75,7 +75,8 @@
       <span class="truncate">{{ v.created_at|date:"M j, H:i" }} · {{ v.subject|default:"(no subject)" }}</span>
       <form method="post" action="/email/templates/{{ template.pk }}/versions/{{ v.pk }}/restore/"
             hx-boost="false"
-            @submit="confirm('Restore this version? What you have now is kept as a version first.') ? (leaving = true) : $event.preventDefault()">
+            data-confirm="Restore this version? What you have now is kept as a version first." data-confirm-label="Restore"
+            @submit="leaving = true">
         {% csrf_token %}
         <input type="hidden" name="mode" value="blocks">
         <button class="eb-link" type="submit">Restore</button>

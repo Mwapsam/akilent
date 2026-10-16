@@ -121,3 +121,81 @@ def test_facebook_abandoned_claim_is_reconciled_and_late_write_refused():
 
     variant.refresh_from_db()
     assert variant.status == Status.RECONCILING
+
+
+def _fb_variant():
+    account = Account.objects.create(company_name="FB Late Co")
+    post = ContentPost.objects.create(
+        account=account, platforms=["facebook"], media_type="image"
+    )
+    return ContentPostVariant.objects.create(
+        post=post, platform="facebook", caption="x"
+    )
+
+
+def _expire_and_recover(variant):
+    ContentPostVariant.objects.filter(pk=variant.pk).update(
+        last_attempt_at=timezone.now() - timedelta(minutes=45)
+    )
+    recover_abandoned_publish_claims()
+
+
+def test_late_facebook_success_is_refused_after_recovery():
+    from apps.publishing.services import publish_variant
+
+    variant = _fb_variant()
+    ok = {
+        "success": True,
+        "publication_id": "fb_late",
+        "publication_url": "https://facebook.com/fb_late",
+        "error": "",
+        "error_type": "",
+        "error_at": None,
+        "reconciling": False,
+    }
+
+    def late_worker(v, p):
+        _expire_and_recover(v)
+        return ok
+
+    with patch(
+        "apps.publishing.services._publish_variant_facebook", side_effect=late_worker
+    ):
+        publish_variant(ContentPostVariant.objects.get(pk=variant.pk))
+
+    variant.refresh_from_db()
+    assert variant.status == Status.RECONCILING
+    assert variant.publication_id == ""
+
+
+def test_late_facebook_failure_is_refused_after_recovery():
+    from apps.publishing.services import publish_variant
+
+    variant = _fb_variant()
+
+    def late_worker(v, p):
+        _expire_and_recover(v)
+        return {
+            "success": False,
+            "publication_id": "",
+            "publication_url": "",
+            "error": "Invalid image",
+            "error_type": "unknown",
+            "error_at": timezone.now(),
+            "reconciling": False,
+        }
+
+    with patch(
+        "apps.publishing.services._publish_variant_facebook", side_effect=late_worker
+    ):
+        publish_variant(ContentPostVariant.objects.get(pk=variant.pk))
+
+    variant.refresh_from_db()
+    assert variant.status == Status.RECONCILING
+    # The refusal must leave the reason recovery recorded, untouched.
+    assert variant.last_error == (
+        "Publish attempt abandoned before its outcome was recorded; "
+        "reconcile before retrying"
+    )
+    assert variant.last_error_type == ContentPostVariant.ErrorType.TIMEOUT
+    assert variant.publication_id == ""

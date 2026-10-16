@@ -71,10 +71,10 @@
     <div class="flex gap-2">
       <button type="submit" name="action" value="delete_drafts"
               class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
-              onclick="return confirm('Delete selected drafts?')">Delete drafts</button>
+              data-confirm="Delete the selected drafts? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
       <button type="submit" name="action" value="cancel_scheduled"
               class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
-              onclick="return confirm('Cancel selected scheduled posts?')">Cancel scheduled</button>
+              data-confirm="Cancel the selected scheduled posts?" data-confirm-label="Cancel posts" data-confirm-cancel="Keep scheduled">Cancel scheduled</button>
     </div>
     <span class="text-xs text-gray-400 ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
   </div>
@@ -146,7 +146,7 @@
 </div>
 {% endif %}
 
-<script>
+<script data-shell-safe>
 document.getElementById('select-all')?.addEventListener('change', function() {
   document.querySelectorAll('.post-checkbox').forEach(cb => cb.checked = this.checked);
 });

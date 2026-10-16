@@ -20,7 +20,7 @@
       </form>
       <form method="post" action="{% url 'instagram-comment-rule-delete' kind rule.pk %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost btn-sm text-red-600" onclick="return confirm('Delete this rule?')">Delete</button>
+        <button type="submit" class="btn btn-ghost btn-sm text-red-600" data-confirm="Delete this rule?" data-confirm-danger data-confirm-label="Delete">Delete</button>
       </form>
     </div>
   </div>

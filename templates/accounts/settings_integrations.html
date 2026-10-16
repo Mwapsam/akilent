@@ -67,7 +67,7 @@
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
-                onclick="return confirm('Disconnect Facebook Page?')">Disconnect</button>
+                data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
       {% else %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
@@ -110,7 +110,7 @@
       <form method="post" action="{% url 'hubspot:oauth-disconnect' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
-                onclick="return confirm('Disconnect HubSpot? Sync will stop but your data stays intact.')">
+                data-confirm="Disconnect HubSpot? Sync will stop but your data stays intact." data-confirm-danger data-confirm-label="Disconnect">
           Disconnect
         </button>
       </form>

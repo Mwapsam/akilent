@@ -101,7 +101,7 @@
       <form method="post" action="{% url 'publishing:plan-delete' item.pk %}" class="ml-auto">
         {% csrf_token %}
         <button type="submit" class="btn btn-ghost text-red-600 hover:tone-coral-bg text-sm"
-                onclick="return confirm('Delete this plan item?')">Delete</button>
+                data-confirm="Delete this plan item?" data-confirm-danger data-confirm-label="Delete">Delete</button>
       </form>
       {% endif %}
     </div>

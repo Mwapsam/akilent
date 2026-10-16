@@ -12,7 +12,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="disable">
       <button type="submit" class="btn btn-danger btn-sm"
-              onclick="return confirm('Disable two-factor authentication? Your account will only be protected by your password.')">
+              data-confirm="Disable two-factor authentication? Your account will only be protected by your password." data-confirm-danger data-confirm-label="Disable">
         Disable two-factor authentication
       </button>
     </form>

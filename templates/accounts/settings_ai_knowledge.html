@@ -46,7 +46,7 @@
             <button name="approve" value="1" class="btn btn-primary btn-sm">Approve</button>
             <button class="btn btn-ghost btn-sm">Save without approving</button>
             <button class="btn btn-ghost btn-sm" formaction="{% url 'settings-ai-knowledge-delete' entry.pk %}" formnovalidate
-                    onclick="return confirm('Delete this entry?');">Delete</button>
+                    data-confirm="Delete this entry?" data-confirm-danger data-confirm-label="Delete">Delete</button>
           </div>
           {% endif %}
         </form>
@@ -84,7 +84,7 @@
               <button class="btn btn-ghost btn-sm">{% if entry.is_active %}Turn off{% else %}Turn on{% endif %}</button>
             </form>
             <form method="post" action="{% url 'settings-ai-knowledge-delete' entry.pk %}" class="inline"
-                  onsubmit="return confirm('Delete this knowledge base entry?');">
+                  data-confirm="Delete this knowledge base entry?" data-confirm-danger data-confirm-label="Delete">
               {% csrf_token %}
               <button class="btn btn-ghost btn-sm">Delete</button>
             </form>

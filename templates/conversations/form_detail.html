@@ -22,7 +22,7 @@
         <button class="btn btn-ghost btn-sm">Move back to draft</button>
         {% endif %}
       </form>
-      <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" onsubmit="return confirm('Delete this form?');">
+      <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" data-confirm="Delete this form?" data-confirm-danger data-confirm-label="Delete">
         {% csrf_token %}
         <button class="btn btn-ghost btn-sm">Delete</button>
       </form>

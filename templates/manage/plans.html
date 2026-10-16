@@ -54,7 +54,7 @@
             <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit</button>
             <form method="post" action="{% url 'core:plan-toggle' plan.pk %}">{% csrf_token %}
               <button class="btn btn-ghost btn-sm">{% if plan.is_active %}Hide{% else %}Show{% endif %}</button></form>
-            <form method="post" action="{% url 'core:plan-delete' plan.pk %}" onsubmit="return confirm('Delete package {{ plan.name|escapejs }}? This cannot be undone.')">{% csrf_token %}
+            <form method="post" action="{% url 'core:plan-delete' plan.pk %}" data-confirm="Delete package {{ plan.name }}? This cannot be undone." data-confirm-danger data-confirm-label="Delete">{% csrf_token %}
               <button class="btn btn-danger-ghost btn-sm" aria-label="Delete {{ plan.name }}">{% include "components/icon.html" with name="trash" class="w-4 h-4" %}</button></form>
           </div>
 

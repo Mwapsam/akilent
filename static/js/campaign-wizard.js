@@ -289,17 +289,20 @@
           self.submitting = true;
           event.target.submit();
         };
-        if (window.Alpine && Alpine.store("confirm")) {
-          Alpine.store("confirm")
-            .ask({
-              title: "Send this campaign?",
-              message: "This emails " + who + " now and can't be undone.",
-              confirmLabel: "Send now",
-            })
-            .then(run);
-        } else {
-          run(window.confirm("Send this campaign to " + who + "?"));
+        var store = window.Alpine && Alpine.store("confirm");
+        if (!store) {
+          // Modal not up yet: send nothing, and say so.
+          if (window.toast) window.toast("danger", "Still loading. Try again in a moment.");
+          return;
         }
+        store
+          .ask({
+            title: "Send this campaign?",
+            message: "This emails " + who + " now and can't be undone.",
+            confirmLabel: "Send now",
+            danger: true,
+          })
+          .then(run);
       },
     };
   }

@@ -297,7 +297,7 @@
       <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
         <span>{{ m.user.email|default:m.user.get_username }} <span class="badge {% if m.role == 'owner' %}badge-brand{% else %}badge-neutral{% endif %}">{{ m.get_role_display }}</span></span>
         {% if m.role != 'owner' %}
-        <form method="post" action="{% url 'core:business-action' business.pk 'change_owner' %}" onsubmit="return confirm('Make {{ m.user.email|escapejs }} the owner? The current owner becomes an admin.')">{% csrf_token %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'change_owner' %}" data-confirm="Make {{ m.user.email }} the owner? The current owner becomes an admin." data-confirm-label="Make owner">{% csrf_token %}
           <input type="hidden" name="membership" value="{{ m.pk }}"><button class="btn btn-ghost btn-sm">Make owner</button></form>
         {% endif %}
       </li>
@@ -329,7 +329,7 @@
         <span><code>{{ k.key_prefix }}…{{ k.last4 }}</code> · {{ k.get_mode_display }}
           {% if k.is_active %}<span class="text-xs text-gray-500">· {% if k.last_used_at %}used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}</span>{% else %}<span class="badge badge-neutral">Revoked</span>{% endif %}</span>
         {% if k.is_active %}
-        <form method="post" action="{% url 'core:business-action' business.pk 'revoke_key' %}" onsubmit="return confirm('Revoke this key? Anything using it stops working.')">{% csrf_token %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'revoke_key' %}" data-confirm="Revoke this key? Anything using it stops working." data-confirm-danger data-confirm-label="Revoke">{% csrf_token %}
           <input type="hidden" name="key" value="{{ k.pk }}"><button class="btn btn-danger-ghost btn-sm">Revoke</button></form>
         {% endif %}
       </li>

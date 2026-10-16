@@ -114,9 +114,9 @@
 
     // Confirm dialog: { open, title, message, confirmLabel, danger, _resolve }
     Alpine.store("confirm", {
-      open: false, title: "", message: "", confirmLabel: "Confirm", danger: false, _resolve: null,
+      open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false, _resolve: null,
       ask(opts) {
-        Object.assign(this, { open: true, danger: false, confirmLabel: "Confirm" }, opts || {});
+        Object.assign(this, { open: true, title: "", danger: false, confirmLabel: "Confirm", cancelLabel: "Cancel" }, opts || {});
         return new Promise((res) => (this._resolve = res));
       },
       respond(ok) { this.open = false; if (this._resolve) this._resolve(ok); this._resolve = null; },
@@ -184,6 +184,62 @@
       })
       .then(function (ok) { if (ok) e.detail.issueRequest(true); });
   });
+
+  // 1b. Plain buttons and forms with data-confirm ask the same modal instead of the browser's
+  //     confirm(). data-confirm-danger colours the button red; data-confirm-label renames it.
+  //     Nothing is sent unless the user confirms. If the modal is not up yet, the action is
+  //     blocked with a toast rather than sent unconfirmed.
+  let confirmBypass = false;
+  function confirmThen(el, proceed) {
+    const store = window.Alpine && Alpine.store("confirm");
+    if (!store) {
+      window.toast("danger", "Still loading. Try again in a moment.");
+      return;
+    }
+    store
+      .ask({
+        message: el.getAttribute("data-confirm"),
+        danger: el.hasAttribute("data-confirm-danger"),
+        confirmLabel: el.getAttribute("data-confirm-label") || "Confirm",
+        cancelLabel: el.getAttribute("data-confirm-cancel") || "Cancel",
+      })
+      .then(function (ok) { if (ok) proceed(); });
+  }
+  function proceedUnguarded(fn) {
+    confirmBypass = true;
+    try { fn(); } finally { confirmBypass = false; }
+  }
+  // Clicks: ask first, then re-click. The form's own validation runs before the dialog, so a
+  // confirmed click can't be stopped by a validation error afterwards.
+  document.addEventListener("click", function (e) {
+    if (confirmBypass || !e.target.closest) return;
+    const btn = e.target.closest("button[data-confirm], input[type=submit][data-confirm]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const form = btn.form;
+    if (form && !btn.formNoValidate && !form.noValidate && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    confirmThen(btn, function () { proceedUnguarded(function () { btn.click(); }); });
+  }, true);
+  // Submits that did not come through a confirmed click (requestSubmit, Enter in a field, a
+  // script) are asked here, whichever of the submitter or the form carries data-confirm.
+  document.addEventListener("submit", function (e) {
+    if (confirmBypass) return;
+    const form = e.target;
+    if (!form.matches) return;
+    const submitter = e.submitter;
+    const asker = submitter && submitter.hasAttribute("data-confirm") ? submitter
+      : form.matches("form[data-confirm]") ? form : null;
+    if (!asker) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    confirmThen(asker, function () {
+      proceedUnguarded(function () { form.requestSubmit(submitter || undefined); });
+    });
+  }, true);
 
   // 2. Surface the X-Toast response header. hx-toast-silent suppresses all but
   //    good news, which is what an auto-poll wants — "not verified yet" every

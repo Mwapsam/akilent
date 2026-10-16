@@ -20,7 +20,7 @@
             <td data-label="Message" class="text-gray-600">{{ r.body|truncatechars:80 }}</td>
             <td>
               <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}"
-                    onsubmit="return confirm('Delete this saved reply?');">
+                    data-confirm="Delete this saved reply?" data-confirm-danger data-confirm-label="Delete">
                 {% csrf_token %}
                 <button class="btn btn-ghost btn-sm">Delete</button>
               </form>

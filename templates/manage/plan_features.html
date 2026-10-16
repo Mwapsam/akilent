@@ -89,7 +89,7 @@
     <label class="text-sm inline-flex items-center gap-2"><input type="checkbox" name="is_active" {% if item.is_active %}checked{% endif %}> Shown</label>
     <div class="flex justify-end gap-2">
       <button class="btn btn-secondary btn-sm">Save</button>
-      <button class="btn btn-danger-ghost btn-sm" formaction="{% url 'core:coming-soon-delete' item.pk %}" onclick="return confirm('Remove {{ item.name|escapejs }}?')">Remove</button>
+      <button class="btn btn-danger-ghost btn-sm" formaction="{% url 'core:coming-soon-delete' item.pk %}" data-confirm="Remove {{ item.name }}?" data-confirm-danger data-confirm-label="Remove">Remove</button>
     </div>
   </form>
   {% endfor %}
