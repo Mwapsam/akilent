@@ -158,7 +158,16 @@ def send_system_email(
             provider.__class__.__name__,
         )
     except Exception as exc:
-        logger.error("Failed to send system email to %s: %s", to_email, exc)
+        # Callers are user-facing (signup, password reset), so this does not raise. The failure
+        # is reported instead: full traceback (Sentry picks it up) and a Slack alert. The alert
+        # leaves out the recipient address.
+        logger.exception("Failed to send system email to %s", to_email)
+        try:
+            from apps.billing.slack import post_message
+
+            post_message(f":warning: System email failed to send: {exc}")
+        except Exception:
+            logger.exception("system email failure alert could not be posted")
         raise
 
 
