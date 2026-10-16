@@ -114,11 +114,13 @@ hx-trigger of its own, so it loads exactly once.
   {% endif %}
 
   {# ── Email stats (secondary; "Scheduled" lives in the panel above) ──── #}
+  {% if "email" in enabled_channels %}
   <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
     {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
     {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
     {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
   </div>
+  {% endif %}
 
   {# ── Recent activity ───────────────────────────────────────────────── #}
   <div class="card overflow-hidden">

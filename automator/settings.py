@@ -428,6 +428,11 @@ INTERNAL_DEBUG_TOKEN = os.getenv("INTERNAL_DEBUG_TOKEN", "")
 # superadmins) overrides them at runtime.
 MAIL_PROVIDER_BACKEND = os.getenv("MAIL_PROVIDER_BACKEND", "stalwart")
 EMAIL_SEND_PROVIDER_BACKEND = os.getenv("EMAIL_SEND_PROVIDER_BACKEND", "smtp")
+# Platform system mail (password resets, verification, billing). When set, it is independent
+# of the tenant send provider, the SMTP relay and the email channel switch: "ses", "smtp" or
+# "null". When unset, system mail keeps using the tenant send provider, so existing
+# deployments don't lose password resets.
+SYSTEM_EMAIL_PROVIDER_BACKEND = os.getenv("SYSTEM_EMAIL_PROVIDER_BACKEND", "")
 
 # AWS SES — credentials come from the standard AWS_* env vars / IAM role; these
 # name the region and (optional) tracking resources. Also settable live via
@@ -633,6 +638,10 @@ CELERY_TASK_ROUTES = {
 }
 
 CELERY_BEAT_SCHEDULE = {
+    "replay-held-webhooks": {
+        "task": "apps.core.webhook_replay.replay_held_webhooks",
+        "schedule": 120.0,  # backstop for the replay kicked off when a channel is switched on
+    },
     "generate-insights": {
         "task": "apps.insights.tasks.generate_insights",
         "schedule": 86400.0,  # nightly — insight rules query potentially large datasets

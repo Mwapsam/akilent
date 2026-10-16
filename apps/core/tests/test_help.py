@@ -86,12 +86,14 @@ def test_search_filters_results(client, all_channels):
     assert b"No matching guides" in resp2.content
 
 
+@pytest.mark.django_db
 def test_search_matches_keywords_and_titles(all_channels):
     assert help_kb.get_article("dns-setup") in help_kb.search("cloudflare")
     assert help_kb.get_article("team") in help_kb.search("invite teammate")
     assert help_kb.search("") == []
 
 
+@pytest.mark.django_db
 def test_grouped_covers_all_articles(all_channels):
     grouped_slugs = {a.slug for _, items in help_kb.grouped() for a in items}
     assert grouped_slugs == {a.slug for a in help_kb.ARTICLES}

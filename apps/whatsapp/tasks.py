@@ -942,6 +942,19 @@ def drain_outbound_queue():
         .select_related("account", "contact")[:_OUTBOUND_BATCH]
     )
 
+    from apps.core.channels import channel_state
+
+    state = channel_state("whatsapp")
+    if state != "enabled":
+        # WhatsApp is switched off (or settings unreadable): nothing leaves the queue. Push the
+        # messages back and look again later, so they go out once it is back on.
+        deferred = list(due)
+        wait = timedelta(minutes=1)
+        OutboundMessage.objects.filter(pk__in=[m.pk for m in deferred]).update(
+            next_attempt_at=now + wait
+        )
+        return {"channel": state, "deferred": len(deferred)}
+
     from apps.billing import api as billing_api
 
     sent = failed = held = 0

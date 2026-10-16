@@ -165,9 +165,11 @@ def test_first_byte_stays_cheap(client, account, django_assert_max_num_queries):
 
     Budget raised 28→29: workspace_context processor added a BusinessContext
     lookup to drive business-model-aware dashboard section ordering.
+    Budget raised 29→30: the admin channel switch (SiteSettings.disabled_channels)
+    is read on a cold cache, once per process every 30s, by the first channel check.
     """
     client.force_login(account.owner)
-    with django_assert_max_num_queries(29):
+    with django_assert_max_num_queries(30):
         assert client.get("/dashboard/").status_code == 200
 
 

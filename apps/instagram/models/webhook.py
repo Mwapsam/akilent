@@ -16,6 +16,7 @@ class WebhookEventLog(models.Model):
         PROCESSING = "processing", "Processing"
         PROCESSED = "processed", "Processed"
         FAILED = "failed", "Failed"
+        HELD = "held", "Held (channel switched off)"
 
     class EventType(models.TextChoices):
         MESSAGE = "message", "DM Message"

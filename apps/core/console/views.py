@@ -15,6 +15,13 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Account
 from apps.billing.models import ManualPaymentRequest, PaymentMethod, Plan
 from apps.core.audit import audit, label
+from apps.core.channels import (
+    CHANNEL_REGISTRY,
+    ChannelUnavailableError,
+    available_channels,
+    enabled_channels,
+    set_channel_enabled,
+)
 from apps.core.console import attention, business, data
 from apps.core.console.business import ConsoleError
 from apps.core.forms import ConfigurationForm
@@ -916,9 +923,36 @@ def settings_page(request):
             pass
         if request.FILES.get("logo"):
             site.logo = request.FILES["logo"]
-        site.save()
+        # Channel switches are saved by set_channel_enabled below, so keep them out of this save.
+        site.save(
+            update_fields=[
+                "app_name",
+                "logo",
+                "support_email",
+                "signups_enabled",
+                "payments_enabled",
+                "automation_events_enabled",
+                "default_plan",
+                "default_trial_days",
+                "updated_at",
+            ]
+        )
         audit(request, "settings.site")
-        messages.success(request, "Settings saved.")
+        channel_error = False
+        for key, ch in CHANNEL_REGISTRY.items():
+            if key not in available_channels():
+                continue  # not wired on this server; the switch is rendered disabled
+            was_on = request.POST.get(f"channel_was_{key}") == "1"
+            want_on = f"channel_{key}" in request.POST
+            if want_on == was_on:
+                continue  # not changed on this page, so leave the current state alone
+            try:
+                set_channel_enabled(key, want_on, request=request)
+            except ChannelUnavailableError:
+                channel_error = True
+                messages.error(request, f"{ch.label} is not set up on this server.")
+        if not channel_error:
+            messages.success(request, "Settings saved.")
         return redirect("core:settings")
 
     mail = MailProviderSettings.load()
@@ -935,6 +969,15 @@ def settings_page(request):
                 "complaint_halt": f"{mail.reputation_complaint_halt * 100:g}",
             },
             "whatsapp_env": settings.WHATSAPP_ENABLED,  # kept as raw setting for the ops console
+            "channels": [
+                {
+                    "key": key,
+                    "label": ch.label,
+                    "available": key in available_channels(),
+                    "enabled": key in enabled_channels(),
+                }
+                for key, ch in CHANNEL_REGISTRY.items()
+            ],
         },
     )
 

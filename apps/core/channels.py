@@ -14,6 +14,9 @@ It also 404s the channel's ``api_paths`` in the public REST API.
 
 from __future__ import annotations
 
+import logging
+import threading
+import time
 from dataclasses import dataclass, field
 
 
@@ -25,9 +28,10 @@ class ChannelDef:
     url_prefix: str
     # Prefixes (under url_prefix) that stay reachable while the channel is off.
     public_paths: tuple[str, ...] = ()
-    # Inbound webhook (under url_prefix). While off, GET still runs the
-    # verification handshake and POSTs are acknowledged and dropped, so the
-    # provider doesn't disable the subscription.
+    # Inbound webhook (under url_prefix). GET still runs the verification handshake.
+    # A POST on a channel that isn't set up on this server gets 200 and is dropped. A POST
+    # on a channel the admin has switched off is validated and stored as held, and gets 200;
+    # it is processed when the channel is back on (see apps/core/webhook_replay.py).
     webhook_path: str = ""
     # Exact paths (under url_prefix) another channel also uses: path -> that channel.
     hub_paths: dict[str, str] = field(default_factory=dict)
@@ -92,8 +96,38 @@ LIMIT_CHANNEL_DEPS: dict[str, str] = {
 }
 
 
-def enabled_channels() -> frozenset[str]:
-    """Return the set of channel keys that are currently enabled."""
+class ChannelError(Exception):
+    """Base for "this send can't go out on its channel right now"."""
+
+
+def channel_error_status(exc: ChannelError) -> int:
+    """HTTP status for a channel error: 503 while settings load (retry), else 403."""
+    return 503 if isinstance(exc, ChannelStateUnknownError) else 403
+
+
+class ChannelDisabledError(ChannelError):
+    """Raised before an operation on a channel the platform admin has switched off."""
+
+    def __init__(self, key: str, message: str | None = None):
+        self.key = key
+        super().__init__(message or f"{CHANNEL_REGISTRY[key].label} is disabled.")
+
+
+class ChannelUnavailableError(Exception):
+    """Raised when an admin tries to enable a channel this server is not set up for."""
+
+
+# The admin's disabled list, cached per process. ``value`` is the last list read from the
+# database and survives failed reloads, so a database outage keeps the last decision.
+_CACHE_TTL_SECONDS = 5.0
+_RETRY_AFTER_FAILURE_SECONDS = 10.0
+_cache_lock = threading.Lock()
+_cache: dict = {"value": None, "loaded_at": 0.0, "failed_at": 0.0, "generation": 0}
+logger = logging.getLogger(__name__)
+
+
+def available_channels() -> frozenset[str]:
+    """Channels this server is set up for (env flags). The admin cannot enable more than this."""
     from django.conf import settings
 
     return frozenset(
@@ -103,8 +137,169 @@ def enabled_channels() -> frozenset[str]:
     )
 
 
+class ChannelStateUnknownError(ChannelError):
+    """The admin's channel settings could not be read, so the state is not known yet.
+
+    Sends are retried later rather than dropped or refused permanently.
+    """
+
+    def __init__(self, key: str):
+        self.key = key
+        label = CHANNEL_REGISTRY[key].label if key in CHANNEL_REGISTRY else key
+        super().__init__(f"{label} is temporarily unavailable, try again shortly.")
+
+
+def _read_disabled_from_db() -> frozenset[str] | None:
+    from apps.core.models import SiteSettings
+
+    try:
+        raw = SiteSettings.load().disabled_channels or []
+    except Exception:
+        logger.exception("Channel settings could not be read")
+        return None
+    return frozenset(k for k in raw if k in CHANNEL_REGISTRY)
+
+
+def disabled_channels() -> frozenset[str] | None:
+    """Channels the admin has switched off, or ``None`` when that is not known yet.
+
+    A failed reload keeps the last good value. ``None`` only happens before the first
+    successful read in this process.
+    """
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _cache["value"]
+        if cached is not None and now - _cache["loaded_at"] < _CACHE_TTL_SECONDS:
+            return cached
+        if now - _cache["failed_at"] < _RETRY_AFTER_FAILURE_SECONDS:
+            return cached  # the database failed moments ago; don't hammer it
+        generation = _cache["generation"]
+    loaded = _read_disabled_from_db()
+    if loaded is None:
+        with _cache_lock:
+            _cache["failed_at"] = time.monotonic()
+            return _cache["value"]
+    with _cache_lock:
+        # Store only if no admin change was saved while this read was in flight.
+        if _cache["generation"] == generation:
+            _cache.update(value=loaded, loaded_at=now)
+    return loaded
+
+
+def invalidate_channel_cache() -> None:
+    """Force the next read to hit the database (last good value is kept for outages)."""
+    with _cache_lock:
+        _cache["loaded_at"] = 0.0
+        _cache["generation"] += 1
+
+
+def enabled_channels() -> frozenset[str]:
+    """Return the set of channel keys that are currently enabled.
+
+    Enabled = available on this server AND not switched off by the admin. When the admin
+    settings are unknown, nothing is shown as enabled (pages hide, nothing new is offered).
+    """
+    disabled = disabled_channels()
+    if disabled is None:
+        return frozenset()
+    return available_channels() - disabled
+
+
+def channel_state(key: str) -> str:
+    """ "enabled", "disabled" (server not set up, or admin switched off), or "unknown"."""
+    if key not in available_channels():
+        return "disabled"
+    disabled = disabled_channels()
+    if disabled is None:
+        return "unknown"
+    return "disabled" if key in disabled else "enabled"
+
+
 def is_enabled(key: str) -> bool:
     return key in enabled_channels()
+
+
+def hide_disabled_channels(qs, field: str = "channel"):
+    """Exclude rows whose channel is switched off (existing data stays in the database)."""
+    hidden = sorted(set(CHANNEL_REGISTRY) - enabled_channels())
+    return qs.exclude(**{f"{field}__in": hidden}) if hidden else qs
+
+
+def visible_choices(choices):
+    """Filter ``(value, label)`` pairs down to the ones whose channel is enabled.
+
+    Values that are not registry channels (e.g. SMS) are kept as they are.
+    """
+    enabled = enabled_channels()
+    return [(v, l) for v, l in choices if v not in CHANNEL_REGISTRY or v in enabled]
+
+
+def assert_channel_enabled(key: str) -> None:
+    """Send-boundary check.
+
+    Raises ``ChannelDisabledError`` when the channel is off (permanent for this send), and
+    ``ChannelStateUnknownError`` when the settings can't be read yet (retry later).
+    """
+    state = channel_state(key)
+    if state == "disabled":
+        raise ChannelDisabledError(key)
+    if state == "unknown":
+        raise ChannelStateUnknownError(key)
+
+
+def set_channel_enabled(key: str, enabled: bool, *, request) -> bool:
+    """Switch a channel on or off. Returns True if the state changed.
+
+    Locks the settings row so concurrent admin changes to different channels both persist,
+    and writes the audit entry in the same transaction.
+    """
+    from django.db import transaction
+
+    from apps.core.audit import audit
+    from apps.core.models import SiteSettings
+
+    if key not in CHANNEL_REGISTRY:
+        raise ValueError(f"Unknown channel: {key}")
+    if enabled and key not in available_channels():
+        raise ChannelUnavailableError(key)
+
+    SiteSettings.load()  # make sure the singleton row exists before locking it
+    with transaction.atomic():
+        site = SiteSettings.objects.select_for_update().get(pk=1)
+        current = set(site.disabled_channels or [])
+        was_enabled = key not in current
+        if was_enabled == enabled:
+            return False
+        if enabled:
+            current.discard(key)
+        else:
+            current.add(key)
+        site.disabled_channels = sorted(current)
+        site.save(update_fields=["disabled_channels", "updated_at"])
+        audit(
+            request,
+            "channel.enabled" if enabled else "channel.disabled",
+            target=key,
+            channel=key,
+            previous=was_enabled,
+            new=enabled,
+        )
+    invalidate_channel_cache()
+    if enabled:
+        _kick_webhook_replay()
+    return True
+
+
+def _kick_webhook_replay() -> None:
+    """Release webhooks held while the channel was off. The periodic sweep is the backstop."""
+    try:
+        from apps.core.webhook_replay import replay_held_webhooks
+
+        replay_held_webhooks.delay()
+    except Exception:
+        logger.exception(
+            "could not start webhook replay; the periodic sweep will retry"
+        )
 
 
 def feature_visible(key: str, channels: frozenset[str] | set[str]) -> bool:

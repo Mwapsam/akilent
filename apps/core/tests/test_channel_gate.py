@@ -48,7 +48,7 @@ def test_links_in_sent_email_keep_resolving(client, email_off):
 
 
 @pytest.mark.django_db
-def test_a_disabled_channels_webhook_acks_and_drops(client, settings):
+def test_a_channel_not_set_up_here_acks_and_drops_webhooks(client, settings):
     from apps.instagram.models.webhook import WebhookEventLog
 
     settings.INSTAGRAM_ENABLED = False
@@ -90,6 +90,7 @@ def test_other_api_resources_are_unaffected(client, email_off):
     assert client.get("/api/v1/contacts").status_code != 404
 
 
+@pytest.mark.django_db
 def test_replies_on_a_disabled_channel_are_refused(settings):
     settings.INSTAGRAM_ENABLED = False
     with pytest.raises(ActionError, match="Instagram is switched off"):

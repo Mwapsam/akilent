@@ -201,7 +201,7 @@ class TestSystemMailSuppressionBoundary:
                 return SendResult(success=True, provider_message_id="m-1")
 
         monkeypatch.setattr(
-            "apps.email.providers.get_send_provider", lambda *a, **k: _Provider()
+            "apps.email.providers.get_system_email_provider", lambda: _Provider()
         )
         monkeypatch.setattr(
             "apps.email.services.validation.validate_recipient", lambda e: True

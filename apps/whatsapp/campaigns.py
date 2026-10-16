@@ -133,6 +133,15 @@ def send_campaign(self, campaign_id: int) -> None:
     """
     from apps.automation import variables
     from apps.automation.workflows import _build_template_payload
+    from apps.core.channels import channel_state
+
+    state = channel_state("whatsapp")
+    if state != "enabled":
+        # Wait until WhatsApp is back on (or settings load). The campaign keeps its status
+        # and resumes from where it stopped, since this function is restart-safe.
+        raise self.retry(
+            countdown=900 if state == "disabled" else 300, max_retries=10_000
+        )
 
     campaign = WhatsAppCampaign.objects.select_related("template", "contact_list").get(
         pk=campaign_id

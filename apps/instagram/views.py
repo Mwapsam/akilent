@@ -583,8 +583,16 @@ class InstagramWebhookView(View):
             event_type,
         )
 
-        # Store raw payload (idempotency enforced by unique constraint)
+        # Store raw payload (idempotency enforced by unique constraint). While the channel is
+        # off, store it as held and process it on replay.
         from django.db import IntegrityError
+
+        from apps.core.channels import channel_state
+
+        # A backlog of held events goes first: a new event joins the queue behind them.
+        held = channel_state("instagram") != "enabled" or (
+            WebhookEventLog.objects.filter(status=WebhookEventLog.Status.HELD).exists()
+        )
 
         try:
             with transaction.atomic():
@@ -593,6 +601,11 @@ class InstagramWebhookView(View):
                     event_id=event_id_key,
                     event_type=event_type,
                     raw_payload=payload,
+                    status=(
+                        WebhookEventLog.Status.HELD
+                        if held
+                        else WebhookEventLog.Status.RECEIVED
+                    ),
                 )
         except IntegrityError:
             logger.debug(
@@ -600,7 +613,8 @@ class InstagramWebhookView(View):
             )
             return HttpResponse(status=200)
 
-        transaction.on_commit(lambda: process_instagram_event.delay(event.pk))
+        if not held:
+            transaction.on_commit(lambda: process_instagram_event.delay(event.pk))
         return HttpResponse(status=200)
 
 

@@ -46,6 +46,7 @@ from apps.conversations.state import (
     unanswered_q,
     with_activity,
 )
+from apps.core.channels import hide_disabled_channels, visible_choices
 from apps.core.htmx import is_background
 
 if TYPE_CHECKING:
@@ -54,6 +55,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 30
+
+
+def get_visible_conversation(account, public_id):
+    """A conversation the inbox may show: 404 for one on a channel the admin switched off."""
+    return get_object_or_404(
+        hide_disabled_channels(Conversation.objects.all()),
+        account=account,
+        public_id=public_id,
+    )
 
 
 def _inbox_context(request, account) -> dict:
@@ -92,7 +102,8 @@ def _inbox_context(request, account) -> dict:
         qs = with_activity(Conversation.objects.filter(account=account)).order_by(
             "-last_any", "-id"
         )
-    qs = qs.select_related("contact")
+    # Conversations on a channel the admin switched off are hidden from every list.
+    qs = hide_disabled_channels(qs.select_related("contact"))
 
     channel = (request.GET.get("channel") or "").strip()
     if channel:
@@ -128,22 +139,30 @@ def _inbox_context(request, account) -> dict:
         "page": page,
         "view": view,
         "channel": channel,
-        "channel_choices": Conversation.Channel.choices,
+        "channel_choices": visible_choices(Conversation.Channel.choices),
         "overdue_only": overdue_only,
-        "needs_attention_count": needs_attention(account, now).count(),
-        "missed_count": missed(account, now).count(),
-        "assigned_count": Conversation.objects.filter(
-            account=account, assigned_to=request.user
+        "needs_attention_count": hide_disabled_channels(
+            needs_attention(account, now)
         ).count(),
-        "unassigned_count": Conversation.objects.filter(
-            account=account,
-            status=Conversation.Status.OPEN,
-            assigned_to__isnull=True,
+        "missed_count": hide_disabled_channels(missed(account, now)).count(),
+        "assigned_count": hide_disabled_channels(
+            Conversation.objects.filter(account=account, assigned_to=request.user)
         ).count(),
-        "closed_count": Conversation.objects.filter(
-            account=account, status=Conversation.Status.CLOSED
+        "unassigned_count": hide_disabled_channels(
+            Conversation.objects.filter(
+                account=account,
+                status=Conversation.Status.OPEN,
+                assigned_to__isnull=True,
+            )
         ).count(),
-        "all_count": Conversation.objects.filter(account=account).count(),
+        "closed_count": hide_disabled_channels(
+            Conversation.objects.filter(
+                account=account, status=Conversation.Status.CLOSED
+            )
+        ).count(),
+        "all_count": hide_disabled_channels(
+            Conversation.objects.filter(account=account)
+        ).count(),
         "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
         "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
     }
@@ -281,7 +300,7 @@ def ai_suggest(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     proposal = ai_api.request_proposal(account, conversation, request.user)
     if proposal is None:
         return JsonResponse(
@@ -300,7 +319,7 @@ def ai_dismiss(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
-    get_object_or_404(Conversation, account=account, public_id=public_id)
+    get_visible_conversation(account, public_id)
     ai_api.dismiss(account, request.POST.get("proposal"))
     return JsonResponse({"ok": True})
 
@@ -314,7 +333,7 @@ def ai_apply(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     ok, message = ai_api.apply_extra(
         account,
         conversation,
@@ -345,7 +364,7 @@ def ai_learn(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"ok": False, "error": "no account"}, status=403)
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     if not accounts_api.is_account_admin(request.user, account):
         return JsonResponse(
             {"ok": False, "error": "Only an owner or admin can teach AI new answers."},
@@ -398,7 +417,7 @@ def conversation_detail(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -703,7 +722,7 @@ def conversation_delete(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     if not _can_delete(request, account):
         messages.error(request, "Only owners and admins can delete conversations.")
         return redirect("conversations:detail", public_id=public_id)
@@ -906,7 +925,7 @@ def routing_rules(request):
             "account": account,
             "rules": rules,
             "teams": Team.objects.filter(account=account).order_by("name"),
-            "channel_choices": Conversation.Channel.choices,
+            "channel_choices": visible_choices(Conversation.Channel.choices),
         },
     )
 
@@ -1068,7 +1087,7 @@ def send_media(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"ok": False, "error": "No account."}, status=403)
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     upload = request.FILES.get("file")
     if upload is None:
         return JsonResponse(
@@ -1146,7 +1165,7 @@ def message_media(request, public_id: str, message_id: int):
     account = get_current_account(request)
     if account is None:
         raise Http404
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
     message = get_object_or_404(
         Message.objects.select_related("whatsapp_message", "instagram_message"),
         pk=message_id,
@@ -1192,7 +1211,7 @@ def messages_feed(request, public_id: str):
     account = get_current_account(request)
     if account is None:
         return JsonResponse({"error": "no account"}, status=403)
-    conversation = get_object_or_404(Conversation, account=account, public_id=public_id)
+    conversation = get_visible_conversation(account, public_id)
 
     try:
         after = max(int(request.GET.get("after") or 0), 0)
@@ -1389,7 +1408,11 @@ def recommendation_act(request, pk: int):
         conversation_id = int(raw_cid)
     except (ValueError, TypeError):
         return HttpResponse(status=400)
-    conversation = get_object_or_404(Conversation, pk=conversation_id, account=account)
+    conversation = get_object_or_404(
+        hide_disabled_channels(Conversation.objects.all()),
+        pk=conversation_id,
+        account=account,
+    )
 
     try:
         execute_recommendation(

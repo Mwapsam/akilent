@@ -397,10 +397,11 @@ class WhatsAppWebhookReplayTest(TestCase):
         self.assertEqual(response2.status_code, 200)
 
         # Get the second webhook event and process it
+        # An identical redelivery is deduplicated at intake (same body fingerprint), so no second
+        # event is stored; reprocessing the stored one is a no-op.
         webhook_events = WebhookEventLog.objects.all()
-        self.assertEqual(webhook_events.count(), 2)
-        replay_event = webhook_events[1]
-        process_whatsapp_event(replay_event.id)
+        self.assertEqual(webhook_events.count(), 1)
+        process_whatsapp_event(webhook_events[0].id)
 
         # Message log should still exist (duplicate not created)
         logs_after_replay = MessageLog.objects.filter(

@@ -184,7 +184,7 @@ def test_provider_outage_retries_and_keeps_message(account, monkeypatch):
         class request:
             retries = 0
 
-        def retry(self, exc=None, countdown=None):
+        def retry(self, exc=None, countdown=None, max_retries=None):
             retried["hit"] = True
             raise RuntimeError("retry")
 
@@ -219,13 +219,18 @@ def test_retry_exhaustion_pages_operators(account, monkeypatch):
     alerts = []
     monkeypatch.setattr("apps.billing.slack.post_message", lambda t: alerts.append(t))
 
+    from django.core.cache import cache
+
     from apps.email.tasks import _MAX_RETRIES, _send_email_message
+
+    # Transient failures are counted per message; this one is the last of them.
+    cache.set(f"email-transient-attempts:{msg.pk}", _MAX_RETRIES - 1, timeout=60)
 
     class _Task:
         class request:
-            retries = _MAX_RETRIES  # last attempt
+            retries = 0
 
-        def retry(self, exc=None, countdown=None):
+        def retry(self, exc=None, countdown=None, max_retries=None):
             raise RuntimeError("retry")
 
     with pytest.raises(RuntimeError):

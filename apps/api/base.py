@@ -58,3 +58,8 @@ class BaseApiView(APIView):
     def finish_idempotency(self, record, response):
         idempotency_complete(record, response)
         return response
+
+    def release_idempotency(self, record):
+        """Drop an unfinished record so the client can retry with the same key."""
+        if record is not None:
+            record.delete()

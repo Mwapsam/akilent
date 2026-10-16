@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from apps.api.base import BaseApiView
+from apps.api.channel_errors import channel_error_response
 from apps.api.permissions import (
     HasBulkEmailFeature,
     HasEmailApiFeature,
@@ -24,6 +25,7 @@ from apps.api.services import (
     render_template_preview,
     update_template,
 )
+from apps.core.channels import ChannelError
 from apps.email.models import BulkEmailCampaign, EmailMessage, EmailTemplate
 from apps.logs.models import ApiRequest
 
@@ -127,25 +129,29 @@ class MessageCreateView(BaseApiView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        result = create_and_queue_message(
-            account=request.user,
-            from_email=data["from_email"],
-            to_email=data["to_email"],
-            subject=data.get("subject", ""),
-            text_body=data.get("text", ""),
-            html_body=data.get("html", ""),
-            template_id=data.get("template_id"),
-            template_variables=data.get("template_variables"),
-            locale=data.get("locale") or None,
-            attachments=data.get("attachments") or None,
-            mode=getattr(request.auth, "mode", "live"),
-            scheduled_at=data.get("scheduled_at"),
-            tz=data.get("timezone", ""),
-            created_by=getattr(request.auth, "created_by", None),
-            recurrence=data.get("recurrence", ""),
-            recurrence_until=data.get("recurrence_until"),
-            max_occurrences=data.get("max_occurrences"),
-        )
+        try:
+            result = create_and_queue_message(
+                account=request.user,
+                from_email=data["from_email"],
+                to_email=data["to_email"],
+                subject=data.get("subject", ""),
+                text_body=data.get("text", ""),
+                html_body=data.get("html", ""),
+                template_id=data.get("template_id"),
+                template_variables=data.get("template_variables"),
+                locale=data.get("locale") or None,
+                attachments=data.get("attachments") or None,
+                mode=getattr(request.auth, "mode", "live"),
+                scheduled_at=data.get("scheduled_at"),
+                tz=data.get("timezone", ""),
+                created_by=getattr(request.auth, "created_by", None),
+                recurrence=data.get("recurrence", ""),
+                recurrence_until=data.get("recurrence_until"),
+                max_occurrences=data.get("max_occurrences"),
+            )
+        except ChannelError as exc:
+            self.release_idempotency(idem)
+            return channel_error_response(exc)
         request.auth.touch()
         return self.finish_idempotency(
             idem, Response(_create_result_body(result), status=status.HTTP_202_ACCEPTED)
@@ -352,23 +358,27 @@ class CampaignCreateView(BaseApiView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        result = create_and_queue_campaign(
-            account=request.user,
-            from_email=data["from_email"],
-            template_id=data.get("template_id"),
-            subject=data.get("subject", ""),
-            text_body=data.get("text", ""),
-            html_body=data.get("html", ""),
-            recipients=data["recipients"] or None,
-            list_slug=data.get("list") or None,
-            segment_slug=data.get("segment") or None,
-            scheduled_at=data.get("scheduled_at"),
-            tz=data.get("timezone", ""),
-            created_by=getattr(request.auth, "created_by", None),
-            recurrence=data.get("recurrence", ""),
-            recurrence_until=data.get("recurrence_until"),
-            max_occurrences=data.get("max_occurrences"),
-        )
+        try:
+            result = create_and_queue_campaign(
+                account=request.user,
+                from_email=data["from_email"],
+                template_id=data.get("template_id"),
+                subject=data.get("subject", ""),
+                text_body=data.get("text", ""),
+                html_body=data.get("html", ""),
+                recipients=data["recipients"] or None,
+                list_slug=data.get("list") or None,
+                segment_slug=data.get("segment") or None,
+                scheduled_at=data.get("scheduled_at"),
+                tz=data.get("timezone", ""),
+                created_by=getattr(request.auth, "created_by", None),
+                recurrence=data.get("recurrence", ""),
+                recurrence_until=data.get("recurrence_until"),
+                max_occurrences=data.get("max_occurrences"),
+            )
+        except ChannelError as exc:
+            self.release_idempotency(idem)
+            return channel_error_response(exc)
         request.auth.touch()
 
         from apps.scheduler.models import ScheduledJob

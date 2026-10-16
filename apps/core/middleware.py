@@ -340,13 +340,26 @@ class ChannelGateMiddleware:
     def __call__(self, request):
         from django.http import Http404, HttpResponse, JsonResponse
 
-        from apps.core.channels import CHANNEL_REGISTRY, enabled_channels
+        from apps.core.channels import (
+            CHANNEL_REGISTRY,
+            available_channels,
+            enabled_channels,
+        )
 
         path = request.path_info.lstrip("/")
         if path.startswith("api/"):
             resource = path.split("/", 2)[2] if path.count("/") >= 2 else ""
             enabled = enabled_channels()
+            available = available_channels()
             for ch in CHANNEL_REGISTRY.values():
+                # Send endpoints on a channel set up here answer for themselves (403 when it is
+                # switched off, 503 while settings load), so clients see the real reason.
+                if (
+                    ch.key in available
+                    and request.method == "POST"
+                    and resource.strip("/") in ("messages", "campaigns")
+                ):
+                    continue
                 if ch.key not in enabled and any(
                     resource == p.rstrip("/")
                     or resource.startswith(p.rstrip("/") + "/")
@@ -377,6 +390,12 @@ class ChannelGateMiddleware:
             if ch.webhook_path and rest == ch.webhook_path:
                 if request.method == "GET":
                     break
-                return HttpResponse(status=200)
+                if ch.key in available_channels():
+                    # Set up here but switched off: the view validates and stores the event,
+                    # and replay processes it once the channel is back on.
+                    break
+                return HttpResponse(
+                    status=200
+                )  # not set up on this server: dropped, as before
             raise Http404(f"{ch.label} is not enabled")
         return self.get_response(request)

@@ -15,6 +15,11 @@ class WebhookEventLog(models.Model):
     attempts = models.PositiveSmallIntegerField(default=0)
     error_message = models.TextField(blank=True, null=True)
 
+    # True while the channel is switched off: stored and acknowledged, processed on replay.
+    held = models.BooleanField(default=False, db_index=True)
+    # sha256 of the raw body. Meta redelivers identical bodies, so a repeat is dropped.
+    fingerprint = models.CharField(max_length=64, blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(blank=True, null=True)
 
@@ -22,6 +27,13 @@ class WebhookEventLog(models.Model):
         indexes = [
             models.Index(fields=["processed", "created_at"]),  # retry worker
             models.Index(fields=["source", "event_type"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "fingerprint"],
+                condition=~models.Q(fingerprint=""),
+                name="uniq_whatsapp_webhook_fingerprint",
+            )
         ]
 
     def mark_processed(self):

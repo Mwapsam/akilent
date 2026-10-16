@@ -18,7 +18,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.accounts import onboarding as ob
-from apps.accounts.forms import SignupForm
+from apps.accounts.forms import SignupForm, enabled_service_choices
 from apps.accounts.models import Account, Membership
 from apps.accounts.utils import get_current_account, set_current_account
 
@@ -206,6 +206,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
 
     from apps.billing.models import Plan
 
+    enabled_values = {value for value, _ in enabled_service_choices()}
     plans = [
         {
             "slug": p.slug,
@@ -217,6 +218,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
             "features": _plan_feature_bullets(p),
         }
         for p in Plan.objects.filter(is_active=True).order_by("price_monthly")
+        if p.service_type in enabled_values
     ]
 
     from apps.core.channels import is_enabled
@@ -237,7 +239,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         if matched:
             services, plan_slug = matched["serviceType"], matched["slug"]
             start_step = 2
-        elif req_services in dict(Account.Services.choices):
+        elif req_services in dict(enabled_service_choices()):
             services, start_step = req_services, 1
         else:
             start_step = 0
@@ -249,7 +251,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         "whatsappEnabled": whatsapp_enabled,
         "plans": plans,
         "serviceChoices": [
-            {"value": v, "label": l} for v, l in Account.Services.choices
+            {"value": v, "label": l} for v, l in enabled_service_choices()
         ],
         "preselect": {
             "services": services,
@@ -873,6 +875,23 @@ def _attention_items(account, stats, numbers, email_domains, subscription):
 
 def _email_stats(account, subscription):
     """Real-data dashboard aggregates for an account (no open/click tracking)."""
+    from apps.core.channels import is_enabled
+
+    if not is_enabled("email"):
+        # Same keys and types as below, zero-valued, without the queries.
+        return {
+            "sent_month": 0,
+            "failed_month": 0,
+            "success_rate_display": "—",
+            "failed_sub": "0 failed this month",
+            "domains_verified": 0,
+            "domains_sub": "of 0 total",
+            "emails_used": 0,
+            "email_quota": None,
+            "usage_pct": None,
+            "recent_sends": [],
+        }
+
     from django.db.models import Count, Q
     from django.utils import timezone
 

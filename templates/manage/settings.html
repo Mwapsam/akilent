@@ -53,6 +53,22 @@
     </div>
 
     <div class="card card-pad">
+      <h2 class="font-semibold mb-1">Channels</h2>
+      <p class="help mb-4">Switch a channel off to hide it on every page and stop new sends. Existing messages and data are kept, and switching it back on restores access.</p>
+      <div class="space-y-3">
+        {% for ch in channels %}
+        <label class="flex items-center gap-3 text-sm {% if not ch.available %}opacity-60{% endif %}">
+          <input type="checkbox" name="channel_{{ ch.key }}" class="rounded border-border-strong"
+                 {% if ch.enabled %}checked{% endif %} {% if not ch.available %}disabled{% endif %}>
+          {{ ch.label }}
+          <input type="hidden" name="channel_was_{{ ch.key }}" value="{% if ch.enabled %}1{% endif %}">
+          {% if not ch.available %}<span class="text-xs text-gray-500">not set up on this server</span>{% endif %}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card card-pad">
       <h2 class="font-semibold mb-4">New-signup defaults</h2>
       <div class="grid sm:grid-cols-2 gap-4">
         <div>

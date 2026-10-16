@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import logging
@@ -672,12 +673,33 @@ class WhatsAppWebhookView(View):
             )
             return HttpResponse(status=200)
 
-        event = WebhookEventLog.objects.create(
-            source=WebhookEventLog.Source.WHATSAPP,
-            event_type=_classify_event(payload),
-            payload=payload,
-        )
+        from django.db import IntegrityError
 
-        transaction.on_commit(lambda: process_whatsapp_event.delay(event.id))
+        from apps.core.channels import channel_state
+
+        # Stored before anything is processed, so a 200 never loses the event. While the
+        # channel is off (or its settings can't be read) it stays held until replay.
+        # A backlog of held events goes first: a new event joins the queue behind them.
+        held = channel_state("whatsapp") != "enabled" or (
+            WebhookEventLog.objects.filter(
+                source=WebhookEventLog.Source.WHATSAPP, held=True
+            ).exists()
+        )
+        fingerprint = hashlib.sha256(request.body).hexdigest()
+        try:
+            with transaction.atomic():
+                event = WebhookEventLog.objects.create(
+                    source=WebhookEventLog.Source.WHATSAPP,
+                    event_type=_classify_event(payload),
+                    payload=payload,
+                    held=held,
+                    fingerprint=fingerprint,
+                )
+        except IntegrityError:
+            logger.debug("WhatsApp webhook: duplicate delivery %s", fingerprint[:12])
+            return HttpResponse(status=200)
+
+        if not held:
+            transaction.on_commit(lambda: process_whatsapp_event.delay(event.id))
 
         return HttpResponse(status=200)

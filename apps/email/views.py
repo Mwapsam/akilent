@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import ajax_redirect, get_current_account, hx_toast, is_ajax
+from apps.core.channels import ChannelError, channel_error_status
 from apps.core.htmx import full_page_load
 from apps.email.models import (
     EmailApiKey,
@@ -844,6 +845,8 @@ def api_send(request):
         return JsonResponse({"error": str(exc)}, status=403)
     except PlanLimitExceeded as exc:
         return JsonResponse({"error": str(exc)}, status=403)
+    except ChannelError as exc:
+        return JsonResponse({"error": str(exc)}, status=channel_error_status(exc))
 
     api_key.touch()
     response = JsonResponse({"id": msg.id, "status": msg.status}, status=202)
@@ -1453,6 +1456,8 @@ def template_send_test(request, pk):
         return JsonResponse({"error": str(e)}, status=400)
     except PlanLimitExceeded as e:
         return JsonResponse({"error": str(e)}, status=403)
+    except ChannelError as e:
+        return JsonResponse({"error": str(e)}, status=channel_error_status(e))
 
     cache.set(cooldown_key, True, timeout=30)
     return JsonResponse({"status": "queued"}, status=202)
@@ -1822,6 +1827,8 @@ def campaign_create(request):
             errors["from_email"] = str(exc)
         except MissingPostalAddressError as exc:
             errors["form"] = str(exc)
+        except ChannelError as exc:
+            errors["form"] = str(exc)
         except SchedulingError as exc:
             errors["scheduled_at"] = str(exc)
         except (
@@ -1923,6 +1930,8 @@ def campaign_send_test(request):
         return _ajax_error(str(e))
     except PlanLimitExceeded as e:
         return _ajax_error(str(e), status=403)
+    except ChannelError as e:
+        return _ajax_error(str(e), status=channel_error_status(e))
 
     cache.set(cooldown_key, True, timeout=30)
     return JsonResponse({"status": "queued"}, status=202)

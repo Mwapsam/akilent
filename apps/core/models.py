@@ -1,6 +1,12 @@
+import logging
+
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 from apps.accounts.fields import EncryptedTextField
+
+logger = logging.getLogger(__name__)
 
 
 class Configurations(models.Model):
@@ -51,6 +57,10 @@ class SiteSettings(models.Model):
     )
     default_trial_days = models.PositiveIntegerField(default=14)
 
+    # Channels the platform admin has switched off (keys from CHANNEL_REGISTRY). A channel
+    # is enabled when the server supports it (env flag) and it is not listed here.
+    disabled_channels = models.JSONField(default=list, blank=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -61,13 +71,29 @@ class SiteSettings(models.Model):
         return self.app_name
 
     def save(self, *args, **kwargs):
+        from apps.core.channels import CHANNEL_REGISTRY
+
         self.pk = 1  # enforce singleton
+        # Drop keys no longer in the registry (a renamed or removed channel) so one stale
+        # key can't block every settings save. New keys are validated in set_channel_enabled.
+        known = set(CHANNEL_REGISTRY)
+        stale = set(self.disabled_channels or []) - known
+        if stale:
+            logger.warning("Dropping unknown disabled channel(s): %s", sorted(stale))
+        self.disabled_channels = sorted(set(self.disabled_channels or []) & known)
         super().save(*args, **kwargs)
 
     @classmethod
     def load(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+@receiver(post_save, sender=SiteSettings)
+def _reset_channel_cache(sender, **kwargs):
+    from apps.core.channels import invalidate_channel_cache
+
+    invalidate_channel_cache()
 
 
 class MailProviderSettings(models.Model):

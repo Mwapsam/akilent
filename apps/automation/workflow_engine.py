@@ -60,6 +60,7 @@ from apps.automation.models import (
     WorkflowRun,
     WorkflowStepRun,
 )
+from apps.core.channels import ChannelStateUnknownError
 
 logger = logging.getLogger(__name__)
 
@@ -637,6 +638,16 @@ def _run_send_email(run: WorkflowRun, step: dict) -> dict:
     from django.utils.dateparse import parse_datetime
 
     from apps.api.services import create_and_queue_message
+    from apps.core.channels import ChannelStateUnknownError, channel_state
+
+    state = channel_state("email")
+    if state == "disabled":
+        # Admin switched Email off: keep the workflow and its step config, record the step
+        # as skipped, and move on. Not a failure, so no retry and no run failure.
+        return {"skipped": "channel_disabled", "channel": "email"}
+    if state == "unknown":
+        # Settings can't be read right now: fail the step so the message is not lost silently.
+        raise ChannelStateUnknownError("email")
 
     contact = run.contact
     if not contact.email:
@@ -684,6 +695,13 @@ def _run_send_whatsapp(run: WorkflowRun, step: dict) -> dict:
     template, no matching WhatsAppContact) raises, which ``advance_run`` turns
     into a FAILED run rather than a silent no-op or a false "completed".
     """
+    from apps.core.channels import ChannelStateUnknownError, channel_state
+
+    state = channel_state("whatsapp")
+    if state == "disabled":
+        return {"skipped": "channel_disabled", "channel": "whatsapp"}
+    if state == "unknown":
+        raise ChannelStateUnknownError("whatsapp")
     from django.utils.dateparse import parse_datetime
 
     from apps.automation.workflows import send_whatsapp_message
@@ -2026,6 +2044,14 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 return _complete(run)
             else:
                 raise ValueError(f"unsupported workflow step type {stype!r}")
+        except ChannelStateUnknownError:
+            # Settings can't be read right now. The step wasn't recorded, so the run waits and
+            # runs this step again instead of failing (and alerting) over a transient read error.
+            run.status = WorkflowRun.Status.WAITING
+            run.next_due_at = timezone.now() + timedelta(minutes=5)
+            run.save(update_fields=["status", "next_due_at"])
+            logger.warning("workflow run %s: channel state unknown, retrying", run.pk)
+            return run
         except Exception as exc:
             logger.exception("workflow run %s step %s failed", run.pk, step.get("id"))
             _record(run, step, {"error": str(exc)}, status="error")
@@ -2042,6 +2068,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             run,
             step,
             result,
+            status="skipped" if result.get("skipped") else "ok",
             ig_outbound_message_id=result.get("ig_outbound_message_id"),
         )
         # Interactive and ask_question steps park the run (WAITING + deadline).

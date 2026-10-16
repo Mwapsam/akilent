@@ -69,6 +69,17 @@ def send_outbound(outbound: OutboundMessage) -> bool:
     if outbound.status == OutboundMessage.Status.SENT:
         return True  # already sent — idempotent
 
+    from apps.core.channels import channel_state
+
+    if channel_state("instagram") != "enabled":
+        # Instagram is switched off (or its settings can't be read): don't send. Put the message
+        # back to QUEUED, since the drain marked it SENDING; left there it would go stale and be
+        # marked UNCONFIRMED instead of being sent when Instagram comes back on.
+        OutboundMessage.objects.filter(pk=outbound.pk).update(
+            status=OutboundMessage.Status.QUEUED
+        )
+        return False
+
     instagram_account = outbound.instagram_account
     if not instagram_account.access_token:
         logger.error(

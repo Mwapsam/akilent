@@ -46,7 +46,9 @@
   {% include "insights/_goals.html" %}
 </div>
 
+{% if "email" in enabled_channels %}
 <div class="mt-10">
   {% include "insights/_email.html" %}
 </div>
+{% endif %}
 {% endblock %}

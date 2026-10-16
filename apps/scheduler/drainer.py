@@ -23,6 +23,13 @@ from apps.scheduler.models import ScheduledJob
 
 logger = logging.getLogger(__name__)
 
+# Scheduled job kinds that send through a channel an admin can switch off.
+_HELD_KIND_CHANNEL: dict[str, str] = {
+    ScheduledJob.Kind.EMAIL_SINGLE.value: "email",
+    ScheduledJob.Kind.EMAIL_CAMPAIGN.value: "email",
+    ScheduledJob.Kind.WHATSAPP.value: "whatsapp",
+}
+
 BATCH = 100
 
 
@@ -61,11 +68,19 @@ def _claim_due(now) -> list[int]:
         if connection.features.has_select_for_update_skip_locked
         else {}
     )
+    from apps.core.channels import channel_state
+
+    # Jobs whose channel is switched off stay SCHEDULED and are skipped here, so they can't
+    # use up the batch and starve other jobs. They are claimed again once the channel is on.
+    blocked = [
+        k for k, c in _HELD_KIND_CHANNEL.items() if channel_state(c) != "enabled"
+    ]
     with transaction.atomic():
         rows = (
             ScheduledJob.objects.select_for_update(**lock_kwargs)  # type: ignore[arg-type]
             .filter(status=ScheduledJob.Status.SCHEDULED, fire_at__lte=now)
             .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
+            .exclude(kind__in=blocked)
             .order_by("fire_at", "id")[:BATCH]
         )
         for job in rows:
@@ -145,6 +160,23 @@ def _fire_one(job_id: int) -> str:
     # Too-stale guard: never blast a long-missed schedule.
     lateness = (timezone.now() - job.fire_at).total_seconds()
     if lateness > job.stale_grace_secs:
+        # A recurring series skips this late occurrence and carries on. A one-off is failed.
+        if job.recurrence:
+            # Skip this late occurrence: it doesn't count toward max_occurrences (arming the next
+            # one adds one back), and the series moves on to the next occurrence after now.
+            job.fire_at = timezone.now()
+            job.occurrence_count = max(job.occurrence_count - 1, 0)
+            if job.arm_next_occurrence():
+                logger.warning(
+                    "scheduler.drain: job %s skipped a late occurrence (%.0fs late)",
+                    job.public_id,
+                    lateness,
+                )
+                return "stale_skipped"
+            # The series has no occurrences left: it is done, not failed.
+            job.status = ScheduledJob.Status.COMPLETED
+            job.save(update_fields=["status"])
+            return "completed"
         job.mark_failed("missed schedule window", terminal=True)
         logger.warning(
             "scheduler.drain: job %s stale_skipped (%.0fs late)",
@@ -152,6 +184,25 @@ def _fire_one(job_id: int) -> str:
             lateness,
         )
         return "stale_skipped"
+
+    # Channel switched off since this was scheduled: keep the job and try again on a later
+    # tick. Nothing is sent, and the recurring series or the campaign is kept, not failed.
+    held_channel = _HELD_KIND_CHANNEL.get(job.kind)
+    if held_channel:
+        from apps.core.channels import channel_state
+
+        state = channel_state(held_channel)
+        if state != "enabled":
+            # fire_at is left alone: the stale guard and recurrence still apply when it's back on.
+            logger.debug(
+                "scheduler.drain: job %s waiting, %s is %s",
+                job.public_id,
+                held_channel,
+                state,
+            )
+            job.status = ScheduledJob.Status.SCHEDULED
+            job.save(update_fields=["status"])
+            return "held"
 
     try:
         running = False

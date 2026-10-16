@@ -10,6 +10,8 @@ from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import AuthResult
 from django.core.management.base import BaseCommand
 
+from apps.core.channels import ChannelStateUnknownError
+
 logger = logging.getLogger(__name__)
 
 
@@ -84,6 +86,10 @@ class RelayHandler:
                 )
             logger.info(f"SMTP: queued {len(to_emails)} message(s) from {username}")
             return "250 Message accepted"
+        except ChannelStateUnknownError as exc:
+            # Settings can't be read right now: a temporary failure, so the sender retries.
+            logger.warning(f"SMTP: deferred, channel state unknown: {exc}")
+            return "451 4.3.0 Temporary queueing failure, try again later"
         except Exception as exc:
             logger.error(f"SMTP: failed to queue message: {exc}")
             return f"550 Failed to queue message: {str(exc)[:100]}"

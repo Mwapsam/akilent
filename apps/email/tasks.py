@@ -195,8 +195,18 @@ def _send_email_message(
 
     ``task`` is the bound Celery task instance (for retry/request.retries).
     """
+    from apps.core.channels import ChannelStateUnknownError, channel_state
     from apps.email.services.reputation import check_can_send
     from apps.email.services.suppression import is_suppressed
+
+    # Last check before the provider call: nothing is sent while Email is off or its settings
+    # can't be read. The message stays queued and is retried, so a campaign resumes when Email
+    # is back on instead of every recipient failing.
+    state = channel_state("email")
+    if state != "enabled":
+        raise task.retry(
+            countdown=600, max_retries=10_000, exc=ChannelStateUnknownError("email")
+        )
 
     att_objs: tuple = ()
     if attachments:
@@ -292,7 +302,14 @@ def _send_email_message(
     except Exception as exc:
         msg.mark_failed(str(exc))
         logger.exception("_send_email_message: failed for EmailMessage %s", msg.pk)
-        is_last = task.request.retries >= _MAX_RETRIES
+        # Channel waits also count as Celery retries, so transient failures keep their own
+        # counter, starting from the current retry count.
+        from django.core.cache import cache
+
+        cache_key = f"email-transient-attempts:{msg.pk}"
+        cache.add(cache_key, 0, timeout=86400)
+        attempts = cache.incr(cache_key)
+        is_last = attempts >= _MAX_RETRIES
         if is_last:
             # Quota was reserved at accept time (LimitChecker.check_email); a
             # message that never gets delivered shouldn't permanently burn it.
@@ -316,8 +333,13 @@ def _send_email_message(
                 )
             except Exception:
                 logger.exception("retry-exhaustion Slack alert failed for %s", msg.pk)
-        delay = _exponential_backoff_delay(task.request.retries)
-        raise task.retry(exc=exc, countdown=delay) from exc
+        delay = _exponential_backoff_delay(attempts - 1)
+        remaining = max(_MAX_RETRIES - attempts, 0)
+        raise task.retry(
+            exc=exc,
+            countdown=delay,
+            max_retries=task.request.retries + remaining + 1,
+        ) from exc
 
     # The provider accepted the message. That is the irreversible boundary:
     # nothing from here on may raise into the retry path above, or the

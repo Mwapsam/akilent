@@ -16,7 +16,12 @@ from apps.accounts.utils import get_current_account
 from apps.automation import api as automation_api
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
-from apps.automation.workflow_templates import STARTER_TEMPLATES, list_templates
+from apps.automation.workflow_templates import (
+    STARTER_TEMPLATES,
+    STEP_CHANNEL,
+    list_templates,
+)
+from apps.core.channels import enabled_channels
 from apps.core.htmx import full_page_load
 from apps.core.module_gate import module_required
 
@@ -520,7 +525,14 @@ def workflow_editor(request, slug: str):
             "account": account,
             "wf": wf,
             "definition_json": json.dumps(wf.definition or {}, indent=2),
-            "step_types": json.dumps(_STEP_TYPES),
+            # Existing steps keep working; only new ones are offered for enabled channels.
+            "step_types": json.dumps(
+                [
+                    t
+                    for t in _STEP_TYPES
+                    if STEP_CHANNEL.get(t) in (None, *enabled_channels())
+                ]
+            ),
             "trigger_types": json.dumps(_TRIGGER_TYPES),
             "validation_errors": json.dumps(
                 validate_definition(wf.definition, account=account)

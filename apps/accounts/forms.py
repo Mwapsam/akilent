@@ -8,6 +8,24 @@ from django.contrib.auth.models import User
 
 from apps.accounts.models import Account, Invitation
 
+# Channels each signup service needs. A service is offered only when all its channels are on.
+SERVICE_CHANNELS: dict[str, set[str]] = {
+    Account.Services.EMAIL.value: {"email"},
+    Account.Services.WHATSAPP.value: {"whatsapp"},
+    Account.Services.BOTH.value: {"email", "whatsapp"},
+}
+
+
+def enabled_service_choices() -> list[tuple[str, str]]:
+    from apps.core.channels import enabled_channels
+
+    enabled = enabled_channels()
+    return [
+        (value, label)
+        for value, label in Account.Services.choices
+        if SERVICE_CHANNELS.get(value, set()) <= enabled
+    ]
+
 
 class SignupForm(UserCreationForm):
     """Service-first signup: personal + business details that create the User
@@ -75,6 +93,13 @@ class SignupForm(UserCreationForm):
             "password1",
             "password2",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only services whose channels are enabled are valid, so a disabled one is rejected too.
+        field = self.fields["selected_services"]
+        assert isinstance(field, forms.ChoiceField)
+        field.choices = enabled_service_choices()
 
     def clean_email(self):
         email = self.cleaned_data["email"]

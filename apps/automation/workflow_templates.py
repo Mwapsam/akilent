@@ -9,6 +9,9 @@ from __future__ import annotations
 
 _FROM = "hello@example.com"  # placeholder — caller must replace before publishing
 
+# Step types that need a channel; hidden from new configuration while that channel is off.
+STEP_CHANNEL = {"send_email": "email", "send_whatsapp": "whatsapp"}
+
 STARTER_TEMPLATES: dict[str, dict] = {
     "welcome-series": {
         "name": "Welcome series",
@@ -152,6 +155,9 @@ STARTER_TEMPLATES: dict[str, dict] = {
 
 
 def list_templates() -> list[dict]:
+    from apps.core.channels import enabled_channels
+
+    enabled = enabled_channels()
     return [
         {
             "id": key,
@@ -161,6 +167,11 @@ def list_templates() -> list[dict]:
             "step_count": len(t["definition"]["steps"]),
         }
         for key, t in STARTER_TEMPLATES.items()
+        # Hide starters that send through a channel that is switched off.
+        if all(
+            STEP_CHANNEL.get(s.get("type")) in (None, *enabled)
+            for s in t["definition"]["steps"]
+        )
     ]
 
 

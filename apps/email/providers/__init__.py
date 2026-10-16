@@ -129,6 +129,23 @@ def get_send_provider(mode: str = "live") -> EmailSendProvider:
         )
         backend = getattr(settings, "EMAIL_SEND_PROVIDER_BACKEND", "smtp")
 
+    return _load_send_provider(backend)
+
+
+def get_system_email_provider() -> EmailSendProvider:
+    """Return the provider for platform system mail (password resets, verification, billing).
+
+    Reads only ``SYSTEM_EMAIL_PROVIDER_BACKEND``. It does not read the tenant send settings
+    in the database, the SMTP relay, or the channel switch, so system mail keeps working
+    whatever the tenant email channel is set to.
+    """
+    backend = getattr(settings, "SYSTEM_EMAIL_PROVIDER_BACKEND", "")
+    if not backend:
+        return get_send_provider()
+    return _load_send_provider(backend)
+
+
+def _load_send_provider(backend: str) -> EmailSendProvider:
     dotted = _SEND_ALIASES.get(backend, backend)
     if "." not in dotted:
         raise ValueError(

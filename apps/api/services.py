@@ -94,6 +94,12 @@ def create_and_queue_message(
     apps.billing.limits.PlanLimitExceeded on rejection — callers translate
     those into their own response shape.
     """
+    from apps.core.channels import assert_channel_enabled
+
+    # Every tenant email goes through here (API, SMTP relay, workflows, campaigns), so this
+    # is the gate for new sends. Raises ChannelDisabledError while Email is switched off.
+    assert_channel_enabled("email")
+
     is_test = mode == "test"
 
     from apps.scheduler.api import (
@@ -340,6 +346,10 @@ def create_and_queue_campaign(
 
     scheduled = should_schedule(scheduled_at)
     fire_at = resolve_fire_at(scheduled_at, tz) if scheduled else None
+
+    from apps.core.channels import assert_channel_enabled
+
+    assert_channel_enabled("email")
 
     lc = LimitChecker(account)
     lc.require_feature("bulk_email", "bulk email sending")

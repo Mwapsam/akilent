@@ -99,7 +99,7 @@ def send_system_email(
     """
     import email.utils
 
-    from apps.email.providers import get_send_provider
+    from apps.email.providers import get_system_email_provider
     from apps.email.services.suppression import is_suppressed_globally
     from apps.email.services.validation import validate_recipient
     from apps.email.types import OutboundEmail
@@ -140,8 +140,9 @@ def send_system_email(
         "X-Auto-Response-Suppress": "OOF, AutoReply",
     }
 
+    provider = get_system_email_provider()
     try:
-        get_send_provider().send(
+        provider.send(
             OutboundEmail(
                 from_email=from_email,
                 to_email=to_email,
@@ -154,7 +155,7 @@ def send_system_email(
         logger.debug(
             "Sent system email to %s via %s",
             to_email,
-            get_send_provider().__class__.__name__,
+            provider.__class__.__name__,
         )
     except Exception as exc:
         logger.error("Failed to send system email to %s: %s", to_email, exc)
