@@ -104,9 +104,8 @@ class TwoFASetupTest(TestCase):
             {"action": "enable", "token": str(token)},
             follow=False,
         )
-        self.assertRedirects(
-            resp, reverse("settings-security"), fetch_redirect_response=False
-        )
+        # Enabling now shows the one-time recovery codes instead of redirecting.
+        self.assertTemplateUsed(resp, "accounts/2fa_recovery_codes.html")
         self.assertTrue(
             TOTPDevice.objects.filter(user=self.user, confirmed=True).exists()
         )
@@ -128,10 +127,17 @@ class TwoFASetupTest(TestCase):
     def test_disable_removes_device(self):
         from django_otp.plugins.otp_totp.models import TOTPDevice
 
-        TOTPDevice.objects.create(user=self.user, name="default", confirmed=True)
+        device = TOTPDevice.objects.create(
+            user=self.user, name="default", confirmed=True
+        )
+        # Disabling requires the account password and a current code.
         resp = self.client.post(
             reverse("2fa-setup"),
-            {"action": "disable"},
+            {
+                "action": "disable",
+                "password": "testpass123",
+                "token": _current_token(device),
+            },
             follow=False,
         )
         self.assertRedirects(

@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.accounts.mfa.MfaEnforcementMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
     "apps.core.middleware.ChannelGateMiddleware",
@@ -167,6 +168,20 @@ AUTHENTICATION_BACKENDS = [
 # This prevents tokens left in unattended browsers from staying valid indefinitely.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 8 * 60 * 60  # 8 hours
+
+# Per-device TOTP lockout: delays grow 5s, 10s, 20s... (default factor is 1).
+# Enforced for TOTP codes and recovery codes alike; see _check_second_factor.
+OTP_TOTP_THROTTLE_FACTOR = 5
+
+# Role-based MFA enforcement (apps/accounts/mfa.py). Off by default; enable per
+# role only after recovery and every entry point are proven. Email codes never count.
+MFA_ENFORCEMENT_ENABLED = os.getenv("MFA_ENFORCEMENT_ENABLED", "0") == "1"
+MFA_ENFORCED_ROLES = ()  # e.g. ("owner", "admin") once rollout is approved
+MFA_ENFORCE_STAFF = False  # platform staff, separate switch
+
+# TOTP secret storage: plaintext (default) | migrating | encrypted. See
+# docs/design/totp-encryption-migration.md. Change only through the phased command.
+TOTP_SECRET_STORAGE = os.getenv("TOTP_SECRET_STORAGE", "plaintext")
 
 AUTH_PASSWORD_VALIDATORS = [
     {

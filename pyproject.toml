@@ -78,6 +78,7 @@ addopts = [
 ]
 markers = [
     "performance: timing-sensitive; excluded from the correctness gate with -m 'not performance'",
+    "serial: threaded concurrency tests; run without xdist so workers cannot contend",
 ]
 
 # ---------------------------------------------------------------------------

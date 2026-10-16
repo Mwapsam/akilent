@@ -1,0 +1,16 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Save your recovery codes</h2>
+  <p class="text-sm text-gray-600 mb-4">
+    Each code works once, in place of an authenticator code, if you lose your device.
+    They are shown only now. Store them somewhere safe, such as a password manager.
+  </p>
+  <ul class="grid grid-cols-2 gap-2 mb-6" aria-label="Recovery codes">
+    {% for code in codes %}
+      <li><code class="block font-mono text-sm tone-neutral-bg px-3 py-2 rounded select-all">{{ code }}</code></li>
+    {% endfor %}
+  </ul>
+  <a href="{% url 'settings-security' %}" class="btn btn-primary">I've saved my codes</a>
+</div>
+{% endblock %}

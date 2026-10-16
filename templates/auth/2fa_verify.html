@@ -8,7 +8,7 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">Two-factor authentication</h1>
-      <p class="text-sm text-gray-400 mt-1">Enter the 6-digit code from your authenticator app</p>
+      <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app, or a recovery code</p>
     </div>
 
     <div class="card card-pad sm:!p-8">
@@ -26,9 +26,8 @@
         <div>
           <label for="id_token" class="label">Authentication code</label>
           <input id="id_token" type="text" name="token"
-                 inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
-                 autocomplete="one-time-code" autofocus
-                 placeholder="000 000"
+                 maxlength="20" autocomplete="one-time-code" autofocus
+                 placeholder="000 000 or recovery code"
                  class="input text-center tracking-widest text-lg">
         </div>
         <button type="submit" class="btn btn-primary btn-block mt-2">Verify</button>

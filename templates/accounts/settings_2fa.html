@@ -8,9 +8,18 @@
       Two-factor authentication is <span class="font-medium text-green-600">enabled</span> on your account.
       You'll be asked for a code from your authenticator app each time you sign in.
     </p>
-    <form method="post">
+    <form method="post" class="space-y-3 mb-4">
       {% csrf_token %}
       <input type="hidden" name="action" value="disable">
+      <p class="text-xs text-gray-600">To turn this off, confirm your password and a current code.</p>
+      <div>
+        <label for="id_disable_password" class="label">Password</label>
+        <input id="id_disable_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
+      </div>
+      <div>
+        <label for="id_disable_token" class="label">Authenticator code or recovery code</label>
+        <input id="id_disable_token" type="text" name="token" autocomplete="one-time-code" required maxlength="20" class="input w-64">
+      </div>
       <button type="submit" class="btn btn-danger btn-sm"
               data-confirm="Disable two-factor authentication? Your account will only be protected by your password." data-confirm-danger data-confirm-label="Disable">
         Disable two-factor authentication

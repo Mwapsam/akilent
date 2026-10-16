@@ -73,10 +73,26 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: automator.settings_test
 
-      - name: Run tests
+      - name: Run tests (correctness gate, blocks deploy)
         # --reuse-db + --nomigrations = big speed win
         # -n auto = parallel (requires pytest-xdist; remove the flag if you
         # haven't installed it yet)
-        run: poetry run pytest --reuse-db --nomigrations -n auto
+        # Timing-sensitive tests are excluded here; they run in the
+        # performance step below so contention cannot block a deploy.
+        run: poetry run pytest --reuse-db --nomigrations -n auto -m "not performance and not serial"
+        env:
+          DJANGO_SETTINGS_MODULE: automator.settings_test
+
+      - name: Run serial correctness tests (blocks deploy)
+        # Threaded concurrency tests. Serial, so xdist workers cannot contend.
+        run: poetry run pytest --reuse-db --nomigrations -n 0 -m serial
+        env:
+          DJANGO_SETTINGS_MODULE: automator.settings_test
+
+      - name: Run performance tests (visible, non-blocking)
+        # Serial, so the timing budget measures the code, not parallel contention.
+        # continue-on-error keeps a budget miss visible without blocking deploy.
+        continue-on-error: true
+        run: poetry run pytest --reuse-db --nomigrations -n 0 -m performance
         env:
           DJANGO_SETTINGS_MODULE: automator.settings_test

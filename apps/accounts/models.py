@@ -6,6 +6,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.accounts.fields import EncryptedTextField
+
 
 class Account(models.Model):
     class Services(models.TextChoices):
@@ -395,3 +397,33 @@ class PilotEnrollment(models.Model):
 
     def __str__(self):
         return f"Pilot wave {self.wave}: {self.account}"
+
+
+class RecoveryCode(models.Model):
+    """A single-use TOTP recovery code. Stores an HMAC digest, never the code."""
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="recovery_codes"
+    )
+    code_hash = models.CharField(max_length=64)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "code_hash"], name="uniq_recovery_code_per_user"
+            )
+        ]
+
+
+class TOTPSecretCiphertext(models.Model):
+    """Encrypted copy of a TOTP device's secret. Read only through apps/accounts/totp_storage.py."""
+
+    device = models.OneToOneField(
+        "otp_totp.TOTPDevice",
+        on_delete=models.CASCADE,
+        related_name="secret_ciphertext",
+    )
+    key_enc = EncryptedTextField()
+    created_at = models.DateTimeField(auto_now_add=True)

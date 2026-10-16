@@ -56,6 +56,23 @@ _2FA_SESSION_BACKEND_KEY = "_2fa_backend"
 _2FA_SESSION_NEXT_KEY = "_2fa_next"
 
 
+def begin_second_factor(request, user, backend, next_url=""):
+    """Record a pending login so the code prompt can complete it.
+
+    The one place the challenge state is written. Off-site ``next`` URLs are
+    dropped here, so every caller gets the same validation.
+    """
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    if next_url and not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        next_url = ""
+    request.session[_2FA_SESSION_KEY] = user.pk
+    request.session[_2FA_SESSION_BACKEND_KEY] = backend
+    request.session[_2FA_SESSION_NEXT_KEY] = next_url
+
+
 class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
     def dispatch(self, request, *args, **kwargs):
         if request.method == "POST":
@@ -84,23 +101,15 @@ class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
         return super().form_invalid(form)
 
     def form_valid(self, form):
-        from django.utils.http import url_has_allowed_host_and_scheme
         from django_otp.plugins.otp_totp.models import TOTPDevice
 
         user = form.get_user()
         if TOTPDevice.objects.filter(user=user, confirmed=True).exists():
-            # Stash the authenticated user in the session; don't call login() yet.
-            self.request.session[_2FA_SESSION_KEY] = user.pk
-            self.request.session[_2FA_SESSION_BACKEND_KEY] = user.backend
+            # login() happens only after the code check.
             raw_next = (
                 self.request.POST.get("next") or self.request.GET.get("next") or ""
             )
-            # Reject off-site redirects before they reach the session.
-            if raw_next and not url_has_allowed_host_and_scheme(
-                raw_next, allowed_hosts={self.request.get_host()}
-            ):
-                raw_next = ""
-            self.request.session[_2FA_SESSION_NEXT_KEY] = raw_next
+            begin_second_factor(self.request, user, user.backend, raw_next)
             return redirect(reverse("2fa-verify"))
         return super().form_valid(form)
 
@@ -448,19 +457,22 @@ def verify_email(request, uidb64, token):
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
-    already_verified = (
-        user is not None
-        and not Account.objects.filter(
-            memberships__user=user,
-            memberships__role=Membership.Role.OWNER,
-            email_verified=False,
-        ).exists()
-    )
+    # The token is always checked. An already-verified account used to skip the
+    # check and log in, which let anyone who knew the pk sign in without a token.
+    token_ok = user is not None and email_verification_token.check_token(user, token)
 
-    if user is not None and (
-        already_verified or email_verification_token.check_token(user, token)
-    ):
+    if user is not None and token_ok:
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
         _mark_email_verified(user)
+        if (
+            not request.user.is_authenticated
+            and user.is_active
+            and TOTPDevice.objects.filter(user=user, confirmed=True).exists()
+        ):
+            # Enrolled users get the same second-factor step as password login.
+            begin_second_factor(request, user, "apps.accounts.backends.EmailBackend")
+            return redirect(reverse("2fa-verify"))
         if not request.user.is_authenticated and user.is_active:
             login(request, user, backend="apps.accounts.backends.EmailBackend")
             membership = (
@@ -968,6 +980,33 @@ def _chatbot_summary(account) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _check_second_factor(user, device, raw):
+    """Return the locked device if raw is a valid TOTP code or unused recovery code.
+
+    The device row is locked for the whole check, so concurrent guesses are
+    serialised and the django_otp lockout is enforced for both paths. A failed
+    recovery attempt counts against the same lockout as a failed TOTP attempt.
+    """
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.accounts import recovery, totp_storage
+
+    with transaction.atomic():
+        locked = TOTPDevice.objects.select_for_update().get(pk=device.pk)
+        allowed, _ = locked.verify_is_allowed()
+        if not allowed:
+            return None
+        if recovery.looks_like_code(raw):
+            if recovery.redeem(user, raw):
+                locked.throttle_reset(commit=True)
+                return locked
+            locked.throttle_increment(commit=True)
+            return None
+        # verify_token() handles replay (last_t) and increments the lockout on failure.
+        # Secret access goes through the storage service, which re-seals the key column.
+        return totp_storage.verify_and_seal(locked, raw)
+
+
 def _2fa_verify(request):
     """Step 2 of login when the user has TOTP enabled.
 
@@ -977,6 +1016,7 @@ def _2fa_verify(request):
     """
     from django.contrib.auth import login as auth_login
     from django.contrib.auth.models import User
+    from django_otp import login as otp_login
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
     from apps.core.audit import platform_record
@@ -994,7 +1034,8 @@ def _2fa_verify(request):
     if request.method == "POST":
         token = request.POST.get("token", "").replace(" ", "")
         device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
-        if device and device.verify_token(token):
+        verified = _check_second_factor(user, device, token) if device else None
+        if verified:
             backend = request.session.pop(
                 _2FA_SESSION_BACKEND_KEY, "apps.accounts.backends.EmailBackend"
             )
@@ -1005,6 +1046,8 @@ def _2fa_verify(request):
             request.session.pop(_2FA_SESSION_KEY, None)
             user.backend = backend
             auth_login(request, user)
+            # Mark the session as OTP-verified only after login() has rotated it.
+            otp_login(request, verified)
             platform_record(
                 action="auth.2fa_success",
                 actor=user,
@@ -1041,7 +1084,30 @@ def _2fa_setup(request):
         action = request.POST.get("action")
 
         if action == "disable" and existing:
+            # Re-authenticate: a password and a current factor, so a stolen
+            # session alone cannot switch 2FA off.
+            password = request.POST.get("password", "")
+            token = request.POST.get("token", "").replace(" ", "")
+            if not (
+                user.check_password(password)
+                and _check_second_factor(user, existing, token)
+            ):
+                platform_record(
+                    action="auth.2fa_disable_failed",
+                    account=account,
+                    actor=user,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    success=False,
+                )
+                messages.error(
+                    request,
+                    "Enter your password and a current code to turn off two-factor authentication.",
+                )
+                return redirect("settings-security")
+            from apps.accounts.models import RecoveryCode
+
             TOTPDevice.objects.filter(user=user).delete()
+            RecoveryCode.objects.filter(user=user).delete()
             platform_record(
                 action="auth.2fa_disabled",
                 account=account,
@@ -1052,10 +1118,15 @@ def _2fa_setup(request):
             return redirect("settings-security")
 
         if action == "enable":
+            from apps.accounts import recovery
+
             token = request.POST.get("token", "").replace(" ", "")
             # Retrieve the unconfirmed device created during GET.
-            device = TOTPDevice.objects.filter(user=user, confirmed=False).first()
-            if device and device.verify_token(token):
+            from apps.accounts import totp_storage
+
+            pending = TOTPDevice.objects.filter(user=user, confirmed=False).first()
+            device = totp_storage.verify_and_seal(pending, token) if pending else None
+            if device:
                 device.confirmed = True
                 device.save(update_fields=["confirmed"])
                 platform_record(
@@ -1064,8 +1135,13 @@ def _2fa_setup(request):
                     actor=user,
                     ip_address=request.META.get("REMOTE_ADDR"),
                 )
-                messages.success(request, "Two-factor authentication enabled.")
-                return redirect("settings-security")
+                # Shown once on this page and never stored in plaintext or logged.
+                codes = recovery.generate_codes(user)
+                return render(
+                    request,
+                    "accounts/2fa_recovery_codes.html",
+                    {"codes": codes, "account": account},
+                )
             messages.error(
                 request,
                 "Code didn't match. Please scan the QR code again and try a fresh code.",
@@ -1078,11 +1154,15 @@ def _2fa_setup(request):
         )
 
     # Create (or reuse) an unconfirmed device and show the QR code.
-    device, _ = TOTPDevice.objects.get_or_create(
-        user=user,
-        confirmed=False,
-        defaults={"name": "default"},
-    )
+    from apps.accounts import totp_storage
+
+    pending = TOTPDevice.objects.filter(user=user, confirmed=False).first()
+    if pending is None:
+        pending = totp_storage.create_device(user, name="default", confirmed=False)
+    device = totp_storage.load(pending)
+    if device is None:
+        messages.error(request, "Two-factor set-up is unavailable. Contact support.")
+        return redirect("settings-security")
     uri = device.config_url  # otpauth://totp/...
 
     # Render QR as an inline SVG (no file I/O, no Pillow required).
