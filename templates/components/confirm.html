@@ -13,7 +13,8 @@ AJAX forms with data-confirm trigger this; it resolves true/false.{% endcomment 
     <p class="text-sm text-gray-500 mt-2" x-text="$store.confirm.message"></p>
     <div class="mt-6 flex justify-end gap-3">
       <button type="button" class="btn btn-secondary btn-sm"
-              @click="$store.confirm.respond(false)">Cancel</button>
+              x-text="$store.confirm.cancelLabel || 'Cancel'"
+              @click="$store.confirm.respond(false)"></button>
       <button type="button" class="btn btn-sm"
               :class="$store.confirm.danger ? 'btn-danger' : 'btn-primary'"
               x-text="$store.confirm.confirmLabel || 'Confirm'"
