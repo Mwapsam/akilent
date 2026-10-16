@@ -1,0 +1,75 @@
+{# Per-variant/channel publication result card #}
+{% load publishing_filters %}
+
+<div class="card card-pad space-y-2 border-l-4
+  {% if variant.status == 'published' %}border-teal-600
+  {% elif variant.status == 'failed' %}border-red-600
+  {% elif variant.status == 'reconciling' %}border-yellow-600
+  {% elif variant.status == 'scheduled' %}border-gray-400
+  {% elif variant.status == 'publishing' %}border-amber-600
+  {% else %}border-gray-300{% endif %}">
+
+  {# Platform name + Status #}
+  <div class="flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2">
+      <p class="font-medium text-sm">{{ variant.platform|platform_display_name }}</p>
+      {# Status badge #}
+      {{ variant|variant_status_badge|safe }}
+    </div>
+    {% if variant.last_attempt_at %}
+    <p class="text-xs text-gray-400">{{ variant.last_attempt_at|timesince }} ago</p>
+    {% endif %}
+  </div>
+
+  {# Publication URL (if successful) #}
+  {% if variant.status == 'published' and variant.publication_url|slice:":8" == "https://" or variant.status == 'published' and variant.publication_url|slice:":7" == "http://" %}
+  <div>
+    <p class="text-xs text-gray-500 mb-0.5">Published URL</p>
+    <a href="{{ variant.publication_url }}" target="_blank" class="text-sm text-accent underline truncate">
+      {{ variant.publication_url|truncatewords:10 }}
+    </a>
+  </div>
+  {% endif %}
+
+  {# Publication ID (metadata) #}
+  {% if variant.publication_id and variant.status == 'published' %}
+  <div>
+    <p class="text-xs text-gray-400">ID: {{ variant.publication_id }}</p>
+  </div>
+  {% endif %}
+
+  {# Error message (if failed or reconciling) #}
+  {% if variant.last_error and variant.status in 'failed,reconciling' %}
+  <div class="tone-coral-bg tone-coral-border rounded p-2 space-y-1">
+    <p class="text-xs font-medium text-red-700">
+      {% if variant.status == 'reconciling' %}❓ Ambiguous outcome{% else %}Error{% endif %}
+    </p>
+    <p class="text-xs text-red-700">{{ variant|variant_error_message }}</p>
+  </div>
+  {% endif %}
+
+  {# Retry controls #}
+  {% if variant|is_variant_retryable %}
+  <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}" class="mt-2">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-ghost text-xs text-red-700 hover:tone-coral-bg">
+      Retry this channel
+    </button>
+  </form>
+  {% endif %}
+
+  {# Reconciliation controls (future) #}
+  {% if variant.status == 'reconciling' %}
+  <p class="text-xs text-gray-500 italic">Reconciliation in progress. Automatic verification coming soon.</p>
+  {% endif %}
+
+  {# Metadata: attempt count, error type #}
+  {% if variant.attempt_count > 0 %}
+  <div class="text-xs text-gray-400 mt-2 pt-2 border-t border-border">
+    <p>{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}</p>
+    {% if variant.last_error_type %}
+    <p>Error type: {{ variant.get_last_error_type_display }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

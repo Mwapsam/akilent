@@ -12,6 +12,7 @@ import threading
 import time
 from unittest.mock import patch
 
+import pytest
 from django.contrib.auth.models import User
 from django.test import TestCase
 
@@ -33,6 +34,7 @@ def _make_account(slug="load-test-acct"):
     return account, user
 
 
+@pytest.mark.performance
 class ContactImportLoadTest(TestCase):
     """import_rows() must handle 5,000 contacts without error within 60 s."""
 

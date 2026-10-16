@@ -26,6 +26,7 @@ from .models import (
     ContentPillar,
     ContentPlanItem,
     ContentPost,
+    ContentPostVariant,
     FacebookPageConnection,
 )
 from .providers.facebook import FacebookPublishError, list_pages
@@ -708,17 +709,25 @@ def plan_item_create_post(request, pk):
 
     item = get_object_or_404(ContentPlanItem, pk=pk, account=account)
 
-    with transaction.atomic():
-        post = ContentPost.objects.create(
-            account=account,
-            plan_item=item,
-            platforms=item.platforms,
-            media_type=item.media_type,
-            status=ContentPost.Status.DRAFT,
-            created_by=request.user,
-        )
-        item.plan_status = ContentPlanItem.PlanStatus.IN_PRODUCTION
-        item.save(update_fields=["plan_status", "updated_at"])
+    from .services import initialize_post_with_variants
+
+    try:
+        with transaction.atomic():
+            post = ContentPost.objects.create(
+                account=account,
+                plan_item=item,
+                platforms=item.platforms,
+                media_type=item.media_type,
+                status=ContentPost.Status.DRAFT,
+                created_by=request.user,
+                brief_objective=item.objective,
+            )
+            item.plan_status = ContentPlanItem.PlanStatus.IN_PRODUCTION
+            item.save(update_fields=["plan_status", "updated_at"])
+            initialize_post_with_variants(post, item.platforms)
+    except ValueError as exc:
+        messages.error(request, f"Cannot create a post from this plan item: {exc!s}")
+        return redirect("publishing:planning")
 
     return redirect(
         f"{request.build_absolute_uri('/publishing/new/')}?post_id={post.pk}"
@@ -881,6 +890,14 @@ def post_new(request):
             if override:
                 platform_captions[plat] = override
 
+        # Brief context fields
+        brief_objective = request.POST.get("brief_objective", "").strip()
+        brief_audience = request.POST.get("brief_audience", "").strip()
+        brief_problem = request.POST.get("brief_problem", "").strip()
+        brief_offer = request.POST.get("brief_offer", "").strip()
+        brief_message = request.POST.get("brief_message", "").strip()
+        brief_cta = request.POST.get("brief_cta", "").strip()
+
         scheduled_at = None
         if scheduled_at_raw:
             from django.utils.dateparse import parse_datetime
@@ -905,9 +922,24 @@ def post_new(request):
         post.scheduled_at = scheduled_at
         post.status = status
         post.platform_captions = platform_captions
+        post.brief_objective = brief_objective
+        post.brief_audience = brief_audience
+        post.brief_problem = brief_problem
+        post.brief_offer = brief_offer
+        post.brief_message = brief_message
+        post.brief_cta = brief_cta
         if not post.pk:
             post.created_by = request.user
-        post.save()
+
+        from .services import initialize_post_with_variants
+
+        try:
+            with transaction.atomic():
+                post.save()
+                initialize_post_with_variants(post, platforms)
+        except ValueError as exc:
+            messages.error(request, f"Failed to initialize post: {exc!s}")
+            return redirect("publishing:post-new")
 
         if action == "publish_now":
             from .tasks import publish_post_async
@@ -1003,6 +1035,104 @@ def post_retry(request, pk):
 
 @login_required
 @require_POST
+def post_retry_variant(request, pk, platform):
+    """Retry a specific failed variant/channel by enqueueing publish_variant_async task.
+
+    Safeguards:
+    - Only FAILED variants can be retried
+    - Approval is revalidated when the task runs
+    - Task enqueue failures are caught and displayed
+    - Prevents duplicate enqueues via atomic state transition
+    """
+    from .tasks import publish_variant_async
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+
+    try:
+        variant = post.variants.get(platform=platform)
+    except post.variants.model.DoesNotExist:
+        messages.error(request, "Variant not found.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if variant.status != ContentPostVariant.Status.FAILED:
+        messages.error(request, "Only failed variants can be retried.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    # Atomically transition variant to PUBLISHING to prevent duplicate enqueues
+    try:
+        with transaction.atomic():
+            # Reload to ensure no concurrent retry in progress
+            variant = ContentPostVariant.objects.select_for_update().get(pk=variant.pk)
+
+            # Double-check status (in case another request just retried)
+            if variant.status != ContentPostVariant.Status.FAILED:
+                messages.error(
+                    request,
+                    "This variant is already being processed or has been retried.",
+                )
+                return redirect("publishing:post-detail", pk=post.pk)
+
+            # Transition to PUBLISHING atomically (marks the retry as in-progress)
+            variant.status = ContentPostVariant.Status.PUBLISHING
+            variant.last_error = ""
+            variant.last_error_type = ""
+            variant.last_error_at = None
+            variant.last_attempt_at = timezone.now()
+            variant.save(
+                update_fields=[
+                    "status",
+                    "last_error",
+                    "last_error_type",
+                    "last_error_at",
+                    "last_attempt_at",
+                ]
+            )
+
+        # Enqueue the task after the atomic state transition succeeds
+        try:
+            publish_variant_async.delay(variant.pk)
+        except Exception as enqueue_exc:
+            # If enqueue fails, reset variant to FAILED so user can retry
+            logger.exception(
+                "Failed to enqueue publish_variant_async for variant=%s, resetting to FAILED",
+                variant.pk,
+            )
+            variant.status = ContentPostVariant.Status.FAILED
+            variant.last_error = f"Enqueue failed: {str(enqueue_exc)[:200]}"
+            variant.last_error_type = ContentPostVariant.ErrorType.UNKNOWN
+            variant.last_error_at = timezone.now()
+            variant.save(
+                update_fields=[
+                    "status",
+                    "last_error",
+                    "last_error_type",
+                    "last_error_at",
+                ]
+            )
+            messages.error(
+                request,
+                "Failed to enqueue retry (broker unreachable). Variant reset to FAILED. Please try again.",
+            )
+            return redirect("publishing:post-detail", pk=post.pk)
+
+    except Exception as exc:
+        logger.exception("post_retry_variant failed for variant=%s", variant.pk)
+        messages.error(
+            request,
+            f"Failed to retry: {str(exc)[:100]}. Please try again.",
+        )
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    messages.success(request, f"{platform.title()} publishing retry enqueued.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@require_POST
 def post_cancel(request, pk):
     account = get_current_account(request)
     if account is None:
@@ -1054,6 +1184,159 @@ def post_refresh_insights(request, pk):
 
     fetch_fb_post_insights.apply_async(args=[post.pk])
     messages.success(request, "Refreshing metrics — reload in a moment.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+# ---------------------------------------------------------------------------
+# Approval workflow
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_POST
+def post_submit_for_review(request, pk):
+    """Submit a draft post for review."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+
+    if post.approval_status != "draft":
+        messages.error(request, "Only draft posts can be submitted for review.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    post.approval_status = "submitted"
+    post.save(update_fields=["approval_status"])
+
+    from .models import ApprovalLog
+
+    ApprovalLog.objects.create(
+        post=post, action=ApprovalLog.Action.SUBMITTED, performed_by=request.user
+    )
+
+    messages.success(request, "Post submitted for review.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@require_POST
+def post_approve(request, pk):
+    """Approve a post for publishing."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+
+    if post.approval_status not in ("submitted", "changes_requested"):
+        messages.error(
+            request, "Only submitted or changes-requested posts can be approved."
+        )
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if post.created_by_id and post.created_by_id == request.user.pk:
+        messages.error(request, "You cannot approve your own post.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if post.assigned_reviewer and post.assigned_reviewer != request.user:
+        messages.error(request, "Only the assigned reviewer can approve this post.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    post.approval_status = "approved"
+    post.approved_by = request.user
+    post.approved_at = timezone.now()
+    post.last_content_hash = post.compute_content_hash()
+    post.save(
+        update_fields=[
+            "approval_status",
+            "approved_by",
+            "approved_at",
+            "last_content_hash",
+        ]
+    )
+
+    from .models import ApprovalLog
+
+    ApprovalLog.objects.create(
+        post=post, action=ApprovalLog.Action.APPROVED, performed_by=request.user
+    )
+
+    messages.success(request, "Post approved.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@require_POST
+def post_request_changes(request, pk):
+    """Request changes to a submitted post."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+
+    if post.approval_status != "submitted":
+        messages.error(request, "Can only request changes on submitted posts.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if post.assigned_reviewer and post.assigned_reviewer != request.user:
+        messages.error(request, "Only the assigned reviewer can request changes.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    feedback = request.POST.get("feedback", "").strip()
+    if not feedback:
+        messages.error(request, "Feedback is required when requesting changes.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    post.approval_status = "changes_requested"
+    post.approval_feedback = feedback
+    post.save(update_fields=["approval_status", "approval_feedback"])
+
+    from .models import ApprovalLog
+
+    ApprovalLog.objects.create(
+        post=post,
+        action=ApprovalLog.Action.CHANGES_REQUESTED,
+        performed_by=request.user,
+        feedback=feedback,
+    )
+
+    messages.success(request, "Changes requested.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@require_POST
+def post_resubmit_after_changes(request, pk):
+    """Resubmit a post after changes were requested."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+
+    if post.approval_status != "changes_requested":
+        messages.error(request, "Only posts with changes requested can be resubmitted.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if post.created_by != request.user:
+        messages.error(request, "Only the creator can resubmit changes.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    post.approval_status = "submitted"
+    post.approval_feedback = ""
+    post.save(update_fields=["approval_status", "approval_feedback"])
+
+    from .models import ApprovalLog
+
+    ApprovalLog.objects.create(
+        post=post,
+        action=ApprovalLog.Action.RESUBMITTED,
+        performed_by=request.user,
+    )
+
+    messages.success(request, "Post resubmitted for review.")
     return redirect("publishing:post-detail", pk=post.pk)
 
 
@@ -1128,3 +1411,206 @@ def caption_draft_result(request, draft_id):
             "hashtags": first.get("hashtags", []),
         }
     )
+
+
+# Reconciliation Operations (Step 4.7B)
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def reconciliation_queue(request):
+    """List all variants in RECONCILING state for operator action."""
+    from django.core.paginator import Paginator
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    # Only show variants for posts in this account
+    reconciling_qs = (
+        ContentPostVariant.objects.filter(
+            post__account=account,
+            status=ContentPostVariant.Status.RECONCILING,
+        )
+        .select_related("post")
+        .order_by("-last_error_at")
+    )
+
+    paginator = Paginator(reconciling_qs, 20)  # 20 per page
+    page = request.GET.get("page", 1)
+    variants_page = paginator.get_page(page)
+
+    return render(
+        request,
+        "publishing/reconciliation_queue.html",
+        {
+            "variants": variants_page,
+            "account": account,
+        },
+    )
+
+
+def _is_safe_public_url(url: str) -> bool:
+    from django.core.exceptions import ValidationError
+    from django.core.validators import URLValidator
+
+    if not url.lower().startswith(("http://", "https://")):
+        return False
+    try:
+        URLValidator(schemes=["http", "https"])(url)
+    except ValidationError:
+        return False
+    return True
+
+
+@login_required
+@require_POST
+def reconciliation_confirm_published(request, variant_id):
+    """Operator confirms variant was actually published in provider."""
+    from .services import reconcile_variant_confirmed_published
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    # Phase A2: Do NOT acquire lock here; service owns the transaction.
+    # View handles authorization and request parsing only.
+    try:
+        variant = ContentPostVariant.objects.get(pk=variant_id)
+    except ContentPostVariant.DoesNotExist:
+        messages.error(request, "Variant not found.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.post.account != account:
+        messages.error(request, "Access denied.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.status != ContentPostVariant.Status.RECONCILING:
+        messages.error(
+            request,
+            f"Only RECONCILING variants can be confirmed published. This variant is {variant.status}.",
+        )
+        return redirect("publishing:post-detail", pk=variant.post.pk)
+
+    publication_id = request.POST.get("publication_id", "").strip()
+    publication_url = request.POST.get("publication_url", "").strip()
+    evidence_notes = request.POST.get("evidence_notes", "").strip()
+
+    if not publication_id:
+        messages.error(request, "Publication ID is required.")
+        return redirect("publishing:reconciliation-queue")
+
+    if publication_url and not _is_safe_public_url(publication_url):
+        messages.error(
+            request, "The published URL must start with http:// or https://."
+        )
+        return redirect("publishing:reconciliation-queue")
+
+    try:
+        reconcile_variant_confirmed_published(
+            variant=variant,
+            publication_id=publication_id,
+            publication_url=publication_url,
+            evidence_notes=evidence_notes,
+            performed_by=request.user,
+        )
+        messages.success(
+            request,
+            f"{variant.platform.title()} variant confirmed published with ID {publication_id}.",
+        )
+    except Exception as exc:
+        logger.exception("Failed to confirm published for variant=%s", variant_id)
+        messages.error(request, f"Failed to confirm published: {str(exc)[:100]}")
+
+    return redirect("publishing:post-detail", pk=variant.post.pk)
+
+
+@login_required
+@require_POST
+def reconciliation_retry(request, variant_id):
+    """Operator initiates retry for variant after determining it was not published."""
+    from .services import reconcile_variant_retry
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    # Phase A2: Do NOT acquire lock here; service owns the transaction.
+    try:
+        variant = ContentPostVariant.objects.get(pk=variant_id)
+    except ContentPostVariant.DoesNotExist:
+        messages.error(request, "Variant not found.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.post.account != account:
+        messages.error(request, "Access denied.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.status != ContentPostVariant.Status.RECONCILING:
+        messages.error(
+            request,
+            f"Only RECONCILING variants can be retried. This variant is {variant.status}.",
+        )
+        return redirect("publishing:post-detail", pk=variant.post.pk)
+
+    try:
+        reconcile_variant_retry(variant=variant, performed_by=request.user)
+        messages.success(
+            request,
+            f"{variant.platform.title()} variant reset to FAILED and ready for retry.",
+        )
+    except Exception as exc:
+        logger.exception("Failed to retry variant=%s", variant_id)
+        messages.error(request, f"Failed to initiate retry: {str(exc)[:100]}")
+
+    return redirect("publishing:post-detail", pk=variant.post.pk)
+
+
+@login_required
+@require_POST
+def reconciliation_leave_unresolved(request, variant_id):
+    """Operator leaves variant RECONCILING with notes for next investigation step."""
+    from .services import reconcile_variant_leave_unresolved
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    # Phase A2: Do NOT acquire lock here; service owns the transaction.
+    try:
+        variant = ContentPostVariant.objects.get(pk=variant_id)
+    except ContentPostVariant.DoesNotExist:
+        messages.error(request, "Variant not found.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.post.account != account:
+        messages.error(request, "Access denied.")
+        return redirect("publishing:reconciliation-queue")
+
+    if variant.status != ContentPostVariant.Status.RECONCILING:
+        messages.error(
+            request,
+            f"Only RECONCILING variants can be left unresolved. This variant is {variant.status}.",
+        )
+        return redirect("publishing:post-detail", pk=variant.post.pk)
+
+    next_step = request.POST.get("next_step", "").strip()
+    if not next_step:
+        messages.error(request, "Please describe the next investigative step.")
+        return redirect("publishing:reconciliation-queue")
+
+    try:
+        reconcile_variant_leave_unresolved(
+            variant=variant,
+            next_step=next_step,
+            performed_by=request.user,
+        )
+        messages.success(
+            request,
+            f"{variant.platform.title()} variant left unresolved. Next step: {next_step}",
+        )
+    except Exception as exc:
+        logger.exception("Failed to leave unresolved for variant=%s", variant_id)
+        messages.error(request, f"Failed to update: {str(exc)[:100]}")
+
+    return redirect("publishing:reconciliation-queue")

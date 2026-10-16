@@ -1232,16 +1232,21 @@ def _run_lookup_product(run: WorkflowRun, step: dict) -> dict:
 
 
 def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
-    """Publish a ContentPost immediately.
+    """Publish a ContentPost immediately via the variant orchestrator.
 
     Step shape:
       {"type": "publish_post", "post_id": "<ContentPost pk>", "on_error": "notify_team"}
 
-    On success stores ig_media_id / fb_post_id in run.context.
-    On failure routes to on_error if provided, otherwise raises.
+    Routes through ``orchestrate_post_publication``, respecting approval checks, per-variant
+    outcomes, and asynchronous Instagram processing. Returns per-variant states and preserves
+    channel-specific errors.
+
+    On approval failure or post not found, routes to on_error if provided, otherwise raises.
+    On orchestration success, stores per-variant outcomes in run.context and returns them.
+    On orchestration error (unexpected exception), routes to on_error if provided.
     """
     from apps.publishing.models import ContentPost
-    from apps.publishing.services import publish_post
+    from apps.publishing.services import orchestrate_post_publication
 
     step_id = step.get("id") or ""
     post_id = step.get("post_id") or ""
@@ -1255,21 +1260,48 @@ def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
             return {"_routed_to": on_error, "reason": "not_found"}
         raise ValueError(msg) from None
 
+    # Check approval at execution time
+    if post.approval_required and not post.is_approval_valid():
+        msg = f"publish_post step {step_id!r}: approval is invalid or not present"
+        if on_error:
+            return {"_routed_to": on_error, "reason": "approval_invalid", "error": msg}
+        raise ValueError(msg)
+
     try:
-        publish_post(post)
+        parent_status, outcomes = orchestrate_post_publication(post)
     except Exception as exc:
-        logger.exception("publish_post step %s failed: %s", step_id, exc)
+        logger.exception(
+            "publish_post step %s failed orchestrating post=%s: %s",
+            step_id,
+            post_id,
+            exc,
+        )
         if on_error:
             return {"_routed_to": on_error, "reason": "error", "error": str(exc)}
         raise
 
+    # Store per-variant outcomes in context so the workflow can inspect them if needed.
+    # outcomes is a list of {"platform": str, "status": str, "publication_id": str, ...}
+    post.refresh_from_db(fields=["ig_media_id", "fb_post_id"])
     run.context = {
         **(run.context or {}),
+        "publish_outcomes": outcomes,
+        "publish_parent_status": parent_status,
         "ig_media_id": post.ig_media_id,
         "fb_post_id": post.fb_post_id,
     }
     run.save(update_fields=["context"])
-    return {"ig_media_id": post.ig_media_id, "fb_post_id": post.fb_post_id}
+
+    # Return aggregated outcome for the step result.
+    # If any variant is in PROCESSING (IG video), the publication is not yet complete.
+    # The workflow can later check run.context["publish_outcomes"] to see per-channel state.
+    return {
+        "parent_status": parent_status,
+        "outcomes": outcomes,
+        "outcome_count": len(outcomes),
+        "ig_media_id": post.ig_media_id,
+        "fb_post_id": post.fb_post_id,
+    }
 
 
 def _run_ask_question(run: WorkflowRun, step: dict) -> dict:

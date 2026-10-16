@@ -76,6 +76,9 @@ addopts = [
     "--nomigrations", 
     "-n", "auto",     
 ]
+markers = [
+    "performance: timing-sensitive; excluded from the correctness gate with -m 'not performance'",
+]
 
 # ---------------------------------------------------------------------------
 # Ruff – lint + format

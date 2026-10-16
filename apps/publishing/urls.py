@@ -32,6 +32,11 @@ urlpatterns = [
     path("posts/<int:pk>/", views.post_detail, name="post-detail"),
     path("posts/<int:pk>/delete/", views.post_delete, name="post-delete"),
     path("posts/<int:pk>/retry/", views.post_retry, name="post-retry"),
+    path(
+        "posts/<int:pk>/retry/<str:platform>/",
+        views.post_retry_variant,
+        name="post-retry-variant",
+    ),
     path("posts/<int:pk>/cancel/", views.post_cancel, name="post-cancel"),
     path("posts/<int:pk>/reopen/", views.post_reopen, name="post-reopen"),
     path(
@@ -39,12 +44,50 @@ urlpatterns = [
         views.post_refresh_insights,
         name="post-refresh-insights",
     ),
+    # Approval workflow
+    path(
+        "posts/<int:pk>/submit-for-review/",
+        views.post_submit_for_review,
+        name="post-submit-for-review",
+    ),
+    path(
+        "posts/<int:pk>/approve/",
+        views.post_approve,
+        name="post-approve",
+    ),
+    path(
+        "posts/<int:pk>/request-changes/",
+        views.post_request_changes,
+        name="post-request-changes",
+    ),
+    path(
+        "posts/<int:pk>/resubmit-after-changes/",
+        views.post_resubmit_after_changes,
+        name="post-resubmit-after-changes",
+    ),
     # AI caption generation
     path("caption/generate/", views.generate_caption, name="caption-generate"),
     path(
         "caption/result/<str:draft_id>/",
         views.caption_draft_result,
         name="caption-result",
+    ),
+    # Reconciliation (Step 4.7B)
+    path("reconciliation/", views.reconciliation_queue, name="reconciliation-queue"),
+    path(
+        "reconciliation/<int:variant_id>/confirm-published/",
+        views.reconciliation_confirm_published,
+        name="reconciliation-confirm",
+    ),
+    path(
+        "reconciliation/<int:variant_id>/retry/",
+        views.reconciliation_retry,
+        name="reconciliation-retry",
+    ),
+    path(
+        "reconciliation/<int:variant_id>/leave-unresolved/",
+        views.reconciliation_leave_unresolved,
+        name="reconciliation-unresolved",
     ),
     # Facebook OAuth
     path("fb/connect/", views.fb_oauth_connect, name="fb-connect"),

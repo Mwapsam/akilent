@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Post — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -55,6 +56,18 @@
         {{ post.get_status_display }}
       </span>
     </div>
+
+    {# Per-channel status (if variants exist) #}
+    {% if post.variants.exists %}
+    <div class="mt-4 pt-3 border-t border-border">
+      <p class="text-sm font-medium text-gray-600 mb-2">Per-Channel Status</p>
+      <div class="space-y-2">
+        {% for variant in post.variants.all %}
+          {% include "publishing/variant_result_card.html" %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     {# Linked plan item #}
     {% if post.plan_item %}

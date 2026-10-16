@@ -218,7 +218,49 @@ class ContentPost(models.Model):
     fb_impressions = models.PositiveIntegerField(null=True, blank=True)
     fb_insights_fetched_at = models.DateTimeField(null=True, blank=True)
 
+    # Brief context — inherited from plan item or entered in composer
+    brief_objective = models.TextField(blank=True, default="")
+    brief_audience = models.TextField(blank=True, default="")
+    brief_problem = models.TextField(blank=True, default="")
+    brief_offer = models.TextField(blank=True, default="")
+    brief_message = models.TextField(blank=True, default="")
+    brief_cta = models.TextField(blank=True, default="")
+
     error = models.TextField(blank=True, default="")
+
+    # Approval workflow
+    approval_required = models.BooleanField(
+        default=False
+    )  # Can solo creator publish without review?
+    assigned_reviewer = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="posts_to_review",
+    )
+    approval_status = models.CharField(
+        max_length=20,
+        choices=[
+            ("draft", "Draft"),
+            ("submitted", "Submitted for Review"),
+            ("changes_requested", "Changes Requested"),
+            ("approved", "Approved"),
+        ],
+        default="draft",
+    )
+    approved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_posts",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approval_feedback = models.TextField(blank=True, default="")
+    last_content_hash = models.CharField(
+        max_length=64, blank=True, default=""
+    )  # SHA256 of caption+platform_captions+media_urls when approved
 
     created_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -244,6 +286,80 @@ class ContentPost(models.Model):
         override = (self.platform_captions or {}).get(platform, "")
         return override if override else self.caption
 
+    def compute_content_hash(self) -> str:
+        return self.content_hash_for()
+
+    def content_hash_for(self, variants=None) -> str:
+        """SHA256 over every field the provider payload can draw from.
+
+        Includes post-level fallback fields (caption, platform_captions, hashtags,
+        media_urls) because publishing uses them when a variant leaves them empty.
+        Pass ``variants`` to hash an in-memory snapshot instead of re-querying.
+        """
+        import hashlib
+        import json
+
+        if variants is None:
+            variants = self.variants.all()
+        variant_contents = sorted(
+            (
+                {
+                    "platform": v.platform,
+                    "caption": v.caption or "",
+                    "media_urls": v.media_urls or [],
+                    "format_choice": v.format_choice or "",
+                }
+                for v in variants
+            ),
+            key=lambda d: d["platform"],
+        )
+        content = {
+            "caption": self.caption or "",
+            "platform_captions": self.platform_captions or {},
+            "hashtags": self.hashtags or [],
+            "media_urls": self.media_urls or [],
+            "variants": variant_contents,
+        }
+        content_json = json.dumps(content, sort_keys=True)
+        return hashlib.sha256(content_json.encode()).hexdigest()
+
+    def has_content_changed_since_approval(self) -> bool:
+        """Check if content has changed since last approval (post-level).
+
+        DEPRECATED: Phase C requires variant-level approval. Use ContentPostVariant
+        methods instead. This method is retained for backward compatibility.
+        """
+        if not self.approved_at or not self.last_content_hash:
+            return False
+        return self.compute_content_hash() != self.last_content_hash
+
+    def is_approval_valid(self, variants=None) -> bool:
+        """Check if the post's approval is currently valid.
+
+        Phase C: Approval is valid only when:
+        1. approval_required is True (if False, no approval needed)
+        2. approval_status is "approved"
+        3. approved_by is set (reviewer assignment required)
+        4. approved_at is set
+        5. last_content_hash matches current computed hash (content unchanged)
+
+        Returns True if approval_required is False (solo publishing allowed).
+        Returns False if approval_required is True but any of the above conditions fail.
+        """
+        if not self.approval_required:
+            return True
+
+        if self.approval_status != "approved":
+            return False
+
+        if not self.approved_by:
+            return False
+
+        if not self.approved_at or not self.last_content_hash:
+            return False
+
+        return self.content_hash_for(variants) == self.last_content_hash
+
 
 class ContentCaption(models.Model):
     """AI-generated caption drafts — linked to a post or standalone (pre-post generation)."""
@@ -263,6 +379,201 @@ class ContentCaption(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class ContentPostVariant(models.Model):
+    """Per-channel variant of a ContentPost with independent schedule, status, and publication outcome."""
+
+    class Platform(models.TextChoices):
+        FACEBOOK = "facebook", "Facebook"
+        INSTAGRAM = "instagram", "Instagram"
+        EMAIL = "email", "Email"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SCHEDULED = "scheduled", "Scheduled"
+        PUBLISHING = "publishing", "Publishing"
+        PROCESSING = "processing", "Processing"
+        PUBLISHED = "published", "Published"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+        RECONCILING = "reconciling", "Pending reconciliation"
+
+    class ErrorType(models.TextChoices):
+        VALIDATION = "validation", "Validation"
+        PERMISSION = "permission", "Permission/Auth"
+        RATE_LIMIT = "rate_limit", "Rate Limit"
+        PROVIDER_OUTAGE = "provider_outage", "Provider Outage"
+        TIMEOUT = "timeout", "Timeout"
+        UNKNOWN = "unknown", "Unknown"
+
+    post = models.ForeignKey(
+        ContentPost, on_delete=models.CASCADE, related_name="variants"
+    )
+    platform = models.CharField(max_length=20, choices=Platform.choices)
+
+    # Content (independent per platform)
+    caption = models.TextField(blank=True, default="")
+    media_urls = models.JSONField(default=list, blank=True)
+    format_choice = models.CharField(max_length=30, blank=True, default="")
+
+    # Scheduling and publication
+    scheduled_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    publication_id = models.CharField(max_length=255, blank=True, default="")
+    publication_url = models.URLField(max_length=2048, blank=True, default="")
+
+    # Status lifecycle
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True
+    )
+
+    # Error handling
+    last_error = models.TextField(blank=True, default="")
+    last_error_type = models.CharField(
+        max_length=50, choices=ErrorType.choices, blank=True, default=""
+    )
+    last_error_at = models.DateTimeField(null=True, blank=True)
+
+    # Retry tracking
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+
+    # Processing duration tracking (separate from polling attempts)
+    # Set when the provider first enters PROCESSING state (e.g., IG video upload starts)
+    # Used to detect genuinely overdue provider operations (not just polling health)
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+
+    # Provider-specific metadata (ig_container_id, etc.)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("post", "platform")
+        ordering = ["platform", "-created_at"]
+        indexes = [
+            models.Index(fields=["scheduled_at", "status"]),
+            models.Index(fields=["post", "platform"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.post.public_id} / {self.platform}"
+
+    def compute_content_hash(self) -> str:
+        """Compute SHA256 hash of this variant's actual publication content.
+
+        Phase C: Approval is based on the exact content that will be published,
+        including variant-specific caption, media URLs, and format choices.
+        """
+        import hashlib
+        import json
+
+        content = {
+            "platform": self.platform,
+            "caption": self.caption,
+            "media_urls": self.media_urls or [],
+            "format_choice": self.format_choice or "",
+        }
+        content_json = json.dumps(content, sort_keys=True)
+        return hashlib.sha256(content_json.encode()).hexdigest()
+
+    def variant_approval_valid(self) -> bool:
+        """Check if the variant's approval (on parent post) is still valid.
+
+        Approval is valid if:
+        1. Parent post approval_status is "approved"
+        2. Parent post has a reviewer
+        3. No content in ANY variant has changed since the post was approved
+
+        Returns False if content changed after approval (prevents silent unapproved publishing).
+        Note: Changing ANY variant invalidates the entire post's approval.
+        """
+        post = self.post
+        if post.approval_status != "approved":
+            return False
+        if not post.approved_by:
+            return False
+        if not post.approved_at or not post.last_content_hash:
+            return False
+
+        # Check if the post's aggregate content matches what was approved
+        # If any variant changed, the post's hash will differ from the approved hash
+        return post.compute_content_hash() == post.last_content_hash
+
+
+class ApprovalLog(models.Model):
+    """Audit trail for content approval actions."""
+
+    class Action(models.TextChoices):
+        SUBMITTED = "submitted", "Submitted for Review"
+        APPROVED = "approved", "Approved"
+        CHANGES_REQUESTED = "changes_requested", "Changes Requested"
+        RESUBMITTED = "resubmitted", "Resubmitted After Changes"
+
+    post = models.ForeignKey(
+        ContentPost, on_delete=models.CASCADE, related_name="approval_logs"
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approval_actions",
+    )
+    feedback = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.post.public_id} / {self.action} / {self.created_at}"
+
+
+class ReconciliationLog(models.Model):
+    """Audit trail for variant reconciliation actions."""
+
+    class Action(models.TextChoices):
+        CONFIRMED_PUBLISHED = "confirmed_published", "Confirmed Published"
+        RETRY = "retry", "Retry Publication"
+        LEFT_UNRESOLVED = "left_unresolved", "Left Unresolved"
+
+    variant = models.ForeignKey(
+        ContentPostVariant,
+        on_delete=models.CASCADE,
+        related_name="reconciliation_logs",
+    )
+    action = models.CharField(max_length=30, choices=Action.choices)
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reconciliation_actions",
+    )
+
+    # For confirmed_published action
+    provider_publication_id = models.CharField(max_length=255, blank=True, default="")
+    provider_publication_url = models.URLField(max_length=2048, blank=True, default="")
+    evidence_notes = models.TextField(blank=True, default="")
+
+    # For left_unresolved action
+    next_investigative_step = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["variant", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant.post.public_id}/{self.variant.platform} - {self.action}"
 
 
 class FacebookPageConnection(models.Model):

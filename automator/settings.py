@@ -783,9 +783,21 @@ CELERY_BEAT_SCHEDULE.update(
             "task": "apps.publishing.tasks.publish_due_posts",
             "schedule": 60.0,
         },
-        "poll-ig-containers": {
-            "task": "apps.publishing.tasks.poll_ig_containers",
+        "poll-ig-variant-containers": {
+            "task": "apps.publishing.tasks.poll_ig_variant_containers",
             "schedule": 30.0,
+        },
+        "reconcile-stale-publishing-variants": {
+            "task": "apps.publishing.tasks.reconcile_stale_publishing_variants",
+            "schedule": 3600.0,  # Every hour
+        },
+        "escalate-exhausted-processing-variants": {
+            "task": "apps.publishing.tasks.escalate_exhausted_processing_variants",
+            "schedule": 7200.0,  # Every 2 hours
+        },
+        "recover-abandoned-publish-claims": {
+            "task": "apps.publishing.tasks.recover_abandoned_publish_claims",
+            "schedule": 300.0,  # Every 5 minutes; claims expire after a 30-minute lease
         },
     }
 )

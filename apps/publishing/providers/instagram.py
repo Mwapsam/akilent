@@ -147,6 +147,10 @@ class InstagramPublishProvider:
         data = self._get(container_id, fields="status_code")
         return data.get("status_code", "UNKNOWN")
 
+    def get_permalink(self, media_id: str) -> str:
+        data = self._get(media_id, fields="permalink")
+        return data.get("permalink", "")
+
     def publish_container(self, ig_user_id: str, container_id: str) -> str:
         """Returns the published ig_media_id."""
         data = self._post(

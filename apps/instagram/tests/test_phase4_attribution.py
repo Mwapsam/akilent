@@ -31,7 +31,7 @@ from apps.instagram.models.comment import CommentThread
 from .helpers import make_account, make_instagram_account, make_instagram_contact
 
 NOW = timezone.now()
-PERIOD = Period(NOW - timedelta(days=7), NOW + timedelta(minutes=1))
+PERIOD = Period(NOW - timedelta(days=7), NOW + timedelta(days=1))
 
 
 def _period_dict(start=None, end=None):

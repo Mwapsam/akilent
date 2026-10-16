@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Reconciliation — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Reconciliation queue</h1>
+  <p class="text-sm text-gray-500 mt-0.5">Publications whose outcome is uncertain. Confirm what happened on the channel before acting.</p>
+</div>
+
+{% if variants %}
+  <div class="space-y-4">
+    {% for variant in variants %}
+      <div class="card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <a href="{% url 'publishing:post-detail' variant.post.pk %}" class="font-medium">{{ variant.post.public_id }}</a>
+            <span class="text-sm text-gray-500">· {{ variant.platform }}</span>
+          </div>
+          <span class="badge">Reconciling</span>
+        </div>
+        {% if variant.last_error %}
+          <p class="mt-2 text-sm">{{ variant.last_error }}</p>
+        {% endif %}
+
+        <div class="mt-3 grid gap-3 md:grid-cols-3">
+          <form method="post" action="{% url 'publishing:reconciliation-confirm' variant.pk %}" class="space-y-2">
+            {% csrf_token %}
+            <p class="text-sm font-medium">Confirm published</p>
+            <input name="publication_id" required placeholder="Publication ID" class="input w-full">
+            <input name="publication_url" placeholder="Public URL" class="input w-full">
+            <input name="evidence_notes" placeholder="Evidence" class="input w-full">
+            <button type="submit" class="btn btn-primary">Confirm published</button>
+          </form>
+
+          <form method="post" action="{% url 'publishing:reconciliation-retry' variant.pk %}" class="space-y-2">
+            {% csrf_token %}
+            <p class="text-sm font-medium">Retry</p>
+            <p class="text-xs text-gray-500">Only if the channel confirms nothing was published.</p>
+            <button type="submit" class="btn">Retry publication</button>
+          </form>
+
+          <form method="post" action="{% url 'publishing:reconciliation-unresolved' variant.pk %}" class="space-y-2">
+            {% csrf_token %}
+            <p class="text-sm font-medium">Leave unresolved</p>
+            <input name="next_step" required placeholder="Next investigative step" class="input w-full">
+            <button type="submit" class="btn">Leave unresolved</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if variants.has_other_pages %}
+    <nav class="mt-4 flex items-center gap-3 text-sm">
+      {% if variants.has_previous %}<a href="?page={{ variants.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ variants.number }} of {{ variants.paginator.num_pages }}</span>
+      {% if variants.has_next %}<a href="?page={{ variants.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="text-sm text-gray-500">Nothing is waiting for reconciliation.</p>
+{% endif %}
+{% endblock %}
