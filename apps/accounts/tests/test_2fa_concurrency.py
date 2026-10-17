@@ -111,6 +111,11 @@ class ConcurrentRegenerationTest(TransactionTestCase):
     def test_concurrent_regenerations_leave_exactly_one_valid_set(self):
         from apps.accounts.models import RecoveryCode
 
+        if connection.vendor != "postgresql":
+            # The guarantee comes from select_for_update(), which SQLite ignores. On SQLite
+            # concurrent writes fail with "table is locked" rather than leaving two sets.
+            self.skipTest("needs PostgreSQL row locks")
+
         user = User.objects.create_user(
             username="regen-race@example.com",
             email="regen-race@example.com",
