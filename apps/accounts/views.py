@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts import onboarding as ob
 from apps.accounts.forms import SignupForm, enabled_service_choices
@@ -1033,6 +1033,10 @@ def _finish_second_factor(request, user, device=None):
     # Mark the session as OTP-verified only after login() has rotated it.
     if device is not None:
         otp_login(request, device)
+        request.session[STRONG_VERIFIED_KEY] = {
+            "at": timezone.now().isoformat(),
+            "user": user.pk,
+        }
     platform_record(
         action="auth.2fa_success",
         actor=user,
@@ -1372,6 +1376,9 @@ def email_mfa_settings(request):
 
 PASSKEY_REAUTH_KEY = "passkey_reauth_at"
 PASSKEY_REAUTH_SECONDS = 300
+# Set when an app, passkey or security key passes. Email codes never set it.
+STRONG_VERIFIED_KEY = "strong_verified_at"
+STRONG_VERIFIED_SECONDS = 15 * 60
 
 
 def _pending_user(request):
@@ -1399,6 +1406,24 @@ def _reauth_is_fresh(request):
     return timezone.now() - datetime.fromisoformat(stamp) <= timedelta(
         seconds=PASSKEY_REAUTH_SECONDS
     )
+
+
+def _recently_verified(request):
+    """True if this session passed a strong factor recently and is still OTP-verified."""
+    stamp = request.session.get(STRONG_VERIFIED_KEY)
+    is_verified = getattr(request.user, "is_verified", None)
+    if not stamp or is_verified is None or not is_verified():
+        return False
+    if stamp.get("user") != request.user.pk:
+        return False
+    return timezone.now() - datetime.fromisoformat(stamp["at"]) <= timedelta(
+        seconds=STRONG_VERIFIED_SECONDS
+    )
+
+
+def _passkey_change_allowed(request):
+    """A recent strong sign-in, or a recent password and code, allows a passkey change."""
+    return _reauth_is_fresh(request) or _recently_verified(request)
 
 
 def _reauthenticate(user, password, token):
@@ -1441,7 +1466,7 @@ def passkey_register_options(request):
         return JsonResponse({"ok": False}, status=400)
     # A re-authentication from the last few minutes covers a retry after a cancelled
     # browser prompt, so the user is not asked for a new code.
-    if not _reauth_is_fresh(request):
+    if not _passkey_change_allowed(request):
         if not _reauthenticate(
             request.user, str(body.get("password", "")), str(body.get("token", ""))
         ):
@@ -1465,7 +1490,7 @@ def passkey_register_finish(request):
     from apps.core.audit import platform_record
 
     body = _json_body(request)
-    if body is None or not _reauth_is_fresh(request):
+    if body is None or not _passkey_change_allowed(request):
         return JsonResponse({"ok": False}, status=400)
     name = body.get("name", "")
     passkey = passkeys.finish_registration(
@@ -1498,6 +1523,7 @@ def passkey_settings(request):
         {
             "passkeys": PasskeyCredential.objects.filter(user=user),
             "totp_enrolled": has_totp(user),
+            "reauth_fresh": _passkey_change_allowed(request),
             "account": get_current_account(request),
         },
     )
@@ -1525,6 +1551,125 @@ def passkey_remove(request, pk):
     )
     messages.success(request, "Passkey removed.")
     return redirect("settings-passkeys")
+
+
+def _qr_svg(url):
+    """An inline SVG QR code for a URL. Only our own URL goes in, so the markup is ours."""
+    import segno
+
+    return segno.make(url, error="m").svg_inline(scale=6, border=2)
+
+
+@login_required
+@require_POST
+def passkey_link_start(request):
+    """Re-authenticate if needed, then open the QR code page for a phone."""
+    from apps.accounts import passkeys
+
+    user = request.user
+    if not _passkey_change_allowed(request):
+        if not _reauthenticate(
+            user, request.POST.get("password", ""), request.POST.get("token", "")
+        ):
+            messages.error(request, "Check your password and code, then try again.")
+            return redirect("settings-passkeys")
+        request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
+    return redirect("passkey-link", token=passkeys.create_link(user))
+
+
+@login_required
+def passkey_link_page(request, token):
+    """Show the QR code. The page waits until the phone finishes, then returns."""
+    from apps.accounts import passkeys
+
+    if passkeys.find_link(request.user, token) is None:
+        messages.error(
+            request, "That code has expired or was already used. Make a new one."
+        )
+        return redirect("settings-passkeys")
+    phone_url = request.build_absolute_uri(reverse("passkey-phone", args=[token]))
+    return render(
+        request,
+        "accounts/passkey_link.html",
+        {
+            "qr_svg": _qr_svg(phone_url),
+            "status_url": reverse("passkey-link-status", args=[token]),
+            "account": get_current_account(request),
+        },
+    )
+
+
+@login_required
+@require_GET
+def passkey_link_status(request, token):
+    from apps.accounts import passkeys
+
+    if passkeys.link_is_done(request.user, token):
+        messages.success(request, "Passkey added from your phone.")
+        return JsonResponse({"done": True, "redirect": reverse("settings-passkeys")})
+    expired = passkeys.find_link(request.user, token) is None
+    if expired:
+        messages.error(request, "That code has expired. Make a new one to try again.")
+    return JsonResponse({"done": False, "expired": expired})
+
+
+@login_required
+@require_GET
+def passkey_phone_page(request, token):
+    """The page a phone opens after scanning the QR code. Signing in on the phone is required."""
+    from apps.accounts import passkeys
+
+    link_ok = passkeys.find_link(request.user, token) is not None
+    return render(
+        request,
+        "accounts/passkey_phone.html",
+        {
+            "link_ok": link_ok,
+            "options_url": reverse("passkey-phone-options", args=[token]),
+            "finish_url": reverse("passkey-phone-finish", args=[token]),
+        },
+    )
+
+
+@login_required
+@require_POST
+def passkey_phone_options(request, token):
+    from apps.accounts import passkeys
+
+    if passkeys.find_link(request.user, token) is None:
+        return JsonResponse({"ok": False}, status=400)
+    return HttpResponse(
+        passkeys.begin_registration(request, request.user),
+        content_type="application/json",
+    )
+
+
+@login_required
+@require_POST
+def passkey_phone_finish(request, token):
+    from apps.accounts import passkeys
+    from apps.core.audit import platform_record
+
+    body = _json_body(request)
+    if body is None:
+        return JsonResponse({"ok": False}, status=400)
+    name = body.get("name", "")
+    passkey = passkeys.complete_link(
+        request,
+        request.user,
+        token,
+        body.get("credential"),
+        name if isinstance(name, str) else "",
+    )
+    if passkey is None:
+        return JsonResponse({"ok": False}, status=400)
+    platform_record(
+        action="auth.passkey_added",
+        actor=request.user,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"passkey_pk": passkey.pk, "via": "qr"},
+    )
+    return JsonResponse({"ok": True})
 
 
 @require_POST

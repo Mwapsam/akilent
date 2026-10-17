@@ -1,10 +1,9 @@
 {% extends "accounts/settings_base.html" %}
-{% load static %}
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Passkeys and security keys</h2>
+  <h2 class="font-semibold mb-1">Passkeys</h2>
   <p class="text-sm text-gray-600 mb-4">
-    Sign in with your device's fingerprint, face or PIN, or with a hardware security key.
+    Sign in with your phone's fingerprint, face or PIN, or with a security key.
     Works for people who don't use an authenticator app.
   </p>
 
@@ -39,53 +38,31 @@
     <p class="text-sm text-gray-600 mb-6">You have no passkeys yet.</p>
   {% endif %}
 
-  {% if not totp_enrolled %}
-    <form method="post" action="{% url 'passkey-reauth-send' %}" class="mb-6">
+  <div class="border-t border-border pt-6">
+    <h3 class="font-medium text-ink mb-1">Add a passkey</h3>
+    <p class="text-sm text-gray-600 mb-4">
+      Scan a QR code with your phone's camera, then confirm on the phone with its fingerprint, face or PIN.
+    </p>
+    <form method="post" action="{% url 'passkey-link-start' %}" class="space-y-3">
       {% csrf_token %}
-      <p class="text-xs text-gray-600 mb-2">Changes to passkeys need a code. Without an authenticator app, we email one to you.</p>
-      <button type="submit" class="btn btn-ghost btn-sm">Email me a code</button>
+      {% if not reauth_fresh %}
+        <p class="text-xs text-gray-600">
+          Confirm it's you first.{% if not totp_enrolled %} Without an authenticator app, we email a code to you.{% endif %}
+        </p>
+        {% if not totp_enrolled %}
+          <button type="submit" formaction="{% url 'passkey-reauth-send' %}" formnovalidate class="btn btn-ghost btn-sm">Email me a code</button>
+        {% endif %}
+        <div>
+          <label for="id_passkey_password" class="label">Password</label>
+          <input id="id_passkey_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
+        </div>
+        <div>
+          <label for="id_passkey_token" class="label">{% if totp_enrolled %}Authenticator code{% else %}Code we emailed you{% endif %}</label>
+          <input id="id_passkey_token" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" required maxlength="20" class="input w-40 tracking-widest">
+        </div>
+      {% endif %}
+      <button type="submit" class="btn btn-primary">Show QR code</button>
     </form>
-  {% endif %}
-
-  <form id="passkey-register" class="space-y-3" onsubmit="return false;">
-    {% csrf_token %}
-    <div>
-      <label for="id_passkey_password" class="label">Password</label>
-      <input id="id_passkey_password" type="password" autocomplete="current-password" required class="input w-64">
-    </div>
-    <div>
-      <label for="id_passkey_token" class="label">{% if totp_enrolled %}Authenticator code{% else %}Code we emailed you{% endif %}</label>
-      <input id="id_passkey_token" type="text" inputmode="numeric" autocomplete="one-time-code" required maxlength="20" class="input w-40 tracking-widest">
-    </div>
-    <div>
-      <label for="id_passkey_name" class="label">Name this key</label>
-      <input id="id_passkey_name" type="text" maxlength="60" placeholder="For example: Work laptop" class="input w-64">
-    </div>
-    <button type="button" id="passkey-register-btn" class="btn btn-primary">Add a passkey or security key</button>
-    <p id="passkey-register-error" class="text-sm text-red-600" role="alert" hidden></p>
-  </form>
+  </div>
 </div>
-
-<script src="{% static 'js/passkeys.js' %}" defer></script>
-<script defer>
-  document.getElementById("passkey-register-btn").addEventListener("click", async function () {
-    var err = document.getElementById("passkey-register-error");
-    err.hidden = true;
-    try {
-      await window.passkeyRegister(
-        "{% url 'passkey-register-options' %}",
-        "{% url 'passkey-register-finish' %}",
-        document.getElementById("id_passkey_name").value,
-        {
-          password: document.getElementById("id_passkey_password").value,
-          token: document.getElementById("id_passkey_token").value
-        }
-      );
-      window.location.reload();
-    } catch (e) {
-      err.textContent = e.message || "Something went wrong. Try again.";
-      err.hidden = false;
-    }
-  });
-</script>
 {% endblock %}

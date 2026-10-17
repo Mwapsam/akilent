@@ -1,0 +1,42 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Add a passkey with your phone</h2>
+  <ol class="text-sm text-gray-600 mb-6 list-decimal pl-5 space-y-1">
+    <li>Open your phone's camera and point it at this code.</li>
+    <li>Sign in on the phone if it asks.</li>
+    <li>Confirm with your fingerprint, face or PIN.</li>
+  </ol>
+
+  <div class="flex flex-col items-center gap-4">
+    <div class="bg-white p-3 rounded-lg border border-border" role="img" aria-label="QR code to add a passkey on your phone">
+      {{ qr_svg|safe }}
+    </div>
+    <p id="passkey-link-status" class="text-sm text-gray-600" role="status" aria-live="polite">Waiting for your phone...</p>
+    <p class="text-xs text-gray-500">This code works once and expires in 5 minutes.</p>
+    <a href="{% url 'settings-passkeys' %}" class="btn btn-ghost btn-sm">Cancel</a>
+  </div>
+</div>
+
+<script defer>
+  (function () {
+    var statusEl = document.getElementById("passkey-link-status");
+    var url = "{{ status_url }}";
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(url, { credentials: "same-origin" });
+        var body = await res.json();
+        if (body.done) {
+          clearInterval(timer);
+          window.location.href = body.redirect;
+        } else if (body.expired) {
+          clearInterval(timer);
+          window.location.href = "{% url 'settings-passkeys' %}";
+        }
+      } catch (e) {
+        statusEl.textContent = "Connection lost. This page will keep checking.";
+      }
+    }, 2000);
+  })();
+</script>
+{% endblock %}

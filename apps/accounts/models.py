@@ -473,3 +473,19 @@ class PasskeyCredential(Device):
 
     def __str__(self):
         return self.name or "Passkey"
+
+
+class PasskeyLinkRequest(models.Model):
+    """A one-time QR code that lets a phone add a passkey for the signed-in account.
+
+    Only the SHA-256 digest of the token is stored. The row is single use: it is
+    marked used in the same transaction that stores the passkey.
+    """
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="passkey_links"
+    )
+    token_digest = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)

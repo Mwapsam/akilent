@@ -27,8 +27,7 @@
 
   window.passkeyRegister = async function (optionsUrl, finishUrl, name, reauth) {
     var res = await post(optionsUrl, reauth || {});
-    if (res.status === 400) throw new Error("Check your password and code, then try again.");
-    if (!res.ok) throw new Error("Could not start registration.");
+    if (!res.ok) throw new Error("Could not start. Check the details and try again.");
     var opts = await res.json();
     opts.challenge = b64urlToBuf(opts.challenge);
     opts.user.id = b64urlToBuf(opts.user.id);

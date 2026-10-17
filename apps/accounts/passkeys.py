@@ -11,7 +11,9 @@ user-verification prompt and the sign counter are the controls.
 """
 
 import base64
+import hashlib
 import json
+import secrets
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -39,6 +41,80 @@ AUTH_KEY = "webauthn_authentication"
 
 def has_passkeys(user):
     return PasskeyCredential.objects.filter(user=user, confirmed=True).exists()
+
+
+LINK_TTL = timedelta(minutes=5)
+
+
+def _link_digest(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_link(user):
+    """Issue a one-time token for a phone to add a passkey. Returns the raw token."""
+    from apps.accounts.models import PasskeyLinkRequest
+
+    token = secrets.token_urlsafe(32)
+    PasskeyLinkRequest.objects.create(
+        user=user,
+        token_digest=_link_digest(token),
+        expires_at=timezone.now() + LINK_TTL,
+    )
+    return token
+
+
+def find_link(user, token):
+    """The pending link for this user and token, or None if it is used, expired or not theirs."""
+    from apps.accounts.models import PasskeyLinkRequest
+
+    link = PasskeyLinkRequest.objects.filter(
+        token_digest=_link_digest(token), user=user
+    ).first()
+    if link is None or link.used_at is not None or link.expires_at <= timezone.now():
+        return None
+    return link
+
+
+def complete_link(request, user, token, credential_json, name=""):
+    """Store a passkey added from a phone and mark the link used, in one transaction.
+
+    The link row is locked, so two phones cannot both use it. If the credential does
+    not verify, nothing is stored and the link stays usable for another try.
+    """
+    from django.db import transaction
+
+    from apps.accounts.models import PasskeyLinkRequest
+
+    now = timezone.now()
+    with transaction.atomic():
+        link = (
+            PasskeyLinkRequest.objects.select_for_update()
+            .filter(
+                token_digest=_link_digest(token),
+                user=user,
+                used_at__isnull=True,
+                expires_at__gt=now,
+            )
+            .first()
+        )
+        if link is None:
+            return None
+        passkey = finish_registration(request, user, credential_json, name)
+        if passkey is None:
+            transaction.set_rollback(True)
+            return None
+        link.used_at = now
+        link.save(update_fields=["used_at"])
+        return passkey
+
+
+def link_is_done(user, token):
+    """True once a passkey has been added through this link."""
+    from apps.accounts.models import PasskeyLinkRequest
+
+    return PasskeyLinkRequest.objects.filter(
+        token_digest=_link_digest(token), user=user, used_at__isnull=False
+    ).exists()
 
 
 def _relying_party(request):
