@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Two-factor authentication — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
 <div class="min-h-screen flex items-center justify-center px-4 py-12">
@@ -8,13 +9,17 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">Two-factor authentication</h1>
-      <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app, or a recovery code</p>
+      {% if channel == "email" %}
+        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code we emailed you</p>
+      {% else %}
+        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app, or a recovery code</p>
+      {% endif %}
     </div>
 
     <div class="card card-pad sm:!p-8">
       {% if messages %}
         {% for msg in messages %}
-          <div class="mb-5 alert alert-danger">
+          <div class="mb-5 alert {% if msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}">
             {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
             <p>{{ msg }}</p>
           </div>
@@ -27,11 +32,49 @@
           <label for="id_token" class="label">Authentication code</label>
           <input id="id_token" type="text" name="token"
                  maxlength="20" autocomplete="one-time-code" autofocus
-                 placeholder="000 000 or recovery code"
+                 placeholder="{% if channel == 'email' %}000 000{% else %}000 000 or recovery code{% endif %}"
                  class="input text-center tracking-widest text-lg">
         </div>
         <button type="submit" class="btn btn-primary btn-block mt-2">Verify</button>
       </form>
+
+      {% if channel == "email" and has_app %}
+        <form method="post" class="mt-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="use_app">
+          <button type="submit" class="btn btn-ghost btn-block">Use my authenticator app instead</button>
+        </form>
+      {% elif email_available %}
+        <form method="post" class="mt-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="send_email">
+          <button type="submit" class="btn btn-ghost btn-block">Email me a code instead</button>
+        </form>
+      {% endif %}
+
+      {% if passkey_available %}
+        <div class="mt-4">
+          {% csrf_token %}
+          <button type="button" id="passkey-signin-btn" class="btn btn-ghost btn-block">Use a passkey or security key</button>
+          <p id="passkey-signin-error" class="text-sm text-red-600 mt-2" role="alert" hidden></p>
+        </div>
+        <script src="{% static 'js/passkeys.js' %}" defer></script>
+        <script defer>
+          document.getElementById("passkey-signin-btn").addEventListener("click", async function () {
+            var err = document.getElementById("passkey-signin-error");
+            err.hidden = true;
+            try {
+              await window.passkeySignIn(
+                "{% url 'passkey-signin-options' %}",
+                "{% url 'passkey-signin-finish' %}"
+              );
+            } catch (e) {
+              err.textContent = e.message || "Something went wrong. Try again.";
+              err.hidden = false;
+            }
+          });
+        </script>
+      {% endif %}
     </div>
 
     <p class="text-center text-xs text-gray-400 mt-6">

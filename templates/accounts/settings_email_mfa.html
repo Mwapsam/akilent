@@ -1,0 +1,63 @@
+{% extends "accounts/settings_base.html" %}
+{% block settings_content %}
+<div class="card card-pad max-w-xl">
+  <h2 class="font-semibold mb-1">Email sign-in codes</h2>
+  <p class="text-sm text-gray-600 mb-4">
+    Get a six-digit code by email when you sign in. Codes expire after 10 minutes and work once.
+    They are for accounts without an authenticator app or passkey.
+  </p>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="mb-4 alert {% if msg.level_tag == 'success' %}alert-success{% elif msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}"><p>{{ msg }}</p></div>
+    {% endfor %}
+  {% endif %}
+
+  {% if enrolled %}
+    <p class="text-sm mb-4">Status: <span class="font-medium text-green-600">on</span></p>
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="send_disable">
+      <button type="submit" class="btn btn-ghost btn-sm">Email me a code to turn this off</button>
+    </form>
+    <form method="post" class="space-y-3 mt-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="confirm_disable">
+      <div>
+        <label for="id_disable_password" class="label">Password</label>
+        <input id="id_disable_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
+      </div>
+      <div>
+        <label for="id_disable_code" class="label">Code from email</label>
+        <input id="id_disable_code" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" required maxlength="10" class="input w-40 tracking-widest">
+      </div>
+      <button type="submit" class="btn btn-danger btn-sm">Turn off email codes</button>
+    </form>
+  {% elif strong_factor %}
+    <p class="text-sm mb-4">
+      Status: <span class="font-medium text-gray-600">off</span>.
+      Your account already uses an authenticator app or passkey, so email codes are not offered.
+    </p>
+  {% else %}
+    <p class="text-sm mb-4">Status: <span class="font-medium text-gray-600">off</span></p>
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="send_enrol">
+      <button type="submit" class="btn btn-ghost btn-sm">Email me a code to turn this on</button>
+    </form>
+    <form method="post" class="space-y-3 mt-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="confirm_enrol">
+      <div>
+        <label for="id_enrol_password" class="label">Password</label>
+        <input id="id_enrol_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
+      </div>
+      <div>
+        <label for="id_enrol_code" class="label">Code from email</label>
+        <input id="id_enrol_code" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" required maxlength="10" class="input w-40 tracking-widest">
+      </div>
+      <button type="submit" class="btn btn-primary">Turn on email codes</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

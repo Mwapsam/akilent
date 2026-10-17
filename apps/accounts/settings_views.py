@@ -184,6 +184,9 @@ def settings_security(request):
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
     totp_enabled = TOTPDevice.objects.filter(user=request.user, confirmed=True).exists()
+    from apps.accounts import email_mfa
+    from apps.accounts.passkeys import has_passkeys
+
     return render(
         request,
         "accounts/settings_security.html",
@@ -192,6 +195,8 @@ def settings_security(request):
             "account": account,
             "active_tab": "security",
             "totp_enabled": totp_enabled,
+            "passkeys_enabled": has_passkeys(request.user),
+            "email_codes_enabled": email_mfa.is_enrolled(request.user),
         },
     )
 

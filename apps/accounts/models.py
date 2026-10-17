@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django_otp.models import Device
 
 from apps.accounts.fields import EncryptedTextField
 
@@ -427,3 +428,48 @@ class TOTPSecretCiphertext(models.Model):
     )
     key_enc = EncryptedTextField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class EmailMfaEnrolment(models.Model):
+    """Presence of this row means the user has opted in to email sign-in codes."""
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="email_mfa"
+    )
+    enabled_at = models.DateTimeField(auto_now_add=True)
+
+
+class EmailLoginCode(models.Model):
+    """A one-time email code. Stores an HMAC digest, never the code."""
+
+    class Purpose(models.TextChoices):
+        ENROL = "enrol", "Enrol"
+        LOGIN = "login", "Sign in"
+        DISABLE = "disable", "Disable"
+        REAUTH = "reauth", "Confirm a passkey change"
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="email_login_codes"
+    )
+    purpose = models.CharField(max_length=10, choices=Purpose.choices)
+    code_hash = models.CharField(max_length=64)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "purpose", "created_at"])]
+
+
+class PasskeyCredential(Device):
+    """A WebAuthn passkey or security key. A django-otp Device, so django_otp.login() works."""
+
+    credential_id = models.BinaryField(unique=True)
+    public_key = models.BinaryField()
+    sign_count = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name or "Passkey"

@@ -5,7 +5,14 @@ from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 
 from apps.accounts.forms import LoginForm
-from apps.accounts.views import LoginView, LogoutView, PasswordResetView, _2fa_verify
+from apps.accounts.views import (
+    LoginView,
+    LogoutView,
+    PasswordResetView,
+    _2fa_verify,
+    passkey_signin_finish,
+    passkey_signin_options,
+)
 from apps.core import views as core_views
 from apps.core import views_events
 from apps.seo.sitemaps import SITEMAPS
@@ -36,6 +43,14 @@ urlpatterns = [
     ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/2fa/verify/", _2fa_verify, name="2fa-verify"),
+    path(
+        "auth/2fa/passkey/options/",
+        passkey_signin_options,
+        name="passkey-signin-options",
+    ),
+    path(
+        "auth/2fa/passkey/finish/", passkey_signin_finish, name="passkey-signin-finish"
+    ),
     path(
         "auth/password-reset/",
         PasswordResetView.as_view(

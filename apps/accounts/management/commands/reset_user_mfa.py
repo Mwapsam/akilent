@@ -19,7 +19,12 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
-from apps.accounts.models import RecoveryCode
+from apps.accounts.models import (
+    EmailLoginCode,
+    EmailMfaEnrolment,
+    PasskeyCredential,
+    RecoveryCode,
+)
 from apps.core.audit import platform_record
 
 
@@ -76,8 +81,11 @@ class Command(BaseCommand):
 
         devices = TOTPDevice.objects.filter(user=target).count()
         codes = RecoveryCode.objects.filter(user=target).count()
+        passkeys = PasskeyCredential.objects.filter(user=target).count()
+        email_rows = EmailMfaEnrolment.objects.filter(user=target).count()
         self.stdout.write(
-            f"Target {target.email}: {devices} TOTP device(s), {codes} recovery code(s)."
+            f"Target {target.email}: {devices} TOTP device(s), {codes} recovery code(s), "
+            f"{passkeys} passkey(s), email codes {'on' if email_rows else 'off'}."
         )
         if not options["confirm"]:
             self.stdout.write("Dry run. Re-run with --confirm to reset.")
@@ -86,6 +94,9 @@ class Command(BaseCommand):
         with transaction.atomic():
             TOTPDevice.objects.filter(user=target).delete()
             RecoveryCode.objects.filter(user=target).delete()
+            PasskeyCredential.objects.filter(user=target).delete()
+            EmailMfaEnrolment.objects.filter(user=target).delete()
+            EmailLoginCode.objects.filter(user=target).delete()
             ended = _end_sessions(target.pk)
             platform_record(
                 action="auth.mfa_operator_reset",
@@ -98,6 +109,8 @@ class Command(BaseCommand):
                     "approved_by": approver.email,
                     "devices_removed": devices,
                     "recovery_codes_removed": codes,
+                    "passkeys_removed": passkeys,
+                    "email_mfa_removed": email_rows,
                     "sessions_ended": ended,
                 },
             )

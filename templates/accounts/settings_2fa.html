@@ -3,6 +3,8 @@
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Two-factor authentication</h2>
 
+  <p class="text-sm mb-4"><a href="{% url 'settings-email-mfa' %}" class="text-accent hover:text-accent-strong">Email sign-in codes</a> are a separate option. <a href="{% url 'settings-passkeys' %}" class="text-accent hover:text-accent-strong">Passkeys and security keys</a> are too.</p>
+
   {% if enabled %}
     <p class="text-sm text-gray-500 mb-4">
       Two-factor authentication is <span class="font-medium text-green-600">enabled</span> on your account.

@@ -25,6 +25,36 @@ urlpatterns = [
     ),
     path("settings/security/2fa/", views._2fa_setup, name="2fa-setup"),
     path(
+        "settings/security/email-codes/",
+        views.email_mfa_settings,
+        name="settings-email-mfa",
+    ),
+    path(
+        "settings/security/passkeys/",
+        views.passkey_settings,
+        name="settings-passkeys",
+    ),
+    path(
+        "settings/security/passkeys/reauth/",
+        views.passkey_reauth_send,
+        name="passkey-reauth-send",
+    ),
+    path(
+        "settings/security/passkeys/options/",
+        views.passkey_register_options,
+        name="passkey-register-options",
+    ),
+    path(
+        "settings/security/passkeys/finish/",
+        views.passkey_register_finish,
+        name="passkey-register-finish",
+    ),
+    path(
+        "settings/security/passkeys/<int:pk>/remove/",
+        views.passkey_remove,
+        name="passkey-remove",
+    ),
+    path(
         "settings/security/", settings_views.settings_security, name="settings-security"
     ),
     path("settings/team/", settings_views.settings_team, name="settings-team"),

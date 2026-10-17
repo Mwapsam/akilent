@@ -1,5 +1,6 @@
+import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -10,16 +11,22 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import transaction
-from django.http import HttpResponseForbidden
-from django.shortcuts import redirect, render
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.http import require_POST
 
 from apps.accounts import onboarding as ob
 from apps.accounts.forms import SignupForm, enabled_service_choices
-from apps.accounts.models import Account, Membership
+from apps.accounts.models import (
+    Account,
+    EmailMfaEnrolment,
+    Membership,
+    PasskeyCredential,
+)
 from apps.accounts.utils import get_current_account, set_current_account
 
 logger = logging.getLogger(__name__)
@@ -54,13 +61,35 @@ class _RestoreSiteBrandingMixin:
 _2FA_SESSION_KEY = "_2fa_user_pk"
 _2FA_SESSION_BACKEND_KEY = "_2fa_backend"
 _2FA_SESSION_NEXT_KEY = "_2fa_next"
+_2FA_CHANNEL_KEY = "_2fa_channel"  # "app" or "email" for the prompt
 
 
-def begin_second_factor(request, user, backend, next_url=""):
-    """Record a pending login so the code prompt can complete it.
+_2FA_STEPUP_KEY = (
+    "_2fa_stepup"  # True when the session is signed in but not yet verified
+)
 
-    The one place the challenge state is written. Off-site ``next`` URLs are
-    dropped here, so every caller gets the same validation.
+
+def _code_sent_message(request, result):
+    """Tell the user what happened to a code request. Limits are shown as "sent recently"."""
+    from apps.accounts import email_mfa
+
+    if result == email_mfa.SENT:
+        messages.info(request, "A code is on its way to your email.")
+    elif result == email_mfa.RECENT:
+        messages.info(request, "A code was sent recently. Check your email.")
+    else:
+        messages.error(
+            request,
+            "We couldn't send a code just now. Try again in a few minutes, or contact support.",
+        )
+
+
+def begin_second_factor(request, user, backend, next_url="", stepup=False):
+    """Record a pending second factor. The one place the challenge state is written.
+
+    ``stepup`` marks a session that is already signed in but not yet verified, which
+    is the enforcement middleware's case. An emailed code cannot verify such a session,
+    so email is not offered for a step-up. Off-site ``next`` URLs are dropped here.
     """
     from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -71,6 +100,8 @@ def begin_second_factor(request, user, backend, next_url=""):
     request.session[_2FA_SESSION_KEY] = user.pk
     request.session[_2FA_SESSION_BACKEND_KEY] = backend
     request.session[_2FA_SESSION_NEXT_KEY] = next_url
+    request.session[_2FA_STEPUP_KEY] = stepup
+    request.session.pop(_2FA_CHANNEL_KEY, None)
 
 
 class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
@@ -101,10 +132,9 @@ class LoginView(_RestoreSiteBrandingMixin, auth_views.LoginView):
         return super().form_invalid(form)
 
     def form_valid(self, form):
-        from django_otp.plugins.otp_totp.models import TOTPDevice
 
         user = form.get_user()
-        if TOTPDevice.objects.filter(user=user, confirmed=True).exists():
+        if _challenge_required(user):
             # login() happens only after the code check.
             raw_next = (
                 self.request.POST.get("next") or self.request.GET.get("next") or ""
@@ -462,13 +492,11 @@ def verify_email(request, uidb64, token):
     token_ok = user is not None and email_verification_token.check_token(user, token)
 
     if user is not None and token_ok:
-        from django_otp.plugins.otp_totp.models import TOTPDevice
-
         _mark_email_verified(user)
         if (
             not request.user.is_authenticated
             and user.is_active
-            and TOTPDevice.objects.filter(user=user, confirmed=True).exists()
+            and _challenge_required(user)
         ):
             # Enrolled users get the same second-factor step as password login.
             begin_second_factor(request, user, "apps.accounts.backends.EmailBackend")
@@ -980,6 +1008,54 @@ def _chatbot_summary(account) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _finish_second_factor(request, user, device=None):
+    """Log the user in after a second factor passes. Returns where to send them.
+
+    ``device`` is the django-otp device that passed, if there was one. Email codes
+    pass None, because they have no OTP device to mark.
+    """
+    from django.contrib.auth import login as auth_login
+    from django_otp import login as otp_login
+
+    from apps.core.audit import platform_record
+
+    backend = request.session.pop(
+        _2FA_SESSION_BACKEND_KEY, "apps.accounts.backends.EmailBackend"
+    )
+    next_url = (
+        request.session.pop(_2FA_SESSION_NEXT_KEY, "") or settings.LOGIN_REDIRECT_URL
+    )
+    request.session.pop(_2FA_SESSION_KEY, None)
+    request.session.pop(_2FA_CHANNEL_KEY, None)
+    request.session.pop(_2FA_STEPUP_KEY, None)
+    user.backend = backend
+    auth_login(request, user)
+    # Mark the session as OTP-verified only after login() has rotated it.
+    if device is not None:
+        otp_login(request, device)
+    platform_record(
+        action="auth.2fa_success",
+        actor=user,
+        ip_address=request.META.get("REMOTE_ADDR"),
+    )
+    return next_url
+
+
+def _challenge_required(user):
+    """A password login needs a second step if the user has an app, email codes or a passkey.
+
+    Email codes count here even for accounts that must use an app. The code proves the
+    login; protected pages still need a verified app or passkey.
+    """
+    from apps.accounts import email_mfa
+    from apps.accounts.mfa import has_second_factor, has_totp
+    from apps.accounts.passkeys import has_passkeys
+
+    # Email codes are a sign-in option only for accounts with no app or passkey.
+    email_counts = email_mfa.is_enrolled(user) and not has_second_factor(user)
+    return has_totp(user) or email_counts or has_passkeys(user)
+
+
 def _check_second_factor(user, device, raw):
     """Return the locked device if raw is a valid TOTP code or unused recovery code.
 
@@ -1008,17 +1084,18 @@ def _check_second_factor(user, device, raw):
 
 
 def _2fa_verify(request):
-    """Step 2 of login when the user has TOTP enabled.
+    """Step 2 of sign-in. Offers the authenticator app, emailed codes, or a passkey.
 
-    After password auth succeeds, LoginView stashes the user PK in the session
-    and redirects here instead of calling login(). We verify the TOTP token;
-    on success we call login() ourselves and proceed to the next URL.
+    The app and emailed codes are separate channels. An emailed code is never
+    checked as an app code, so a mistyped emailed code cannot use up the app's
+    throttle. An unknown or unavailable action is refused without any token check.
+    Each POST redirects back, so a refresh does not repeat the action.
     """
-    from django.contrib.auth import login as auth_login
     from django.contrib.auth.models import User
-    from django_otp import login as otp_login
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
+    from apps.accounts import email_mfa
+    from apps.accounts.passkeys import has_passkeys
     from apps.core.audit import platform_record
 
     user_pk = request.session.get(_2FA_SESSION_KEY)
@@ -1031,38 +1108,77 @@ def _2fa_verify(request):
         del request.session[_2FA_SESSION_KEY]
         return redirect(settings.LOGIN_URL)
 
+    device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    stepup = bool(request.session.get(_2FA_STEPUP_KEY))
+    # Email codes prove a login only. They are never offered for a step-up.
+    from apps.accounts.mfa import has_second_factor
+
+    # Email codes are a sign-in option only for accounts with no app or passkey.
+    email_available = (
+        email_mfa.is_enrolled(user) and not stepup and not has_second_factor(user)
+    )
+    channel = request.session.get(_2FA_CHANNEL_KEY, "app") if email_available else "app"
+    if device is None and email_available:
+        channel = "email"
+
     if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "send_email":
+            if email_available:
+                _code_sent_message(request, email_mfa.send_code(user, "login"))
+                request.session[_2FA_CHANNEL_KEY] = "email"
+            else:
+                messages.error(
+                    request, "Email codes are not available for this sign-in."
+                )
+            return redirect(reverse("2fa-verify"))
+        if action == "use_app":
+            if device is not None:
+                request.session[_2FA_CHANNEL_KEY] = "app"
+            return redirect(reverse("2fa-verify"))
+        if action is not None:
+            # Unknown or unavailable action: no token check and no throttle change.
+            return redirect(reverse("2fa-verify"))
+
         token = request.POST.get("token", "").replace(" ", "")
-        device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
-        verified = _check_second_factor(user, device, token) if device else None
-        if verified:
-            backend = request.session.pop(
-                _2FA_SESSION_BACKEND_KEY, "apps.accounts.backends.EmailBackend"
+        if channel == "email":
+            passed = email_mfa.check_code(user, "login", token)
+            factor_device = (
+                None  # an emailed code proves the login; there is no OTP device
             )
-            next_url = (
-                request.session.pop(_2FA_SESSION_NEXT_KEY, "")
-                or settings.LOGIN_REDIRECT_URL
+        else:
+            factor_device = (
+                _check_second_factor(user, device, token) if device else None
             )
-            request.session.pop(_2FA_SESSION_KEY, None)
-            user.backend = backend
-            auth_login(request, user)
-            # Mark the session as OTP-verified only after login() has rotated it.
-            otp_login(request, verified)
-            platform_record(
-                action="auth.2fa_success",
-                actor=user,
-                ip_address=request.META.get("REMOTE_ADDR"),
-            )
-            return redirect(next_url)
+            passed = factor_device is not None
+        if passed:
+            return redirect(_finish_second_factor(request, user, factor_device))
+
         platform_record(
             action="auth.2fa_failed",
             ip_address=request.META.get("REMOTE_ADDR"),
             success=False,
-            metadata={"user_pk": user_pk},
+            metadata={"user_pk": user_pk, "channel": channel},
         )
-        messages.error(request, "Invalid code. Please try again.")
+        if channel == "email" and email_mfa.guess_limit_reached(user):
+            messages.error(
+                request,
+                "Too many attempts. Try again in an hour, or use a passkey if you have one.",
+            )
+        else:
+            messages.error(request, "Invalid code. Please try again.")
+        return redirect(reverse("2fa-verify"))
 
-    return render(request, "auth/2fa_verify.html")
+    return render(
+        request,
+        "auth/2fa_verify.html",
+        {
+            "channel": channel,
+            "email_available": email_available,
+            "has_app": device is not None,
+            "passkey_available": has_passkeys(user),
+        },
+    )
 
 
 @login_required
@@ -1181,3 +1297,258 @@ def _2fa_setup(request):
             "secret": base64.b32encode(device.bin_key).decode().rstrip("="),
         },
     )
+
+
+@login_required
+def email_mfa_settings(request):
+    """Turn email sign-in codes on or off.
+
+    Email codes are a sign-in option only for accounts with no authenticator app or
+    passkey, so they can never weaken an account that has one. Turning them on or off
+    needs the password and an emailed code.
+    """
+    from apps.accounts import email_mfa
+    from apps.accounts.mfa import has_second_factor
+    from apps.core.audit import platform_record
+
+    user = request.user
+    account = get_current_account(request)
+    enrolled = email_mfa.is_enrolled(user)
+    strong_factor = has_second_factor(user)
+    too_strong = "Email codes are for accounts without an authenticator app or passkey."
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        code = request.POST.get("token", "")
+        password = request.POST.get("password", "")
+        if action == "send_enrol" and not enrolled:
+            if strong_factor:
+                messages.error(request, too_strong)
+            else:
+                _code_sent_message(request, email_mfa.send_code(user, "enrol"))
+        elif action == "confirm_enrol" and not enrolled:
+            if strong_factor:
+                messages.error(request, too_strong)
+            elif user.check_password(password) and email_mfa.check_code(
+                user, "enrol", code
+            ):
+                EmailMfaEnrolment.objects.get_or_create(user=user)
+                platform_record(
+                    action="auth.email_mfa_enabled",
+                    account=account,
+                    actor=user,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                )
+                messages.success(request, "Email sign-in codes are on.")
+                return redirect("settings-email-mfa")
+            else:
+                messages.error(
+                    request, "Check your password and the code, then try again."
+                )
+        elif action == "send_disable" and enrolled:
+            _code_sent_message(request, email_mfa.send_code(user, "disable"))
+        elif action == "confirm_disable" and enrolled:
+            if user.check_password(password) and email_mfa.check_code(
+                user, "disable", code
+            ):
+                EmailMfaEnrolment.objects.filter(user=user).delete()
+                platform_record(
+                    action="auth.email_mfa_disabled",
+                    account=account,
+                    actor=user,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                )
+                messages.success(request, "Email sign-in codes are off.")
+                return redirect("settings-email-mfa")
+            messages.error(request, "Check your password and the code, then try again.")
+        return redirect("settings-email-mfa")
+
+    return render(
+        request,
+        "accounts/settings_email_mfa.html",
+        {"enrolled": enrolled, "strong_factor": strong_factor, "account": account},
+    )
+
+
+PASSKEY_REAUTH_KEY = "passkey_reauth_at"
+PASSKEY_REAUTH_SECONDS = 300
+
+
+def _pending_user(request):
+    """The user who passed their password and is now completing a second factor."""
+    pk = request.session.get(_2FA_SESSION_KEY)
+    if not pk:
+        return None
+    return User.objects.filter(pk=pk).first()
+
+
+def _json_body(request):
+    """Parse a JSON object from the request. Returns None if it is not one."""
+    try:
+        body = json.loads(request.body or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _reauth_is_fresh(request):
+    """True if the user re-authenticated for a passkey change in the last few minutes."""
+    stamp = request.session.get(PASSKEY_REAUTH_KEY)
+    if stamp is None:
+        return False
+    return timezone.now() - datetime.fromisoformat(stamp) <= timedelta(
+        seconds=PASSKEY_REAUTH_SECONDS
+    )
+
+
+def _reauthenticate(user, password, token):
+    """Re-authenticate before a passkey change: password, then a current second factor.
+
+    The factor is the authenticator app if one is enrolled, otherwise a code
+    emailed to the account. The password is checked first, so a wrong password
+    uses no attempt.
+    """
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.accounts import email_mfa
+
+    if not user.check_password(password):
+        return False
+    token = token.replace(" ", "")
+    totp = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    if totp is not None:
+        return _check_second_factor(user, totp, token) is not None
+    return email_mfa.check_code(user, "reauth", token)
+
+
+@login_required
+@require_POST
+def passkey_reauth_send(request):
+    """Email a re-authentication code to users who have no authenticator app."""
+    from apps.accounts import email_mfa
+
+    _code_sent_message(request, email_mfa.send_code(request.user, "reauth"))
+    return redirect("settings-passkeys")
+
+
+@login_required
+@require_POST
+def passkey_register_options(request):
+    from apps.accounts import passkeys
+
+    body = _json_body(request)
+    if body is None:
+        return JsonResponse({"ok": False}, status=400)
+    # A re-authentication from the last few minutes covers a retry after a cancelled
+    # browser prompt, so the user is not asked for a new code.
+    if not _reauth_is_fresh(request):
+        if not _reauthenticate(
+            request.user, str(body.get("password", "")), str(body.get("token", ""))
+        ):
+            return JsonResponse({"ok": False}, status=400)
+        request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
+    return HttpResponse(
+        passkeys.begin_registration(request, request.user),
+        content_type="application/json",
+    )
+
+
+@login_required
+@require_POST
+def passkey_register_finish(request):
+    """Verify and store a new passkey. The re-authentication stamp survives a failed try.
+
+    It is cleared only after a passkey is stored, so one cancelled browser prompt does
+    not cost the user another emailed code.
+    """
+    from apps.accounts import passkeys
+    from apps.core.audit import platform_record
+
+    body = _json_body(request)
+    if body is None or not _reauth_is_fresh(request):
+        return JsonResponse({"ok": False}, status=400)
+    name = body.get("name", "")
+    passkey = passkeys.finish_registration(
+        request,
+        request.user,
+        body.get("credential"),
+        name if isinstance(name, str) else "",
+    )
+    if passkey is None:
+        return JsonResponse({"ok": False}, status=400)
+    request.session.pop(PASSKEY_REAUTH_KEY, None)
+    platform_record(
+        action="auth.passkey_added",
+        actor=request.user,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"passkey_pk": passkey.pk},
+    )
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def passkey_settings(request):
+    """List passkeys and register a new one. Removal is a separate, re-authenticated POST."""
+    from apps.accounts.mfa import has_totp
+
+    user = request.user
+    return render(
+        request,
+        "accounts/settings_passkeys.html",
+        {
+            "passkeys": PasskeyCredential.objects.filter(user=user),
+            "totp_enrolled": has_totp(user),
+            "account": get_current_account(request),
+        },
+    )
+
+
+@login_required
+@require_POST
+def passkey_remove(request, pk):
+    """Remove a passkey. Needs the password and a current second factor."""
+    from apps.core.audit import platform_record
+
+    user = request.user
+    passkey = get_object_or_404(PasskeyCredential, pk=pk, user=user)
+    if not _reauthenticate(
+        user, request.POST.get("password", ""), request.POST.get("token", "")
+    ):
+        messages.error(request, "Check your password and code, then try again.")
+        return redirect("settings-passkeys")
+    passkey.delete()
+    platform_record(
+        action="auth.passkey_removed",
+        actor=user,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata={"passkey_pk": pk},
+    )
+    messages.success(request, "Passkey removed.")
+    return redirect("settings-passkeys")
+
+
+@require_POST
+def passkey_signin_options(request):
+    from apps.accounts import passkeys
+    from apps.accounts.passkeys import has_passkeys
+
+    user = _pending_user(request)
+    if user is None or not has_passkeys(user):
+        return JsonResponse({"ok": False}, status=400)
+    return HttpResponse(
+        passkeys.begin_authentication(request, user), content_type="application/json"
+    )
+
+
+@require_POST
+def passkey_signin_finish(request):
+    from apps.accounts import passkeys
+
+    user = _pending_user(request)
+    body = _json_body(request)
+    if user is None or body is None:
+        return JsonResponse({"ok": False}, status=400)
+    passkey = passkeys.finish_authentication(request, user, body.get("credential"))
+    if passkey is None:
+        return JsonResponse({"ok": False}, status=400)
+    return JsonResponse({"redirect": _finish_second_factor(request, user, passkey)})

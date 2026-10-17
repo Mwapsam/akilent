@@ -33,11 +33,12 @@
 <div class="card card-pad max-w-xl mt-4">
   <h2 class="font-semibold mb-1">Two-factor authentication</h2>
   <p class="text-sm text-gray-500 mb-3">
-    {% if totp_enabled %}
+    {% if totp_enabled or passkeys_enabled or email_codes_enabled %}
       <span class="inline-flex items-center gap-1 text-green-600 font-medium">
         {% include "components/icon.html" with name="check" class="w-4 h-4" %} Enabled
       </span>
-      — your account requires a code from your authenticator app at sign-in.
+      — sign-in asks for a second factor:
+      {% if totp_enabled %}authenticator app{% endif %}{% if passkeys_enabled %}{% if totp_enabled %}, {% endif %}passkey{% endif %}{% if email_codes_enabled %}{% if totp_enabled or passkeys_enabled %}, {% endif %}email codes{% endif %}.
     {% else %}
       Not enabled. Add an extra layer of security to your account.
     {% endif %}

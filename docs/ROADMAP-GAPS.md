@@ -286,3 +286,54 @@ Operator evidence to record separately from code tests: restore drill result, re
 - Production runs `98b647b`. Migrations 0014 and 0015 applied. Enforcement inert: flags False, roles empty, staff off. TOTP storage plaintext.
 - Earlier entries in this file that say the work is uncommitted or not deployed are superseded by this line.
 - CI result for `98b647b`: **passed** (reported by the owner 2026-10-17; run number not yet recorded). Deploy was triggered by the CI success gate, not by manual dispatch.
+- Dependency change (2026-10-17, owner approved): removed unused `django-anymail`; `cryptography` 49.0.0 (released 2026-06-12); `webauthn` 3.0.1 (released 2026-09-25) added for passkeys (PR-4). Accounts, email, serial, ruff and mypy pass. Uncommitted: `pyproject.toml` and `poetry.lock`.
+
+### Email codes and passkeys built (2026-10-17, not committed)
+- Email sign-in codes: `apps/accounts/email_mfa.py`; models `EmailMfaEnrolment`, `EmailLoginCode` (migration 0016). Six digits, HMAC-hashed, single-use, 10 minutes, five guesses, 60-second cooldown that looks the same to the user. Opt-in at `settings/security/email-codes/`. Tests: `test_email_mfa.py` (14).
+- Passkeys and security keys (WebAuthn, `webauthn` 3.0.1): `apps/accounts/passkeys.py`; `PasskeyCredential` is a django-otp Device (migration 0017), so `django_otp.login()` works. Challenges are single-use and expire after five minutes. A sign counter that does not advance is refused. Page at `settings/security/passkeys/`; sign-in options on the 2FA prompt. Browser script `static/js/passkeys.js`. Tests: `test_passkeys.py` (12), with the WebAuthn cryptography mocked.
+- Enforcement: a passkey now counts as a second factor. Email codes never do, and the sign-in path refuses them for enforced accounts.
+- Not verified yet: a real passkey on a device (needs HTTPS and the production host as RP ID); PostgreSQL run for the new tests; the `publishing` migration drift that `makemigrations` reports is pre-existing and not from this work.
+
+### Review findings on email codes and passkeys (2026-10-17): fixed
+- Required users can reach enrolment and passkey sign-in pages (allowlist in `apps/accounts/mfa.py`).
+- An email-only account that must use an app is not challenged; it signs in and is sent to set-up.
+- The operator reset removes passkeys, email enrolment and email codes as well as TOTP.
+- Email codes are checked before the authenticator app, so a successful email sign-in does not touch its throttle. **Trade-off:** a wrong emailed code, when the account also has an app, is still checked as an app code, so it counts toward the app's throttle.
+- Email codes are sent through `send_system_email` (the platform provider, with alerting).
+- Adding a passkey needs the password (plus an app code if enrolled) within five minutes.
+- Email guesses are capped per account: five codes sent and ten guesses accepted per hour. That is 240 guesses a day at most, about 0.024% of the code space, not the 7,200 the review's scenario allowed.
+- Passkey removal checks the password before any code, so a wrong password uses no attempt.
+- Passkey JSON endpoints return 400 for bad input, not 500. Success messages show as success.
+
+### Second review of email codes and passkeys (2026-10-17): fixed
+- **Critical:** an enforced account that had only email codes could sign in with a password alone. Email is a login factor again for every opted-in account; enforcement still requires a verified app or passkey on protected pages.
+- Passkey add and remove need the password plus a current factor: the authenticator app if enrolled, otherwise a code emailed to the account (purpose `reauth`).
+- Required users with a strong factor must verify it before the passkey and email enrolment pages. Only users with no strong factor reach them unverified.
+- The sign-in prompt keeps app codes and emailed codes on separate channels. A wrong emailed code never reaches the authenticator throttle.
+- Sending a code redirects (no re-POST on refresh), and the passkey button stays on the prompt.
+- Malformed passkey input returns 400 in every case, including a non-JSON credential string.
+- Email sends and checks lock the user row, so concurrent requests cannot exceed the limits. This is effective on PostgreSQL only; SQLite ignores row locks. A failed send makes its code unusable.
+- Email rules live in one place (`email_mfa.is_enrolled`), and the app rule in `mfa.has_totp`.
+- Not verified yet: the PostgreSQL run for the locking; a real passkey on a device.
+
+### Third review of email codes and passkeys (2026-10-17): fixed
+- **Serious:** a session that had passed only an emailed code could open `2fa-setup` and enrol its own authenticator app. `2fa-setup` is now an enrolment page, reachable only with no strong factor.
+- An emailed code no longer offers a loop: email is not offered at a step-up (`stepup` flag set by the enforcement middleware), so an enforced user with a passkey is prompted for the passkey or app only.
+- An unknown or unavailable action is refused before any token check, so it cannot count as a failed code.
+- The email channel is cleared on every new challenge and on completion.
+- A failed email send says so, instead of 'sent recently'.
+- The passkey re-authentication lasts five minutes and survives a cancelled browser prompt, so a retry needs no new code.
+- A verified session returns early in the enforcement middleware, before the factor queries run.
+- The duplicate sign-counter check is removed; the WebAuthn library enforces it.
+- Not verified yet: PostgreSQL (row locks); a real passkey on a device.
+
+### Fourth review of email codes and passkeys (2026-10-17): fixed
+- **Policy change:** email codes are a sign-in option only for accounts with no authenticator app or passkey. An app or passkey account is never offered email, so email cannot weaken it. Enabling email codes needs the password and an emailed code, and is refused for accounts with a strong factor.
+- An email-only account gets a send button on the prompt, so it can request a code.
+- A failed send deletes its code row, so it neither starts a cooldown nor uses the hourly limit.
+- A lockout from wrong guesses shows its own message ("try again in an hour, or use a passkey"). The per-account guess limit still applies to all purposes; a password holder can use it up, which is the trade-off for the hourly cap.
+- A duplicate authenticator returns a refusal, not a 500.
+- The reset dry run and audit record count passkeys and email codes too.
+- Email settings messages show success and info correctly. The security page lists every factor in use.
+- anymail: no references remain in code or configuration. Production runs `98b647b`, which predates the removal.
+- Not verified yet: PostgreSQL (row locks); a real passkey on a device.
