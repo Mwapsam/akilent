@@ -100,7 +100,7 @@ class PasskeyReauthSurvivesAFailedTryTest(TestCase):
         client.post(reverse("passkey-reauth-send"))
         options = client.post(
             reverse("passkey-register-options"),
-            data='{"password": "%s", "token": "%s"}' % (PASSWORD, _last_code()),
+            data='{"method": "email", "token": "%s"}' % _last_code(),
             content_type="application/json",
         )
         self.assertEqual(options.status_code, 200)

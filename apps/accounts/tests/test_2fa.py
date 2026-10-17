@@ -152,4 +152,4 @@ class TwoFASetupTest(TestCase):
 
         TOTPDevice.objects.create(user=self.user, name="default", confirmed=True)
         resp = self.client.get(reverse("settings-security"))
-        self.assertContains(resp, "Enabled")
+        self.assertContains(resp, "Configured")

@@ -198,7 +198,7 @@ class EmailOnlyPromptTest(TestCase):
 
         resp = self.client.get(reverse("2fa-verify"))
 
-        self.assertContains(resp, "Email me a code")
+        self.assertContains(resp, "Email me a new code")
 
     def test_sending_then_signing_in_with_the_emailed_code_works(self):
         self.client.post(

@@ -31,21 +31,46 @@
 </div>
 
 <div class="card card-pad max-w-xl mt-4">
-  <h2 class="font-semibold mb-1">Two-factor authentication</h2>
-  <p class="text-sm text-gray-500 mb-3">
-    {% if totp_enabled or passkeys_enabled or email_codes_enabled %}
-      <span class="inline-flex items-center gap-1 text-green-600 font-medium">
-        {% include "components/icon.html" with name="check" class="w-4 h-4" %} Enabled
-      </span>
-      — sign-in asks for a second factor:
-      {% if totp_enabled %}authenticator app{% endif %}{% if passkeys_enabled %}{% if totp_enabled %}, {% endif %}passkey{% endif %}{% if email_codes_enabled %}{% if totp_enabled or passkeys_enabled %}, {% endif %}email codes{% endif %}.
-    {% else %}
-      Not enabled. Add an extra layer of security to your account.
-    {% endif %}
+  <h2 class="font-semibold mb-1">Two-factor methods</h2>
+  <p class="text-sm text-gray-600 mb-4">
+    Sign-in asks for one of the methods below. Add more than one so you are not locked out if one is lost.
   </p>
-  <a href="{% url '2fa-setup' %}" class="btn btn-secondary btn-sm">
-    {% if totp_enabled %}Manage{% else %}Set up{% endif %} two-factor authentication
-  </a>
+  <ul class="divide-y divide-border">
+    <li class="py-3 flex items-start justify-between gap-3">
+      <div>
+        <p class="font-medium text-ink">Authenticator app</p>
+        <p class="text-sm text-gray-600">A 6-digit code from an app such as Google Authenticator, Authy or 1Password.</p>
+        <p class="text-xs mt-1 {% if totp_enabled %}text-green-700{% else %}text-gray-600{% endif %}">{% if totp_enabled %}Configured{% else %}Not set up{% endif %}</p>
+      </div>
+      <a href="{% url '2fa-setup' %}" class="btn btn-ghost btn-sm touch-target shrink-0">{% if totp_enabled %}Manage{% else %}Set up{% endif %}</a>
+    </li>
+    <li class="py-3 flex items-start justify-between gap-3">
+      <div>
+        <p class="font-medium text-ink">Passkeys and security keys</p>
+        <p class="text-sm text-gray-600">Use your phone's fingerprint, face or PIN, or a hardware security key.</p>
+        <p class="text-xs mt-1 {% if passkey_count %}text-green-700{% else %}text-gray-600{% endif %}">{% if passkey_count %}{{ passkey_count }} configured{% else %}None configured{% endif %}</p>
+      </div>
+      <a href="{% url 'settings-passkeys' %}" class="btn btn-ghost btn-sm touch-target shrink-0">{% if passkey_count %}Manage{% else %}Add{% endif %}</a>
+    </li>
+    <li class="py-3 flex items-start justify-between gap-3">
+      <div>
+        <p class="font-medium text-ink">Email codes</p>
+        <p class="text-sm text-gray-600">A 6-digit code emailed to you at sign-in. Codes expire after 10 minutes.</p>
+        <p class="text-xs mt-1 {% if email_codes_enabled %}text-green-700{% else %}text-gray-600{% endif %}">{% if email_codes_enabled %}On{% else %}Off{% endif %}</p>
+      </div>
+      <a href="{% url 'settings-email-mfa' %}" class="btn btn-ghost btn-sm touch-target shrink-0">{% if email_codes_enabled %}Manage{% else %}Set up{% endif %}</a>
+    </li>
+    <li class="py-3 flex items-start justify-between gap-3">
+      <div>
+        <p class="font-medium text-ink">Recovery codes</p>
+        <p class="text-sm text-gray-600">One-time codes for when you can't reach your app. Store them somewhere safe.</p>
+        <p class="text-xs mt-1 text-gray-600">{% if totp_enabled %}{{ recovery_remaining }} left{% else %}Available once an authenticator app is set up{% endif %}</p>
+      </div>
+      {% if totp_enabled %}
+        <a href="{% url '2fa-setup' %}" class="btn btn-ghost btn-sm touch-target shrink-0">Manage</a>
+      {% endif %}
+    </li>
+  </ul>
 </div>
 
 <div class="card card-pad max-w-xl mt-4">

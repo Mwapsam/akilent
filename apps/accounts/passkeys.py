@@ -11,9 +11,7 @@ user-verification prompt and the sign counter are the controls.
 """
 
 import base64
-import hashlib
 import json
-import secrets
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -32,7 +30,7 @@ from webauthn.helpers.structs import (
     ResidentKeyRequirement,
 )
 
-from apps.accounts.models import PasskeyCredential
+from apps.accounts.models import PasskeyCredential, PasskeyRegistrationChallenge
 
 CHALLENGE_TTL = timedelta(minutes=5)
 REG_KEY = "webauthn_registration"
@@ -41,80 +39,6 @@ AUTH_KEY = "webauthn_authentication"
 
 def has_passkeys(user):
     return PasskeyCredential.objects.filter(user=user, confirmed=True).exists()
-
-
-LINK_TTL = timedelta(minutes=5)
-
-
-def _link_digest(token):
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def create_link(user):
-    """Issue a one-time token for a phone to add a passkey. Returns the raw token."""
-    from apps.accounts.models import PasskeyLinkRequest
-
-    token = secrets.token_urlsafe(32)
-    PasskeyLinkRequest.objects.create(
-        user=user,
-        token_digest=_link_digest(token),
-        expires_at=timezone.now() + LINK_TTL,
-    )
-    return token
-
-
-def find_link(user, token):
-    """The pending link for this user and token, or None if it is used, expired or not theirs."""
-    from apps.accounts.models import PasskeyLinkRequest
-
-    link = PasskeyLinkRequest.objects.filter(
-        token_digest=_link_digest(token), user=user
-    ).first()
-    if link is None or link.used_at is not None or link.expires_at <= timezone.now():
-        return None
-    return link
-
-
-def complete_link(request, user, token, credential_json, name=""):
-    """Store a passkey added from a phone and mark the link used, in one transaction.
-
-    The link row is locked, so two phones cannot both use it. If the credential does
-    not verify, nothing is stored and the link stays usable for another try.
-    """
-    from django.db import transaction
-
-    from apps.accounts.models import PasskeyLinkRequest
-
-    now = timezone.now()
-    with transaction.atomic():
-        link = (
-            PasskeyLinkRequest.objects.select_for_update()
-            .filter(
-                token_digest=_link_digest(token),
-                user=user,
-                used_at__isnull=True,
-                expires_at__gt=now,
-            )
-            .first()
-        )
-        if link is None:
-            return None
-        passkey = finish_registration(request, user, credential_json, name)
-        if passkey is None:
-            transaction.set_rollback(True)
-            return None
-        link.used_at = now
-        link.save(update_fields=["used_at"])
-        return passkey
-
-
-def link_is_done(user, token):
-    """True once a passkey has been added through this link."""
-    from apps.accounts.models import PasskeyLinkRequest
-
-    return PasskeyLinkRequest.objects.filter(
-        token_digest=_link_digest(token), user=user, used_at__isnull=False
-    ).exists()
 
 
 def _relying_party(request):
@@ -148,9 +72,26 @@ def _descriptors(credentials):
     ]
 
 
+def _session_digest(request):
+    """SHA-256 of the current session key, saving the session first if it has none yet.
+
+    The digest binds a registration to the session that started it. Rotating the session
+    key therefore invalidates the attempt, which is the intended outcome.
+    """
+    import hashlib
+
+    if not request.session.session_key:
+        request.session.save()
+    return hashlib.sha256(request.session.session_key.encode()).hexdigest()
+
+
 def begin_registration(request, user):
-    """Return registration options as JSON for the browser."""
-    rp_id, _ = _relying_party(request)
+    """Return registration options as JSON, and store the ceremony they belong to.
+
+    The browser runs the standard ceremony. Any phone handoff is the browser's own
+    cross-device flow, so no Akilent page is opened on the phone.
+    """
+    rp_id, origin = _relying_party(request)
     existing = PasskeyCredential.objects.filter(user=user)
     options = generate_registration_options(
         rp_id=rp_id,
@@ -162,22 +103,56 @@ def begin_registration(request, user):
             resident_key=ResidentKeyRequirement.PREFERRED,
         ),
     )
-    _store_challenge(request, REG_KEY, options.challenge)
+    ceremony = PasskeyRegistrationChallenge.objects.create(
+        user=user,
+        challenge=base64.b64encode(options.challenge).decode(),
+        rp_id=rp_id,
+        origin=origin,
+        session_digest=_session_digest(request),
+        expires_at=timezone.now() + CHALLENGE_TTL,
+    )
+    request.session[REG_KEY] = {"id": ceremony.pk}
     return options_to_json(options)
 
 
-def finish_registration(request, user, credential_json, name=""):
-    """Verify the new credential and store it. Returns the credential, or None."""
-    pending = _take_challenge(request, REG_KEY)
-    if pending is None:
+def _consume_ceremony(user, ceremony_id, session_digest):
+    """Mark the ceremony used if it is this user's, this session's, unused and unexpired.
+
+    Returns the ceremony, or None. Atomic: the conditional UPDATE matches a row once, so
+    parallel completions cannot both succeed.
+    """
+    now = timezone.now()
+    claimed = PasskeyRegistrationChallenge.objects.filter(
+        pk=ceremony_id,
+        user=user,
+        session_digest=session_digest,
+        used_at__isnull=True,
+        expires_at__gt=now,
+    ).update(used_at=now)
+    if claimed != 1:
         return None
-    rp_id, origin = _relying_party(request)
+    return PasskeyRegistrationChallenge.objects.get(pk=ceremony_id)
+
+
+def finish_registration(request, user, credential_json, name=""):
+    """Verify the new credential and store it. Returns the credential, or None.
+
+    The ceremony is consumed before verification, so it is single use whether or not the
+    credential verifies. Verification uses the challenge, origin and relying-party ID
+    stored with the ceremony, not whatever the completing request claims.
+    """
+    pending = request.session.pop(REG_KEY, None)
+    if not pending or not isinstance(pending, dict) or "id" not in pending:
+        return None
+    ceremony = _consume_ceremony(user, pending["id"], _session_digest(request))
+    if ceremony is None:
+        return None
     try:
         verified = verify_registration_response(
             credential=credential_json,
-            expected_challenge=base64.b64decode(pending["challenge"]),
-            expected_rp_id=rp_id,
-            expected_origin=origin,
+            expected_challenge=ceremony.challenge_bytes(),
+            expected_rp_id=ceremony.rp_id,
+            expected_origin=ceremony.origin,
         )
     except Exception:
         return None

@@ -1,4 +1,5 @@
 {% extends "accounts/settings_base.html" %}
+{% load static %}
 {# Messages render inline on this page, so the toast layer stays off. #}
 {% block toasts %}{% endblock %}
 {% block settings_content %}
@@ -50,28 +51,85 @@
   <div class="border-t border-border pt-6">
     <h3 class="font-medium text-ink mb-1">Add a passkey</h3>
     <p class="text-sm text-gray-600 mb-4">
-      Scan a QR code with your phone's camera, then confirm on the phone with its fingerprint, face or PIN.
+      Your device asks you to confirm with its fingerprint, face or PIN. Akilent doesn't ask you to sign in to your phone.
     </p>
-    <form method="post" action="{% url 'passkey-link-start' %}" class="space-y-3">
+    <form id="passkey-add-form" method="post" action="{% url 'settings-passkeys' %}" class="space-y-4">
       {% csrf_token %}
       {% if not reauth_fresh %}
-        <p class="text-xs text-gray-600">
-          Adding a passkey needs your password and a current code, so someone with access to an open browser can't add one. {% if not totp_enrolled %}Without an authenticator app, we email a code to you.{% endif %}
-        </p>
-        {% if not totp_enrolled %}
-          <button type="submit" formaction="{% url 'passkey-reauth-send' %}" formnovalidate class="btn btn-ghost btn-sm touch-target">Email me a code</button>
+        <fieldset>
+          <legend class="label">Confirm it's you with</legend>
+          <div class="space-y-2 mt-1">
+            {% if totp_enrolled %}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="radio" name="method" value="app" checked> Authenticator app code
+              </label>
+            {% endif %}
+            {% if email_allowed %}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="radio" name="method" value="email" {% if not totp_enrolled %}checked{% endif %}> Email code
+              </label>
+            {% endif %}
+            {% if password_allowed %}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="radio" name="method" value="password" > Password
+              </label>
+            {% endif %}
+          </div>
+        </fieldset>
+        <div>
+          <label for="id_passkey_token" class="label">Code (app or email)</label>
+          <input id="id_passkey_token" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="input w-40 tracking-widest">
+        </div>
+        <div>
+          <label for="id_passkey_password" class="label">Password (only if you chose Password)</label>
+          <input id="id_passkey_password" type="password" name="password" autocomplete="current-password" class="input w-64">
+        </div>
+        {% if email_allowed %}
+          <button type="submit" formaction="{% url 'passkey-reauth-send' %}" formnovalidate class="btn btn-ghost touch-target">
+            Email me a code
+          </button>
         {% endif %}
-        <div>
-          <label for="id_passkey_password" class="label">Password</label>
-          <input id="id_passkey_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
-        </div>
-        <div>
-          <label for="id_passkey_token" class="label">{% if totp_enrolled %}Authenticator code{% else %}Code we emailed you{% endif %}</label>
-          <input id="id_passkey_token" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" required maxlength="20" class="input w-40 tracking-widest">
-        </div>
       {% endif %}
-      <button type="submit" class="btn btn-primary">Show QR code</button>
+      <div>
+        <button type="button" id="passkey-add-here" class="btn btn-primary touch-target" hidden>Add a passkey</button>
+        <p class="text-xs text-gray-600 mt-2">To use your phone, pick it when your browser offers that option.</p>
+      </div>
+      <p id="passkey-add-error" class="text-sm text-red-600" role="alert" hidden></p>
     </form>
   </div>
 </div>
+
+<script src="{% static 'js/passkeys.js' %}" defer></script>
+<script defer>
+  (function () {
+    var btn = document.getElementById("passkey-add-here");
+    var errEl = document.getElementById("passkey-add-error");
+    // Hide the same-device button where the browser has no passkey support.
+    if (!window.PublicKeyCredential || !window.passkeyRegister) return;
+    btn.hidden = false;
+    var form = document.getElementById("passkey-add-form");
+    btn.addEventListener("click", async function () {
+      errEl.hidden = true;
+      var reauth = {};
+      var method = form.querySelector("input[name=method]:checked");
+      if (method) reauth.method = method.value;
+      reauth.token = form.querySelector("[name=token]") ? form.querySelector("[name=token]").value : "";
+      reauth.password = form.querySelector("[name=password]") ? form.querySelector("[name=password]").value : "";
+      btn.disabled = true;
+      try {
+        await window.passkeyRegister(
+          "{% url 'passkey-register-options' %}",
+          "{% url 'passkey-register-finish' %}",
+          "",
+          reauth
+        );
+        window.location.href = "{% url 'settings-passkeys' %}";
+      } catch (e) {
+        errEl.textContent = e.message || "The passkey could not be added. Try again.";
+        errEl.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}

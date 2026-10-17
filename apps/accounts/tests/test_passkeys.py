@@ -20,9 +20,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
 
-from apps.accounts import passkeys
 from apps.accounts.mfa import has_second_factor
-from apps.accounts.models import PasskeyCredential
+from apps.accounts.models import PasskeyCredential, PasskeyRegistrationChallenge
 from apps.accounts.tests.test_email_mfa import _last_code
 
 PASSWORD = "pw-12345678"
@@ -80,7 +79,7 @@ class PasskeyRegistrationTest(TestCase):
         return _post_json(
             self.client,
             "passkey-register-options",
-            {"password": PASSWORD, "token": _last_code()},
+            {"method": "email", "token": _last_code()},
         )
 
     def test_registration_needs_the_password(self):
@@ -130,11 +129,9 @@ class PasskeyRegistrationTest(TestCase):
 
     def test_expired_challenge_is_refused(self):
         self._start_registration()
-        session = self.client.session
-        session[passkeys.REG_KEY]["at"] = (
-            timezone.now() - timedelta(minutes=10)
-        ).isoformat()
-        session.save()
+        PasskeyRegistrationChallenge.objects.update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
 
         with mock.patch(REG_VERIFY, return_value=_fake_registration()):
             resp = _post_json(

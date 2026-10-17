@@ -20,11 +20,17 @@ logger = logging.getLogger(__name__)
 
 RECOVERY_REGENERATED = "recovery_regenerated"
 TWO_FACTOR_DISABLED = "two_factor_disabled"
+PASSKEY_ADDED = "passkey_added"
 
 _COPY = {
     RECOVERY_REGENERATED: (
         "Your recovery codes were replaced",
         "Your two-factor recovery codes were replaced on {when}. Your old codes no longer work.",
+    ),
+    PASSKEY_ADDED: (
+        "A passkey was added to your account",
+        "A passkey was added to your account on {when}. If you didn't add it, sign in and "
+        "remove it, then change your password.{tail}",
     ),
     TWO_FACTOR_DISABLED: (
         "Two-factor authentication was turned off",

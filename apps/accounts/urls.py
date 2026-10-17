@@ -70,36 +70,6 @@ urlpatterns = [
         name="passkey-remove",
     ),
     path(
-        "settings/security/passkeys/link/start/",
-        views.passkey_link_start,
-        name="passkey-link-start",
-    ),
-    path(
-        "settings/security/passkeys/link/<str:token>/",
-        views.passkey_link_page,
-        name="passkey-link",
-    ),
-    path(
-        "settings/security/passkeys/link/<str:token>/status/",
-        views.passkey_link_status,
-        name="passkey-link-status",
-    ),
-    path(
-        "passkey/link/<str:token>/",
-        views.passkey_phone_page,
-        name="passkey-phone",
-    ),
-    path(
-        "passkey/link/<str:token>/options/",
-        views.passkey_phone_options,
-        name="passkey-phone-options",
-    ),
-    path(
-        "passkey/link/<str:token>/finish/",
-        views.passkey_phone_finish,
-        name="passkey-phone-finish",
-    ),
-    path(
         "settings/security/", settings_views.settings_security, name="settings-security"
     ),
     path("settings/team/", settings_views.settings_team, name="settings-team"),

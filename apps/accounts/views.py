@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_POST
 
 from apps.accounts import onboarding as ob
 from apps.accounts.forms import SignupForm, enabled_service_choices
@@ -64,6 +64,7 @@ _2FA_SESSION_KEY = "_2fa_user_pk"
 _2FA_SESSION_BACKEND_KEY = "_2fa_backend"
 _2FA_SESSION_NEXT_KEY = "_2fa_next"
 _2FA_CHANNEL_KEY = "_2fa_channel"  # "app" or "email" for the prompt
+_2FA_EMAIL_SENT_KEY = "_2fa_email_sent"  # a sign-in code was emailed for this sign-in
 
 
 _2FA_STEPUP_KEY = (
@@ -119,6 +120,7 @@ def begin_second_factor(request, user, backend, next_url="", stepup=False):
             _2FA_SESSION_NEXT_KEY,
             _2FA_STEPUP_KEY,
             _2FA_CHANNEL_KEY,
+            _2FA_EMAIL_SENT_KEY,
             RECOVERY_DISPLAY_KEY,
             STRONG_VERIFIED_KEY,
             PASSKEY_REAUTH_KEY,
@@ -1055,6 +1057,7 @@ def _finish_second_factor(request, user, device=None):
     )
     request.session.pop(_2FA_SESSION_KEY, None)
     request.session.pop(_2FA_CHANNEL_KEY, None)
+    request.session.pop(_2FA_EMAIL_SENT_KEY, None)
     request.session.pop(_2FA_STEPUP_KEY, None)
     user.backend = backend
     auth_login(request, user)
@@ -1219,6 +1222,7 @@ def _2fa_verify(request):
             if email_available:
                 _code_sent_message(request, email_mfa.send_code(user, "login"))
                 request.session[_2FA_CHANNEL_KEY] = "email"
+                request.session[_2FA_EMAIL_SENT_KEY] = True
             else:
                 messages.error(
                     request, "Email codes are not available for this sign-in."
@@ -1279,6 +1283,11 @@ def _2fa_verify(request):
                 request, "That code didn't work. Check the code and try again."
             )
         return redirect(reverse("2fa-verify"))
+
+    if channel == "email" and not request.session.get(_2FA_EMAIL_SENT_KEY):
+        # Email-only accounts: send the code when the step opens, as password reset does.
+        request.session[_2FA_EMAIL_SENT_KEY] = True
+        _code_sent_message(request, email_mfa.send_code(user, "login"))
 
     return render(
         request,
@@ -1690,20 +1699,14 @@ REAUTH_PASSWORD_LIMIT = 5
 REAUTH_PASSWORD_WINDOW_SECONDS = 15 * 60
 
 
-def _reauth_outcome(user, password, token, allow_recovery=True):
-    """Password, then a current second factor, for a sensitive change.
+def _password_guess(user, password):
+    """Check a password against the per-account limit. Returns (ok, wait_message).
 
-    Returns (ok, wait_message). Every attempt is counted before its password is
-    checked, using an atomic increment, so parallel requests cannot all pass the
-    limit before any of them counts. A correct password clears the count. Once the
-    limit is reached the password is not checked at all. ``allow_recovery`` is False
-    for passkey changes, which the recovery-code policy does not cover. The factor is
-    the authenticator app if one is enrolled, otherwise an emailed code.
+    Every attempt is counted before its password is checked, using an atomic
+    increment, so parallel requests cannot all pass the limit before any of them
+    counts. A correct password clears the count. Once the limit is reached the
+    password is not checked at all.
     """
-    from django_otp.plugins.otp_totp.models import TOTPDevice
-
-    from apps.accounts import email_mfa
-
     key = f"reauth-password-failures:{user.pk}"
     cache.add(key, 0, REAUTH_PASSWORD_WINDOW_SECONDS)
     try:
@@ -1716,6 +1719,23 @@ def _reauth_outcome(user, password, token, allow_recovery=True):
     if not user.check_password(password):
         return False, None
     cache.delete(key)
+    return True, None
+
+
+def _reauth_outcome(user, password, token, allow_recovery=True):
+    """Password, then a current second factor, for a sensitive change.
+
+    Returns (ok, wait_message). ``allow_recovery`` is False for passkey changes, which
+    the recovery-code policy does not cover. The factor is the authenticator app if
+    one is enrolled, otherwise an emailed code.
+    """
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.accounts import email_mfa
+
+    ok, wait = _password_guess(user, password)
+    if not ok:
+        return False, wait
     token = token.replace(" ", "")
     totp = TOTPDevice.objects.filter(user=user, confirmed=True).first()
     if totp is not None:
@@ -1724,6 +1744,51 @@ def _reauth_outcome(user, password, token, allow_recovery=True):
         )
         return factor is not None, wait
     return email_mfa.check_code(user, "reauth", token), None
+
+
+def _verify_for_passkey_enrolment(user, method, password, token):
+    """Confirm it's the account owner, using the one method the user chose.
+
+    ``password``: only for accounts not required to use MFA. Where MFA is required, a
+    passkey would otherwise satisfy MFA with the password alone.
+    ``app``: a current authenticator app code. Recovery codes are not accepted here.
+    ``email``: the code emailed by passkey_reauth_send.
+    Returns (ok, message).
+    """
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.accounts import email_mfa
+    from apps.accounts.mfa import mfa_required
+
+    token = token.replace(" ", "")
+    if method == "password":
+        if mfa_required(user):
+            return (
+                False,
+                "Your account must use an authenticator app or passkey. Choose another option.",
+            )
+        ok, wait = _password_guess(user, password)
+        return ok, wait or "That password didn't match. Try again."
+    if method == "app":
+        totp = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+        if totp is None:
+            return False, "Set up an authenticator app first, or choose another option."
+        factor, wait = _check_second_factor(user, totp, token, allow_recovery=False)
+        return (
+            factor is not None,
+            wait or "That app code didn't work. Check it and try again.",
+        )
+    if method == "email":
+        if mfa_required(user):
+            # Email codes never count as a strong factor where MFA is required.
+            return (
+                False,
+                "Your account must use an authenticator app or passkey. Choose another option.",
+            )
+        if email_mfa.check_code(user, "reauth", token):
+            return True, None
+        return False, "That email code didn't work. Check it and try again."
+    return False, "Choose how to confirm it's you."
 
 
 @login_required
@@ -1747,14 +1812,15 @@ def passkey_register_options(request):
     # A re-authentication from the last few minutes covers a retry after a cancelled
     # browser prompt, so the user is not asked for a new code.
     if not _passkey_change_allowed(request):
-        ok, wait = _reauth_outcome(
+        # The same one-method choice as the QR path: app, email or password.
+        ok, message = _verify_for_passkey_enrolment(
             request.user,
+            str(body.get("method", "")),
             str(body.get("password", "")),
             str(body.get("token", "")),
-            allow_recovery=False,
         )
         if not ok:
-            return JsonResponse({"ok": False, "error": wait or ""}, status=400)
+            return JsonResponse({"ok": False, "error": message}, status=400)
         request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
     return HttpResponse(
         passkeys.begin_registration(request, request.user),
@@ -1792,13 +1858,16 @@ def passkey_register_finish(request):
         ip_address=request.META.get("REMOTE_ADDR"),
         metadata={"passkey_pk": passkey.pk},
     )
+    from apps.accounts.security_notices import PASSKEY_ADDED, notify_after_commit
+
+    notify_after_commit(request.user, PASSKEY_ADDED)
     return JsonResponse({"ok": True})
 
 
 @login_required
 def passkey_settings(request):
     """List passkeys and register a new one. Removal is a separate, re-authenticated POST."""
-    from apps.accounts.mfa import has_totp
+    from apps.accounts.mfa import has_totp, mfa_required
 
     user = request.user
     return render(
@@ -1807,6 +1876,8 @@ def passkey_settings(request):
         {
             "passkeys": PasskeyCredential.objects.filter(user=user),
             "totp_enrolled": has_totp(user),
+            "password_allowed": not mfa_required(user),
+            "email_allowed": not mfa_required(user),
             "reauth_fresh": _passkey_change_allowed(request),
             "account": get_current_account(request),
         },
@@ -1839,131 +1910,6 @@ def passkey_remove(request, pk):
     )
     messages.success(request, "Passkey removed.")
     return redirect("settings-passkeys")
-
-
-def _qr_svg(url):
-    """An inline SVG QR code for a URL. Only our own URL goes in, so the markup is ours."""
-    import segno
-
-    return segno.make(url, error="m").svg_inline(scale=6, border=2)
-
-
-@login_required
-@require_POST
-def passkey_link_start(request):
-    """Re-authenticate if needed, then open the QR code page for a phone."""
-    from apps.accounts import passkeys
-
-    user = request.user
-    if not _passkey_change_allowed(request):
-        ok, wait = _reauth_outcome(
-            user,
-            request.POST.get("password", ""),
-            request.POST.get("token", ""),
-            allow_recovery=False,
-        )
-        if not ok:
-            messages.error(
-                request, wait or "Check your password and code, then try again."
-            )
-            return redirect("settings-passkeys")
-        request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
-    return redirect("passkey-link", token=passkeys.create_link(user))
-
-
-@login_required
-def passkey_link_page(request, token):
-    """Show the QR code. The page waits until the phone finishes, then returns."""
-    from apps.accounts import passkeys
-
-    if passkeys.find_link(request.user, token) is None:
-        messages.error(
-            request, "That code has expired or was already used. Make a new one."
-        )
-        return redirect("settings-passkeys")
-    phone_url = request.build_absolute_uri(reverse("passkey-phone", args=[token]))
-    return render(
-        request,
-        "accounts/passkey_link.html",
-        {
-            "qr_svg": _qr_svg(phone_url),
-            "status_url": reverse("passkey-link-status", args=[token]),
-            "account": get_current_account(request),
-        },
-    )
-
-
-@login_required
-@require_GET
-def passkey_link_status(request, token):
-    from apps.accounts import passkeys
-
-    if passkeys.link_is_done(request.user, token):
-        messages.success(request, "Passkey added from your phone.")
-        return JsonResponse({"done": True, "redirect": reverse("settings-passkeys")})
-    expired = passkeys.find_link(request.user, token) is None
-    if expired:
-        messages.error(request, "That code has expired. Make a new one to try again.")
-    return JsonResponse({"done": False, "expired": expired})
-
-
-@login_required
-@require_GET
-def passkey_phone_page(request, token):
-    """The page a phone opens after scanning the QR code. Signing in on the phone is required."""
-    from apps.accounts import passkeys
-
-    link_ok = passkeys.find_link(request.user, token) is not None
-    return render(
-        request,
-        "accounts/passkey_phone.html",
-        {
-            "link_ok": link_ok,
-            "options_url": reverse("passkey-phone-options", args=[token]),
-            "finish_url": reverse("passkey-phone-finish", args=[token]),
-        },
-    )
-
-
-@login_required
-@require_POST
-def passkey_phone_options(request, token):
-    from apps.accounts import passkeys
-
-    if passkeys.find_link(request.user, token) is None:
-        return JsonResponse({"ok": False}, status=400)
-    return HttpResponse(
-        passkeys.begin_registration(request, request.user),
-        content_type="application/json",
-    )
-
-
-@login_required
-@require_POST
-def passkey_phone_finish(request, token):
-    from apps.accounts import passkeys
-    from apps.core.audit import platform_record
-
-    body = _json_body(request)
-    if body is None:
-        return JsonResponse({"ok": False}, status=400)
-    name = body.get("name", "")
-    passkey = passkeys.complete_link(
-        request,
-        request.user,
-        token,
-        body.get("credential"),
-        name if isinstance(name, str) else "",
-    )
-    if passkey is None:
-        return JsonResponse({"ok": False}, status=400)
-    platform_record(
-        action="auth.passkey_added",
-        actor=request.user,
-        ip_address=request.META.get("REMOTE_ADDR"),
-        metadata={"passkey_pk": passkey.pk, "via": "qr"},
-    )
-    return JsonResponse({"ok": True})
 
 
 @require_POST

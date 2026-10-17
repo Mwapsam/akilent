@@ -475,17 +475,27 @@ class PasskeyCredential(Device):
         return self.name or "Passkey"
 
 
-class PasskeyLinkRequest(models.Model):
-    """A one-time QR code that lets a phone add a passkey for the signed-in account.
+class PasskeyRegistrationChallenge(models.Model):
+    """One passkey registration attempt. Shared by all requests, so it can be used once.
 
-    Only the SHA-256 digest of the token is stored. The row is single use: it is
-    marked used in the same transaction that stores the passkey.
+    The session only holds this row's id. The row holds the challenge and the origin and
+    relying-party ID it was issued for. ``used_at`` is set by a conditional UPDATE, so
+    of several parallel completions only one can succeed.
     """
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="passkey_links"
+        User, on_delete=models.CASCADE, related_name="passkey_registrations"
     )
-    token_digest = models.CharField(max_length=64, unique=True)
+    challenge = models.CharField(max_length=128)
+    rp_id = models.CharField(max_length=255)
+    origin = models.CharField(max_length=255)
+    # SHA-256 of the initiating session key. The key itself is never stored.
+    session_digest = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
+
+    def challenge_bytes(self):
+        import base64
+
+        return base64.b64decode(self.challenge)
