@@ -37,7 +37,10 @@
 
   window.passkeyRegister = async function (optionsUrl, finishUrl, name, reauth) {
     var res = await post(optionsUrl, reauth || {});
-    if (!res.ok) throw new Error("Could not start. Check the details and try again.");
+    if (!res.ok) {
+      var body = await res.json().catch(function () { return {}; });
+      throw new Error(body.error || "Could not start. Check the details and try again.");
+    }
     var opts = await res.json();
     opts.challenge = b64urlToBuf(opts.challenge);
     opts.user.id = b64urlToBuf(opts.user.id);

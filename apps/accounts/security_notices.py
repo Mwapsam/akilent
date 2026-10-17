@@ -52,15 +52,16 @@ def _send(user_pk, email, kind):
 
     subject, template = _COPY[kind]
     when = timezone.now().strftime("%d %B %Y at %H:%M UTC")
-    if (
-        kind == TWO_FACTOR_DISABLED
-        and PasskeyCredential.objects.filter(user_id=user_pk, confirmed=True).exists()
-    ):
-        tail = "Your passkeys and security keys still work."
-    elif kind == TWO_FACTOR_DISABLED:
-        tail = "Your password is now the only way to sign in."
-    else:
-        tail = ""
+    tail = ""
+    if kind == TWO_FACTOR_DISABLED:
+        from apps.accounts.models import EmailMfaEnrolment
+
+        if PasskeyCredential.objects.filter(user_id=user_pk, confirmed=True).exists():
+            tail = "Your passkeys and security keys still work."
+        elif EmailMfaEnrolment.objects.filter(user_id=user_pk).exists():
+            tail = "Your password and email sign-in codes are now the only ways to sign in."
+        else:
+            tail = "Your password is now the only way to sign in."
     body = f"{template.format(when=when, tail=tail)}\n\n{_FOOTER}\n"
     try:
         send_system_email(to_email=email, subject=subject, text_body=body)
