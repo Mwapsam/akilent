@@ -81,7 +81,7 @@ class SessionStateAndCrossFactorLockoutTest(TestCase):
         self._second_step()
         # The first wrong recovery code opens a delay. Attempts inside that
         # delay are refused without being counted, so the counter stays at 1.
-        self.client.post(reverse("2fa-verify"), {"token": "AAAA-BBBB-CCCC-DDDD"})
+        self.client.post(reverse("2fa-recovery"), {"code": "AAAA-BBBB-CCCC-DDDD"})
         self.client.post(reverse("2fa-verify"), {"token": _current_token(self.device)})
 
         self.assertNotIn(DEVICE_ID_SESSION_KEY, self.client.session)
@@ -102,4 +102,44 @@ class SessionStateAndCrossFactorLockoutTest(TestCase):
 
         self.assertEqual(
             self.client.session[DEVICE_ID_SESSION_KEY], self.device.persistent_id
+        )
+
+
+class ConcurrentRegenerationTest(TransactionTestCase):
+    """Concurrent regenerations must leave exactly one valid set (PostgreSQL row lock)."""
+
+    def test_concurrent_regenerations_leave_exactly_one_valid_set(self):
+        from apps.accounts.models import RecoveryCode
+
+        user = User.objects.create_user(
+            username="regen-race@example.com",
+            email="regen-race@example.com",
+            password=PASSWORD,
+        )
+        recovery.generate_codes(user)
+        errors = []
+        barrier = threading.Barrier(6)
+
+        def regenerate():
+            try:
+                barrier.wait()
+                recovery.generate_codes(user)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=regenerate) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            RecoveryCode.objects.filter(user=user, used_at__isnull=True).count(),
+            recovery.CODE_COUNT,
+        )
+        self.assertEqual(
+            RecoveryCode.objects.filter(user=user).count(), recovery.CODE_COUNT
         )

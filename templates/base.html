@@ -350,6 +350,7 @@
   {% endif %}
 
   {# ─── Server-side flash messages → toasts ────────────────────────────── #}
+  {% block toasts %}
   {% if messages %}
     {% with messages_data=messages|dictsort:"tags" %}
       <script type="application/json" id="flash-messages">
@@ -369,6 +370,7 @@
       }
     "></div>
   {% endif %}
+  {% endblock %}
 
   {% if not request.shell_swap %}
   {# ─── Global overlays ─────────────────────────────────────────────────── #}

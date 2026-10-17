@@ -25,6 +25,21 @@ urlpatterns = [
     ),
     path("settings/security/2fa/", views._2fa_setup, name="2fa-setup"),
     path(
+        "settings/security/2fa/recovery-codes/",
+        views.recovery_codes_page,
+        name="settings-recovery-codes",
+    ),
+    path(
+        "settings/security/2fa/recovery-codes/confirm/",
+        views.recovery_codes_confirm,
+        name="recovery-codes-confirm",
+    ),
+    path(
+        "settings/security/2fa/recovery-codes/regenerate/",
+        views.recovery_codes_regenerate,
+        name="recovery-codes-regenerate",
+    ),
+    path(
         "settings/security/email-codes/",
         views.email_mfa_settings,
         name="settings-email-mfa",

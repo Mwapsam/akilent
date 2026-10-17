@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -17,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts import onboarding as ob
@@ -76,7 +78,15 @@ def _code_sent_message(request, result):
     if result == email_mfa.SENT:
         messages.info(request, "A code is on its way to your email.")
     elif result == email_mfa.RECENT:
-        messages.info(request, "A code was sent recently. Check your email.")
+        messages.info(
+            request,
+            "A code was sent just now. Check your email, or wait a minute before asking again.",
+        )
+    elif result == email_mfa.CAPPED:
+        messages.error(
+            request,
+            "Too many codes have been sent to this account. Try again in an hour, or use another sign-in method.",
+        )
     else:
         messages.error(
             request,
@@ -97,6 +107,25 @@ def begin_second_factor(request, user, backend, next_url="", stepup=False):
         next_url, allowed_hosts={request.get_host()}
     ):
         next_url = ""
+    if not stepup and not request.user.is_authenticated:
+        # Rotate the key so a session fixed before sign-in stops working, and clear only
+        # the state that belongs to sign-in and recovery. Other session data is kept.
+        from apps.accounts import passkeys
+
+        request.session.cycle_key()
+        for key in (
+            _2FA_SESSION_KEY,
+            _2FA_SESSION_BACKEND_KEY,
+            _2FA_SESSION_NEXT_KEY,
+            _2FA_STEPUP_KEY,
+            _2FA_CHANNEL_KEY,
+            RECOVERY_DISPLAY_KEY,
+            STRONG_VERIFIED_KEY,
+            PASSKEY_REAUTH_KEY,
+            passkeys.REG_KEY,
+            passkeys.AUTH_KEY,
+        ):
+            request.session.pop(key, None)
     request.session[_2FA_SESSION_KEY] = user.pk
     request.session[_2FA_SESSION_BACKEND_KEY] = backend
     request.session[_2FA_SESSION_NEXT_KEY] = next_url
@@ -1060,12 +1089,24 @@ def _challenge_required(user):
     return has_totp(user) or email_counts or has_passkeys(user)
 
 
-def _check_second_factor(user, device, raw):
-    """Return the locked device if raw is a valid TOTP code or unused recovery code.
+def _wait_text(info):
+    """How long to wait after a lockout, in words."""
+    if not info or "locked_until" not in info:
+        return "Too many attempts. Try again later."
+    seconds = math.ceil((info["locked_until"] - timezone.now()).total_seconds())
+    if seconds <= 60:
+        return f"Too many attempts. Try again in {max(seconds, 1)} seconds."
+    if seconds <= 3600:
+        return f"Too many attempts. Try again in {math.ceil(seconds / 60)} minutes."
+    return "Too many attempts. Try again later."
 
-    The device row is locked for the whole check, so concurrent guesses are
-    serialised and the django_otp lockout is enforced for both paths. A failed
-    recovery attempt counts against the same lockout as a failed TOTP attempt.
+
+def _check_second_factor(user, device, raw):
+    """Check an app code or unused recovery code under the device lock.
+
+    Returns (device, None) on success, (None, wait_message) while the lockout is
+    active, and (None, None) for a wrong code. The lockout is read inside the same
+    lock as the check, so the message and the decision always agree.
     """
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
@@ -1073,18 +1114,77 @@ def _check_second_factor(user, device, raw):
 
     with transaction.atomic():
         locked = TOTPDevice.objects.select_for_update().get(pk=device.pk)
-        allowed, _ = locked.verify_is_allowed()
+        allowed, info = locked.verify_is_allowed()
         if not allowed:
-            return None
+            return None, _wait_text(info)
         if recovery.looks_like_code(raw):
             if recovery.redeem(user, raw):
                 locked.throttle_reset(commit=True)
-                return locked
+                return locked, None
             locked.throttle_increment(commit=True)
-            return None
+            return None, None
         # verify_token() handles replay (last_t) and increments the lockout on failure.
         # Secret access goes through the storage service, which re-seals the key column.
-        return totp_storage.verify_and_seal(locked, raw)
+        return totp_storage.verify_and_seal(locked, raw), None
+
+
+RECOVERY_DISPLAY_KEY = "recovery_display"
+RECOVERY_DISPLAY_SECONDS = 10 * 60
+
+
+def _mark_strong_verified(request, device):
+    """Record a strong factor that just passed in this session (used after enabling an app)."""
+    from django_otp import login as otp_login
+
+    otp_login(request, device)
+    request.session[STRONG_VERIFIED_KEY] = {
+        "at": timezone.now().isoformat(),
+        "user": request.user.pk,
+    }
+
+
+def _store_recovery_display(request, codes):
+    """Keep a freshly generated set in the session, encrypted, for a short display window."""
+    from apps.accounts.fields import seal_text
+
+    payload = json.dumps({"at": timezone.now().isoformat(), "codes": codes})
+    request.session[RECOVERY_DISPLAY_KEY] = seal_text(payload)
+
+
+def _load_recovery_display(request):
+    """The codes still on display, or None.
+
+    None covers expired, missing and unreadable state alike. Unreadable state is
+    cleared and never regenerated here (fail closed): the user must make a new set.
+    """
+    from apps.accounts import recovery
+    from apps.accounts.fields import open_text
+
+    token = request.session.get(RECOVERY_DISPLAY_KEY)
+    if not token:
+        return None
+    raw = open_text(token)
+    if raw is None:
+        request.session.pop(RECOVERY_DISPLAY_KEY, None)
+        return None
+    try:
+        data = json.loads(raw)
+        issued = datetime.fromisoformat(data["at"])
+        codes = data["codes"]
+    except (ValueError, KeyError, TypeError):
+        request.session.pop(RECOVERY_DISPLAY_KEY, None)
+        return None
+    well_formed = (
+        isinstance(codes, list)
+        and len(codes) == recovery.CODE_COUNT
+        and all(isinstance(c, str) for c in codes)
+    )
+    if not well_formed or timezone.now() - issued > timedelta(
+        seconds=RECOVERY_DISPLAY_SECONDS
+    ):
+        request.session.pop(RECOVERY_DISPLAY_KEY, None)
+        return None
+    return codes
 
 
 def _2fa_verify(request):
@@ -1095,24 +1195,15 @@ def _2fa_verify(request):
     throttle. An unknown or unavailable action is refused without any token check.
     Each POST redirects back, so a refresh does not repeat the action.
     """
-    from django.contrib.auth.models import User
-    from django_otp.plugins.otp_totp.models import TOTPDevice
-
     from apps.accounts import email_mfa
     from apps.accounts.passkeys import has_passkeys
     from apps.core.audit import platform_record
 
-    user_pk = request.session.get(_2FA_SESSION_KEY)
-    if not user_pk:
+    user, device = _pending_second_factor(request)
+    if user is None:
         return redirect(settings.LOGIN_URL)
+    user_pk = user.pk
 
-    try:
-        user = User.objects.get(pk=user_pk)
-    except User.DoesNotExist:
-        del request.session[_2FA_SESSION_KEY]
-        return redirect(settings.LOGIN_URL)
-
-    device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
     stepup = bool(request.session.get(_2FA_STEPUP_KEY))
     # Email codes prove a login only. They are never offered for a step-up.
     from apps.accounts.mfa import has_second_factor
@@ -1151,9 +1242,20 @@ def _2fa_verify(request):
                 None  # an emailed code proves the login; there is no OTP device
             )
         else:
-            factor_device = (
-                _check_second_factor(user, device, token) if device else None
+            from apps.accounts import recovery
+
+            if device is not None and recovery.looks_like_code(token):
+                messages.error(
+                    request,
+                    'That looks like a recovery code. Use "Lost your device?" to enter it.',
+                )
+                return redirect(reverse("2fa-verify"))
+            factor_device, wait = (
+                _check_second_factor(user, device, token) if device else (None, None)
             )
+            if wait:
+                messages.error(request, wait)
+                return redirect(reverse("2fa-verify"))
             passed = factor_device is not None
         if passed:
             return redirect(_finish_second_factor(request, user, factor_device))
@@ -1170,7 +1272,9 @@ def _2fa_verify(request):
                 "Too many attempts. Try again in an hour, or use a passkey if you have one.",
             )
         else:
-            messages.error(request, "Invalid code. Please try again.")
+            messages.error(
+                request, "That code didn't work. Check the code and try again."
+            )
         return redirect(reverse("2fa-verify"))
 
     return render(
@@ -1180,9 +1284,135 @@ def _2fa_verify(request):
             "channel": channel,
             "email_available": email_available,
             "has_app": device is not None,
+            "recovery_available": device is not None and channel == "app",
             "passkey_available": has_passkeys(user),
         },
     )
+
+
+def recovery_sign_in(request):
+    """Step 2 with a recovery code. Its own page, so the code field never takes these.
+
+    Shows nothing about the account until the code is accepted, not even how many
+    codes are left.
+    """
+    from apps.accounts import recovery
+    from apps.core.audit import platform_record
+
+    user, device = _pending_second_factor(request)
+    if user is None or device is None:
+        # Recovery codes belong to an app. Without one, go back to the sign-in step.
+        return redirect(reverse("2fa-verify"))
+
+    if request.method == "POST":
+        raw = request.POST.get("code", "")
+        if not recovery.looks_like_code(raw):
+            messages.error(
+                request,
+                "Recovery codes have 16 letters and numbers. Check the code and try again.",
+            )
+            return redirect(reverse("2fa-recovery"))
+        passed, wait = _check_second_factor(user, device, raw)
+        if wait:
+            platform_record(
+                action="auth.2fa_failed",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                success=False,
+                metadata={"user_pk": user.pk, "channel": "recovery", "locked": True},
+            )
+            messages.error(request, wait)
+            return redirect(reverse("2fa-recovery"))
+        if passed is not None:
+            return redirect(_finish_second_factor(request, user, passed))
+        platform_record(
+            action="auth.2fa_failed",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            success=False,
+            metadata={"user_pk": user.pk, "channel": "recovery"},
+        )
+        messages.error(
+            request,
+            "That recovery code didn't work. Each code works once. Check it and try again.",
+        )
+        return redirect(reverse("2fa-recovery"))
+
+    return render(request, "auth/2fa_recovery.html")
+
+
+@login_required
+@never_cache
+def recovery_codes_page(request):
+    """Show the codes from the setup or regenerate step, for one display window."""
+    from apps.accounts.mfa import has_totp
+
+    codes = _load_recovery_display(request)
+    return render(
+        request,
+        "accounts/2fa_recovery_codes.html",
+        {
+            "codes": codes,
+            "account": get_current_account(request),
+            "can_regenerate": has_totp(request.user),
+        },
+    )
+
+
+@login_required
+@require_POST
+def recovery_codes_confirm(request):
+    """The user confirms they saved the codes. Removes the temporary copy."""
+    if request.POST.get("saved") != "1":
+        messages.error(request, "Tick the box to confirm you saved your codes.")
+        return redirect(reverse("settings-recovery-codes"))
+    request.session.pop(RECOVERY_DISPLAY_KEY, None)
+    messages.success(request, "Recovery codes saved. Keep them somewhere safe.")
+    return redirect("settings-security")
+
+
+@login_required
+@require_POST
+def recovery_codes_regenerate(request):
+    """Replace all recovery codes. Needs the password and a current app code.
+
+    The old codes stop working in the same transaction that creates the new set.
+    """
+    from apps.accounts import recovery
+    from apps.accounts.mfa import has_totp
+    from apps.accounts.security_notices import RECOVERY_REGENERATED, notify_after_commit
+    from apps.core.audit import platform_record
+
+    user = request.user
+    # Recovery codes are only for accounts with an authenticator app. Email codes
+    # never authorise a new set, so an email-only account cannot be given codes.
+    if not has_totp(user):
+        messages.error(
+            request, "Turn on an authenticator app before making recovery codes."
+        )
+        return redirect("settings-security")
+    ok, wait = _reauth_outcome(
+        user, request.POST.get("password", ""), request.POST.get("token", "")
+    )
+    if not ok:
+        platform_record(
+            action="auth.recovery_codes_regen_failed",
+            actor=user,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            success=False,
+            metadata={"locked": bool(wait)},
+        )
+        messages.error(request, wait or "Check your password and code, then try again.")
+        return redirect("settings-security")
+
+    with transaction.atomic():
+        codes = recovery.generate_codes(user)
+        platform_record(
+            action="auth.recovery_codes_regenerated",
+            actor=user,
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+        notify_after_commit(user, RECOVERY_REGENERATED)
+    _store_recovery_display(request, codes)
+    return redirect("settings-recovery-codes")
 
 
 @login_required
@@ -1207,33 +1437,41 @@ def _2fa_setup(request):
             # Re-authenticate: a password and a current factor, so a stolen
             # session alone cannot switch 2FA off.
             password = request.POST.get("password", "")
-            token = request.POST.get("token", "").replace(" ", "")
-            if not (
-                user.check_password(password)
-                and _check_second_factor(user, existing, token)
-            ):
+            ok, wait = _reauth_outcome(user, password, request.POST.get("token", ""))
+            if not ok:
                 platform_record(
                     action="auth.2fa_disable_failed",
                     account=account,
                     actor=user,
                     ip_address=request.META.get("REMOTE_ADDR"),
                     success=False,
+                    metadata={"locked": bool(wait)},
                 )
                 messages.error(
                     request,
-                    "Enter your password and a current code to turn off two-factor authentication.",
+                    wait
+                    or "Enter your password and a current code to turn off two-factor authentication.",
                 )
                 return redirect("settings-security")
             from apps.accounts.models import RecoveryCode
-
-            TOTPDevice.objects.filter(user=user).delete()
-            RecoveryCode.objects.filter(user=user).delete()
-            platform_record(
-                action="auth.2fa_disabled",
-                account=account,
-                actor=user,
-                ip_address=request.META.get("REMOTE_ADDR"),
+            from apps.accounts.security_notices import (
+                TWO_FACTOR_DISABLED,
+                notify_after_commit,
             )
+
+            # The change, its audit record and the notice are one unit: the email is
+            # sent only if this transaction commits.
+            with transaction.atomic():
+                TOTPDevice.objects.filter(user=user).delete()
+                RecoveryCode.objects.filter(user=user).delete()
+                platform_record(
+                    action="auth.2fa_disabled",
+                    account=account,
+                    actor=user,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                )
+                notify_after_commit(user, TWO_FACTOR_DISABLED)
+            request.session.pop(RECOVERY_DISPLAY_KEY, None)
             messages.success(request, "Two-factor authentication disabled.")
             return redirect("settings-security")
 
@@ -1249,22 +1487,21 @@ def _2fa_setup(request):
             if device:
                 device.confirmed = True
                 device.save(update_fields=["confirmed"])
+                _mark_strong_verified(request, device)
                 platform_record(
                     action="auth.2fa_enabled",
                     account=account,
                     actor=user,
                     ip_address=request.META.get("REMOTE_ADDR"),
                 )
-                # Shown once on this page and never stored in plaintext or logged.
+                # Kept encrypted in the session for a short window; never logged.
                 codes = recovery.generate_codes(user)
-                return render(
-                    request,
-                    "accounts/2fa_recovery_codes.html",
-                    {"codes": codes, "account": account},
-                )
+                _store_recovery_display(request, codes)
+                return redirect("settings-recovery-codes")
             messages.error(
                 request,
-                "Code didn't match. Please scan the QR code again and try a fresh code.",
+                "That code didn't match. Check that your phone's time is set automatically, "
+                "then enter the newest code.",
             )
             # Fall through to re-render setup with the same (unconfirmed) device.
 
@@ -1381,12 +1618,29 @@ STRONG_VERIFIED_KEY = "strong_verified_at"
 STRONG_VERIFIED_SECONDS = 15 * 60
 
 
-def _pending_user(request):
-    """The user who passed their password and is now completing a second factor."""
+def _pending_second_factor(request):
+    """(user, confirmed app device) for the second step in progress, or (None, None).
+
+    The one place that reads the pending state. A pointer to a user who no longer
+    exists is cleared here, so callers never repeat that cleanup.
+    """
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
     pk = request.session.get(_2FA_SESSION_KEY)
     if not pk:
-        return None
-    return User.objects.filter(pk=pk).first()
+        return None, None
+    user = User.objects.filter(pk=pk).first()
+    if user is None:
+        request.session.pop(_2FA_SESSION_KEY, None)
+        return None, None
+    device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    return user, device
+
+
+def _pending_user(request):
+    """The user who passed their password and is now completing a second factor."""
+    user, _ = _pending_second_factor(request)
+    return user
 
 
 def _json_body(request):
@@ -1426,24 +1680,45 @@ def _passkey_change_allowed(request):
     return _reauth_is_fresh(request) or _recently_verified(request)
 
 
-def _reauthenticate(user, password, token):
-    """Re-authenticate before a passkey change: password, then a current second factor.
+REAUTH_PASSWORD_LIMIT = 5
+REAUTH_PASSWORD_WINDOW_SECONDS = 15 * 60
 
-    The factor is the authenticator app if one is enrolled, otherwise a code
-    emailed to the account. The password is checked first, so a wrong password
-    uses no attempt.
+
+def _reauth_outcome(user, password, token):
+    """Password, then a current second factor, for a sensitive change.
+
+    Returns (ok, wait_message). Wrong passwords count against a per-account limit,
+    so a hijacked session cannot guess the password without bound. Once the limit is
+    reached, the password is not checked at all. A correct password clears the count.
+    The factor is the authenticator app if one is enrolled, otherwise an emailed code.
     """
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
     from apps.accounts import email_mfa
 
+    key = f"reauth-password-failures:{user.pk}"
+    if (cache.get(key) or 0) >= REAUTH_PASSWORD_LIMIT:
+        return False, "Too many failed attempts. Try again in 15 minutes."
     if not user.check_password(password):
-        return False
+        cache.add(key, 0, REAUTH_PASSWORD_WINDOW_SECONDS)
+        try:
+            cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, REAUTH_PASSWORD_WINDOW_SECONDS)
+        return False, None
+    cache.delete(key)
     token = token.replace(" ", "")
     totp = TOTPDevice.objects.filter(user=user, confirmed=True).first()
     if totp is not None:
-        return _check_second_factor(user, totp, token) is not None
-    return email_mfa.check_code(user, "reauth", token)
+        factor, wait = _check_second_factor(user, totp, token)
+        return factor is not None, wait
+    return email_mfa.check_code(user, "reauth", token), None
+
+
+def _reauthenticate(user, password, token):
+    """True if the password and current second factor pass. See _reauth_outcome."""
+    ok, _ = _reauth_outcome(user, password, token)
+    return ok
 
 
 @login_required
@@ -1467,10 +1742,11 @@ def passkey_register_options(request):
     # A re-authentication from the last few minutes covers a retry after a cancelled
     # browser prompt, so the user is not asked for a new code.
     if not _passkey_change_allowed(request):
-        if not _reauthenticate(
+        ok, wait = _reauth_outcome(
             request.user, str(body.get("password", "")), str(body.get("token", ""))
-        ):
-            return JsonResponse({"ok": False}, status=400)
+        )
+        if not ok:
+            return JsonResponse({"ok": False, "error": wait or ""}, status=400)
         request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
     return HttpResponse(
         passkeys.begin_registration(request, request.user),
@@ -1537,10 +1813,11 @@ def passkey_remove(request, pk):
 
     user = request.user
     passkey = get_object_or_404(PasskeyCredential, pk=pk, user=user)
-    if not _reauthenticate(
+    ok, wait = _reauth_outcome(
         user, request.POST.get("password", ""), request.POST.get("token", "")
-    ):
-        messages.error(request, "Check your password and code, then try again.")
+    )
+    if not ok:
+        messages.error(request, wait or "Check your password and code, then try again.")
         return redirect("settings-passkeys")
     passkey.delete()
     platform_record(
@@ -1568,10 +1845,13 @@ def passkey_link_start(request):
 
     user = request.user
     if not _passkey_change_allowed(request):
-        if not _reauthenticate(
+        ok, wait = _reauth_outcome(
             user, request.POST.get("password", ""), request.POST.get("token", "")
-        ):
-            messages.error(request, "Check your password and code, then try again.")
+        )
+        if not ok:
+            messages.error(
+                request, wait or "Check your password and code, then try again."
+            )
             return redirect("settings-passkeys")
         request.session[PASSKEY_REAUTH_KEY] = timezone.now().isoformat()
     return redirect("passkey-link", token=passkeys.create_link(user))

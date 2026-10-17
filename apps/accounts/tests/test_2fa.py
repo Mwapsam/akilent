@@ -104,8 +104,10 @@ class TwoFASetupTest(TestCase):
             {"action": "enable", "token": str(token)},
             follow=False,
         )
-        # Enabling now shows the one-time recovery codes instead of redirecting.
-        self.assertTemplateUsed(resp, "accounts/2fa_recovery_codes.html")
+        # Enabling sends the user to the recovery codes page, shown once.
+        self.assertRedirects(
+            resp, reverse("settings-recovery-codes"), fetch_redirect_response=False
+        )
         self.assertTrue(
             TOTPDevice.objects.filter(user=self.user, confirmed=True).exists()
         )

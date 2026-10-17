@@ -1,7 +1,14 @@
 {% extends "accounts/settings_base.html" %}
+{# Messages render inline on this page, so the toast layer stays off. #}
+{% block toasts %}{% endblock %}
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Two-factor authentication</h2>
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="mb-4 alert {% if msg.level_tag == 'success' %}alert-success{% elif msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}" role="{% if msg.level_tag == 'error' %}alert{% else %}status{% endif %}"><p>{{ msg }}</p></div>
+    {% endfor %}
+  {% endif %}
 
   <p class="text-sm mb-4"><a href="{% url 'settings-email-mfa' %}" class="text-accent hover:text-accent-strong">Email sign-in codes</a> are a separate option. <a href="{% url 'settings-passkeys' %}" class="text-accent hover:text-accent-strong">Passkeys and security keys</a> are too.</p>
 
@@ -19,19 +26,27 @@
         <input id="id_disable_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
       </div>
       <div>
-        <label for="id_disable_token" class="label">Authenticator code or recovery code</label>
-        <input id="id_disable_token" type="text" name="token" autocomplete="one-time-code" required maxlength="20" class="input w-64">
+        <label for="id_disable_token" class="label">Authenticator app code or recovery code</label>
+        <input id="id_disable_token" type="text" name="token" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required maxlength="24" class="input w-64 tracking-wider">
       </div>
-      <button type="submit" class="btn btn-danger btn-sm"
-              data-confirm="Disable two-factor authentication? Your account will only be protected by your password." data-confirm-danger data-confirm-label="Disable">
-        Disable two-factor authentication
+      <button type="submit" class="btn btn-danger btn-sm touch-target"
+              data-confirm="Turn off two-factor authentication? Your recovery codes will be deleted. Passkeys and email codes are not changed by this." data-confirm-danger data-confirm-label="Turn off">
+        Turn off two-factor authentication
       </button>
     </form>
 
+    <div class="border-t border-border pt-5 mt-5">
+      <h3 class="font-medium text-ink mb-1">Recovery codes</h3>
+      <p class="text-sm text-gray-600 mb-4">
+        Making a new set stops your old codes from working. Use this if you have lost them.
+      </p>
+      {% include "accounts/_recovery_regenerate_form.html" %}
+    </div>
+
   {% else %}
-    <p class="text-sm text-gray-500 mb-4">
-      Protect your account with a time-based one-time password (TOTP) from an app like
-      Google Authenticator, Authy, or 1Password.
+    <p class="text-sm text-gray-600 mb-4">
+      Protect your account with a 6-digit code from an authenticator app such as
+      Google Authenticator, Authy or 1Password. Scan the code below with the app.
     </p>
 
     <div class="mb-5 flex flex-col items-start gap-4">
@@ -41,32 +56,38 @@
              class="w-48 h-48">
       </div>
       <div>
-        <p class="text-xs text-gray-500 mb-1">Can't scan? Enter this key manually:</p>
-        <code class="text-xs font-mono tone-neutral-bg px-2 py-1 rounded select-all break-all">{{ secret }}</code>
+        <p class="text-xs text-gray-600 mb-1">Can't scan? Type this key into your app as a time-based key:</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <code id="setup-key" class="text-xs font-mono tone-neutral-bg px-2 py-1 rounded select-all break-all">{{ secret }}</code>
+          <button type="button" id="copy-setup-key" class="btn btn-ghost btn-sm touch-target">Copy key</button>
+        </div>
+        <script>
+          document.getElementById("copy-setup-key").addEventListener("click", function () {
+            var btn = this;
+            navigator.clipboard.writeText(document.getElementById("setup-key").textContent.trim()).then(function () {
+              btn.textContent = "Copied";
+            }, function () {
+              btn.textContent = "Copy failed. Select the key and copy it.";
+            });
+          });
+        </script>
       </div>
     </div>
 
-    {% if messages %}
-      {% for msg in messages %}
-        <div class="mb-4 alert alert-danger">
-          {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
-          <p>{{ msg }}</p>
-        </div>
-      {% endfor %}
-    {% endif %}
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <input type="hidden" name="action" value="enable">
       <div>
-        <label for="id_token" class="label">Confirm with a code from the app</label>
+        <label for="id_token" class="label">6-digit code from the app</label>
         <input id="id_token" type="text" name="token"
-               inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
+               inputmode="numeric" maxlength="7" required
                autocomplete="one-time-code"
-               placeholder="000 000"
+               placeholder="123456"
                class="input w-40 text-center tracking-widest text-lg">
       </div>
       <button type="submit" class="btn btn-primary">Enable two-factor authentication</button>
+      <p class="text-xs text-gray-600">Stuck? <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Visit the help centre</a>.</p>
     </form>
   {% endif %}
 </div>

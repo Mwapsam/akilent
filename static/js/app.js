@@ -371,7 +371,10 @@
     const main = mainEl();
     if (!main) return;
     const invalid = main.querySelector('[aria-invalid="true"], .errorlist');
-    const target = invalid && invalid.matches("input, select, textarea") ? invalid : main.querySelector("h1") || main;
+    // An autofocus field (for example a code entry) takes focus ahead of the heading, as it
+    // would on a full page load, so keyboard users land where they need to type.
+    const autofocus = main.querySelector("[autofocus]");
+    const target = invalid && invalid.matches("input, select, textarea") ? invalid : autofocus || main.querySelector("h1") || main;
     if (target !== main && !target.hasAttribute("tabindex") && !target.matches("input, select, textarea")) {
       target.setAttribute("tabindex", "-1");
     }

@@ -25,6 +25,16 @@
     });
   }
 
+  // Turn a browser or server failure into a sentence a user can act on.
+  function explain(err, fallback) {
+    // NotAllowedError also covers a timeout or a key that is not on this device, so the
+    // message names those causes rather than assuming the user cancelled.
+    if (err && err.name === "NotAllowedError") return new Error("We couldn't use that passkey. It may not be on this device, the prompt may have timed out, or it was cancelled. Try again, or sign in another way.");
+    if (err && err.name === "InvalidStateError") return new Error("This key is already on your account.");
+    if (err && err.name === "NotSupportedError") return new Error("This browser can't use passkeys. Try another browser or device.");
+    return new Error(fallback);
+  }
+
   window.passkeyRegister = async function (optionsUrl, finishUrl, name, reauth) {
     var res = await post(optionsUrl, reauth || {});
     if (!res.ok) throw new Error("Could not start. Check the details and try again.");
@@ -32,7 +42,12 @@
     opts.challenge = b64urlToBuf(opts.challenge);
     opts.user.id = b64urlToBuf(opts.user.id);
     (opts.excludeCredentials || []).forEach(function (c) { c.id = b64urlToBuf(c.id); });
-    var cred = await navigator.credentials.create({ publicKey: opts });
+    var cred;
+    try {
+      cred = await navigator.credentials.create({ publicKey: opts });
+    } catch (err) {
+      throw explain(err, "The key could not be added. Try again.");
+    }
     var payload = {
       id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
       response: {
@@ -53,7 +68,12 @@
     var opts = await res.json();
     opts.challenge = b64urlToBuf(opts.challenge);
     (opts.allowCredentials || []).forEach(function (c) { c.id = b64urlToBuf(c.id); });
-    var cred = await navigator.credentials.get({ publicKey: opts });
+    var cred;
+    try {
+      cred = await navigator.credentials.get({ publicKey: opts });
+    } catch (err) {
+      throw explain(err, "That key did not sign in. Try again.");
+    }
     var payload = {
       id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
       response: {

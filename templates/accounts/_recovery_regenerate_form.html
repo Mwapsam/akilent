@@ -1,0 +1,15 @@
+<form method="post" action="{% url 'recovery-codes-regenerate' %}" class="space-y-3">
+  {% csrf_token %}
+  <div>
+    <label for="id_regen_password" class="label">Password</label>
+    <input id="id_regen_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
+  </div>
+  <div>
+    <label for="id_regen_token" class="label">Authenticator app code or recovery code</label>
+    <input id="id_regen_token" type="text" name="token" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required maxlength="24" class="input w-64 tracking-wider">
+  </div>
+  <button type="submit" class="btn btn-ghost btn-sm touch-target"
+          data-confirm="Make a new set of recovery codes? Your current codes will stop working." data-confirm-label="Make new codes">
+    Make new recovery codes
+  </button>
+</form>

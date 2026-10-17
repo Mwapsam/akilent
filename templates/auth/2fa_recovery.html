@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{# Messages render inline on this page, so the toast layer stays off. #}
+{% block toasts %}{% endblock %}
+{% block title %}Use a recovery code — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex mb-4">
+        {% include "components/brand_mark.html" with class="w-12 h-12" %}
+      </div>
+      <h1 class="text-xl font-semibold text-ink">Use a recovery code</h1>
+      <p class="text-sm text-gray-600 mt-1">
+        Enter one of the 16-character codes you saved when you turned on two-factor authentication.
+      </p>
+    </div>
+
+    <div class="card card-pad sm:!p-8">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="mb-5 alert alert-danger" role="alert">
+            {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
+            <p>{{ msg }}</p>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label for="id_code" class="label">Recovery code</label>
+          <input id="id_code" type="text" name="code"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 maxlength="24" required autofocus
+                 placeholder="ABCD-EFGH-JKLM-NPQR"
+                 aria-describedby="id_code_help"
+                 class="input font-mono tracking-wider text-center text-lg">
+          <p id="id_code_help" class="text-xs text-gray-600 mt-2">
+            Each code works once. Dashes and capitals don't matter.
+            If you have run out of codes, contact support to reset two-factor authentication.
+          </p>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+      </form>
+    </div>
+
+    <p class="text-center text-xs text-gray-600 mt-6">
+      <a href="{% url '2fa-verify' %}" class="text-accent hover:text-accent-strong">Use my authenticator app instead</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

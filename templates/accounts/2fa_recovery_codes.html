@@ -1,16 +1,76 @@
 {% extends "accounts/settings_base.html" %}
+{# Messages render inline on this page, so the toast layer stays off. #}
+{% block toasts %}{% endblock %}
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Save your recovery codes</h2>
-  <p class="text-sm text-gray-600 mb-4">
-    Each code works once, in place of an authenticator code, if you lose your device.
-    They are shown only now. Store them somewhere safe, such as a password manager.
-  </p>
-  <ul class="grid grid-cols-2 gap-2 mb-6" aria-label="Recovery codes">
-    {% for code in codes %}
-      <li><code class="block font-mono text-sm tone-neutral-bg px-3 py-2 rounded select-all">{{ code }}</code></li>
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="mb-4 alert {% if msg.level_tag == 'success' %}alert-success{% elif msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}" role="alert"><p>{{ msg }}</p></div>
     {% endfor %}
-  </ul>
-  <a href="{% url 'settings-security' %}" class="btn btn-primary">I've saved my codes</a>
+  {% endif %}
+
+  {% if codes %}
+    <h2 class="font-semibold mb-1">Save your recovery codes</h2>
+    <p class="text-sm text-gray-600 mb-4">
+      Each code works once, instead of an authenticator code, if you lose your phone.
+      Store them somewhere safe, such as a password manager. Keep this page open until you have saved them.
+    </p>
+
+    <ol class="grid grid-cols-2 gap-2 mb-4 font-mono text-sm" aria-label="Recovery codes" id="recovery-codes">
+      {% for code in codes %}
+        <li class="tone-neutral-bg px-3 py-2 rounded select-all">{{ code }}</li>
+      {% endfor %}
+    </ol>
+
+    <div class="flex flex-wrap gap-2 mb-6">
+      <button type="button" id="copy-codes" class="btn btn-ghost btn-sm touch-target">Copy codes</button>
+      <button type="button" id="download-codes" class="btn btn-ghost btn-sm touch-target">Download as .txt</button>
+    </div>
+
+    <form method="post" action="{% url 'recovery-codes-confirm' %}" class="space-y-4">
+      {% csrf_token %}
+      <label class="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="saved" value="1" id="codes-saved" required class="mt-1">
+        <span>I have saved these codes somewhere safe.</span>
+      </label>
+      <button type="submit" class="btn btn-primary touch-target">Done</button>
+    </form>
+
+    <script>
+      (function () {
+        var list = document.getElementById("recovery-codes");
+        var codes = Array.prototype.map.call(list.querySelectorAll("li"), function (li) { return li.textContent.trim(); });
+        document.getElementById("copy-codes").addEventListener("click", function () {
+          navigator.clipboard.writeText(codes.join("\n")).then(function () {
+            this.textContent = "Copied";
+          }.bind(this), function () {
+            this.textContent = "Copy failed. Select the codes and copy them.";
+          }.bind(this));
+        });
+        document.getElementById("download-codes").addEventListener("click", function () {
+          var text = "Recovery codes for your account. Each works once.\n\n" + codes.join("\n") + "\n";
+          var url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = "recovery-codes.txt";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        });
+      })();
+    </script>
+  {% else %}
+    <h2 class="font-semibold mb-1">Your recovery codes are no longer shown</h2>
+    <p class="text-sm text-gray-600 mb-4">
+      For your safety, codes are shown for a short time only. Make a new set to continue.
+      Your old codes stop working as soon as you make a new set.
+    </p>
+    {% if can_regenerate %}
+      {% include "accounts/_recovery_regenerate_form.html" %}
+    {% else %}
+      <p class="text-sm text-gray-600">Turn on an authenticator app to make new recovery codes.</p>
+    {% endif %}
+  {% endif %}
 </div>
 {% endblock %}

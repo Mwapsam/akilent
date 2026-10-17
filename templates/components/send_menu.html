@@ -5,7 +5,7 @@ Deep-links into the composer come in Phase 4; v1 routes to the closest screen.
 <div x-data="{ open: false, trigger: null }" @keydown.escape.window="open = false" @send-menu-open.window="open = true">
   <button type="button"
           id="send-menu-trigger"
-          class="btn btn-primary btn-sm"
+          class="btn btn-primary btn-sm touch-target"
           @click="trigger = $event.target; open = true"
           aria-haspopup="dialog"
           aria-controls="send-menu-dialog"

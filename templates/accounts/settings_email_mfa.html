@@ -1,4 +1,6 @@
 {% extends "accounts/settings_base.html" %}
+{# Messages render inline on this page, so the toast layer stays off. #}
+{% block toasts %}{% endblock %}
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Email sign-in codes</h2>
@@ -18,7 +20,7 @@
     <form method="post" class="space-y-3">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_disable">
-      <button type="submit" class="btn btn-ghost btn-sm">Email me a code to turn this off</button>
+      <button type="submit" class="btn btn-ghost btn-sm touch-target">Email me a code to turn this off</button>
     </form>
     <form method="post" class="space-y-3 mt-4">
       {% csrf_token %}
@@ -31,7 +33,8 @@
         <label for="id_disable_code" class="label">Code from email</label>
         <input id="id_disable_code" type="text" name="token" inputmode="numeric" autocomplete="one-time-code" required maxlength="10" class="input w-40 tracking-widest">
       </div>
-      <button type="submit" class="btn btn-danger btn-sm">Turn off email codes</button>
+      <button type="submit" class="btn btn-danger btn-sm touch-target"
+              data-confirm="Turn off email sign-in codes? Your password will be the only way to sign in." data-confirm-danger data-confirm-label="Turn off">Turn off email codes</button>
     </form>
   {% elif strong_factor %}
     <p class="text-sm mb-4">
@@ -43,7 +46,7 @@
     <form method="post" class="space-y-3">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_enrol">
-      <button type="submit" class="btn btn-ghost btn-sm">Email me a code to turn this on</button>
+      <button type="submit" class="btn btn-ghost btn-sm touch-target">Email me a code to turn this on</button>
     </form>
     <form method="post" class="space-y-3 mt-4">
       {% csrf_token %}

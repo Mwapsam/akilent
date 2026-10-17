@@ -28,6 +28,7 @@ ALLOWED_URL_NAMES = frozenset(
         "login",
         "logout",
         "2fa-verify",
+        "2fa-recovery",
         "verify_email",
         "resend_verification",
         "password_reset",

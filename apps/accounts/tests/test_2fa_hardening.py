@@ -36,7 +36,7 @@ class RecoveryCodeTest(TestCase):
         codes = recovery.generate_codes(self.user)
         _login_to_second_step(self.client)
 
-        resp = self.client.post(reverse("2fa-verify"), {"token": codes[0]})
+        resp = self.client.post(reverse("2fa-recovery"), {"code": codes[0]})
 
         self.assertTrue(get_user(self.client).is_authenticated)
         self.assertEqual(
@@ -75,7 +75,7 @@ class RecoveryCodeTest(TestCase):
         recovery.generate_codes(self.user)
         _login_to_second_step(self.client)
 
-        self.client.post(reverse("2fa-verify"), {"token": "AAAA-BBBB-CCCC-DDDD"})
+        self.client.post(reverse("2fa-recovery"), {"code": "AAAA-BBBB-CCCC-DDDD"})
 
         self.device.refresh_from_db()
         self.assertEqual(self.device.throttling_failure_count, 1)
@@ -167,9 +167,17 @@ class EnableIssuesRecoveryCodesTest(TestCase):
             reverse("2fa-setup"),
             {"action": "enable", "token": _current_token(device)},
         )
+        self.assertRedirects(
+            resp, reverse("settings-recovery-codes"), fetch_redirect_response=False
+        )
 
-        self.assertTemplateUsed(resp, "accounts/2fa_recovery_codes.html")
-        self.assertEqual(len(resp.context["codes"]), recovery.CODE_COUNT)
+        page = self.client.get(reverse("settings-recovery-codes"))
+        self.assertTemplateUsed(page, "accounts/2fa_recovery_codes.html")
+        self.assertEqual(len(page.context["codes"]), recovery.CODE_COUNT)
+        self.assertEqual(
+            len(self.client.get(reverse("settings-recovery-codes")).context["codes"]),
+            recovery.CODE_COUNT,
+        )
         self.assertEqual(
             RecoveryCode.objects.filter(user=self.user).count(), recovery.CODE_COUNT
         )

@@ -16,6 +16,23 @@ def _fernet() -> MultiFernet:
     return MultiFernet([Fernet(k) for k in keys])
 
 
+def seal_text(value: str) -> str:
+    """Encrypt a short string for temporary storage, such as a session payload."""
+    return _fernet().encrypt(value.encode()).decode()
+
+
+def open_text(token: str) -> str | None:
+    """Decrypt a value made by seal_text. Returns None if it cannot be read.
+
+    Callers treat None as "show nothing": a missing key, a rotated key that no
+    longer matches, or a tampered value all fail closed.
+    """
+    try:
+        return _fernet().decrypt(token.encode()).decode()
+    except Exception:
+        return None
+
+
 class EncryptedTextField(models.TextField):
     """A ``TextField`` that transparently encrypts/decrypts via Fernet."""
 

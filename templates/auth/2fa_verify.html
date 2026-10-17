@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# Messages render inline on this page, so the toast layer stays off. #}
+{% block toasts %}{% endblock %}
 {% load static %}
 {% block title %}Two-factor authentication — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
@@ -10,33 +12,40 @@
       </div>
       <h1 class="text-xl font-semibold text-ink">Two-factor authentication</h1>
       {% if channel == "email" %}
-        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code we emailed you</p>
+        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code we emailed you. It expires in 10 minutes.</p>
       {% else %}
-        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app, or a recovery code</p>
+        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app.</p>
       {% endif %}
     </div>
 
     <div class="card card-pad sm:!p-8">
       {% if messages %}
         {% for msg in messages %}
-          <div class="mb-5 alert {% if msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}">
+          <div class="mb-5 alert {% if msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}" role="{% if msg.level_tag == 'info' %}status{% else %}alert{% endif %}">
             {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
             <p>{{ msg }}</p>
           </div>
         {% endfor %}
       {% endif %}
 
-      <form method="post" novalidate class="space-y-4">
+      <form method="post" class="space-y-4">
         {% csrf_token %}
         <div>
-          <label for="id_token" class="label">Authentication code</label>
+          <label for="id_token" class="label">6-digit code</label>
           <input id="id_token" type="text" name="token"
-                 maxlength="20" autocomplete="one-time-code" autofocus
-                 placeholder="{% if channel == 'email' %}000 000{% else %}000 000 or recovery code{% endif %}"
+                 inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"
+                 maxlength="7" required autofocus
+                 placeholder="123456"
                  class="input text-center tracking-widest text-lg">
         </div>
         <button type="submit" class="btn btn-primary btn-block mt-2">Verify</button>
       </form>
+
+      {% if recovery_available %}
+        <p class="mt-4 text-center">
+          <a href="{% url '2fa-recovery' %}" class="text-sm text-accent hover:text-accent-strong">Lost your device? Use a recovery code</a>
+        </p>
+      {% endif %}
 
       {% if channel == "email" and has_app %}
         <form method="post" class="mt-4">
@@ -54,7 +63,6 @@
 
       {% if passkey_available %}
         <div class="mt-4">
-          {% csrf_token %}
           <button type="button" id="passkey-signin-btn" class="btn btn-ghost btn-block">Use a passkey or security key</button>
           <p id="passkey-signin-error" class="text-sm text-red-600 mt-2" role="alert" hidden></p>
         </div>
@@ -77,8 +85,9 @@
       {% endif %}
     </div>
 
-    <p class="text-center text-xs text-gray-400 mt-6">
+    <p class="text-center text-xs text-gray-600 mt-6">
       <a href="{% url 'login' %}" class="text-accent hover:text-accent-strong">Back to sign in</a>
+      &middot; <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Need help?</a>
     </p>
   </div>
 </div>

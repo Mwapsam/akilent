@@ -13,6 +13,7 @@ import hmac
 import secrets
 
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.utils import timezone
@@ -48,6 +49,9 @@ def generate_codes(user):
         displayed.append("-".join(raw[i : i + 4] for i in range(0, _CODE_LENGTH, 4)))
         digests.append(_digest(raw))
     with transaction.atomic():
+        # Lock the user row so two regenerations run one after the other. Without
+        # this, both could delete the old set and each add ten, leaving twenty valid.
+        User.objects.select_for_update().filter(pk=user.pk).first()
         RecoveryCode.objects.filter(user=user).delete()
         RecoveryCode.objects.bulk_create(
             [RecoveryCode(user=user, code_hash=d) for d in digests]

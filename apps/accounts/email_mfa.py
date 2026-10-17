@@ -36,7 +36,8 @@ MAX_GUESSES_PER_HOUR = 10  # per account, across all codes
 
 # Results of send_code.
 SENT = "sent"
-RECENT = "recent"  # cooldown or hourly limit: a code went out recently
+RECENT = "recent"  # cooldown: a code went out moments ago
+CAPPED = "capped"  # hourly limit on emailed codes reached
 UNAVAILABLE = "unavailable"  # no address on file, or delivery failed
 
 
@@ -58,7 +59,7 @@ def _lock_user(user):
 
 
 def send_code(user, purpose):
-    """Email a fresh code. Returns SENT, RECENT or UNAVAILABLE."""
+    """Email a fresh code. Returns SENT, RECENT, CAPPED or UNAVAILABLE."""
     from apps.email.services.send import send_system_email
 
     if not user.email:
@@ -78,7 +79,7 @@ def send_code(user, purpose):
         )
         if recent.count() >= MAX_SENDS_PER_HOUR:
             logger.warning("email_mfa: send limit reached for user %s", user.pk)
-            return RECENT
+            return CAPPED
         code = f"{secrets.randbelow(10**6):06d}"
         EmailLoginCode.objects.filter(
             user=user, purpose=purpose, used_at__isnull=True

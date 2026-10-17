@@ -12,6 +12,7 @@ from apps.accounts.views import (
     _2fa_verify,
     passkey_signin_finish,
     passkey_signin_options,
+    recovery_sign_in,
 )
 from apps.core import views as core_views
 from apps.core import views_events
@@ -43,6 +44,7 @@ urlpatterns = [
     ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/2fa/verify/", _2fa_verify, name="2fa-verify"),
+    path("auth/2fa/recovery/", recovery_sign_in, name="2fa-recovery"),
     path(
         "auth/2fa/passkey/options/",
         passkey_signin_options,
