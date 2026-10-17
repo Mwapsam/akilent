@@ -80,9 +80,7 @@ class CeremonyIsStoredAndBoundTest(TestCase):
         self.assertEqual(row.user, self.user)
         self.assertIsNone(row.used_at)
         self.assertGreater(row.expires_at, timezone.now())
-        self.assertEqual(
-            self.client.session[passkeys.REG_KEY]["id"], row.pk
-        )
+        self.assertEqual(self.client.session[passkeys.REG_KEY]["id"], row.pk)
 
     def test_verification_uses_the_challenge_and_origin_stored_with_the_ceremony(self):
         _begin(self.client)
@@ -213,15 +211,19 @@ class SingleUseAndExpiryTest(TestCase):
     def test_the_notice_is_sent_only_after_a_passkey_is_stored(self):
         _begin(self.client)
 
-        with mock.patch(VERIFY, side_effect=ValueError("bad")), mock.patch(NOTIFY) as notify:
+        with (
+            mock.patch(VERIFY, side_effect=ValueError("bad")),
+            mock.patch(NOTIFY) as notify,
+        ):
             _finish(self.client)
 
         notify.assert_not_called()
 
         _begin(self.client)
-        with mock.patch(VERIFY, return_value=_fake_registration(b"ok")), mock.patch(
-            NOTIFY
-        ) as notify:
+        with (
+            mock.patch(VERIFY, return_value=_fake_registration(b"ok")),
+            mock.patch(NOTIFY) as notify,
+        ):
             self.assertEqual(_finish(self.client).status_code, 200)
 
         notify.assert_called_once()

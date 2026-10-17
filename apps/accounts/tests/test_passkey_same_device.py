@@ -72,11 +72,11 @@ class SameDeviceRegistrationTest(TestCase):
         self.assertIn("didn't match", resp.json()["error"])
 
     def test_a_chosen_app_code_is_accepted_without_the_password(self):
-        device = TOTPDevice.objects.create(user=self.user, name="default", confirmed=True)
-
-        resp = _options(
-            self.client, {"method": "app", "token": _current_token(device)}
+        device = TOTPDevice.objects.create(
+            user=self.user, name="default", confirmed=True
         )
+
+        resp = _options(self.client, {"method": "app", "token": _current_token(device)})
 
         self.assertEqual(resp.status_code, 200)
 
@@ -108,9 +108,10 @@ class SameDeviceFinishTest(TestCase):
     def test_a_stored_passkey_sends_the_owner_a_notice(self):
         _options(self.client, {"method": "password", "password": PASSWORD})
 
-        with mock.patch(REG_VERIFY, return_value=_fake_registration(b"device")), mock.patch(
-            "apps.accounts.security_notices.notify_after_commit"
-        ) as notify:
+        with (
+            mock.patch(REG_VERIFY, return_value=_fake_registration(b"device")),
+            mock.patch("apps.accounts.security_notices.notify_after_commit") as notify,
+        ):
             resp = self.client.post(
                 reverse("passkey-register-finish"),
                 data=json.dumps({"credential": {}, "name": "Laptop"}),

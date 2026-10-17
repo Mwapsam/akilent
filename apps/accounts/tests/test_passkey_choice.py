@@ -45,7 +45,9 @@ class PasskeyChoiceTest(TestCase):
         self.assertIn("challenge", resp.json())
 
     def test_the_app_code_is_enough_without_the_password(self):
-        device = TOTPDevice.objects.create(user=self.user, name="default", confirmed=True)
+        device = TOTPDevice.objects.create(
+            user=self.user, name="default", confirmed=True
+        )
 
         resp = self._start(method="app", token=_current_token(device))
 
