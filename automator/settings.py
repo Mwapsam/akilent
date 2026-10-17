@@ -173,6 +173,9 @@ SESSION_COOKIE_AGE = 8 * 60 * 60  # 8 hours
 # Enforced for TOTP codes and recovery codes alike; see _check_second_factor.
 OTP_TOTP_THROTTLE_FACTOR = 5
 
+# Shown as the account name in authenticator apps, e.g. "Akilent: you@example.com".
+OTP_TOTP_ISSUER = "Akilent"
+
 # Role-based MFA enforcement (apps/accounts/mfa.py). Off by default; enable per
 # role only after recovery and every entry point are proven. Email codes never count.
 MFA_ENFORCEMENT_ENABLED = os.getenv("MFA_ENFORCEMENT_ENABLED", "0") == "1"

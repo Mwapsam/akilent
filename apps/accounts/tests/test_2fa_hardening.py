@@ -210,3 +210,19 @@ class SpacedCodeTest(TestCase):
         )
 
         self.assertFalse(TOTPDevice.objects.filter(pk=device.pk).exists())
+
+
+class EnrolmentUriIssuerTest(TestCase):
+    """Authenticator apps must show the app name next to the account."""
+
+    def test_enrolment_uri_names_the_issuer(self):
+        from urllib.parse import unquote, urlsplit
+
+        user = _user("issuer@example.com")
+        device = TOTPDevice.objects.create(user=user, name="default", confirmed=False)
+
+        uri = unquote(urlsplit(device.config_url).path)
+        query = device.config_url
+
+        self.assertIn("Akilent:issuer@example.com", uri)
+        self.assertIn("issuer=Akilent", query)
