@@ -1,6 +1,6 @@
 # TOTP secret encryption: migration design (revision 2, for owner approval)
 
-Status: **implemented in development (not production).** Owner approved the design direction; production switch still requires the PostgreSQL run, the Phase 0 inspection, a maintenance window, and the lost-device rehearsal. No production changes made. Owner: the user (solo project). Blocks mandatory MFA enforcement.
+Status: **code deployed in commit 98b647b; production in plaintext mode.** Migrations 0014 and 0015 applied; sidecar table empty; production device still plaintext. Remaining phases (expand, switch, contract) not started.
 
 ## 1. Current state
 - Production has **one** `TOTPDevice` (owner report, 2026-10-16). It must keep working throughout the migration.
@@ -120,3 +120,9 @@ The `DJANGO_SECRET_KEY` interpolation warning in `.env` is **not being pursued**
 - Stored key length: 40 characters (hex). Key value not printed or recorded.
 - Identifiers (device and user IDs) are kept out of this repository, per the review.
 - Sidecar table check: **not yet run**. Expected to fail with a missing-table error, because migration 0015 is not deployed.
+
+## 13. Deployment state (verified 2026-10-17)
+- Production runs `98b647b` (feat(mfa): role-based MFA enforcement and recovery codes). Migrations `0014_recovery_code` and `0015_totp_secret_ciphertext` applied.
+- Production flags: `MFA_ENFORCEMENT_ENABLED=False`, `MFA_ENFORCED_ROLES=[]`, `MFA_ENFORCE_STAFF=False`, `TOTP_SECRET_STORAGE=plaintext`. Enforcement is inert.
+- Live behaviour changes: disable 2FA needs password plus code; enrolment shows recovery codes once; email-verify links do not sign in enrolled users; spaced codes verify.
+- CI result for `98b647b`: **passed** (reported by the owner 2026-10-17; run number not yet recorded). Deploy was triggered by the CI success gate, not by manual dispatch.

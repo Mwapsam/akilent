@@ -177,7 +177,7 @@ OTP_TOTP_THROTTLE_FACTOR = 5
 # role only after recovery and every entry point are proven. Email codes never count.
 MFA_ENFORCEMENT_ENABLED = os.getenv("MFA_ENFORCEMENT_ENABLED", "0") == "1"
 MFA_ENFORCED_ROLES = ()  # e.g. ("owner", "admin") once rollout is approved
-MFA_ENFORCE_STAFF = False  # platform staff, separate switch
+MFA_ENFORCE_STAFF = True  # platform staff only; owners and admins follow later
 
 # TOTP secret storage: plaintext (default) | migrating | encrypted. See
 # docs/design/totp-encryption-migration.md. Change only through the phased command.

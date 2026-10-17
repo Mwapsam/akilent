@@ -281,3 +281,8 @@ Operator evidence to record separately from code tests: restore drill result, re
 - Review fixes (2026-10-17): spaced TOTP codes verify again (regression from `.strip()`; tests in `test_2fa_hardening.py`); threaded tests carry the `serial` marker and run in a blocking serial CI step, outside the xdist run; the 2FA challenge state is written in one place (`begin_second_factor` in `apps/accounts/views.py`), used by login, email verify and the enforcement middleware.
 - Not re-run on PostgreSQL after these fixes: the verification container was removed. Re-run the serial and PostgreSQL tests before relying on them.
 - PostgreSQL re-run after review fixes: MFA/TOTP files 64 passed, 0 skipped. Full accounts suite: same six baseline failures as `a2f4863`. Details: design doc section 11.
+
+### Deployment state (verified 2026-10-17)
+- Production runs `98b647b`. Migrations 0014 and 0015 applied. Enforcement inert: flags False, roles empty, staff off. TOTP storage plaintext.
+- Earlier entries in this file that say the work is uncommitted or not deployed are superseded by this line.
+- CI result for `98b647b`: **passed** (reported by the owner 2026-10-17; run number not yet recorded). Deploy was triggered by the CI success gate, not by manual dispatch.
