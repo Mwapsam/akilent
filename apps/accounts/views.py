@@ -1746,6 +1746,29 @@ def _reauth_outcome(user, password, token, allow_recovery=True):
     return email_mfa.check_code(user, "reauth", token), None
 
 
+def _app_code_refusal(device, token):
+    """Explain a refused app code. A code already used to sign in cannot be used again.
+
+    Authenticator codes are single use per 30-second step, so the code shown when the user
+    signed in is refused here. Saying so stops people retrying the same code.
+    """
+    from django_otp.oath import TOTP
+    from django_otp.plugins.otp_totp.models import TOTPDevice
+
+    from apps.accounts import totp_storage
+
+    fresh = TOTPDevice.objects.get(pk=device.pk)
+    totp_storage.load(fresh)
+    try:
+        now_totp = TOTP(fresh.bin_key, fresh.step, fresh.t0, fresh.digits, fresh.drift)
+        current_step, current_code = now_totp.t(), now_totp.token()
+    finally:
+        totp_storage.reseal(fresh)
+    if fresh.last_t == current_step and token == f"{current_code:0{fresh.digits}d}":
+        return "That code was just used to sign in. Wait for the next code in your app, then try again."
+    return "That app code didn't work. Check it and try again."
+
+
 def _verify_for_passkey_enrolment(user, method, password, token):
     """Confirm it's the account owner, using the one method the user chose.
 
@@ -1774,10 +1797,9 @@ def _verify_for_passkey_enrolment(user, method, password, token):
         if totp is None:
             return False, "Set up an authenticator app first, or choose another option."
         factor, wait = _check_second_factor(user, totp, token, allow_recovery=False)
-        return (
-            factor is not None,
-            wait or "That app code didn't work. Check it and try again.",
-        )
+        if factor is not None:
+            return True, None
+        return False, wait or _app_code_refusal(totp, token)
     if method == "email":
         if mfa_required(user):
             # Email codes never count as a strong factor where MFA is required.

@@ -9,6 +9,7 @@ import json
 from datetime import timedelta
 from unittest import mock
 
+import pytest
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -229,6 +230,7 @@ class SingleUseAndExpiryTest(TestCase):
         notify.assert_called_once()
 
 
+@pytest.mark.serial
 class ConcurrentCompletionTest(TransactionTestCase):
     """Two real requests race for one challenge. Runs only where the database supports it."""
 

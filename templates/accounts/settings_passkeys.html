@@ -105,7 +105,11 @@
     var btn = document.getElementById("passkey-add-here");
     var errEl = document.getElementById("passkey-add-error");
     // Hide the same-device button where the browser has no passkey support.
-    if (!window.PublicKeyCredential || !window.passkeyRegister) return;
+    if (!window.PublicKeyCredential || !window.passkeyRegister) {
+      errEl.textContent = "Passkeys aren't available here. Open Akilent over https (or localhost) in a current browser.";
+      errEl.hidden = false;
+      return;
+    }
     btn.hidden = false;
     var form = document.getElementById("passkey-add-form");
     btn.addEventListener("click", async function () {
