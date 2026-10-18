@@ -114,6 +114,19 @@ def publish_post_async(self, post_id: int) -> str:
         logger.exception("publish_post_async failed for post=%s", post_id)
         if self.request.retries < self.max_retries:
             raise self.retry(countdown=60 * (2**self.request.retries), exc=exc) from exc
+        from .models import ContentPostVariant
+        from .services import refresh_parent_post
+
+        unstarted = (
+            ContentPostVariant.Status.DRAFT,
+            ContentPostVariant.Status.SCHEDULED,
+        )
+        if post.variants.exclude(status__in=unstarted).exists():
+            # Some channel ran; its variant holds the real outcome, so derive the parent
+            # from the variants instead of overwriting a partial success with FAILED.
+            refresh_parent_post(post)
+            post.refresh_from_db(fields=["status"])
+            return post.status
         post.status = ContentPost.Status.FAILED
         post.error = str(exc)[:500]
         post.save(update_fields=["status", "error"])
@@ -301,28 +314,42 @@ def reconcile_stale_publishing_variants() -> dict:
 
     count_escalated = 0
     stale_found = stale_qs.count()
-    for variant in stale_qs[:100]:  # Process max 100 per run to avoid timeout
-        logger.warning(
-            "Escalating stale variant to RECONCILING: variant=%s post=%s platform=%s last_error_at=%s",
-            variant.pk,
-            variant.post.pk,
-            variant.platform,
-            variant.last_error_at,
-        )
-        variant.status = ContentPostVariant.Status.RECONCILING
-        variant.last_error = "Stuck in PUBLISHING for 6+ hours (enqueue may have failed); manual reconciliation needed"
-        variant.last_error_type = ContentPostVariant.ErrorType.UNKNOWN
-        variant.last_error_at = now
-        drop_claim_flag(variant)
-        variant.save(
-            update_fields=[
-                "status",
-                "last_error",
-                "last_error_type",
-                "last_error_at",
-                "metadata",
-            ]
-        )
+    stale_filter = Q(last_attempt_at__lte=stale_threshold) | Q(
+        last_attempt_at__isnull=True
+    )
+    for pk in list(stale_qs.values_list("pk", flat=True)[:100]):  # Bounded per run
+        # Re-check under a row lock: a worker may have claimed or finished the variant
+        # since the query ran, and its state must not be overwritten.
+        with transaction.atomic():
+            variant = (
+                ContentPostVariant.objects.select_for_update()
+                .filter(pk=pk, status=ContentPostVariant.Status.PUBLISHING)
+                .filter(stale_filter)
+                .first()
+            )
+            if variant is None:
+                continue
+            logger.warning(
+                "Escalating stale variant to RECONCILING: variant=%s post=%s platform=%s last_error_at=%s",
+                variant.pk,
+                variant.post_id,
+                variant.platform,
+                variant.last_error_at,
+            )
+            variant.status = ContentPostVariant.Status.RECONCILING
+            variant.last_error = "Stuck in PUBLISHING for 6+ hours (enqueue may have failed); manual reconciliation needed"
+            variant.last_error_type = ContentPostVariant.ErrorType.UNKNOWN
+            variant.last_error_at = now
+            drop_claim_flag(variant)
+            variant.save(
+                update_fields=[
+                    "status",
+                    "last_error",
+                    "last_error_type",
+                    "last_error_at",
+                    "metadata",
+                ]
+            )
         count_escalated += 1
 
     if count_escalated > 0:
@@ -371,21 +398,30 @@ def poll_ig_variant_containers() -> int:
     ).exclude(metadata__ig_container_id__exact="")
 
     count = 0
-    for variant in qs:
+    for pk in qs.values_list("pk", flat=True):
         try:
-            # Record poll attempt in metadata for exhaustion detection
-            variant.metadata = variant.metadata or {}
-            variant.metadata["last_poll_attempt"] = timezone.now().isoformat()
-            variant.save(update_fields=["metadata"])
+            # Record the poll attempt under a row lock, merged into the current metadata,
+            # so a concurrent publish claim written to metadata is never overwritten.
+            with transaction.atomic():
+                variant = (
+                    ContentPostVariant.objects.select_for_update()
+                    .filter(pk=pk, status=ContentPostVariant.Status.PROCESSING)
+                    .first()
+                )
+                if variant is None:
+                    continue
+                variant.metadata = {
+                    **(variant.metadata or {}),
+                    "last_poll_attempt": timezone.now().isoformat(),
+                }
+                variant.save(update_fields=["metadata"])
 
             done = try_publish_ig_variant_container(variant)
             if done:
                 count += 1
             refresh_parent_post(variant.post)
         except Exception:
-            logger.exception(
-                "poll_ig_variant_containers error for variant=%s", variant.pk
-            )
+            logger.exception("poll_ig_variant_containers error for variant=%s", pk)
     return count
 
 

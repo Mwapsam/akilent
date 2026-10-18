@@ -18,13 +18,15 @@ import logging
 import requests
 from django.conf import settings
 
+from .errors import MetaPublishError
+
 logger = logging.getLogger(__name__)
 
 _GRAPH_VERSION = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
 _BASE = f"https://graph.facebook.com/{_GRAPH_VERSION}"
 
 
-class FacebookPublishError(Exception):
+class FacebookPublishError(MetaPublishError):
     pass
 
 
@@ -40,7 +42,7 @@ class FacebookPublishProvider:
         )
         data = r.json()
         if "error" in data:
-            raise FacebookPublishError(data["error"].get("message", str(data["error"])))
+            raise FacebookPublishError.from_response(r, data)
         return data
 
     def create_text_post(self, message: str) -> str:
@@ -84,7 +86,7 @@ class FacebookPublishProvider:
         )
         data = r.json()
         if "error" in data:
-            raise FacebookPublishError(data["error"].get("message", str(data["error"])))
+            raise FacebookPublishError.from_response(r, data)
         result: dict[str, int] = {"reach": 0, "impressions": 0}
         for item in data.get("data", []):
             name = item.get("name", "")
@@ -118,7 +120,7 @@ def exchange_for_long_lived_user_token(
     )
     data = r.json()
     if "error" in data:
-        raise FacebookPublishError(data["error"].get("message", str(data)))
+        raise FacebookPublishError.from_response(r, data)
     return data["access_token"]
 
 
@@ -131,7 +133,7 @@ def get_page_token(user_access_token: str, page_id: str) -> str:
     )
     data = r.json()
     if "error" in data:
-        raise FacebookPublishError(data["error"].get("message", str(data)))
+        raise FacebookPublishError.from_response(r, data)
     return data["access_token"]
 
 
@@ -148,7 +150,7 @@ def list_pages(user_access_token: str) -> list[dict]:
     )
     data = r.json()
     if "error" in data:
-        raise FacebookPublishError(data["error"].get("message", str(data)))
+        raise FacebookPublishError.from_response(r, data)
     pages = data.get("data", [])
     if pages:
         return pages

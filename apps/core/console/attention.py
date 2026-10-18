@@ -89,6 +89,10 @@ def reasons(account, now=None) -> list[str]:
         ]
         if last_in is None or now - last_in > QUIET_AFTER:
             out.append("Quiet: no customer message for 3+ days")
+
+    from apps.publishing import api as publishing_api
+
+    out.extend(publishing_api.attention_reasons(account, now))
     return out
 
 

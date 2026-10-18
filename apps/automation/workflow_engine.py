@@ -1278,6 +1278,18 @@ def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
             return {"_routed_to": on_error, "reason": "not_found"}
         raise ValueError(msg) from None
 
+    # Only content that is ready and not already live may be published from a workflow.
+    if post.status in (
+        ContentPost.Status.IDEA,
+        ContentPost.Status.PUBLISHING,
+        ContentPost.Status.PUBLISHED,
+        ContentPost.Status.CANCELLED,
+    ):
+        msg = f"publish_post step {step_id!r}: post is {post.status} and cannot be published"
+        if on_error:
+            return {"_routed_to": on_error, "reason": "invalid_status", "error": msg}
+        raise ValueError(msg)
+
     # Check approval at execution time
     if not post.is_approval_valid():
         msg = f"publish_post step {step_id!r}: approval is invalid or not present"

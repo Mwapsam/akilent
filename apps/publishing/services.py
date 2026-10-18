@@ -160,9 +160,36 @@ def _ig_publish_container(provider, ig_user_id: str, container_id: str) -> str:
         raise _IGPublishOutcomeUnknown(container_id, exc) from exc
 
 
+_IG_RATIO_CHECK_MAX_BYTES = 8 * 1024 * 1024  # Instagram's own image size limit
+
+
+def _is_own_media_url(url: str) -> bool:
+    """Whether ``url`` points at our media storage or our own site.
+
+    Only these are fetched server-side; fetching arbitrary user-supplied URLs would let
+    a user make the server request internal addresses (SSRF).
+    """
+    from urllib.parse import urlparse
+
+    from django.conf import settings
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    hosts = {
+        urlparse(settings.SITE_URL).hostname,
+        urlparse(settings.MEDIA_URL).hostname,
+    }
+    return parsed.hostname.lower() in {h.lower() for h in hosts if h}
+
+
 def _validate_ig_image_ratio(url: str) -> None:
-    """Raise InstagramPublishError before the API call if the aspect ratio is wrong."""
-    if not url:
+    """Raise InstagramPublishError before the API call if the aspect ratio is wrong.
+
+    Best effort: images that are not on our own media host, too large, or unreadable
+    are left for Instagram to judge.
+    """
+    if not url or not _is_own_media_url(url):
         return
     try:
         import io
@@ -170,9 +197,14 @@ def _validate_ig_image_ratio(url: str) -> None:
         import requests as _req
         from PIL import Image
 
-        resp = _req.get(url, timeout=10, stream=True)
-        resp.raise_for_status()
-        img = Image.open(io.BytesIO(resp.content))
+        with _req.get(url, timeout=10, stream=True, allow_redirects=False) as resp:
+            resp.raise_for_status()
+            body = bytearray()
+            for chunk in resp.iter_content(64 * 1024):
+                body.extend(chunk)
+                if len(body) > _IG_RATIO_CHECK_MAX_BYTES:
+                    return
+        img = Image.open(io.BytesIO(bytes(body)))
         w, h = img.size
         if h == 0:
             return
@@ -181,7 +213,8 @@ def _validate_ig_image_ratio(url: str) -> None:
             raise InstagramPublishError(
                 f"Unsupported aspect ratio ({w}x{h}, ratio {ratio:.2f}). "
                 "Instagram accepts: square (1:1), portrait (4:5 = 0.8), "
-                "landscape (1.91:1). Crop the image before publishing."
+                "landscape (1.91:1). Crop the image before publishing.",
+                error_type=ContentPostVariant.ErrorType.VALIDATION,
             )
     except InstagramPublishError:
         raise
@@ -206,9 +239,53 @@ def _ig_account(post: ContentPost):
 
 def _ig_provider_for_post(post: ContentPost) -> InstagramPublishProvider | None:
     ig = _ig_account(post)
-    if ig is None or not ig.access_token:
+    if ig is None or not ig.access_token or ig.token_expired:
         return None
     return InstagramPublishProvider(ig.access_token)
+
+
+IG_RECONNECT_MESSAGE = (
+    "Instagram connection expired. Reconnect Instagram, then retry this post."
+)
+FB_RECONNECT_MESSAGE = (
+    "Facebook Page connection expired. Reconnect it in Content Studio → Channels, "
+    "then retry this post."
+)
+
+
+def _mark_token_invalid(post: ContentPost, platform: str) -> None:
+    """Record that Meta rejected the stored token, so the UI asks for a reconnect."""
+    if platform == "instagram":
+        ig = _ig_account(post)
+        if ig and not ig.token_expired:
+            type(ig).objects.filter(pk=ig.pk).update(token_expired=True)
+            logger.warning("Instagram token invalid for account=%s", post.account_id)
+    else:
+        updated = FacebookPageConnection.objects.filter(
+            account_id=post.account_id, status=FacebookPageConnection.Status.ACTIVE
+        ).update(status=FacebookPageConnection.Status.EXPIRED)
+        if updated:
+            logger.warning("Facebook token invalid for account=%s", post.account_id)
+
+
+def _provider_error_result(exc, post: ContentPost, platform: str) -> dict:
+    """Failure result for a definitive Graph API error."""
+    if exc.token_invalid:
+        _mark_token_invalid(post, platform)
+    message = str(exc)
+    if exc.token_invalid:
+        message = (
+            IG_RECONNECT_MESSAGE if platform == "instagram" else FB_RECONNECT_MESSAGE
+        )
+    return {
+        "success": False,
+        "publication_id": "",
+        "publication_url": "",
+        "error": message,
+        "error_type": exc.error_type,
+        "error_at": timezone.now(),
+        "reconciling": False,
+    }
 
 
 def _fb_provider_for_post(
@@ -307,9 +384,15 @@ def _wait_for_ig_container(
         if status == CONTAINER_STATUS_FINISHED:
             return
         if status in (CONTAINER_STATUS_ERROR, CONTAINER_STATUS_EXPIRED):
-            raise InstagramPublishError(f"Container {status.lower()} before publish.")
+            raise InstagramPublishError(
+                f"Instagram could not process the media (container {status.lower()}).",
+                error_type=ContentPostVariant.ErrorType.VALIDATION,
+            )
         time.sleep(delay)
-    raise InstagramPublishError("Container did not finish processing in time.")
+    raise InstagramPublishError(
+        "Container did not finish processing in time.",
+        error_type=ContentPostVariant.ErrorType.TIMEOUT,
+    )
 
 
 def _publish_instagram(post: ContentPost) -> None:
@@ -510,6 +593,16 @@ def try_publish_ig_variant_container(variant: ContentPostVariant) -> bool:
 
     try:
         status = provider.poll_container_status(container_id)
+    except InstagramPublishError as exc:
+        if exc.token_invalid:
+            _mark_token_invalid(post, "instagram")
+        logger.warning(
+            "poll_container_status refused for variant=%s container=%s: %s",
+            variant.pk,
+            container_id,
+            exc,
+        )
+        return False
     except Exception:
         logger.exception(
             "poll_container_status failed for variant=%s container=%s",
@@ -840,7 +933,12 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
             "success": False,
             "publication_id": "",
             "publication_url": "",
-            "error": "Facebook Page not connected",
+            "error": FB_RECONNECT_MESSAGE
+            if FacebookPageConnection.objects.filter(
+                account_id=post.account_id,
+                status=FacebookPageConnection.Status.EXPIRED,
+            ).exists()
+            else "Facebook Page not connected",
             "error_type": ContentPostVariant.ErrorType.PERMISSION,
             "error_at": timezone.now(),
             "reconciling": False,
@@ -884,15 +982,7 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
             "reconciling": False,
         }
     except FacebookPublishError as exc:
-        return {
-            "success": False,
-            "publication_id": "",
-            "publication_url": "",
-            "error": str(exc),
-            "error_type": ContentPostVariant.ErrorType.UNKNOWN,  # Could refine by message inspection
-            "error_at": timezone.now(),
-            "reconciling": False,
-        }
+        return _provider_error_result(exc, post, "facebook")
     except Exception as exc:
         # Only FacebookPublishError is a definitive answer from Meta. Anything else raised by
         # the publish request (timeout, reset, unreadable response) may have been accepted
@@ -922,7 +1012,9 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             "success": False,
             "publication_id": "",
             "publication_url": "",
-            "error": "Instagram not connected",
+            "error": IG_RECONNECT_MESSAGE
+            if (ig_acct := _ig_account(post)) and ig_acct.token_expired
+            else "Instagram not connected",
             "error_type": ContentPostVariant.ErrorType.PERMISSION,
             "error_at": timezone.now(),
             "reconciling": False,
@@ -1043,15 +1135,7 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             "metadata": {"ig_container_id": exc.container_id},
         }
     except InstagramPublishError as exc:
-        return {
-            "success": False,
-            "publication_id": "",
-            "publication_url": "",
-            "error": str(exc),
-            "error_type": ContentPostVariant.ErrorType.UNKNOWN,
-            "error_at": timezone.now(),
-            "reconciling": False,
-        }
+        return _provider_error_result(exc, post, "instagram")
     except Exception as exc:
         error_msg = str(exc).lower()
         is_timeout = "timeout" in error_msg or "timed out" in error_msg
@@ -1259,9 +1343,18 @@ def refresh_parent_post(post: ContentPost) -> None:
     )
 
     if status == ContentPost.Status.PUBLISHED and not was_published and post.fb_post_id:
+        from functools import partial
+
+        from django.db import transaction
+
         from .tasks import fetch_fb_post_insights
 
-        fetch_fb_post_insights.apply_async(args=[post.pk], countdown=900)
+        # After commit, and robust: this often runs inside a reconciliation transaction,
+        # and a broker error must not roll back the operator's action.
+        transaction.on_commit(
+            partial(fetch_fb_post_insights.apply_async, args=[post.pk], countdown=900),
+            robust=True,
+        )
 
 
 # Step 4.7B: Reconciliation Operations

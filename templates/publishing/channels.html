@@ -27,6 +27,11 @@
               <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
               Publishing enabled
             </span>
+            {% elif ig_connection.token_expired %}
+            <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              Reconnect needed
+            </span>
             {% else %}
             <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
               <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
@@ -42,7 +47,9 @@
         </div>
         {% if ig_connection %}
         <p class="text-sm text-gray-500">Connected via Instagram Business Account.</p>
-        {% if not ig_publish_scope %}
+        {% if ig_connection.token_expired %}
+        <p class="text-xs text-amber-700 mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
+        {% elif not ig_publish_scope %}
         <p class="text-xs text-gray-400 mt-1">The <code>instagram_content_publish</code> permission is pending Meta App Review. Publishing posts will be enabled once Meta approves it.</p>
         {% endif %}
         {% else %}
@@ -68,6 +75,11 @@
             <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
             Connected
           </span>
+          {% elif fb_connection and fb_connection.status == 'expired' %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            Reconnect needed
+          </span>
           {% else %}
           <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
@@ -76,6 +88,9 @@
           {% endif %}
         </div>
         <p class="text-sm text-gray-500">Publish posts, photos, and videos to your Facebook Page.</p>
+        {% if fb_connection and fb_connection.status == 'expired' %}
+        <p class="text-xs text-amber-700 mt-1">Facebook stopped accepting the saved access (for example after a password change or removed permission). Reconnect to resume publishing.</p>
+        {% endif %}
         {% if fb_connection and fb_connection.page_name %}
         <p class="text-xs text-gray-400 mt-1">Page: {{ fb_connection.page_name }}</p>
         {% endif %}

@@ -14,10 +14,13 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 
 from apps.accounts.api import is_account_admin
+from apps.accounts.fields import open_text, seal_text
 from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load
 
@@ -34,12 +37,17 @@ from .models import (
 from .providers.facebook import (
     FacebookPublishError,
     exchange_for_long_lived_user_token,
+    get_page_token,
     list_pages,
 )
 
 logger = logging.getLogger(__name__)
 
 _FB_GRAPH = "https://graph.facebook.com"
+# One Graph version for the whole publishing flow (OAuth and the providers).
+_FB_GRAPH_VERSION = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+_FB_OAUTH_STATE_TTL = datetime.timedelta(minutes=10)
+_FB_PAGE_CHOICES_KEY = "fb_page_choices"
 
 
 # Posts the composer may still change; later states belong to the publishing pipeline.
@@ -124,7 +132,7 @@ def fb_oauth_connect(request):
 
     redirect_uri = request.build_absolute_uri("/publishing/fb/callback/")
 
-    graph_version = getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
+    graph_version = _FB_GRAPH_VERSION
     auth_url = (
         f"https://www.facebook.com/{graph_version}/dialog/oauth"
         f"?{urlencode({'client_id': app_id, 'redirect_uri': redirect_uri, 'scope': _FB_SCOPES, 'state': state})}"
@@ -169,12 +177,22 @@ def fb_oauth_callback(request):
     if not state or conn.oauth_state != state:
         messages.error(request, "Invalid state parameter.")
         return redirect("settings-integrations")
+    state_age = timezone.now() - (conn.oauth_state_created_at or timezone.now())
+    # Consume the state immediately so a callback URL can never be replayed.
+    conn.oauth_state = ""
+    conn.oauth_state_created_at = None
+    conn.save(update_fields=["oauth_state", "oauth_state_created_at", "updated_at"])
+    if state_age > _FB_OAUTH_STATE_TTL:
+        messages.error(
+            request, "The Facebook connection took too long. Please try again."
+        )
+        return redirect("settings-integrations")
 
     app_id = getattr(settings, "WHATSAPP_APP_ID", "")
     app_secret = getattr(settings, "WHATSAPP_APP_SECRET", "")
 
     r = requests.get(
-        f"{_FB_GRAPH}/oauth/access_token",
+        f"{_FB_GRAPH}/{_FB_GRAPH_VERSION}/oauth/access_token",
         params={
             "client_id": app_id,
             "client_secret": app_secret,
@@ -183,7 +201,14 @@ def fb_oauth_callback(request):
         },
         timeout=30,
     )
-    token_data = r.json()
+    try:
+        token_data = r.json()
+    except ValueError:
+        logger.warning("Facebook code exchange returned non-JSON: %s", r.status_code)
+        messages.error(
+            request, "Facebook didn't respond as expected. Please try again."
+        )
+        return redirect("settings-integrations")
     if "error" in token_data:
         messages.error(
             request,
@@ -211,10 +236,26 @@ def fb_oauth_callback(request):
         messages.error(request, "No Facebook Pages found for this account.")
         return redirect("settings-integrations")
 
-    page = pages[0]
-    conn.page_id = page["id"]
-    conn.page_name = page.get("name", "")
-    conn.access_token = page["access_token"]
+    if len(pages) == 1:
+        page = pages[0]
+        _activate_fb_page(conn, page["id"], page.get("name", ""), page["access_token"])
+        messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
+        return redirect("settings-integrations")
+
+    # Several Pages: let the user choose instead of silently connecting the first one.
+    # The user token is sealed before it is kept in the session.
+    request.session[_FB_PAGE_CHOICES_KEY] = {
+        "user_token": seal_text(user_token),
+        "pages": [{"id": p["id"], "name": p.get("name", "")} for p in pages],
+        "created_at": timezone.now().isoformat(),
+    }
+    return redirect("publishing:fb-select-page")
+
+
+def _activate_fb_page(conn, page_id: str, page_name: str, page_token: str) -> None:
+    conn.page_id = page_id
+    conn.page_name = page_name
+    conn.access_token = page_token
     conn.token_expires_at = (
         None  # Page tokens from a long-lived user token never expire
     )
@@ -222,8 +263,55 @@ def fb_oauth_callback(request):
     conn.status = FacebookPageConnection.Status.ACTIVE
     conn.save()
 
-    messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
-    return redirect("settings-integrations")
+
+@full_page_load
+@login_required
+def fb_select_page(request):
+    """Pick which Facebook Page to connect when the user manages more than one."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "settings-integrations")
+    ) is not None:
+        return denied
+
+    choices = request.session.get(_FB_PAGE_CHOICES_KEY)
+    created_at = parse_datetime((choices or {}).get("created_at", ""))
+    if (
+        not choices
+        or not created_at
+        or timezone.now() - created_at > _FB_OAUTH_STATE_TTL
+    ):
+        request.session.pop(_FB_PAGE_CHOICES_KEY, None)
+        messages.error(
+            request, "Page selection expired. Please connect Facebook again."
+        )
+        return redirect("settings-integrations")
+
+    if request.method == "POST":
+        page_id = request.POST.get("page_id", "")
+        page = next((p for p in choices["pages"] if p["id"] == page_id), None)
+        user_token = open_text(choices["user_token"])
+        if page is None or not user_token:
+            messages.error(request, "Choose one of the listed Pages.")
+            return redirect("publishing:fb-select-page")
+        try:
+            page_token = get_page_token(user_token, page_id)
+        except FacebookPublishError as exc:
+            messages.error(request, f"Could not connect that Page: {exc}")
+            return redirect("publishing:fb-select-page")
+        conn, _ = FacebookPageConnection.objects.get_or_create(account=account)
+        _activate_fb_page(conn, page_id, page["name"], page_token)
+        request.session.pop(_FB_PAGE_CHOICES_KEY, None)
+        messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
+        return redirect("settings-integrations")
+
+    return render(
+        request,
+        "publishing/fb_select_page.html",
+        {"account": account, "pages": choices["pages"]},
+    )
 
 
 @login_required
@@ -561,7 +649,7 @@ def publishing_channels(request):
         return redirect("dashboard")
 
     ig = account.instagram_accounts.filter(is_active=True).first()
-    ig_publish_scope = bool(ig and ig.access_token)
+    ig_publish_scope = bool(ig and ig.access_token and not ig.token_expired)
 
     try:
         fb_connection = account.facebook_page_connection
@@ -946,6 +1034,8 @@ def post_new(request):
             )
         except (ContentPost.DoesNotExist, ValueError):
             pass
+        if existing_post and existing_post.status not in _EDITABLE_POST_STATUSES:
+            return redirect("publishing:post-detail", pk=existing_post.pk)
 
     if request.method == "POST":
         pk = request.POST.get("post_id", "")
@@ -1003,6 +1093,13 @@ def post_new(request):
                 scheduled_at = timezone.make_aware(scheduled_at)
 
         action = request.POST.get("action", "draft")
+        if action == "schedule" and not scheduled_at:
+            messages.error(request, "Choose a date and time to schedule the post.")
+            return redirect(
+                f"{reverse('publishing:post-new')}?post_id={post.pk}"
+                if post.pk
+                else "publishing:post-new"
+            )
         if action == "schedule" and scheduled_at:
             status = ContentPost.Status.SCHEDULED
         elif action == "publish_now":
@@ -1085,6 +1182,14 @@ def post_new(request):
             "account": account,
             "media_types": ContentPost.MediaType.choices,
             "existing_post": existing_post,
+            "editor_data": {
+                "caption": existing_post.caption if existing_post else "",
+                "hashtags": existing_post.hashtags if existing_post else [],
+                "platform_captions": existing_post.platform_captions
+                if existing_post
+                else {},
+                "media_urls": existing_post.media_urls if existing_post else [],
+            },
             "goal_choices": goal_choices,
         },
     )
@@ -1321,7 +1426,12 @@ def post_refresh_insights(request, pk):
 
     from .tasks import fetch_fb_post_insights
 
-    fetch_fb_post_insights.apply_async(args=[post.pk])
+    try:
+        fetch_fb_post_insights.apply_async(args=[post.pk])
+    except Exception:
+        logger.exception("Failed to enqueue insights refresh for post=%s", post.pk)
+        messages.error(request, "Couldn't refresh metrics right now. Please try again.")
+        return redirect("publishing:post-detail", pk=post.pk)
     messages.success(request, "Refreshing metrics — reload in a moment.")
     return redirect("publishing:post-detail", pk=post.pk)
 

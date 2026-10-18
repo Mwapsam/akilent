@@ -12,8 +12,9 @@
   <h1 class="text-xl font-semibold tracking-tight mt-1">{% if existing_post %}Edit draft{% else %}New post{% endif %}</h1>
 </div>
 
+{{ editor_data|json_script:"post-editor-data" }}
 <div class="max-w-6xl"
-     x-data="postEditor({{ existing_post.pk|default:'null' }}, '{{ existing_post.caption|default:''|escapejs }}', {{ existing_post.hashtags|default:'[]'|safe }}, {{ existing_post.platform_captions|default:'{}'|safe }})"
+     x-data="postEditor({{ existing_post.pk|default:'null' }}, editorData().caption, editorData().hashtags, editorData().platform_captions)"
      x-init="init()">
 
   {# Step 1: Starting point — only shown for a new post with no existing draft #}
@@ -192,7 +193,7 @@
       </div>
 
       {# Media uploads #}
-      <div class="card card-pad space-y-3" x-data="mediaUploader('{% url "publishing:post-media-upload" %}', {{ existing_post.media_urls|default:'[]'|safe }})">
+      <div class="card card-pad space-y-3" x-data="mediaUploader('{% url "publishing:post-media-upload" %}', editorData().media_urls)">
         <h2 class="font-semibold text-ink">Media</h2>
         <input type="hidden" name="media_urls_json" :value="JSON.stringify(urls)">
 
@@ -396,6 +397,11 @@
 </div>
 
 <script>
+// Existing post content, rendered with json_script so it is never parsed as markup.
+function editorData() {
+  return JSON.parse(document.getElementById('post-editor-data').textContent);
+}
+
 function mediaUploader(uploadUrl, existingUrls) {
   return {
     uploadUrl,

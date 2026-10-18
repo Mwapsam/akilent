@@ -600,6 +600,8 @@ class FacebookPageConnection(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         DISCONNECTED = "disconnected", "Disconnected"
+        # Meta rejected the stored token (revoked, password change); reconnect needed.
+        EXPIRED = "expired", "Reconnect needed"
 
     public_id = models.CharField(
         max_length=40, unique=True, default=_fb_conn_id, editable=False

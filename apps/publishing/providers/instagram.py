@@ -18,6 +18,8 @@ import logging
 import requests
 from django.conf import settings
 
+from .errors import MetaPublishError
+
 logger = logging.getLogger(__name__)
 
 _GRAPH_VERSION = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
@@ -28,7 +30,7 @@ CONTAINER_STATUS_ERROR = "ERROR"
 CONTAINER_STATUS_EXPIRED = "EXPIRED"
 
 
-class InstagramPublishError(Exception):
+class InstagramPublishError(MetaPublishError):
     pass
 
 
@@ -67,7 +69,7 @@ class InstagramPublishProvider:
         data = r.json()
         if "error" in data:
             msg = data["error"].get("message", str(data["error"]))
-            raise InstagramPublishError(_friendly_error(msg))
+            raise InstagramPublishError.from_response(r, data, _friendly_error(msg))
         return data
 
     def _post(self, path: str, **payload) -> dict:
@@ -76,7 +78,7 @@ class InstagramPublishProvider:
         data = r.json()
         if "error" in data:
             msg = data["error"].get("message", str(data["error"]))
-            raise InstagramPublishError(_friendly_error(msg))
+            raise InstagramPublishError.from_response(r, data, _friendly_error(msg))
         return data
 
     def create_image_container(
