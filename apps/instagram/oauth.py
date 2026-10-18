@@ -26,14 +26,16 @@ GRAPH_IG = "https://graph.instagram.com"
 API_IG = "https://api.instagram.com"
 _TIMEOUT = 15
 
-# All four scopes are requested. instagram_business_content_publish requires App Review
-# for non-tester users; add pilot accounts as app testers in the Meta dashboard
-# (App Review → Testers) so all four work in development mode.
+# All five scopes are requested. Each needs App Review for non-tester users; add pilot
+# accounts as app testers in the Meta dashboard (App Review → Testers) so they all work
+# in development mode. instagram_business_manage_insights gives Content Studio the reach,
+# views, saves and shares of the business's own posts.
 SCOPES = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
     "instagram_business_manage_comments,"
-    "instagram_business_content_publish"
+    "instagram_business_content_publish,"
+    "instagram_business_manage_insights"
 )
 
 
