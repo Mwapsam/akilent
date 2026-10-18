@@ -283,3 +283,14 @@ class EnforcedAccountCeremonyTest(TestCase):
 
         self.assertEqual(by_password.status_code, 400)
         self.assertFalse(PasskeyRegistrationChallenge.objects.exists())
+
+
+class CrossDeviceHintTest(TestCase):
+    def test_registration_options_ask_the_browser_to_offer_a_phone(self):
+        user = _user("hint@example.com")
+        client = Client()
+        client.force_login(user)
+
+        resp = _begin(client)
+
+        self.assertIn("hybrid", resp.json().get("hints", []))

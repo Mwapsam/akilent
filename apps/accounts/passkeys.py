@@ -27,6 +27,7 @@ from webauthn import (
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
     PublicKeyCredentialDescriptor,
+    PublicKeyCredentialHint,
     ResidentKeyRequirement,
 )
 
@@ -102,6 +103,8 @@ def begin_registration(request, user):
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.PREFERRED,
         ),
+        # Ask the browser to offer a phone (cross-device) alongside this device.
+        hints=[PublicKeyCredentialHint.HYBRID, PublicKeyCredentialHint.CLIENT_DEVICE],
     )
     ceremony = PasskeyRegistrationChallenge.objects.create(
         user=user,
