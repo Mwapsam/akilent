@@ -142,3 +142,24 @@ def test_the_message_still_lands_if_lead_capture_fails(inbound):
 
     assert conversation is not None
     assert conversation.messages.count() == 1
+
+
+@pytest.mark.django_db
+def test_the_lead_is_owned_by_whoever_routing_assigned(inbound):
+    from unittest.mock import patch
+
+    from django.contrib.auth.models import User
+
+    from apps.conversations.models import Conversation
+
+    account, contact, receive = inbound
+    agent = User.objects.create_user("agent@mk.com", "agent@mk.com", "x")
+
+    def route(conversation):
+        # Routing saves through its own copy of the row, as the real action does.
+        Conversation.objects.filter(pk=conversation.pk).update(assigned_to=agent)
+
+    with patch("apps.conversations.services.route_new_conversation", side_effect=route):
+        receive("How much for the blue dress?", "wamid.1")
+
+    assert Lead.objects.get(account=account, contact=contact).owner == agent

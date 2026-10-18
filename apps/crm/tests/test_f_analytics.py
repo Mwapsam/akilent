@@ -459,6 +459,36 @@ def test_set_lead_status_writes_stage_transition(account, contact):
     assert latest.provenance == StageTransition.Provenance.OBSERVED
 
 
+@pytest.mark.django_db
+def test_a_stale_copy_of_the_lead_records_no_second_transition(account, contact):
+    from apps.crm.models import Lead
+
+    lead = create_lead(account, contact)
+    stale = Lead.objects.get(pk=lead.pk)  # another person's copy, read as "new"
+    set_lead_status(lead, "contacted")
+    before = StageTransition.objects.filter(lead=lead).count()
+
+    assert set_lead_status(stale, "qualified") is False
+    assert StageTransition.objects.filter(lead=lead).count() == before
+    stale.refresh_from_db()
+    assert stale.status == "contacted"
+
+
+@pytest.mark.django_db
+def test_status_is_not_changed_if_its_event_cannot_be_recorded(account, contact):
+    from unittest.mock import patch
+
+    from apps.crm.models import Lead
+
+    lead = create_lead(account, contact)
+    with (
+        patch("apps.crm.services.emit_event", side_effect=RuntimeError("db down")),
+        pytest.raises(RuntimeError),
+    ):
+        set_lead_status(lead, "contacted")
+    assert Lead.objects.get(pk=lead.pk).status == "new"
+
+
 # ---------------------------------------------------------------------------
 # Test 10: create_lead writes a creation StageTransition
 # ---------------------------------------------------------------------------

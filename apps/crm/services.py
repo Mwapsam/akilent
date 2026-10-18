@@ -128,11 +128,20 @@ def set_lead_status(lead: Lead, status: str, *, actor=None) -> bool:
 
     previous = lead.status
     owner_before = lead.owner
-    lead.status = status
     now = timezone.now()
-    lead.save(update_fields=["status", "updated_at"])
 
+    # The status, its event and its stage transition commit together. The update is
+    # conditional on the status we read, so two people moving the same lead at once
+    # record one transition, not two that disagree about where it came from.
     with transaction.atomic():
+        moved = Lead.objects.filter(pk=lead.pk, status=previous).update(
+            status=status, updated_at=now
+        )
+        if not moved:
+            lead.refresh_from_db(fields=["status", "updated_at"])
+            return False
+        lead.status = status
+        lead.updated_at = now
         event = emit_event(
             account=lead.account,
             type="lead.status_changed",

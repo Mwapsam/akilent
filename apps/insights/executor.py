@@ -15,7 +15,7 @@ Execution semantics
 -------------------
     SKIPPED   — trigger matched no targets, OR idempotency guard blocked re-dispatch
     COMPLETED — action was successfully invoked (campaign queued, follow-up created,
-                notify_owner deferred deliberately)
+                owners emailed)
     FAILED    — action raised an error (missing campaign_id, unexpected exception)
 
 A COMPLETED execution is NOT a business outcome.  It records that Akilent
@@ -192,9 +192,42 @@ def _already_executed(policy, target_payload: dict) -> bool:
     action_type = policy.action.get("type", "")
     if action_type == "campaign":
         return _already_executed_campaign(policy)
+    if action_type == "notify_owner":
+        return _already_notified(policy, target_payload)
     # create_followup uses get_or_create — deduplication happens at the DB level.
-    # notify_owner is always deferred — never suppress.
     return False
+
+
+def _notify_window(policy) -> timedelta:
+    condition = policy.condition or {}
+    if "hours" in condition:
+        return timedelta(hours=max(int(condition["hours"]), 1))
+    if "days" in condition:
+        return timedelta(days=int(condition["days"]))
+    return timedelta(hours=24)
+
+
+def _already_notified(policy, target_payload: dict) -> bool:
+    """True if every current target was already in an alert within the window.
+
+    Policies are evaluated every 15 minutes; the owner should hear about each
+    waiting customer once per window, not every quarter hour.
+    """
+    from apps.insights.models import PolicyExecution
+
+    current = {str(i) for i in target_payload.get("ids") or []}
+    if not current:
+        return False
+    recent = PolicyExecution.objects.filter(
+        policy=policy,
+        status=PolicyExecution.Status.COMPLETED,
+        started_at__gte=timezone.now() - _notify_window(policy),
+        result__action="notify_owner",
+    ).values_list("result", flat=True)
+    notified = {
+        str(i) for result in recent for i in (result or {}).get("target_ids", [])
+    }
+    return current <= notified
 
 
 def _already_executed_campaign(policy) -> bool:
@@ -241,7 +274,7 @@ def _execute_action(policy, targets: list, account) -> dict:
     if action_type == "create_followup":
         return _execute_followup(policy, targets, account)
     if action_type == "notify_owner":
-        return _execute_notify_owner(policy, account)
+        return _execute_notify_owner(policy, targets, account)
     # Should be unreachable after the activation guard, but stay defensive.
     raise PolicyActionError(f"Unknown action type: {action_type!r}")
 
@@ -299,17 +332,41 @@ def _execute_followup(policy, targets, account) -> dict:
     }
 
 
-def _execute_notify_owner(policy, account) -> dict:
-    # notify_owner requires a persistent notification model not yet built.
-    # Deliberately deferred: log the intent, return COMPLETED so the execution
-    # ledger records the decision rather than a false failure.
-    logger.warning(
-        "executor: notify_owner action deferred — no notification model yet "
-        "(policy=%s account=%s)",
-        policy.pk,
-        account.pk,
+def _execute_notify_owner(policy, targets, account) -> dict:
+    """Email the business's owners and admins that this policy's condition is met.
+
+    Uses the team notification channel (``apps.accounts.notifications``): email, so
+    it reaches an owner who isn't looking at Akilent. Links to the inbox, where the
+    waiting conversations are.
+    """
+    from django.urls import reverse
+
+    from apps.accounts.notifications import notify_team
+
+    target = _build_target(targets)
+    count = target["count"]
+    noun = "conversation" if target["type"] == "conversation" else "customer"
+    plural = noun if count == 1 else f"{noun}s"
+    sent = notify_team(
+        account,
+        to="owners",
+        subject=f"{policy.name}: {count} {plural} need attention",
+        text=(
+            f'Your rule "{policy.name}" found {count} {plural} that need attention. '
+            "Open the inbox to follow them up."
+        ),
+        path=reverse("conversations:inbox"),
+        reason=(
+            f'You\'re getting this because the rule "{policy.name}" is switched on '
+            "in Akilent's Insights."
+        ),
     )
-    return {"action": "notify_owner", "dispatch": "deferred"}
+    return {
+        "action": "notify_owner",
+        "dispatch": "sent" if sent else "no_recipients",
+        "recipients": sent,
+        "target_ids": target["ids"],
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -453,3 +453,42 @@ def test_sync_job_skipped_when_disconnected(account, contact_link, connection):
         process_sync_job(job)
 
     mock_gc.assert_not_called()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# New contacts reach HubSpot off the message path
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db(transaction=True)
+def test_new_contact_push_is_queued_after_commit_not_run_inline(account, connection):
+    from unittest.mock import patch
+
+    with (
+        patch("apps.hubspot.create.create_hs_contact_from_local") as inline,
+        patch("apps.hubspot.tasks.push_new_contact_to_hubspot.delay") as queued,
+    ):
+        contact = Contact.objects.create(account=account, phone="+260971000099")
+    inline.assert_not_called()
+    queued.assert_called_once_with(contact.pk)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_no_push_is_queued_without_a_connection(account):
+    from unittest.mock import patch
+
+    with patch("apps.hubspot.tasks.push_new_contact_to_hubspot.delay") as queued:
+        Contact.objects.create(account=account, phone="+260971000098")
+    queued.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_push_task_creates_the_hubspot_contact(contact, connection):
+    from unittest.mock import patch
+
+    from apps.hubspot.tasks import push_new_contact_to_hubspot
+
+    with patch("apps.hubspot.create.create_hs_contact_from_local") as create:
+        push_new_contact_to_hubspot(contact.pk)
+    create.assert_called_once()
+    assert create.call_args.args[0].pk == contact.pk

@@ -8,12 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 def on_contact_saved(sender, instance, created, **kwargs):
-    """When a new Akilent Contact is saved, push it to HubSpot if connected.
+    """When a new Akilent Contact is saved, queue its push to HubSpot if connected.
 
     Only fires on creation (not updates — updates go through the sync job queue
     via enqueue_contact_sync, triggered by the views that change contact data).
-    Runs synchronously; failures are logged and swallowed so they never break
-    the contact save.
+    The HubSpot call itself runs in ``tasks.push_new_contact_to_hubspot`` after the
+    transaction commits; this handler only checks for a connection, so it never
+    slows down or breaks the contact save.
     """
     if not created:
         return
@@ -22,26 +23,19 @@ def on_contact_saved(sender, instance, created, **kwargs):
     if getattr(instance, "source", None) == "hubspot":
         return
 
-    # Avoid import-time circular imports by importing inside the handler.
     try:
-        from apps.hubspot.create import create_hs_contact_from_local
+        from django.db import transaction
+
         from apps.hubspot.models import HubSpotConnection
+        from apps.hubspot.tasks import push_new_contact_to_hubspot
 
-        try:
-            conn = HubSpotConnection.objects.get(
-                account=instance.account,
-                status=HubSpotConnection.Status.ACTIVE,
-            )
-        except HubSpotConnection.DoesNotExist:
+        if not HubSpotConnection.objects.filter(
+            account_id=instance.account_id,
+            status=HubSpotConnection.Status.ACTIVE,
+        ).exists():
             return
-
-        link = create_hs_contact_from_local(instance, conn)
-        if link:
-            logger.info(
-                "hubspot: created HS contact %s for Akilent contact %s",
-                link.hs_object_id,
-                instance.pk,
-            )
+        contact_id = instance.pk
+        transaction.on_commit(lambda: push_new_contact_to_hubspot.delay(contact_id))
     except Exception as exc:
         logger.warning(
             "hubspot: on_contact_saved failed for contact %s: %s", instance.pk, exc

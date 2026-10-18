@@ -124,3 +124,36 @@ def test_a_missed_closed_conversation_is_not_escalated(account):
     conv.save(update_fields=["status"])
     result = escalate_overdue_conversations()
     assert result == {"escalated": 0}
+
+
+@pytest.mark.django_db
+def test_the_assignee_is_emailed_once_per_waiting_episode(account):
+    from unittest.mock import patch
+
+    agent = User.objects.create_user("agent", "a@example.com", "pw")
+    Membership.objects.create(user=agent, account=account, role=Membership.Role.MEMBER)
+    conv = _waiting_conversation(
+        account, waited=OVERDUE_WAITING + timedelta(minutes=1), assigned_to=agent
+    )
+    with patch("apps.accounts.notifications.notify_team", return_value=1) as notify:
+        escalate_overdue_conversations()
+        escalate_overdue_conversations()  # same episode: no second email
+
+    notify.assert_called_once()
+    kwargs = notify.call_args.kwargs
+    assert kwargs["to"] == "assignee"
+    assert kwargs["conversation"].pk == conv.pk
+    assert "waiting" in kwargs["subject"]
+
+
+@pytest.mark.django_db
+def test_an_alert_failure_does_not_stop_the_sweep(account):
+    from unittest.mock import patch
+
+    _waiting_conversation(account, waited=OVERDUE_WAITING + timedelta(minutes=1))
+    _waiting_conversation(account, waited=OVERDUE_WAITING + timedelta(minutes=1))
+    with patch(
+        "apps.accounts.notifications.notify_team", side_effect=RuntimeError("smtp")
+    ):
+        result = escalate_overdue_conversations()
+    assert result == {"escalated": 2}

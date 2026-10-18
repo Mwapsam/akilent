@@ -23,9 +23,9 @@ def escalate_overdue_conversations() -> dict:
     """Every OPEN, still-waiting conversation past ``OVERDUE_WAITING`` gets one
     ``conversation.escalated`` Event per waiting episode (Phase B.2). A still-
     unassigned one also gets a fresh routing attempt — a team or agent may
-    have become available since the customer wrote in. An assigned one just
-    gets the Event for now: the notification mechanism beyond the audit
-    trail is deliberately out of scope until there's a real need for it.
+    have become available since the customer wrote in. Then whoever has it
+    (the assignee, or the owners and admins if nobody does) gets one email
+    for that episode, so a waiting customer isn't left to the audit trail.
 
     Idempotent via ``emit_event``'s ``source_event_id`` (keyed on the
     conversation and the exact ``last_in`` it's waiting on): a customer's
@@ -45,7 +45,7 @@ def escalate_overdue_conversations() -> dict:
     ).filter(unanswered_q(), last_in__lte=cutoff)
 
     escalated = 0
-    for conversation in overdue.select_related("account"):
+    for conversation in overdue.select_related("account", "contact"):
         event = emit_event(
             account=conversation.account,
             type="conversation.escalated",
@@ -65,9 +65,47 @@ def escalate_overdue_conversations() -> dict:
         escalated += 1
         if conversation.assigned_to_id is None:
             route_new_conversation(conversation)
+            conversation.refresh_from_db(fields=["assigned_to"])
+        _alert_overdue(conversation, now)
     if escalated:
         logger.warning("escalate_overdue_conversations: escalated=%s", escalated)
     return {"escalated": escalated}
+
+
+def _alert_overdue(conversation, now) -> None:
+    """Email whoever has this conversation that the customer is still waiting.
+
+    Best-effort: a mail failure must not stop the escalation sweep.
+    """
+    from django.urls import reverse
+
+    from apps.accounts.notifications import notify_team
+
+    contact = conversation.contact
+    who = contact.full_name or str(contact)
+    hours = max(int((now - conversation.last_in).total_seconds() // 3600), 1)
+    waited = f"{hours} hour" if hours == 1 else f"{hours} hours"
+    try:
+        notify_team(
+            conversation.account,
+            to="assignee",
+            conversation=conversation,
+            subject=f"{who} has been waiting {waited} for a reply",
+            text=(
+                f"{who} messaged on {conversation.get_channel_display()} and hasn't had a "
+                f"reply for {waited}."
+            ),
+            path=reverse("conversations:detail", args=[conversation.public_id]),
+            reason=(
+                "You're getting this because Akilent tells the assigned teammate (or the "
+                "owners, if nobody is assigned) when a customer waits too long."
+            ),
+        )
+    except Exception:
+        logger.exception(
+            "escalate_overdue_conversations: alert failed for conversation=%s",
+            conversation.pk,
+        )
 
 
 @shared_task(queue="celery")

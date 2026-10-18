@@ -63,8 +63,20 @@ def recipients(account, to: str, *, conversation=None) -> list:
     )
 
 
+_AUTOMATION_REASON = (
+    "You're getting this because an automation in Akilent was set up to tell your team."
+)
+
+
 def notify_team(
-    account, *, to: str, subject: str, text: str, path: str = "", conversation=None
+    account,
+    *,
+    to: str,
+    subject: str,
+    text: str,
+    path: str = "",
+    conversation=None,
+    reason: str = _AUTOMATION_REASON,
 ) -> int:
     """Email ``text`` (with a link to ``path``) to the chosen teammates. Returns how many were sent.
 
@@ -79,7 +91,7 @@ def notify_team(
     body = text[:MAX_TEXT]
     if path:
         body += f"\n\nOpen it: {absolute_url(path)}"
-    body += "\n\nYou're getting this because an automation in Akilent was set up to tell your team."
+    body += f"\n\n{reason}"
 
     from apps.email.services.html_email import build_transactional_html
 

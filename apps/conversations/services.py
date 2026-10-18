@@ -416,6 +416,9 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
         phrase = detect_buying_intent(body)
         if phrase is None:
             return
+        # Routing ran just before this, possibly on another copy of the row: whoever
+        # it gave the conversation to owns the lead, so it has someone to follow it up.
+        conversation.refresh_from_db(fields=["assigned_to"])
         # Goes through the registry, so module gating ("Track potential sales"
         # switched off) and CRM's own rules apply exactly as they do for the
         # agent's manual button — and no crm model is imported here.
@@ -426,6 +429,7 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
             contact=contact,
             conversation_id=conversation.public_id,
             signal=phrase,
+            owner=conversation.assigned_to,
         )
     except Exception:
         logger.exception(
