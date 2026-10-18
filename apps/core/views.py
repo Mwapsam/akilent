@@ -224,12 +224,20 @@ _LEGAL_PAGES = {
     "data-deletion": ("legal/data_deletion.html", "Data deletion"),
     "cookies": ("legal/cookies.html", "Cookie policy"),
 }
-_LEGAL_UPDATED = "26 September 2026"  # change with the text
+_LEGAL_UPDATED = "18 October 2026"  # change with the text
 
 
 def legal_page(request, slug):
     template, title = _LEGAL_PAGES[slug]
     ctx = {"page_title": title, "updated": _LEGAL_UPDATED}
+    if slug == "data-deletion":
+        # Meta links people here with the confirmation code from its data-deletion
+        # callback. Only a code in the format we issue is echoed back.
+        import re
+
+        code = request.GET.get("code", "")
+        if re.fullmatch(r"[0-9a-f]{16}", code):
+            ctx["deletion_code"] = code
 
     from apps.core.markdown import wants_markdown
 

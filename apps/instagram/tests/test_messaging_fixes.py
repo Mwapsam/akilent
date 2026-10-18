@@ -24,6 +24,7 @@ from apps.instagram.tests.helpers import (
     make_account,
     make_instagram_account,
     make_instagram_contact,
+    open_dm_window,
     signed_post,
 )
 from apps.instagram.views import InstagramWebhookView
@@ -301,7 +302,10 @@ class TestOutbox(InstagramCase):
         from apps.instagram.models import OutboundMessage
         from apps.instagram.services.outbound import enqueue_reply
 
-        make_instagram_contact(self.account, self.ig_account, igsid=self.igsid)
+        ig_contact, _ = make_instagram_contact(
+            self.account, self.ig_account, igsid=self.igsid
+        )
+        open_dm_window(self.ig_account, ig_contact)
         return enqueue_reply(
             self.ig_account,
             self.igsid,
@@ -496,6 +500,19 @@ class TestDeauthorize(InstagramCase):
         self.ig_account.refresh_from_db()
         self.assertTrue(self.ig_account.is_active)
 
+    def test_deauthorize_finds_the_account_by_app_scoped_id(self):
+        from apps.instagram.views import instagram_deauthorize
+
+        self.ig_account.app_scoped_user_id = "asid_123"
+        self.ig_account.save(update_fields=["app_scoped_user_id"])
+        request = RequestFactory().post(
+            "/instagram/deauthorize/",
+            {"signed_request": self._signed({"user_id": "asid_123"})},
+        )
+        self.assertEqual(instagram_deauthorize(request).status_code, 200)
+        self.ig_account.refresh_from_db()
+        self.assertFalse(self.ig_account.is_active)
+
     def test_data_deletion_returns_confirmation(self):
         from apps.instagram.views import instagram_data_deletion
 
@@ -515,6 +532,132 @@ class TestDeauthorize(InstagramCase):
         self.assertIn("confirmation_code", body)
         self.assertIn(body["confirmation_code"], body["url"])
         task.delay.assert_called_once()
+
+
+class TestDataDeletionRemovesData(InstagramCase):
+    def test_deletion_removes_account_conversations_and_contacts(self):
+        from apps.contacts.models import Contact
+        from apps.conversations.models import Conversation
+        from apps.instagram.models import InstagramBusinessAccount, InstagramContact
+        from apps.instagram.tasks import delete_instagram_account_data
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        ig_contact = InstagramContact.objects.get(instagram_scoped_id=self.igsid)
+        contact_pk = ig_contact.contact_id
+        self.assertIsNotNone(contact_pk)
+
+        delete_instagram_account_data(self.ig_account.pk, "code")
+
+        self.assertFalse(
+            InstagramBusinessAccount.objects.filter(pk=self.ig_account.pk).exists()
+        )
+        self.assertFalse(Conversation.objects.filter(channel="instagram").exists())
+        self.assertFalse(InstagramContact.objects.filter(pk=ig_contact.pk).exists())
+        self.assertFalse(Contact.objects.filter(pk=contact_pk).exists())
+
+    def test_contact_with_an_order_or_other_channel_is_kept(self):
+        from apps.contacts.models import Contact
+        from apps.instagram.models import InstagramContact
+        from apps.instagram.tasks import delete_instagram_account_data
+        from apps.whatsapp import api as whatsapp_api
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        ig_contact = InstagramContact.objects.get(instagram_scoped_id=self.igsid)
+        wa_contact = whatsapp_api.get_or_create_contact(
+            self.account, "+260971111111", "Same person"
+        )
+        wa_contact.contact = ig_contact.contact
+        wa_contact.save(update_fields=["contact"])
+
+        delete_instagram_account_data(self.ig_account.pk, "code")
+
+        self.assertFalse(InstagramContact.objects.filter(pk=ig_contact.pk).exists())
+        self.assertTrue(Contact.objects.filter(pk=ig_contact.contact_id).exists())
+
+    def test_deletion_removes_stored_media(self):
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        from apps.instagram.models import InstagramMessage
+        from apps.instagram.tasks import delete_instagram_account_data
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        msg = InstagramMessage.objects.get()
+        name = default_storage.save("instagram/media/test-del.jpg", ContentFile(b"x"))
+        InstagramMessage.objects.filter(pk=msg.pk).update(media_file=name)
+
+        delete_instagram_account_data(self.ig_account.pk, "code")
+
+        self.assertFalse(default_storage.exists(name))
+
+
+class TestDmWindowEnforcedOnSend(InstagramCase):
+    """Free-text DMs are refused outside the 24h window, before Meta is called."""
+
+    def _outbound(self, *, last_inbound_at):
+        from apps.instagram.models import OutboundMessage
+        from apps.instagram.services.outbound import enqueue_reply
+
+        ig_contact, _ = make_instagram_contact(
+            self.account, self.ig_account, igsid=self.igsid
+        )
+        thread = open_dm_window(self.ig_account, ig_contact)
+        thread.last_inbound_at = last_inbound_at
+        thread.save(update_fields=["last_inbound_at"])
+        return enqueue_reply(
+            self.ig_account,
+            self.igsid,
+            "Following up",
+            action_type=OutboundMessage.ActionType.DM_REPLY,
+            idempotency_key=f"wf:{secrets.token_hex(4)}",
+        )
+
+    def test_send_after_the_window_closed_is_refused_without_calling_meta(self):
+        from apps.instagram.models import OutboundMessage
+        from apps.instagram.services.outbound import send_outbound
+
+        outbound = self._outbound(last_inbound_at=timezone.now() - timedelta(hours=25))
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider.send_message"
+        ) as send:
+            self.assertFalse(send_outbound(outbound))
+        send.assert_not_called()
+        outbound.refresh_from_db()
+        self.assertEqual(outbound.status, OutboundMessage.Status.FAILED)
+
+    def test_dm_to_someone_who_never_wrote_is_refused(self):
+        from apps.instagram.models import OutboundMessage
+        from apps.instagram.services.outbound import enqueue_reply, send_outbound
+
+        outbound = enqueue_reply(
+            self.ig_account,
+            "igsid_stranger",
+            "Hi",
+            action_type=OutboundMessage.ActionType.DM_REPLY,
+            idempotency_key=f"wf:{secrets.token_hex(4)}",
+        )
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider.send_message"
+        ) as send:
+            self.assertFalse(send_outbound(outbound))
+        send.assert_not_called()
+
+    def test_reply_action_refuses_a_closed_window(self):
+        from apps.conversations.actions import ActionError, ReplyAction
+        from apps.conversations.models import Conversation
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        conversation = Conversation.objects.get(channel="instagram")
+        thread = conversation.instagram_conversation
+        thread.last_inbound_at = timezone.now() - timedelta(hours=25)
+        thread.save(update_fields=["last_inbound_at"])
+
+        with self.assertRaises(ActionError):
+            ReplyAction().execute({}, conversation=conversation, body="Late reply")
 
 
 class TestWebhookSignatureWithoutSecret(TestCase):

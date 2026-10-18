@@ -19,6 +19,11 @@ class InstagramBusinessAccount(models.Model):
     instagram_business_account_id = models.CharField(
         max_length=50, unique=True, db_index=True
     )
+    # The app-scoped user id (``/me`` ``id``). Meta's deauthorize and data-deletion
+    # callbacks name the account by this id, not by the professional account id.
+    app_scoped_user_id = models.CharField(
+        max_length=50, blank=True, default="", db_index=True
+    )
     # Connected Facebook Page ID (needed for comment webhooks and private replies)
     page_id = models.CharField(max_length=50, blank=True, default="")
     # Human-readable name synced from the page

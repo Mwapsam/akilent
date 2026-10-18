@@ -179,6 +179,7 @@ def discover_instagram_account(access_token: str) -> dict:
         )
     return {
         "instagram_business_account_id": ig_id,
+        "app_scoped_user_id": str(data.get("id") or ""),
         "name": data.get("name", ""),
         "username": data.get("username", ""),
         "page_id": "",

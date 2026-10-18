@@ -29,6 +29,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -420,6 +421,7 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
         instagram_business_account_id=iba_id,
         defaults={
             "page_id": page_id,
+            "app_scoped_user_id": chosen.get("app_scoped_user_id", ""),
             "name": chosen.get("name", ""),
             "username": chosen.get("username", ""),
             "access_token": page_access_token,
@@ -686,8 +688,12 @@ def _signed_request_account(request):
     if data is None:
         return None, None
     user_id = str(data.get("user_id") or "")
+    # Instagram Login callbacks carry the app-scoped id; the professional account id is
+    # matched too, for accounts connected before the app-scoped id was stored.
     iba = (
-        InstagramBusinessAccount.objects.filter(instagram_business_account_id=user_id)
+        InstagramBusinessAccount.objects.filter(
+            Q(app_scoped_user_id=user_id) | Q(instagram_business_account_id=user_id)
+        )
         .order_by("-is_active")
         .first()
         if user_id

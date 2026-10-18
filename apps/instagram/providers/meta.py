@@ -58,9 +58,9 @@ class MetaInstagramProvider(BaseInstagramProvider):
         #   replies are allowed for 24 hours after their last message (the 7-day
         #   HUMAN_AGENT tag needs its own App Review and isn't used).
         # - Private reply: 7-day window from the comment timestamp.
-        # We rely on the API returning an error for ineligible sends and treat
-        # that as non-retryable; this method provides a best-effort pre-flight
-        # check based on cached data. Real eligibility is confirmed by the API.
+        # The 24-hour DM window is enforced before this is called, from our own
+        # record of the customer's last message (services.outbound.dm_window_open).
+        # Anything else ineligible is refused by the API and treated as terminal.
         return EligibilityResult(eligible=True)
 
     def send_message(self, recipient_igsid: str, body: str) -> SendResult:

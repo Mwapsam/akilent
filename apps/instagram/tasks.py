@@ -121,20 +121,59 @@ def refresh_instagram_tokens() -> dict:
         iba.access_token = token
         iba.token_expires_at = now + timedelta(seconds=expires_in or 60 * 24 * 3600)
         iba.save(update_fields=["access_token", "token_expires_at", "updated_at"])
+        _backfill_app_scoped_user_id(iba)
         refreshed += 1
     return {"refreshed": refreshed, "failed": failed}
+
+
+def _backfill_app_scoped_user_id(iba) -> None:
+    """Learn the app-scoped id of an account connected before it was stored.
+
+    Meta's deauthorize and data-deletion callbacks name the account by it; without it
+    those callbacks could not find the account. Best-effort: retried on the next refresh.
+    """
+    if iba.app_scoped_user_id or not iba.uses_instagram_login:
+        return
+    from apps.instagram.oauth import discover_instagram_account
+
+    try:
+        found = discover_instagram_account(iba.access_token)
+    except Exception:
+        logger.warning(
+            "could not look up the app-scoped id of instagram_account=%s", iba.pk
+        )
+        return
+    if found.get("app_scoped_user_id"):
+        iba.app_scoped_user_id = found["app_scoped_user_id"]
+        iba.save(update_fields=["app_scoped_user_id", "updated_at"])
 
 
 @shared_task
 def delete_instagram_account_data(instagram_account_id: int, confirmation_code: str):
     """Fulfil a Meta data-deletion request for one connected Instagram account.
 
-    Deletes the account row, which cascades to its Instagram contacts' threads,
-    messages, comments and outbox, plus the inbox conversations those threads
-    backed (they hold the same messages).
+    Deletes everything Akilent received through that account:
+
+    * the account row, which cascades to its threads, messages, comments, outbox and
+      stored webhook payloads;
+    * the inbox conversations those threads backed (they hold the same messages);
+    * attachment files in storage, inbound and outbound;
+    * the Instagram identities of people who only reached the business through this
+      account, and the canonical contact Instagram created for them when nothing else
+      holds it (no other channel, no orders or deals, which are the business's own
+      records). Leads and activity cascade with that contact.
     """
+    from django.core.files.storage import default_storage
+
+    from apps.contacts.models import Contact
     from apps.conversations.models import ChannelConversation, Conversation
-    from apps.instagram.models import InstagramBusinessAccount, InstagramConversation
+    from apps.instagram.models import (
+        InstagramBusinessAccount,
+        InstagramContact,
+        InstagramConversation,
+    )
+    from apps.instagram.models.comment import CommentThread
+    from apps.instagram.models.message import InstagramMessage, OutboundMessage
 
     iba = InstagramBusinessAccount.objects.filter(pk=instagram_account_id).first()
     if iba is None:
@@ -145,11 +184,62 @@ def delete_instagram_account_data(instagram_account_id: int, confirmation_code: 
                 "pk", flat=True
             )
         )
+        ig_contact_ids = set(
+            InstagramConversation.objects.filter(instagram_account=iba).values_list(
+                "instagram_contact_id", flat=True
+            )
+        ) | set(
+            CommentThread.objects.filter(instagram_account=iba).values_list(
+                "instagram_contact_id", flat=True
+            )
+        )
+        media_paths = [
+            name
+            for name in InstagramMessage.objects.filter(
+                conversation__instagram_account=iba
+            )
+            .exclude(media_file="")
+            .exclude(media_file__isnull=True)
+            .values_list("media_file", flat=True)
+            if name
+        ] + list(
+            OutboundMessage.objects.filter(instagram_account=iba)
+            .exclude(media_path="")
+            .values_list("media_path", flat=True)
+        )
         spine_ids = ChannelConversation.objects.filter(
             channel=Conversation.Channel.INSTAGRAM, object_id__in=thread_ids
         ).values_list("conversation_id", flat=True)
         Conversation.objects.filter(pk__in=list(spine_ids)).delete()
         iba.delete()
+
+        # People who still talk to the business through another connected Instagram
+        # account keep that identity.
+        orphaned = (
+            InstagramContact.objects.filter(pk__in=ig_contact_ids)
+            .exclude(conversations__isnull=False)
+            .exclude(comment_threads__isnull=False)
+        )
+        contact_ids = set(
+            orphaned.exclude(contact__isnull=True).values_list("contact_id", flat=True)
+        )
+        orphaned.delete()
+        Contact.objects.filter(
+            pk__in=contact_ids,
+            source="instagram",
+            instagram_contacts__isnull=True,
+            whatsapp_contacts__isnull=True,
+            orders__isnull=True,
+            deals__isnull=True,
+        ).delete()
+
+    for path in media_paths:
+        try:
+            default_storage.delete(path)
+        except Exception:
+            logger.warning(
+                "delete_instagram_account_data: could not delete media %s", path
+            )
     logger.info(
         "delete_instagram_account_data: deleted instagram_account=%s code=%s",
         instagram_account_id,

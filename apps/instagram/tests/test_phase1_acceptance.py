@@ -523,8 +523,17 @@ class TestCommentVsDM(TestCase):
 
 class TestOutboundFailureHandling(TestCase):
     def setUp(self):
+        from apps.instagram.tests.helpers import (
+            make_instagram_contact,
+            open_dm_window,
+        )
+
         self.account, _ = make_account()
         self.ig_account = make_instagram_account(self.account)
+        ig_contact, _ = make_instagram_contact(
+            self.account, self.ig_account, igsid="igsid_err"
+        )
+        open_dm_window(self.ig_account, ig_contact)
 
     def test_meta_api_error_marks_outbound_failed_not_exception(self):
         from apps.instagram.models.message import OutboundMessage
@@ -564,7 +573,7 @@ class TestOutboundFailureHandling(TestCase):
 
         outbound = enqueue_reply(
             self.ig_account,
-            "igsid_perm",
+            "igsid_err",
             "Hi",
             action_type=OutboundMessage.ActionType.DM_REPLY,
             idempotency_key=f"test:{secrets.token_hex(8)}",

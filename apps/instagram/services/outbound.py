@@ -96,6 +96,16 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         instagram_account_id=instagram_account.instagram_business_account_id,
     )
 
+    if (
+        outbound.action_type == OutboundMessage.ActionType.DM_REPLY
+        and not dm_window_open(instagram_account, outbound.recipient_igsid)
+    ):
+        # Enforced here, not left to Meta: every DM path (inbox, workflows, AI, the
+        # outbox drain's retries) goes through this one function.
+        outbound.mark_failed(WINDOW_CLOSED_ERROR, terminal=True)
+        _notify_automation_failed(outbound)
+        return False
+
     eligibility = provider.can_send(outbound.recipient_igsid, outbound.action_type)
     if not eligibility.eligible:
         outbound.mark_failed(
@@ -154,6 +164,31 @@ def send_outbound(outbound: OutboundMessage) -> bool:
     if outbound.status == OutboundMessage.Status.FAILED:
         _notify_automation_failed(outbound)
     return False
+
+
+WINDOW_CLOSED_ERROR = (
+    "Not sent: Instagram only allows replies within 24 hours of the customer's "
+    "last message."
+)
+
+
+def dm_window_open(instagram_account: InstagramBusinessAccount, igsid: str) -> bool:
+    """Whether a free-text DM to this person is inside Instagram's 24-hour window.
+
+    Measured from their last message to this business account. Someone who never
+    messaged it has no window at all.
+    """
+    from apps.instagram.models import InstagramConversation
+
+    thread = (
+        InstagramConversation.objects.filter(
+            instagram_account=instagram_account,
+            instagram_contact__instagram_scoped_id=igsid,
+        )
+        .order_by("-last_inbound_at")
+        .first()
+    )
+    return bool(thread and thread.window_is_open)
 
 
 def _notify_automation_failed(outbound: OutboundMessage) -> None:

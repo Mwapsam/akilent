@@ -66,6 +66,18 @@ def make_instagram_contact(account, ig_account, *, igsid=None):
     return ig_contact, contact
 
 
+def open_dm_window(ig_account, ig_contact):
+    """Record that the customer just wrote, so a free-text DM reply is allowed."""
+    from apps.instagram.models import InstagramConversation
+
+    thread, _ = InstagramConversation.objects.get_or_create(
+        instagram_account=ig_account, instagram_contact=ig_contact
+    )
+    thread.last_inbound_at = timezone.now()
+    thread.save(update_fields=["last_inbound_at"])
+    return thread
+
+
 # ---------------------------------------------------------------------------
 # Webhook payload builders
 # ---------------------------------------------------------------------------

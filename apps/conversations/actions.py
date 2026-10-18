@@ -143,6 +143,10 @@ class ReplyAction(Action):
                 raise ActionError(
                     "Instagram isn't connected — reconnect it in Settings → Instagram."
                 )
+            if not ig_convo.window_is_open:
+                from apps.instagram.services.outbound import WINDOW_CLOSED_ERROR
+
+                raise ActionError(WINDOW_CLOSED_ERROR)
             igsid = ig_convo.instagram_contact.instagram_scoped_id
             key = idempotency_key or f"reply:{conversation.pk}:{uuid.uuid4()}"
             outbound = enqueue_reply(
@@ -234,6 +238,10 @@ class ReplyMediaAction(Action):
                 raise ActionError(
                     "Instagram isn't connected — reconnect it in Settings → Instagram."
                 )
+            if not ig_convo.window_is_open:
+                from apps.instagram.services.outbound import WINDOW_CLOSED_ERROR
+
+                raise ActionError(WINDOW_CLOSED_ERROR)
             igsid = ig_convo.instagram_contact.instagram_scoped_id
             label = {
                 "image": _ATTACHMENT_LABELS["image"],

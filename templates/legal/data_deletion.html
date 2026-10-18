@@ -1,10 +1,24 @@
 {% extends "legal/_layout.html" %}
 {% block legal_body %}
 
+{% if deletion_code %}
+<div class="legal-notice" role="status">
+  <p>
+    <strong>Your data deletion request was received.</strong>
+    Confirmation code: <strong>{{ deletion_code }}</strong>.
+  </p>
+  <p>
+    Akilent has disconnected the Instagram account and is deleting the data it received
+    through it, as described under "Disconnecting Instagram" below. Deletion is completed
+    within 30 days. Quote this code if you contact us about the request.
+  </p>
+</div>
+{% endif %}
+
 <p>
   This page explains how to request deletion of your personal data from
   {{ site.app_name|default:"Akilent" }}. It also serves as Akilent's
-  data deletion instructions for Meta's WhatsApp Business Platform.
+  data deletion instructions for Meta's WhatsApp Business Platform and Instagram Platform.
 </p>
 
 <h2>If you messaged a business that uses Akilent</h2>
@@ -17,21 +31,22 @@
 
   <li>
     Or email <strong>support@akilent.com</strong> with the subject
-    <strong>"Delete my data"</strong>. Include the WhatsApp number you used
-    and the name of the business you contacted.
+    <strong>"Delete my data"</strong>. Include the WhatsApp number or Instagram
+    username you used and the name of the business you contacted.
     We will verify the request with the business and process deletion within
     30 days where applicable.
   </li>
 </ol>
 
 <p>
-  Replying <strong>STOP</strong> to a business stops future messages from that business,
-  but it does not delete previous messages.
+  On WhatsApp, replying <strong>STOP</strong> to a business stops future messages from
+  that business, but it does not delete previous messages.
 </p>
 
 <p>
   Deleting data from Akilent does not remove copies stored on your own device
-  or within WhatsApp's systems. Those are governed by WhatsApp's own privacy practices.
+  or within WhatsApp's or Instagram's systems. Those are governed by Meta's own privacy
+  practices.
 </p>
 
 <h2>If you have an Akilent account</h2>
@@ -40,7 +55,7 @@
   <li>
     To delete a customer's contact details and conversations, the account owner
     should email <strong>support@akilent.com</strong> with the customer's
-    WhatsApp number.
+    WhatsApp number or Instagram username.
   </li>
 
   <li>
@@ -68,6 +83,25 @@
 <p>
   Existing data already stored in Akilent remains until it is deleted using
   one of the methods described above.
+</p>
+
+<h2>Disconnecting Instagram</h2>
+
+<p>
+  You can disconnect an Instagram account from <strong>Settings → Instagram</strong> in
+  Akilent, or by removing Akilent under <strong>Apps and websites</strong> in your
+  Instagram settings. Either way, Akilent stops receiving and sending Instagram messages
+  and comments for that account. Disconnecting keeps the conversation history in Akilent
+  so the business can still see it.
+</p>
+
+<p>
+  To have that data deleted as well, use <strong>Remove</strong> and request deletion in
+  your Instagram settings under <strong>Apps and websites</strong>, or email
+  <strong>support@akilent.com</strong>. Akilent then deletes what it received through
+  that Instagram account: its direct messages, comments, attachments and the Instagram
+  usernames and names of the people who wrote to it. Contact records the business also
+  uses on another channel, or for its own orders and deals, keep those other details.
 </p>
 
 <h2>Questions</h2>
