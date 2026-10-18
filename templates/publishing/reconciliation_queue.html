@@ -1,49 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Reconciliation — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% load publishing_filters %}
+{% block title %}Needs check — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-  <h1 class="text-2xl font-semibold tracking-tight">Reconciliation queue</h1>
-  <p class="text-sm text-gray-500 mt-0.5">Publications whose outcome is uncertain. Confirm what happened on the channel before acting.</p>
+<div class="mb-4 flex items-center justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+    <p class="text-sm text-gray-500 mt-0.5">Publications we couldn't confirm. Check the channel before you act, so nothing is posted twice.</p>
+  </div>
+  <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
+
+{% include "publishing/_subnav.html" %}
 
 {% if variants %}
   <div class="space-y-4">
     {% for variant in variants %}
-      <div class="card p-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <a href="{% url 'publishing:post-detail' variant.post.pk %}" class="font-medium">{{ variant.post.public_id }}</a>
-            <span class="text-sm text-gray-500">· {{ variant.platform }}</span>
+      <div class="card card-pad space-y-4">
+        <div class="flex items-start gap-3">
+          {% include "publishing/_media_thumb.html" with url=variant.post|first_media size="w-14 h-14" alt=variant.post.caption|truncatechars:80 %}
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="{% url 'publishing:post-detail' variant.post.pk %}" class="font-medium text-ink hover:underline truncate">
+                {{ variant.post.caption|truncatechars:80|default:"(no caption)" }}
+              </a>
+              {{ variant|variant_status_badge }}
+            </div>
+            <p class="text-xs text-gray-500 mt-0.5">
+              {{ variant.platform|platform_display_name }}
+              {% if variant.last_error_at %} · last attempt {{ variant.last_error_at|timesince }} ago{% endif %}
+            </p>
+            {% if variant.last_error %}
+              <p class="mt-2 text-sm text-gray-600">{{ variant.last_error }}</p>
+            {% endif %}
           </div>
-          <span class="badge">Reconciling</span>
         </div>
-        {% if variant.last_error %}
-          <p class="mt-2 text-sm">{{ variant.last_error }}</p>
-        {% endif %}
 
-        <div class="mt-3 grid gap-3 md:grid-cols-3">
+        <ol class="text-sm text-gray-600 list-decimal pl-5 space-y-0.5">
+          <li>Open your {{ variant.platform|platform_display_name }} account and look for this post.</li>
+          <li>If it's there, confirm it below. If it isn't, retry. If you can't tell yet, leave it unresolved with a next step.</li>
+        </ol>
+
+        <div class="grid gap-4 md:grid-cols-3 pt-3 border-t border-border">
           <form method="post" action="{% url 'publishing:reconciliation-confirm' variant.pk %}" class="space-y-2">
             {% csrf_token %}
-            <p class="text-sm font-medium">Confirm published</p>
-            <input name="publication_id" required placeholder="Publication ID" class="input w-full">
-            <input name="publication_url" placeholder="Public URL" class="input w-full">
-            <input name="evidence_notes" placeholder="Evidence" class="input w-full">
-            <button type="submit" class="btn btn-primary">Confirm published</button>
+            <p class="text-sm font-medium text-ink">It was published</p>
+            <label class="sr-only" for="pubid-{{ variant.pk }}">Publication ID</label>
+            <input id="pubid-{{ variant.pk }}" name="publication_id" required placeholder="Publication ID" class="input w-full text-sm">
+            <label class="sr-only" for="puburl-{{ variant.pk }}">Public URL</label>
+            <input id="puburl-{{ variant.pk }}" name="publication_url" placeholder="Public URL (optional)" class="input w-full text-sm">
+            <label class="sr-only" for="evidence-{{ variant.pk }}">Evidence</label>
+            <input id="evidence-{{ variant.pk }}" name="evidence_notes" placeholder="How you checked (optional)" class="input w-full text-sm">
+            <button type="submit" class="btn btn-primary text-sm">Confirm published</button>
           </form>
 
           <form method="post" action="{% url 'publishing:reconciliation-retry' variant.pk %}" class="space-y-2">
             {% csrf_token %}
-            <p class="text-sm font-medium">Retry</p>
-            <p class="text-xs text-gray-500">Only if the channel confirms nothing was published.</p>
-            <button type="submit" class="btn">Retry publication</button>
+            <p class="text-sm font-medium text-ink">It wasn't published</p>
+            <p class="text-xs text-gray-500">Retry only if the post is not on the channel. Otherwise it will appear twice.</p>
+            <button type="submit" class="btn btn-ghost text-sm"
+                    data-confirm="Retry only if this post is not already on {{ variant.platform|platform_display_name }}. Retrying a post that did go out publishes it twice."
+                    data-confirm-label="Retry publication" data-confirm-cancel="Go back">Retry publication</button>
           </form>
 
           <form method="post" action="{% url 'publishing:reconciliation-unresolved' variant.pk %}" class="space-y-2">
             {% csrf_token %}
-            <p class="text-sm font-medium">Leave unresolved</p>
-            <input name="next_step" required placeholder="Next investigative step" class="input w-full">
-            <button type="submit" class="btn">Leave unresolved</button>
+            <p class="text-sm font-medium text-ink">Can't tell yet</p>
+            <label class="sr-only" for="next-{{ variant.pk }}">Next step</label>
+            <input id="next-{{ variant.pk }}" name="next_step" required placeholder="What you'll check next" class="input w-full text-sm">
+            <button type="submit" class="btn btn-ghost text-sm">Leave unresolved</button>
           </form>
         </div>
       </div>
@@ -51,13 +76,15 @@
   </div>
 
   {% if variants.has_other_pages %}
-    <nav class="mt-4 flex items-center gap-3 text-sm">
-      {% if variants.has_previous %}<a href="?page={{ variants.previous_page_number }}">Previous</a>{% endif %}
-      <span>Page {{ variants.number }} of {{ variants.paginator.num_pages }}</span>
-      {% if variants.has_next %}<a href="?page={{ variants.next_page_number }}">Next</a>{% endif %}
-    </nav>
+    <div class="flex items-center justify-center gap-2 mt-4">
+      {% if variants.has_previous %}<a href="{% querystring page=variants.previous_page_number %}" class="btn btn-ghost text-sm">← Prev</a>{% endif %}
+      <span class="text-sm text-gray-500">Page {{ variants.number }} of {{ variants.paginator.num_pages }}</span>
+      {% if variants.has_next %}<a href="{% querystring page=variants.next_page_number %}" class="btn btn-ghost text-sm">Next →</a>{% endif %}
+    </div>
   {% endif %}
 {% else %}
-  <p class="text-sm text-gray-500">Nothing is waiting for reconciliation.</p>
+  <div class="card card-pad text-center py-12">
+    <p class="text-sm text-gray-500">Nothing needs checking. Every publication has a confirmed outcome.</p>
+  </div>
 {% endif %}
 {% endblock %}

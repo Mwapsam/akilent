@@ -62,7 +62,7 @@
             {% if item.pillar %} · {{ item.pillar.name }}{% endif %}
           </p>
         </div>
-        <div class="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div class="shrink-0 flex gap-1 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
           <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Create post</button>
@@ -93,7 +93,7 @@
           <span class="text-sm text-ink">{{ item.topic|truncatechars:60 }}</span>
           <p class="text-xs text-gray-400 mt-0.5">{{ item.get_plan_status_display }}</p>
         </div>
-        <div class="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div class="shrink-0 flex gap-1 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
           <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
             {% csrf_token %}
             <button type="submit" class="text-xs text-accent hover:underline">→ Post</button>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Publishing — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -45,12 +46,7 @@
       {% for post in upcoming %}
       <a href="{% url 'publishing:post-detail' post.pk %}"
          class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle transition-colors">
-        <div class="shrink-0 w-8 h-8 rounded tone-info-bg flex items-center justify-center text-blue-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-        </div>
+        {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-ink truncate">{{ post.caption|truncatechars:60|default:"(no caption)" }}</p>
           <p class="text-xs text-gray-400">

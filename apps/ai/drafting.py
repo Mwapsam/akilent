@@ -499,6 +499,9 @@ def run(draft, provider) -> None:
         platform = draft.context.get("platform", "instagram")
         system = content_caption_prompt(account, media_type, platform, notes)
         user = draft.prompt
+        goal = draft.context.get("goal", "")
+        if goal:
+            user = f"{user}\nGoal: {goal}"
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (

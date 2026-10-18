@@ -14,12 +14,12 @@
 
 {{ editor_data|json_script:"post-editor-data" }}
 <div class="max-w-6xl"
-     x-data="postEditor({{ existing_post.pk|default:'null' }}, editorData().caption, editorData().hashtags, editorData().platform_captions)"
+     x-data="postEditor({{ existing_post.pk|default:'null' }}, editorData().caption, editorData().hashtags, editorData().platform_captions, editorData().platforms, editorData().media_type, editorData().scheduled_at)"
      x-init="init()">
 
   {# Step 1: Starting point — only shown for a new post with no existing draft #}
   {% if not existing_post %}
-  <div x-show="step === 1" class="grid grid-cols-2 gap-3 mb-6">
+  <div x-show="step === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
     <button type="button"
             @click="step = 2; mode = 'ai'"
             class="card card-pad text-left hover:border-brand-400 transition-colors group">
@@ -143,14 +143,12 @@
         <div class="flex gap-4">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" name="platforms" value="instagram"
-                   {% if not existing_post or 'instagram' in existing_post.platforms %}checked{% endif %}
-                   @change="updatePlatforms()" class="rounded">
+                   x-model="selectedPlatforms" class="rounded">
             <span class="text-sm font-medium">Instagram</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" name="platforms" value="facebook"
-                   {% if existing_post and 'facebook' in existing_post.platforms %}checked{% endif %}
-                   @change="updatePlatforms()" class="rounded">
+                   x-model="selectedPlatforms" class="rounded">
             <span class="text-sm font-medium">Facebook</span>
           </label>
         </div>
@@ -159,9 +157,9 @@
       {# Media type #}
       <div class="card card-pad">
         <h2 class="font-semibold text-ink mb-2">Media type</h2>
-        <select name="media_type" class="input w-full">
+        <select name="media_type" class="input w-full" x-model="mediaType" aria-label="Media type">
           {% for value, label in media_types %}
-          <option value="{{ value }}" {% if existing_post.media_type == value %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ value }}">{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -238,7 +236,8 @@
               <p x-show="item.status === 'done'" class="text-xs text-gray-400 mt-0.5">Uploaded</p>
             </div>
             {# Remove #}
-            <button type="button" @click="remove(i)" class="text-gray-400 hover:text-red-500 flex-shrink-0">
+            <button type="button" @click="remove(i)" class="text-gray-500 hover:text-red-500 flex-shrink-0"
+                    :aria-label="'Remove ' + item.name">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
               </svg>
@@ -249,20 +248,41 @@
 
       {# Schedule #}
       <div class="card card-pad space-y-3">
-        <h2 class="font-semibold text-ink">Schedule</h2>
-        <p class="text-xs text-gray-400">Leave blank to save as draft.</p>
-        <input type="datetime-local" name="scheduled_at"
-               value="{{ existing_post.scheduled_at|date:'Y-m-d\TH:i'|default:'' }}"
-               class="input w-64">
+        <h2 class="font-semibold text-ink"><label for="scheduled-at">Schedule</label></h2>
+        <p class="text-xs text-gray-500">{% if review_gate %}You can pick a time now. You can schedule it once an Owner or Admin approves the post.{% else %}Pick a date and time to schedule, or leave it blank and save as a draft.{% endif %}</p>
+        <input type="datetime-local" name="scheduled_at" id="scheduled-at"
+               x-model="scheduledAt"
+               class="input w-full sm:w-64">
+        <p class="text-xs text-gray-500">Times are in {{ current_tz_name }}.</p>
       </div>
 
       {# Actions #}
-      <div class="flex flex-wrap gap-2">
-        <button type="submit" name="action" value="draft" class="btn btn-ghost">Save as draft</button>
-        <button type="submit" name="action" value="schedule" class="btn btn-primary">Schedule</button>
-        <button type="submit" name="action" value="publish_now" class="btn btn-ghost text-teal-700 hover:tone-teal-bg">Publish now</button>
-        <a href="{% url 'publishing:index' %}" class="btn btn-ghost text-gray-400">Cancel</a>
+      {% if review_gate %}
+      <div class="space-y-2">
+        <p class="text-xs text-gray-500">This workspace reviews posts before they go out. Submit it, and an Owner or Admin will approve it or ask for changes.</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" name="action" value="submit_review" class="btn btn-primary"
+                  :disabled="selectedPlatforms.length === 0">Save &amp; submit for review</button>
+          <button type="submit" name="action" value="draft" class="btn btn-ghost">Save as draft</button>
+          <a href="{% url 'publishing:index' %}" class="btn btn-ghost text-gray-500">Cancel</a>
+        </div>
       </div>
+      {% else %}
+      {% if approved_for_publish %}
+      <p class="text-xs text-gray-500">Approved. Changing the caption, media or channels sends it back for review.</p>
+      {% endif %}
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" name="action" value="schedule" class="btn btn-primary"
+                :disabled="!scheduledAt || selectedPlatforms.length === 0"
+                :title="scheduledAt ? '' : 'Pick a date and time first'">Schedule</button>
+        <button type="submit" name="action" value="draft" class="btn btn-ghost">Save as draft</button>
+        <button type="submit" name="action" value="publish_now" class="btn btn-ghost text-teal-700 hover:tone-teal-bg"
+                :disabled="selectedPlatforms.length === 0"
+                :data-confirm="'Publish to ' + platformListLabel() + ' now? It goes live immediately.'"
+                data-confirm-label="Publish now" data-confirm-cancel="Not yet">Publish now</button>
+        <a href="{% url 'publishing:index' %}" class="btn btn-ghost text-gray-500">Cancel</a>
+      </div>
+      {% endif %}
 
     </form>
   </div>
@@ -275,17 +295,19 @@
         <div class="flex gap-1 text-xs">
           <button type="button"
                   @click="previewPlatform = 'instagram'"
+                  :aria-pressed="previewPlatform === 'instagram'"
                   :class="previewPlatform === 'instagram' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-ink'"
                   class="px-2 py-0.5 rounded-full transition-colors">Instagram</button>
           <button type="button"
                   @click="previewPlatform = 'facebook'"
+                  :aria-pressed="previewPlatform === 'facebook'"
                   :class="previewPlatform === 'facebook' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-ink'"
                   class="px-2 py-0.5 rounded-full transition-colors">Facebook</button>
         </div>
       </div>
 
       {# Instagram preview card #}
-      <div x-show="previewPlatform === 'instagram'" class="rounded-xl border border-surface-subtle bg-white overflow-hidden text-sm shadow-sm">
+      <div x-show="previewPlatform === 'instagram'" class="rounded-xl border border-border bg-surface overflow-hidden text-sm shadow-sm">
         {# Header #}
         <div class="flex items-center gap-2 px-3 py-2 border-b border-surface-subtle">
           <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0"></div>
@@ -298,11 +320,18 @@
         </div>
         {# Media #}
         <template x-if="previewMediaUrls.length > 0 && _isImageUrl(previewMediaUrls[0])">
-          <div class="aspect-square tone-neutral-bg overflow-hidden">
-            <img :src="previewMediaUrls[0]" class="w-full h-full object-cover" alt="">
+          <div class="relative aspect-square tone-neutral-bg overflow-hidden">
+            <img :src="previewMediaUrls[0]" class="w-full h-full object-cover" alt="Preview of the first image">
+            <span x-show="previewMediaUrls.length > 1" class="absolute top-2 right-2 text-xs font-semibold px-1.5 rounded bg-gray-900/60 text-white"
+                  x-text="'1/' + previewMediaUrls.length"></span>
           </div>
         </template>
-        <template x-if="previewMediaUrls.length === 0 || !_isImageUrl(previewMediaUrls[0])">
+        <template x-if="previewMediaUrls.length > 0 && _isVideoUrl(previewMediaUrls[0])">
+          <div class="aspect-square bg-gray-900 overflow-hidden">
+            <video :src="previewMediaUrls[0]" class="w-full h-full object-cover" muted playsinline controls preload="metadata" aria-label="Preview of the video"></video>
+          </div>
+        </template>
+        <template x-if="previewMediaUrls.length === 0 || (!_isImageUrl(previewMediaUrls[0]) && !_isVideoUrl(previewMediaUrls[0]))">
           <div class="aspect-square tone-neutral-bg flex items-center justify-center">
             <svg class="w-10 h-10 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -327,7 +356,7 @@
       </div>
 
       {# Facebook preview card #}
-      <div x-show="previewPlatform === 'facebook'" class="rounded-xl border border-surface-subtle bg-white overflow-hidden text-sm shadow-sm">
+      <div x-show="previewPlatform === 'facebook'" class="rounded-xl border border-border bg-surface overflow-hidden text-sm shadow-sm">
         {# Header #}
         <div class="flex items-center gap-2 px-3 py-2">
           <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
@@ -346,23 +375,33 @@
         {# Media #}
         <template x-if="previewMediaUrls.length > 0 && _isImageUrl(previewMediaUrls[0])">
           <div class="tone-neutral-bg overflow-hidden" style="max-height:200px">
-            <img :src="previewMediaUrls[0]" class="w-full object-cover" alt="">
+            <img :src="previewMediaUrls[0]" class="w-full object-cover" alt="Preview of the first image">
           </div>
         </template>
-        {# Engagement bar #}
-        <div class="flex gap-0 border-t border-surface-subtle mt-1">
-          <button type="button" class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500 hover:tone-neutral-bg rounded">
+        <template x-if="previewMediaUrls.length > 0 && _isVideoUrl(previewMediaUrls[0])">
+          <div class="bg-gray-900 overflow-hidden">
+            <video :src="previewMediaUrls[0]" class="w-full" style="max-height:200px" muted playsinline controls preload="metadata" aria-label="Preview of the video"></video>
+          </div>
+        </template>
+        <template x-if="previewMediaUrls.length === 0 && mediaType !== 'text'">
+          <div class="tone-neutral-bg flex items-center justify-center py-10 text-gray-500">
+            <span class="text-xs">Add media to see it here</span>
+          </div>
+        </template>
+        {# Engagement bar (decorative) #}
+        <div class="flex gap-0 border-t border-border mt-1">
+          <span class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500" aria-hidden="true">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/></svg>
             Like
-          </button>
-          <button type="button" class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500 hover:tone-neutral-bg rounded">
+          </span>
+          <span class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500" aria-hidden="true">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
             Comment
-          </button>
-          <button type="button" class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500 hover:tone-neutral-bg rounded">
+          </span>
+          <span class="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-500" aria-hidden="true">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             Share
-          </button>
+          </span>
         </div>
       </div>
     </div>
@@ -370,11 +409,11 @@
 </div>{# end Alpine postEditor scope #}
 
 {% comment %} Crop modal — outside Alpine scope so Cropper.js can manage the <img> freely {% endcomment %}
-<div id="ig-crop-modal" class="hidden fixed inset-0 flex items-center justify-center bg-gray-900/50 p-4" style="z-index: var(--z-modal)" role="dialog" aria-modal="true">
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl flex flex-col gap-4 p-5">
+<div id="ig-crop-modal" class="hidden fixed inset-0 flex items-center justify-center bg-gray-900/50 p-4" style="z-index: var(--z-modal)" role="dialog" aria-modal="true" aria-labelledby="ig-crop-title">
+  <div class="bg-surface rounded-xl shadow-2xl w-full max-w-xl flex flex-col gap-4 p-5" tabindex="-1" id="ig-crop-panel">
     <div class="flex items-center justify-between">
       <div>
-        <h3 class="font-semibold text-ink">Crop for Instagram</h3>
+        <h3 class="font-semibold text-ink" id="ig-crop-title">Crop image</h3>
         <p class="text-xs text-gray-500 mt-0.5">Pick a ratio, drag to reposition, then crop.</p>
       </div>
       <button id="ig-crop-skip" type="button" class="text-sm text-gray-500 hover:text-ink underline">Skip crop</button>
@@ -503,7 +542,7 @@ async function _readThumb(file) {
   });
 }
 
-function postEditor(existingPostId, existingCaption, existingHashtags, existingPlatformCaptions) {
+function postEditor(existingPostId, existingCaption, existingHashtags, existingPlatformCaptions, initialPlatforms, initialMediaType, initialScheduledAt) {
   return {
     step: existingPostId ? 3 : 1,
     mode: existingPostId ? 'scratch' : '',
@@ -514,7 +553,9 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     caption: existingCaption || '',
     hashtags: existingHashtags || [],
     platformCaptions: existingPlatformCaptions || {},
-    selectedPlatforms: ['instagram'],
+    selectedPlatforms: initialPlatforms && initialPlatforms.length ? initialPlatforms : ['instagram'],
+    mediaType: initialMediaType || 'image',
+    scheduledAt: initialScheduledAt || '',
     previewPlatform: 'instagram',
     previewMediaUrls: [],
 
@@ -533,13 +574,22 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
       return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url);
     },
 
-    updatePlatforms() {
-      this.selectedPlatforms = [...document.querySelectorAll('[name=platforms]:checked')].map(cb => cb.value);
+    _isVideoUrl(url) {
+      return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+    },
+
+    platformListLabel() {
+      const names = { instagram: 'Instagram', facebook: 'Facebook' };
+      return this.selectedPlatforms.map(p => names[p] || p).join(' and ') || 'your channels';
     },
 
     selectOption(opt) {
       this.caption = opt.caption;
       this.hashtags = opt.hashtags || [];
+      // Carry the brief's choices into the editor so the post matches what was generated.
+      this.selectedPlatforms = [this.brief.platform];
+      this.previewPlatform = this.brief.platform;
+      this.mediaType = this.brief.mediaType;
       this.step = 3;
     },
 
@@ -553,6 +603,7 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
       fd.append('prompt', this.brief.topic);
       fd.append('media_type', this.brief.mediaType);
       fd.append('platform', this.brief.platform);
+      fd.append('goal', this.brief.goal);
       fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
       let res, data;
@@ -629,9 +680,14 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
   let _cropper = null;
   let _cropCb = null;
 
+  let _returnFocus = null;
+
   window._igCropOpen = function (src, name, type, callback) {
     _cropCb = callback;
+    _returnFocus = document.activeElement;
     const modal = document.getElementById('ig-crop-modal');
+    const igSelected = !!document.querySelector('[name=platforms][value=instagram]:checked');
+    document.getElementById('ig-crop-title').textContent = igSelected ? 'Crop for Instagram' : 'Crop image';
     const img = document.getElementById('ig-crop-img');
     // Reset the img src to force Cropper to reinitialise on the new image.
     img.src = '';
@@ -646,6 +702,7 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     };
     img.src = src;
     modal.classList.remove('hidden');
+    document.getElementById('ig-crop-panel').focus();
   };
 
   window._igCropSetRatio = function (w, h) {
@@ -656,7 +713,19 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     document.getElementById('ig-crop-modal').classList.add('hidden');
     if (_cropper) { _cropper.destroy(); _cropper = null; }
     if (_cropCb) { _cropCb(result); _cropCb = null; }
+    const back = _returnFocus && document.contains(_returnFocus) ? _returnFocus
+      : document.querySelector('label[for=media-file-input]');
+    if (back && back.focus) back.focus();
+    _returnFocus = null;
   }
+
+  // Esc skips the crop (uploads the original), the same as the Skip button.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !document.getElementById('ig-crop-modal').classList.contains('hidden')) {
+      e.preventDefault();
+      _closeCrop(null);
+    }
+  });
 
   document.getElementById('ig-crop-apply').addEventListener('click', function () {
     if (!_cropper) return;

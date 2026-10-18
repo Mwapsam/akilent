@@ -68,6 +68,14 @@ _BRIEF_FIELDS = (
     "brief_cta",
 )
 
+# Goals the composer's AI brief offers; the generator only accepts these.
+CAPTION_GOAL_CHOICES = [
+    ("engagement", "Increase engagement"),
+    ("sales", "Drive sales"),
+    ("awareness", "Build brand awareness"),
+    ("educate", "Educate customers"),
+]
+
 
 def _admin_required(request, account, redirect_to: str):
     """Return a redirect when the user is not an Owner/Admin of ``account``, else None."""
@@ -441,6 +449,8 @@ def publishing_calendar(request):
     next_iso = next_week_start.isocalendar()
     prev_week_param = f"{prev_iso[0]}-W{prev_iso[1]:02d}"
     next_week_param = f"{next_iso[0]}-W{next_iso[1]:02d}"
+    this_iso = week_start.isocalendar()
+    week_param = f"{this_iso[0]}-W{this_iso[1]:02d}"
 
     # Server-side filters
     channel_filter = request.GET.get("channel", "")
@@ -497,6 +507,7 @@ def publishing_calendar(request):
             "week_end": week_end,
             "prev_week_param": prev_week_param,
             "next_week_param": next_week_param,
+            "week_param": week_param,
             "view_mode": view_mode,
             "channel_filter": channel_filter,
             "status_filter": status_filter,
@@ -1086,8 +1097,6 @@ def post_new(request):
 
         scheduled_at = None
         if scheduled_at_raw:
-            from django.utils.dateparse import parse_datetime
-
             scheduled_at = parse_datetime(scheduled_at_raw)
             if scheduled_at and timezone.is_naive(scheduled_at):
                 scheduled_at = timezone.make_aware(scheduled_at)
@@ -1143,6 +1152,15 @@ def post_new(request):
             messages.error(request, f"Failed to initialize post: {exc!s}")
             return redirect("publishing:post-new")
 
+        if action == "submit_review":
+            if post.requires_approval and _submit_for_review(post, request.user):
+                messages.success(request, "Post saved and submitted for review.")
+            elif post.approval_status == "submitted":
+                messages.success(request, "Post saved. It's still waiting for review.")
+            else:
+                messages.success(request, "Post saved.")
+            return redirect("publishing:post-detail", pk=post.pk)
+
         if review_blocked:
             messages.warning(
                 request,
@@ -1169,12 +1187,22 @@ def post_new(request):
         messages.success(request, "Post saved.")
         return redirect("publishing:post-detail", pk=post.pk)
 
-    goal_choices = [
-        ("engagement", "Increase engagement"),
-        ("sales", "Drive sales"),
-        ("awareness", "Build brand awareness"),
-        ("educate", "Educate customers"),
-    ]
+    requires_review = (
+        existing_post.requires_approval
+        if existing_post
+        else PublishingSettings.requires_review_for(account)
+    )
+    approved = bool(
+        existing_post
+        and existing_post.approval_status == "approved"
+        and existing_post.is_approval_valid()
+    )
+    # Prefill the schedule from the draft, or from the calendar's "+" link (?scheduled_at=).
+    initial_scheduled = existing_post.scheduled_at if existing_post else None
+    if initial_scheduled is None:
+        initial_scheduled = parse_datetime(request.GET.get("scheduled_at", ""))
+    elif timezone.is_aware(initial_scheduled):
+        initial_scheduled = timezone.localtime(initial_scheduled)
     return render(
         request,
         "publishing/post_new.html",
@@ -1189,8 +1217,22 @@ def post_new(request):
                 if existing_post
                 else {},
                 "media_urls": existing_post.media_urls if existing_post else [],
+                "platforms": existing_post.platforms
+                if existing_post
+                else ["instagram"],
+                "media_type": existing_post.media_type
+                if existing_post
+                else ContentPost.MediaType.IMAGE,
+                "scheduled_at": initial_scheduled.strftime("%Y-%m-%dT%H:%M")
+                if initial_scheduled
+                else "",
             },
-            "goal_choices": goal_choices,
+            "goal_choices": CAPTION_GOAL_CHOICES,
+            # Review-only actions until the post holds a still-valid approval; an approved
+            # post can be scheduled, and editing its content sends it back for review.
+            "review_gate": requires_review and not approved,
+            "approved_for_publish": requires_review and approved,
+            "current_tz_name": timezone.get_current_timezone_name(),
         },
     )
 
@@ -1451,11 +1493,20 @@ def post_submit_for_review(request, pk):
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
 
+    if not _submit_for_review(post, request.user):
+        messages.error(request, "Only draft posts can be submitted for review.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    messages.success(request, "Post submitted for review.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+def _submit_for_review(post, user) -> bool:
+    """Mark ``post`` submitted and log it. False when it is not a draft awaiting review."""
     # An approval of content that has since changed no longer counts, so it may be resubmitted.
     stale_approval = post.approval_status == "approved" and not post.is_approval_valid()
     if post.approval_status != "draft" and not stale_approval:
-        messages.error(request, "Only draft posts can be submitted for review.")
-        return redirect("publishing:post-detail", pk=post.pk)
+        return False
 
     post.approval_status = "submitted"
     post.save(update_fields=["approval_status"])
@@ -1463,11 +1514,9 @@ def post_submit_for_review(request, pk):
     from .models import ApprovalLog
 
     ApprovalLog.objects.create(
-        post=post, action=ApprovalLog.Action.SUBMITTED, performed_by=request.user
+        post=post, action=ApprovalLog.Action.SUBMITTED, performed_by=user
     )
-
-    messages.success(request, "Post submitted for review.")
-    return redirect("publishing:post-detail", pk=post.pk)
+    return True
 
 
 def _reviewer_ids(account) -> set[int]:
@@ -1635,13 +1684,16 @@ def generate_caption(request):
     media_type = request.POST.get("media_type", "image")
     platform = request.POST.get("platform", "instagram")
     post_id = request.POST.get("post_id", "")
+    goal = dict(CAPTION_GOAL_CHOICES).get(request.POST.get("goal", ""), "")
 
     if not prompt:
         return JsonResponse({"error": "Prompt is required."}, status=400)
 
     from apps.ai import tasks as ai_tasks
 
-    draft_id = ai_tasks.build_caption_draft(account.id, prompt, media_type, platform)
+    draft_id = ai_tasks.build_caption_draft(
+        account.id, prompt, media_type, platform, goal=goal
+    )
 
     if post_id:
         try:

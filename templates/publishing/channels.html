@@ -50,7 +50,7 @@
         {% if ig_connection.token_expired %}
         <p class="text-xs text-amber-700 mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
         {% elif not ig_publish_scope %}
-        <p class="text-xs text-gray-400 mt-1">The <code>instagram_content_publish</code> permission is pending Meta App Review. Publishing posts will be enabled once Meta approves it.</p>
+        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing our permission to publish to Instagram. You can plan and draft Instagram posts now; publishing turns on once Meta approves.</p>
         {% endif %}
         {% else %}
         <p class="text-sm text-gray-500">Connect Instagram to publish images, reels, and stories from Akilent.</p>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Calendar — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -16,33 +17,34 @@
 
   {# Week navigation #}
   <div class="flex items-center gap-1">
-    <a href="?week={{ prev_week_param }}{% if view_mode != 'week' %}&view={{ view_mode }}{% endif %}"
-       class="btn btn-ghost py-1 px-2 text-sm">‹</a>
+    <a href="{% querystring week=prev_week_param %}"
+       class="btn btn-ghost py-1 px-2 text-sm" aria-label="Previous week">‹</a>
     <span class="text-sm font-medium text-ink min-w-[120px] text-center">
       {{ week_start|date:"N j" }} – {{ week_end|date:"N j, Y" }}
     </span>
-    <a href="?week={{ next_week_param }}{% if view_mode != 'week' %}&view={{ view_mode }}{% endif %}"
-       class="btn btn-ghost py-1 px-2 text-sm">›</a>
+    <a href="{% querystring week=next_week_param %}"
+       class="btn btn-ghost py-1 px-2 text-sm" aria-label="Next week">›</a>
+    <a href="{% querystring week=None %}" class="btn btn-ghost py-1 px-2 text-sm">Today</a>
   </div>
 
   {# View toggle #}
   <div class="flex rounded-lg border border-surface-subtle overflow-hidden text-sm">
-    <a href="?week={{ week_start|date:'Y' }}-W{{ week_start|date:'W' }}&view=week{% if channel_filter %}&channel={{ channel_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+    <a href="{% querystring view='week' %}"
        class="px-3 py-1.5 {% if view_mode == 'week' %}bg-brand-500 text-white{% else %}text-gray-500 hover:bg-surface-subtle{% endif %}">Week</a>
-    <a href="?week={{ week_start|date:'Y' }}-W{{ week_start|date:'W' }}&view=list{% if channel_filter %}&channel={{ channel_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+    <a href="{% querystring view='list' %}"
        class="px-3 py-1.5 {% if view_mode == 'list' %}bg-brand-500 text-white{% else %}text-gray-500 hover:bg-surface-subtle{% endif %}">List</a>
   </div>
 
   {# Filters #}
   <form method="get" class="flex items-center gap-2">
-    <input type="hidden" name="week" value="{{ week_start|date:'Y' }}-W{{ week_start|date:'W' }}">
+    <input type="hidden" name="week" value="{{ week_param }}">
     <input type="hidden" name="view" value="{{ view_mode }}">
-    <select name="channel" onchange="this.form.submit()" class="input text-sm py-1">
+    <select name="channel" onchange="this.form.submit()" class="input text-sm py-1" aria-label="Channel">
       <option value="">All channels</option>
       <option value="instagram" {% if channel_filter == 'instagram' %}selected{% endif %}>Instagram</option>
       <option value="facebook" {% if channel_filter == 'facebook' %}selected{% endif %}>Facebook</option>
     </select>
-    <select name="status" onchange="this.form.submit()" class="input text-sm py-1">
+    <select name="status" onchange="this.form.submit()" class="input text-sm py-1" aria-label="Status">
       <option value="">All statuses</option>
       {% for val, label in status_choices %}
       <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -67,7 +69,8 @@
         {{ day|date:"D j" }}
       </span>
       <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00"
-         class="text-gray-300 hover:text-brand-500 text-xs leading-none">+</a>
+         class="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-brand-600 hover:bg-surface-subtle text-sm leading-none"
+         aria-label="New post on {{ day|date:'l, N j' }}">+</a>
     </div>
 
     {# Plan items — outlined, lighter #}
@@ -84,12 +87,7 @@
     {# Posts — solid #}
     {% for post in day_posts %}
     <a href="{% url 'publishing:post-detail' post.pk %}"
-       class="block text-xs px-1.5 py-0.5 mb-0.5 rounded truncate
-         {% if post.status == 'published' %}tone-teal text-teal-700
-         {% elif post.status == 'failed' %}tone-coral text-red-700
-         {% elif post.status == 'scheduled' %}tone-info text-blue-700
-         {% elif post.status == 'cancelled' %}tone-neutral text-gray-500
-         {% else %}tone-neutral text-ink{% endif %}"
+       class="block text-xs px-1.5 py-0.5 mb-0.5 rounded truncate {{ post.status|status_tone }}"
        title="{{ post.caption|default:'(no caption)' }} · {{ post.get_status_display }}">
       {{ post.scheduled_at|time:"H:i" }} {{ post.caption|truncatechars:18|default:"(no caption)" }}
     </a>
@@ -98,7 +96,7 @@
     {% if not day_plan_items and not day_posts %}
     <div class="h-full flex items-center justify-center">
       <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}"
-         class="text-gray-200 hover:text-gray-400 text-xs">plan</a>
+         class="text-gray-500 hover:text-ink text-xs" aria-label="Plan content for {{ day|date:'l, N j' }}">plan</a>
     </div>
     {% endif %}
   </div>
@@ -130,7 +128,7 @@
           <td class="px-4 py-2 text-gray-400">{{ item.platforms|join:", "|capfirst }}</td>
           <td class="px-4 py-2 text-gray-400">{{ item.get_media_type_display }}</td>
           <td class="px-4 py-2">
-            <span class="text-xs px-2 py-0.5 rounded-full tone-neutral">{{ item.get_plan_status_display }}</span>
+            {% status_badge 'idea' item.get_plan_status_display %}
           </td>
         </tr>
         {% endfor %}
@@ -138,19 +136,15 @@
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
           <td class="px-4 py-2 text-gray-500 whitespace-nowrap">{{ post.scheduled_at|date:"D N j, H:i" }}</td>
           <td class="px-4 py-2">
-            <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">{{ post.caption|truncatechars:60|default:"(no caption)" }}</a>
+            <div class="flex items-center gap-3">
+              {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
+              <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">{{ post.caption|truncatechars:60|default:"(no caption)" }}</a>
+            </div>
           </td>
           <td class="px-4 py-2 text-gray-400">{{ post.platforms|join:", "|capfirst }}</td>
           <td class="px-4 py-2 text-gray-400">{{ post.get_media_type_display }}</td>
           <td class="px-4 py-2">
-            <span class="text-xs px-2 py-0.5 rounded-full
-              {% if post.status == 'published' %}tone-teal
-              {% elif post.status == 'failed' %}tone-coral
-              {% elif post.status == 'scheduled' %}tone-info
-              {% elif post.status == 'cancelled' %}tone-neutral
-              {% else %}tone-neutral{% endif %}">
-              {{ post.get_status_display }}
-            </span>
+            {% status_badge post.status post.get_status_display %}
           </td>
         </tr>
         {% endfor %}

@@ -46,13 +46,7 @@
   <div class="card card-pad space-y-3">
     <div class="flex items-center gap-2">
       <span class="text-sm font-medium text-gray-500">Review</span>
-      <span class="text-sm px-2 py-0.5 rounded-full
-        {% if approval_valid %}tone-teal
-        {% elif post.approval_status == 'submitted' %}tone-amber
-        {% elif post.approval_status == 'changes_requested' %}tone-coral
-        {% else %}tone-neutral{% endif %}">
-        {% if approval_valid %}Approved{% elif post.approval_status == 'submitted' %}Waiting for review{% elif post.approval_status == 'changes_requested' %}Changes requested{% else %}Not submitted{% endif %}
-      </span>
+      {% if approval_valid %}{% status_badge 'approved' 'Approved' %}{% elif post.approval_status == 'submitted' %}{% status_badge 'in_review' 'Waiting for review' %}{% elif post.approval_status == 'changes_requested' %}{% status_badge 'failed' 'Changes requested' %}{% else %}{% status_badge 'draft' 'Not submitted' %}{% endif %}
     </div>
 
     {% if approval_valid %}
@@ -111,23 +105,13 @@
     {# Status #}
     <div class="flex items-center gap-2">
       <span class="text-sm font-medium text-gray-500">Status</span>
-      <span class="text-sm px-2 py-0.5 rounded-full
-        {% if post.status == 'published' %}tone-teal
-        {% elif post.status == 'failed' %}tone-coral
-        {% elif post.status == 'scheduled' %}tone-info
-        {% elif post.status == 'publishing' %}tone-amber
-        {% elif post.status == 'in_review' %}tone-amber
-        {% elif post.status == 'approved' %}tone-teal
-        {% elif post.status == 'cancelled' %}tone-neutral
-        {% else %}tone-neutral{% endif %}">
-        {{ post.get_status_display }}
-      </span>
+      {% status_badge post.status post.get_status_display %}
     </div>
 
     {# Per-channel status (if variants exist) #}
     {% if post.variants.exists %}
     <div class="mt-4 pt-3 border-t border-border">
-      <p class="text-sm font-medium text-gray-600 mb-2">Per-Channel Status</p>
+      <p class="text-sm font-medium text-gray-600 mb-2">Per-channel status</p>
       <div class="space-y-2">
         {% for variant in post.variants.all %}
           {% include "publishing/variant_result_card.html" %}
@@ -172,12 +156,33 @@
 
   {% if post.media_urls %}
   <div class="card card-pad">
-    <p class="text-sm text-gray-500 mb-2">Media</p>
-    <div class="space-y-1">
+    <p class="text-sm text-gray-500 mb-2">Media{% if post.media_urls|length > 1 %} ({{ post.media_urls|length }}){% endif %}</p>
+    {% if post.media_urls|length == 1 %}
+      {% with only=post.media_urls.0 %}
+      {% if only|media_kind == "video" %}
+        {% include "publishing/_media_thumb.html" with url=only size="w-full max-w-md aspect-video" alt="Post video" controls=True %}
+      {% else %}
+        <a href="{{ only }}" target="_blank" rel="noopener" class="block max-w-md" aria-label="Open full-size media">
+          {% include "publishing/_media_thumb.html" with url=only size="w-full aspect-square" alt=post.caption|truncatechars:80 %}
+        </a>
+      {% endif %}
+      {% endwith %}
+    {% else %}
+    <ol class="grid grid-cols-2 sm:grid-cols-3 gap-2">
       {% for url in post.media_urls %}
-      <a href="{{ url }}" target="_blank" class="block text-sm text-accent underline truncate">{{ url }}</a>
+      <li class="relative">
+        {% if url|media_kind == "video" %}
+          {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-square" alt="Post video" controls=True %}
+        {% else %}
+          <a href="{{ url }}" target="_blank" rel="noopener" class="block" aria-label="Open media {{ forloop.counter }} full size">
+            {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-square" alt="Carousel item" %}
+          </a>
+        {% endif %}
+        <span class="absolute top-1 left-1 text-xs font-semibold px-1.5 rounded bg-gray-900/60 text-white" aria-hidden="true">{{ forloop.counter }}</span>
+      </li>
       {% endfor %}
-    </div>
+    </ol>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -200,13 +205,13 @@
 
   {% if post.ig_media_id %}
   <div class="card card-pad">
-    <p class="text-xs text-gray-400">Instagram media ID: {{ post.ig_media_id }}</p>
+    <p class="text-xs text-gray-500">Instagram media ID: {{ post.ig_media_id }}</p>
   </div>
   {% endif %}
 
   {% if post.fb_post_id %}
   <div class="card card-pad">
-    <p class="text-xs text-gray-400 mb-2">Facebook post ID: {{ post.fb_post_id }}</p>
+    <p class="text-xs text-gray-500 mb-2">Facebook post ID: {{ post.fb_post_id }}</p>
     {% if post.fb_reach is not None or post.fb_impressions is not None %}
     <div class="flex gap-6 mt-1">
       {% if post.fb_reach is not None %}

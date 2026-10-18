@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Library — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -20,7 +21,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-      <select name="status" class="input text-sm py-1">
+      <select name="status" onchange="this.form.submit()" class="input text-sm py-1">
         <option value="">All</option>
         {% for val, label in status_choices %}
         <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -29,7 +30,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Platform</label>
-      <select name="platform" class="input text-sm py-1">
+      <select name="platform" onchange="this.form.submit()" class="input text-sm py-1">
         <option value="">All</option>
         <option value="instagram" {% if platform_filter == 'instagram' %}selected{% endif %}>Instagram</option>
         <option value="facebook" {% if platform_filter == 'facebook' %}selected{% endif %}>Facebook</option>
@@ -37,7 +38,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Media type</label>
-      <select name="media_type" class="input text-sm py-1">
+      <select name="media_type" onchange="this.form.submit()" class="input text-sm py-1">
         <option value="">All</option>
         {% for val, label in media_type_choices %}
         <option value="{{ val }}" {% if media_type_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -83,7 +84,8 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-surface-subtle">
-          <th class="w-8 px-3 py-2"></th>
+          <th class="w-8 px-3 py-2"><span class="sr-only">Select</span></th>
+          <th class="w-12 px-1 py-2"><span class="sr-only">Media</span></th>
           <th class="text-left px-4 py-2 font-medium text-gray-500">Caption</th>
           <th class="text-left px-4 py-2 font-medium text-gray-500">Platform</th>
           <th class="text-left px-4 py-2 font-medium text-gray-500">Type</th>
@@ -95,7 +97,11 @@
         {% for post in page_obj %}
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
           <td class="px-3 py-2 text-center">
-            <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox">
+            <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox"
+                   aria-label="Select post {{ post.caption|truncatechars:30|default:'(no caption)' }}">
+          </td>
+          <td class="px-1 py-2">
+            {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
           </td>
           <td class="px-4 py-2">
             <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">
@@ -105,15 +111,7 @@
           <td class="px-4 py-2 text-gray-400">{{ post.platforms|join:", "|capfirst }}</td>
           <td class="px-4 py-2 text-gray-400">{{ post.get_media_type_display }}</td>
           <td class="px-4 py-2">
-            <span class="text-xs px-2 py-0.5 rounded-full
-              {% if post.status == 'published' %}tone-teal
-              {% elif post.status == 'failed' %}tone-coral
-              {% elif post.status == 'scheduled' %}tone-info
-              {% elif post.status == 'in_review' %}tone-amber
-              {% elif post.status == 'cancelled' %}tone-neutral
-              {% else %}tone-neutral{% endif %}">
-              {{ post.get_status_display }}
-            </span>
+            {% status_badge post.status post.get_status_display %}
           </td>
           <td class="px-4 py-2 text-gray-400 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
         </tr>
@@ -135,12 +133,12 @@
 {% if page_obj.has_other_pages %}
 <div class="flex items-center justify-center gap-2 mt-4">
   {% if page_obj.has_previous %}
-  <a href="?{% if q %}q={{ q }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.previous_page_number }}"
+  <a href="{% querystring page=page_obj.previous_page_number %}"
      class="btn btn-ghost text-sm">← Prev</a>
   {% endif %}
   <span class="text-sm text-gray-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
   {% if page_obj.has_next %}
-  <a href="?{% if q %}q={{ q }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.next_page_number }}"
+  <a href="{% querystring page=page_obj.next_page_number %}"
      class="btn btn-ghost text-sm">Next →</a>
   {% endif %}
 </div>
