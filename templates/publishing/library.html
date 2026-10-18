@@ -119,6 +119,7 @@
           <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.get_media_type_display }}</td>
           <td class="px-3 sm:px-4 py-2">
             {% status_badge post.status post.get_status_display %}
+            {% with reach=post|reach_summary %}{% if reach %}<span class="block text-xs text-gray-500 mt-0.5 tabular-nums">{{ reach }}</span>{% endif %}{% endwith %}
           </td>
           <td class="hidden sm:table-cell px-4 py-2 text-gray-500 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
         </tr>

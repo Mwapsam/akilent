@@ -849,6 +849,10 @@ CELERY_BEAT_SCHEDULE.update(
             "task": "apps.publishing.tasks.recover_abandoned_publish_claims",
             "schedule": 300.0,  # Every 5 minutes; claims expire after a 30-minute lease
         },
+        "collect-due-metrics": {
+            "task": "apps.publishing.tasks.collect_due_metrics",
+            "schedule": 900.0,  # Every 15 minutes; each channel has its own read plan
+        },
     }
 )
 

@@ -15,6 +15,31 @@ _VALIDATION_CODES = {100, 352, 9004}  # plus the 36000-36999 IG media range
 _OUTAGE_CODES = {1, 2}
 
 
+def parse_insights(data: dict) -> dict:
+    """Turn a Graph ``/insights`` body into {metric: int}.
+
+    Reads ``values[-1].value`` (or ``total_value.value``). A breakdown dict, such as
+    reactions by type, is summed. Metrics absent from the body are left out.
+    """
+    result: dict[str, int] = {}
+    for item in data.get("data") or []:
+        name = item.get("name")
+        if not name:
+            continue
+        value = None
+        values = item.get("values") or []
+        if values:
+            value = values[-1].get("value")
+        elif isinstance(item.get("total_value"), dict):
+            value = item["total_value"].get("value")
+        if isinstance(value, dict):
+            value = sum(v for v in value.values() if isinstance(v, int | float))
+        number = _as_int(value)
+        if number is not None:
+            result[name] = number
+    return result
+
+
 def _as_int(value) -> int | None:
     try:
         return int(value)

@@ -315,24 +315,6 @@ def test_schedule_without_a_date_is_refused_not_silently_drafted(owner_client):
     assert not ContentPost.objects.filter(account=account).exists()
 
 
-def test_metrics_refresh_survives_a_broker_outage(owner_client):
-    from apps.publishing.tasks import fetch_fb_post_insights
-
-    client, account = owner_client
-    post = ContentPost.objects.create(
-        account=account, platforms=["facebook"], fb_post_id="fb1"
-    )
-
-    with patch.object(
-        fetch_fb_post_insights, "apply_async", side_effect=ConnectionError
-    ):
-        response = client.post(
-            reverse("publishing:post-refresh-insights", args=[post.pk])
-        )
-
-    assert response.status_code == 302
-
-
 # --- Facebook connect ---------------------------------------------------------------------
 
 

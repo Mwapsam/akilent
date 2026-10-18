@@ -140,3 +140,43 @@ def variant_error_message(variant):
     if error_type == "validation":
         return f"{error_msg} (validation failed - fix and resubmit)"
     return error_msg
+
+
+@register.filter
+def variant_performance(variant):
+    """The Performance card's rows for a published channel (see metrics.performance_for)."""
+    from apps.publishing.metrics import performance_for
+
+    return performance_for(variant)
+
+
+@register.filter
+def published_channels(post):
+    """The post's published Facebook/Instagram channels, which have performance numbers."""
+    from apps.publishing.models import ContentPostVariant
+
+    return [
+        v
+        for v in post.variants.all()
+        if v.status == ContentPostVariant.Status.PUBLISHED
+        and v.publication_id
+        and v.platform
+        in (ContentPostVariant.Platform.FACEBOOK, ContentPostVariant.Platform.INSTAGRAM)
+    ]
+
+
+@register.filter
+def join_platforms(variants):
+    names = [v.get_platform_display() for v in variants]
+    return " and ".join(names)
+
+
+@register.filter
+def reach_summary(post):
+    """'Reach: Instagram 1,204 · Facebook 340' from each channel's latest read; '' if none."""
+    parts = []
+    for v in post.variants.all():
+        value = ((v.metrics_latest or {}).get("values") or {}).get("reach")
+        if value is not None:
+            parts.append(f"{v.get_platform_display()} {value:,}")
+    return f"Reach: {' · '.join(parts)}" if parts else ""

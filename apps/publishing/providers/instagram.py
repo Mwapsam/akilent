@@ -18,7 +18,7 @@ import logging
 import requests
 from django.conf import settings
 
-from .errors import MetaPublishError
+from .errors import MetaPublishError, parse_insights
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,19 @@ class InstagramPublishProvider:
         """Returns one of: FINISHED, IN_PROGRESS, ERROR, EXPIRED, PUBLISHED."""
         data = self._get(container_id, fields="status_code")
         return data.get("status_code", "UNKNOWN")
+
+    def fetch_media_fields(self, media_id: str, fields: list[str]) -> dict:
+        """Read fields such as like_count/comments_count (instagram_business_basic)."""
+        return self._get(media_id, fields=",".join(fields))
+
+    def fetch_media_insights(self, media_id: str, metrics: list[str]) -> dict:
+        """Read lifetime insights for one media object (instagram_business_manage_insights).
+
+        Returns {metric: value} for the metrics Instagram reported. A metric with no
+        data yet is left out, never reported as 0.
+        """
+        data = self._get(f"{media_id}/insights", metric=",".join(metrics))
+        return parse_insights(data)
 
     def get_permalink(self, media_id: str) -> str:
         data = self._get(media_id, fields="permalink")

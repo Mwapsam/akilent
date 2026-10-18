@@ -1,0 +1,56 @@
+{% load publishing_filters %}
+{% comment %}
+One published channel's performance numbers. A metric with no number shows "—" and the
+reason, never 0. Expects ``variant`` (a published ContentPostVariant).
+{% endcomment %}
+{% with perf=variant|variant_performance %}
+<div class="rounded-lg border border-border p-3 space-y-3">
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <p class="text-sm font-medium text-ink">{{ perf.channel }}</p>
+    <p class="text-xs text-gray-500">
+      {% if perf.collected_at %}
+        Updated {{ perf.collected_at|timesince }} ago{% if perf.stale %} · <span class="text-amber-700">may be out of date</span>{% endif %}{% if perf.finished %} · final numbers{% endif %}
+      {% elif perf.first_read_at %}
+        First numbers about {{ perf.first_read_at|date:"H:i" }}
+      {% else %}
+        Not read yet
+      {% endif %}
+    </p>
+  </div>
+
+  <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+    {% for row in perf.rows %}
+    <div>
+      <dt class="text-xs text-gray-500" title="{{ row.definition }}">
+        {{ row.label }}
+        <span class="sr-only">: {{ row.definition }}</span>
+      </dt>
+      {% if row.value is not None %}
+      <dd class="text-sm font-semibold tabular-nums">{{ row.value }}</dd>
+      {% else %}
+      <dd class="text-sm font-semibold text-gray-400" title="{{ row.reason }}">—<span class="sr-only"> ({{ row.reason }})</span></dd>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </dl>
+
+  {% if perf.needs_permission %}
+  <p class="text-xs text-gray-600">
+    Some numbers need permission.
+    {% if variant.platform == 'instagram' %}
+    <a href="{% url 'instagram-accounts' %}" class="underline">Reconnect Instagram</a> and allow access to insights.
+    {% else %}
+    <a href="{% url 'publishing:channels' %}" class="underline">Reconnect your Facebook Page</a> and allow access to insights.
+    {% endif %}
+  </p>
+  {% endif %}
+
+  {% if perf.collected_at and perf.notes %}
+  <ul class="text-xs text-gray-500 space-y-0.5">
+    {% for note in perf.notes %}
+    <li>— {{ note.labels }}: {{ note.reason }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endwith %}

@@ -112,8 +112,10 @@ def _parse_schedule(raw: str):
     return value
 
 
+# read_insights + pages_read_engagement: post views, reach and reactions (Page/insights).
 _FB_SCOPES = (
-    "pages_show_list,pages_manage_posts,pages_read_engagement,business_management"
+    "pages_show_list,pages_manage_posts,pages_read_engagement,read_insights,"
+    "business_management"
 )
 
 # Valid status transitions: {from_status: allowed_to_statuses}
@@ -651,7 +653,7 @@ def publishing_library(request):
             pass
 
     platform_filter = request.GET.get("platform", "")
-    posts = list(qs)
+    posts = list(qs.prefetch_related("variants"))
     if platform_filter:
         posts = [p for p in posts if platform_filter in (p.platforms or [])]
 
@@ -1664,20 +1666,47 @@ def post_refresh_insights(request, pk):
         return redirect("dashboard")
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
-    if not post.fb_post_id:
-        messages.error(request, "No Facebook post ID — cannot fetch metrics.")
-        return redirect("publishing:post-detail", pk=post.pk)
+    detail = redirect("publishing:post-detail", pk=post.pk)
+    channels = list(
+        post.variants.filter(
+            status=ContentPostVariant.Status.PUBLISHED,
+            platform__in=(
+                ContentPostVariant.Platform.FACEBOOK,
+                ContentPostVariant.Platform.INSTAGRAM,
+            ),
+        ).exclude(publication_id="")
+    )
+    if not channels:
+        messages.error(request, "Numbers are available once a channel has published.")
+        return detail
 
-    from .tasks import fetch_fb_post_insights
+    # One manual read per channel every few minutes; Meta updates slowly and rate-limits.
+    recent = timezone.now() - _METRICS_REFRESH_EVERY
+    due = [
+        v
+        for v in channels
+        if v.metrics_collected_at is None or v.metrics_collected_at < recent
+    ]
+    if not due:
+        messages.info(request, "Numbers were just updated. Try again in a few minutes.")
+        return detail
+
+    from .tasks import collect_variant_metrics_task
 
     try:
-        fetch_fb_post_insights.apply_async(args=[post.pk])
+        for variant in due:
+            collect_variant_metrics_task.delay(variant.pk)
     except Exception:
-        logger.exception("Failed to enqueue insights refresh for post=%s", post.pk)
-        messages.error(request, "Couldn't refresh metrics right now. Please try again.")
-        return redirect("publishing:post-detail", pk=post.pk)
-    messages.success(request, "Refreshing metrics — reload in a moment.")
-    return redirect("publishing:post-detail", pk=post.pk)
+        logger.exception("Failed to enqueue metrics refresh for post=%s", post.pk)
+        messages.error(
+            request, "Couldn't refresh the numbers right now. Please try again."
+        )
+        return detail
+    messages.success(request, "Updating the numbers. Reload in a moment.")
+    return detail
+
+
+_METRICS_REFRESH_EVERY = datetime.timedelta(minutes=5)
 
 
 # ---------------------------------------------------------------------------

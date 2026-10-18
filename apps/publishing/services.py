@@ -1418,7 +1418,6 @@ def refresh_parent_post(post: ContentPost) -> None:
         for v in variants
     ]
     status = _aggregate_parent_status(post, outcomes)
-    was_published = post.status == ContentPost.Status.PUBLISHED
 
     def _published_id(platform: str) -> str:
         return next(
@@ -1465,19 +1464,26 @@ def refresh_parent_post(post: ContentPost) -> None:
         ]
     )
 
-    if status == ContentPost.Status.PUBLISHED and not was_published and post.fb_post_id:
-        from functools import partial
-
-        from django.db import transaction
-
-        from .tasks import fetch_fb_post_insights
-
-        # After commit, and robust: this often runs inside a reconciliation transaction,
-        # and a broker error must not roll back the operator's action.
-        transaction.on_commit(
-            partial(fetch_fb_post_insights.apply_async, args=[post.pk], countdown=900),
-            robust=True,
+    # Plan the first performance read of each channel that just went live. The
+    # collect_due_metrics sweep reads it then and plans the reads after that.
+    first_reads = [
+        v.pk
+        for v in variants
+        if v.status == ContentPostVariant.Status.PUBLISHED
+        and v.platform
+        in (ContentPostVariant.Platform.FACEBOOK, ContentPostVariant.Platform.INSTAGRAM)
+        and v.metrics_next_at is None
+        and v.metrics_collected_at is None
+    ]
+    for pk in first_reads:
+        variant = next(v for v in variants if v.pk == pk)
+        ContentPostVariant.objects.filter(pk=pk, metrics_next_at__isnull=True).update(
+            metrics_next_at=(variant.published_at or timezone.now())
+            + METRICS_FIRST_READ
         )
+
+
+METRICS_FIRST_READ = timedelta(hours=1)
 
 
 # Step 4.7B: Reconciliation Operations

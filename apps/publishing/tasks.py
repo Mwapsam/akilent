@@ -299,51 +299,91 @@ def publish_variant_async(self, variant_id: int, scheduled: bool = False) -> str
 
 @shared_task(queue="outbound")
 def fetch_fb_post_insights(post_id: int) -> str:
-    """Fetch reach/impressions for a published Facebook post and store them.
+    """Kept so tasks queued before the metrics rework still run: reads the post's
+    Facebook channel through the per-channel collector."""
+    from .models import ContentPostVariant
 
-    Scheduled ~15 minutes after publish to allow Meta's insights to populate.
-    Uses pages_read_engagement scope on the stored page access token.
-    """
-    from django.utils import timezone
-
-    from .models import ContentPost
-    from .services import _fb_provider_for_post
-
-    try:
-        post = ContentPost.objects.get(pk=post_id)
-    except ContentPost.DoesNotExist:
-        return "not_found"
-
-    if not post.fb_post_id:
+    variant = ContentPostVariant.objects.filter(
+        post_id=post_id,
+        platform=ContentPostVariant.Platform.FACEBOOK,
+        status=ContentPostVariant.Status.PUBLISHED,
+    ).first()
+    if variant is None:
         return "no_fb_post"
+    return collect_variant_metrics_task(variant.pk)
 
-    result = _fb_provider_for_post(post)
-    if result is None:
-        return "no_connection"
 
-    provider, _ = result
+METRICS_LEASE = 30  # minutes a queued read holds its slot before it may be queued again
+
+
+@shared_task(queue="outbound")
+def collect_variant_metrics_task(variant_id: int) -> str:
+    """Read one published channel's performance numbers."""
+    from datetime import timedelta
+
+    from .metrics_collector import (
+        RATE_LIMIT_BACKOFF,
+        MetricsRateLimited,
+        collect_variant_metrics,
+    )
+    from .models import ContentPostVariant
+
     try:
-        insights = provider.fetch_post_insights(post.fb_post_id)
-    except Exception as exc:
-        logger.error(
-            "fetch_fb_post_insights failed for post=%s fb_post_id=%s: %s",
-            post_id,
-            post.fb_post_id,
-            exc,
+        variant = ContentPostVariant.objects.select_related("post").get(pk=variant_id)
+    except ContentPostVariant.DoesNotExist:
+        return "not_found"
+    if (
+        variant.status != ContentPostVariant.Status.PUBLISHED
+        or not variant.publication_id
+    ):
+        return "not_published"
+    try:
+        collect_variant_metrics(variant)
+    except MetricsRateLimited:
+        ContentPostVariant.objects.filter(pk=variant.pk).update(
+            metrics_next_at=timezone.now() + RATE_LIMIT_BACKOFF
+        )
+        logger.warning("Metrics read rate-limited for variant=%s", variant_id)
+        return "rate_limited"
+    except Exception:
+        # Unexpected: leave metrics_next_at on its lease so the sweep tries again.
+        logger.exception("Metrics read failed for variant=%s", variant_id)
+        ContentPostVariant.objects.filter(pk=variant.pk).update(
+            metrics_next_at=timezone.now() + timedelta(minutes=METRICS_LEASE)
         )
         return "error"
-
-    post.fb_reach = insights.get("reach")
-    post.fb_impressions = insights.get("impressions")
-    post.fb_insights_fetched_at = timezone.now()
-    post.save(update_fields=["fb_reach", "fb_impressions", "fb_insights_fetched_at"])
-    logger.info(
-        "fetch_fb_post_insights ok post=%s reach=%s impressions=%s",
-        post_id,
-        post.fb_reach,
-        post.fb_impressions,
-    )
     return "ok"
+
+
+@shared_task(queue="outbound")
+def collect_due_metrics() -> int:
+    """Queue a read for every published channel whose next planned read has come."""
+    from datetime import timedelta
+
+    from .models import ContentPostVariant
+
+    now = timezone.now()
+    count = 0
+    with transaction.atomic():
+        due = ContentPostVariant.objects.select_for_update(skip_locked=True).filter(
+            status=ContentPostVariant.Status.PUBLISHED,
+            platform__in=(
+                ContentPostVariant.Platform.FACEBOOK,
+                ContentPostVariant.Platform.INSTAGRAM,
+            ),
+            metrics_next_at__lte=now,
+        )[:200]
+        for variant in due:
+            # Lease the slot: the read moves metrics_next_at on, and a lost enqueue
+            # comes round again once the lease runs out.
+            ContentPostVariant.objects.filter(pk=variant.pk).update(
+                metrics_next_at=now + timedelta(minutes=METRICS_LEASE)
+            )
+            transaction.on_commit(
+                partial(collect_variant_metrics_task.delay, variant.pk), robust=True
+            )
+            count += 1
+    return count
 
 
 @shared_task(queue="outbound")

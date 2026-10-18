@@ -18,7 +18,7 @@ import logging
 import requests
 from django.conf import settings
 
-from .errors import MetaPublishError
+from .errors import MetaPublishError, parse_insights
 
 logger = logging.getLogger(__name__)
 
@@ -65,39 +65,45 @@ class FacebookPublishProvider:
         data = self._post("videos", **payload)
         return data["id"]
 
-    def fetch_post_insights(self, post_id: str) -> dict[str, int]:
-        """Fetch reach and impressions for a published Page post.
-
-        Returns {"reach": N, "impressions": N}. Values may be 0 if insights
-        haven't populated yet (Meta takes up to 15 min after publish).
-        Requires pages_read_engagement scope on the page access token.
-
-        Uses v19+ metric names: post_impressions_organic_unique (reach) and
-        post_impressions_organic (impressions). Legacy post_impressions* were
-        removed in Graph API v19.
-        """
-        r = requests.get(
-            f"{_BASE}/{post_id}/insights",
-            params={
-                "metric": "post_impressions_organic,post_impressions_organic_unique",
-                "access_token": self._token,
-            },
-            timeout=30,
-        )
+    def _get(self, path: str, **params) -> dict:
+        params["access_token"] = self._token
+        r = requests.get(f"{_BASE}/{path}", params=params, timeout=30)
         data = r.json()
         if "error" in data:
             raise FacebookPublishError.from_response(r, data)
-        result: dict[str, int] = {"reach": 0, "impressions": 0}
-        for item in data.get("data", []):
-            name = item.get("name", "")
-            values = item.get("values", [])
-            if values:
-                val = values[-1].get("value", 0)
-                if name == "post_impressions_organic":
-                    result["impressions"] = int(val)
-                elif name == "post_impressions_organic_unique":
-                    result["reach"] = int(val)
-        return result
+        return data
+
+    def fetch_fields(self, object_id: str, fields: list[str]) -> dict:
+        return self._get(object_id, fields=",".join(fields))
+
+    def resolve_post_id(self, object_id: str) -> str:
+        """The Page post behind a published object, for post insights.
+
+        A text post's id already is the post id (``{page-id}_{post-id}``). A photo names
+        its post in ``page_story_id`` and a video in ``post_id``.
+        """
+        if "_" in object_id:
+            return object_id
+        for field in ("page_story_id", "post_id"):
+            try:
+                data = self._get(object_id, fields=field)
+            except FacebookPublishError as exc:
+                if exc.code == 100:  # not a field of this object type
+                    continue
+                raise
+            if data.get(field):
+                return data[field]
+        return ""
+
+    def fetch_post_insights(self, post_id: str, metrics: list[str]) -> dict:
+        """Lifetime insights for a Page post (read_insights + pages_read_engagement).
+
+        Returns {metric: value} for the metrics Facebook reported; one with no data is
+        left out, never reported as 0.
+        """
+        return parse_insights(
+            self._get(f"{post_id}/insights", metric=",".join(metrics))
+        )
 
 
 def exchange_for_long_lived_user_token(

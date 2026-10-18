@@ -466,6 +466,13 @@ class ContentPostVariant(models.Model):
     # Provider-specific metadata (ig_container_id, etc.)
     metadata = models.JSONField(default=dict, blank=True)
 
+    # Performance numbers (see apps.publishing.metrics). ``metrics_latest`` mirrors the
+    # newest VariantMetricSnapshot as {"values": {key: int|None}, "states": {key: state}}.
+    metrics_latest = models.JSONField(default=dict, blank=True)
+    metrics_collected_at = models.DateTimeField(null=True, blank=True)
+    # The next planned read; None once collection is finished (or before publish).
+    metrics_next_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -524,6 +531,29 @@ class ContentPostVariant(models.Model):
         # Check if the post's aggregate content matches what was approved
         # If any variant changed, the post's hash will differ from the approved hash
         return post.compute_content_hash() == post.last_content_hash
+
+
+class VariantMetricSnapshot(models.Model):
+    """One read of a published channel's performance numbers. Append-only history.
+
+    ``values`` holds a number or None per metric key; ``states`` says why a value is
+    None (see ``apps.publishing.metrics.State``). None is never shown as 0.
+    """
+
+    variant = models.ForeignKey(
+        ContentPostVariant, on_delete=models.CASCADE, related_name="metric_snapshots"
+    )
+    collected_at = models.DateTimeField(db_index=True)
+    values = models.JSONField(default=dict)
+    states = models.JSONField(default=dict)
+    error_type = models.CharField(max_length=50, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-collected_at"]
+
+    def __str__(self) -> str:
+        return f"{self.variant} @ {self.collected_at:%Y-%m-%d %H:%M}"
 
 
 class ApprovalLog(models.Model):

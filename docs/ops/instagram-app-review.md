@@ -1,7 +1,7 @@
 # Instagram App Review — submission pack
 
 For the Akilent Meta app (`1080201821670178`). Paste the text below into the App Review
-form. Request **only** these four permissions; anything else gets the whole submission
+form. Request **only** these five permissions; anything else gets the whole submission
 rejected for "requesting permissions the app doesn't use". They match `SCOPES` in
 `apps/instagram/oauth.py`. Keep the two in step: a scope the connect flow asks for but
 the review doesn't cover (or the reverse) is also grounds for rejection.
@@ -12,6 +12,7 @@ the review doesn't cover (or the reverse) is also grounds for rejection.
 | `instagram_business_manage_messages` | Receive the business's Instagram DMs in the Akilent inbox and send the business's replies. |
 | `instagram_business_manage_comments` | Receive comments on the business's posts, send a private reply the business set up, and hide/delete abusive comments the business chose to moderate. |
 | `instagram_business_content_publish` | Publish the posts a business creates and schedules in Akilent's Content Studio to its own Instagram account. |
+| `instagram_business_manage_insights` | Show the business how each post it published from Content Studio performed (reach, views, saves, shares). |
 
 **Before submitting**
 1. Business Verification is complete for the business portfolio that owns the app.
@@ -73,6 +74,14 @@ time Akilent creates a media container on the business's account and publishes i
 published that the business didn't create; posts that need approval are held until
 someone approves them.
 
+**instagram_business_manage_insights**
+After Akilent publishes a post for the business, Content Studio shows how that post is
+doing: reach, views, saves, shares and interactions, read from `/{media-id}/insights`
+for that post only. Akilent reads insights only for media it published on the business's
+behalf. It refreshes them a few times in the first weeks after publishing (about 1 hour,
+6 hours, 1, 3, 7 and 28 days), and the business can refresh by hand. The numbers are shown
+only to the business's own team, next to the post.
+
 ## Test instructions for the reviewer
 
 1. Go to `https://akilent.com/` and sign in with the reviewer credentials provided.
@@ -89,6 +98,9 @@ someone approves them.
 6. Open **Content Studio**, create a post with a caption and an image, choose the connected
    Instagram account as a channel and publish it. It appears on the Instagram profile, and
    Content Studio shows it as published.
+7. Open the published post in Content Studio. Under **Performance**, click **Refresh
+   numbers**. Reach, views, saves and shares for that post appear (Meta can take a few
+   minutes to report the first numbers for a new post).
 
 ## Screencast script (one video, about 3 minutes)
 
@@ -96,7 +108,7 @@ Record at normal speed with captions; show the Instagram app/web next to Akilent
 
 1. **0:00 Login.** Sign in to Akilent. Caption: "A business connects its own Instagram account."
 2. **0:15 Connect.** Settings → Instagram → Connect Instagram → Instagram login dialog → show
-   the permission screen listing the four permissions → approve → connected account card.
+   the permission screen listing the five permissions → approve → connected account card.
    Caption: "instagram_business_basic: we show which account is connected."
 3. **0:45 Receive.** From a second phone/account send "Hi, is the blue bag available?". Show it
    arriving in the Akilent inbox. Caption: "instagram_business_manage_messages: customer DMs
@@ -111,6 +123,9 @@ Record at normal speed with captions; show the Instagram app/web next to Akilent
 7. **2:25 Publish.** Content Studio → new post with caption and image → choose the Instagram
    channel → Publish. Show the post on the Instagram profile and as published in Akilent.
    Caption: "instagram_business_content_publish: the business publishes its own post."
+   Then open an older published post and show its Performance card with reach, views,
+   saves and shares. Caption: "instagram_business_manage_insights: the business sees how
+   its own post performed."
 8. **2:55 Disconnect.** Settings → Instagram → Disconnect. Caption: "The business can
    disconnect at any time; Meta's deauthorize and data-deletion callbacks are supported."
 
