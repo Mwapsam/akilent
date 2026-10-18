@@ -100,17 +100,32 @@
 </div>
 
 <script src="{% static 'js/passkeys.js' %}" defer></script>
-<script defer>
+<script>
   (function () {
     var btn = document.getElementById("passkey-add-here");
     var errEl = document.getElementById("passkey-add-error");
-    // Hide the same-device button where the browser has no passkey support.
-    if (!window.PublicKeyCredential || !window.passkeyRegister) {
+    var script = document.querySelector('script[src*="passkeys.js"]');
+    // Signed-in pages are boosted by htmx, so this runs as the body is swapped in. The
+    // script above may not have loaded yet, so wait for it rather than assume order.
+    if (window.passkeyRegister || !script) {
+      init();
+    } else {
+      script.addEventListener("load", init);
+      script.addEventListener("error", function () { showUnavailable(); });
+    }
+
+    function showUnavailable() {
       errEl.textContent = "Passkeys aren't available here. Open Akilent over https (or localhost) in a current browser.";
       errEl.hidden = false;
-      return;
     }
-    btn.hidden = false;
+
+    function init() {
+      // Hide the same-device button where the browser has no passkey support.
+      if (!window.PublicKeyCredential || !window.passkeyRegister) {
+        showUnavailable();
+        return;
+      }
+      btn.hidden = false;
     var form = document.getElementById("passkey-add-form");
     btn.addEventListener("click", async function () {
       errEl.hidden = true;
@@ -134,6 +149,7 @@
         btn.disabled = false;
       }
     });
+    }
   })();
 </script>
 {% endblock %}
