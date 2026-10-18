@@ -38,6 +38,11 @@ REG_KEY = "webauthn_registration"
 AUTH_KEY = "webauthn_authentication"
 
 
+def _timeout_ms():
+    """How long the browser waits for a phone to scan, approve and pair (both ceremonies)."""
+    return getattr(settings, "WEBAUTHN_REGISTRATION_TIMEOUT_MS", 120_000)
+
+
 def has_passkeys(user):
     return PasskeyCredential.objects.filter(user=user, confirmed=True).exists()
 
@@ -105,6 +110,7 @@ def begin_registration(request, user):
         ),
         # Ask the browser to offer a phone (cross-device) alongside this device.
         hints=[PublicKeyCredentialHint.HYBRID, PublicKeyCredentialHint.CLIENT_DEVICE],
+        timeout=_timeout_ms(),
     )
     ceremony = PasskeyRegistrationChallenge.objects.create(
         user=user,
@@ -182,6 +188,7 @@ def begin_authentication(request, user):
     options = generate_authentication_options(
         rp_id=rp_id,
         allow_credentials=_descriptors(PasskeyCredential.objects.filter(user=user)),
+        timeout=_timeout_ms(),
     )
     _store_challenge(request, AUTH_KEY, options.challenge, user_pk=user.pk)
     return options_to_json(options)

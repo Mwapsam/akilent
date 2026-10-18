@@ -294,3 +294,14 @@ class CrossDeviceHintTest(TestCase):
         resp = _begin(client)
 
         self.assertIn("hybrid", resp.json().get("hints", []))
+
+
+class RegistrationTimeoutTest(TestCase):
+    def test_registration_gives_the_phone_two_minutes(self):
+        user = _user("timeout@example.com")
+        client = Client()
+        client.force_login(user)
+
+        resp = _begin(client)
+
+        self.assertEqual(resp.json()["timeout"], passkeys._timeout_ms())

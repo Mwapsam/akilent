@@ -14,15 +14,27 @@
   }
   function csrf() {
     var el = document.querySelector("[name=csrfmiddlewaretoken]");
-    return el ? el.value : "";
+    if (!el) throw new Error("This page is missing its security token. Refresh and try again.");
+    return el.value;
   }
-  function post(url, body) {
-    return fetch(url, {
+  // Network failures become a readable message instead of the browser's "Failed to fetch".
+  async function post(url, body) {
+    // Build the request first: its own errors are not network errors.
+    var init = {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+      headers: { "Accept": "application/json", "Content-Type": "application/json", "X-CSRFToken": csrf() },
       body: body ? JSON.stringify(body) : "{}"
-    });
+    };
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      throw new Error("Could not reach the server. Check your connection and try again.");
+    }
+  }
+  // A non-JSON body (for example a proxy error page) becomes null, not a SyntaxError.
+  function readJson(res) {
+    return res.json().catch(function () { return null; });
   }
 
   // Turn a browser or server failure into a sentence a user can act on.
@@ -32,22 +44,43 @@
     if (err && err.name === "NotAllowedError") return new Error("We couldn't use that passkey. It may not be on this device, the prompt may have timed out, or it was cancelled. Try again, or sign in another way.");
     if (err && err.name === "InvalidStateError") return new Error("This key is already on your account.");
     if (err && err.name === "NotSupportedError") return new Error("This browser can't use passkeys. Try another browser or device.");
+    if (err && err.name === "AbortError") return new Error("The request was stopped. Start again when you're ready.");
+    if (err && err.name === "SecurityError") return new Error("Passkeys need a secure (https) connection and the right site address. Open Akilent from its normal address and try again.");
     return new Error(fallback);
   }
 
-  window.passkeyRegister = async function (optionsUrl, finishUrl, name, reauth) {
-    var res = await post(optionsUrl, reauth || {});
-    if (!res.ok) {
-      var body = await res.json().catch(function () { return {}; });
-      throw new Error(body.error || "Could not start. Check the details and try again.");
+  function requirePasskeySupport() {
+    if (!window.isSecureContext) {
+      throw new Error("Passkeys need a secure (https) connection. Open Akilent from its normal address.");
     }
-    var opts = await res.json();
+    if (!window.PublicKeyCredential || !navigator.credentials) {
+      throw new Error("This browser doesn't support passkeys. Try another browser or device.");
+    }
+  }
+
+  // Server errors are shown when they carry a message; otherwise the fallback is used.
+  async function serverError(res, fallback) {
+    var body = (await readJson(res)) || {};
+    return new Error((typeof body === "object" && body.error) || fallback);
+  }
+
+  // Optional control: { signal: AbortSignal } lets the page cancel the browser prompt.
+  window.passkeyRegister = async function (optionsUrl, finishUrl, name, reauth, control) {
+    requirePasskeySupport();
+    var res = await post(optionsUrl, reauth || {});
+    if (!res.ok) throw await serverError(res, "Could not start. Check the details and try again.");
+    var opts = await readJson(res);
+    if (!opts || !opts.challenge || !opts.user || !opts.user.id) {
+      throw new Error("Could not start. Check the details and try again.");
+    }
     opts.challenge = b64urlToBuf(opts.challenge);
     opts.user.id = b64urlToBuf(opts.user.id);
     (opts.excludeCredentials || []).forEach(function (c) { c.id = b64urlToBuf(c.id); });
     var cred;
     try {
-      cred = await navigator.credentials.create({ publicKey: opts });
+      var createOpts = { publicKey: opts };
+      if (control && control.signal) createOpts.signal = control.signal;
+      cred = await navigator.credentials.create(createOpts);
     } catch (err) {
       // Diagnostic only: the error name and browser context. Never the challenge or key data.
       console.error("Passkey registration failed", {
@@ -56,6 +89,7 @@
       });
       throw explain(err, "The key could not be added. Try again.");
     }
+    if (!cred || cred.type !== "public-key") throw new Error("Unexpected response from your device. Try again.");
     var payload = {
       id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
       response: {
@@ -66,19 +100,23 @@
       clientExtensionResults: cred.getClientExtensionResults()
     };
     var done = await post(finishUrl, { credential: payload, name: name || "" });
-    if (!done.ok) throw new Error("The key could not be saved. Try again.");
+    if (!done.ok) throw await serverError(done, "The key could not be saved. Try again.");
     return true;
   };
 
-  window.passkeySignIn = async function (optionsUrl, finishUrl) {
+  window.passkeySignIn = async function (optionsUrl, finishUrl, control) {
+    requirePasskeySupport();
     var res = await post(optionsUrl);
-    if (!res.ok) throw new Error("Could not start sign-in.");
-    var opts = await res.json();
+    if (!res.ok) throw await serverError(res, "Could not start sign-in.");
+    var opts = await readJson(res);
+    if (!opts || !opts.challenge) throw new Error("Could not start sign-in. Try again.");
     opts.challenge = b64urlToBuf(opts.challenge);
     (opts.allowCredentials || []).forEach(function (c) { c.id = b64urlToBuf(c.id); });
     var cred;
     try {
-      cred = await navigator.credentials.get({ publicKey: opts });
+      var getOpts = { publicKey: opts };
+      if (control && control.signal) getOpts.signal = control.signal;
+      cred = await navigator.credentials.get(getOpts);
     } catch (err) {
       throw explain(err, "That key did not sign in. Try again.");
     }
@@ -93,8 +131,20 @@
       clientExtensionResults: cred.getClientExtensionResults()
     };
     var done = await post(finishUrl, { credential: payload });
-    if (!done.ok) throw new Error("That key did not sign in. Try again.");
-    var body = await done.json();
-    window.location.href = body.redirect;
+    if (!done.ok) throw await serverError(done, "That key did not sign in. Try again.");
+    // The server has already signed the user in, so a bad redirect must not show an error.
+    // Fall back to the dashboard instead.
+    var body = await readJson(done);
+    var target = null;
+    try {
+      if (body && typeof body.redirect === "string" && body.redirect) {
+        target = new URL(body.redirect, location.origin);
+      }
+    } catch (e) { target = null; }
+    if (!target || target.origin !== location.origin) {
+      window.location.href = "/dashboard/";
+      return;
+    }
+    window.location.href = target.pathname + target.search + target.hash;
   };
 })();
