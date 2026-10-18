@@ -1579,9 +1579,8 @@ def variant_reschedule(request, pk, platform):
     with transaction.atomic():
         post = ContentPost.objects.select_for_update().get(pk=post.pk)
         variant = post.variants.select_for_update().filter(platform=platform).first()
-        allowed = (
-            variant is not None
-            and platform in (post.platforms or [])
+        if variant is None or not (
+            platform in (post.platforms or [])
             and (
                 variant.status == Status.SCHEDULED
                 or (
@@ -1590,8 +1589,7 @@ def variant_reschedule(request, pk, platform):
                     in (ContentPost.Status.SCHEDULED, ContentPost.Status.PUBLISHING)
                 )
             )
-        )
-        if not allowed:
+        ):
             messages.error(
                 request, "Only a channel that hasn't gone out can be rescheduled."
             )
