@@ -45,7 +45,7 @@ class _FakeProvider:
         return self._result
 
 
-class OutboundSendTest(TestCase):
+class _OutboundBase(TestCase):
     def setUp(self):
         # settings_test runs Celery eager, so send_message()'s
         # drain_outbound_queue.delay() would fire a real send inline. Silence the
@@ -75,6 +75,8 @@ class OutboundSendTest(TestCase):
         ):
             drain_outbound_queue()
 
+
+class OutboundSendTest(_OutboundBase):
     # --- api.send_message -------------------------------------------------
 
     def test_send_message_builds_payload_and_idempotency_key(self):
@@ -250,3 +252,34 @@ class OutboundSendTest(TestCase):
         msg.refresh_from_db()
         self.assertEqual(msg.status, OutboundMessage.Status.UNCONFIRMED)
         self.assertEqual(len(provider.calls), 0)
+
+
+class OverlappingDrainTest(_OutboundBase):
+    """Two drains that load the same queued row must send it once."""
+
+    def test_message_claimed_by_another_drain_is_skipped(self):
+        from django.core.cache import cache
+
+        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        cache.add(f"wa_outbound_claim:{msg.pk}", "1", 60)
+        self.addCleanup(cache.delete, f"wa_outbound_claim:{msg.pk}")
+        provider = _FakeProvider()
+        self._drain_with(provider)
+        self.assertEqual(provider.calls, [])
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboundMessage.Status.QUEUED)
+
+    def test_stale_copy_of_an_already_sent_message_is_not_claimed(self):
+        from apps.whatsapp.tasks import _claim_for_send
+
+        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        stale = OutboundMessage.objects.get(pk=msg.pk)  # loaded by the slower drain
+        self._drain_with(_FakeProvider())  # the faster drain sends it
+        self.assertFalse(_claim_for_send(stale, timezone.now()))
+
+    def test_claim_is_released_after_the_attempt(self):
+        from django.core.cache import cache
+
+        msg = whatsapp_api.send_message(self.account, self.contact, "hi")
+        self._drain_with(_FakeProvider())
+        self.assertIsNone(cache.get(f"wa_outbound_claim:{msg.pk}"))

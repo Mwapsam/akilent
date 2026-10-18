@@ -412,10 +412,17 @@ def numbers_create(request):
         messages.error(request, msg)
         return redirect("whatsapp-numbers")
 
+    from apps.accounts.api import is_account_admin
+
+    if not is_account_admin(request.user, account):
+        return fail("Only an owner or admin can add WhatsApp numbers.", status=403)
+
     phone_number_id = (request.POST.get("phone_number_id") or "").strip()
     access_token = (request.POST.get("access_token") or "").strip()
     if not phone_number_id:
         return fail("Phone number ID is required.")
+    if not access_token:
+        return fail("An access token for this phone number is required.")
 
     from apps.billing.limits import LimitChecker, PlanLimitExceeded
 
@@ -427,25 +434,36 @@ def numbers_create(request):
     if WhatsAppBusinessNumber.objects.filter(phone_number_id=phone_number_id).exists():
         return fail("This phone number ID is already registered.")
 
+    # Inbound messages are routed by phone_number_id alone, so the id must be proven to
+    # belong to whoever adds it: Meta has to answer for it with the token supplied.
+    # Otherwise any account could claim another business's number and read its inbox.
+    from apps.whatsapp.embedded import fetch_display_number
+
+    confirmed_number = fetch_display_number(phone_number_id, access_token)
+    if not confirmed_number:
+        return fail(
+            "Meta didn't confirm that this access token can manage that phone number ID. "
+            "Check both values and try again."
+        )
+
     number = WhatsAppBusinessNumber.objects.create(
         account=account,
         phone_number_id=phone_number_id,
-        access_token=access_token or None,
+        access_token=access_token,
         waba_id=(request.POST.get("waba_id") or "").strip() or None,
         business_id=(request.POST.get("business_id") or "").strip() or None,
-        display_number=(request.POST.get("display_number") or "").strip() or None,
+        display_number=(request.POST.get("display_number") or "").strip()
+        or confirmed_number,
     )
 
-    # Same registration path as OAuth and retry. Needs a token to call Meta.
-    result = register_number(number) if number.access_token else None
+    # Same registration path as OAuth and retry.
+    result = register_number(number)
 
     from apps.accounts import onboarding as ob
 
     ob.advance_onboarding(account)  # side effects only; the numbers page is the console
 
-    if result is None:
-        msg = f"WhatsApp number {phone_number_id} added. Add an access token to finish setup."
-    elif result.ok:
+    if result.ok:
         msg = f"WhatsApp number {phone_number_id} registered."
     else:
         msg = f"Number {phone_number_id} added, but registration failed: {result.error}"
@@ -459,7 +477,7 @@ def numbers_create(request):
             }
         )
 
-    (messages.success if result and result.ok else messages.warning)(request, msg)
+    (messages.success if result.ok else messages.warning)(request, msg)
     return redirect("whatsapp-numbers")
 
 
@@ -549,6 +567,12 @@ def numbers_delete(request, pk):
     if account is None:
         return redirect("dashboard")
     if request.method != "POST":
+        return redirect("whatsapp-numbers")
+
+    from apps.accounts.api import is_account_admin
+
+    if not is_account_admin(request.user, account):
+        messages.error(request, "Only an owner or admin can remove WhatsApp numbers.")
         return redirect("whatsapp-numbers")
 
     number = get_object_or_404(WhatsAppBusinessNumber, pk=pk, account=account)

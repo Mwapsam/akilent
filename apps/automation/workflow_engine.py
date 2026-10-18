@@ -1134,21 +1134,9 @@ def _lead_reachable_before(steps_by_id: dict, target_sid: str, all_steps: list) 
 
 def _messaging_window_open(conversation) -> bool:
     """True if the conversation's channel window allows free-text replies."""
-    from apps.conversations.models import Conversation as SpineConversation
+    from apps.conversations.api import conversation_window_is_open
 
-    ch = conversation.channel
-    if ch == SpineConversation.Channel.WHATSAPP:
-        wa_convo = getattr(conversation, "whatsapp_conversation", None)
-        if wa_convo is None:
-            return False
-        return bool(getattr(wa_convo, "window_is_open", lambda: True)())
-    if ch == SpineConversation.Channel.INSTAGRAM:
-        ig_convo = getattr(conversation, "instagram_conversation", None)
-        if ig_convo is None:
-            return False
-        return bool(getattr(ig_convo, "window_is_open", lambda: True)())
-    # Other channels: assume open.
-    return True
+    return conversation_window_is_open(conversation)
 
 
 def _run_lookup_product(run: WorkflowRun, step: dict) -> dict:

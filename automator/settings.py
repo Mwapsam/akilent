@@ -427,6 +427,13 @@ if not DEBUG and WHATSAPP_ENABLED:
     if not WHATSAPP_APP_SECRET:
         raise ValueError("WHATSAPP_APP_SECRET is missing")
 
+if not DEBUG and INSTAGRAM_ENABLED:
+    # INSTAGRAM_APP_SECRET already falls back to WHATSAPP_APP_SECRET above.
+    if not INSTAGRAM_APP_SECRET:
+        raise ValueError("INSTAGRAM_APP_SECRET is missing")
+    if not INSTAGRAM_VERIFY_TOKEN:
+        raise ValueError("INSTAGRAM_VERIFY_TOKEN is missing")
+
 
 # --- Slack ---
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")

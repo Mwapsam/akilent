@@ -61,3 +61,5 @@ packages/*/.phpunit.cache/
 
 .mypy_cache/
 .claude/
+# Pre-deploy database snapshots taken on the server by deploy.yml
+/backups/

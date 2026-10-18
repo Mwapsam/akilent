@@ -457,7 +457,8 @@ def _verify_signature(request) -> bool:
 
     Instagram Business Login webhooks may be signed with the Instagram app secret
     or the Meta app secret, so either is accepted. If neither is configured,
-    verification is skipped so development environments without secrets still work.
+    verification is skipped only under DEBUG so local development still works;
+    anywhere else an unsigned webhook is refused.
     """
     from apps.core.meta_signature import verify_meta_signature
 
@@ -466,7 +467,10 @@ def _verify_signature(request) -> bool:
         getattr(settings, "WHATSAPP_APP_SECRET", "") or "",
     ]
     if not any(candidates):
-        return True
+        if settings.DEBUG:
+            return True
+        logger.error("Instagram webhook refused: no app secret is configured")
+        return False
     return verify_meta_signature(request, candidates)
 
 
@@ -558,34 +562,11 @@ class InstagramWebhookView(View):
             logger.error("Instagram webhook: invalid JSON body")
             return HttpResponse(status=200)  # return 200 so Meta doesn't retry
 
-        # Resolve to an InstagramBusinessAccount for HMAC verification
-        page_id = _extract_page_id(payload)
-        instagram_account = None
-        if page_id:
-            try:
-                instagram_account = get_instagram_account_for_webhook(page_id)
-            except TenantResolutionError:
-                logger.warning(
-                    "Instagram webhook: unknown page_id=%s — storing as unresolved",
-                    page_id,
-                )
-
         if not _verify_signature(request):
             from apps.core.meta_signature import log_signature_failure
 
             log_signature_failure(request, "Instagram")
             return HttpResponse(status=403)
-
-        event_type = _classify_event(payload)
-        event_id_key = _deterministic_event_id(
-            instagram_account.pk if instagram_account else 0,
-            payload,
-            event_type,
-        )
-
-        # Store raw payload (idempotency enforced by unique constraint). While the channel is
-        # off, store it as held and process it on replay.
-        from django.db import IntegrityError
 
         from apps.core.channels import channel_state
 
@@ -594,28 +575,64 @@ class InstagramWebhookView(View):
             WebhookEventLog.objects.filter(status=WebhookEventLog.Status.HELD).exists()
         )
 
-        try:
-            with transaction.atomic():
-                event = WebhookEventLog.objects.create(
-                    instagram_account=instagram_account,
-                    event_id=event_id_key,
-                    event_type=event_type,
-                    raw_payload=payload,
-                    status=(
-                        WebhookEventLog.Status.HELD
-                        if held
-                        else WebhookEventLog.Status.RECEIVED
-                    ),
-                )
-        except IntegrityError:
-            logger.debug(
-                "Instagram webhook: duplicate event_id=%s — skipping", event_id_key
-            )
-            return HttpResponse(status=200)
-
-        if not held:
-            transaction.on_commit(lambda: process_instagram_event.delay(event.pk))
+        # Meta may batch entries for several connected accounts into one delivery. Each
+        # entry is stored as its own event, resolved to its own account, so one
+        # business's comments or DMs are never processed under another's.
+        entries = payload.get("entry") if isinstance(payload, dict) else None
+        if isinstance(entries, list) and len(entries) > 1:
+            parts = [{**payload, "entry": [entry]} for entry in entries]
+        else:
+            parts = [payload]
+        for part in parts:
+            _store_webhook_event(part, held=held)
         return HttpResponse(status=200)
+
+
+def _store_webhook_event(payload: dict, *, held: bool) -> None:
+    """Store one webhook event (idempotently) and enqueue it unless held."""
+    from django.db import IntegrityError
+
+    page_id = _extract_page_id(payload)
+    instagram_account = None
+    if page_id:
+        try:
+            instagram_account = get_instagram_account_for_webhook(page_id)
+        except TenantResolutionError:
+            logger.warning(
+                "Instagram webhook: unknown page_id=%s — storing as unresolved",
+                page_id,
+            )
+
+    event_type = _classify_event(payload)
+    event_id_key = _deterministic_event_id(
+        instagram_account.pk if instagram_account else 0,
+        payload,
+        event_type,
+    )
+
+    # Idempotency is enforced by the unique constraint. While the channel is off,
+    # the event is stored as held and processed on replay.
+    try:
+        with transaction.atomic():
+            event = WebhookEventLog.objects.create(
+                instagram_account=instagram_account,
+                event_id=event_id_key,
+                event_type=event_type,
+                raw_payload=payload,
+                status=(
+                    WebhookEventLog.Status.HELD
+                    if held
+                    else WebhookEventLog.Status.RECEIVED
+                ),
+            )
+    except IntegrityError:
+        logger.debug(
+            "Instagram webhook: duplicate event_id=%s — skipping", event_id_key
+        )
+        return
+
+    if not held:
+        transaction.on_commit(lambda: process_instagram_event.delay(event.pk))
 
 
 def _extract_page_id(payload: dict) -> str:

@@ -515,3 +515,24 @@ class TestDeauthorize(InstagramCase):
         self.assertIn("confirmation_code", body)
         self.assertIn(body["confirmation_code"], body["url"])
         task.delay.assert_called_once()
+
+
+class TestWebhookSignatureWithoutSecret(TestCase):
+    """With no app secret configured, only DEBUG may skip signature checks."""
+
+    def _request(self):
+        return RequestFactory().post(
+            "/instagram/webhook/", data=b"{}", content_type="application/json"
+        )
+
+    @override_settings(DEBUG=False, INSTAGRAM_APP_SECRET="", WHATSAPP_APP_SECRET="")
+    def test_unsigned_webhook_is_refused_outside_debug(self):
+        from apps.instagram.views import _verify_signature
+
+        self.assertFalse(_verify_signature(self._request()))
+
+    @override_settings(DEBUG=True, INSTAGRAM_APP_SECRET="", WHATSAPP_APP_SECRET="")
+    def test_unsigned_webhook_is_accepted_in_debug(self):
+        from apps.instagram.views import _verify_signature
+
+        self.assertTrue(_verify_signature(self._request()))

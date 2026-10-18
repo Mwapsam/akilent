@@ -66,6 +66,18 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: automator.settings_test
 
+      # Tests run with --nomigrations, so nothing else notices a model change that was
+      # never given a migration, or a migration graph that no longer applies.
+      - name: Migrations are complete
+        run: poetry run python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SETTINGS_MODULE: automator.settings_test
+
+      - name: Migrations apply from scratch
+        run: poetry run python manage.py migrate --noinput
+        env:
+          DJANGO_SETTINGS_MODULE: automator.settings_test
+
       - name: Run email tests
         # Email delivery / SES is reputation-critical — run it as its own step so
         # a regression here is unmistakable, and fail if any test is skipped.

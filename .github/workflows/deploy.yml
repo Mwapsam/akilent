@@ -7,12 +7,57 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   deploy:
     environment: .env
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    env:
+      # The exact commit to release: the one CI tested, never whatever main is by now.
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
+      - name: Require a green CI run for this commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list --repo "${{ github.repository }}" --workflow CI \
+            --commit "$DEPLOY_SHA" --limit 1 --json conclusion -q '.[0].conclusion')
+          if [ "$conclusion" != "success" ]; then
+            echo "CI has not passed for $DEPLOY_SHA (latest run: ${conclusion:-none}); not deploying."
+            exit 1
+          fi
+
+      - name: Check required secrets are set
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
+          INSTAGRAM_VERIFY_TOKEN: ${{ secrets.INSTAGRAM_VERIFY_TOKEN }}
+          META_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET || secrets.WHATSAPP_APP_SECRET }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # An unset secret reaches the server as NAME= and the app either refuses to start
+          # or silently runs with the feature off. Fail here, before anything is touched.
+          missing=""
+          for name in DJANGO_SECRET_KEY ALLOWED_HOSTS POSTGRES_PASSWORD FIELD_ENCRYPTION_KEY \
+                      INSTAGRAM_VERIFY_TOKEN META_APP_SECRET SSH_HOST DEPLOY_PATH; do
+            eval "value=\${$name:-}"
+            [ -z "$value" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "Required secrets are empty:$missing"
+            exit 1
+          fi
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -101,6 +146,7 @@ jobs:
           HUBSPOT_CLIENT_ID: ${{ secrets.HUBSPOT_CLIENT_ID }}
           HUBSPOT_CLIENT_SECRET: ${{ secrets.HUBSPOT_CLIENT_SECRET }}
           SYSTEM_EMAIL_PROVIDER_BACKEND: ${{ secrets.SYSTEM_EMAIL_PROVIDER_BACKEND }}
+          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -129,13 +175,14 @@ jobs:
             AI_MODEL_FAST,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENAI_BASE_URL,AI_AUTONOMY_ENABLED,
             BACKUP_S3_BUCKET,BACKUP_AWS_ACCESS_KEY_ID,BACKUP_AWS_SECRET_ACCESS_KEY,SEO_ALLOW_INDEXING,GOOGLE_ANALYTICS_ID,
             INSTAGRAM_APP_ID,INSTAGRAM_APP_SECRET,INSTAGRAM_GRAPH_VERSION,INSTAGRAM_VERIFY_TOKEN,
-            HUBSPOT_CLIENT_ID,HUBSPOT_CLIENT_SECRET,SYSTEM_EMAIL_PROVIDER_BACKEND
+            HUBSPOT_CLIENT_ID,HUBSPOT_CLIENT_SECRET,SYSTEM_EMAIL_PROVIDER_BACKEND,
+            DEPLOY_SHA
           script: |
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
             PREV=$(git rev-parse HEAD)
             git fetch origin main
-            git reset --hard origin/main
+            git reset --hard "$DEPLOY_SHA"
 
             # Rebuild .env on the server from the GitHub secrets forwarded above -
             # secrets are the source of truth, not any hand-edited server copy.
@@ -252,6 +299,15 @@ jobs:
               done
               return 1
             }
+
+            # Snapshot the database before migrations run, so a bad migration can be undone
+            # (rollback below restores code only). Keeps the last 5 snapshots on the VPS.
+            if docker compose ps --status running db | grep -q db; then
+              mkdir -p backups/pre-deploy
+              docker compose exec -T db pg_dump -Fc --no-owner -U "$POSTGRES_USER" "$POSTGRES_DB" \
+                > "backups/pre-deploy/$(date -u +%Y%m%dT%H%M%SZ)-$PREV.dump"
+              ls -1t backups/pre-deploy/*.dump | tail -n +6 | xargs -r rm -f
+            fi
 
             release
             if ! healthy; then

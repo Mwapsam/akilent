@@ -36,6 +36,37 @@ _MEDIA_BATCH = 20
 _MAX_EVENT_ATTEMPTS = 3
 _SENDING_STALE = timedelta(minutes=10)
 
+
+def _claim_for_send(msg: OutboundMessage, now) -> bool:
+    """Take one queued message for this drain, or say another drain already has it.
+
+    Drains overlap (beat every 10s plus a .delay() per send), and each loads its batch
+    before sending. The claim is held for the whole attempt, and the row is re-read
+    under it, so a drain holding a stale copy skips a message another drain already
+    sent, held or failed instead of sending it a second time.
+    """
+    key = f"wa_outbound_claim:{msg.pk}"
+    if not cache.add(key, "1", timeout=int(_SENDING_STALE.total_seconds())):
+        return False
+    still_due = (
+        OutboundMessage.objects.filter(
+            pk=msg.pk,
+            status__in=[OutboundMessage.Status.QUEUED, OutboundMessage.Status.HELD],
+        )
+        .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
+        .exists()
+    )
+    if not still_due:
+        cache.delete(key)
+        return False
+    msg.refresh_from_db()
+    return True
+
+
+def _release_send_claim(msg: OutboundMessage) -> None:
+    cache.delete(f"wa_outbound_claim:{msg.pk}")
+
+
 _PAYLOAD_TYPE_TO_LOG_TYPE = {
     "text": MessageLog.MessageType.TEXT,
     "template": MessageLog.MessageType.TEMPLATE,
@@ -961,6 +992,8 @@ def drain_outbound_queue():
     providers: dict = {}
     numbers: dict = {}
     for msg in due:
+        if not _claim_for_send(msg, now):
+            continue
         reservation = None
         limit_key = None
         try:
@@ -1066,6 +1099,8 @@ def drain_outbound_queue():
                 msg, phone_number_id=getattr(provider, "phone_number_id", "")
             )
             failed += 1
+        finally:
+            _release_send_claim(msg)
 
     if sent or failed or held:
         logger.info(

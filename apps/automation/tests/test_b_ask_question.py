@@ -415,6 +415,27 @@ def test_window_closed_routes_to_on_error(account, contact, conversation):
     )
 
 
+@pytest.mark.parametrize("channel", ["whatsapp", "instagram"])
+@pytest.mark.parametrize("is_open", [True, False])
+def test_messaging_window_open_reads_the_channel_property(channel, is_open):
+    """The real check, unpatched: window_is_open is a property, not a method."""
+    from types import SimpleNamespace
+
+    from apps.automation.workflow_engine import _messaging_window_open
+
+    class _ChannelConvo:
+        @property
+        def window_is_open(self):
+            return is_open
+
+    convo = SimpleNamespace(
+        channel=channel,
+        whatsapp_conversation=_ChannelConvo() if channel == "whatsapp" else None,
+        instagram_conversation=_ChannelConvo() if channel == "instagram" else None,
+    )
+    assert _messaging_window_open(convo) is is_open
+
+
 # ── B.9  Idempotent re-entry: existing open interaction → park only ───────────
 
 
