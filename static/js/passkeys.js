@@ -49,6 +49,11 @@
     try {
       cred = await navigator.credentials.create({ publicKey: opts });
     } catch (err) {
+      // Diagnostic only: the error name and browser context. Never the challenge or key data.
+      console.error("Passkey registration failed", {
+        name: err && err.name,
+        secureContext: window.isSecureContext
+      });
       throw explain(err, "The key could not be added. Try again.");
     }
     var payload = {
