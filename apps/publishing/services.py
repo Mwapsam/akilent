@@ -99,14 +99,13 @@ def initialize_post_with_variants(
                     variant.pk,
                 )
             elif variant.status in editable:
+                # The schedule is owned by apply_schedule, so a per-channel time set
+                # there is not overwritten by a content edit.
                 variant.caption = caption
                 variant.media_urls = post.media_urls or []
-                variant.scheduled_at = post.scheduled_at
                 if variant.status == Status.CANCELLED:
                     variant.status = Status.DRAFT
-                variant.save(
-                    update_fields=["caption", "media_urls", "scheduled_at", "status"]
-                )
+                variant.save(update_fields=["caption", "media_urls", "status"])
             variants.append(variant)
 
         for platform, variant in existing.items():
@@ -124,6 +123,95 @@ def initialize_post_with_variants(
                 )
 
     return variants
+
+
+# ---------------------------------------------------------------------------
+# Per-channel scheduling: each variant carries its own time and SCHEDULED status
+# ---------------------------------------------------------------------------
+
+# Variants a schedule change may touch; anything that has started publishing keeps its state.
+_SCHEDULABLE = (
+    ContentPostVariant.Status.DRAFT,
+    ContentPostVariant.Status.SCHEDULED,
+    ContentPostVariant.Status.FAILED,
+)
+
+
+def apply_schedule(post: ContentPost, times: dict | None = None) -> None:
+    """Sync the variants' schedule with the post's status.
+
+    ``times`` maps platform -> aware datetime for channels that publish at their own
+    time; channels missing from it use ``post.scheduled_at``. A SCHEDULED post marks
+    its pending variants SCHEDULED, and the scheduler publishes each when it is due.
+    Any other status takes pending variants back to DRAFT, keeping their times for
+    the composer to prefill. The post's own time becomes the earliest channel time.
+    """
+    times = times or {}
+    Status = ContentPostVariant.Status
+    scheduling = post.status == ContentPost.Status.SCHEDULED
+    variants = list(
+        post.variants.filter(status__in=_SCHEDULABLE, platform__in=post.platforms)
+    )
+    for variant in variants:
+        variant.scheduled_at = times.get(variant.platform) or post.scheduled_at
+        if scheduling:
+            variant.status = Status.SCHEDULED
+            variant.dispatched_at = None
+        elif variant.status == Status.SCHEDULED:
+            variant.status = Status.DRAFT
+        variant.save(update_fields=["scheduled_at", "status", "dispatched_at"])
+
+    chosen = [v.scheduled_at for v in variants if v.scheduled_at]
+    if chosen and min(chosen) != post.scheduled_at:
+        post.scheduled_at = min(chosen)
+        post.save(update_fields=["scheduled_at", "updated_at"])
+
+
+def reschedule_variant(variant: ContentPostVariant, when) -> None:
+    """Move one pending channel to a new time and schedule it."""
+    variant.scheduled_at = when
+    variant.status = ContentPostVariant.Status.SCHEDULED
+    variant.dispatched_at = None
+    variant.save(update_fields=["scheduled_at", "status", "dispatched_at"])
+    refresh_parent_post(variant.post)
+
+
+def cancel_post(post: ContentPost) -> None:
+    """Cancel every channel that has not started publishing.
+
+    Channels already live stay published, so a partly published post ends PUBLISHED
+    rather than CANCELLED.
+    """
+    post.variants.filter(
+        status__in=(
+            ContentPostVariant.Status.DRAFT,
+            ContentPostVariant.Status.SCHEDULED,
+        )
+    ).update(status=ContentPostVariant.Status.CANCELLED, dispatched_at=None)
+    if post.variants.exclude(status=ContentPostVariant.Status.CANCELLED).exists():
+        refresh_parent_post(post)
+        return
+    post.status = ContentPost.Status.CANCELLED
+    post.save(update_fields=["status", "updated_at"])
+
+
+def reopen_post(post: ContentPost) -> None:
+    """Return a cancelled post and its channels to draft, with no schedule."""
+    post.variants.filter(
+        status=ContentPostVariant.Status.CANCELLED, platform__in=post.platforms
+    ).update(status=ContentPostVariant.Status.DRAFT, scheduled_at=None)
+    post.status = ContentPost.Status.DRAFT
+    post.scheduled_at = None
+    post.save(update_fields=["status", "scheduled_at", "updated_at"])
+
+
+def variant_is_due(variant: ContentPostVariant, now=None) -> bool:
+    """A SCHEDULED channel waits for its own time; every other state is not time-gated."""
+    if variant.status != ContentPostVariant.Status.SCHEDULED:
+        return True
+    return variant.scheduled_at is None or variant.scheduled_at <= (
+        now or timezone.now()
+    )
 
 
 def _ig_permalink(provider, media_id: str) -> str:
@@ -1153,8 +1241,13 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
         }
 
 
-def orchestrate_post_publication(post: ContentPost) -> tuple[str, list[dict]]:
+def orchestrate_post_publication(
+    post: ContentPost, *, only_due: bool = True
+) -> tuple[str, list[dict]]:
     """Orchestrate per-variant publishing for a ContentPost (Step 4.3).
+
+    With ``only_due`` (the default) a channel scheduled for later is left for the
+    scheduler; ``only_due=False`` publishes every pending channel now.
 
     Returns:
     - parent_status: aggregated post status (published, partial_success, failed, publishing, reconciling)
@@ -1175,12 +1268,13 @@ def orchestrate_post_publication(post: ContentPost) -> tuple[str, list[dict]]:
 
     # Publish each eligible variant
     outcomes = []
+    now = timezone.now()
     for variant in variants:
-        # Skip already published or cancelled variants
+        # Skip already published or cancelled variants, and channels not yet due
         if variant.status in (
             ContentPostVariant.Status.PUBLISHED,
             ContentPostVariant.Status.CANCELLED,
-        ):
+        ) or (only_due and not variant_is_due(variant, now)):
             outcomes.append(
                 {
                     "platform": variant.platform,
@@ -1277,6 +1371,20 @@ def _aggregate_parent_status(post: ContentPost, outcomes: list[dict]) -> str:
     if cancelled_count == len(statuses):
         return ContentPost.Status.CANCELLED
 
+    # Some channels are live and the rest are waiting for their own time: the post is
+    # still scheduled. A channel left in draft needs attention, so the post isn't done.
+    if published_count > 0 and failed_count == 0 and draft_or_scheduled > 0:
+        if all(
+            s
+            in (
+                ContentPostVariant.Status.PUBLISHED,
+                ContentPostVariant.Status.SCHEDULED,
+            )
+            for s in statuses
+        ):
+            return ContentPost.Status.SCHEDULED
+        return ContentPost.Status.PUBLISHING
+
     # All required variants published (no failures or cancellations)
     if failed_count == 0 and cancelled_count == 0 and published_count > 0:
         return ContentPost.Status.PUBLISHED
@@ -1338,8 +1446,23 @@ def refresh_parent_post(post: ContentPost) -> None:
     post.error = "; ".join(errors)
     if status == ContentPost.Status.PUBLISHED and post.published_at is None:
         post.published_at = timezone.now()
+    # The post's time is its next channel to go out, so listings sort by what's next.
+    pending_times = [
+        v.scheduled_at
+        for v in variants
+        if v.status == ContentPostVariant.Status.SCHEDULED and v.scheduled_at
+    ]
+    if pending_times:
+        post.scheduled_at = min(pending_times)
     post.save(
-        update_fields=["status", "fb_post_id", "ig_media_id", "error", "published_at"]
+        update_fields=[
+            "status",
+            "fb_post_id",
+            "ig_media_id",
+            "error",
+            "published_at",
+            "scheduled_at",
+        ]
     )
 
     if status == ContentPost.Status.PUBLISHED and not was_published and post.fb_post_id:

@@ -431,6 +431,9 @@ class ContentPostVariant(models.Model):
 
     # Scheduling and publication
     scheduled_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # When the scheduler last enqueued this channel. A due variant is re-enqueued only
+    # after a grace window, so a lost enqueue is retried without a 60 s loop.
+    dispatched_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
     publication_id = models.CharField(max_length=255, blank=True, default="")
     publication_url = models.URLField(max_length=2048, blank=True, default="")

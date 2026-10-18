@@ -1286,7 +1286,10 @@ def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
         raise ValueError(msg)
 
     try:
-        parent_status, outcomes = orchestrate_post_publication(post)
+        # A workflow step means "publish now", including channels scheduled for later.
+        # Each channel is still claimed under its own lock, so a scheduler dispatch
+        # running at the same time cannot publish it twice.
+        parent_status, outcomes = orchestrate_post_publication(post, only_due=False)
     except Exception as exc:
         logger.exception(
             "publish_post step %s failed orchestrating post=%s: %s",

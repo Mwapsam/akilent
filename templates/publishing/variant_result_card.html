@@ -19,6 +19,28 @@
     {% endif %}
   </div>
 
+  {# This channel's own time #}
+  {% if variant.status == 'scheduled' and variant.scheduled_at %}
+  <p class="text-sm text-gray-600">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
+  {% elif variant.status == 'published' and variant.published_at %}
+  <p class="text-xs text-gray-500">Published {{ variant.published_at|date:"N j, H:i" }}</p>
+  {% endif %}
+  {% if variant.status == 'draft' and variant.last_error %}
+  <p class="text-xs text-gray-600">{{ variant.last_error }}</p>
+  {% endif %}
+
+  {% if variant.status == 'scheduled' or variant.status == 'draft' and post.status in 'scheduled,publishing' %}
+  <form method="post" action="{% url 'publishing:variant-reschedule' post.pk variant.platform %}"
+        class="flex flex-wrap items-center gap-2">
+    {% csrf_token %}
+    <label for="reschedule-{{ variant.platform }}" class="sr-only">New time for {{ variant.platform|platform_display_name }}</label>
+    <input type="datetime-local" name="scheduled_at" id="reschedule-{{ variant.platform }}" required
+           value="{% if variant.scheduled_at %}{{ variant.scheduled_at|date:'Y-m-d\TH:i' }}{% endif %}"
+           class="input text-sm w-full sm:w-56">
+    <button type="submit" class="btn btn-ghost text-xs">{% if variant.status == 'scheduled' %}Change time{% else %}Schedule this channel{% endif %}</button>
+  </form>
+  {% endif %}
+
   {# Publication URL (if successful) #}
   {% if variant.status == 'published' and variant.publication_url|slice:":8" == "https://" or variant.status == 'published' and variant.publication_url|slice:":7" == "http://" %}
   <a href="{{ variant.publication_url }}" target="_blank" rel="noopener"

@@ -250,10 +250,32 @@
       <div class="card card-pad space-y-3">
         <h2 class="font-semibold text-ink"><label for="scheduled-at">Schedule</label></h2>
         <p class="text-xs text-gray-500">{% if review_gate %}You can pick a time now. You can schedule it once an Owner or Admin approves the post.{% else %}Pick a date and time to schedule, or leave it blank and save as a draft.{% endif %}</p>
-        <input type="datetime-local" name="scheduled_at" id="scheduled-at"
-               x-model="scheduledAt"
-               class="input w-full sm:w-64">
-        <p class="text-xs text-gray-500">Times are in {{ current_tz_name }}.</p>
+        <input type="hidden" name="schedule_mode" :value="perChannel && selectedPlatforms.length > 1 ? 'per_channel' : 'same'">
+        <div x-show="!perChannel || selectedPlatforms.length < 2">
+          <input type="datetime-local" name="scheduled_at" id="scheduled-at"
+                 x-model="scheduledAt"
+                 class="input w-full sm:w-64">
+        </div>
+        <template x-if="selectedPlatforms.length > 1">
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" x-model="perChannel" @change="if (perChannel) { selectedPlatforms.forEach(p => { if (!channelTimes[p]) channelTimes[p] = scheduledAt; }); }">
+            Pick a different time for each channel
+          </label>
+        </template>
+        <div x-show="perChannel && selectedPlatforms.length > 1" class="space-y-2">
+          <template x-for="p in selectedPlatforms" :key="p">
+            <div class="flex flex-wrap items-center gap-3">
+              <label :for="'scheduled-at-' + p" class="w-24 text-sm text-ink" x-text="{ instagram: 'Instagram', facebook: 'Facebook' }[p] || p"></label>
+              <input type="datetime-local" :id="'scheduled-at-' + p" :name="'scheduled_at_' + p"
+                     x-model="channelTimes[p]"
+                     class="input w-full sm:w-64">
+            </div>
+          </template>
+        </div>
+        <p class="text-xs text-gray-500">
+          Times are in {{ current_tz_name }}.
+          {% if tz_is_default %}<a href="{% url 'settings-hours' %}" class="underline">Set your business timezone</a> so times match your clock.{% endif %}
+        </p>
       </div>
 
       {# Actions #}
@@ -273,8 +295,8 @@
       {% endif %}
       <div class="flex flex-wrap gap-2">
         <button type="submit" name="action" value="schedule" class="btn btn-primary"
-                :disabled="!scheduledAt || selectedPlatforms.length === 0"
-                :title="scheduledAt ? '' : 'Pick a date and time first'">Schedule</button>
+                :disabled="!canSchedule()"
+                :title="canSchedule() ? '' : 'Pick a date and time first'">Schedule</button>
         <button type="submit" name="action" value="draft" class="btn btn-ghost">Save as draft</button>
         <button type="submit" name="action" value="publish_now" class="btn btn-ghost text-teal-700 hover:tone-teal-bg"
                 :disabled="selectedPlatforms.length === 0"
@@ -556,6 +578,8 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     selectedPlatforms: initialPlatforms && initialPlatforms.length ? initialPlatforms : ['instagram'],
     mediaType: initialMediaType || 'image',
     scheduledAt: initialScheduledAt || '',
+    perChannel: !!editorData().per_channel,
+    channelTimes: Object.assign({ instagram: '', facebook: '' }, editorData().channel_times || {}),
     previewPlatform: 'instagram',
     previewMediaUrls: [],
 
@@ -576,6 +600,14 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
 
     _isVideoUrl(url) {
       return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+    },
+
+    canSchedule() {
+      if (this.selectedPlatforms.length === 0) return false;
+      if (this.perChannel && this.selectedPlatforms.length > 1) {
+        return this.selectedPlatforms.every(p => !!this.channelTimes[p]);
+      }
+      return !!this.scheduledAt;
     },
 
     platformListLabel() {

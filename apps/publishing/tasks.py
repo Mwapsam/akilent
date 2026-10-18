@@ -13,17 +13,52 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
+DISPATCH_GRACE_MINUTES = 15
+
+
 @shared_task(queue="outbound")
 def publish_due_posts() -> int:
-    """Pick ContentPosts whose scheduled_at has passed and publish them."""
-    from .models import ContentPost
+    """Publish every channel whose own scheduled time has passed.
+
+    Each variant is dispatched on its own, so Facebook and Instagram can go out at
+    different times. A post scheduled only at post level (no SCHEDULED variant) still
+    publishes through the whole-post path.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Q
+
+    from .models import ContentPost, ContentPostVariant
 
     now = timezone.now()
-    qs = ContentPost.objects.select_for_update(skip_locked=True).filter(
-        status=ContentPost.Status.SCHEDULED,
-        scheduled_at__lte=now,
-    )
     count = 0
+    due_variants = ContentPostVariant.objects.select_for_update(
+        skip_locked=True, of=("self",)
+    ).filter(
+        Q(dispatched_at__isnull=True)
+        | Q(dispatched_at__lt=now - timedelta(minutes=DISPATCH_GRACE_MINUTES)),
+        status=ContentPostVariant.Status.SCHEDULED,
+        scheduled_at__lte=now,
+        post__status__in=(ContentPost.Status.SCHEDULED, ContentPost.Status.PUBLISHING),
+    )
+    with transaction.atomic():
+        for variant in due_variants:
+            variant.dispatched_at = now
+            variant.save(update_fields=["dispatched_at", "updated_at"])
+            # After commit, robust: a broker failure leaves dispatched_at set, and the
+            # variant is picked up again once the grace window passes.
+            transaction.on_commit(
+                partial(publish_variant_async.delay, variant.pk, scheduled=True),
+                robust=True,
+            )
+            count += 1
+
+    qs = (
+        ContentPost.objects.select_for_update(skip_locked=True)
+        .filter(status=ContentPost.Status.SCHEDULED, scheduled_at__lte=now)
+        .exclude(variants__status=ContentPostVariant.Status.SCHEDULED)
+        .exclude(variants__status=ContentPostVariant.Status.PUBLISHED)
+    )
     with transaction.atomic():
         for post in qs:
             post.status = ContentPost.Status.PUBLISHING
@@ -134,8 +169,13 @@ def publish_post_async(self, post_id: int) -> str:
 
 
 @shared_task(bind=True, max_retries=3, queue="outbound")
-def publish_variant_async(self, variant_id: int) -> str:
-    """Publish a single ContentPostVariant. Used for per-channel retries.
+def publish_variant_async(self, variant_id: int, scheduled: bool = False) -> str:
+    """Publish a single ContentPostVariant: a scheduled channel or a per-channel retry.
+
+    ``scheduled`` marks a dispatch from publish_due_posts. It publishes only a variant
+    that is still SCHEDULED and due, so a channel cancelled or moved after dispatch is
+    left alone. If its approval no longer holds, only that channel goes back to draft;
+    another channel of the post may already be live.
 
     Safeguards:
     - Acquires database lock before validating state (Phase A2)
@@ -167,6 +207,32 @@ def publish_variant_async(self, variant_id: int) -> str:
             ContentPostVariant.Status.PROCESSING,
         ):
             return f"skipped_{variant.status}"
+
+        if scheduled:
+            from .services import refresh_parent_post, variant_is_due
+
+            if variant.status != ContentPostVariant.Status.SCHEDULED:
+                return "skipped_not_scheduled"
+            if not variant_is_due(variant):
+                return "not_due"
+            if not post.is_approval_valid():
+                variant.status = ContentPostVariant.Status.DRAFT
+                variant.last_error = (
+                    "Approval is missing or no longer matches the content; "
+                    "reapprove, then schedule this channel again."
+                )
+                variant.last_error_type = ContentPostVariant.ErrorType.VALIDATION
+                variant.last_error_at = timezone.now()
+                variant.save(
+                    update_fields=[
+                        "status",
+                        "last_error",
+                        "last_error_type",
+                        "last_error_at",
+                    ]
+                )
+                refresh_parent_post(post)
+                return "approval_required"
 
         # Safeguard: check approval at execution time (may have changed since enqueue)
         if not post.is_approval_valid():

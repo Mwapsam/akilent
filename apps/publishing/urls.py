@@ -38,6 +38,11 @@ urlpatterns = [
         views.post_retry_variant,
         name="post-retry-variant",
     ),
+    path(
+        "posts/<int:pk>/channels/<str:platform>/reschedule/",
+        views.variant_reschedule,
+        name="variant-reschedule",
+    ),
     path("posts/<int:pk>/cancel/", views.post_cancel, name="post-cancel"),
     path("posts/<int:pk>/reopen/", views.post_reopen, name="post-reopen"),
     path(

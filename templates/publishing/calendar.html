@@ -88,15 +88,16 @@ targets on a phone and compact chips in the grid.{% endcomment %}
     {% endfor %}
 
     {# Posts — solid #}
-    {% for post in day_posts %}
+    {% for entry in day_posts %}{% with post=entry.post %}
     <a href="{% url 'publishing:post-detail' post.pk %}"
-       class="flex items-center gap-2 text-sm md:text-xs px-2.5 py-2 md:px-1.5 md:py-0.5 mb-1 md:mb-0.5 rounded {{ post.status|status_tone }}"
-       title="{{ post.caption|default:'(no caption)' }} · {{ post.get_status_display }}">
+       class="flex items-center gap-2 text-sm md:text-xs px-2.5 py-2 md:px-1.5 md:py-0.5 mb-1 md:mb-0.5 rounded {{ entry.status|status_tone }}"
+       title="{{ post.caption|default:'(no caption)' }} · {{ entry.platforms|join:', '|capfirst }} · {{ entry.status_label }}">
       <span class="md:hidden">{% include "publishing/_media_thumb.html" with url=post|first_media size="w-8 h-8" alt="" %}</span>
-      <span class="shrink-0 tabular-nums">{{ post.scheduled_at|time:"H:i" }}</span>
+      <span class="shrink-0 tabular-nums">{{ entry.at|time:"H:i" }}</span>
+      {% if entry.platforms|length == 1 %}<span class="shrink-0 font-medium">{{ entry.platforms.0|capfirst }}</span>{% endif %}
       <span class="min-w-0 truncate">{{ post.caption|truncatechars:80|default:"(no caption)" }}</span>
     </a>
-    {% endfor %}
+    {% endwith %}{% endfor %}
 
     {% if not day_plan_items and not day_posts %}
     <div class="md:h-full flex items-center md:justify-center gap-2 text-sm md:text-xs text-gray-500">
@@ -142,28 +143,28 @@ targets on a phone and compact chips in the grid.{% endcomment %}
           </td>
         </tr>
         {% endfor %}
-        {% for post in day_posts %}
+        {% for entry in day_posts %}{% with post=entry.post %}
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
           <td class="pl-3 pr-1 sm:px-4 py-2 text-gray-500 align-top">
-            <span class="whitespace-nowrap">{{ post.scheduled_at|date:"D N j" }}</span>
-            <span class="block text-xs tabular-nums">{{ post.scheduled_at|time:"H:i" }}</span>
+            <span class="whitespace-nowrap">{{ entry.at|date:"D N j" }}</span>
+            <span class="block text-xs tabular-nums">{{ entry.at|time:"H:i" }}</span>
           </td>
           <td class="px-3 sm:px-4 py-2">
             <div class="flex items-center gap-2 sm:gap-3">
               {% include "publishing/_media_thumb.html" with url=post|first_media size="w-8 h-8 sm:w-10 sm:h-10" alt=post.caption|truncatechars:80 %}
               <div class="min-w-0">
                 <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">{{ post.caption|truncatechars:60|default:"(no caption)" }}</a>
-                <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}</span>
+                <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ entry.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}</span>
               </div>
             </div>
           </td>
-          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ entry.platforms|join:", "|capfirst }}</td>
           <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.get_media_type_display }}</td>
           <td class="pl-1 pr-3 sm:px-4 py-2">
-            {% status_badge post.status post.get_status_display %}
+            {% status_badge entry.status entry.status_label %}
           </td>
         </tr>
-        {% endfor %}
+        {% endwith %}{% endfor %}
       {% endfor %}
       {% if not week_has_content %}
       <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No content this week.</td></tr>

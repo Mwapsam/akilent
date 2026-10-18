@@ -126,6 +126,17 @@ def get_hours(account):
     return BusinessHours.objects.filter(account=account).first()
 
 
+def workspace_timezone(account) -> str:
+    """The business's own timezone, set with its opening hours; UTC until it is set."""
+    hours = get_hours(account) if account is not None else None
+    tz = (hours.timezone if hours else "") or DEFAULT_TIMEZONE
+    try:
+        ZoneInfo(tz)
+    except (ValueError, KeyError):  # ZoneInfoNotFoundError is a KeyError
+        return DEFAULT_TIMEZONE
+    return tz
+
+
 def is_configured(account) -> bool:
     hours = get_hours(account)
     return bool(hours and hours.schedule)

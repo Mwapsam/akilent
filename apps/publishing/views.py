@@ -85,6 +85,33 @@ def _admin_required(request, account, redirect_to: str):
     return redirect(redirect_to)
 
 
+def _in_workspace_tz(view):
+    """Show and read schedule times in the business's own timezone (from its opening
+    hours), so a time picked in the composer is the time on the owner's clock."""
+    from functools import wraps
+    from zoneinfo import ZoneInfo
+
+    from apps.accounts.business_hours import workspace_timezone
+
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        account = get_current_account(request)
+        if account is None:
+            return view(request, *args, **kwargs)
+        with timezone.override(ZoneInfo(workspace_timezone(account))):
+            return view(request, *args, **kwargs)
+
+    return wrapper
+
+
+def _parse_schedule(raw: str):
+    """A datetime-local value read as wall-clock time in the active timezone."""
+    value = parse_datetime((raw or "").strip()) if raw else None
+    if value and timezone.is_naive(value):
+        value = timezone.make_aware(value)
+    return value
+
+
 _FB_SCOPES = (
     "pages_show_list,pages_manage_posts,pages_read_engagement,business_management"
 )
@@ -351,6 +378,7 @@ def fb_oauth_disconnect(request):
 
 
 @login_required
+@_in_workspace_tz
 def publishing_index(request):
     account = get_current_account(request)
     if account is None:
@@ -412,7 +440,76 @@ def publishing_index(request):
 # ---------------------------------------------------------------------------
 
 
+def _calendar_entries(account, start, end) -> list[dict]:
+    """Calendar entries for posts with a time in [start, end], one per publish time.
+
+    A post whose channels share a time is one entry. A post with a different time per
+    channel shows one entry per channel time, each with that channel's own status.
+    """
+    variants = (
+        ContentPostVariant.objects.filter(
+            post__account=account, scheduled_at__gte=start, scheduled_at__lte=end
+        )
+        .exclude(status=ContentPostVariant.Status.CANCELLED)
+        .select_related("post")
+    )
+    by_post: dict[int, list] = {}
+    for v in variants:
+        if v.platform in (v.post.platforms or []):
+            by_post.setdefault(v.post_id, []).append(v)
+
+    entries = []
+    for post_variants in by_post.values():
+        post = post_variants[0].post
+        times = {v.scheduled_at for v in post_variants}
+        if len(times) == 1 and len(post_variants) == len(post.platforms or []):
+            entries.append(
+                {
+                    "post": post,
+                    "at": post_variants[0].scheduled_at,
+                    "platforms": post.platforms,
+                    "status": post.status,
+                    "status_label": post.get_status_display(),
+                }
+            )
+            continue
+        for v in post_variants:
+            entries.append(
+                {
+                    "post": post,
+                    "at": v.scheduled_at,
+                    "platforms": [v.platform],
+                    "status": v.status,
+                    "status_label": v.get_status_display(),
+                }
+            )
+
+    # Posts scheduled only at post level (no variant time in range) keep one entry.
+    for post in ContentPost.objects.filter(
+        account=account, scheduled_at__gte=start, scheduled_at__lte=end
+    ).exclude(pk__in=by_post.keys()):
+        if (
+            post.variants.exclude(status=ContentPostVariant.Status.CANCELLED)
+            .filter(scheduled_at__isnull=False)
+            .exclude(scheduled_at=post.scheduled_at)
+            .exists()
+        ):
+            continue  # its channels are scheduled in another week
+        entries.append(
+            {
+                "post": post,
+                "at": post.scheduled_at,
+                "platforms": post.platforms or [],
+                "status": post.status,
+                "status_label": post.get_status_display(),
+            }
+        )
+    entries.sort(key=lambda e: e["at"])
+    return entries
+
+
 @login_required
+@_in_workspace_tz
 def publishing_calendar(request):
     account = get_current_account(request)
     if account is None:
@@ -457,17 +554,11 @@ def publishing_calendar(request):
     status_filter = request.GET.get("status", "")
     view_mode = request.GET.get("view", "week")
 
-    posts_base = ContentPost.objects.filter(
-        account=account,
-        scheduled_at__gte=week_start_dt,
-        scheduled_at__lte=week_end_dt,
-    ).order_by("scheduled_at")
-
-    posts_qs: list[ContentPost] = list(posts_base)
+    entries = _calendar_entries(account, week_start_dt, week_end_dt)
     if channel_filter:
-        posts_qs = [p for p in posts_qs if channel_filter in (p.platforms or [])]
+        entries = [e for e in entries if channel_filter in e["platforms"]]
     if status_filter:
-        posts_qs = [p for p in posts_qs if p.status == status_filter]
+        entries = [e for e in entries if e["post"].status == status_filter]
 
     plan_items_qs = ContentPlanItem.objects.filter(
         account=account,
@@ -480,7 +571,7 @@ def publishing_calendar(request):
     for i in range(7):
         day = week_start + datetime.timedelta(days=i)
         day_posts = [
-            p for p in posts_qs if timezone.localtime(p.scheduled_at, tz).date() == day
+            e for e in entries if timezone.localtime(e["at"], tz).date() == day
         ]
         day_plan_items = [pi for pi in plan_items_qs if pi.planned_date == day]
         week_days.append((day, day_plan_items, day_posts))
@@ -525,6 +616,7 @@ def publishing_calendar(request):
 
 
 @login_required
+@_in_workspace_tz
 def publishing_library(request):
     account = get_current_account(request)
     if account is None:
@@ -630,11 +722,19 @@ def publishing_library_bulk(request):
             )
 
     elif action == "cancel_scheduled":
-        updated = ContentPost.objects.filter(
-            pk__in=pks,
-            account=account,
-            status=ContentPost.Status.SCHEDULED,
-        ).update(status=ContentPost.Status.CANCELLED)
+        from .services import cancel_post
+
+        to_cancel = list(
+            ContentPost.objects.filter(
+                pk__in=pks,
+                account=account,
+                status=ContentPost.Status.SCHEDULED,
+            )
+        )
+        with transaction.atomic():
+            for scheduled_post in to_cancel:
+                cancel_post(scheduled_post)
+        updated = len(to_cancel)
         if updated:
             messages.success(request, f"Cancelled {updated} scheduled post(s).")
         skipped = len(pks) - updated
@@ -1032,6 +1132,7 @@ def post_media_upload(request):
 
 
 @login_required
+@_in_workspace_tz
 def post_new(request):
     account = get_current_account(request)
     if account is None:
@@ -1097,11 +1198,20 @@ def post_new(request):
             if override:
                 platform_captions[plat] = override
 
-        scheduled_at = None
-        if scheduled_at_raw:
-            scheduled_at = parse_datetime(scheduled_at_raw)
-            if scheduled_at and timezone.is_naive(scheduled_at):
-                scheduled_at = timezone.make_aware(scheduled_at)
+        scheduled_at = _parse_schedule(scheduled_at_raw)
+        # Per-channel times: each selected channel publishes at its own time, and the
+        # post's time is the earliest of them.
+        channel_times = {}
+        if request.POST.get("schedule_mode") == "per_channel" and len(platforms) > 1:
+            channel_times = {
+                plat: _parse_schedule(request.POST.get(f"scheduled_at_{plat}", ""))
+                for plat in platforms
+            }
+            if all(channel_times.values()):
+                scheduled_at = min(channel_times.values())
+            else:
+                scheduled_at = None
+            channel_times = {p: t for p, t in channel_times.items() if t}
 
         action = request.POST.get("action", "draft")
         if action == "schedule" and not scheduled_at:
@@ -1134,7 +1244,7 @@ def post_new(request):
         if not post.pk:
             post.created_by = request.user
 
-        from .services import initialize_post_with_variants
+        from .services import apply_schedule, initialize_post_with_variants
 
         review_blocked = False
         try:
@@ -1150,6 +1260,9 @@ def post_new(request):
                     review_blocked = post.status != ContentPost.Status.DRAFT
                     post.status = ContentPost.Status.DRAFT
                     post.save(update_fields=["status", "approval_status", "updated_at"])
+                # After the review check, so a post held for review keeps its channels
+                # in draft instead of letting the scheduler pick them up.
+                apply_schedule(post, channel_times)
         except ValueError as exc:
             messages.error(request, f"Failed to initialize post: {exc!s}")
             return redirect("publishing:post-new")
@@ -1205,6 +1318,18 @@ def post_new(request):
         initial_scheduled = parse_datetime(request.GET.get("scheduled_at", ""))
     elif timezone.is_aware(initial_scheduled):
         initial_scheduled = timezone.localtime(initial_scheduled)
+    # Prefill each channel's own time; show the per-channel inputs when they differ.
+    channel_times = {}
+    if existing_post:
+        for v in existing_post.variants.exclude(
+            status=ContentPostVariant.Status.CANCELLED
+        ):
+            if v.scheduled_at:
+                channel_times[v.platform] = timezone.localtime(v.scheduled_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                )
+    from apps.accounts.business_hours import DEFAULT_TIMEZONE, workspace_timezone
+
     return render(
         request,
         "publishing/post_new.html",
@@ -1228,6 +1353,8 @@ def post_new(request):
                 "scheduled_at": initial_scheduled.strftime("%Y-%m-%dT%H:%M")
                 if initial_scheduled
                 else "",
+                "channel_times": channel_times,
+                "per_channel": len(set(channel_times.values())) > 1,
             },
             "goal_choices": CAPTION_GOAL_CHOICES,
             # Review-only actions until the post holds a still-valid approval; an approved
@@ -1235,11 +1362,13 @@ def post_new(request):
             "review_gate": requires_review and not approved,
             "approved_for_publish": requires_review and approved,
             "current_tz_name": timezone.get_current_timezone_name(),
+            "tz_is_default": workspace_timezone(account) == DEFAULT_TIMEZONE,
         },
     )
 
 
 @login_required
+@_in_workspace_tz
 def post_detail(request, pk):
     account = get_current_account(request)
     if account is None:
@@ -1290,6 +1419,7 @@ def post_delete(request, pk):
 
 @login_required
 @require_POST
+@_in_workspace_tz
 def post_retry(request, pk):
     account = get_current_account(request)
     if account is None:
@@ -1303,20 +1433,20 @@ def post_retry(request, pk):
     # Validate scheduled_at is in the future (or allow override via POST)
     scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
     if scheduled_at_raw:
-        from django.utils.dateparse import parse_datetime
-
-        new_scheduled = parse_datetime(scheduled_at_raw)
-        if new_scheduled and timezone.is_naive(new_scheduled):
-            new_scheduled = timezone.make_aware(new_scheduled)
-        post.scheduled_at = new_scheduled
+        post.scheduled_at = _parse_schedule(scheduled_at_raw)
 
     if not post.scheduled_at or post.scheduled_at <= timezone.now():
         # Default to 2 minutes from now
         post.scheduled_at = timezone.now() + datetime.timedelta(minutes=2)
 
+    from .services import apply_schedule
+
     post.status = ContentPost.Status.SCHEDULED
     post.error = ""
-    post.save(update_fields=["status", "error", "scheduled_at"])
+    with transaction.atomic():
+        post.save(update_fields=["status", "error", "scheduled_at"])
+        # Every channel that hasn't gone out is retried at the new time.
+        apply_schedule(post)
     messages.success(request, "Post rescheduled for retry.")
     return redirect("publishing:post-detail", pk=post.pk)
 
@@ -1421,6 +1551,68 @@ def post_retry_variant(request, pk, platform):
 
 @login_required
 @require_POST
+@_in_workspace_tz
+def variant_reschedule(request, pk, platform):
+    """Give one channel its own publish time, leaving the post's other channels as they are."""
+    from .services import reschedule_variant
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+    detail = redirect("publishing:post-detail", pk=post.pk)
+
+    when = _parse_schedule(request.POST.get("scheduled_at", ""))
+    if when is None:
+        messages.error(request, "Choose a date and time for this channel.")
+        return detail
+    if when <= timezone.now():
+        messages.error(request, "Choose a time in the future.")
+        return detail
+    if not post.is_approval_valid():
+        messages.error(
+            request, "This post needs an approved review before it can be scheduled."
+        )
+        return detail
+
+    Status = ContentPostVariant.Status
+    with transaction.atomic():
+        post = ContentPost.objects.select_for_update().get(pk=post.pk)
+        variant = post.variants.select_for_update().filter(platform=platform).first()
+        allowed = (
+            variant is not None
+            and platform in (post.platforms or [])
+            and (
+                variant.status == Status.SCHEDULED
+                or (
+                    variant.status == Status.DRAFT
+                    and post.status
+                    in (ContentPost.Status.SCHEDULED, ContentPost.Status.PUBLISHING)
+                )
+            )
+        )
+        if not allowed:
+            messages.error(
+                request, "Only a channel that hasn't gone out can be rescheduled."
+            )
+            return detail
+        variant.last_error = ""
+        variant.save(update_fields=["last_error"])
+        reschedule_variant(variant, when)
+
+    from django.utils.formats import date_format
+
+    local = timezone.localtime(when)
+    messages.success(
+        request,
+        f"{variant.get_platform_display()} goes out "
+        f"{date_format(local, 'N j')}, {local:%H:%M}.",
+    )
+    return detail
+
+
+@login_required
+@require_POST
 def post_cancel(request, pk):
     account = get_current_account(request)
     if account is None:
@@ -1431,9 +1623,18 @@ def post_cancel(request, pk):
         messages.error(request, "Only scheduled posts can be cancelled.")
         return redirect("publishing:post-detail", pk=post.pk)
 
-    post.status = ContentPost.Status.CANCELLED
-    post.save(update_fields=["status"])
-    messages.success(request, "Post cancelled.")
+    from .services import cancel_post
+
+    with transaction.atomic():
+        cancel_post(post)
+    post.refresh_from_db(fields=["status"])
+    if post.status == ContentPost.Status.CANCELLED:
+        messages.success(request, "Post cancelled.")
+    else:
+        messages.success(
+            request,
+            "Channels still waiting were cancelled. Channels already live stay published.",
+        )
     return redirect("publishing:post-detail", pk=post.pk)
 
 
@@ -1449,9 +1650,10 @@ def post_reopen(request, pk):
         messages.error(request, "Only cancelled posts can be reopened.")
         return redirect("publishing:post-detail", pk=post.pk)
 
-    post.status = ContentPost.Status.DRAFT
-    post.scheduled_at = None
-    post.save(update_fields=["status", "scheduled_at"])
+    from .services import reopen_post
+
+    with transaction.atomic():
+        reopen_post(post)
     messages.success(request, "Post reopened as draft.")
     return redirect("publishing:post-detail", pk=post.pk)
 
