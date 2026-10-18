@@ -85,7 +85,7 @@ def _enrich_contact_profile(
     access_token = instagram_account.access_token
     if not access_token:
         return
-    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    version = settings.INSTAGRAM_GRAPH_VERSION
     try:
         resp = requests.get(
             f"https://graph.instagram.com/{version}/{ig_contact.instagram_scoped_id}",

@@ -24,7 +24,7 @@ class EmbeddedSignupError(Exception):
 
 
 def _version() -> str:
-    return getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
+    return settings.WHATSAPP_GRAPH_VERSION
 
 
 def exchange_code_for_token(code: str, redirect_uri: str | None = None) -> str:

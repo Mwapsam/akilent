@@ -4,7 +4,7 @@ Uses Meta's Instagram Login for Business API:
   Auth dialog:    https://www.instagram.com/oauth/authorize
   Token exchange: https://api.instagram.com/oauth/access_token   (POST, short-lived)
   Long-lived:     https://graph.instagram.com/access_token       (GET with query params, 60 days)
-  Account info:   https://graph.instagram.com/v21.0/me
+  Account info:   https://graph.instagram.com/{version}/me
 
 This is distinct from the Facebook Login flow used by WhatsApp.  The token
 returned here is scoped directly to the Instagram Business Account — no Facebook
@@ -154,7 +154,7 @@ def discover_instagram_account(access_token: str) -> dict:
 
     Raises InstagramOAuthError if the /me call fails or returns no ID.
     """
-    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    version = settings.INSTAGRAM_GRAPH_VERSION
     # Meta requires access_token as a query param (not Authorization header) and a versioned URL.
     # user_id is the actual IG account ID used in webhooks; id is the app-scoped ID.
     resp = requests.get(
@@ -193,7 +193,7 @@ def subscribe_ig_account_to_webhooks(ig_user_id: str, access_token: str) -> bool
     Uses the Instagram Graph API — works for Instagram Business Login accounts
     that have no linked Facebook Page.  Returns True on success.
     """
-    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    version = settings.INSTAGRAM_GRAPH_VERSION
     resp = requests.post(
         f"{GRAPH_IG}/{version}/{ig_user_id}/subscribed_apps",
         params={
@@ -218,7 +218,7 @@ def unsubscribe_ig_account_from_webhooks(ig_user_id: str, access_token: str) -> 
     Best-effort: returns False instead of raising, so a dead token never blocks
     a business from disconnecting.
     """
-    version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+    version = settings.INSTAGRAM_GRAPH_VERSION
     try:
         resp = requests.delete(
             f"{GRAPH_IG}/{version}/{ig_user_id}/subscribed_apps",

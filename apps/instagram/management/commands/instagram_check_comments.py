@@ -34,7 +34,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         out = self.stdout.write
         since = timezone.now() - timedelta(days=7)
-        version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+        version = settings.INSTAGRAM_GRAPH_VERSION
 
         from apps.whatsapp.tasks import _automation_events_enabled
 

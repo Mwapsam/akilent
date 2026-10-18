@@ -90,7 +90,7 @@ class Command(BaseCommand):
             out(f"  business ig_id={recipient}  customer sender_id={sender}")
 
         account = used.instagram_account
-        version = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+        version = settings.INSTAGRAM_GRAPH_VERSION
         token = account.access_token or ""
         out("\nWhat the reply token says about itself (GET /me):")
         out("  " + _get(f"{GRAPH_IG}/{version}/me", token, "id,user_id,username"))

@@ -157,6 +157,34 @@ class ConsentKeywordTest(TestCase):
         self.assertTrue(ack.payload.get("_consent_ack"))
         self.assertEqual(ack.status, OutboundMessage.Status.SENT)
 
+    def test_stop_still_applies_when_the_first_attempt_failed_part_way(self):
+        """A failure after the message was saved must not make the retry skip STOP."""
+        from apps.whatsapp import tasks
+        from apps.whatsapp.models import WebhookEventLog
+
+        self._ingest(_inbound_text("Hello", msg_id="wamid.A"))
+        real = tasks.project_to_inbox
+        with patch.object(
+            tasks, "project_to_inbox", side_effect=RuntimeError("db hiccup")
+        ) as projection:
+            view = WhatsAppWebhookView()
+            view.post(_signed_post(_inbound_text("STOP", msg_id="wamid.B")))
+            event = WebhookEventLog.objects.get(processed=False)
+            with self.assertRaises(Exception):
+                process_whatsapp_event(event.id)
+            projection.side_effect = None
+            projection.wraps = real
+            process_whatsapp_event(event.id)
+
+        contact = WhatsAppContact.objects.get(account=self.account)
+        self.assertEqual(contact.opt_in_status, WhatsAppContact.OptInStatus.OPTED_OUT)
+
+    def test_a_lone_cancel_is_not_an_opt_out(self):
+        self._ingest(_inbound_text("Hello", msg_id="wamid.A"))
+        self._ingest(_inbound_text("Cancel", msg_id="wamid.B"))
+        contact = WhatsAppContact.objects.get(account=self.account)
+        self.assertFalse(contact.is_opted_out)
+
     def test_send_to_opted_out_contact_is_refused(self):
         self._ingest(_inbound_text("STOP", msg_id="wamid.C"))
         contact = WhatsAppContact.objects.get(account=self.account)

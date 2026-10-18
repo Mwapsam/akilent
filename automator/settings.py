@@ -380,23 +380,27 @@ WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET")
 # onboarding link Meta gives you in the App dashboard.
 WHATSAPP_APP_ID = os.getenv("WHATSAPP_APP_ID", "")
 WHATSAPP_CONFIG_ID = os.getenv("WHATSAPP_CONFIG_ID", "")
-WHATSAPP_GRAPH_VERSION = os.getenv("WHATSAPP_GRAPH_VERSION", "v21.0")
+# Meta Graph API version. v21.0 stops working on 21 January 2027; v25.0 is supported
+# until 29 July 2028 (developers.facebook.com/docs/graph-api/changelog/versions).
+# ``or`` rather than a getenv default: an unset deploy secret arrives as an empty string.
+META_GRAPH_VERSION = "v25.0"
+WHATSAPP_GRAPH_VERSION = os.getenv("WHATSAPP_GRAPH_VERSION") or META_GRAPH_VERSION
 
 # Instagram Business Login (OAuth connect flow).
 # Same Meta app as WhatsApp — fall back to WHATSAPP_APP_ID/SECRET if the
 # Instagram-specific vars aren't set separately.
 INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID", "") or WHATSAPP_APP_ID
 INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET") or WHATSAPP_APP_SECRET
-INSTAGRAM_GRAPH_VERSION = os.getenv("INSTAGRAM_GRAPH_VERSION", "v21.0")
+INSTAGRAM_GRAPH_VERSION = os.getenv("INSTAGRAM_GRAPH_VERSION") or META_GRAPH_VERSION
 INSTAGRAM_VERIFY_TOKEN = os.getenv("INSTAGRAM_VERIFY_TOKEN", "")
 
 # Inbound keyword handling for messaging consent. A single-word inbound text
 # matching (case-insensitively) one of these opts the contact out / back in.
+# Kept to words that only mean "stop messaging me": a lone "Cancel" or "End" is
+# usually about an order or booking, and used to opt the customer out silently.
 WHATSAPP_STOP_KEYWORDS = [
     k.strip().upper()
-    for k in os.getenv(
-        "WHATSAPP_STOP_KEYWORDS", "STOP,UNSUBSCRIBE,CANCEL,END,QUIT"
-    ).split(",")
+    for k in os.getenv("WHATSAPP_STOP_KEYWORDS", "STOP,UNSUBSCRIBE,STOPALL").split(",")
     if k.strip()
 ]
 WHATSAPP_START_KEYWORDS = [
@@ -666,6 +670,10 @@ CELERY_BEAT_SCHEDULE = {
     "replay-held-webhooks": {
         "task": "apps.core.webhook_replay.replay_held_webhooks",
         "schedule": 120.0,  # backstop for the replay kicked off when a channel is switched on
+    },
+    "sweep-stuck-webhooks": {
+        "task": "apps.core.webhook_replay.sweep_stuck_webhooks",
+        "schedule": 600.0,  # events stored but never processed (lost enqueue, retries spent)
     },
     "generate-insights": {
         "task": "apps.insights.tasks.generate_insights",

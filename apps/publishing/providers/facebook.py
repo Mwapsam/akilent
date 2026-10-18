@@ -22,7 +22,7 @@ from .errors import MetaPublishError
 
 logger = logging.getLogger(__name__)
 
-_GRAPH_VERSION = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+_GRAPH_VERSION = settings.INSTAGRAM_GRAPH_VERSION
 _BASE = f"https://graph.facebook.com/{_GRAPH_VERSION}"
 
 

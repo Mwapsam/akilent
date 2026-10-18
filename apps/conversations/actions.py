@@ -159,6 +159,12 @@ class ReplyAction(Action):
             if outbound is None:
                 outbound = OutboundMessage.objects.get(idempotency_key=key)
             if not send_outbound(outbound):
+                outbound.refresh_from_db()
+                if outbound.status != OutboundMessage.Status.FAILED:
+                    # A transient failure: the outbox drain retries it with backoff. Raising
+                    # here would invite the user to send it again, and the customer would
+                    # then get it twice. Same as WhatsApp, where a reply is always queued.
+                    return {"outbound_message_id": None, "queued": True}
                 raise ActionError(f"Instagram send failed: {outbound.last_error}")
             # send_outbound already recorded it; this returns that same Message.
             spine_msg = record_sent_message(outbound)
@@ -256,9 +262,15 @@ class ReplyMediaAction(Action):
                 idempotency_key=key,
                 media=media,
             ) or OutboundMessage.objects.get(idempotency_key=key)
+            queued = False
             if not send_outbound(outbound):
-                raise ActionError(f"Instagram send failed: {outbound.last_error}")
-            spine_msg = record_sent_message(outbound)
+                outbound.refresh_from_db()
+                if outbound.status == OutboundMessage.Status.FAILED:
+                    raise ActionError(f"Instagram send failed: {outbound.last_error}")
+                # Transient: the outbox drain retries it (see ReplyAction). The caption
+                # still goes now, so it may arrive just before the attachment.
+                queued = True
+            spine_msg = None if queued else record_sent_message(outbound)
             # An Instagram attachment can't carry text, so a caption follows it.
             if caption.strip():
                 run_action(
@@ -268,6 +280,8 @@ class ReplyMediaAction(Action):
                     body=caption,
                     idempotency_key=f"{key}:caption",
                 )
+            if queued:
+                return {"outbound_message_id": None, "queued": True}
             return {"outbound_message_id": spine_msg.id if spine_msg else None}
 
         raise ActionError(

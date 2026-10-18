@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 
 import requests
+from django.conf import settings
 
 from .base import BaseInstagramProvider, EligibilityResult, SendResult
 
 logger = logging.getLogger(__name__)
 
-GRAPH_API_VERSION = "v21.0"
+GRAPH_API_VERSION = settings.INSTAGRAM_GRAPH_VERSION
 # Instagram Business Login tokens (IGAA…) only work with graph.instagram.com.
 # graph.facebook.com requires a Facebook User/Page token (EAA…).
 GRAPH_IG_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"

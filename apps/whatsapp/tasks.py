@@ -472,6 +472,10 @@ def _process_status_update(value: dict, status_obj: dict) -> None:
             direction=MessageLog.Direction.OUTBOUND,
         )
         status_changed = log.apply_status_update(new_status)
+        if new_status == "failed":
+            # Must land on the OutboundMessage before the projection below reads its
+            # error code for the inbox's failure reason.
+            _record_delivery_failure(log, status_obj, phone_number_id)
 
         # Keep the spine message in step with the provider log (idempotent; also repairs an
         # earlier failed projection). This is what flips a failed send back to "waiting".
@@ -497,9 +501,69 @@ def _process_status_update(value: dict, status_obj: dict) -> None:
                 logger.debug("_handle_status_update: failed to publish event: %s", exc)
 
     except MessageLog.DoesNotExist:
+        # Meta can report a status before the drain has saved the send's message id.
+        # While a send is in flight, retry the event (handlers are idempotent) rather
+        # than drop it: an early "failed" would otherwise be lost for good.
+        if OutboundMessage.objects.filter(
+            account=account, status=OutboundMessage.Status.SENDING
+        ).exists():
+            raise StatusBeforeSend(
+                f"status for {message_id} arrived before its send was recorded"
+            ) from None
         logger.debug(
             "_handle_status_update: no outbound log for message_id=%s", message_id
         )
+
+
+class StatusBeforeSend(Exception):
+    """A status webhook arrived for a send that hasn't recorded its message id yet."""
+
+
+# Meta: the person has stopped accepting marketing messages from this business.
+_MARKETING_STOPPED = "131050"
+
+
+def _record_delivery_failure(
+    log: MessageLog, status_obj: dict, phone_number_id: str
+) -> None:
+    """Act on a "failed" status: Meta accepted the send, then couldn't deliver it.
+
+    Most delivery errors (131047 window closed, 131026 undeliverable, 131049 / 131050
+    marketing limits) only ever arrive this way, never as a send-time error, so this is
+    where the message, its campaign recipient and any waiting workflow learn of them.
+    """
+    error = (status_obj.get("errors") or [{}])[0] or {}
+    code = str(error.get("code") or "")
+    title = error.get("title") or error.get("message") or "Meta couldn't deliver it"
+    details = (error.get("error_data") or {}).get("details") or ""
+    reason = f"{code}: {title}" if code else title
+    if details and details != title:
+        reason = f"{reason} ({details})"
+
+    outbound = (
+        OutboundMessage.objects.filter(message_log=log)
+        .select_related("account", "contact")
+        .first()
+    )
+    if outbound is not None and outbound.status != OutboundMessage.Status.FAILED:
+        outbound.status = OutboundMessage.Status.FAILED
+        outbound.error_code = code[:32]
+        outbound.last_error = reason[:5000]
+        outbound.next_attempt_at = None
+        outbound.save(
+            update_fields=["status", "error_code", "last_error", "next_attempt_at"]
+        )
+        _notify_terminal_failure(outbound, phone_number_id=phone_number_id)
+
+    if code == _MARKETING_STOPPED:
+        contact = log.contact
+        if contact.opt_in_status == WhatsAppContact.OptInStatus.OPTED_IN:
+            # Marketing consent is withdrawn; service replies inside the window still go.
+            contact.opt_in_status = WhatsAppContact.OptInStatus.UNKNOWN
+            contact.save(update_fields=["opt_in_status"])
+            contact._record_on_contact(
+                "whatsapp.marketing_stopped", {"reason": reason[:255]}
+            )
 
 
 def _get_provider_for_account(account):

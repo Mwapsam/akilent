@@ -94,3 +94,91 @@ def _replay_instagram() -> int:
             logger.exception("replay: could not enqueue Instagram webhook %s", pk)
             break
     return released
+
+
+# ---------------------------------------------------------------------------
+# Stuck events: stored and acknowledged, but never processed
+# ---------------------------------------------------------------------------
+
+# An event this old that still isn't processed was lost on the way to (or out of)
+# the worker: an enqueue dropped while the broker was down, a killed process, or
+# Celery's own retries running out on a transient error.
+_STUCK_AFTER_MINUTES = 10
+# Total processing attempts before an event is left for a person to look at.
+_MAX_SWEEP_ATTEMPTS = 6
+
+
+@shared_task(name="apps.core.webhook_replay.sweep_stuck_webhooks")
+def sweep_stuck_webhooks() -> dict:
+    """Re-enqueue webhook events that were stored but never processed.
+
+    Bounded by each event's attempt count, so an event that keeps failing stops
+    being retried. Also covers a WhatsApp webhook that arrived during Embedded
+    Signup before its number was saved (tenant not found yet): it is retried once
+    the number exists. Processing is idempotent, so a re-enqueue is always safe.
+    """
+    invalidate_channel_cache()
+    result = {}
+    if channel_state("whatsapp") == "enabled":
+        result["whatsapp"] = _sweep_whatsapp()
+    if channel_state("instagram") == "enabled":
+        result["instagram"] = _sweep_instagram()
+    return result
+
+
+def _stuck_cutoff():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    return timezone.now() - timedelta(minutes=_STUCK_AFTER_MINUTES)
+
+
+def _sweep_whatsapp() -> int:
+    from apps.whatsapp.models import WebhookEventLog
+    from apps.whatsapp.tasks import process_whatsapp_event
+
+    ids = list(
+        WebhookEventLog.objects.filter(
+            source=WebhookEventLog.Source.WHATSAPP,
+            processed=False,
+            held=False,
+            attempts__lt=_MAX_SWEEP_ATTEMPTS,
+            created_at__lt=_stuck_cutoff(),
+        )
+        .order_by("created_at", "id")
+        .values_list("id", flat=True)[:_BATCH]
+    )
+    return _enqueue_all(ids, process_whatsapp_event, "WhatsApp")
+
+
+def _sweep_instagram() -> int:
+    from apps.instagram.models.webhook import WebhookEventLog
+    from apps.instagram.tasks import process_instagram_event
+
+    Status = WebhookEventLog.Status
+    ids = list(
+        WebhookEventLog.objects.filter(
+            status__in=[Status.RECEIVED, Status.PROCESSING, Status.FAILED],
+            instagram_account__isnull=False,  # unresolved: no business to process it for
+            attempts__lt=_MAX_SWEEP_ATTEMPTS,
+            received_at__lt=_stuck_cutoff(),
+        )
+        .order_by("received_at", "id")
+        .values_list("id", flat=True)[:_BATCH]
+    )
+    return _enqueue_all(ids, process_instagram_event, "Instagram")
+
+
+def _enqueue_all(ids, task, label: str) -> int:
+    swept = 0
+    for pk in ids:
+        try:
+            task.delay(pk)
+        except Exception:
+            logger.exception("sweep: could not enqueue %s webhook %s", label, pk)
+            break  # broker is down; the next sweep picks them up
+        swept += 1
+    if swept:
+        logger.warning("sweep: re-enqueued %s stuck %s webhook events", swept, label)
+    return swept

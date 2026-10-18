@@ -13,8 +13,8 @@ TRIGGER_LABELS = {
     "contact.updated": "When a customer's details change",
     "email.opened": "When a customer opens an email",
     "email.clicked": "When a customer clicks a link in an email",
-    "whatsapp.received": "When a customer messages you",
-    "conversation.message_received": "When a customer messages you",
+    "whatsapp.received": "When a customer messages you on WhatsApp",
+    "conversation.message_received": "When a customer messages you (any channel)",
     "lead.created": "When someone becomes an interested customer",
     "lead.status_changed": "When an interested customer's status changes",
     "lead.qualified": "When an interested customer is marked qualified",
@@ -22,7 +22,7 @@ TRIGGER_LABELS = {
 }
 
 STEP_LABELS = {
-    "reply_text": "Reply on WhatsApp",
+    "reply_text": "Reply in the conversation",
     "send_buttons": "Ask with buttons",
     "send_list": "Ask with a list",
     "wait_for_reply": "Wait for their answer",

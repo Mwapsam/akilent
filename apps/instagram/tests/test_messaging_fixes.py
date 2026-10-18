@@ -660,6 +660,45 @@ class TestDmWindowEnforcedOnSend(InstagramCase):
             ReplyAction().execute({}, conversation=conversation, body="Late reply")
 
 
+class TestReplyTransientFailure(InstagramCase):
+    def test_transient_failure_is_left_queued_not_reported_as_an_error(self):
+        from apps.conversations.actions import ReplyAction
+        from apps.conversations.models import Conversation
+        from apps.instagram.models import OutboundMessage
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        conversation = Conversation.objects.get(channel="instagram")
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider.send_message",
+            return_value=SendResult(
+                success=False, error="[2] temporary", terminal=False
+            ),
+        ):
+            result = ReplyAction().execute({}, conversation=conversation, body="Hi!")
+        self.assertTrue(result.get("queued"))
+        outbound = OutboundMessage.objects.get(body="Hi!")
+        self.assertEqual(outbound.status, OutboundMessage.Status.QUEUED)
+
+    def test_permanent_failure_is_still_an_error(self):
+        from apps.conversations.actions import ActionError, ReplyAction
+        from apps.conversations.models import Conversation
+
+        with patch(AUTOMATION_ON, return_value=False):
+            _deliver(self.dm("Hello"))
+        conversation = Conversation.objects.get(channel="instagram")
+        with (
+            patch(
+                "apps.instagram.providers.meta.MetaInstagramProvider.send_message",
+                return_value=SendResult(
+                    success=False, error="[10] nope", terminal=True
+                ),
+            ),
+            self.assertRaises(ActionError),
+        ):
+            ReplyAction().execute({}, conversation=conversation, body="Hi!")
+
+
 class TestWebhookSignatureWithoutSecret(TestCase):
     """With no app secret configured, only DEBUG may skip signature checks."""
 

@@ -31,7 +31,7 @@ _GRAPH_HOST = "https://graph.facebook.com"
 
 def _graph_api_base() -> str:
     """Graph API base URL, versioned from a single setting (WHATSAPP_GRAPH_VERSION)."""
-    version = getattr(settings, "WHATSAPP_GRAPH_VERSION", "v21.0")
+    version = settings.WHATSAPP_GRAPH_VERSION
     return f"{_GRAPH_HOST}/{version}"
 
 

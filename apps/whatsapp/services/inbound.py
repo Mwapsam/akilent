@@ -90,81 +90,91 @@ class WhatsAppInboundService:
             self.message, msg_type, extract_reply
         )
 
-        # Step 4 — get_or_create MessageLog (idempotency anchor)
-        valid_types = {c[0] for c in MessageLog.MessageType.choices}
-        reply = extract_reply(self.message)
-        message_log, created = MessageLog.objects.get_or_create(
-            account=account,
-            message_id=self.message.get("id"),
-            defaults={
-                "conversation": wa_conversation,
-                "contact": contact_record,
-                "direction": MessageLog.Direction.INBOUND,
-                "message_type": (
-                    MessageLog.MessageType.TEXT
-                    if reply is not None
-                    else msg_type
-                    if msg_type in valid_types
-                    else MessageLog.MessageType.UNKNOWN
-                ),
-                "content": content,
-                "media_id": media_id,
-                "media_mime_type": media_mime_type,
-                "status": MessageLog.Status.DELIVERED,
-                "timestamp": msg_ts,
-                "raw_payload": self.event.payload,
-            },
-        )
+        # Steps 4-6 commit together. The MessageLog is the idempotency anchor: if it were
+        # saved and a later step then failed, the retry would see it as already handled
+        # and skip STOP handling, mark-read and MessageReceived for good.
+        from django.db import transaction
 
-        contact_record.last_message_at = msg_ts
-        contact_record.save(update_fields=["last_message_at"])
-
-        if created and media_id:
-            # Fetch now so a photo or voice note shows in the inbox within seconds,
-            # not at the next once-a-minute sweep.
-            from django.db import transaction
-
-            from apps.whatsapp.tasks import download_media
-
-            transaction.on_commit(download_media.delay)
-
-        # Step 5 — project to spine (canonical contact + Conversation + Message)
-        try:
-            enroll = _automation_events_enabled()
-        except Exception:
-            enroll = False
-        project_to_inbox(
-            account,
-            contact_record,
-            wa_conversation,
-            message_log,
-            enroll_workflows=enroll,
-        )
-
-        # Step 6 — consent keywords, auto-reply, mark_read, domain event
-        if created and msg_type == "text":
-            _apply_consent_keyword(
-                contact_record, wa_conversation, content, inbound_log_id=message_log.pk
+        with transaction.atomic():
+            # Step 4 — get_or_create MessageLog (idempotency anchor)
+            valid_types = {c[0] for c in MessageLog.MessageType.choices}
+            reply = extract_reply(self.message)
+            message_log, created = MessageLog.objects.get_or_create(
+                account=account,
+                message_id=self.message.get("id"),
+                defaults={
+                    "conversation": wa_conversation,
+                    "contact": contact_record,
+                    "direction": MessageLog.Direction.INBOUND,
+                    "message_type": (
+                        MessageLog.MessageType.TEXT
+                        if reply is not None
+                        else msg_type
+                        if msg_type in valid_types
+                        else MessageLog.MessageType.UNKNOWN
+                    ),
+                    "content": content,
+                    "media_id": media_id,
+                    "media_mime_type": media_mime_type,
+                    "status": MessageLog.Status.DELIVERED,
+                    "timestamp": msg_ts,
+                    "raw_payload": self.event.payload,
+                },
             )
 
-        if created and not contact_record.is_opted_out:
-            _auto_reply_during_setup(phone_number_id, contact_record)
+            contact_record.last_message_at = msg_ts
+            contact_record.save(update_fields=["last_message_at"])
 
-        if created and self.message.get("id"):
-            from django.conf import settings
+            if created and media_id:
+                # Fetch now so a photo or voice note shows in the inbox within seconds,
+                # not at the next once-a-minute sweep.
+                from apps.whatsapp.tasks import download_media
 
-            if getattr(settings, "WHATSAPP_MARK_READ_ENABLED", True):
-                mark_read.delay(account.id, self.message["id"])
+                transaction.on_commit(download_media.delay)
 
-        if created:
-            self._publish_message_received(
+            # Step 5 — project to spine (canonical contact + Conversation + Message)
+            try:
+                enroll = _automation_events_enabled()
+            except Exception:
+                enroll = False
+            project_to_inbox(
                 account,
                 contact_record,
-                msg_ts,
-                msg_type,
-                content,
-                message_id=self.message.get("id") or "",
+                wa_conversation,
+                message_log,
+                enroll_workflows=enroll,
             )
+
+            # Step 6 — consent keywords, auto-reply, mark_read, domain event
+            if created and msg_type == "text":
+                _apply_consent_keyword(
+                    contact_record,
+                    wa_conversation,
+                    content,
+                    inbound_log_id=message_log.pk,
+                )
+
+            if created and not contact_record.is_opted_out:
+                _auto_reply_during_setup(phone_number_id, contact_record)
+
+            if created and self.message.get("id"):
+                from django.conf import settings
+
+                if getattr(settings, "WHATSAPP_MARK_READ_ENABLED", True):
+                    message_id = self.message["id"]
+                    transaction.on_commit(
+                        lambda: mark_read.delay(account.id, message_id)
+                    )
+
+            if created:
+                self._publish_message_received(
+                    account,
+                    contact_record,
+                    msg_ts,
+                    msg_type,
+                    content,
+                    message_id=self.message.get("id") or "",
+                )
 
     # ------------------------------------------------------------------
     # Helpers

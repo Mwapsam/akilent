@@ -53,7 +53,7 @@ PLANS = [
         "max_conversations_per_month": 5000,
         "max_emails_per_month": 50000,
         "max_automation_rules": 50,
-        "max_whatsapp_numbers": 3,
+        "max_whatsapp_numbers": 1,  # one until per-number routing (billing 0025)
         "trial_days": 0,
         "has_priority_support": True,
         "email_apis": True,
@@ -74,7 +74,7 @@ PLANS = [
         "max_conversations_per_month": -1,
         "max_emails_per_month": -1,
         "max_automation_rules": -1,
-        "max_whatsapp_numbers": 10,
+        "max_whatsapp_numbers": 1,  # one until per-number routing (billing 0025)
         "trial_days": 0,
         "has_priority_support": True,
         "email_apis": True,

@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 _FB_GRAPH = "https://graph.facebook.com"
 # One Graph version for the whole publishing flow (OAuth and the providers).
-_FB_GRAPH_VERSION = getattr(settings, "INSTAGRAM_GRAPH_VERSION", "v21.0")
+_FB_GRAPH_VERSION = settings.INSTAGRAM_GRAPH_VERSION
 _FB_OAUTH_STATE_TTL = datetime.timedelta(minutes=10)
 _FB_PAGE_CHOICES_KEY = "fb_page_choices"
 
