@@ -83,3 +83,44 @@ def test_broker_outage_stops_the_sweep_without_raising():
     ) as delay:
         result = webhook_replay.sweep_stuck_webhooks()
     assert delay.call_count == 1 and result["whatsapp"] == 0
+
+
+@pytest.mark.django_db
+def test_old_webhook_bodies_are_pruned_but_held_and_recent_ones_kept():
+    from apps.whatsapp.models import WebhookEventLog
+
+    old_done = _wa_event(age_minutes=31 * 24 * 60, processed=True)
+    old_failed = _wa_event(age_minutes=31 * 24 * 60)  # unprocessed: kept 90 days
+    ancient_failed = _wa_event(age_minutes=91 * 24 * 60)
+    held = _wa_event(age_minutes=200 * 24 * 60, held=True)
+    recent = _wa_event(age_minutes=60, processed=True)
+
+    result = webhook_replay.prune_webhook_logs()
+
+    remaining = set(WebhookEventLog.objects.values_list("pk", flat=True))
+    assert remaining == {old_failed.pk, held.pk, recent.pk}
+    assert old_done.pk not in remaining and ancient_failed.pk not in remaining
+    assert result["whatsapp"] == 2
+
+
+@pytest.mark.django_db
+def test_old_processed_instagram_events_are_pruned():
+    from apps.instagram.models.webhook import WebhookEventLog
+
+    WebhookEventLog.objects.create(
+        event_id="old",
+        event_type="message",
+        raw_payload={},
+        status=WebhookEventLog.Status.PROCESSED,
+    )
+    WebhookEventLog.objects.create(
+        event_id="new",
+        event_type="message",
+        raw_payload={},
+        status=WebhookEventLog.Status.PROCESSED,
+    )
+    WebhookEventLog.objects.filter(event_id="old").update(
+        received_at=timezone.now() - timedelta(days=31)
+    )
+    webhook_replay.prune_webhook_logs()
+    assert list(WebhookEventLog.objects.values_list("event_id", flat=True)) == ["new"]

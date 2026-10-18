@@ -105,3 +105,57 @@ class SyncTemplatesTest(TestCase):
         self.assertEqual(tpl.approval_status, MessageTemplate.ApprovalStatus.APPROVED)
         event.refresh_from_db()
         self.assertTrue(event.processed)
+
+
+class TemplateLanguageFallbackTest(TestCase):
+    """A status for a language we don't have exactly must not hit every language."""
+
+    setUp = SyncTemplatesTest.setUp
+
+    def _status(self, language, event="REJECTED"):
+        ev = WebhookEventLog.objects.create(
+            source=WebhookEventLog.Source.WHATSAPP,
+            event_type="message_template_status_update",
+            payload={
+                "entry": [
+                    {
+                        "id": "WABA1",
+                        "changes": [
+                            {
+                                "field": "message_template_status_update",
+                                "value": {
+                                    "message_template_name": "promo",
+                                    "message_template_language": language,
+                                    "event": event,
+                                },
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+        process_whatsapp_event(ev.id)
+
+    def _tpl(self, language):
+        return MessageTemplate.objects.create(
+            account=self.account,
+            name=f"Promo {language}",
+            whatsapp_template_name="promo",
+            language_code=language,
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        )
+
+    def test_single_language_template_matches_by_name(self):
+        tpl = self._tpl("en")
+        self._status("en_US")
+        tpl.refresh_from_db()
+        self.assertEqual(tpl.approval_status, MessageTemplate.ApprovalStatus.REJECTED)
+
+    def test_other_languages_are_not_changed(self):
+        en, fr = self._tpl("en"), self._tpl("fr")
+        self._status("pt_BR")
+        for tpl in (en, fr):
+            tpl.refresh_from_db()
+            self.assertEqual(
+                tpl.approval_status, MessageTemplate.ApprovalStatus.APPROVED
+            )

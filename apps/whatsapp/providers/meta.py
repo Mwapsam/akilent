@@ -351,6 +351,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 url,
                 data={"asset_type": "FLOW_JSON"},
                 files={"file": ("flow.json", file_bytes, "application/json")},
+                # Drop the session's JSON Content-Type so requests sets the multipart one,
+                # with its boundary; otherwise Meta can't parse the upload.
+                headers={"Content-Type": None},
                 timeout=30,
             )
         except requests.RequestException as e:
@@ -418,13 +421,12 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         if not self._app_id:
             raise WhatsAppProviderError("WHATSAPP_APP_ID is not configured.")
         try:
+            # The token goes in a header, never the query string: a failed request's
+            # error message (logged, and stored on the template) includes the full URL.
             start = requests.post(
                 f"{_graph_api_base()}/{self._app_id}/uploads",
-                params={  # type: ignore[arg-type]
-                    "file_length": len(content),
-                    "file_type": mime_type,
-                    "access_token": self._access_token,
-                },
+                params={"file_length": len(content), "file_type": mime_type},  # type: ignore[arg-type]
+                headers={"Authorization": f"OAuth {self._access_token}"},
                 timeout=30,
             )
             start.raise_for_status()

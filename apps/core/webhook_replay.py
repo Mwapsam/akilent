@@ -182,3 +182,54 @@ def _enqueue_all(ids, task, label: str) -> int:
     if swept:
         logger.warning("sweep: re-enqueued %s stuck %s webhook events", swept, label)
     return swept
+
+
+# ---------------------------------------------------------------------------
+# Retention: raw webhook bodies hold customers' messages, names and numbers
+# ---------------------------------------------------------------------------
+
+# Meta redelivers a webhook for at most 7 days, so a processed event is only kept
+# for diagnosis. One that never processed is kept longer, for someone to investigate.
+PROCESSED_RETENTION_DAYS = 30
+UNPROCESSED_RETENTION_DAYS = 90
+_PRUNE_BATCH = 2000
+
+
+@shared_task(name="apps.core.webhook_replay.prune_webhook_logs")
+def prune_webhook_logs() -> dict:
+    """Delete stored WhatsApp and Instagram webhook bodies past their retention.
+
+    Held events are never pruned: they are waiting for their channel to come back on.
+    Deletes in batches so one run can't hold a long lock on a large table.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from apps.instagram.models.webhook import WebhookEventLog as IGEvent
+    from apps.whatsapp.models import WebhookEventLog as WAEvent
+
+    now = timezone.now()
+    processed_before = now - timedelta(days=PROCESSED_RETENTION_DAYS)
+    unprocessed_before = now - timedelta(days=UNPROCESSED_RETENTION_DAYS)
+
+    wa = WAEvent.objects.filter(held=False).filter(
+        Q(processed=True, created_at__lt=processed_before)
+        | Q(created_at__lt=unprocessed_before)
+    )
+    ig = IGEvent.objects.exclude(status=IGEvent.Status.HELD).filter(
+        Q(status=IGEvent.Status.PROCESSED, received_at__lt=processed_before)
+        | Q(received_at__lt=unprocessed_before)
+    )
+    return {"whatsapp": _delete_in_batches(wa), "instagram": _delete_in_batches(ig)}
+
+
+def _delete_in_batches(queryset) -> int:
+    deleted = 0
+    while True:
+        ids = list(queryset.values_list("pk", flat=True)[:_PRUNE_BATCH])
+        if not ids:
+            return deleted
+        queryset.model.objects.filter(pk__in=ids).delete()
+        deleted += len(ids)

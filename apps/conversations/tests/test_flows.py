@@ -153,6 +153,21 @@ class TestMetaProviderFlowMethods:
         call_kwargs = mock_post.call_args
         assert "FLOW_JSON" in str(call_kwargs)
 
+    def test_update_flow_json_sends_a_real_multipart_body(self):
+        """The session's JSON Content-Type must not override the multipart one."""
+        provider = self._provider()
+        with patch.object(
+            provider._session,
+            "send",
+            return_value=_mock_response(200, {"success": True}),
+        ) as send:
+            provider.update_flow_json("flow_x", {"version": "3.0"})
+        prepared = send.call_args.args[0]
+        assert prepared.headers["Content-Type"].startswith(
+            "multipart/form-data; boundary="
+        )
+        assert prepared.headers["Authorization"].startswith("Bearer ")
+
     def test_update_flow_json_4xx_raises_provider_error(self):
         provider = self._provider()
         error_body = {

@@ -110,7 +110,10 @@ def discover_waba_and_phone(access_token: str) -> tuple[list[str], dict]:
         raise EmbeddedSignupError(
             (data.get("error") or {}).get("message") or "Could not verify access token."
         )
-    logger.info("discover_waba_and_phone: debug_token data=%s", token_data)
+    logger.debug(
+        "discover_waba_and_phone: token scopes=%s",
+        [s.get("scope") for s in token_data.get("granular_scopes") or []],
+    )
 
     waba_ids: list[str] = []
     for scope in token_data.get("granular_scopes") or []:

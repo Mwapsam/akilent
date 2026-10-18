@@ -44,6 +44,9 @@ jobs:
           META_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET || secrets.WHATSAPP_APP_SECRET }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
         run: |
           # An unset secret reaches the server as NAME= and the app either refuses to start
           # or silently runs with the feature off. Fail here, before anything is touched.
@@ -57,6 +60,11 @@ jobs:
             echo "Required secrets are empty:$missing"
             exit 1
           fi
+          # Not fatal, but production shouldn't run without them for long.
+          [ -z "$SENTRY_DSN" ] && echo "::warning::SENTRY_DSN is empty: errors are not reported anywhere."
+          [ -z "$BACKUP_S3_BUCKET" ] && echo "::warning::BACKUP_S3_BUCKET is empty: the database is not being backed up."
+          [ -z "$BACKUP_AWS_ACCESS_KEY_ID" ] && echo "::warning::BACKUP_AWS_ACCESS_KEY_ID is not set: backups use the main AWS keys."
+          true
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -135,8 +143,10 @@ jobs:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           AI_AUTONOMY_ENABLED: ${{ secrets.AI_AUTONOMY_ENABLED }}
           BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
-          BACKUP_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          BACKUP_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Backups should use keys that can only reach the backup bucket (docs/ops/backups.md);
+          # the main AWS keys are the fallback until BACKUP_AWS_* secrets exist.
+          BACKUP_AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
+          BACKUP_AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
           SEO_ALLOW_INDEXING: ${{ secrets.SEO_ALLOW_INDEXING }}
           GOOGLE_ANALYTICS_ID: ${{ secrets.GOOGLE_ANALYTICS_ID }}
           INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}

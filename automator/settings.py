@@ -671,6 +671,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.core.webhook_replay.replay_held_webhooks",
         "schedule": 120.0,  # backstop for the replay kicked off when a channel is switched on
     },
+    "prune-webhook-logs": {
+        "task": "apps.core.webhook_replay.prune_webhook_logs",
+        "schedule": 86400.0,  # raw webhook bodies are customer data; keep them 30/90 days
+    },
     "sweep-stuck-webhooks": {
         "task": "apps.core.webhook_replay.sweep_stuck_webhooks",
         "schedule": 600.0,  # events stored but never processed (lost enqueue, retries spent)

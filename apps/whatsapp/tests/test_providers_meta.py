@@ -128,6 +128,10 @@ class MetaProviderTest(TestCase):
         result = provider.upload_template_media(b"bytes", "image/png", "x.png")
         self.assertTrue(result.success)
         self.assertEqual(result.handle, "handle-abc")
+        # The token rides in a header: a failed request's error message includes the URL.
+        start = responses.calls[0].request
+        self.assertNotIn("access_token", start.url)
+        self.assertEqual(start.headers["Authorization"], "OAuth tok")
 
     def test_upload_template_media_requires_app_id(self):
         from apps.whatsapp.providers.base import WhatsAppProviderError

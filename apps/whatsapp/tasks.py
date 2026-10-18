@@ -142,6 +142,8 @@ def process_whatsapp_event(self, event_id: int):
             _handle_status_update(event)
         elif event.event_type == "message_template_status_update":
             _handle_template_status_update(event)
+        elif event.event_type in _ACCOUNT_HEALTH_FIELDS:
+            _handle_account_health(event)
         else:
             logger.debug(
                 "process_whatsapp_event: no handler for event_type=%s", event.event_type
@@ -1362,6 +1364,86 @@ def _handle_template_status_update(event: WebhookEventLog) -> None:
     _for_each_item(entries, _process_template_status_change)
 
 
+# Meta webhooks about the health of the business's WhatsApp account and numbers.
+_ACCOUNT_HEALTH_FIELDS = ("phone_number_quality_update", "account_update")
+# The events that put sending at risk; anything else is just logged.
+_ACCOUNT_HEALTH_ALERTS = {
+    "FLAGGED": "Meta flagged the quality of your WhatsApp number {number}. If it "
+    "doesn't improve, Meta will lower how many customers you can message each day.",
+    "DOWNGRADE": "Meta lowered the daily messaging limit of your WhatsApp number "
+    "{number} to {limit} because of its quality rating.",
+    "ACCOUNT_RESTRICTION": "Meta restricted your WhatsApp Business account. Some "
+    "messages can't be sent until the restriction ends.",
+    "ACCOUNT_VIOLATION": "Meta reported a policy violation on your WhatsApp Business "
+    "account.",
+    "DISABLED_UPDATE": "Meta disabled your WhatsApp Business account or one of its "
+    "numbers. Messages can't be sent until it's restored.",
+}
+
+
+def _handle_account_health(event: WebhookEventLog) -> None:
+    """Log Meta's quality and account webhooks, and tell the owners about the serious ones.
+
+    Without this a flagged, restricted or banned number fails silently: sends just
+    start failing. Scoped to the account(s) that own the WABA, like template updates.
+    """
+    entries = [
+        (entry, change)
+        for entry in (event.payload or {}).get("entry") or []
+        for change in entry.get("changes") or []
+    ]
+    _for_each_item(entries, _process_account_health_change)
+
+
+def _process_account_health_change(entry: dict, change: dict) -> None:
+    from django.urls import reverse
+
+    from apps.accounts.models import Account
+    from apps.accounts.notifications import notify_team
+
+    value = change.get("value") or {}
+    kind = (value.get("event") or "").upper()
+    waba_id = entry.get("id")
+    number = value.get("display_phone_number") or value.get("phone_number") or ""
+    logger.warning(
+        "whatsapp account health: field=%s event=%s waba=%s number=%s value=%s",
+        change.get("field"),
+        kind,
+        waba_id,
+        number,
+        {k: v for k, v in value.items() if k != "display_phone_number"},
+    )
+    template = _ACCOUNT_HEALTH_ALERTS.get(kind)
+    if template is None or not waba_id:
+        return
+    account_ids = set(
+        WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list(
+            "account_id", flat=True
+        )
+    )
+    if not account_ids:
+        raise TenantResolutionError(f"No WhatsApp account owns WABA id {waba_id!r}")
+    limit = (value.get("current_limit") or "").replace(
+        "TIER_", ""
+    ).lower() or "a lower tier"
+    text = template.format(number=number or "", limit=limit).replace("  ", " ")
+    for account in Account.objects.filter(pk__in=account_ids):
+        try:
+            notify_team(
+                account,
+                to="owners",
+                subject="Action needed on your WhatsApp account",
+                text=text,
+                path=reverse("whatsapp-numbers"),
+                reason=(
+                    "You're getting this because Meta sent Akilent a warning about "
+                    "your WhatsApp account."
+                ),
+            )
+        except Exception:
+            logger.exception("account health alert failed for account=%s", account.pk)
+
+
 def _process_template_status_change(entry: dict, change: dict) -> None:
     value = change.get("value", {})
     name = value.get("message_template_name")
@@ -1389,7 +1471,21 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
         approval_status=mapped
     )
     if not updated:
-        scoped.filter(whatsapp_template_name=name).update(approval_status=mapped)
+        # No exact language match (codes can differ, e.g. "en" vs "en_US"). Only a
+        # template with a single language is safe to match by name: with several, a
+        # rejection of one would mark every language rejected. The 30-minute template
+        # sync settles those from Meta's own list.
+        same_name = scoped.filter(whatsapp_template_name=name)
+        if same_name.values("language_code").distinct().count() == 1:
+            same_name.update(approval_status=mapped)
+        else:
+            logger.info(
+                "template status %s for %s/%s matched no language exactly; "
+                "left for the template sync",
+                mapped,
+                name,
+                language,
+            )
 
 
 def _upsert_meta_template(account, tpl: dict) -> None:
