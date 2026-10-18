@@ -26,6 +26,7 @@ urlpatterns = [
     path("library/bulk/", views.publishing_library_bulk, name="library-bulk"),
     # Channels
     path("channels/", views.publishing_channels, name="channels"),
+    path("settings/", views.publishing_settings_update, name="settings"),
     # Posts
     path("posts/media/upload/", views.post_media_upload, name="post-media-upload"),
     path("new/", views.post_new, name="post-new"),

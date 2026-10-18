@@ -137,6 +137,29 @@ def _ig_permalink(provider, media_id: str) -> str:
         return ""
 
 
+class _IGPublishOutcomeUnknown(Exception):
+    """The final media_publish call failed without a definitive answer from Meta."""
+
+    def __init__(self, container_id: str, cause: Exception) -> None:
+        super().__init__(str(cause))
+        self.container_id = container_id
+
+
+def _ig_publish_container(provider, ig_user_id: str, container_id: str) -> str:
+    """Run the final media_publish call.
+
+    Only InstagramPublishError is a definitive rejection from Meta. Anything else
+    (connection reset, unreadable response, missing id) may have published the media,
+    so it is raised as an unknown outcome to be reconciled, never blindly retried.
+    """
+    try:
+        return provider.publish_container(ig_user_id, container_id)
+    except InstagramPublishError:
+        raise
+    except Exception as exc:
+        raise _IGPublishOutcomeUnknown(container_id, exc) from exc
+
+
 def _validate_ig_image_ratio(url: str) -> None:
     """Raise InstagramPublishError before the API call if the aspect ratio is wrong."""
     if not url:
@@ -593,7 +616,7 @@ def publish_variant(variant: ContentPostVariant) -> dict:
     post = variant.post
 
     # Validate approval before publishing (Step 3 integration)
-    if post.approval_required and not post.is_approval_valid():
+    if not post.is_approval_valid():
         return {
             "success": False,
             "publication_id": "",
@@ -640,7 +663,7 @@ def publish_variant(variant: ContentPostVariant) -> dict:
                 "reconciling": False,
             }
 
-        if post.approval_required and not post.is_approval_valid(variants):
+        if not post.is_approval_valid(variants):
             return {
                 "success": False,
                 "publication_id": "",
@@ -749,6 +772,11 @@ def publish_variant(variant: ContentPostVariant) -> dict:
             if result.get("reconciling"):
                 variant.status = ContentPostVariant.Status.RECONCILING
                 variant.processing_started_at = None  # Clear on reconciliation
+                # Keep provider evidence (e.g. the IG container id) for the operator.
+                variant.metadata = {
+                    **(variant.metadata or {}),
+                    **result.get("metadata", {}),
+                }
             elif result.get("metadata", {}).get("ig_container_id"):
                 # Video container created; waiting for polling
                 variant.status = ContentPostVariant.Status.PROCESSING
@@ -930,7 +958,7 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             _validate_ig_image_ratio(url)
             container_id = provider.create_image_container(ig_user_id, url, caption)
             _wait_for_ig_container(provider, container_id)
-            ig_media_id = provider.publish_container(ig_user_id, container_id)
+            ig_media_id = _ig_publish_container(provider, ig_user_id, container_id)
             return {
                 "success": True,
                 "publication_id": ig_media_id,
@@ -962,7 +990,7 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             else:
                 container_id = provider.create_story_image_container(ig_user_id, url)
             _wait_for_ig_container(provider, container_id)
-            ig_media_id = provider.publish_container(ig_user_id, container_id)
+            ig_media_id = _ig_publish_container(provider, ig_user_id, container_id)
             return {
                 "success": True,
                 "publication_id": ig_media_id,
@@ -982,7 +1010,7 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
                 ig_user_id, children, caption
             )
             _wait_for_ig_container(provider, container_id)
-            ig_media_id = provider.publish_container(ig_user_id, container_id)
+            ig_media_id = _ig_publish_container(provider, ig_user_id, container_id)
             return {
                 "success": True,
                 "publication_id": ig_media_id,
@@ -1003,6 +1031,17 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             "reconciling": False,
         }
 
+    except _IGPublishOutcomeUnknown as exc:
+        return {
+            "success": False,
+            "publication_id": "",
+            "publication_url": "",
+            "error": f"Publication outcome unknown: {exc}",
+            "error_type": ContentPostVariant.ErrorType.UNKNOWN,
+            "error_at": timezone.now(),
+            "reconciling": True,
+            "metadata": {"ig_container_id": exc.container_id},
+        }
     except InstagramPublishError as exc:
         return {
             "success": False,

@@ -6,6 +6,7 @@ ContentPlanItem     — a planned content idea (not yet a post).
 ContentPost         — a piece of content moving through publishing.
 ContentCaption      — AI-generated caption drafts for a post (or standalone).
 FacebookPageConnection — per-account OAuth token for a connected Facebook Page.
+PublishingSettings  — per-account Content Studio settings (review requirement).
 """
 
 from __future__ import annotations
@@ -333,20 +334,31 @@ class ContentPost(models.Model):
             return False
         return self.compute_content_hash() != self.last_content_hash
 
+    @property
+    def requires_approval(self) -> bool:
+        """Approval is needed when the post asks for it or its workspace requires review.
+
+        Read live from the workspace setting, so turning review on also covers posts that
+        were already scheduled.
+        """
+        return self.approval_required or PublishingSettings.requires_review_for(
+            self.account_id
+        )
+
     def is_approval_valid(self, variants=None) -> bool:
         """Check if the post's approval is currently valid.
 
         Phase C: Approval is valid only when:
-        1. approval_required is True (if False, no approval needed)
+        1. approval is required (see requires_approval; if not, no approval needed)
         2. approval_status is "approved"
         3. approved_by is set (reviewer assignment required)
         4. approved_at is set
         5. last_content_hash matches current computed hash (content unchanged)
 
-        Returns True if approval_required is False (solo publishing allowed).
-        Returns False if approval_required is True but any of the above conditions fail.
+        Returns True if approval is not required (solo publishing allowed).
+        Returns False if approval is required but any of the above conditions fail.
         """
-        if not self.approval_required:
+        if not self.requires_approval:
             return True
 
         if self.approval_status != "approved":
@@ -442,7 +454,11 @@ class ContentPostVariant(models.Model):
     # Processing duration tracking (separate from polling attempts)
     # Set when the provider first enters PROCESSING state (e.g., IG video upload starts)
     # Used to detect genuinely overdue provider operations (not just polling health)
-    processing_started_at = models.DateTimeField(null=True, blank=True)
+    processing_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the provider first entered PROCESSING state",
+    )
 
     # Provider-specific metadata (ig_container_id, etc.)
     metadata = models.JSONField(default=dict, blank=True)
@@ -456,6 +472,10 @@ class ContentPostVariant(models.Model):
         indexes = [
             models.Index(fields=["scheduled_at", "status"]),
             models.Index(fields=["post", "platform"]),
+            models.Index(
+                fields=["processing_started_at", "status"],
+                name="publishing__processings_idx",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -604,3 +624,24 @@ class FacebookPageConnection(models.Model):
 
     def __str__(self) -> str:
         return f"{self.account} / FB Page: {self.page_name or self.page_id}"
+
+
+class PublishingSettings(models.Model):
+    """Per-workspace Content Studio settings."""
+
+    account = models.OneToOneField(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="publishing_settings",
+    )
+    # When on, every post needs an Owner/Admin approval of its current content before it
+    # can be scheduled or published. Off by default so solo creators publish directly.
+    requires_review = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.account} publishing settings"
+
+    @classmethod
+    def requires_review_for(cls, account) -> bool:
+        return cls.objects.filter(account=account, requires_review=True).exists()

@@ -6,7 +6,9 @@ Wraps the Facebook Graph API for posting to a connected Page:
   - Video posts → POST /{page-id}/videos
 
 Requires scopes: pages_manage_posts, pages_read_engagement
-Page access tokens are long-lived (60 days) and stored encrypted.
+Page access tokens are fetched with a long-lived user token, so they do not
+expire (they stop working only if the user revokes access or changes their
+password). They are stored encrypted.
 """
 
 from __future__ import annotations
@@ -94,6 +96,30 @@ class FacebookPublishProvider:
                 elif name == "post_impressions_organic_unique":
                     result["reach"] = int(val)
         return result
+
+
+def exchange_for_long_lived_user_token(
+    app_id: str, app_secret: str, short_lived_token: str
+) -> str:
+    """Swap a short-lived user token (~1 hour) for a long-lived one (~60 days).
+
+    Page tokens fetched with a long-lived user token do not expire; page tokens
+    fetched with a short-lived one expire with it.
+    """
+    r = requests.get(
+        f"{_BASE}/oauth/access_token",
+        params={
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": short_lived_token,
+        },
+        timeout=30,
+    )
+    data = r.json()
+    if "error" in data:
+        raise FacebookPublishError(data["error"].get("message", str(data)))
+    return data["access_token"]
 
 
 def get_page_token(user_access_token: str, page_id: str) -> str:

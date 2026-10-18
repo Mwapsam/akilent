@@ -24,7 +24,7 @@ class TestApprovalWorkflow(TestCase):
             user=self.creator, account=self.account, role=Membership.Role.OWNER
         )
         Membership.objects.create(
-            user=self.reviewer, account=self.account, role=Membership.Role.MEMBER
+            user=self.reviewer, account=self.account, role=Membership.Role.ADMIN
         )
         self.client = Client()
 
@@ -236,7 +236,7 @@ class TestContentChangeInvalidatesApproval(TestCase):
             user=self.creator, account=self.account, role=Membership.Role.OWNER
         )
         Membership.objects.create(
-            user=self.reviewer, account=self.account, role=Membership.Role.MEMBER
+            user=self.reviewer, account=self.account, role=Membership.Role.ADMIN
         )
 
         self.post = ContentPost.objects.create(
@@ -391,7 +391,7 @@ class TestApprovalStateTransitions(TestCase):
             user=self.user, account=self.account, role=Membership.Role.OWNER
         )
         Membership.objects.create(
-            user=self.reviewer, account=self.account, role=Membership.Role.MEMBER
+            user=self.reviewer, account=self.account, role=Membership.Role.ADMIN
         )
         self.client = Client()
 
@@ -487,7 +487,7 @@ class TestApprovalLogAuditTrail(TestCase):
             user=self.creator, account=self.account, role=Membership.Role.OWNER
         )
         Membership.objects.create(
-            user=self.reviewer, account=self.account, role=Membership.Role.MEMBER
+            user=self.reviewer, account=self.account, role=Membership.Role.ADMIN
         )
         self.client = Client()
 

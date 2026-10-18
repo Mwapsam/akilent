@@ -822,6 +822,10 @@ CELERY_BEAT_SCHEDULE.update(
             "task": "apps.publishing.tasks.escalate_exhausted_processing_variants",
             "schedule": 7200.0,  # Every 2 hours
         },
+        "recover-unstarted-publishing-posts": {
+            "task": "apps.publishing.tasks.recover_unstarted_publishing_posts",
+            "schedule": 300.0,  # Every 5 minutes; posts get a 15-minute grace period
+        },
         "recover-abandoned-publish-claims": {
             "task": "apps.publishing.tasks.recover_abandoned_publish_claims",
             "schedule": 300.0,  # Every 5 minutes; claims expire after a 30-minute lease

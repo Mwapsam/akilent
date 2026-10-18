@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from apps.accounts.api import is_account_admin
 from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load
 
@@ -28,12 +29,46 @@ from .models import (
     ContentPost,
     ContentPostVariant,
     FacebookPageConnection,
+    PublishingSettings,
 )
-from .providers.facebook import FacebookPublishError, list_pages
+from .providers.facebook import (
+    FacebookPublishError,
+    exchange_for_long_lived_user_token,
+    list_pages,
+)
 
 logger = logging.getLogger(__name__)
 
 _FB_GRAPH = "https://graph.facebook.com"
+
+
+# Posts the composer may still change; later states belong to the publishing pipeline.
+_EDITABLE_POST_STATUSES = (
+    ContentPost.Status.IDEA,
+    ContentPost.Status.DRAFT,
+    ContentPost.Status.IN_REVIEW,
+    ContentPost.Status.APPROVED,
+    ContentPost.Status.SCHEDULED,
+)
+
+_BRIEF_FIELDS = (
+    "brief_objective",
+    "brief_audience",
+    "brief_problem",
+    "brief_offer",
+    "brief_message",
+    "brief_cta",
+)
+
+
+def _admin_required(request, account, redirect_to: str):
+    """Return a redirect when the user is not an Owner/Admin of ``account``, else None."""
+    if is_account_admin(request.user, account):
+        return None
+    messages.error(request, "Only an Owner or Admin can do that.")
+    return redirect(redirect_to)
+
+
 _FB_SCOPES = (
     "pages_show_list,pages_manage_posts,pages_read_engagement,business_management"
 )
@@ -71,6 +106,10 @@ def fb_oauth_connect(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "settings-integrations")
+    ) is not None:
+        return denied
 
     app_id = getattr(settings, "WHATSAPP_APP_ID", "")
     if not app_id:
@@ -98,6 +137,10 @@ def fb_oauth_callback(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "settings-integrations")
+    ) is not None:
+        return denied
 
     error = request.GET.get("error")
     if error:
@@ -122,7 +165,8 @@ def fb_oauth_callback(request):
         messages.error(request, "No pending Facebook connection found.")
         return redirect("settings-integrations")
 
-    if conn.oauth_state != state:
+    # A completed connect clears oauth_state to "", so an empty state must never match.
+    if not state or conn.oauth_state != state:
         messages.error(request, "Invalid state parameter.")
         return redirect("settings-integrations")
 
@@ -147,7 +191,15 @@ def fb_oauth_callback(request):
         )
         return redirect("settings-integrations")
 
-    user_token = token_data["access_token"]
+    # The code exchange yields a ~1-hour user token, and page tokens fetched with it expire
+    # with it. Upgrade first so the stored page token does not expire.
+    try:
+        user_token = exchange_for_long_lived_user_token(
+            app_id, app_secret, token_data["access_token"]
+        )
+    except FacebookPublishError as exc:
+        messages.error(request, f"Facebook token exchange failed: {exc}")
+        return redirect("settings-integrations")
 
     try:
         pages = list_pages(user_token)
@@ -163,6 +215,9 @@ def fb_oauth_callback(request):
     conn.page_id = page["id"]
     conn.page_name = page.get("name", "")
     conn.access_token = page["access_token"]
+    conn.token_expires_at = (
+        None  # Page tokens from a long-lived user token never expire
+    )
     conn.oauth_state = ""
     conn.status = FacebookPageConnection.Status.ACTIVE
     conn.save()
@@ -177,6 +232,10 @@ def fb_oauth_disconnect(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "settings-integrations")
+    ) is not None:
+        return denied
 
     try:
         conn = account.facebook_page_connection
@@ -524,8 +583,31 @@ def publishing_channels(request):
             "ig_publish_scope": ig_publish_scope,
             "fb_connection": fb_connection,
             "recent_failures": recent_failures,
+            "requires_review": PublishingSettings.requires_review_for(account),
+            "is_admin": is_account_admin(request.user, account),
         },
     )
+
+
+@login_required
+@require_POST
+def publishing_settings_update(request):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if (denied := _admin_required(request, account, "publishing:channels")) is not None:
+        return denied
+
+    prefs, _ = PublishingSettings.objects.get_or_create(account=account)
+    prefs.requires_review = request.POST.get("requires_review") == "on"
+    prefs.save(update_fields=["requires_review", "updated_at"])
+    messages.success(
+        request,
+        "Posts now need an Owner or Admin approval before publishing."
+        if prefs.requires_review
+        else "Review before publishing is off.",
+    )
+    return redirect("publishing:channels")
 
 
 # ---------------------------------------------------------------------------
@@ -875,6 +957,13 @@ def post_new(request):
         else:
             post = ContentPost(account=account, created_by=request.user)
 
+        if post.pk and post.status not in _EDITABLE_POST_STATUSES:
+            messages.error(
+                request,
+                f"A {post.get_status_display().lower()} post can't be edited.",
+            )
+            return redirect("publishing:post-detail", pk=post.pk)
+
         caption = request.POST.get("caption", "").strip()
         hashtags_raw = request.POST.get("hashtags", "").strip()
         hashtags = [t.lstrip("#").strip() for t in hashtags_raw.split() if t.strip()]
@@ -905,14 +994,6 @@ def post_new(request):
             if override:
                 platform_captions[plat] = override
 
-        # Brief context fields
-        brief_objective = request.POST.get("brief_objective", "").strip()
-        brief_audience = request.POST.get("brief_audience", "").strip()
-        brief_problem = request.POST.get("brief_problem", "").strip()
-        brief_offer = request.POST.get("brief_offer", "").strip()
-        brief_message = request.POST.get("brief_message", "").strip()
-        brief_cta = request.POST.get("brief_cta", "").strip()
-
         scheduled_at = None
         if scheduled_at_raw:
             from django.utils.dateparse import parse_datetime
@@ -937,29 +1018,56 @@ def post_new(request):
         post.scheduled_at = scheduled_at
         post.status = status
         post.platform_captions = platform_captions
-        post.brief_objective = brief_objective
-        post.brief_audience = brief_audience
-        post.brief_problem = brief_problem
-        post.brief_offer = brief_offer
-        post.brief_message = brief_message
-        post.brief_cta = brief_cta
+        # Brief fields are only overwritten when the form sends them, so a composer save
+        # does not wipe a brief copied from the plan item.
+        for field in _BRIEF_FIELDS:
+            if field in request.POST:
+                setattr(post, field, request.POST[field].strip())
         if not post.pk:
             post.created_by = request.user
 
         from .services import initialize_post_with_variants
 
+        review_blocked = False
         try:
             with transaction.atomic():
                 post.save()
                 initialize_post_with_variants(post, platforms)
+                # Checked after the variants exist, since the approval covers them. An
+                # approval of earlier content no longer applies, so the post goes back
+                # to draft for a fresh review.
+                if not post.is_approval_valid():
+                    if post.approval_status == "approved":
+                        post.approval_status = "draft"
+                    review_blocked = post.status != ContentPost.Status.DRAFT
+                    post.status = ContentPost.Status.DRAFT
+                    post.save(update_fields=["status", "approval_status", "updated_at"])
         except ValueError as exc:
             messages.error(request, f"Failed to initialize post: {exc!s}")
             return redirect("publishing:post-new")
 
+        if review_blocked:
+            messages.warning(
+                request,
+                "This workspace requires review before publishing. The post was saved as a "
+                "draft; submit it for review, then schedule or publish it once approved.",
+            )
+            return redirect("publishing:post-detail", pk=post.pk)
+
         if action == "publish_now":
             from .tasks import publish_post_async
 
-            publish_post_async.delay(post.pk)
+            try:
+                publish_post_async.delay(post.pk)
+            except Exception:
+                logger.exception("Failed to enqueue publish for post=%s", post.pk)
+                post.status = ContentPost.Status.DRAFT
+                post.save(update_fields=["status", "updated_at"])
+                messages.error(
+                    request,
+                    "Couldn't start publishing right now. The post was saved as a draft; please try again.",
+                )
+                return redirect("publishing:post-detail", pk=post.pk)
 
         messages.success(request, "Post saved.")
         return redirect("publishing:post-detail", pk=post.pk)
@@ -989,8 +1097,24 @@ def post_detail(request, pk):
         return redirect("dashboard")
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
+    requires_approval = post.requires_approval
+    can_review = False
+    if requires_approval and post.approval_status == "submitted":
+        can_review, _ = _can_review(post, request.user, account)
     return render(
-        request, "publishing/post_detail.html", {"account": account, "post": post}
+        request,
+        "publishing/post_detail.html",
+        {
+            "account": account,
+            "post": post,
+            "editable": post.status in _EDITABLE_POST_STATUSES,
+            "requires_approval": requires_approval,
+            "approval_valid": post.is_approval_valid(),
+            "can_review": can_review,
+            "approval_logs": post.approval_logs.select_related("performed_by")[:20]
+            if requires_approval
+            else [],
+        },
     )
 
 
@@ -1217,7 +1341,9 @@ def post_submit_for_review(request, pk):
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
 
-    if post.approval_status != "draft":
+    # An approval of content that has since changed no longer counts, so it may be resubmitted.
+    stale_approval = post.approval_status == "approved" and not post.is_approval_valid()
+    if post.approval_status != "draft" and not stale_approval:
         messages.error(request, "Only draft posts can be submitted for review.")
         return redirect("publishing:post-detail", pk=post.pk)
 
@@ -1234,29 +1360,32 @@ def post_submit_for_review(request, pk):
     return redirect("publishing:post-detail", pk=post.pk)
 
 
-def _can_review(post, user, account, action="review") -> tuple[bool, str]:
-    """Review policy for approve and request-changes alike. The creator may review their own
-    post only in a solo workspace. An assigned reviewer who is still a member takes precedence
-    over everyone else; if that reviewer has left the workspace, or none is assigned, any
-    member may review."""
-    from django.db.models import Count, Q
-
+def _reviewer_ids(account) -> set[int]:
+    """User ids of the workspace's Owners and Admins, the only people who may review."""
     from apps.accounts.models import Membership
 
-    reviewer_id = post.assigned_reviewer_id
-    counts = Membership.objects.filter(account=account).aggregate(
-        total=Count("pk"),
-        me=Count("pk", filter=Q(user_id=user.pk)),
-        reviewer=Count("pk", filter=Q(user_id=reviewer_id)),
+    return set(
+        Membership.objects.filter(
+            account=account,
+            role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
+        ).values_list("user_id", flat=True)
     )
-    if counts["me"] == 0:
-        return False, "You are not a member of this workspace."
-    if post.created_by_id == user.pk and counts["total"] > 1:
+
+
+def _can_review(post, user, account, action="review") -> tuple[bool, str]:
+    """Review policy for approve and request-changes alike. Only an Owner or Admin may review.
+    The creator may review their own post only when no other Owner/Admin could. An assigned
+    reviewer who is still an Owner/Admin takes precedence over everyone else."""
+    reviewers = _reviewer_ids(account)
+    if user.pk not in reviewers:
+        return False, "Only an Owner or Admin can review posts."
+    if post.created_by_id == user.pk and reviewers - {user.pk}:
         return (
             False,
-            "You cannot review your own post in a team workspace. Ask a teammate to review it.",
+            "You cannot review your own post while another Owner or Admin can. Ask them to review it.",
         )
-    if reviewer_id and counts["reviewer"] and reviewer_id != user.pk:
+    reviewer_id = post.assigned_reviewer_id
+    if reviewer_id and reviewer_id in reviewers and reviewer_id != user.pk:
         return False, f"Only the assigned reviewer can {action} this post."
     return True, ""
 
@@ -1512,6 +1641,10 @@ def reconciliation_confirm_published(request, variant_id):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "publishing:reconciliation-queue")
+    ) is not None:
+        return denied
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
     # View handles authorization and request parsing only.
@@ -1574,6 +1707,10 @@ def reconciliation_retry(request, variant_id):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "publishing:reconciliation-queue")
+    ) is not None:
+        return denied
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
     try:
@@ -1615,6 +1752,10 @@ def reconciliation_leave_unresolved(request, variant_id):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if (
+        denied := _admin_required(request, account, "publishing:reconciliation-queue")
+    ) is not None:
+        return denied
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
     try:

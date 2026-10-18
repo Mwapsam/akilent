@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 
 from django.db import transaction
 from django.utils import timezone
@@ -26,10 +27,54 @@ def publish_due_posts() -> int:
     with transaction.atomic():
         for post in qs:
             post.status = ContentPost.Status.PUBLISHING
-            post.save(update_fields=["status"])
-            publish_post_async.delay(post.pk)
+            post.save(update_fields=["status", "updated_at"])
+            # Enqueue after commit so one broker failure cannot roll back the batch; a
+            # post whose enqueue fails is picked up by recover_unstarted_publishing_posts.
+            transaction.on_commit(
+                partial(publish_post_async.delay, post.pk), robust=True
+            )
             count += 1
     return count
+
+
+UNSTARTED_POST_GRACE_MINUTES = 15
+
+
+@shared_task(queue="outbound")
+def recover_unstarted_publishing_posts() -> int:
+    """Re-enqueue posts left in PUBLISHING whose publish task never ran.
+
+    A failed or lost enqueue leaves the parent PUBLISHING with no variant ever claimed,
+    and nothing else would move it. Re-enqueueing is safe: publish_post_async re-checks
+    the status and every variant is claimed atomically before any provider call.
+    """
+    from datetime import timedelta
+
+    from .models import ContentPost, ContentPostVariant
+
+    now = timezone.now()
+    unstarted = (ContentPostVariant.Status.DRAFT, ContentPostVariant.Status.SCHEDULED)
+    pks = list(
+        ContentPost.objects.filter(
+            status=ContentPost.Status.PUBLISHING,
+            updated_at__lt=now - timedelta(minutes=UNSTARTED_POST_GRACE_MINUTES),
+        )
+        .exclude(
+            variants__status__in=[
+                s for s in ContentPostVariant.Status if s not in unstarted
+            ]
+        )
+        .values_list("pk", flat=True)
+    )
+    # Bump updated_at so each post is retried at most once per grace window.
+    ContentPost.objects.filter(pk__in=pks).update(updated_at=now)
+    for pk in pks:
+        logger.warning("Re-enqueueing unstarted publishing post=%s", pk)
+        try:
+            publish_post_async.delay(pk)
+        except Exception:
+            logger.exception("Re-enqueue failed for unstarted post=%s", pk)
+    return len(pks)
 
 
 @shared_task(bind=True, max_retries=3, queue="outbound")
@@ -49,7 +94,7 @@ def publish_post_async(self, post_id: int) -> str:
             ContentPost.Status.SCHEDULED,
         ):
             return "skipped"
-        if post.approval_required and not post.is_approval_valid():
+        if not post.is_approval_valid():
             post.status = ContentPost.Status.DRAFT
             post.error = "Approval is missing or no longer matches the content; reapprove before publishing."
             post.save(update_fields=["status", "error"])
@@ -111,7 +156,7 @@ def publish_variant_async(self, variant_id: int) -> str:
             return f"skipped_{variant.status}"
 
         # Safeguard: check approval at execution time (may have changed since enqueue)
-        if post.approval_required and not post.is_approval_valid():
+        if not post.is_approval_valid():
             variant.status = ContentPostVariant.Status.FAILED
             variant.last_error = "Post approval is invalid or not present"
             variant.last_error_type = ContentPostVariant.ErrorType.VALIDATION
@@ -159,6 +204,12 @@ def publish_variant_async(self, variant_id: int) -> str:
         return "processing"
     if result.get("reconciling"):
         return "reconciling"
+    # Validation and permission failures will not succeed on retry; only transient ones may.
+    if result.get("error_type") in (
+        ContentPostVariant.ErrorType.VALIDATION,
+        ContentPostVariant.ErrorType.PERMISSION,
+    ):
+        return "failed"
     if self.request.retries < self.max_retries:
         raise self.retry(
             countdown=60 * (2**self.request.retries),

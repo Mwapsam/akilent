@@ -1279,7 +1279,7 @@ def _run_publish_post(run: WorkflowRun, step: dict) -> dict:
         raise ValueError(msg) from None
 
     # Check approval at execution time
-    if post.approval_required and not post.is_approval_valid():
+    if not post.is_approval_valid():
         msg = f"publish_post step {step_id!r}: approval is invalid or not present"
         if on_error:
             return {"_routed_to": on_error, "reason": "approval_invalid", "error": msg}

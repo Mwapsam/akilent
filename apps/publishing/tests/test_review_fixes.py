@@ -39,13 +39,11 @@ def _login(user):
     return client
 
 
-def test_creator_cannot_self_approve_in_a_team_workspace(account):
+def test_creator_cannot_self_approve_when_another_admin_can_review(account):
     creator = User.objects.create_user("creator", "c@example.com", "pass")
-    teammate = User.objects.create_user("mate", "m@example.com", "pass")
+    admin = User.objects.create_user("mate", "m@example.com", "pass")
     Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
-    Membership.objects.create(
-        user=teammate, account=account, role=Membership.Role.MEMBER
-    )
+    Membership.objects.create(user=admin, account=account, role=Membership.Role.ADMIN)
     post = _post_for(account, creator)
 
     _login(creator).post(reverse("publishing:post-approve", args=[post.pk]))
@@ -56,11 +54,9 @@ def test_creator_cannot_self_approve_in_a_team_workspace(account):
 
 def test_creator_who_assigns_themselves_as_reviewer_cannot_self_approve(account):
     creator = User.objects.create_user("selfrev", "sr@example.com", "pass")
-    teammate = User.objects.create_user("mate5", "m5@example.com", "pass")
+    admin = User.objects.create_user("mate5", "m5@example.com", "pass")
     Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
-    Membership.objects.create(
-        user=teammate, account=account, role=Membership.Role.MEMBER
-    )
+    Membership.objects.create(user=admin, account=account, role=Membership.Role.ADMIN)
     post = _post_for(account, creator, reviewer=creator)
 
     _login(creator).post(reverse("publishing:post-approve", args=[post.pk]))
@@ -80,20 +76,47 @@ def test_creator_can_self_approve_in_a_solo_workspace(account):
     assert post.approval_status == "approved"
 
 
-def test_eligible_teammate_can_approve_when_no_reviewer_is_assigned(account):
-    creator = User.objects.create_user("creator2", "c2@example.com", "pass")
-    teammate = User.objects.create_user("mate2", "m2@example.com", "pass")
-    Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
-    Membership.objects.create(
-        user=teammate, account=account, role=Membership.Role.MEMBER
-    )
-    post = _post_for(account, creator)
+def test_sole_admin_can_approve_their_own_post_when_others_are_members(account):
+    """Otherwise nobody could ever approve the only Owner's posts."""
+    owner = User.objects.create_user("owner6", "o6@example.com", "pass")
+    member = User.objects.create_user("member6", "m6@example.com", "pass")
+    Membership.objects.create(user=owner, account=account, role=Membership.Role.OWNER)
+    Membership.objects.create(user=member, account=account, role=Membership.Role.MEMBER)
+    post = _post_for(account, owner)
 
-    _login(teammate).post(reverse("publishing:post-approve", args=[post.pk]))
+    _login(owner).post(reverse("publishing:post-approve", args=[post.pk]))
 
     post.refresh_from_db()
     assert post.approval_status == "approved"
-    assert post.approved_by == teammate
+
+
+def test_admin_can_approve_when_no_reviewer_is_assigned(account):
+    creator = User.objects.create_user("creator2", "c2@example.com", "pass")
+    admin = User.objects.create_user("mate2", "m2@example.com", "pass")
+    Membership.objects.create(
+        user=creator, account=account, role=Membership.Role.MEMBER
+    )
+    Membership.objects.create(user=admin, account=account, role=Membership.Role.ADMIN)
+    post = _post_for(account, creator)
+
+    _login(admin).post(reverse("publishing:post-approve", args=[post.pk]))
+
+    post.refresh_from_db()
+    assert post.approval_status == "approved"
+    assert post.approved_by == admin
+
+
+def test_member_cannot_approve(account):
+    creator = User.objects.create_user("creator7", "c7@example.com", "pass")
+    member = User.objects.create_user("member7", "m7@example.com", "pass")
+    Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
+    Membership.objects.create(user=member, account=account, role=Membership.Role.MEMBER)
+    post = _post_for(account, creator)
+
+    _login(member).post(reverse("publishing:post-approve", args=[post.pk]))
+
+    post.refresh_from_db()
+    assert post.approval_status == "submitted"
 
 
 def test_non_member_cannot_approve(account):
@@ -110,13 +133,16 @@ def test_non_member_cannot_approve(account):
 
 def test_explicit_reviewer_takes_precedence_over_the_fallback(account):
     creator = User.objects.create_user("creator4", "c4@example.com", "pass")
-    teammate = User.objects.create_user("mate4", "m4@example.com", "pass")
+    other_admin = User.objects.create_user("mate4", "m4@example.com", "pass")
     reviewer = User.objects.create_user("rev4", "r4@example.com", "pass")
-    for u in (creator, teammate, reviewer):
-        Membership.objects.create(user=u, account=account, role=Membership.Role.MEMBER)
+    Membership.objects.create(
+        user=creator, account=account, role=Membership.Role.MEMBER
+    )
+    for u in (other_admin, reviewer):
+        Membership.objects.create(user=u, account=account, role=Membership.Role.ADMIN)
     post = _post_for(account, creator, reviewer=reviewer)
 
-    _login(teammate).post(reverse("publishing:post-approve", args=[post.pk]))
+    _login(other_admin).post(reverse("publishing:post-approve", args=[post.pk]))
     post.refresh_from_db()
     assert post.approval_status == "submitted"
 
@@ -182,13 +208,11 @@ def test_workflow_publish_step_keeps_media_id_keys(account):
     assert "ig_media_id" in run.context and "fb_post_id" in run.context
 
 
-def test_creator_cannot_request_changes_on_own_post_in_a_team_workspace(account):
+def test_creator_cannot_request_changes_on_own_post_when_another_admin_can(account):
     creator = User.objects.create_user("rcreator", "rc@example.com", "pass")
-    teammate = User.objects.create_user("rmate", "rm@example.com", "pass")
+    admin = User.objects.create_user("rmate", "rm@example.com", "pass")
     Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
-    Membership.objects.create(
-        user=teammate, account=account, role=Membership.Role.MEMBER
-    )
+    Membership.objects.create(user=admin, account=account, role=Membership.Role.ADMIN)
     post = _post_for(account, creator)
 
     _login(creator).post(
@@ -200,17 +224,17 @@ def test_creator_cannot_request_changes_on_own_post_in_a_team_workspace(account)
     assert post.approval_status == "submitted"
 
 
-def test_any_member_can_approve_when_the_assigned_reviewer_has_left(account):
+def test_any_admin_can_approve_when_the_assigned_reviewer_has_left(account):
     creator = User.objects.create_user("lcreator", "lc@example.com", "pass")
-    teammate = User.objects.create_user("lmate", "lm@example.com", "pass")
+    admin = User.objects.create_user("lmate", "lm@example.com", "pass")
     gone = User.objects.create_user("lgone", "lg@example.com", "pass")
-    Membership.objects.create(user=creator, account=account, role=Membership.Role.OWNER)
     Membership.objects.create(
-        user=teammate, account=account, role=Membership.Role.MEMBER
+        user=creator, account=account, role=Membership.Role.MEMBER
     )
+    Membership.objects.create(user=admin, account=account, role=Membership.Role.ADMIN)
     post = _post_for(account, creator, reviewer=gone)
 
-    _login(teammate).post(reverse("publishing:post-approve", args=[post.pk]))
+    _login(admin).post(reverse("publishing:post-approve", args=[post.pk]))
 
     post.refresh_from_db()
     assert post.approval_status == "approved"
