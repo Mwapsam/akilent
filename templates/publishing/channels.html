@@ -96,7 +96,7 @@
         {% endif %}
       </div>
     </div>
-    <div class="mt-4 flex gap-2">
+    <div class="mt-4 flex flex-wrap gap-2">
       {% if fb_connection and fb_connection.status == 'active' %}
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
@@ -114,7 +114,7 @@
     <h3 class="font-semibold text-ink mb-1">Review before publishing</h3>
     <p class="text-sm text-gray-500">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
     {% if is_admin %}
-    <form method="post" action="{% url 'publishing:settings' %}" class="mt-3 flex items-center justify-between gap-3">
+    <form method="post" action="{% url 'publishing:settings' %}" class="mt-3 flex flex-wrap items-center justify-between gap-3">
       {% csrf_token %}
       <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" name="requires_review" {% if requires_review %}checked{% endif %}>

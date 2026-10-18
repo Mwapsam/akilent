@@ -513,6 +513,8 @@ def publishing_calendar(request):
             "status_filter": status_filter,
             "unscheduled_drafts": unscheduled_drafts,
             "status_choices": ContentPost.Status.choices,
+            "today": today,
+            "week_has_content": any(items or posts for _, items, posts in week_days),
         },
     )
 

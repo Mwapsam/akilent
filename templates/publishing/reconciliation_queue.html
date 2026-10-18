@@ -3,7 +3,7 @@
 {% block title %}Needs check — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex items-center justify-between gap-4">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
     <p class="text-sm text-gray-500 mt-0.5">Publications we couldn't confirm. Check the channel before you act, so nothing is posted twice.</p>
@@ -41,7 +41,7 @@
           <li>If it's there, confirm it below. If it isn't, retry. If you can't tell yet, leave it unresolved with a next step.</li>
         </ol>
 
-        <div class="grid gap-4 md:grid-cols-3 pt-3 border-t border-border">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3 pt-3 border-t border-border">
           <form method="post" action="{% url 'publishing:reconciliation-confirm' variant.pk %}" class="space-y-2">
             {% csrf_token %}
             <p class="text-sm font-medium text-ink">It was published</p>

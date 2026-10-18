@@ -3,7 +3,7 @@
 {% block title %}Library — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex items-center justify-between gap-4">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
@@ -13,15 +13,20 @@
 {% include "publishing/_subnav.html" %}
 
 {# Filter form #}
-<form method="get" class="card card-pad mb-4">
+<form method="get" class="card card-pad mb-4"
+      x-data="{ more: {% if status_filter or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
   <div class="flex flex-wrap gap-3 items-end">
-    <div class="flex-1 min-w-[180px]">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Search</label>
-      <input type="text" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full text-sm py-1">
+    <div class="flex-1 min-w-[11rem]">
+      <label class="block text-xs font-medium text-gray-500 mb-1" for="library-q">Search</label>
+      <input type="text" id="library-q" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full text-sm py-1">
     </div>
+    <button type="button" class="btn btn-ghost text-sm py-1 sm:hidden" @click="more = !more" :aria-expanded="more" aria-controls="library-more-filters">
+      Filters{% if status_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
+    </button>
+    <div id="library-more-filters" class="w-full grid grid-cols-2 gap-3 sm:contents" :class="{ 'max-sm:hidden': !more }">
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-      <select name="status" onchange="this.form.submit()" class="input text-sm py-1">
+      <select name="status" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
         <option value="">All</option>
         {% for val, label in status_choices %}
         <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -30,7 +35,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Platform</label>
-      <select name="platform" onchange="this.form.submit()" class="input text-sm py-1">
+      <select name="platform" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
         <option value="">All</option>
         <option value="instagram" {% if platform_filter == 'instagram' %}selected{% endif %}>Instagram</option>
         <option value="facebook" {% if platform_filter == 'facebook' %}selected{% endif %}>Facebook</option>
@@ -38,7 +43,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Media type</label>
-      <select name="media_type" onchange="this.form.submit()" class="input text-sm py-1">
+      <select name="media_type" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
         <option value="">All</option>
         {% for val, label in media_type_choices %}
         <option value="{{ val }}" {% if media_type_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -47,11 +52,12 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
-      <input type="date" name="date_from" value="{{ date_from }}" class="input text-sm py-1">
+      <input type="date" name="date_from" value="{{ date_from }}" class="input w-full sm:w-auto text-sm py-1">
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
-      <input type="date" name="date_to" value="{{ date_to }}" class="input text-sm py-1">
+      <input type="date" name="date_to" value="{{ date_to }}" class="input w-full sm:w-auto text-sm py-1">
+    </div>
     </div>
     <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
     {% if q or status_filter or platform_filter or media_type_filter or date_from or date_to %}
@@ -65,11 +71,11 @@
   {% csrf_token %}
 
   {% if page_obj.object_list %}
-  <div class="flex items-center gap-3 mb-3">
-    <label class="text-sm text-gray-500 flex items-center gap-1.5">
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
+    <label class="text-sm text-gray-500 flex items-center gap-1.5 min-h-9">
       <input type="checkbox" id="select-all" class="rounded"> Select all
     </label>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <button type="submit" name="action" value="delete_drafts"
               class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
               data-confirm="Delete the selected drafts? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
@@ -77,43 +83,44 @@
               class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
               data-confirm="Cancel the selected scheduled posts?" data-confirm-label="Cancel posts" data-confirm-cancel="Keep scheduled">Cancel scheduled</button>
     </div>
-    <span class="text-xs text-gray-400 ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
+    <span class="text-xs text-gray-500 ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
   </div>
 
   <div class="card overflow-hidden table-wrap">
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-surface-subtle">
-          <th class="w-8 px-3 py-2"><span class="sr-only">Select</span></th>
+          <th class="w-8 pl-3 pr-1 sm:px-3 py-2"><span class="sr-only">Select</span></th>
           <th class="w-12 px-1 py-2"><span class="sr-only">Media</span></th>
-          <th class="text-left px-4 py-2 font-medium text-gray-500">Caption</th>
-          <th class="text-left px-4 py-2 font-medium text-gray-500">Platform</th>
-          <th class="text-left px-4 py-2 font-medium text-gray-500">Type</th>
-          <th class="text-left px-4 py-2 font-medium text-gray-500">Status</th>
-          <th class="text-left px-4 py-2 font-medium text-gray-500">Created</th>
+          <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Caption</th>
+          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Platform</th>
+          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Type</th>
+          <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Status</th>
+          <th class="hidden sm:table-cell text-left px-4 py-2 font-medium text-gray-500">Created</th>
         </tr>
       </thead>
       <tbody>
         {% for post in page_obj %}
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
-          <td class="px-3 py-2 text-center">
+          <td class="pl-3 pr-1 sm:px-3 py-2 text-center">
             <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox"
                    aria-label="Select post {{ post.caption|truncatechars:30|default:'(no caption)' }}">
           </td>
           <td class="px-1 py-2">
             {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
           </td>
-          <td class="px-4 py-2">
-            <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">
+          <td class="px-3 sm:px-4 py-2">
+            <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">
               {{ post.caption|truncatechars:70|default:"(no caption)" }}
             </a>
+            <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
           </td>
-          <td class="px-4 py-2 text-gray-400">{{ post.platforms|join:", "|capfirst }}</td>
-          <td class="px-4 py-2 text-gray-400">{{ post.get_media_type_display }}</td>
-          <td class="px-4 py-2">
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.get_media_type_display }}</td>
+          <td class="px-3 sm:px-4 py-2">
             {% status_badge post.status post.get_status_display %}
           </td>
-          <td class="px-4 py-2 text-gray-400 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
+          <td class="hidden sm:table-cell px-4 py-2 text-gray-500 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
         </tr>
         {% endfor %}
       </tbody>

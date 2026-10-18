@@ -3,7 +3,7 @@
 {% block title %}Calendar — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex items-center justify-between gap-4">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
@@ -19,7 +19,7 @@
   <div class="flex items-center gap-1">
     <a href="{% querystring week=prev_week_param %}"
        class="btn btn-ghost py-1 px-2 text-sm" aria-label="Previous week">‹</a>
-    <span class="text-sm font-medium text-ink min-w-[120px] text-center">
+    <span class="text-sm font-medium text-ink min-w-[7.5rem] text-center whitespace-nowrap">
       {{ week_start|date:"N j" }} – {{ week_end|date:"N j, Y" }}
     </span>
     <a href="{% querystring week=next_week_param %}"
@@ -36,15 +36,15 @@
   </div>
 
   {# Filters #}
-  <form method="get" class="flex items-center gap-2">
+  <form method="get" class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
     <input type="hidden" name="week" value="{{ week_param }}">
     <input type="hidden" name="view" value="{{ view_mode }}">
-    <select name="channel" onchange="this.form.submit()" class="input text-sm py-1" aria-label="Channel">
+    <select name="channel" onchange="this.form.submit()" class="input text-sm py-1 flex-1 sm:flex-none sm:w-auto" aria-label="Channel">
       <option value="">All channels</option>
       <option value="instagram" {% if channel_filter == 'instagram' %}selected{% endif %}>Instagram</option>
       <option value="facebook" {% if channel_filter == 'facebook' %}selected{% endif %}>Facebook</option>
     </select>
-    <select name="status" onchange="this.form.submit()" class="input text-sm py-1" aria-label="Status">
+    <select name="status" onchange="this.form.submit()" class="input text-sm py-1 flex-1 sm:flex-none sm:w-auto" aria-label="Status">
       <option value="">All statuses</option>
       {% for val, label in status_choices %}
       <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -56,47 +56,53 @@
 
 {% if view_mode == 'week' %}
 
-{# Week grid #}
-<div class="grid grid-cols-7 gap-1 mb-4">
+{% comment %}Week: one card per day, stacked on a phone (seven ~45px columns are
+unreadable at 360px), the seven-column grid from md up. Entries are full-size tap
+targets on a phone and compact chips in the grid.{% endcomment %}
+<div class="grid grid-cols-1 md:grid-cols-7 gap-2 md:gap-1 mb-4">
   {% for day, day_plan_items, day_posts in week_days %}
-  <div class="min-h-[120px] rounded-lg border border-surface-subtle p-1.5
+  <div class="md:min-h-[120px] rounded-lg border border-surface-subtle p-2 md:p-1.5 bg-surface md:bg-transparent
     {% if day == today %}ring-2 ring-brand-400{% endif %}">
 
     {# Day header #}
     <div class="flex items-center justify-between mb-1">
-      <span class="text-xs font-medium
+      <span class="text-sm md:text-xs font-medium
         {% if day == today %}text-brand-600{% else %}text-gray-500{% endif %}">
-        {{ day|date:"D j" }}
+        <span class="md:hidden">{{ day|date:"l, N j" }}{% if day == today %} · Today{% endif %}</span>
+        <span class="hidden md:inline">{{ day|date:"D j" }}</span>
       </span>
       <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00"
-         class="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-brand-600 hover:bg-surface-subtle text-sm leading-none"
+         class="inline-flex items-center justify-center w-9 h-9 md:w-6 md:h-6 rounded text-gray-500 hover:text-brand-600 hover:bg-surface-subtle text-base md:text-sm leading-none"
          aria-label="New post on {{ day|date:'l, N j' }}">+</a>
     </div>
 
     {# Plan items — outlined, lighter #}
     {% for item in day_plan_items %}
     <a href="{% url 'publishing:plan-edit' item.pk %}"
-       class="block text-xs px-1.5 py-0.5 mb-0.5 rounded border truncate
+       class="block text-sm md:text-xs px-2.5 py-2 md:px-1.5 md:py-0.5 mb-1 md:mb-0.5 rounded border truncate
          {% if item.pillar %}border-dashed{% else %}border-dashed border-gray-300{% endif %} text-gray-600 hover:bg-surface-subtle"
        style="{% if item.pillar %}border-color:{{ item.pillar.color }};color:{{ item.pillar.color }}{% endif %}"
        title="{{ item.topic }} (planned)">
-      ◦ {{ item.topic|truncatechars:20 }}
+      ◦ {{ item.topic|truncatechars:80 }}
     </a>
     {% endfor %}
 
     {# Posts — solid #}
     {% for post in day_posts %}
     <a href="{% url 'publishing:post-detail' post.pk %}"
-       class="block text-xs px-1.5 py-0.5 mb-0.5 rounded truncate {{ post.status|status_tone }}"
+       class="flex items-center gap-2 text-sm md:text-xs px-2.5 py-2 md:px-1.5 md:py-0.5 mb-1 md:mb-0.5 rounded {{ post.status|status_tone }}"
        title="{{ post.caption|default:'(no caption)' }} · {{ post.get_status_display }}">
-      {{ post.scheduled_at|time:"H:i" }} {{ post.caption|truncatechars:18|default:"(no caption)" }}
+      <span class="md:hidden">{% include "publishing/_media_thumb.html" with url=post|first_media size="w-8 h-8" alt="" %}</span>
+      <span class="shrink-0 tabular-nums">{{ post.scheduled_at|time:"H:i" }}</span>
+      <span class="min-w-0 truncate">{{ post.caption|truncatechars:80|default:"(no caption)" }}</span>
     </a>
     {% endfor %}
 
     {% if not day_plan_items and not day_posts %}
-    <div class="h-full flex items-center justify-center">
+    <div class="md:h-full flex items-center md:justify-center gap-2 text-sm md:text-xs text-gray-500">
+      <span class="md:hidden">Nothing planned ·</span>
       <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}"
-         class="text-gray-500 hover:text-ink text-xs" aria-label="Plan content for {{ day|date:'l, N j' }}">plan</a>
+         class="hover:text-ink underline md:no-underline" aria-label="Plan content for {{ day|date:'l, N j' }}">plan</a>
     </div>
     {% endif %}
   </div>
@@ -110,47 +116,58 @@
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-surface-subtle">
-        <th class="text-left px-4 py-2 font-medium text-gray-500">Date / Time</th>
-        <th class="text-left px-4 py-2 font-medium text-gray-500">Content</th>
-        <th class="text-left px-4 py-2 font-medium text-gray-500">Platform</th>
-        <th class="text-left px-4 py-2 font-medium text-gray-500">Type</th>
-        <th class="text-left px-4 py-2 font-medium text-gray-500">Status</th>
+        <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">When</th>
+        <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Content</th>
+        <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Platform</th>
+        <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Type</th>
+        <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Status</th>
       </tr>
     </thead>
     <tbody>
       {% for day, day_plan_items, day_posts in week_days %}
         {% for item in day_plan_items %}
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
-          <td class="px-4 py-2 text-gray-400 whitespace-nowrap">{{ day|date:"D N j" }} <span class="text-xs">(planned)</span></td>
-          <td class="px-4 py-2">
-            <a href="{% url 'publishing:plan-edit' item.pk %}" class="font-medium text-ink hover:underline">{{ item.topic|truncatechars:60 }}</a>
+          <td class="pl-3 pr-1 sm:px-4 py-2 text-gray-500 align-top">
+            <span class="whitespace-nowrap">{{ day|date:"D N j" }}</span>
+            <span class="block text-xs">planned</span>
           </td>
-          <td class="px-4 py-2 text-gray-400">{{ item.platforms|join:", "|capfirst }}</td>
-          <td class="px-4 py-2 text-gray-400">{{ item.get_media_type_display }}</td>
-          <td class="px-4 py-2">
+          <td class="px-3 sm:px-4 py-2">
+            <a href="{% url 'publishing:plan-edit' item.pk %}" class="font-medium text-ink hover:underline line-clamp-2">{{ item.topic|truncatechars:60 }}</a>
+            <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ item.platforms|join:", "|capfirst }}{% if item.platforms %} · {% endif %}{{ item.get_media_type_display }}</span>
+          </td>
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ item.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ item.get_media_type_display }}</td>
+          <td class="pl-1 pr-3 sm:px-4 py-2">
             {% status_badge 'idea' item.get_plan_status_display %}
           </td>
         </tr>
         {% endfor %}
         {% for post in day_posts %}
         <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
-          <td class="px-4 py-2 text-gray-500 whitespace-nowrap">{{ post.scheduled_at|date:"D N j, H:i" }}</td>
-          <td class="px-4 py-2">
-            <div class="flex items-center gap-3">
-              {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
-              <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline">{{ post.caption|truncatechars:60|default:"(no caption)" }}</a>
+          <td class="pl-3 pr-1 sm:px-4 py-2 text-gray-500 align-top">
+            <span class="whitespace-nowrap">{{ post.scheduled_at|date:"D N j" }}</span>
+            <span class="block text-xs tabular-nums">{{ post.scheduled_at|time:"H:i" }}</span>
+          </td>
+          <td class="px-3 sm:px-4 py-2">
+            <div class="flex items-center gap-2 sm:gap-3">
+              {% include "publishing/_media_thumb.html" with url=post|first_media size="w-8 h-8 sm:w-10 sm:h-10" alt=post.caption|truncatechars:80 %}
+              <div class="min-w-0">
+                <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">{{ post.caption|truncatechars:60|default:"(no caption)" }}</a>
+                <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}</span>
+              </div>
             </div>
           </td>
-          <td class="px-4 py-2 text-gray-400">{{ post.platforms|join:", "|capfirst }}</td>
-          <td class="px-4 py-2 text-gray-400">{{ post.get_media_type_display }}</td>
-          <td class="px-4 py-2">
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.get_media_type_display }}</td>
+          <td class="pl-1 pr-3 sm:px-4 py-2">
             {% status_badge post.status post.get_status_display %}
           </td>
         </tr>
         {% endfor %}
-      {% empty %}
-      <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No content this week.</td></tr>
       {% endfor %}
+      {% if not week_has_content %}
+      <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No content this week.</td></tr>
+      {% endif %}
     </tbody>
   </table>
 </div>
@@ -164,7 +181,7 @@
   <div class="flex flex-wrap gap-2">
     {% for post in unscheduled_drafts %}
     <a href="{% url 'publishing:post-detail' post.pk %}"
-       class="text-xs px-2 py-1 rounded tone-neutral hover:tone-neutral-bg">
+       class="text-sm md:text-xs px-3 py-2 md:px-2 md:py-1 rounded tone-neutral hover:tone-neutral-bg">
       {{ post.caption|truncatechars:40|default:"(no caption)" }}
     </a>
     {% endfor %}
