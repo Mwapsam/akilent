@@ -487,3 +487,21 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 success=False,
                 error=str(e),
             )
+
+    def send_typing_indicator(self, message_id: str) -> ReadReceiptResult:
+        """Mark the message read and show the customer "typing…" (Cloud API typing
+        indicator). Meta clears it after ~25 seconds or when the reply arrives."""
+        url = self._url(f"{self.phone_number_id}/messages")
+        payload = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+            "typing_indicator": {"type": "text"},
+        }
+        try:
+            response = self._session.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            return ReadReceiptResult(success=True)
+        except requests.RequestException as e:
+            logger.debug("typing indicator for %s not sent: %s", message_id, e)
+            return ReadReceiptResult(success=False, error=str(e))

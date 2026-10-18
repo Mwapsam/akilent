@@ -235,6 +235,14 @@ class WhatsAppProvider(ABC):
             WhatsAppProviderError: on network failure, auth error, etc.
         """
 
+    def send_typing_indicator(self, message_id: str) -> ReadReceiptResult:
+        """Show the customer "typing…" in reply to their inbound message ``message_id``.
+
+        Best effort and cosmetic, like a read receipt. Providers that can't show one
+        report failure rather than raising.
+        """
+        return ReadReceiptResult(success=False, error="not supported")
+
 
 class WhatsAppProviderError(Exception):
     """Base exception for WhatsApp provider errors."""

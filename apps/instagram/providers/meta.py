@@ -98,6 +98,17 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram send_message unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)
 
+    def send_typing(self, recipient_igsid: str) -> bool:
+        """Sender action ``typing_on``: the customer sees "typing…" until we reply or
+        Meta times it out. Cosmetic, so any failure is logged quietly and dropped."""
+        payload = {"recipient": {"id": recipient_igsid}, "sender_action": "typing_on"}
+        try:
+            self._post(f"{self._account_id}/messages", payload)
+            return True
+        except Exception as exc:
+            logger.debug("Instagram typing indicator not sent: %s", exc)
+            return False
+
     def send_quick_reply(
         self, recipient_igsid: str, body: str, quick_replies: list
     ) -> SendResult:

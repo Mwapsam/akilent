@@ -134,6 +134,11 @@ class Contact(models.Model):
         return " ".join(p for p in (self.first_name, self.last_name) if p)
 
     @property
+    def display_name(self) -> str:
+        """How the inbox names this customer: their name, else phone, else email."""
+        return self.full_name or self.phone or self.email or "Unknown customer"
+
+    @property
     def whatsapp_opted_out(self) -> bool:
         """True if any of this contact's WhatsApp identities has opted out (e.g. STOP).
 

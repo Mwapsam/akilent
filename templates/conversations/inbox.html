@@ -65,8 +65,8 @@ The links are icon buttons on a phone with their labels kept for screen readers
     <div id="inbox-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
     <div id="inbox-body"
          data-hash=""
-         hx-get="{% url 'conversations:inbox_feed' %}?view={{ view|urlencode }}&channel={{ channel|urlencode }}"
-         hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))]{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
+         hx-get="{% url 'conversations:inbox_feed' %}{% querystring h=None %}"
+         hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))], inbox-refresh from:body{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
          hx-swap="innerHTML"
          hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
          hx-on::after-request="if (event.detail.xhr.status === 200) { this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''; document.getElementById('inbox-status').textContent = 'Inbox updated.'; setTimeout(() => { document.getElementById('inbox-status').textContent = ''; }, 4000); }">
@@ -74,7 +74,23 @@ The links are icon buttons on a phone with their labels kept for screen readers
     </div>
   </div>
   <div class="inbox-pane-col">
-    <div class="inbox-pane-empty">Select a conversation to view it here.</div>
+    <div class="inbox-pane-empty">
+      <span class="inbox-pane-empty-icon" aria-hidden="true">
+        {% include "components/icon.html" with name="message-circle" class="w-6 h-6" %}
+      </span>
+      <p class="font-medium text-ink">Select a conversation</p>
+      <p class="text-sm text-gray-500">It opens here, with the list still beside it.</p>
+    </div>
+    {% comment %}Shown while a conversation loads (inbox_pane.js sets .is-loading).{% endcomment %}
+    <div class="inbox-pane-skeleton" aria-hidden="true">
+      <div class="inbox-skel-header"><span class="inbox-skel inbox-skel-avatar"></span><span class="inbox-skel inbox-skel-line w-40"></span></div>
+      <div class="inbox-skel-thread">
+        <span class="inbox-skel inbox-skel-bubble w-2/5"></span>
+        <span class="inbox-skel inbox-skel-bubble is-out w-1/3"></span>
+        <span class="inbox-skel inbox-skel-bubble w-1/2"></span>
+        <span class="inbox-skel inbox-skel-bubble is-out w-2/5"></span>
+      </div>
+    </div>
     <div id="conversation-pane-inner"></div>
   </div>
 </div>

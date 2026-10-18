@@ -37,6 +37,11 @@ function registerChat() {
     _recCancelled: false,
     canRecord: !!(navigator.mediaDevices && window.MediaRecorder),
     aiUsedId: null,
+    // Teammates in this conversation (from messages_feed), and the two-replies guard.
+    presence: { viewing: [], typing: [] },
+    collision: '',
+    collisionAck: false,
+    _lastTypingPing: 0,
 
     // "[Photo]" / "[Voice message]" placeholders say nothing once the media itself shows.
     showText(m) {
@@ -46,6 +51,17 @@ function registerChat() {
     },
 
     init() {
+      // An unsent reply survives switching conversations in the two-pane inbox, and a reload.
+      this._draftKey = 'inbox-draft:' + cfg.id;
+      try { this.draft = sessionStorage.getItem(this._draftKey) || ''; } catch (e) { /* storage blocked */ }
+      if (this.draft) this.$nextTick(() => { if (this.$refs.input) this.grow(this.$refs.input); });
+      this.$watch('draft', (value) => {
+        try {
+          if (value) sessionStorage.setItem(this._draftKey, value);
+          else sessionStorage.removeItem(this._draftKey);
+        } catch (e) { /* storage blocked: the draft just isn't kept */ }
+        if (value.trim()) this.pingTyping();
+      });
       this.$nextTick(() => this.scrollBottom(true));
       // --cv-top defaults to a fixed 7rem, which only holds when the app shell's topbar is the
       // only thing above .cv. Embedded in the two-pane inbox, the inbox header/filters push it
@@ -176,6 +192,11 @@ function registerChat() {
           // The real message replaces its optimistic placeholder.
           const i = this.messages.findIndex((m) => m.pending && m.body === raw.body);
           if (i !== -1) this.messages.splice(i, 1);
+          else if (this.draft.trim()) {
+            // Someone else answered while this reply was being written.
+            this.collision = raw.byAi ? 'AI just sent a reply.' : 'A reply was just sent in this conversation.';
+            this.collisionAck = false;
+          }
         } else {
           inbound = true;
         }
@@ -200,6 +221,7 @@ function registerChat() {
       this.open = data.open;
       if (data.windowOpen !== undefined) this.windowOpen = data.windowOpen;
       if (this.ai.enabled && data.aiProposal !== undefined) this.ai.proposal = data.aiProposal;
+      if (data.presence) this.presence = { viewing: data.presence.viewing || [], typing: data.presence.typing || [] };
       if (data.messages.length) {
         this.$nextTick(() => {
           if (stick) this.scrollBottom();
@@ -362,6 +384,33 @@ function registerChat() {
       }
     },
 
+    // ── presence ─────────────────────────────────────────────────
+    presenceText() {
+      const names = (list) => list.length === 1 ? list[0]
+        : list.length === 2 ? list[0] + ' and ' + list[1]
+        : list[0] + ' and ' + (list.length - 1) + ' others';
+      const p = this.presence;
+      if (p.typing.length) return names(p.typing) + (p.typing.length === 1 ? ' is typing…' : ' are typing…');
+      if (p.viewing.length) return names(p.viewing) + (p.viewing.length === 1 ? ' is also viewing' : ' are also viewing');
+      return '';
+    },
+    // Tells teammates (and, where the channel allows, the customer) that a reply is being
+    // written. At most one ping per 4 seconds of typing; the server rate-limits the
+    // customer-facing indicator further. Best effort: a failed ping changes nothing.
+    pingTyping() {
+      const now = Date.now();
+      if (!cfg.typingUrl || !this.open || now - this._lastTypingPing < 4000) return;
+      this._lastTypingPing = now;
+      const token = this.$refs.composer && this.$refs.composer.querySelector('[name=csrfmiddlewaretoken]');
+      if (!token) return;
+      const fd = new FormData();
+      fd.set('csrfmiddlewaretoken', token.value);
+      fetch(cfg.typingUrl, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+      }).catch(() => {});
+    },
+
     // ── composing ────────────────────────────────────────────────
     grow(el) {
       el.style.height = 'auto';
@@ -375,6 +424,13 @@ function registerChat() {
     async send() {
       const body = this.draft.trim();
       if (!body || this.sending) return;
+      if (this.collision && !this.collisionAck) {
+        // A reply just went out from someone else: the first Send only asks to check it.
+        this.collisionAck = true;
+        return;
+      }
+      this.collision = '';
+      this.collisionAck = false;
       const form = this.$refs.composer;
       const fd = new FormData(form);
       fd.set('body', body);
@@ -404,6 +460,49 @@ function registerChat() {
         this.sending = false;
         this.$nextTick(() => { this.grow(this.$refs.input); this.$refs.input.focus({ preventScroll: true }); });
       }
+    },
+  }));
+
+  /* Menu button for the conversation header (Assign, Close, More): opens a list of choices,
+   * arrow keys / Home / End move between them, Esc closes and returns focus to the button,
+   * Tab or a click outside closes. Each choice is a submit button or link, so nothing
+   * happens until one is picked. State is `menuOpen`, not `open`, so a menu nested in the
+   * chat component can still read the conversation's own `open` flag. */
+  Alpine.data('cvMenu', () => ({
+    menuOpen: false,
+    init() {
+      this._outside = (e) => { if (this.menuOpen && !this.$el.contains(e.target)) this.menuOpen = false; };
+      document.addEventListener('click', this._outside, true);
+      this.$el.addEventListener('keydown', (e) => this.onKey(e));
+    },
+    destroy() { document.removeEventListener('click', this._outside, true); },
+    items() {
+      return [...this.$refs.menu.querySelectorAll('[role^="menuitem"]')].filter((el) => el.offsetParent !== null && !el.disabled);
+    },
+    toggle() {
+      this.menuOpen = !this.menuOpen;
+      if (this.menuOpen) this.$nextTick(() => { const first = this.items()[0]; if (first) first.focus(); });
+    },
+    close(refocus) {
+      this.menuOpen = false;
+      if (refocus) this.$refs.trigger.focus();
+    },
+    onKey(e) {
+      if (e.key === 'Escape' && this.menuOpen) { e.preventDefault(); e.stopPropagation(); this.close(true); return; }
+      if (!this.menuOpen) {
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target === this.$refs.trigger) { e.preventDefault(); this.toggle(); }
+        return;
+      }
+      if (e.key === 'Tab') { this.close(false); return; }
+      const list = this.items();
+      if (!list.length) return;
+      const i = list.indexOf(document.activeElement);
+      let next = null;
+      if (e.key === 'ArrowDown') next = list[(i + 1) % list.length];
+      else if (e.key === 'ArrowUp') next = list[(i - 1 + list.length) % list.length];
+      else if (e.key === 'Home') next = list[0];
+      else if (e.key === 'End') next = list[list.length - 1];
+      if (next) { e.preventDefault(); next.focus(); }
     },
   }));
 

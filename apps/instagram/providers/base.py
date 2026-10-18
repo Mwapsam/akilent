@@ -41,6 +41,10 @@ class BaseInstagramProvider(ABC):
     def send_message(self, recipient_igsid: str, body: str) -> SendResult:
         """Send a DM via the Instagram Messaging API."""
 
+    def send_typing(self, recipient_igsid: str) -> bool:
+        """Show the customer "typing…" in the DM thread. Best effort; False if not shown."""
+        return False
+
     @abstractmethod
     def private_reply(self, comment_id: str, body: str) -> SendResult:
         """Send a private reply to a comment (Meta Private Reply API, 7-day window)."""

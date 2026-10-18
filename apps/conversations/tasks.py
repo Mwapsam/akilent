@@ -8,6 +8,73 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(queue="celery")
+def send_typing_indicator(conversation_id: int) -> bool:
+    """Show the customer "typing…" while a teammate writes a reply (WhatsApp, Instagram).
+
+    Best effort and cosmetic, like the read receipt: anything missing or failing is
+    dropped quietly. Meta clears the indicator after ~25 seconds or when the reply lands.
+    """
+    from apps.conversations.models import Conversation, Message
+
+    try:
+        conversation = Conversation.objects.select_related("account").get(
+            pk=conversation_id
+        )
+        inbound = Message.objects.filter(
+            conversation=conversation, direction=Message.Direction.INBOUND
+        ).order_by("-timestamp", "-id")
+        if conversation.channel == Conversation.Channel.WHATSAPP:
+            last = (
+                inbound.filter(whatsapp_message__isnull=False)
+                .select_related("whatsapp_message")
+                .first()
+            )
+            wa_message = last.whatsapp_message if last is not None else None
+            if wa_message is None or not wa_message.message_id:
+                return False
+            from apps.whatsapp.tasks import _get_provider_for_account
+
+            provider = _get_provider_for_account(conversation.account)
+            if provider is None:
+                return False
+            return provider.send_typing_indicator(wa_message.message_id).success
+        if conversation.channel == Conversation.Channel.INSTAGRAM:
+            from apps.core.channels import channel_state
+
+            if channel_state("instagram") != "enabled":
+                return False
+            last = (
+                inbound.filter(instagram_message__conversation__isnull=False)
+                .select_related(
+                    "instagram_message__conversation__instagram_account",
+                    "instagram_message__conversation__instagram_contact",
+                )
+                .first()
+            )
+            ig_message = last.instagram_message if last is not None else None
+            ig_conversation = (
+                ig_message.conversation if ig_message is not None else None
+            )
+            if ig_conversation is None:
+                return False
+            ig_account = ig_conversation.instagram_account
+            if not ig_account.access_token:
+                return False
+            from apps.instagram.providers.meta import MetaInstagramProvider
+
+            provider = MetaInstagramProvider(
+                access_token=ig_account.access_token,
+                instagram_account_id=ig_account.instagram_business_account_id,
+            )
+            return provider.send_typing(
+                ig_conversation.instagram_contact.instagram_scoped_id
+            )
+    except Exception as exc:
+        logger.debug("send_typing_indicator: skipped for %s: %s", conversation_id, exc)
+    return False
+
+
+@shared_task(queue="celery")
 def remind_missed_conversations() -> int:
     """Give every missed WhatsApp conversation a due follow-up (see ``recovery``)."""
     from apps.conversations.recovery import create_missed_followups

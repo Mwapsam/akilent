@@ -465,14 +465,16 @@ def test_the_picker_lists_teammates(logged_in, open_conversation, teammate):
 
 
 @pytest.mark.django_db
-def test_the_assign_picker_is_a_single_select(logged_in, open_conversation, teammate):
+def test_the_assign_picker_is_a_single_menu(logged_in, open_conversation, teammate):
     """The header used to carry a one-click "assign to me" button *and* a separate
-    "assign to a teammate" select, doing overlapping jobs. One merged select now covers
+    "assign to a teammate" select, doing overlapping jobs. One merged picker now covers
     both, and — since it no longer needs a teammate to be worth showing — a solo account
-    gets it too."""
+    gets it too. It is a menu of submit buttons rather than an auto-submitting <select>,
+    which reassigned the conversation as a keyboard user arrowed through it."""
     client, _, _ = logged_in
     body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
-    assert body.count('name="assignee"') == 1
+    assert body.count('aria-label="Assign conversation"') == 1
+    assert '<select id="assignee"' not in body
     assert "Assign to me" in body
     assert 'value="none"' in body  # Unassigned is always reachable, even solo
 

@@ -9,10 +9,11 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db.models import Count, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -116,6 +117,16 @@ def _inbox_context(request, account) -> dict:
     if overdue_only:
         qs = qs.filter(unanswered_q(), last_in__lte=now - OVERDUE_WAITING)
 
+    # The row preview is the latest message, annotated here rather than fetched per row:
+    # the list is re-rendered by the 8-second poll for every open inbox.
+    latest = Message.objects.filter(conversation=OuterRef("pk")).order_by(
+        "-timestamp", "-id"
+    )
+    qs = qs.annotate(
+        preview_body=Subquery(latest.values("body")[:1]),
+        preview_direction=Subquery(latest.values("direction")[:1]),
+    )
+
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
     for c in page:
         c.snapshot = snapshot_of(c, now)
@@ -128,10 +139,20 @@ def _inbox_context(request, account) -> dict:
             )
             and c.snapshot.last_customer_message_at is not None
         )
-        last = (
-            c.messages.order_by("-timestamp", "-id").only("body", "direction").first()
+        c.has_messages = c.preview_direction is not None
+
+    # Teammates in these conversations right now (one cache read for the page).
+    from apps.conversations import presence
+
+    rows = list(page)
+    if rows:
+        others = presence.for_conversations(
+            [c.pk for c in rows],
+            list(_team_members(account)),
+            exclude_user_id=request.user.pk,
         )
-        c.preview = last
+        for c in rows:
+            c.presence = others.get(c.pk)
 
     return {
         "account": account,
@@ -418,6 +439,10 @@ def conversation_detail(request, public_id: str):
     if account is None:
         return redirect("dashboard")
     conversation = get_visible_conversation(account, public_id)
+    # Loaded into the two-pane inbox (static/js/inbox_pane.js) rather than as its own page.
+    # Its forms then post with hx-post into the pane, so an action keeps the list beside it.
+    in_pane = _in_pane(request)
+    mutated = False
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -469,6 +494,8 @@ def conversation_detail(request, public_id: str):
                 )
                 conversation.mark_read()
                 _record_ai_use(account, request, "")
+                if in_pane:
+                    messages.success(request, f"Sent “{template.name}”.")
             elif action == "create_followup":
                 from apps.conversations.followups import resolve_due_at
 
@@ -489,13 +516,23 @@ def conversation_detail(request, public_id: str):
                 )
                 messages.success(request, "Follow-up scheduled.")
             elif action == "assign":
+                assignee = _resolve_assignee(account, request)
                 run_action(
                     "assign_conversation",
                     ctx,
                     conversation=conversation,
-                    user=_resolve_assignee(account, request),
+                    user=assignee,
                     assigned_by=request.user,
                 )
+                if in_pane:
+                    messages.success(
+                        request,
+                        "Unassigned."
+                        if assignee is None
+                        else "Assigned to you."
+                        if assignee.pk == request.user.pk
+                        else f"Assigned to {assignee.get_full_name() or assignee.get_username()}.",
+                    )
             elif action == "add_note":
                 run_action(
                     "add_internal_note",
@@ -504,6 +541,8 @@ def conversation_detail(request, public_id: str):
                     body=request.POST.get("body", "").strip(),
                     author=request.user,
                 )
+                if in_pane:
+                    messages.success(request, "Note added.")
             elif action == "mark_read":
                 conversation.mark_read()
             elif action == "close":
@@ -513,8 +552,14 @@ def conversation_detail(request, public_id: str):
                 conversation.close(
                     resolution=resolution, actor=f"user:{request.user.pk}"
                 )
+                if in_pane:
+                    messages.success(
+                        request, "Closed. It reopens if the customer writes again."
+                    )
             elif action == "reopen":
                 conversation.reopen(actor=f"user:{request.user.pk}")
+                if in_pane:
+                    messages.success(request, "Conversation reopened.")
             elif action == "start_form":
                 form = ConversationForm.objects.filter(
                     account=account,
@@ -526,6 +571,8 @@ def conversation_detail(request, public_id: str):
                 run_action(
                     "start_conversation_form", ctx, conversation=conversation, form=form
                 )
+                if in_pane:
+                    messages.success(request, f"Started “{form.name}”.")
         except ActionError as exc:
             if _is_ajax(request):
                 return JsonResponse({"ok": False, "error": str(exc)}, status=400)
@@ -533,7 +580,11 @@ def conversation_detail(request, public_id: str):
         else:
             if _is_ajax(request):
                 return JsonResponse({"ok": True})
-        return redirect("conversations:detail", public_id=public_id)
+            mutated = True
+        if not in_pane:
+            return redirect("conversations:detail", public_id=public_id)
+        # In the pane: re-render it below, from fresh state, instead of redirecting away.
+        conversation = get_visible_conversation(account, public_id)
 
     if (
         viewing_as(request) is None
@@ -555,6 +606,7 @@ def conversation_detail(request, public_id: str):
         "sendMediaUrl": reverse(
             "conversations:send_media", args=[conversation.public_id]
         ),
+        "typingUrl": reverse("conversations:typing", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
         "open": conversation.status == Conversation.Status.OPEN,
         # Only WhatsApp enforces a messaging window today; other channels report
@@ -693,18 +745,46 @@ def conversation_detail(request, public_id: str):
         "active_form_response": active_form_response,
         "published_forms": published_forms,
         "can_delete": _can_delete(request, account),
+        "in_pane": in_pane,
+        "detail_url": reverse("conversations:detail", args=[conversation.public_id]),
     }
     # The inbox list (templates/conversations/inbox.html, ≥lg) loads a conversation into its
     # own pane via a plain background GET — see static/js/inbox_pane.js — rather than a full
     # navigation, so opening one never re-loads the shell or the list beside it. Below lg there
     # is no pane to load into, so a row's own href still points here and gets the full page below.
-    if (
-        is_background(request)
-        and request.headers.get("HX-Target") == "conversation-pane-inner"
-    ):
-        return render(request, "conversations/_conversation_pane.html", pane_context)
+    if in_pane:
+        response = render(
+            request, "conversations/_conversation_pane.html", pane_context
+        )
+        _messages_to_toast(request, response)
+        if mutated:
+            # Assignment, close and reopen change the list beside the pane: refresh it now.
+            response["HX-Trigger"] = "inbox-refresh"
+        return response
 
     return render(request, "conversations/conversation_detail.html", pane_context)
+
+
+def _in_pane(request) -> bool:
+    return (
+        is_background(request)
+        and request.headers.get("HX-Target") == "conversation-pane-inner"
+    )
+
+
+_TOAST_TYPES = {"error": "danger", "warning": "warning", "info": "info"}
+
+
+def _messages_to_toast(request, response) -> None:
+    """A pane swap renders no page shell, so queued flash messages would surface on some
+    later page. Carry the latest one as an X-Toast instead (static/js/app.js shows it)."""
+    from apps.accounts.utils import hx_toast
+
+    last = None
+    for message in messages.get_messages(request):
+        last = message
+    if last is not None:
+        hx_toast(response, _TOAST_TYPES.get(last.level_tag, "success"), str(last))
 
 
 def _can_delete(request, account) -> bool:
@@ -1236,6 +1316,15 @@ def messages_feed(request, public_id: str):
         .only("id", "status", "metadata")[:20]
     )
 
+    from apps.conversations import presence
+
+    # Support looking "as" the business is not a teammate in the conversation.
+    if viewing_as(request) is None:
+        presence.mark_viewing(conversation.pk, request.user.pk)
+    others = presence.for_conversation(
+        conversation.pk, list(_team_members(account)), exclude_user_id=request.user.pk
+    )
+
     return JsonResponse(
         {
             "messages": [
@@ -1273,8 +1362,70 @@ def messages_feed(request, public_id: str):
                 },
             ),
             "open": conversation.status == Conversation.Status.OPEN,
+            "presence": others,
         }
     )
+
+
+# Channels whose API can show the customer that we're typing. Neither tells us when the
+# customer is typing: Meta's webhooks carry messages and receipts, never typing.
+_CUSTOMER_TYPING_CHANNELS = {
+    Conversation.Channel.WHATSAPP,
+    Conversation.Channel.INSTAGRAM,
+}
+_CUSTOMER_TYPING_EVERY = 20  # seconds between indicators sent to Meta, per conversation
+
+
+@login_required
+@require_POST
+def conversation_typing(request, public_id: str):
+    """The composer's "someone is writing a reply" ping (static/js/chat.js pingTyping).
+
+    Marks the teammate as typing for everyone else in the conversation, and — at most every
+    20 seconds, on an open conversation inside the 24-hour window — shows the customer a
+    typing indicator on WhatsApp or Instagram. Best effort: the answer is always ``ok``.
+    """
+    from django.core.cache import cache
+
+    from apps.conversations import presence
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"ok": False, "error": "no account"}, status=403)
+    conversation = get_visible_conversation(account, public_id)
+    if viewing_as(request) is not None:
+        return JsonResponse(
+            {"ok": True}
+        )  # support viewing "as" the business doesn't type
+
+    presence.mark_typing(conversation.pk, request.user.pk)
+
+    if (
+        conversation.channel in _CUSTOMER_TYPING_CHANNELS
+        and conversation.status == Conversation.Status.OPEN
+        and _window_is_open(conversation)
+        and cache.add(
+            f"typing-out:{conversation.pk}", 1, _CUSTOMER_TYPING_EVERY
+        )  # True only for the first ping in the window
+    ):
+        from apps.conversations.tasks import send_typing_indicator
+
+        try:
+            send_typing_indicator.delay(conversation.pk)
+        except Exception:
+            logger.debug("typing indicator not queued for %s", conversation.pk)
+
+    if getattr(settings, "REALTIME_SSE_ENABLED", False):
+        from apps.core import realtime
+
+        # The open panes already re-poll on "message.created" for their own conversation
+        # (chat.js), and that poll carries the presence: no new event wiring needed.
+        realtime.publish(
+            account.pk,
+            "message.created",
+            {"conversation_id": conversation.public_id},
+        )
+    return JsonResponse({"ok": True})
 
 
 @login_required

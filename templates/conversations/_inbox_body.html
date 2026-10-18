@@ -16,30 +16,33 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
   which would also scroll the page vertically.{% endcomment %}
   <nav class="inbox-tabs relative" aria-label="Inbox views"
        x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
-    {% with ch=channel|yesno:"&channel=,"|add:channel ov=overdue_only|yesno:"&overdue=1," %}
-    <a href="?view=needs_attention{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
+    {% comment %}Absolute links (the inbox URL plus the current query, re-rendered by
+    querystring): once a conversation is open in the two-pane view the address bar shows
+    that conversation, and a bare "?view=" would resolve against it. channel and overdue
+    carry across tabs; the page and the poll's digest (h) never do.{% endcomment %}
+    {% url 'conversations:inbox' as inbox_url %}
+    <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
       Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
     </a>
-    <a href="?view=unassigned{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'unassigned' %}aria-current="page"{% endif %}
+    <a href="{{ inbox_url }}{% querystring view='unassigned' page=None h=None %}" class="inbox-tab" {% if view == 'unassigned' %}aria-current="page"{% endif %}
        title="Open conversations nobody has been assigned to yet">
       Unassigned{% if unassigned_count %}<span class="inbox-tab-count">{{ unassigned_count }}</span>{% endif %}
     </a>
-    <a href="?view=missed{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
+    <a href="{{ inbox_url }}{% querystring view='missed' page=None h=None %}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
        title="Customers who wrote and got no reply for over 24 hours">
       Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>{% endif %}
     </a>
-    <a href="?view=assigned{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
+    <a href="{{ inbox_url }}{% querystring view='assigned' page=None h=None %}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
       {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
       third of the screen, and it was the tab that got cut off.{% endcomment %}
       <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
     </a>
-    <a href="?view=all{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
+    <a href="{{ inbox_url }}{% querystring view='all' page=None h=None %}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
       All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
     </a>
-    <a href="?view=closed{{ ch }}{{ ov }}" class="inbox-tab" {% if view == 'closed' %}aria-current="page"{% endif %}>
+    <a href="{{ inbox_url }}{% querystring view='closed' page=None h=None %}" class="inbox-tab" {% if view == 'closed' %}aria-current="page"{% endif %}>
       Closed{% if closed_count %}<span class="inbox-tab-count">{{ closed_count }}</span>{% endif %}
     </a>
-    {% endwith %}
   </nav>
 
   {% comment %}On a phone the filter is a round icon the size of a tab, with
@@ -48,7 +51,7 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
   beside the tabs left room for only two of the four. From sm up it is the
   ordinary select. The dot marks a filter in force, since the icon alone would
   not show which channel is selected.{% endcomment %}
-  <form method="get" class="inbox-filter{% if channel %} is-active{% endif %}"
+  <form method="get" action="{% url 'conversations:inbox' %}" class="inbox-filter{% if channel %} is-active{% endif %}"
         x-data="{ busy: false }" @submit="busy = true">
     <input type="hidden" name="view" value="{{ view }}" />
     <span class="inbox-filter-icon" aria-hidden="true">
@@ -64,10 +67,10 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
     {% comment %}Combines with any tab above ("My" + overdue, "Unassigned" +
     overdue) rather than being its own tab, since every tab can meaningfully
     be narrowed to "...and it's overdue".{% endcomment %}
-    <label class="inbox-filter-toggle hidden sm:inline-flex">
+    <label class="inbox-filter-toggle{% if overdue_only %} is-on{% endif %}">
       <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.requestSubmit()"
              :disabled="busy" />
-      Overdue only
+      <span class="sm:hidden">Overdue</span><span class="hidden sm:inline">Overdue only</span>
     </label>
   </form>
 </div>
@@ -78,16 +81,16 @@ can silently keep narrowing the list to one channel with only the small dot on t
 as a hint. Spell it out, with a one-click way back to every channel.{% endcomment %}
 <p class="inbox-filter-note">
   Showing {% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %} only ·
-  <a href="?view={{ view }}">Clear filter</a>
+  <a href="{% url 'conversations:inbox' %}{% querystring channel=None page=None h=None %}">Clear filter</a>
 </p>
 {% endif %}
 
 {% if page and page.object_list %}
 <ul class="inbox-list">
   {% for c in page %}
-  {% with name=c.contact.full_name|default:c.contact.email|default:c.contact.phone %}
+  {% with name=c.contact.display_name %}
   <li>
-    <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}">
+    <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}" data-title="{{ name }}">
       {% comment %}A phone number's first character is "+", which is not an
       initial; contacts with no name get a person glyph instead.{% endcomment %}
       <span class="chat-avatar inbox-avatar" aria-hidden="true">
@@ -127,7 +130,7 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
         </div>
 
         <p class="inbox-preview">
-          {% if c.preview %}{% if c.preview.direction == 'outbound' %}<span class="text-gray-500">You: </span>{% endif %}{{ c.preview.body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
+          {% if c.has_messages %}{% if c.preview_direction == 'outbound' %}<span class="text-gray-500">You: </span>{% endif %}{{ c.preview_body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
         </p>
 
         <div class="inbox-meta">
@@ -141,6 +144,14 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
           {% comment %}No badge at all for a conversation with no messages yet
           (state INDETERMINATE) — it used to fall through to "Closed".{% endcomment %}
           {% include "components/channel_tag.html" with channel=c.channel compact=True %}
+          {% comment %}A teammate in this conversation right now (apps.conversations.presence):
+          typing beats viewing, so two people don't open the same customer and both reply.{% endcomment %}
+          {% if c.presence %}
+          <span class="inbox-presence{% if c.presence.typing %} is-typing{% endif %}"
+                title="{% if c.presence.typing %}{{ c.presence.typing|join:', ' }} typing{% else %}{{ c.presence.viewing|join:', ' }} viewing{% endif %}">
+            {% if c.presence.typing %}{{ c.presence.typing.0 }} is typing…{% else %}{% include "components/icon.html" with name="eye" class="w-3.5 h-3.5" %}{{ c.presence.viewing.0 }}{% endif %}
+          </span>
+          {% endif %}
           {% if c.assigned_to %}
           <span class="inbox-assignee">
             {% include "components/icon.html" with name="user" class="w-3.5 h-3.5" %}
@@ -177,4 +188,4 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
 </div>
 {% endif %}
 
-{% include "components/pagination.html" with page=page %}
+{% include "components/pagination.html" with page=page base=inbox_url %}

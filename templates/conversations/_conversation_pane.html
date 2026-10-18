@@ -1,5 +1,8 @@
 {% load static ui %}
-{% with display_name=conversation.contact.full_name|default:conversation.contact.phone|default:conversation.contact.email %}
+{% with display_name=conversation.contact.display_name %}
+{% comment %}Forms that change this conversation. On its own page they post and redirect
+as before; loaded into the two-pane inbox (in_pane) they hx-post into the pane, so the
+list stays beside it and the view answers with the refreshed pane plus a toast.{% endcomment %}
 {{ chat_config|json_script:"chat-config" }}
 {% if REALTIME_SSE_ENABLED %}
 {% comment %}
@@ -40,7 +43,7 @@
         /* minmax(0, 1fr) caps the row at the container's height. With the default
            `auto` row, the pane grows to fit every message and the thread never scrolls. */
         grid-template-rows: minmax(0, 1fr);
-        height: calc(100dvh - var(--cv-top)); min-height: 520px; }
+        height: calc(100dvh - var(--cv-top)); min-height: min(520px, calc(100dvh - var(--cv-top))); }
   .cv > * { min-height: 0; }
 
   /* The pane's actual available width is what should drive its layout, not the browser
@@ -94,6 +97,51 @@
        letting it scroll internally keeps a guaranteed minimum of thread visible either way. */
     .cv-footer { max-height: min(60vh, calc(100% - 6rem)); overflow-y: auto; }
   }
+  /* In the two-pane inbox the list is already beside the pane: no "back" needed. */
+  @media (min-width: 1024px) { #inbox-split .cv-h-back { display: none; } }
+
+  /* Header menus (Assign, Close, More): a button that opens a list of choices, each a
+     submit button — nothing changes until a choice is made (an auto-submitting <select>
+     fired on arrow keys). See cvMenu in static/js/chat.js. */
+  .cv-menu { position: relative; }
+  .cv-menu-btn { display: inline-flex; align-items: center; gap: .375rem; height: 2.25rem; padding: 0 .625rem; border-radius: .625rem;
+                 font-size: .8125rem; font-weight: 500; color: var(--cv-ink); border: 1px solid var(--cv-line); background: var(--cv-surface); }
+  .cv-menu-btn:hover { background: var(--cv-hover); }
+  .cv-menu-btn:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+  .cv-menu-btn .cv-chip { display: inline-flex; align-items: center; justify-content: center; width: 1.375rem; height: 1.375rem; border-radius: 999px;
+                          font-size: .6875rem; font-weight: 600; color: var(--cv-accent); background: color-mix(in srgb, var(--cv-accent) 12%, var(--cv-surface)); }
+  .cv-menu-btn--icon { width: 2.25rem; padding: 0; justify-content: center; border-color: transparent; background: transparent; color: var(--cv-ink-subtle); }
+  .cv-menu-panel { position: absolute; right: 0; top: calc(100% + .375rem); z-index: var(--z-dropdown); min-width: 13rem; max-width: 18rem;
+                   max-height: 20rem; overflow-y: auto; padding: .375rem; background: var(--cv-surface); border: 1px solid var(--cv-line);
+                   border-radius: .75rem; box-shadow: var(--shadow-pop); }
+  .cv-menu-label { padding: .375rem .625rem .25rem; font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--cv-ink-subtle); }
+  .cv-menu-item { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .5rem .625rem; border-radius: .5rem; text-align: left;
+                  font-size: .875rem; color: var(--cv-ink); }
+  .cv-menu-item:hover, .cv-menu-item:focus-visible { background: var(--cv-hover); outline: none; }
+  .cv-menu-item[aria-checked="true"] { font-weight: 600; }
+  .cv-menu-item svg { width: 1rem; height: 1rem; flex: none; color: var(--cv-ink-subtle); }
+  .cv-menu-sep { height: 1px; margin: .25rem .375rem; background: var(--cv-line); }
+  /* Narrow pane: the Assign label and the Close menu fold away (Close moves into More),
+     so the customer's name keeps its width. */
+  .cv-wide-only { display: none; }
+  .cv-assign-label { display: none; }
+  @container cvpane (min-width: 44rem) {
+    .cv-wide-only { display: block; }
+    .cv-narrow-only { display: none; }
+    .cv-assign-label { display: inline; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+
+  /* Teammates in this conversation, and the guard against two replies at once. */
+  .cv-presence { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem .75rem; font-size: .75rem; color: var(--cv-ink-muted); }
+  .cv-dots { display: inline-flex; gap: 2px; }
+  .cv-dots span { width: 4px; height: 4px; border-radius: 999px; background: currentColor; animation: cv-bounce 1.2s infinite ease-in-out; }
+  .cv-dots span:nth-child(2) { animation-delay: .15s; }
+  .cv-dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes cv-bounce { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+  @media (prefers-reduced-motion: reduce) { .cv-dots span { animation: none; opacity: .7; } }
+  .cv-collision { display: flex; align-items: flex-start; gap: .5rem; margin-bottom: .625rem; padding: .625rem .75rem; border-radius: .625rem;
+                  background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border); color: var(--cv-warn-fg); font-size: .8125rem; }
+
   .cv-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 999px; font-weight: 600;
                color: var(--cv-accent); background: color-mix(in srgb, var(--cv-accent) 12%, var(--cv-surface)); }
 
@@ -312,7 +360,7 @@
   {% endif %}
 </style>
 
-<div class="cv-wrap">
+<div class="cv-wrap" data-title="{{ display_name }}">
 <div class="cv" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))" @keydown.escape.window="infoOpen = false">
   <div x-show="infoOpen" x-cloak x-transition.opacity @click="infoOpen = false"
        class="cv-backdrop"></div>
@@ -323,50 +371,97 @@
       <a href="{% url 'conversations:inbox' %}" class="cv-iconbtn cv-h-back -ml-1" aria-label="Back to inbox">
         {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
       </a>
-      <span class="cv-avatar cv-h-avatar text-sm" aria-hidden="true">{{ display_name|default:"?"|slice:":1"|upper }}</span>
+      <span class="cv-avatar cv-h-avatar text-sm" aria-hidden="true">{% if conversation.contact.full_name %}{{ conversation.contact.full_name|slice:":1"|upper }}{% elif conversation.contact.email and not conversation.contact.phone %}{{ conversation.contact.email|slice:":1"|upper }}{% else %}{% include "components/icon.html" with name="user" class="w-5 h-5" %}{% endif %}</span>
       <h1 class="cv-h-name text-base font-semibold text-ink truncate">{{ display_name }}</h1>
       <div class="cv-h-status" x-html="statusHtml"></div>
 
       <div class="cv-h-actions flex items-center gap-1 shrink-0">
-        <form method="post" class="cv-assign flex items-center gap-1">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="assign" />
-          <svg class="cv-h-icon w-4 h-4 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
-          <label class="sr-only" for="assignee">Assign conversation</label>
-          <select id="assignee" name="assignee" class="select select-sm" onchange="this.form.submit()">
-            {% for member in team_members %}
-            <option value="{{ member.pk }}" {% if member.pk == conversation.assigned_to_id %}selected{% endif %}>
-              {% if member.pk == request.user.id %}{% if member.pk == conversation.assigned_to_id %}Assigned to you{% else %}Assign to me{% endif %}{% else %}{{ member.get_full_name|default:member.username }}{% endif %}
-            </option>
-            {% endfor %}
-            <option value="none" {% if not conversation.assigned_to_id %}selected{% endif %}>Unassigned</option>
-          </select>
-        </form>
-        {# Driven by the live `open` flag, so it reappears if the customer writes again while the page is open. #}
-        <form method="post" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %} class="cv-close flex items-center gap-1">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="close" />
-          <svg class="cv-h-icon w-4 h-4 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
-          <label class="sr-only" for="close-resolution">Close conversation</label>
-          <select id="close-resolution" name="resolution" class="select select-sm" onchange="this.form.submit()" title="Close conversation. It reopens if the customer writes again.">
-            <option value="" selected disabled>Close as…</option>
-            {% for value, label in conversation.Resolution.choices %}
-            <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-          </select>
-        </form>
-        {# ── Create support ticket ───────────────────────────────────────────── #}
-        <form method="post" action="{% url 'conversations:create_ticket' conversation.public_id %}">
-          {% csrf_token %}
-          <button type="submit" class="cv-iconbtn" title="Create support ticket from this conversation"
-                  aria-label="Create support ticket">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-              <rect x="9" y="3" width="6" height="4" rx="1"/>
-              <path d="M9 12h6M9 16h4"/>
-            </svg>
+        {# ── Assign ── #}
+        <div class="cv-menu" x-data="cvMenu">
+          <button type="button" class="cv-menu-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+                  aria-label="Assigned to {% if conversation.assigned_to_id == request.user.id %}you{% elif conversation.assigned_to %}{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.get_username }}{% else %}nobody{% endif %}. Change">
+            <span class="cv-chip" aria-hidden="true">{% if conversation.assigned_to %}{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.get_username|slice:":1"|upper }}{% else %}{% include "components/icon.html" with name="user" class="w-3.5 h-3.5" %}{% endif %}</span>
+            <span class="cv-assign-label">{% if conversation.assigned_to_id == request.user.id %}You{% elif conversation.assigned_to %}{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.get_username }}{% else %}Unassigned{% endif %}</span>
+            {% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 text-gray-400" %}
           </button>
-        </form>
+          <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Assign conversation">
+            <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+              {% csrf_token %}
+              <input type="hidden" name="action" value="assign" />
+              {% if conversation.assigned_to_id != request.user.id %}
+              <button type="submit" name="assignee" value="{{ request.user.id }}" class="cv-menu-item" role="menuitem">
+                {% include "components/icon.html" with name="user" class="w-4 h-4" %}Assign to me
+              </button>
+              <div class="cv-menu-sep" role="separator"></div>
+              {% endif %}
+              {% for member in team_members %}{% if member.pk != request.user.id %}
+              <button type="submit" name="assignee" value="{{ member.pk }}" class="cv-menu-item" role="menuitemradio"
+                      aria-checked="{% if member.pk == conversation.assigned_to_id %}true{% else %}false{% endif %}">
+                <span class="w-4 text-center text-xs font-semibold text-gray-500" aria-hidden="true">{{ member.get_full_name|default:member.username|slice:":1"|upper }}</span>
+                <span class="truncate">{{ member.get_full_name|default:member.username }}</span>
+                {% if member.pk == conversation.assigned_to_id %}{% include "components/icon.html" with name="check" class="w-4 h-4 ml-auto" %}{% endif %}
+              </button>
+              {% endif %}{% endfor %}
+              <button type="submit" name="assignee" value="none" class="cv-menu-item" role="menuitemradio"
+                      aria-checked="{% if conversation.assigned_to_id %}false{% else %}true{% endif %}">
+                {% include "components/icon.html" with name="x" class="w-4 h-4" %}Unassigned
+                {% if not conversation.assigned_to_id %}{% include "components/icon.html" with name="check" class="w-4 h-4 ml-auto" %}{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {# ── Close (wide panes; narrow ones find it under More) ── Driven by the live `open` flag, so it reappears if the customer writes again. #}
+        <div class="cv-menu cv-wide-only" x-data="cvMenu" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %}>
+          <button type="button" class="cv-menu-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+                  title="Close the conversation. It reopens if the customer writes again.">
+            {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-gray-400" %}
+            Close
+            {% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 text-gray-400" %}
+          </button>
+          <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Close as">
+            <p class="cv-menu-label" aria-hidden="true">Close as</p>
+            <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+              {% csrf_token %}
+              <input type="hidden" name="action" value="close" />
+              {% for value, label in conversation.Resolution.choices %}
+              <button type="submit" name="resolution" value="{{ value }}" class="cv-menu-item" role="menuitem">{{ label }}</button>
+              {% endfor %}
+            </form>
+          </div>
+        </div>
+
+        {# ── More ── #}
+        <div class="cv-menu" x-data="cvMenu">
+          <button type="button" class="cv-menu-btn cv-menu-btn--icon" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="More actions">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg>
+          </button>
+          <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="More actions">
+            <div class="cv-narrow-only" x-show="open" {% if conversation.status != 'open' %}x-cloak{% endif %}>
+              <p class="cv-menu-label" aria-hidden="true">Close as</p>
+              <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="close" />
+                {% for value, label in conversation.Resolution.choices %}
+                <button type="submit" name="resolution" value="{{ value }}" class="cv-menu-item" role="menuitem">
+                  {% include "components/icon.html" with name="check-circle" class="w-4 h-4" %}{{ label }}
+                </button>
+                {% endfor %}
+              </form>
+              <div class="cv-menu-sep" role="separator"></div>
+            </div>
+            <form method="post" action="{% url 'conversations:create_ticket' conversation.public_id %}">
+              {% csrf_token %}
+              <button type="submit" class="cv-menu-item" role="menuitem">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                Create support ticket
+              </button>
+            </form>
+            <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="cv-menu-item" role="menuitem">
+              {% include "components/icon.html" with name="user" class="w-4 h-4" %}View customer profile
+            </a>
+          </div>
+        </div>
         <button type="button" class="cv-iconbtn cv-info-btn" @click="infoOpen = true" :aria-expanded="infoOpen" aria-controls="chat-info" aria-label="Conversation details">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
         </button>
@@ -500,6 +595,15 @@
           window is closed (x-effect on .cv-tpl), so a "Use a template" button here would only
           ever point at something already open — pure height with no function of its own.
         {% endcomment %}
+        <p class="cv-presence" x-show="presenceText()" x-cloak role="status" aria-live="polite">
+          <span class="cv-dots" x-show="presence.typing.length" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span x-text="presenceText()"></span>
+        </p>
+        <div class="cv-collision" x-show="collision" x-cloak role="alert">
+          <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          <p class="flex-1"><span x-text="collision"></span> Check it before you send yours<span x-show="collisionAck">, or press Send again to send anyway</span>.</p>
+          <button type="button" class="text-xs underline" @click="collision = ''; collisionAck = false">Dismiss</button>
+        </div>
         <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <p class="flex-1">
@@ -610,7 +714,7 @@
           </template>
         </div>
 
-        <form method="post" class="cv-composer" x-ref="composer" @submit.prevent="send()">
+        <form method="post" action="{{ detail_url }}" class="cv-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
           <input type="hidden" name="action" value="reply" />
           <input type="hidden" name="ai_proposal" :value="aiUsedId || ''" />
@@ -685,7 +789,7 @@
             Reminder set for {{ open_followup.due_at|date:"D j M, H:i" }}
           </span>
           {% else %}
-          <form method="post" class="contents">
+          <form method="post" class="contents" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
             {% csrf_token %}
             <input type="hidden" name="action" value="create_followup" />
             <input type="hidden" name="when" value="tomorrow" />
@@ -723,7 +827,7 @@
             <span class="cv-badge" x-show="!windowOpen" x-cloak>Required</span>
             <svg class="cv-chev w-4 h-4 ml-auto text-gray-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </summary>
-          <form method="post" class="p-3 space-y-3" x-data="{ tpl: '' }"
+          <form method="post" class="p-3 space-y-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} x-data="{ tpl: '' }"
                 x-on:ai-template-apply.window="tpl = String($event.detail.templateId); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
             {% csrf_token %}
             <input type="hidden" name="action" value="send_template" />
@@ -763,7 +867,7 @@
           This conversation is closed{% if conversation.resolution %} as <strong>{{ conversation.get_resolution_display }}</strong>{% endif %}.
           It reopens if the customer writes again.
         </span>
-        <form method="post">
+        <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="action" value="reopen" />
           <button class="btn btn-ghost btn-sm">Reopen</button>
@@ -839,7 +943,11 @@
           <p class="font-medium text-ink">{{ item.automation }} <span class="font-normal text-gray-400">· {{ item.when|date:"j M, H:i" }}</span></p>
           <ul class="mt-0.5 space-y-0.5">
             {% for line in item.lines %}
-            <li class="{% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">{% if line.ok %}✓{% else %}✗{% endif %} {{ line.text }}</li>
+            <li class="flex items-start gap-1.5 {% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">
+              {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
+              {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
+              <span>{{ line.text }}</span>
+            </li>
             {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
           </ul>
         </div>
@@ -859,19 +967,24 @@
         <h2 class="cv-h">Tags</h2>
         <div class="flex flex-wrap gap-1 mb-2">
           {% for t in conversation.contact.tags.all %}
-          <form method="post" action="{% url 'contacts:tag_remove' conversation.contact.public_id %}" class="inline-flex">
+          {% url 'contacts:tag_remove' conversation.contact.public_id as tag_url %}
+          <form method="post" action="{{ tag_url }}" class="inline-flex" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
             {% csrf_token %}
             <input type="hidden" name="tag" value="{{ t.name }}" />
-            <input type="hidden" name="next" value="{{ request.path }}" />
-            <span class="badge badge-neutral inline-flex items-center gap-1">{{ t.name }}
-              <button class="opacity-60 hover:opacity-100" aria-label="Remove tag {{ t.name }}" title="Remove tag">&times;</button>
+            <input type="hidden" name="next" value="{{ detail_url }}" />
+            <span class="badge badge-neutral inline-flex items-center gap-0.5 pr-0.5">{{ t.name }}
+              <button class="inline-flex items-center justify-center w-6 h-6 -my-1 rounded-full opacity-60 hover:opacity-100 hover:bg-hover"
+                      aria-label="Remove tag {{ t.name }}" title="Remove tag">
+                {% include "components/icon.html" with name="x" class="w-3.5 h-3.5" %}
+              </button>
             </span>
           </form>
           {% empty %}<span class="text-sm text-gray-400">No tags yet.</span>{% endfor %}
         </div>
-        <form method="post" action="{% url 'contacts:tag_add' conversation.contact.public_id %}" class="flex gap-2">
+        {% url 'contacts:tag_add' conversation.contact.public_id as tag_url %}
+        <form method="post" action="{{ tag_url }}" class="flex gap-2" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.path }}" />
+          <input type="hidden" name="next" value="{{ detail_url }}" />
           <label class="sr-only" for="conversation-add-tag">Add a tag</label>
           <input id="conversation-add-tag" name="tag" class="input" maxlength="40" placeholder="Add a tag…" />
           <button class="btn btn-secondary btn-sm">Add</button>
@@ -924,7 +1037,7 @@
       {% elif published_forms %}
       <div class="cv-section">
         <h2 class="cv-h">Start a form</h2>
-        <form method="post" class="flex gap-2">
+        <form method="post" class="flex gap-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="action" value="start_form" />
           <label class="sr-only" for="start-form-id">Form</label>
@@ -949,9 +1062,10 @@
             {% if open_followup.note %}<p class="text-gray-600 mt-0.5">{{ open_followup.note }}</p>{% endif %}
           </div>
         </div>
-        <form method="post" action="{% url 'conversations:followup_complete' open_followup.pk %}" class="mt-2">
+        {% url 'conversations:followup_complete' open_followup.pk as tag_url %}
+        <form method="post" action="{{ tag_url }}" class="mt-2" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
-          <input type="hidden" name="next" value="{% url 'conversations:detail' conversation.public_id %}" />
+          <input type="hidden" name="next" value="{{ detail_url }}" />
           <button class="btn btn-ghost btn-sm w-full">Mark done</button>
         </form>
         {% else %}
@@ -963,7 +1077,7 @@
         {% endcomment %}
         <details class="cv-followup-more">
           <summary class="text-sm text-gray-500 cursor-pointer">Set a custom reminder</summary>
-          <form method="post" class="space-y-2 mt-2" x-data="{ when: '1h' }">
+          <form method="post" class="space-y-2 mt-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} x-data="{ when: '1h' }">
             {% csrf_token %}
             <input type="hidden" name="action" value="create_followup" />
             <div class="cv-pills" role="radiogroup" aria-label="Remind me">
@@ -993,7 +1107,7 @@
           <li class="text-sm text-gray-500">No notes yet. Add context for whoever picks this up next.</li>
           {% endfor %}
         </ul>
-        <form method="post" class="flex gap-2 mt-3">
+        <form method="post" class="flex gap-2 mt-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="action" value="add_note" />
           <input type="text" name="body" placeholder="Add a note…" class="input flex-1" aria-label="New internal note" required />
