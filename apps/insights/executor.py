@@ -287,6 +287,24 @@ def _execute_campaign(policy, targets, account) -> dict:
         raise PolicyActionError(
             f"Policy {policy.pk} action.campaign_id is missing — cannot dispatch campaign."
         )
+    from apps.whatsapp.models import WhatsAppCampaign
+
+    campaign = WhatsAppCampaign.objects.filter(pk=campaign_id, account=account).first()
+    if campaign is None:
+        raise PolicyActionError(
+            f"Policy {policy.pk}: campaign {campaign_id} doesn't exist for this account."
+        )
+    # A campaign is sent once: re-dispatching a finished (or failed) one does
+    # nothing, so recording it as "queued" would claim a send that never
+    # happened — and the duplicate guard would then hold off retries for days.
+    if campaign.status not in (
+        WhatsAppCampaign.Status.QUEUED,
+        WhatsAppCampaign.Status.SENDING,
+    ):
+        raise PolicyActionError(
+            f"Policy {policy.pk}: campaign {campaign_id} has already "
+            f"{campaign.get_status_display().lower()} and can't be sent again."
+        )
     send_campaign.delay(campaign_id)
     return {"action": "campaign", "campaign_id": campaign_id, "dispatch": "queued"}
 

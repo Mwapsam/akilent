@@ -309,3 +309,16 @@ def test_email_contact_patch_still_works(client, api_key):  # regression
     r = _patch(client, key, f"/contacts/{cid}", {"first_name": "Ada"})
     assert r.status_code == 200
     assert Contact.objects.get(account=acc, email="a@x.com").first_name == "Ada"
+
+
+@pytest.mark.django_db
+def test_duplicate_list_and_segment_names_conflict_instead_of_500(client, api_key):
+    key, _ = api_key
+    assert _post(client, key, "/lists", {"name": "VIPs"}).status_code == 201
+    resp = _post(client, key, "/lists", {"name": "VIPs"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "already_exists"
+
+    seg = {"name": "Recent", "definition": {}}
+    assert _post(client, key, "/segments", seg).status_code == 201
+    assert _post(client, key, "/segments", seg).status_code == 409

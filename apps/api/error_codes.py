@@ -46,6 +46,7 @@ class ErrorCode:
     IDEMPOTENCY_KEY_IN_PROGRESS = "idempotency_key_in_progress"
 
     # generic
+    ALREADY_EXISTS = "already_exists"
     NOT_FOUND = "not_found"
     THROTTLED = "throttled"
     SERVER_ERROR = "server_error"
@@ -138,6 +139,10 @@ CATALOG: dict[str, dict[str, str]] = {
     },
     ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS: {
         "message": "A request with this Idempotency-Key is still being processed.",
+        "http": "409",
+    },
+    ErrorCode.ALREADY_EXISTS: {
+        "message": "Something with that name already exists.",
         "http": "409",
     },
     ErrorCode.NOT_FOUND: {

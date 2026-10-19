@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.utils.text import slugify
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -17,6 +18,13 @@ from apps.contacts.services import (
     upsert_contact,
     upsert_contact_by_phone,
 )
+
+
+def _already_exists(message: str) -> Response:
+    return Response(
+        {"error": {"code": "already_exists", "message": message}},
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _paging(request, *, default=50, cap=200):
@@ -279,6 +287,10 @@ class ListCollectionView(BaseApiView):
                 {"error": {"code": "validation_error", "message": "name is required"}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if ContactList.objects.filter(
+            account=request.user, slug=slugify(name)[:160]
+        ).exists():
+            return _already_exists(f'A list called "{name}" already exists.')
         l = ContactList.objects.create(account=request.user, name=name)
         return Response({"id": l.slug, "name": l.name}, status=status.HTTP_201_CREATED)
 
@@ -314,6 +326,10 @@ class SegmentCollectionView(BaseApiView):
                 {"error": {"code": "validation_error", "message": "name is required"}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if Segment.objects.filter(
+            account=request.user, slug=slugify(d["name"])[:160]
+        ).exists():
+            return _already_exists(f'A segment called "{d["name"]}" already exists.')
         definition = d.get("definition") or {}
         try:
             count = count_for(definition, request.user)

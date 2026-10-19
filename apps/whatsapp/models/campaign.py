@@ -69,10 +69,21 @@ class WhatsAppCampaign(models.Model):
     # tell "still working, just a big list" from "the chunk chain died"
     # (e.g. an on_commit-scheduled .delay() that never reached the broker).
     last_progress_at = models.DateTimeField(blank=True, null=True)
+    # One per composer page load: a double-click or re-submitted form carries the
+    # same key and gets the campaign already created instead of a second
+    # broadcast to the same people.
+    submission_key = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["account", "status"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "submission_key"],
+                condition=~models.Q(submission_key=""),
+                name="unique_whatsapp_campaign_submission",
+            ),
+        ]
 
     def mark_sending(self) -> None:
         """Idempotent: called at the start of every chunk, but only the first
@@ -137,6 +148,9 @@ class WhatsAppCampaignRecipient(models.Model):
         OPTED_OUT = "opted_out", "Opted out"
         NO_WHATSAPP_IDENTITY = "no_whatsapp_identity", "No WhatsApp number"
         MISSING_VALUE = "missing_value", "Missing template value"
+        # A marketing template only goes to people who agreed to hear from the
+        # business (Meta policy; enforced again at send time in _authorize_send).
+        NOT_OPTED_IN = "not_opted_in", "Hasn't opted in"
 
     campaign = models.ForeignKey(
         WhatsAppCampaign, on_delete=models.CASCADE, related_name="recipients"

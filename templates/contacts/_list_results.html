@@ -1,49 +1,87 @@
-{% comment %}The results half of the contacts list: swapped on filter and paging.
+{% comment %}The results half of the customers list: swapped on filter and paging.
 
 Rendered inside the page on first load and returned on its own for HX-Request,
 so the table, its empty state and the pager all move together. The outer div is
 the swap target and re-renders itself, which is why it carries its own id.
+
+Selection state (`selected`, `allMatching`, `matching`) belongs to the page's
+wrapper; this block only knows the ids on the current page.
 {% endcomment %}
-<div id="contact-results">
+<div id="contact-results"
+     x-data="{ pageIds: [{% for c in page %}'{{ c.public_id }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+               get pageSelected() { return this.pageIds.length > 0 && this.pageIds.every(id => selected.includes(id)) } }"
+     x-init="matching = {{ matching }}">
   {% if page %}
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-2 text-sm">
+    <p class="text-gray-500" aria-live="polite">{% if filtered %}{{ matching }} match{{ matching|pluralize:"es" }}{% else %}Showing {{ page.start_index }}–{{ page.end_index }} of {{ matching }}{% endif %}</p>
+    {% if matching > page|length %}
+    <p x-show="pageSelected && !allMatching" x-cloak>
+      <button type="button" class="text-accent hover:text-accent-strong font-medium" @click="allMatching = true">
+        Select all {{ matching }} {% if filtered %}matching{% else %}customers{% endif %}
+      </button>
+    </p>
+    <p x-show="allMatching" x-cloak class="text-gray-600">
+      All {{ matching }} selected. <button type="button" class="text-accent hover:text-accent-strong font-medium" @click="clear()">Clear</button>
+    </p>
+    {% endif %}
+  </div>
   <div class="table-wrap">
     <table class="table table--cards">
       <thead>
-        <tr><th>Contact</th><th>Name</th><th>Phone</th><th>Tags</th><th>Status</th><th>Last engaged</th><th>First seen</th></tr>
+        <tr>
+          <th class="w-10">
+            <label class="inline-flex items-center justify-center w-8 h-8 -m-2 cursor-pointer">
+              <input type="checkbox" class="h-4 w-4 rounded" aria-label="Select everyone on this page"
+                     :checked="pageSelected"
+                     @change="if ($event.target.checked) { pageIds.forEach(id => { if (!selected.includes(id)) selected.push(id) }) } else { selected = selected.filter(id => !pageIds.includes(id)); allMatching = false }">
+            </label>
+          </th>
+          <th>Customer</th><th>WhatsApp</th><th>Tags</th><th>Last active</th>
+        </tr>
       </thead>
       <tbody>
         {% for c in page %}
-        <tr>
-          <td data-label="Contact"><a href="/contacts/{{ c.public_id }}/" class="font-medium text-accent hover:text-accent-strong">{{ c.email|default:c.phone|default:"Unknown contact" }}</a></td>
-          <td data-label="Name">{{ c.full_name|default:"—" }}</td>
-          <td data-label="Phone" class="tabular-nums">{{ c.phone|default:"—" }}</td>
-          <td data-label="Tags">{% for t in c.tags.all %}<span class="badge badge-neutral mr-1">{{ t.name }}</span>{% empty %}—{% endfor %}</td>
-          <td data-label="Status">
-            <span class="badge {% if c.status == 'subscribed' or c.status == 'active' %}badge-success{% elif c.status == 'unsubscribed' or c.status == 'bounced' or c.status == 'complained' %}badge-danger{% else %}badge-neutral{% endif %}">
-              {{ c.get_status_display }}
-            </span>
+        <tr :class="selected.includes('{{ c.public_id }}') || allMatching ? 'bg-[var(--tone-brand-bg)]' : ''">
+          <td class="w-10" data-label="Select">
+            <label class="inline-flex items-center justify-center w-11 h-11 -m-3 cursor-pointer">
+              <input type="checkbox" class="h-4 w-4 rounded" aria-label="Select {{ c.full_name|default:c.phone|default:c.email }}"
+                     :checked="allMatching || selected.includes('{{ c.public_id }}')"
+                     @change="toggle('{{ c.public_id }}')">
+            </label>
           </td>
-          <td data-label="Last engaged" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"Y-m-d"|default:"—" }}</td>
-          <td data-label="First seen" class="text-gray-500 tabular-nums">{{ c.first_seen|date:"Y-m-d" }}</td>
+          <td data-label="Customer">
+            <a href="{% url 'contacts:detail' c.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ c.full_name|default:c.phone|default:c.email|default:"Unnamed customer" }}</a>
+            {% if c.full_name %}<span class="block text-xs text-gray-500 tabular-nums">{{ c.phone|default:c.email|default:"" }}</span>{% endif %}
+          </td>
+          <td data-label="WhatsApp">{% include "components/wa_state.html" with state=c.wa_state %}</td>
+          <td data-label="Tags">{% for t in c.tags.all %}<span class="badge badge-neutral mr-1">{{ t.name }}</span>{% empty %}<span class="text-gray-400">—</span>{% endfor %}</td>
+          <td data-label="Last active" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"j M Y"|default:"—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% elif q or status or tag %}
+  {% include "components/pagination.html" with page=page target="#contact-results" %}
+  {% elif filtered %}
     {% comment %}
       A filter that matched nothing is a different state from having no
-      contacts at all, and it needs a different way out: clear the filter
-      rather than go and read the API docs.
+      customers at all, and it needs a different way out: clear the filter.
     {% endcomment %}
     <div class="table-wrap">
-      {% include "components/empty_state.html" with icon="search" title="No contacts match those filters" message="Try a different search term, or clear the filters to see everyone." action_url="/contacts/" action_label="Clear filters" %}
+      {% include "components/empty_state.html" with icon="search" title="No customers match those filters" message="Try a different search, or clear the filters to see everyone." action_url="/contacts/" action_label="Clear filters" %}
     </div>
   {% else %}
   <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="users" title="Your customers will appear here" message="Anyone who messages your WhatsApp number is added automatically. You can also add someone you met offline." %}
+    <div class="empty-state">
+      <span class="empty-state-icon">{% include "components/icon.html" with name="users" class="w-6 h-6" %}</span>
+      <p class="empty-state-title">Your customers will appear here</p>
+      <p class="empty-state-message">Anyone who messages you on WhatsApp or Instagram is added automatically. You can also add people yourself.</p>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('add-people-tab', 'paste'); $dispatch('modal-open', 'add-people')">Paste phone numbers</button>
+        <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('add-people-tab', 'csv'); $dispatch('modal-open', 'add-people')">Upload a CSV</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-open', 'new-contact')">Add one customer</button>
+      </div>
+    </div>
   </div>
   {% endif %}
-
-  {% include "components/pagination.html" with page=page target="#contact-results" %}
 </div>

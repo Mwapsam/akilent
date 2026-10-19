@@ -1,0 +1,72 @@
+{% comment %}A list's members: search, WhatsApp-status filter, pages. Swapped over HTMX.{% endcomment %}
+<section id="list-members" aria-labelledby="members-title">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <h2 id="members-title" class="text-lg font-semibold text-ink">People on this list</h2>
+    <form method="get" class="flex flex-wrap items-center gap-2"
+          hx-get="{% url 'contacts:list_detail' contact_list.pk %}" hx-target="#list-members" hx-swap="outerHTML"
+          hx-push-url="true" hx-indicator="#list-members"
+          hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select">
+      <input type="search" name="mq" value="{{ mq }}" class="input w-full sm:w-56" placeholder="Search this list…" aria-label="Search this list">
+      <select name="wa" class="select w-full sm:w-44" aria-label="Filter by WhatsApp status">
+        <option value="">Everyone</option>
+        {% for value, label in wa_choices %}<option value="{{ value }}" {% if value == wa %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <noscript><button class="btn btn-secondary btn-sm">Filter</button></noscript>
+      {% if mq or wa %}<a href="{% url 'contacts:list_detail' contact_list.pk %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+    </form>
+  </div>
+
+  {% if page %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead>
+        <tr><th>Customer</th><th>WhatsApp</th><th>Last active</th><th><span class="sr-only">Actions</span></th></tr>
+      </thead>
+      <tbody>
+        {% for c in page %}
+        <tr>
+          <td data-label="Customer">
+            <a href="{% url 'contacts:detail' c.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ c.full_name|default:c.phone|default:c.email|default:"Unnamed customer" }}</a>
+            {% if c.full_name %}<span class="block text-xs text-gray-500 tabular-nums">{{ c.phone|default:c.email|default:"" }}</span>{% endif %}
+          </td>
+          <td data-label="WhatsApp">{% include "components/wa_state.html" with state=c.wa_state %}</td>
+          <td data-label="Last active" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"j M Y"|default:"—" }}</td>
+          <td class="text-right">
+            <form method="post" action="{% url 'contacts:list_remove_contact' contact_list.pk %}"
+                  data-confirm="Remove {{ c.full_name|default:c.phone|default:c.email }} from “{{ contact_list.name }}”? They stay in your customers."
+                  data-confirm-label="Remove">
+              {% csrf_token %}
+              <input type="hidden" name="public_id" value="{{ c.public_id }}" />
+              <button class="btn btn-ghost btn-sm">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "components/pagination.html" with page=page target="#list-members" %}
+  {% elif mq or wa %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="search" title="Nobody on this list matches" message="Try another search, or clear the filter." action_url=request.path action_label="Clear filter" %}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <span class="empty-state-icon">{% include "components/icon.html" with name="users" class="w-6 h-6" %}</span>
+      <p class="empty-state-title">This list is empty</p>
+      <p class="empty-state-message">Add the people this campaign should go to.</p>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('add-people-tab', 'paste'); $dispatch('modal-open', 'add-people')">Paste phone numbers</button>
+        <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'pick-customers')">Choose from customers</button>
+        {% if messaged_count %}
+        <form method="post" action="{% url 'contacts:list_add_messaged' contact_list.pk %}">
+          {% csrf_token %}
+          <button class="btn btn-ghost btn-sm">Add everyone who messaged you ({{ messaged_count }})</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</section>

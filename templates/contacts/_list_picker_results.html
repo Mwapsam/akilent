@@ -1,0 +1,22 @@
+{% comment %}Rows for the "Add from your customers" picker. `picked` lives on the picker form.{% endcomment %}
+{% if candidates %}
+<ul class="divide-y divide-border">
+  {% for c in candidates %}
+  <li>
+    <label class="flex items-center gap-3 py-2.5 px-1 cursor-pointer min-h-11">
+      <input type="checkbox" class="h-4 w-4 rounded" value="{{ c.public_id }}"
+             :checked="picked.includes('{{ c.public_id }}')"
+             @change="$event.target.checked ? picked.push('{{ c.public_id }}') : picked.splice(picked.indexOf('{{ c.public_id }}'), 1)">
+      <span class="min-w-0 flex-1">
+        <span class="block truncate font-medium text-ink">{{ c.full_name|default:c.phone|default:c.email|default:"Unnamed customer" }}</span>
+        {% if c.full_name %}<span class="block text-xs text-gray-500 tabular-nums">{{ c.phone|default:c.email|default:"" }}</span>{% endif %}
+      </span>
+      {% include "components/wa_state.html" with state=c.wa_state %}
+    </label>
+  </li>
+  {% endfor %}
+</ul>
+{% if candidates|length == 30 %}<p class="text-xs text-gray-500 mt-2">Showing the 30 most recently active. Search to find someone else.</p>{% endif %}
+{% else %}
+<p class="text-sm text-gray-500 py-6 text-center">{% if cq %}No customers match “{{ cq }}”, or they're already on this list.{% else %}Everyone is already on this list.{% endif %}</p>
+{% endif %}

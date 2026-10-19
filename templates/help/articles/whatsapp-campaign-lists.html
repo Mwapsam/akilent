@@ -1,0 +1,46 @@
+{% comment %}Body for the "Build a list and send a WhatsApp campaign" guide.{% endcomment %}
+<p>A WhatsApp campaign sends one approved message to everyone on a <a href="/contacts/lists/">list</a> at once — an offer, a reminder, news. You build the list, pick the message, and see exactly who will get it before you press send.</p>
+
+<h2>1. Make a list and add people</h2>
+<p>Open <a href="/contacts/lists/">Customers → Lists</a>, create a list, then use <strong>Add people</strong>:</p>
+<ul>
+  <li><strong>Paste phone numbers</strong> — one per line, with a name after a comma if you have one: <code>+260971234567, Ada Mwape</code>. Include the country code; a number starting with 0 is read as Zambian.</li>
+  <li><strong>Upload a CSV</strong> — a spreadsheet saved as CSV with a <code>phone</code> column (or <code>mobile</code> / <code>whatsapp</code>). Optional columns: <code>name</code> (or <code>first name</code> and <code>last name</code>) and <code>tags</code>. Up to 5,000 rows and 2 MB per file. You'll see the first rows before anything is added.</li>
+  <li><strong>From your customers</strong> — tick the people you want. On the <a href="/contacts/">Customers</a> page you can also filter (by tag, list or WhatsApp status), select everyone who matches, and choose <strong>Add to list</strong>.</li>
+  <li><strong>Everyone who messaged you</strong> — adds every customer who has chatted with you on WhatsApp, except anyone who replied STOP.</li>
+</ul>
+<p>New numbers become customers automatically. Someone already in your customers is never renamed by an upload. Numbers we can't read are listed afterwards so you can fix them on the spot or download them.</p>
+
+<h2 id="who-gets-what">2. Who can get what</h2>
+<p>Every customer shows one of four WhatsApp statuses:</p>
+<ul>
+  <li><strong>Opted in</strong> — they agreed to hear from you. They can get any campaign, including promotions.</li>
+  <li><strong>Updates only</strong> — they have a WhatsApp number but haven't opted in. They can get <em>update</em> messages (order ready, appointment reminder) but not promotions.</li>
+  <li><strong>Opted out</strong> — they replied STOP. Nothing is sent to them until they reply START.</li>
+  <li><strong>No WhatsApp</strong> — no phone number saved, so WhatsApp can't reach them.</li>
+</ul>
+<p>Templates are approved by Meta as either a <strong>Promotion</strong> (marketing) or an <strong>Update</strong> (utility). Meta only allows promotions to people who opted in, so a promotion to a list of “updates only” customers reaches nobody — the campaign screen shows this before you send.</p>
+
+<h2 id="consent">3. Recording permission (opt-in)</h2>
+<p>When you paste or upload numbers, you can tick <strong>“These customers agreed to get WhatsApp messages from us”</strong>. Tick it only if they really gave you permission — for example they signed up in your shop, filled in a form, or asked to hear about offers. We record who ticked it and when.</p>
+<p>You can also mark one customer as opted in or out from their profile. A customer can always change their mind: replying <strong>STOP</strong> opts them out and <strong>START</strong> opts them back in, and a STOP is never undone by an upload.</p>
+<p>Sending promotions to people who didn't agree breaks WhatsApp's rules and can get your number blocked or limited by Meta.</p>
+
+<h2>4. Send the campaign</h2>
+<p>From a list, choose <strong>Send WhatsApp campaign</strong> (or go to <a href="/email/campaigns/?channel=whatsapp">Campaigns</a>). Three steps:</p>
+<ol>
+  <li><strong>Who gets it</strong> — pick the list. Each list shows how many people are opted in, updates only, opted out and without WhatsApp.</li>
+  <li><strong>The message</strong> — pick an approved template and fill in its blanks, such as the customer's first name. Set what to use when we don't know a value (“there” instead of a name), otherwise those customers are skipped. The preview shows the message as a real customer will see it.</li>
+  <li><strong>Review and send</strong> — the button tells you exactly how many people it will reach, and the panel lists who won't get it and why.</li>
+</ol>
+<p>Pressing send twice never sends twice.</p>
+
+<h2>5. Results, and why someone didn't get it</h2>
+<p>The campaign page updates by itself while it sends: how many messages WhatsApp accepted, delivered and read, and how many failed. Under <strong>Not sent</strong> each reason has a fix:</p>
+<ul>
+  <li><strong>Haven't opted in</strong> — the message was a promotion. Get permission, then mark them opted in.</li>
+  <li><strong>Opted out</strong> — they replied STOP.</li>
+  <li><strong>No WhatsApp number</strong> — add their number on their profile.</li>
+  <li><strong>Missing details</strong> — a blank (like their name) was empty and no fallback was set. Send again with a fallback.</li>
+</ul>
+<p>A <strong>failed</strong> message is one WhatsApp couldn't deliver — usually the number isn't on WhatsApp. The recipients table shows the reason for each one. If your plan's monthly WhatsApp limit is reached, remaining messages wait and go out automatically when there's room.</p>

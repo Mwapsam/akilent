@@ -1682,6 +1682,13 @@ def sweep_stuck_whatsapp_campaigns() -> dict:
             status=WhatsAppCampaign.Status.SENDING,
             last_progress_at__lt=cutoff,
         )
+        # Started, but its first chunk never committed (it rolled back, or the
+        # worker died mid-chunk): no progress timestamp at all.
+        | Q(
+            status=WhatsAppCampaign.Status.SENDING,
+            last_progress_at__isnull=True,
+            started_at__lt=cutoff,
+        )
         | Q(
             status=WhatsAppCampaign.Status.QUEUED,
             created_at__lt=cutoff,

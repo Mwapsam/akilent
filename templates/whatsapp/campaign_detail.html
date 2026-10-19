@@ -7,51 +7,94 @@
     <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
     <span aria-hidden="true">/</span><span class="text-ink">{{ campaign.name }}</span>
   </nav>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ campaign.name }}</h1>
-  <p class="mt-1 text-sm text-gray-600">
-    {% if campaign.status == 'completed' %}{% include "components/status.html" with state="sent" badge=True %}
-    {% elif campaign.status == 'failed' %}<span class="badge badge-danger">Failed</span>
-    {% elif campaign.status == 'sending' or campaign.status == 'queued' %}{% include "components/status.html" with state="sending" badge=True %}
-    {% else %}{% include "components/status.html" with state="draft" badge=True %}{% endif %}
-  </p>
+  <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+    <div class="min-w-0">
+      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ campaign.name }}</h1>
+      <p class="mt-1 text-sm text-gray-600">
+        <a href="{% url 'contacts:list_detail' campaign.contact_list.pk %}" class="text-accent hover:text-accent-strong">{{ campaign.contact_list.name }}</a>
+        · {{ campaign.template.name }} ({% if campaign.template.category == 'marketing' %}Promotion{% else %}Update{% endif %}, {{ campaign.template.language_code|upper }})
+        · {% if campaign.started_at %}sent {{ campaign.started_at|date:"j M Y, H:i" }}{% else %}created {{ campaign.created_at|date:"j M Y, H:i" }}{% endif %}{% if campaign.created_by %} by {{ campaign.created_by.get_full_name|default:campaign.created_by.username }}{% endif %}
+      </p>
+    </div>
+    <a href="{% url 'whatsapp-campaign-new' %}?list={{ campaign.contact_list.pk }}" class="btn btn-secondary btn-sm">
+      {% include "components/icon.html" with name="copy" class="w-4 h-4" %} Send another to this list
+    </a>
+  </div>
 </header>
 
-<div class="card card-pad text-sm space-y-2 max-w-xl">
-  <div class="flex justify-between"><span class="text-gray-500">Customer list</span><span>{{ campaign.contact_list.name }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Template</span><span>{{ campaign.template.name }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Recipients</span><span>{{ campaign.recipient_count }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Created</span><span>{{ campaign.created_at|date:"M j, Y H:i" }}</span></div>
-  {% if campaign.error %}
-  <div class="pt-2"><p class="text-gray-500 mb-1">Error</p><p class="text-red-700">{{ campaign.error }}</p></div>
+{% if campaign.status == 'failed' %}
+<div class="alert alert-danger mb-6" role="alert">
+  {% include "components/icon.html" with name="alert-triangle" %}
+  <div>
+    <p class="font-medium">This campaign stopped</p>
+    <p class="mt-0.5">{{ campaign.error|default:"Something went wrong while preparing the messages." }}</p>
+    {% if campaign.queued_count %}<p class="mt-0.5">The {{ campaign.queued_count }} message{{ campaign.queued_count|pluralize }} already queued still go out.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% include "whatsapp/_campaign_live.html" %}
+
+{% if skip_breakdown %}
+<section class="card card-pad mt-6" aria-labelledby="not-sent-title">
+  <h2 id="not-sent-title" class="text-base font-semibold text-ink">Not sent to {{ campaign.skipped_count }} customer{{ campaign.skipped_count|pluralize }}</h2>
+  <ul class="mt-3 divide-y divide-border">
+    {% for s in skip_breakdown %}
+    <li class="py-3 flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-ink"><span class="font-semibold tabular-nums">{{ s.n }}</span> · {{ s.label }}</p>
+        <p class="text-sm text-gray-600">{{ s.why }}</p>
+      </div>
+      {% if s.key == 'not_opted_in' %}
+        <a href="{% url 'contacts:list_detail' campaign.contact_list.pk %}?wa=updates" class="btn btn-secondary btn-sm">See who</a>
+      {% elif s.key == 'no_whatsapp_identity' %}
+        <a href="{% url 'contacts:list_detail' campaign.contact_list.pk %}?wa=none" class="btn btn-secondary btn-sm">Add their numbers</a>
+      {% elif s.key == 'missing_value' %}
+        <a href="{% url 'whatsapp-campaign-new' %}?list={{ campaign.contact_list.pk }}&template_id={{ campaign.template.pk }}" class="btn btn-secondary btn-sm">Send again with a fallback</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="mt-6" aria-labelledby="recipients-title" id="recipients">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <h2 id="recipients-title" class="text-lg font-semibold text-ink">Recipients</h2>
+    <div class="tabs" role="tablist" aria-label="Filter recipients">
+      <a href="?#recipients" role="tab" class="tab{% if not outcome %} tab-active{% endif %}" aria-selected="{% if not outcome %}true{% else %}false{% endif %}">Everyone</a>
+      <a href="?outcome=sent#recipients" role="tab" class="tab{% if outcome == 'sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'sent' %}true{% else %}false{% endif %}">Sent</a>
+      <a href="?outcome=failed#recipients" role="tab" class="tab{% if outcome == 'failed' %} tab-active{% endif %}" aria-selected="{% if outcome == 'failed' %}true{% else %}false{% endif %}">Failed</a>
+      <a href="?outcome=not_sent#recipients" role="tab" class="tab{% if outcome == 'not_sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'not_sent' %}true{% else %}false{% endif %}">Not sent</a>
+    </div>
+  </div>
+  {% if page %}
+  <div class="table-wrap">
+    <table class="table table--cards">
+      <thead><tr><th>Customer</th><th>Result</th><th>Details</th></tr></thead>
+      <tbody>
+        {% for r in page %}
+        <tr>
+          <td data-label="Customer"><a href="{% url 'contacts:detail' r.contact.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ r.contact.full_name|default:r.contact.phone|default:r.contact.email|default:"Unnamed customer" }}</a></td>
+          <td data-label="Result">
+            {% if r.status == 'queued' %}<span class="badge badge-success">Sent</span>
+            {% elif r.status == 'failed' %}<span class="badge badge-danger">Failed</span>
+            {% elif r.status == 'skipped' %}<span class="badge badge-neutral">Not sent</span>
+            {% else %}<span class="badge badge-info">Waiting</span>{% endif %}
+          </td>
+          <td data-label="Details" class="text-sm text-gray-600">
+            {% if r.status == 'skipped' %}{{ r.get_skip_reason_display }}
+            {% elif r.status == 'failed' %}{{ r.error|default:"WhatsApp couldn't deliver it."|truncatechars:140 }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "components/pagination.html" with page=page %}
+  {% else %}
+  <div class="table-wrap">{% include "components/empty_state.html" with icon="users" title="Nobody here" message="No recipients match this filter." %}</div>
   {% endif %}
-</div>
-
-<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
-  <h2 class="font-medium text-ink">Processing</h2>
-  <p class="text-xs text-gray-400">Has Akilent gotten to this recipient yet — not whether it reached them.</p>
-  <div class="flex justify-between"><span class="text-gray-500">Queued</span><span>{{ campaign.queued_count }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Skipped</span><span>{{ campaign.skipped_count }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Remaining</span><span>{{ remaining }}</span></div>
-</div>
-
-{% if campaign.queued_count %}
-<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
-  <h2 class="font-medium text-ink">Delivery</h2>
-  <p class="text-xs text-gray-400">What Meta reports back for the {{ campaign.queued_count }} messages Akilent handed off.</p>
-  <div class="flex justify-between"><span class="text-gray-500">Sent</span><span>{{ delivery.sent }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Delivered</span><span>{{ delivery.delivered }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Read</span><span>{{ delivery.read }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Failed</span><span>{{ delivery.failed }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Pending</span><span>{{ delivery.pending }}</span></div>
-</div>
-{% endif %}
-
-{% if campaign.skipped_count %}
-<div class="card card-pad text-sm space-y-2 max-w-xl mt-4">
-  <h2 class="font-medium text-ink">Skipped</h2>
-  <div class="flex justify-between"><span class="text-gray-500">Opted out</span><span>{{ skip_breakdown.opted_out|default:0 }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">No WhatsApp number</span><span>{{ skip_breakdown.no_whatsapp_identity|default:0 }}</span></div>
-  <div class="flex justify-between"><span class="text-gray-500">Missing template value</span><span>{{ skip_breakdown.missing_value|default:0 }}</span></div>
-</div>
-{% endif %}
+</section>
 {% endblock %}

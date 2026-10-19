@@ -1,0 +1,26 @@
+{% comment %}First-run checklist for WhatsApp campaigns (spec S1): what's left before the
+first send, each step linking straight to where it's done.{% endcomment %}
+<section class="card card-pad max-w-2xl" aria-labelledby="readiness-heading">
+  <h2 id="readiness-heading" class="text-lg font-semibold text-ink">Send your first WhatsApp campaign</h2>
+  <p class="text-sm text-gray-600 mt-1">Reach everyone on a list at once — an offer, a reminder, news. Three things first:</p>
+  <ol class="mt-5 space-y-4">
+    {% for s in readiness.steps %}
+    <li class="flex items-start gap-3">
+      {% if s.done %}
+        <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-500 text-white" aria-hidden="true">{% include "components/icon.html" with name="check" class="w-4 h-4" %}</span>
+      {% else %}
+        <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-xs text-gray-500" aria-hidden="true">{{ forloop.counter }}</span>
+      {% endif %}
+      <div class="min-w-0 flex-1">
+        <p class="font-medium {% if s.done %}text-gray-500 line-through decoration-gray-300{% else %}text-ink{% endif %}">{{ s.title }}<span class="sr-only">{% if s.done %} — done{% else %} — to do{% endif %}</span></p>
+        {% if not s.done and s.hint %}<p class="text-sm text-gray-600 mt-0.5">{{ s.hint }}</p>{% endif %}
+      </div>
+      {% if not s.done %}<a href="{{ s.url }}" class="btn btn-secondary btn-sm shrink-0">{{ s.action }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if readiness.ready %}
+    <a href="{% url 'whatsapp-campaign-new' %}" class="btn btn-primary btn-sm mt-6">{% include "components/icon.html" with name="send" class="w-4 h-4" %} Create a campaign</a>
+  {% endif %}
+  <p class="text-xs text-gray-500 mt-5"><a href="/help/whatsapp-campaign-lists/" class="text-accent hover:text-accent-strong">How WhatsApp campaigns work</a></p>
+</section>

@@ -496,84 +496,180 @@ def _campaign_variable_mapping_from_post(request, template) -> tuple[dict, dict,
     return mapping, fallbacks, missing
 
 
-@login_required
-@module_required("whatsapp_campaigns")
-def campaign_new(request):
+def _composer_state(request, account, templates):
+    """The composer's choices, from the POST (re-shown on error) or the URL."""
+    import secrets
+
     from apps.automation import variables as wa_variables
 
-    account = get_current_account(request)
-    if account is None:
-        return redirect("dashboard")
+    src = request.POST if request.method == "POST" else request.GET
+    picks, lits, fbs = {}, {}, {}
+    for t in templates:
+        for b in t.blanks:  # type: ignore[attr-defined]
+            key = f"{t.pk}__{b['name']}"
+            picks[key] = src.get(f"var__{key}") or b["default"]
+            lits[key] = src.get(f"lit__{key}") or ""
+            fbs[key] = src.get(f"fb__{key}") or ""
+    return {
+        "list": src.get("contact_list") or src.get("list") or "",
+        "template": src.get("template_id") or "",
+        "name": src.get("name") or "",
+        "picks": picks,
+        "lits": lits,
+        "fbs": fbs,
+        "submission_key": request.POST.get("submission_key")
+        or secrets.token_urlsafe(24),
+        "default_choices": {
+            f"{t.pk}__{b['name']}": wa_variables.default_choice(b["name"])
+            for t in templates
+            for b in t.blanks  # type: ignore[attr-defined]
+        },
+    }
 
-    templates = list(
-        MessageTemplate.objects.filter(
-            account=account,
-            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        ).order_by("name")
-    )
+
+def _composer_templates(account):
+    from apps.automation import variables as wa_variables
+    from apps.whatsapp.campaign_ui import template_options
+
+    templates = template_options(account)
     for t in templates:
         t.blanks = [  # type: ignore[attr-defined]
             {"name": v, "default": wa_variables.default_choice(v)}
             for v in (t.variables or [])
         ]
+    return templates
 
+
+@login_required
+@module_required("whatsapp_campaigns")
+def campaign_new(request):
+    """The stepped composer (spec S2): who → what → review and send."""
+    from apps.automation import variables as wa_variables
+    from apps.whatsapp.campaign_ui import list_options, readiness
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    templates = _composer_templates(account)
+    error = ""
+    step = 1
     if request.method == "POST":
         contact_list = ContactList.objects.filter(
-            account=account, pk=request.POST.get("contact_list")
+            account=account, pk=request.POST.get("contact_list") or 0
         ).first()
-        if contact_list is None:
-            messages.error(request, "Choose a customer list.")
-            return redirect("whatsapp-campaign-new")
         template = next(
-            (t for t in templates if str(t.pk) == request.POST.get("template_id")),
+            (
+                t
+                for t in templates
+                if str(t.pk) == request.POST.get("template_id") and t.sendable  # type: ignore[attr-defined]
+            ),
             None,
         )
-        if template is None:
-            messages.error(request, "Choose a template.")
-            return redirect("whatsapp-campaign-new")
-        variable_mapping, variable_fallbacks, missing = (
-            _campaign_variable_mapping_from_post(request, template)
-        )
-        if missing:
-            messages.error(
-                request, "Fill in what should go in every blank of the message."
+        if contact_list is None:
+            error = "Choose who to send to."
+        elif template is None:
+            error, step = "Choose a message to send.", 2
+        else:
+            variable_mapping, variable_fallbacks, missing = (
+                _campaign_variable_mapping_from_post(request, template)
             )
-            return redirect("whatsapp-campaign-new")
-        try:
-            campaign = create_and_queue_campaign(
-                account=account,
-                name=request.POST.get("name") or "",
-                contact_list=contact_list,
-                template_id=template.pk,
-                variable_mapping=variable_mapping,
-                variable_fallbacks=variable_fallbacks,
-                created_by=request.user,
-            )
-        except CampaignError as exc:
-            messages.error(request, str(exc))
-            return redirect("whatsapp-campaign-new")
-        messages.success(request, "Campaign queued — it's sending now.")
-        return redirect("whatsapp-campaign-detail", pk=campaign.pk)
+            if missing:
+                error, step = "Fill in what goes in every blank of the message.", 2
+            else:
+                try:
+                    campaign = create_and_queue_campaign(
+                        account=account,
+                        name=request.POST.get("name") or "",
+                        contact_list=contact_list,
+                        template_id=template.pk,
+                        variable_mapping=variable_mapping,
+                        variable_fallbacks=variable_fallbacks,
+                        created_by=request.user,
+                        submission_key=request.POST.get("submission_key") or "",
+                    )
+                except CampaignError as exc:
+                    error, step = str(exc), 3
+                else:
+                    from apps.core.audit import platform_record
 
-    picks_default = {
-        f"{t.pk}__{b['name']}": b["default"]
-        for t in templates
-        for b in t.blanks  # type: ignore[attr-defined]
-    }
+                    platform_record(
+                        action="whatsapp_campaign.send",
+                        account=account,
+                        actor=request.user,
+                        resource_type="whatsapp_campaign",
+                        resource_id=str(campaign.pk),
+                        metadata={
+                            "list": contact_list.pk,
+                            "template": template.pk,
+                            "recipients": campaign.recipient_count,
+                        },
+                    )
+                    messages.success(
+                        request,
+                        "Your campaign is on its way. Results appear below as they arrive.",
+                    )
+                    return redirect("whatsapp-campaign-detail", pk=campaign.pk)
+
+    state = _composer_state(request, account, templates)
+    if request.method == "GET" and state["list"]:
+        step = 2 if not state["template"] else 3
     return render(
         request,
         "whatsapp/campaign_new.html",
         {
             "account": account,
-            "contact_lists": ContactList.objects.filter(account=account).order_by(
-                "name"
-            ),
+            "lists": list_options(account),
             "templates": templates,
             "blank_choices": [
                 {"key": key, "label": label}
                 for key, _source, label, _fallback in wa_variables.CHOICES
             ],
-            "picks_default": picks_default,
+            "state": state,
+            "error": error,
+            "step": step,
+            "readiness": readiness(account),
+        },
+        status=400 if error else 200,
+    )
+
+
+@login_required
+@module_required("whatsapp_campaigns")
+def campaign_estimate(request):
+    """HTMX: who the composer's current choices would reach, plus the preview."""
+    from apps.whatsapp.campaign_ui import estimate
+
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponse(status=204)
+    contact_list = ContactList.objects.filter(
+        account=account, pk=request.GET.get("contact_list") or 0
+    ).first()
+    template = MessageTemplate.objects.filter(
+        account=account,
+        pk=request.GET.get("template_id") or 0,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    ).first()
+    if contact_list is None or template is None:
+        return render(request, "whatsapp/_campaign_estimate.html", {"est": None})
+
+    from django.http import QueryDict
+
+    class _Req:  # _campaign_variable_mapping_from_post reads request.POST
+        POST: QueryDict = request.GET
+
+    mapping, fallbacks, missing = _campaign_variable_mapping_from_post(_Req, template)
+    est = estimate(account, contact_list, template, mapping, fallbacks)
+    return render(
+        request,
+        "whatsapp/_campaign_estimate.html",
+        {
+            "est": est,
+            "template": template,
+            "contact_list": contact_list,
+            "blanks_missing": missing,
+            "is_marketing": template.category == MessageTemplate.Category.MARKETING,
         },
     )
 
@@ -581,32 +677,75 @@ def campaign_new(request):
 @login_required
 @module_required("whatsapp_campaigns")
 def campaign_detail(request, pk: int):
+    """Spec S3: where the campaign is, what reached people, who didn't get it and why."""
+    from django.core.paginator import Paginator
+    from django.db.models import Count
+
+    from apps.whatsapp.campaign_ui import SKIP_REASON_COPY, lifecycle_state
+    from apps.whatsapp.models import WhatsAppCampaignRecipient
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
-    campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
-    from django.db.models import Count
-
-    remaining = (
-        campaign.recipient_count - campaign.queued_count - campaign.skipped_count
+    campaign = get_object_or_404(
+        WhatsAppCampaign.objects.select_related(
+            "template", "contact_list", "created_by"
+        ),
+        account=account,
+        pk=pk,
     )
-    skip_breakdown = {
-        row["skip_reason"]: row["n"]
+    processed = campaign.queued_count + campaign.skipped_count
+    remaining = max(campaign.recipient_count - processed, 0)
+    skip_breakdown = [
+        {
+            "key": row["skip_reason"],
+            "n": row["n"],
+            "label": SKIP_REASON_COPY.get(row["skip_reason"], (row["skip_reason"], ""))[
+                0
+            ],
+            "why": SKIP_REASON_COPY.get(row["skip_reason"], ("", ""))[1],
+        }
         for row in campaign.recipients.exclude(skip_reason="")
         .values("skip_reason")
         .annotate(n=Count("id"))
+        .order_by("-n")
+    ]
+    delivery = campaign_delivery_stats(campaign)
+
+    outcome = request.GET.get("outcome") or ""
+    recipients = campaign.recipients.select_related("contact").order_by("pk")
+    _R = WhatsAppCampaignRecipient.Status
+    if outcome == "failed":
+        recipients = recipients.filter(status=_R.FAILED)
+    elif outcome == "not_sent":
+        recipients = recipients.filter(status=_R.SKIPPED)
+    elif outcome == "sent":
+        recipients = recipients.filter(status=_R.QUEUED)
+    else:
+        outcome = ""
+    page = Paginator(recipients, 50).get_page(request.GET.get("page"))
+
+    context = {
+        "account": account,
+        "campaign": campaign,
+        "state": lifecycle_state(campaign),
+        "remaining": remaining,
+        "progress_pct": round(processed * 100 / campaign.recipient_count)
+        if campaign.recipient_count
+        else 100,
+        "delivery": delivery,
+        "reached": delivery["sent"] + delivery["delivered"] + delivery["read"],
+        "skip_breakdown": skip_breakdown,
+        "skip_copy": SKIP_REASON_COPY,
+        "page": page,
+        "outcome": outcome,
+        "in_progress": campaign.status
+        in (WhatsAppCampaign.Status.QUEUED, WhatsAppCampaign.Status.SENDING)
+        or delivery["pending"] > 0,
     }
-    return render(
-        request,
-        "whatsapp/campaign_detail.html",
-        {
-            "account": account,
-            "campaign": campaign,
-            "remaining": max(remaining, 0),
-            "delivery": campaign_delivery_stats(campaign),
-            "skip_breakdown": skip_breakdown,
-        },
-    )
+    if request.headers.get("HX-Request") and request.GET.get("part") == "live":
+        return render(request, "whatsapp/_campaign_live.html", context)
+    return render(request, "whatsapp/campaign_detail.html", context)
 
 
 def _verify_meta_signature(request) -> bool:

@@ -15,6 +15,11 @@ urlpatterns = [
     path("codes/", views.codes_setup, name="whatsapp-codes"),
     path("codes/key/", views.codes_key_create, name="whatsapp-codes-key"),
     path("campaigns/new/", views.campaign_new, name="whatsapp-campaign-new"),
+    path(
+        "campaigns/estimate/",
+        views.campaign_estimate,
+        name="whatsapp-campaign-estimate",
+    ),
     path("campaigns/<int:pk>/", views.campaign_detail, name="whatsapp-campaign-detail"),
     path("numbers/", numbers.numbers_list, name="whatsapp-numbers"),
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),

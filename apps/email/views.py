@@ -1687,14 +1687,28 @@ def campaigns_list(request):
     campaigns = campaigns[:50]
 
     whatsapp_campaigns = []
+    whatsapp_readiness = None
+    whatsapp_campaigns_usable = False
     if whatsapp_enabled:
+        from apps.billing import api as billing_api
+        from apps.whatsapp.campaign_ui import lifecycle_state, readiness
+        from apps.whatsapp.campaigns import delivery_stats_for
         from apps.whatsapp.models import WhatsAppCampaign
 
+        whatsapp_campaigns_usable = billing_api.usable(account, "whatsapp_campaigns")
         whatsapp_campaigns = list(
             WhatsAppCampaign.objects.filter(account=account).select_related(
                 "template", "contact_list"
             )[:50]
         )
+        stats = delivery_stats_for([c.pk for c in whatsapp_campaigns])
+        for c in whatsapp_campaigns:
+            c.stats = stats[c.pk]  # type: ignore[attr-defined]
+            c.state = lifecycle_state(c)  # type: ignore[attr-defined]
+            c.delivered = c.stats["delivered"] + c.stats["read"]  # type: ignore[attr-defined]
+            c.reached = c.delivered + c.stats["sent"]  # type: ignore[attr-defined]
+        if not whatsapp_campaigns:
+            whatsapp_readiness = readiness(account)
 
     return render(
         request,
@@ -1715,6 +1729,8 @@ def campaigns_list(request):
             "email_enabled": email_enabled,
             "whatsapp_enabled": whatsapp_enabled,
             "whatsapp_campaigns": whatsapp_campaigns,
+            "whatsapp_readiness": whatsapp_readiness,
+            "whatsapp_campaigns_usable": whatsapp_campaigns_usable,
         },
     )
 

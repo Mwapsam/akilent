@@ -851,6 +851,9 @@
   .table thead { @apply text-left; background-color: var(--color-surface-muted); color: var(--color-ink-subtle); }
   .table th { @apply px-4 py-3 font-medium whitespace-nowrap; }
   .table tbody { @apply divide-y; border-color: var(--color-border); }
+  /* divide-y draws the line on each row, so the colour has to live there too —
+     set only on tbody, rows fell back to currentColor (a near-black rule). */
+  .table tbody > tr { border-color: var(--color-border); }
   .table td { @apply px-4 py-3 align-middle; }
 
   /* Responsive table → stacked cards below md. Templates add data-label on

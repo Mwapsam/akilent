@@ -10,9 +10,14 @@
   </div>
   <div class="flex flex-wrap items-center gap-2">
     {% if channel == 'whatsapp' %}
+    {% if whatsapp_campaigns_usable and whatsapp_campaigns %}
+    <a href="{% url 'contacts:lists' %}" class="btn btn-secondary btn-sm">
+      {% include "components/icon.html" with name="list" class="w-4 h-4" %} Lists
+    </a>
     <a href="{% url 'whatsapp-campaign-new' %}" class="btn btn-primary btn-sm">
       {% include "components/icon.html" with name="plus" class="w-4 h-4" %} New WhatsApp campaign
     </a>
+    {% endif %}
     {% else %}
     <a href="/email/templates/" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="layout-template" class="w-4 h-4" %} Templates
@@ -40,22 +45,20 @@
   {% if whatsapp_campaigns %}
   <div class="table-wrap">
     <table class="table table--cards">
-      <thead><tr><th>Name</th><th>Customer list</th><th>Status</th><th>Recipients</th><th>Queued</th><th>Skipped</th><th>Created</th><th></th></tr></thead>
+      <thead><tr><th>Campaign</th><th>Status</th><th>Sent to</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Not sent</th><th></th></tr></thead>
       <tbody>
         {% for c in whatsapp_campaigns %}
         <tr>
-          <td data-label="Name" class="font-medium text-ink">{{ c.name }}</td>
-          <td data-label="Customer list">{{ c.contact_list.name }}</td>
-          <td data-label="Status">
-            {% if c.status == 'completed' %}{% include "components/status.html" with state="sent" badge=True %}
-            {% elif c.status == 'failed' %}<span class="badge badge-danger">Failed</span>
-            {% elif c.status == 'sending' or c.status == 'queued' %}{% include "components/status.html" with state="sending" badge=True %}
-            {% else %}{% include "components/status.html" with state="draft" badge=True %}{% endif %}
+          <td data-label="Campaign">
+            <a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
+            <span class="block text-xs text-gray-500">{{ c.contact_list.name }} · {{ c.started_at|default:c.created_at|date:"j M, H:i" }}</span>
           </td>
-          <td data-label="Recipients" class="tabular-nums">{{ c.recipient_count }}</td>
-          <td data-label="Queued" class="tabular-nums">{{ c.queued_count }}</td>
-          <td data-label="Skipped" class="tabular-nums">{{ c.skipped_count }}</td>
-          <td data-label="Created" class="text-gray-500 tabular-nums">{{ c.created_at|date:"M j, H:i" }}</td>
+          <td data-label="Status">{% include "components/status.html" with state=c.state badge=True %}</td>
+          <td data-label="Sent to" class="tabular-nums">{{ c.reached }}<span class="text-gray-400"> / {{ c.recipient_count }}</span></td>
+          <td data-label="Delivered" class="tabular-nums">{{ c.delivered }}</td>
+          <td data-label="Read" class="tabular-nums">{{ c.stats.read }}</td>
+          <td data-label="Failed" class="tabular-nums">{{ c.stats.failed }}</td>
+          <td data-label="Not sent" class="tabular-nums">{{ c.skipped_count }}</td>
           <td class="text-right"><a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="btn btn-ghost btn-sm">View</a></td>
         </tr>
         {% endfor %}
@@ -63,9 +66,7 @@
     </table>
   </div>
   {% else %}
-  <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="send" title="Send your first WhatsApp campaign" message="Reach every customer on a list with an approved WhatsApp template — pick a list, pick a template, and send." action_url="/whatsapp/campaigns/new/" action_label="Create campaign" %}
-  </div>
+    {% include "whatsapp/_campaign_readiness.html" with readiness=whatsapp_readiness %}
   {% endif %}
 {% else %}
 

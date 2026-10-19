@@ -318,7 +318,7 @@ def test_the_contact_list_shows_and_filters_by_tag(owner, account, contact):
     filtered = owner.get("/contacts/?tag=vip").content.decode()
     assert contact.phone in filtered and other.phone not in filtered
     empty = owner.get("/contacts/?tag=nothing").content.decode()
-    assert "No contacts match those filters" in empty
+    assert "No customers match those filters" in empty
 
 
 @pytest.mark.django_db

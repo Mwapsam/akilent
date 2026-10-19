@@ -1,0 +1,33 @@
+{% comment %}Campaign progress + results. Polls itself every 5s while anything is still
+moving, and stops when the campaign is done (the response then has no trigger).{% endcomment %}
+<div id="campaign-live"
+     {% if in_progress %}hx-get="?part=live" hx-trigger="every 5s" hx-swap="outerHTML"{% endif %}>
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    {% include "components/status.html" with state=state badge=True %}
+    {% if in_progress and campaign.status != 'failed' %}
+      <p class="text-sm text-gray-600" aria-live="polite">
+        {% if remaining %}Preparing messages — {{ progress_pct }}% done{% else %}Sending — results update as WhatsApp reports them{% endif %}
+      </p>
+    {% endif %}
+  </div>
+  {% if in_progress and remaining %}
+  <div class="h-2 rounded-full bg-surface-subtle mb-6" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ progress_pct }}" aria-label="Campaign progress">
+    <div class="h-2 rounded-full bg-brand-500 transition-all" style="width: {{ progress_pct }}%"></div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    {% include "components/stat_card.html" with label="On the list" value=campaign.recipient_count icon="users" %}
+    {% include "components/stat_card.html" with label="Sent" value=reached icon="send" sub="Accepted by WhatsApp" %}
+    {% include "components/stat_card.html" with label="Delivered" value=delivery.delivered|add:delivery.read icon="check" tone="success" sub="Reached their phone" %}
+    {% include "components/stat_card.html" with label="Read" value=delivery.read icon="eye" tone="success" %}
+    {% include "components/stat_card.html" with label="Failed" value=delivery.failed icon="alert-triangle" tone="danger" %}
+  </div>
+  {% if delivery.held or delivery.unconfirmed or delivery.pending %}
+  <p class="mt-3 text-sm text-gray-600">
+    {% if delivery.pending %}<span class="mr-3">{{ delivery.pending }} still in the queue</span>{% endif %}
+    {% if delivery.held %}<span class="mr-3">{{ delivery.held }} waiting — your plan's monthly WhatsApp limit is reached (<a href="/billing/" class="text-accent hover:text-accent-strong">see plans</a>)</span>{% endif %}
+    {% if delivery.unconfirmed %}<span>{{ delivery.unconfirmed }} may not have been sent — WhatsApp didn't confirm, so we won't resend</span>{% endif %}
+  </p>
+  {% endif %}
+</div>

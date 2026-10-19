@@ -81,7 +81,7 @@ def test_a_filter_that_matches_nothing_offers_a_way_back(client, account, contac
     out is to clear the filter, not to go and read the API docs."""
     client.force_login(account.owner)
     body = client.get("/contacts/?q=nobody", HTTP_HX_REQUEST="true").content.decode()
-    assert "No contacts match those filters" in body
+    assert "No customers match those filters" in body
     assert "Clear filters" in body
 
 

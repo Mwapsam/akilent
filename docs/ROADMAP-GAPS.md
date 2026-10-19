@@ -31,7 +31,7 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 |---|---|---|
 | Inbox filters (view, channel, overdue) | Implemented (static) | `apps/conversations/views.py:71-119` |
 | Conversation search | Missing | No `q` parameter in the inbox; contact search exists (`apps/contacts/views.py:73`) |
-| Contact import (CSV) | Implemented but incomplete | `apps/contacts/services.py:208`; callable from API only, no UI route |
+| Contact import (CSV) | Implemented (2026-10-19) | Phone-first paste + CSV into a list in the dashboard (`apps/contacts/list_building.py`, `test_list_building.py`, `test_list_ui.py`). The email-keyed API import (`services.py:208`) is unchanged. See `docs/audits/CAMPAIGNS-CONTACTS-AUDIT.md` |
 | Contact dedupe on import | Implemented (static) | `apps/contacts/importer.py:100-104` |
 | Contact merge | Missing | Migration `0003` refuses auto-merge of duplicates |
 | SLA enforcement, support tickets | Implemented (static) | `apps/support/tasks.py:9`, `sla.py:68-84`, tests `test_mark_breached_is_idempotent` |
@@ -61,7 +61,7 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 | WhatsApp inbound voice, ogg/opus for older Safari | Missing | Stored as-is; no ffmpeg on the inbound path. Matches pilot media gap. |
 | WhatsApp outbound audio transcoding | Implemented (static) | `apps/conversations/outbound_media.py:7-157`, `test_outbound_media.py` |
 | WhatsApp template gating and status sync | Implemented (static) | `apps/whatsapp/tasks.py:645-660, 1251-1293, 1438` |
-| WhatsApp broadcasts with opt-out | Implemented (static) | `apps/whatsapp/campaigns.py:190`, `tasks.py:630-640` |
+| WhatsApp broadcasts with opt-out | Implemented; Release 1 fixes 2026-10-19 | Audit found stats losing failures, stuck campaigns, double sends and unreachable hand-added customers; fixed with tests. Lifecycle (draft/schedule/pause/cancel), segments and scale work are Releases 2–3. See `docs/audits/CAMPAIGNS-CONTACTS-AUDIT.md` |
 | Instagram DM triggers | Implemented (static) | Via `conversation.message_received`, `apps/automation/workflow_engine.py:114-135` |
 | Instagram comment triggers and moderation | Implemented (static) | `apps/instagram/rules_views.py`, `test_phase3_acceptance.py` |
 | Instagram App Review gate | Implemented but incomplete | Manual; no code checks review or live-mode status. Scopes rejected 2026-10-07, resubmission pending (Blocked). |

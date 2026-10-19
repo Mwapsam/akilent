@@ -1,0 +1,13 @@
+{% comment %}A customer's WhatsApp reachability — icon + label, never colour alone.
+  {% include "components/wa_state.html" with state=c.wa_state %}
+state ∈ opted_in | updates | opted_out | none (apps/contacts/reachability.py).
+{% endcomment %}
+{% with s=state|default:"none" %}
+<span class="badge inline-flex items-center gap-1 whitespace-nowrap {% if s == 'opted_in' %}badge-success{% elif s == 'opted_out' %}badge-danger{% elif s == 'updates' %}badge-info{% else %}badge-neutral{% endif %}"
+      title="{% if s == 'opted_in' %}Agreed to hear from you — can receive any campaign, including offers.{% elif s == 'updates' %}Can receive updates like order messages, but not offers until they opt in.{% elif s == 'opted_out' %}Asked not to be messaged. Campaigns skip them.{% else %}No phone number, so WhatsApp can't reach them.{% endif %}">
+  {% if s == 'opted_in' %}{% include "components/icon.html" with name="check-circle" class="w-3.5 h-3.5" %}Opted in
+  {% elif s == 'updates' %}{% include "components/icon.html" with name="message-circle" class="w-3.5 h-3.5" %}Updates only
+  {% elif s == 'opted_out' %}{% include "components/icon.html" with name="x-circle" class="w-3.5 h-3.5" %}Opted out
+  {% else %}{% include "components/icon.html" with name="minus-circle" class="w-3.5 h-3.5" %}No WhatsApp{% endif %}
+</span>
+{% endwith %}

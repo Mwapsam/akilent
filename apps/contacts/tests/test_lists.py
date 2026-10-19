@@ -34,7 +34,7 @@ def test_list_index_shows_no_lists_message_when_empty(logged_in):
     client, _account, _ = logged_in
     resp = client.get("/contacts/lists/")
     assert resp.status_code == 200
-    assert b"No customer lists yet" in resp.content
+    assert b"Make your first list" in resp.content
 
 
 @pytest.mark.django_db
@@ -128,10 +128,11 @@ def test_search_candidates_exclude_existing_members(logged_in):
     contact_list = ContactList.objects.create(account=account, name="VIPs")
     contact_list.contacts.add(member)
 
-    resp = client.get(f"/contacts/lists/{contact_list.pk}/?cq=Ada")
+    resp = client.get(f"/contacts/lists/{contact_list.pk}/picker/?cq=Ada")
     assert resp.status_code == 200
     # Already a member: shown in the member table, not offered again as a candidate.
-    assert b"No match, or they" in resp.content
+    assert b"already on this list" in resp.content
+    assert b"Ada Member" not in resp.content
 
 
 @pytest.mark.django_db

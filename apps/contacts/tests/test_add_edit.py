@@ -128,3 +128,21 @@ def test_edit_scoped_to_account(logged_in):
     assert resp.status_code == 404
     theirs.refresh_from_db()
     assert theirs.phone == "+260970000000"
+
+
+@pytest.mark.django_db
+def test_adding_with_an_email_another_customer_owns_explains_instead_of_crashing(
+    logged_in,
+):
+    client, account, _ = logged_in
+    Contact.objects.create(account=account, first_name="Bwalya", email="b@example.com")
+
+    resp = client.post(
+        "/contacts/create/",
+        {"first_name": "Ada", "phone": "+260971234567", "email": "B@example.com"},
+        follow=True,
+    )
+
+    assert resp.status_code == 200
+    assert "Bwalya already has the email b@example.com" in resp.content.decode()
+    assert not Contact.objects.filter(account=account, phone="+260971234567").exists()

@@ -1,30 +1,54 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block title %}Contacts — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Customers — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% comment %}
+  Selection lives on this wrapper, outside the swapped results, so it survives
+  a page change; a new filter clears it (the rows it pointed at may be gone).
+  "All matching" is sent as the filter itself, never a list of ids, so the
+  server re-applies exactly what the owner was looking at.
+{% endcomment %}
+<div x-data="{
+       selected: [],
+       allMatching: false,
+       matching: {{ matching }},
+       toggle(id) { const i = this.selected.indexOf(id); i === -1 ? this.selected.push(id) : this.selected.splice(i, 1); if (i !== -1) this.allMatching = false },
+       clear() { this.selected = []; this.allMatching = false },
+       get count() { return this.allMatching ? this.matching : this.selected.length },
+     }"
+     @contacts-filtered.window="clear()">
+
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Contacts</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ total }} contact{{ total|pluralize }} — your audience and their activity.</p>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Customers</h1>
+    <p class="mt-1 text-sm text-gray-600">{{ total }} customer{{ total|pluralize }}. Group them into lists to send WhatsApp campaigns.</p>
   </div>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <a href="{% url 'contacts:lists' %}" class="btn btn-secondary btn-sm">
-      {% include "components/icon.html" with name="users" class="w-4 h-4" %} Customer lists
+      {% include "components/icon.html" with name="list" class="w-4 h-4" %} Lists
     </a>
-    <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-contact')">
-      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add customer
-    </button>
+    {% dropdown label="Add customers" button_class="btn btn-primary btn-sm" %}
+      <button type="button" class="nav-link w-full" role="menuitem" @click="open = false; $dispatch('modal-open', 'new-contact')">
+        {% include "components/icon.html" with name="user-plus" class="w-4 h-4" %} Add one customer
+      </button>
+      <button type="button" class="nav-link w-full" role="menuitem" @click="open = false; $dispatch('add-people-tab', 'paste'); $dispatch('modal-open', 'add-people')">
+        {% include "components/icon.html" with name="clipboard" class="w-4 h-4" %} Paste phone numbers
+      </button>
+      <button type="button" class="nav-link w-full" role="menuitem" @click="open = false; $dispatch('add-people-tab', 'csv'); $dispatch('modal-open', 'add-people')">
+        {% include "components/icon.html" with name="upload" class="w-4 h-4" %} Upload a CSV file
+      </button>
+    {% enddropdown %}
   </div>
 </header>
 
 {% comment %}
   The filter swaps the results rather than reloading the page. hx-push-url
   keeps the address bar honest, so a filtered list is still linkable and the
-  back button still works.
+  back button still works — and the bulk "all matching" action reads it.
 
-  The search box fires on a 400ms pause rather than per keystroke; the select
-  fires immediately. The submit button stays for keyboard and no-JS use - the
+  The search box fires on a 400ms pause rather than per keystroke; the selects
+  fire immediately. The submit button stays for keyboard and no-JS use - the
   form is a real GET form, so everything here works with HTMX switched off.
 {% endcomment %}
 <form method="get"
@@ -34,34 +58,85 @@
       hx-push-url="true"
       hx-indicator="#contact-results"
       hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
+      @htmx:before-request="$dispatch('contacts-filtered')"
       class="flex flex-wrap items-center gap-2 mb-4">
-  <input type="search" name="q" value="{{ q }}" placeholder="Search email, phone or name…"
-         class="input w-full sm:w-64" aria-label="Search contacts" />
-  <select name="status" class="select w-full sm:w-44" aria-label="Filter by status">
-    <option value="">Any status</option>
-    {% for value, label in status_choices %}
-      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+  <input type="search" name="q" value="{{ q }}" placeholder="Search name, phone or email…"
+         class="input w-full sm:w-64" aria-label="Search customers" />
+  <select name="wa" class="select w-full sm:w-44" aria-label="Filter by WhatsApp status">
+    <option value="">Any WhatsApp status</option>
+    {% for value, label in wa_choices %}
+      <option value="{{ value }}" {% if value == wa %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+  {% if contact_lists %}
+  <select name="list" class="select w-full sm:w-44" aria-label="Filter by list">
+    <option value="">Any list</option>
+    {% for l in contact_lists %}<option value="{{ l.pk }}" {% if l.pk|stringformat:"s" == list %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
   {% if tags %}
   <select name="tag" class="select w-full sm:w-44" aria-label="Filter by tag">
     <option value="">Any tag</option>
     {% for t in tags %}<option value="{{ t.slug }}" {% if t.slug == tag %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
   </select>
   {% endif %}
-  <button class="btn btn-primary btn-sm">Filter</button>
-  {% if q or status or tag %}<a href="/contacts/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  <button class="btn btn-secondary btn-sm">Filter</button>
+  {% if filtered %}<a href="{% url 'contacts:list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
 {% include "contacts/_list_results.html" %}
 
-{% modal "new-contact" title="Add customer" %}
-  <form method="post" action="{% url 'contacts:create' %}" class="space-y-4">
+{% comment %}Bulk action bar: pinned to the bottom of the screen while anything is selected.{% endcomment %}
+<div x-show="count > 0" x-cloak x-transition.opacity
+     class="fixed inset-x-0 bottom-0 lg:bottom-6 lg:inset-x-auto lg:left-1/2 lg:-translate-x-1/2 lg:pl-32"
+     style="z-index: var(--z-dropdown)">
+  <div class="card shadow-pop mx-auto lg:mx-0 flex flex-wrap items-center gap-3 px-4 py-3 rounded-none lg:rounded-2xl">
+    <p class="text-sm font-medium text-ink" aria-live="polite">
+      <span x-text="count.toLocaleString()"></span> selected
+    </p>
+    <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'bulk-add')">
+      {% include "components/icon.html" with name="list" class="w-4 h-4" %} Add to list
+    </button>
+    <button type="button" class="btn btn-ghost btn-sm" @click="clear()">Clear selection</button>
+  </div>
+</div>
+
+{% modal "bulk-add" title="Add to a list" %}
+  <form method="post" action="{% url 'contacts:bulk_add_to_list' %}" class="space-y-4"
+        x-data="{ choice: '{% if contact_lists %}{{ contact_lists.0.pk }}{% else %}new{% endif %}', busy: false }"
+        @submit="busy = true">
+    {% csrf_token %}
+    <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
+    <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
+    <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
+    <p class="text-sm text-gray-600">Add <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> to:</p>
+    <div>
+      <label class="label" for="bulk-list">List</label>
+      <select id="bulk-list" name="list" class="select" x-model="choice">
+        {% for l in contact_lists %}<option value="{{ l.pk }}">{{ l.name }}</option>{% endfor %}
+        <option value="new">+ New list…</option>
+      </select>
+    </div>
+    <div x-show="choice === 'new'" x-cloak>
+      <label class="label" for="bulk-new-name">New list name</label>
+      <input id="bulk-new-name" name="new_name" class="input" placeholder="e.g. VIP customers" :required="choice === 'new'" maxlength="150" />
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm" :aria-busy="busy" :disabled="busy"><span class="btn-spinner" x-show="busy"></span><span>Add to list</span></button>
+    </div>
+  </form>
+{% endmodal %}
+
+</div>
+
+{% modal "new-contact" title="Add a customer" %}
+  <form method="post" action="{% url 'contacts:create' %}" class="space-y-4" x-data="{ busy: false }" @submit="busy = true">
     {% csrf_token %}
     <div class="grid sm:grid-cols-2 gap-3">
       <div>
         <label class="label" for="new-contact-first">First name</label>
-        <input id="new-contact-first" name="first_name" class="input" placeholder="Ada" />
+        <input id="new-contact-first" name="first_name" class="input" placeholder="Ada" autofocus />
       </div>
       <div>
         <label class="label" for="new-contact-last">Last name</label>
@@ -70,8 +145,8 @@
     </div>
     <div>
       <label class="label" for="new-contact-phone">WhatsApp number</label>
-      <input id="new-contact-phone" name="phone" class="input" placeholder="+260971234567" />
-      <p class="text-xs text-gray-400 mt-1">Include the country code so WhatsApp can reach them.</p>
+      <input id="new-contact-phone" name="phone" class="input" inputmode="tel" placeholder="+260971234567" />
+      <p class="text-xs text-gray-500 mt-1">Include the country code so WhatsApp can reach them.</p>
     </div>
     <div>
       <label class="label" for="new-contact-email">Email <span class="font-normal text-gray-400">(optional)</span></label>
@@ -79,8 +154,10 @@
     </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm">Add customer</button>
+      <button class="btn btn-primary btn-sm" :aria-busy="busy" :disabled="busy"><span class="btn-spinner" x-show="busy"></span><span>Add customer</span></button>
     </div>
   </form>
 {% endmodal %}
+
+{% include "contacts/_add_people_modal.html" with lists=contact_lists %}
 {% endblock %}

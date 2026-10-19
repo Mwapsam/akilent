@@ -248,8 +248,9 @@ class CampaignNoIdentityTest(TestCase):
         self.template = _make_template(self.account)
 
         # A contact with no WhatsAppContact row
+        # No phone: there's no number a WhatsApp identity could be made from.
         self.bare_contact = Contact.objects.create(
-            account=self.account, phone="+260971000020", source="seed"
+            account=self.account, email="bare@example.com", source="seed"
         )
 
         self.clist = ContactList.objects.create(

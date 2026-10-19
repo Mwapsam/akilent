@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Plain-language labels for the audit page.
 LABELS = {
     "account.suspend": "Suspended the business",
+    "whatsapp_campaign.send": "Sent a WhatsApp campaign",
     "account.activate": "Reactivated the business",
     "account.close": "Closed the account",
     "subscription.set": "Changed plan or status",

@@ -1,0 +1,117 @@
+{% load ui %}
+{% comment %}Add many customers at once: paste numbers or upload a CSV (spec S6).
+
+  {% include "contacts/_add_people_modal.html" with lists=contact_lists %}          (Customers page: list optional)
+  {% include "contacts/_add_people_modal.html" with fixed_list=contact_list %}      (a list's page)
+
+Opened with $dispatch('add-people-tab', 'paste'|'csv') then $dispatch('modal-open', 'add-people').
+The CSV preview is read in the browser (first rows only), so the owner sees which
+column we'll use before anything is uploaded. The server re-checks everything.
+{% endcomment %}
+{% modal "add-people" title="Add customers" size="xl" %}
+<div x-data="{
+       tab: 'paste',
+       busy: false,
+       listChoice: '{% if fixed_list %}{{ fixed_list.pk }}{% else %}{% endif %}',
+       preview: null,
+       previewError: '',
+       pasted: '',
+       get pastedCount() { return this.pasted.split(/\r?\n/).filter(l => l.trim()).length },
+       readCsv(file) {
+         this.preview = null; this.previewError = '';
+         if (!file) return;
+         if (file.size > 2 * 1024 * 1024) { this.previewError = 'That file is larger than 2 MB. Split it into smaller files.'; return; }
+         const reader = new FileReader();
+         reader.onload = () => {
+           const lines = String(reader.result).replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+           if (!lines.length) { this.previewError = 'That file is empty.'; return; }
+           const sep = [',', ';', '\t'].sort((a, b) => lines[0].split(b).length - lines[0].split(a).length)[0];
+           const split = l => l.split(sep).map(c => c.trim().replace(/^&quot;|&quot;$/g, '').replace(/^\x22|\x22$/g, ''));
+           const headers = split(lines[0]);
+           const phoneNames = ['phone', 'phone number', 'mobile', 'whatsapp', 'number', 'cell'];
+           const phoneCol = headers.findIndex(h => phoneNames.includes(h.toLowerCase()));
+           this.preview = { headers, rows: lines.slice(1, 6).map(split), total: lines.length - 1, phoneCol };
+           if (phoneCol === -1) this.previewError = 'We couldn’t find a phone number column. Name it “phone” (or “mobile” / “whatsapp”) and choose the file again.';
+         };
+         reader.readAsText(file);
+       },
+     }"
+     @add-people-tab.window="tab = $event.detail">
+  <div class="tabs mb-4" role="tablist">
+    <button type="button" class="tab" role="tab" :aria-selected="tab === 'paste'" @click="tab = 'paste'">
+      {% include "components/icon.html" with name="clipboard" class="w-4 h-4" %} Paste numbers
+    </button>
+    <button type="button" class="tab" role="tab" :aria-selected="tab === 'csv'" @click="tab = 'csv'">
+      {% include "components/icon.html" with name="upload" class="w-4 h-4" %} Upload a CSV
+    </button>
+  </div>
+
+  <form method="post" action="{% url 'contacts:import' %}" enctype="multipart/form-data" class="space-y-4"
+        @submit="busy = true">
+    {% csrf_token %}
+    <input type="hidden" name="mode" :value="tab">
+
+    <div x-show="tab === 'paste'">
+      <label class="label" for="add-people-numbers">Phone numbers</label>
+      <textarea id="add-people-numbers" name="numbers" rows="7" class="textarea font-mono text-sm" x-model="pasted"
+                placeholder="+260 97 123 4567, Ada Mwape&#10;+260 96 555 0101, Bwalya&#10;0955 123 456"
+                :required="tab === 'paste'"></textarea>
+      <p class="text-xs text-gray-500 mt-1">One per line. Add a comma and a name if you have one. Include the country code — numbers starting with 0 are read as Zambian.
+        <span x-show="pastedCount" x-cloak class="text-ink" aria-live="polite">· <span x-text="pastedCount"></span> line<span x-show="pastedCount !== 1">s</span></span></p>
+    </div>
+
+    <div x-show="tab === 'csv'" x-cloak>
+      <label class="label" for="add-people-file">CSV file</label>
+      <input id="add-people-file" type="file" name="file" accept=".csv,text/csv" class="input"
+             :required="tab === 'csv'" @change="readCsv($event.target.files[0])">
+      <p class="text-xs text-gray-500 mt-1">Needs a <strong>phone</strong> column. Optional: <strong>name</strong> (or first name / last name) and <strong>tags</strong> (separate several with ;). Up to 5,000 rows.</p>
+      <p x-show="previewError" x-cloak class="field-error mt-2" x-text="previewError" role="alert"></p>
+      <template x-if="preview && preview.phoneCol !== -1">
+        <div class="mt-3">
+          <p class="text-xs text-gray-500 mb-1"><span x-text="preview.total.toLocaleString()"></span> rows. First few, as we'll read them:</p>
+          <div class="table-scroll border border-border rounded-xl">
+            <table class="table text-xs">
+              <thead><tr><template x-for="(h, i) in preview.headers" :key="i"><th :class="i === preview.phoneCol ? 'text-accent-strong' : ''"><span x-text="h"></span><span x-show="i === preview.phoneCol"> · phone</span></th></template></tr></thead>
+              <tbody><template x-for="(r, ri) in preview.rows" :key="ri"><tr><template x-for="(c, ci) in r" :key="ci"><td x-text="c"></td></template></tr></template></tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {% if fixed_list %}
+      <input type="hidden" name="list" value="{{ fixed_list.pk }}">
+      <p class="text-sm text-gray-600">They'll be added to <strong>{{ fixed_list.name }}</strong>. New numbers become customers.</p>
+    {% else %}
+    <div>
+      <label class="label" for="add-people-list">Also add them to a list <span class="font-normal text-gray-400">(optional)</span></label>
+      <select id="add-people-list" name="list" class="select" x-model="listChoice">
+        <option value="">Don't add to a list</option>
+        {% for l in lists %}<option value="{{ l.pk }}">{{ l.name }}</option>{% endfor %}
+        <option value="new">+ New list…</option>
+      </select>
+      <input x-show="listChoice === 'new'" x-cloak name="new_name" class="input mt-2" placeholder="New list name" maxlength="150"
+             :required="listChoice === 'new'" aria-label="New list name">
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl border border-border p-3">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" name="attested" value="1" class="h-4 w-4 mt-0.5 rounded">
+        <span class="text-sm">
+          <span class="font-medium text-ink">These customers agreed to get WhatsApp messages from {{ account.company_name|default:"us" }}</span>
+          <span class="block text-gray-600 mt-0.5">Tick this only if they gave you permission — for example they signed up in your shop or asked for offers. It lets you send them promotions. Without it they can still get updates like order messages. Anyone who replied STOP stays opted out.</span>
+          <a href="/help/whatsapp-campaign-lists/#consent" class="text-xs text-accent hover:text-accent-strong" target="_blank" rel="noopener">What counts as permission?</a>
+        </span>
+      </label>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm" :aria-busy="busy" :disabled="busy || (tab === 'csv' && !!previewError)">
+        <span class="btn-spinner" x-show="busy"></span><span>Add customers</span>
+      </button>
+    </div>
+  </form>
+</div>
+{% endmodal %}

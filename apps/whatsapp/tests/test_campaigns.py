@@ -419,8 +419,8 @@ def test_campaign_skips_opted_out_and_missing_whatsapp_contacts(
         opt_in_status=WhatsAppContact.OptInStatus.OPTED_OUT,
     )
     no_whatsapp_contact = Contact.objects.create(
-        account=account, phone="+260971000011"
-    )  # no WhatsAppContact row
+        account=account, email="no-phone@example.com"
+    )  # no phone, so no WhatsApp identity can exist
     contact_list.contacts.add(opted_out_contact, no_whatsapp_contact)
 
     campaign = create_and_queue_campaign(
@@ -444,6 +444,32 @@ def test_campaign_skips_opted_out_and_missing_whatsapp_contacts(
         )
     )
     assert reasons == {_SkipReason.OPTED_OUT, _SkipReason.NO_WHATSAPP_IDENTITY}
+
+
+def test_campaign_reaches_contact_added_by_hand_without_whatsapp_identity(
+    account, approved_template
+):
+    """A customer added by hand (a phone, but no WhatsAppContact yet) used to be
+    skipped as "no WhatsApp number" — the campaign now gives them an identity."""
+    contact_list = ContactList.objects.create(account=account, name="Walk-ins")
+    walk_in = Contact.objects.create(account=account, phone="+260971000012")
+    WhatsAppContact.objects.filter(contact=walk_in).delete()
+    contact_list.contacts.add(walk_in)
+
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="Blast",
+        contact_list=contact_list,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+
+    recipient = WhatsAppCampaignRecipient.objects.get(campaign=campaign)
+    assert recipient.status == WhatsAppCampaignRecipient.Status.QUEUED
+    identity = WhatsAppContact.objects.get(account=account, contact=walk_in)
+    assert identity.phone_number == "+260971000012"
+    assert identity.opt_in_status == WhatsAppContact.OptInStatus.UNKNOWN
 
 
 # --- Status-layer invariant: never write recipient.status=FAILED for a --
@@ -470,6 +496,60 @@ def test_a_meta_delivery_failure_never_changes_recipient_status(
 
     recipient.refresh_from_db()
     assert recipient.status == _Status.QUEUED  # unchanged by the delivery outcome
+
+
+@pytest.mark.django_db
+def test_terminal_send_failure_is_counted_in_delivery_stats(
+    account, approved_template, contact_list_with_two_customers
+):
+    """The send pipeline marks the recipient FAILED when it gives up on a message
+    (_notify_terminal_failure); that recipient must still show as Failed, not
+    disappear from the delivery numbers."""
+    from apps.whatsapp.tasks import _notify_terminal_failure
+
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list_with_two_customers,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+
+    recipient = WhatsAppCampaignRecipient.objects.filter(campaign=campaign).first()
+    msg = recipient.message
+    msg.status = OutboundMessage.Status.FAILED
+    msg.last_error = "Number not on WhatsApp"
+    msg.save(update_fields=["status", "last_error"])
+    _notify_terminal_failure(msg)
+
+    recipient.refresh_from_db()
+    assert recipient.status == _Status.FAILED
+    stats = campaign_delivery_stats(campaign)
+    assert stats["failed"] == 1
+    assert sum(stats.values()) == 2  # every queued message is accounted for
+
+
+@pytest.mark.django_db
+def test_held_and_unconfirmed_messages_are_not_lumped_into_pending(
+    account, approved_template, contact_list_with_two_customers
+):
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list_with_two_customers,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+    first, second = WhatsAppCampaignRecipient.objects.filter(campaign=campaign)
+    first.message.status = OutboundMessage.Status.HELD
+    first.message.save(update_fields=["status"])
+    second.message.status = OutboundMessage.Status.UNCONFIRMED
+    second.message.save(update_fields=["status"])
+
+    stats = campaign_delivery_stats(campaign)
+    assert (stats["held"], stats["unconfirmed"], stats["pending"]) == (1, 1, 0)
 
 
 # --- Delivery stats: OutboundMessage.status authoritative for FAILED -------
@@ -505,7 +585,15 @@ def test_delivery_stats_bucket_by_recipient_message_status(
     recipients[0].message.save(update_fields=["message_log", "status"])
 
     stats = campaign_delivery_stats(campaign)
-    assert stats == {"sent": 1, "delivered": 0, "read": 0, "failed": 0, "pending": 1}
+    assert stats == {
+        "sent": 1,
+        "delivered": 0,
+        "read": 0,
+        "failed": 0,
+        "held": 0,
+        "unconfirmed": 0,
+        "pending": 1,
+    }
 
 
 @pytest.mark.django_db
@@ -763,3 +851,144 @@ def test_failure_mid_chunk_leaves_pending_rows_and_no_orphan_outbound_message(
     campaign.refresh_from_db()
     assert campaign.status == WhatsAppCampaign.Status.COMPLETED
     assert campaign.queued_count == 5
+
+
+# --- Audit 2026-10-19: stuck, wasted and duplicate sends ------------------
+
+
+@pytest.mark.django_db
+def test_media_header_template_is_refused_up_front(
+    account, approved_template, contact_list_with_two_customers
+):
+    approved_template.header_format = MessageTemplate.HeaderFormat.IMAGE
+    approved_template.save(update_fields=["header_format"])
+
+    with pytest.raises(CampaignError, match="picture, video or document"):
+        create_and_queue_campaign(
+            account=account,
+            name="X",
+            contact_list=contact_list_with_two_customers,
+            template_id=approved_template.id,
+        )
+    assert not WhatsAppCampaign.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_chunk_that_cannot_be_built_fails_the_campaign_instead_of_hanging(
+    account, approved_template, contact_list_with_two_customers
+):
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list_with_two_customers,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    with mock.patch(
+        "apps.automation.workflows._build_template_payload",
+        side_effect=ValueError("Template 'promo' can't be sent yet."),
+    ):
+        send_campaign.run(campaign.id)
+
+    campaign.refresh_from_db()
+    assert campaign.status == WhatsAppCampaign.Status.FAILED
+    assert "can't be sent yet" in campaign.error
+    assert not OutboundMessage.objects.filter(account=account).exists()
+
+
+@pytest.mark.django_db
+def test_sweeper_resumes_sending_campaign_that_never_recorded_progress(
+    account, approved_template, contact_list_with_two_customers
+):
+    from datetime import timedelta
+
+    from apps.whatsapp.tasks import sweep_stuck_whatsapp_campaigns
+
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="X",
+        contact_list=contact_list_with_two_customers,
+        template_id=approved_template.id,
+    )
+    WhatsAppCampaign.objects.filter(pk=campaign.pk).update(
+        status=WhatsAppCampaign.Status.SENDING,
+        started_at=timezone.now() - timedelta(hours=1),
+        last_progress_at=None,
+    )
+    with mock.patch("apps.whatsapp.campaigns.send_campaign.delay") as delay:
+        result = sweep_stuck_whatsapp_campaigns()
+
+    assert result == {"resumed": 1}
+    delay.assert_called_once_with(campaign.pk)
+
+
+@pytest.mark.django_db
+def test_marketing_template_skips_customers_who_have_not_opted_in(
+    account, approved_template
+):
+    approved_template.category = MessageTemplate.Category.MARKETING
+    approved_template.save(update_fields=["category"])
+    contact_list = ContactList.objects.create(account=account, name="Mixed")
+    opted_in = _opted_in_contact(account, 1)
+    unknown = Contact.objects.create(account=account, phone="+260971000099")
+    WhatsAppContact.objects.create(
+        account=account, phone_number=unknown.phone, contact=unknown
+    )
+    contact_list.contacts.add(opted_in, unknown)
+
+    campaign = create_and_queue_campaign(
+        account=account,
+        name="Sale",
+        contact_list=contact_list,
+        template_id=approved_template.id,
+        variable_mapping={"name": "Hi"},
+    )
+    send_campaign.run(campaign.id)
+
+    by_contact = {
+        r.contact_id: r
+        for r in WhatsAppCampaignRecipient.objects.filter(campaign=campaign)
+    }
+    assert by_contact[opted_in.pk].status == _Status.QUEUED
+    assert by_contact[unknown.pk].status == _Status.SKIPPED
+    assert by_contact[unknown.pk].skip_reason == _SkipReason.NOT_OPTED_IN
+
+
+@pytest.mark.django_db
+def test_resubmitting_the_same_form_does_not_send_twice(
+    account, approved_template, contact_list_with_two_customers
+):
+    kwargs = dict(
+        account=account,
+        name="X",
+        contact_list=contact_list_with_two_customers,
+        template_id=approved_template.id,
+        submission_key="form-123",
+    )
+    first = create_and_queue_campaign(**kwargs)
+    second = create_and_queue_campaign(**kwargs)
+
+    assert first.pk == second.pk
+    assert WhatsAppCampaign.objects.filter(account=account).count() == 1
+    assert WhatsAppCampaignRecipient.objects.filter(campaign=first).count() == 2
+
+
+@pytest.mark.django_db
+def test_campaign_creation_is_all_or_nothing(
+    account, approved_template, contact_list_with_two_customers
+):
+    with (
+        mock.patch.object(
+            WhatsAppCampaignRecipient.objects,
+            "bulk_create",
+            side_effect=RuntimeError("db went away"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        create_and_queue_campaign(
+            account=account,
+            name="X",
+            contact_list=contact_list_with_two_customers,
+            template_id=approved_template.id,
+        )
+    assert not WhatsAppCampaign.objects.filter(account=account).exists()
