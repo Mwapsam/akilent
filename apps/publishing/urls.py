@@ -44,6 +44,12 @@ urlpatterns = [
         name="variant-reschedule",
     ),
     path("posts/<int:pk>/cancel/", views.post_cancel, name="post-cancel"),
+    path(
+        "posts/<int:pk>/variants/<int:variant_pk>/first-comment/retry/",
+        views.first_comment_retry,
+        name="first-comment-retry",
+    ),
+    path("locations/search/", views.location_search, name="location-search"),
     path("posts/<int:pk>/reopen/", views.post_reopen, name="post-reopen"),
     path(
         "posts/<int:pk>/refresh-insights/",

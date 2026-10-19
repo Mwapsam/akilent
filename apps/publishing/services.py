@@ -1140,11 +1140,17 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
         else (post.media_urls[0] if post.media_urls else "")
     )
     mt = post.media_type
+    # Alt text, location, collaborators, Reel settings: only those valid for ``mt``.
+    from .post_options import instagram_container_params
+
+    extra = instagram_container_params(variant.options, mt)
 
     try:
         if mt == ContentPost.MediaType.IMAGE:
             _validate_ig_image_ratio(url)
-            container_id = provider.create_image_container(ig_user_id, url, caption)
+            container_id = provider.create_image_container(
+                ig_user_id, url, caption, **extra
+            )
             _wait_for_ig_container(provider, container_id)
             ig_media_id = _ig_publish_container(provider, ig_user_id, container_id)
             return {
@@ -1159,7 +1165,9 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
             }
 
         if mt in (ContentPost.MediaType.VIDEO, ContentPost.MediaType.REEL):
-            container_id = provider.create_video_container(ig_user_id, url, caption)
+            container_id = provider.create_video_container(
+                ig_user_id, url, caption, **extra
+            )
             # Videos are async - return with container ID for polling
             return {
                 "success": False,  # Not fully published yet
@@ -1195,7 +1203,7 @@ def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -
                 child_id = provider.create_carousel_item_container(ig_user_id, item_url)
                 children.append(child_id)
             container_id = provider.create_carousel_container(
-                ig_user_id, children, caption
+                ig_user_id, children, caption, **extra
             )
             _wait_for_ig_container(provider, container_id)
             ig_media_id = _ig_publish_container(provider, ig_user_id, container_id)
@@ -1490,8 +1498,165 @@ def refresh_parent_post(post: ContentPost) -> None:
             + METRICS_FIRST_READ
         )
 
+    queue_first_comments(variants)
+
 
 METRICS_FIRST_READ = timedelta(hours=1)
+
+
+# ---------------------------------------------------------------------------
+# First comment: posted once, after the channel goes live
+# ---------------------------------------------------------------------------
+
+# variant.metadata[FIRST_COMMENT_KEY] = {"status": queued|posting|posted|failed,
+#                                        "id": comment id, "error": str, "at": iso}
+FIRST_COMMENT_KEY = "first_comment"
+FIRST_COMMENT_PERMISSION_MESSAGE = {
+    "instagram": (
+        "Instagram didn't allow the comment. Reconnect Instagram so Akilent can "
+        "comment on your posts, then try again."
+    ),
+    "facebook": (
+        "Facebook didn't allow the comment. Reconnect your Page in Content Studio → "
+        "Channels so Akilent can comment on your posts, then try again."
+    ),
+}
+
+
+def queue_first_comments(variants) -> list[int]:
+    """Queue the first comment of each newly published channel that has one.
+
+    Claimed by writing "queued" under a row lock, so it is queued once however often
+    the parent post is refreshed. Returns the queued variant ids.
+    """
+    from functools import partial
+
+    from django.db import transaction
+
+    from .post_options import first_comment_for
+
+    queued = []
+    for v in variants:
+        if (
+            v.status != ContentPostVariant.Status.PUBLISHED
+            or not v.publication_id
+            or FIRST_COMMENT_KEY in (v.metadata or {})
+            or not first_comment_for(v)
+        ):
+            continue
+        with transaction.atomic():
+            locked = ContentPostVariant.objects.select_for_update().get(pk=v.pk)
+            if FIRST_COMMENT_KEY in (locked.metadata or {}):
+                continue
+            locked.metadata = {
+                **(locked.metadata or {}),
+                FIRST_COMMENT_KEY: {"status": "queued"},
+            }
+            locked.save(update_fields=["metadata"])
+            transaction.on_commit(partial(_enqueue_first_comment, v.pk))
+        queued.append(v.pk)
+    return queued
+
+
+def _enqueue_first_comment(variant_id: int) -> None:
+    from .tasks import post_first_comment_task
+
+    try:
+        post_first_comment_task.delay(variant_id)
+    except Exception:
+        logger.exception("Couldn't enqueue first comment for variant=%s", variant_id)
+
+
+def _set_first_comment_state(variant_id: int, **state) -> None:
+    from django.db import transaction
+
+    with transaction.atomic():
+        v = ContentPostVariant.objects.select_for_update().get(pk=variant_id)
+        v.metadata = {
+            **(v.metadata or {}),
+            FIRST_COMMENT_KEY: {**state, "at": timezone.now().isoformat()},
+        }
+        v.save(update_fields=["metadata"])
+
+
+def post_first_comment(variant_id: int) -> str:
+    """Post a queued first comment. Returns the final status.
+
+    Claims queued → posting first, so two workers never both comment.
+    """
+    from django.db import transaction
+
+    from .post_options import first_comment_for
+    from .providers.errors import MetaPublishError
+
+    with transaction.atomic():
+        v = (
+            ContentPostVariant.objects.select_for_update()
+            .select_related("post", "post__account")
+            .get(pk=variant_id)
+        )
+        state = (v.metadata or {}).get(FIRST_COMMENT_KEY) or {}
+        if state.get("status") != "queued":
+            return state.get("status", "none")
+        v.metadata = {**v.metadata, FIRST_COMMENT_KEY: {"status": "posting"}}
+        v.save(update_fields=["metadata"])
+
+    post = v.post
+    text = first_comment_for(v)
+    if not text:
+        _set_first_comment_state(variant_id, status="skipped")
+        return "skipped"
+
+    provider: InstagramPublishProvider | FacebookPublishProvider | None
+    if v.platform == ContentPostVariant.Platform.INSTAGRAM:
+        provider = _ig_provider_for_post(post)
+        not_connected = IG_RECONNECT_MESSAGE
+    else:
+        fb = _fb_provider_for_post(post)
+        provider = fb[0] if fb else None
+        not_connected = FB_RECONNECT_MESSAGE
+    if provider is None:
+        _set_first_comment_state(variant_id, status="failed", error=not_connected)
+        return "failed"
+
+    try:
+        comment_id = provider.create_comment(v.publication_id, text)
+    except MetaPublishError as exc:
+        error = (
+            FIRST_COMMENT_PERMISSION_MESSAGE[v.platform]
+            if exc.error_type == ContentPostVariant.ErrorType.PERMISSION
+            else str(exc)
+        )
+        logger.warning("First comment failed for variant=%s: %s", variant_id, exc)
+        _set_first_comment_state(variant_id, status="failed", error=error[:500])
+        return "failed"
+    except Exception as exc:
+        # The request may have reached Meta; say so rather than retrying blindly.
+        logger.exception("First comment outcome unknown for variant=%s", variant_id)
+        _set_first_comment_state(
+            variant_id,
+            status="failed",
+            error=f"We couldn't confirm the comment was posted ({exc}). Check the post "
+            "before trying again.",
+        )
+        return "failed"
+    _set_first_comment_state(variant_id, status="posted", id=comment_id)
+    return "posted"
+
+
+def retry_first_comment(variant: ContentPostVariant) -> bool:
+    """Queue a failed first comment again. Returns False if it isn't in a failed state."""
+    from django.db import transaction
+
+    with transaction.atomic():
+        v = ContentPostVariant.objects.select_for_update().get(pk=variant.pk)
+        state = (v.metadata or {}).get(FIRST_COMMENT_KEY) or {}
+        if state.get("status") != "failed":
+            return False
+        v.metadata = {**v.metadata, FIRST_COMMENT_KEY: {"status": "queued"}}
+        v.save(update_fields=["metadata"])
+        transaction.on_commit(lambda: _enqueue_first_comment(v.pk))
+    return True
 
 
 # Step 4.7B: Reconciliation Operations

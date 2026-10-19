@@ -225,6 +225,48 @@
     </div>
   </div>
 
+  {% if channel_options %}
+  <div class="card card-pad space-y-4">
+    <p class="text-sm text-gray-500">Channel options</p>
+    {% for row in channel_options %}
+    {% with o=row.options state=row.comment_state %}
+    <div class="{% if not forloop.first %}border-t border-surface-subtle pt-4 {% endif %}space-y-1.5">
+      <p class="text-sm font-medium text-ink">{{ row.variant.get_platform_display }}</p>
+      <dl class="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-x-4 gap-y-1 text-sm">
+        {% if o.alt_text %}<dt class="text-gray-500">Alt text</dt><dd class="break-words">{{ o.alt_text }}</dd>{% endif %}
+        {% if o.location %}<dt class="text-gray-500">Location</dt><dd>{{ o.location.name|default:o.location.id }}</dd>{% endif %}
+        {% if o.collaborators %}<dt class="text-gray-500">Collaborators</dt><dd>{% for n in o.collaborators %}@{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+        {% if "share_to_feed" in o %}<dt class="text-gray-500">Feed</dt><dd>{% if o.share_to_feed %}Shown in feed and Reels{% else %}Reels tab only{% endif %}</dd>{% endif %}
+        {% if o.cover_url %}<dt class="text-gray-500">Cover</dt><dd>{% include "publishing/_media_thumb.html" with url=o.cover_url size="w-12 h-20" alt="Reel cover" %}</dd>
+        {% elif o.thumb_offset %}<dt class="text-gray-500">Cover</dt><dd>Frame at {% widthratio o.thumb_offset 1000 1 %} s</dd>{% endif %}
+        {% if o.first_comment %}
+        <dt class="text-gray-500">First comment</dt>
+        <dd class="space-y-1">
+          <p class="whitespace-pre-wrap break-words">{{ o.first_comment }}</p>
+          {% if state.status == "posted" %}
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-teal">Posted</span>
+          {% elif state.status == "queued" or state.status == "posting" %}
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-info">Posting…</span>
+          {% elif state.status == "failed" %}
+            <div class="text-xs rounded-lg p-2.5 tone-coral-bg space-y-1.5">
+              <p class="text-ink">Not posted. {{ state.error }}</p>
+              <form method="post" action="{% url 'publishing:first-comment-retry' post.pk row.variant.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-sm">Try again</button>
+              </form>
+            </div>
+          {% else %}
+            <span class="text-xs text-gray-500">Posted when the post goes live.</span>
+          {% endif %}
+        </dd>
+        {% endif %}
+      </dl>
+    </div>
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% include "publishing/_results_card.html" %}
 
   {% with published=post|published_channels %}

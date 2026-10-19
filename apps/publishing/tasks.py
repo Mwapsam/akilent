@@ -317,6 +317,14 @@ METRICS_LEASE = 30  # minutes a queued read holds its slot before it may be queu
 
 
 @shared_task(queue="outbound")
+def post_first_comment_task(variant_id: int) -> str:
+    """Post a published channel's first comment (see services.post_first_comment)."""
+    from .services import post_first_comment
+
+    return post_first_comment(variant_id)
+
+
+@shared_task(queue="outbound")
 def collect_variant_metrics_task(variant_id: int) -> str:
     """Read one published channel's performance numbers."""
     from datetime import timedelta

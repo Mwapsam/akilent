@@ -297,6 +297,135 @@
         </div>
       </fieldset>
 
+      {# More options: only what the selected channels accept for this media type #}
+      <div class="card card-pad" x-show="_anyOption()" x-cloak>
+        <button type="button" class="w-full flex items-center justify-between gap-3 text-left"
+                @click="moreOpen = !moreOpen" :aria-expanded="moreOpen" aria-controls="more-options">
+          <span>
+            <span class="block font-semibold text-ink">More options</span>
+            <span class="block text-xs text-gray-500 mt-0.5"
+                  x-text="_optionsSummary() || 'Alt text, location, collaborators, first comment'"></span>
+          </span>
+          <svg class="w-4 h-4 text-gray-500 transition-transform flex-shrink-0" :class="moreOpen && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+
+        <div id="more-options" x-show="moreOpen" class="mt-4 space-y-6">
+          {# Instagram #}
+          <section x-show="_anyOption('instagram')" class="space-y-4" aria-labelledby="opt-ig-title">
+            <h3 id="opt-ig-title" class="text-sm font-semibold text-ink">Instagram</h3>
+
+            <div x-show="_can('instagram', 'alt_text')">
+              <label for="ig-alt-text" class="block text-sm font-medium text-gray-700 mb-1">Alt text</label>
+              <textarea id="ig-alt-text" name="ig_alt_text" rows="2" maxlength="1000" x-model="opts.instagram.alt_text"
+                        placeholder="e.g. Three summer dresses in yellow, coral and teal on a rail"
+                        class="input w-full text-sm"></textarea>
+              <p class="text-xs text-gray-500 mt-1">Describes the image for people who use screen readers.</p>
+            </div>
+
+            <div x-show="_can('instagram', 'location')">
+              <label for="ig-location-q" class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <input type="hidden" name="ig_location_id" :value="opts.instagram.location ? opts.instagram.location.id : ''">
+              <input type="hidden" name="ig_location_name" :value="opts.instagram.location ? opts.instagram.location.name : ''">
+              <template x-if="opts.instagram.location">
+                <div class="flex items-center gap-2 text-sm">
+                  <span class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 min-w-0">
+                    <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span class="truncate" x-text="opts.instagram.location.name"></span>
+                  </span>
+                  <button type="button" class="text-xs text-gray-500 hover:text-ink underline" @click="opts.instagram.location = null">Remove</button>
+                </div>
+              </template>
+              <div x-show="!opts.instagram.location" class="relative">
+                <input type="search" id="ig-location-q" x-model="loc.query" autocomplete="off"
+                       @input.debounce.350ms="searchLocations()" @keydown.escape="loc.results = []"
+                       placeholder="Search for a place" class="input w-full text-sm"
+                       role="combobox" :aria-expanded="loc.results.length > 0" aria-controls="ig-location-results">
+                <ul id="ig-location-results" role="listbox" x-show="loc.results.length > 0"
+                    class="absolute z-10 mt-1 w-full card p-1 max-h-60 overflow-y-auto">
+                  <template x-for="r in loc.results" :key="r.id">
+                    <li role="option">
+                      <button type="button" class="w-full text-left px-3 py-2 rounded-lg hover:bg-hover text-sm"
+                              @click="opts.instagram.location = { id: r.id, name: r.name }; loc.results = []; loc.query = ''">
+                        <span class="block text-ink" x-text="r.name"></span>
+                        <span class="block text-xs text-gray-500" x-show="r.detail" x-text="r.detail"></span>
+                      </button>
+                    </li>
+                  </template>
+                </ul>
+                <p class="text-xs text-gray-500 mt-1" x-show="loc.loading">Searching…</p>
+                <p class="text-xs text-gray-500 mt-1" x-show="loc.error" x-text="loc.error" role="status"></p>
+                <p class="text-xs text-gray-500 mt-1" x-show="!loc.loading && !loc.error && loc.searched && loc.results.length === 0">No places found.</p>
+              </div>
+            </div>
+
+            <div x-show="_can('instagram', 'collaborators')">
+              <label for="ig-collaborators" class="block text-sm font-medium text-gray-700 mb-1">Collaborators</label>
+              <input type="text" id="ig-collaborators" name="ig_collaborators" x-model="opts.instagram.collaborators"
+                     placeholder="@username, @username" autocomplete="off" autocapitalize="off" spellcheck="false"
+                     class="input w-full text-sm">
+              <p class="text-xs text-gray-500 mt-1">Up to 3 accounts. Each gets an invite to show the post on their profile too.</p>
+            </div>
+
+            <div x-show="_can('instagram', 'share_to_feed')">
+              <input type="hidden" name="ig_share_to_feed" value="0" :disabled="!_can('instagram', 'share_to_feed')">
+              <label class="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="ig_share_to_feed" value="1" class="rounded mt-0.5"
+                       x-model="opts.instagram.share_to_feed" :disabled="!_can('instagram', 'share_to_feed')">
+                <span>Also show the Reel in your feed <span class="block text-xs text-gray-500">Off: it only appears in the Reels tab.</span></span>
+              </label>
+            </div>
+
+            <div x-show="_can('instagram', 'cover_url')" class="space-y-2">
+              <p class="text-sm font-medium text-gray-700">Reel cover</p>
+              <input type="hidden" name="ig_cover_url" :value="opts.instagram.cover_url">
+              <div class="flex flex-wrap items-center gap-3">
+                <template x-if="opts.instagram.cover_url">
+                  <img :src="opts.instagram.cover_url" alt="Reel cover" class="w-14 h-24 rounded-lg object-cover border border-border">
+                </template>
+                <label class="btn btn-ghost btn-sm cursor-pointer">
+                  <input type="file" accept="image/jpeg,image/png" class="sr-only" @change="uploadCover($event)">
+                  <span x-text="opts.instagram.cover_url ? 'Change cover image' : 'Upload a cover image'"></span>
+                </label>
+                <button type="button" x-show="opts.instagram.cover_url" class="text-xs text-gray-500 hover:text-ink underline"
+                        @click="opts.instagram.cover_url = ''">Remove</button>
+                <span class="text-xs text-gray-500" x-show="coverUploading">Uploading…</span>
+              </div>
+              <p class="text-xs text-red-600" x-show="coverError" x-text="coverError" role="alert"></p>
+              <div x-show="!opts.instagram.cover_url">
+                <label for="ig-thumb-offset" class="block text-xs font-medium text-gray-500 mb-1">Or use a frame from the video, at</label>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="ig-thumb-offset" name="ig_thumb_offset" min="0" max="900" step="0.1"
+                         x-model="opts.instagram.thumb_offset" placeholder="0" class="input w-24 text-sm">
+                  <span class="text-sm text-gray-500">seconds</span>
+                </div>
+              </div>
+            </div>
+
+            <div x-show="_can('instagram', 'first_comment')">
+              <label for="ig-first-comment" class="block text-sm font-medium text-gray-700 mb-1">First comment</label>
+              <textarea id="ig-first-comment" name="ig_first_comment" rows="2" maxlength="2200" x-model="opts.instagram.first_comment"
+                        placeholder="e.g. More hashtags, or “Tap the link in our bio to order”"
+                        class="input w-full text-sm"></textarea>
+              <p class="text-xs text-gray-500 mt-1">Posted from your account right after the post goes live.</p>
+            </div>
+          </section>
+
+          {# Facebook #}
+          <section x-show="_anyOption('facebook')" class="space-y-4" aria-labelledby="opt-fb-title">
+            <h3 id="opt-fb-title" class="text-sm font-semibold text-ink">Facebook</h3>
+            <div>
+              <label for="fb-first-comment" class="block text-sm font-medium text-gray-700 mb-1">First comment</label>
+              <textarea id="fb-first-comment" name="fb_first_comment" rows="2" maxlength="2200" x-model="opts.facebook.first_comment"
+                        placeholder="e.g. Prices and sizes are in the photo description"
+                        class="input w-full text-sm"></textarea>
+              <p class="text-xs text-gray-500 mt-1">Posted from your Page right after the post goes live.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
       {# Media uploads #}
       <div class="card card-pad space-y-3" x-data="mediaUploader('{% url "publishing:post-media-upload" %}', editorData().media_urls)">
         <h2 class="font-semibold text-ink">Media</h2>
@@ -441,7 +570,8 @@
         <div class="flex items-center gap-2 px-3 py-2 border-b border-surface-subtle">
           <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0"></div>
           <div class="flex-1 min-w-0">
-            <p class="font-semibold text-xs text-ink leading-tight truncate">your_account</p>
+            <p class="font-semibold text-xs text-ink leading-tight truncate">your_account<template x-if="_can('instagram', 'collaborators') && _collaborators().length"><span x-text="' and ' + (_collaborators().length === 1 ? _collaborators()[0] : _collaborators().length + ' others')"></span></template></p>
+            <p class="text-xs text-gray-500 leading-tight truncate" x-show="_can('instagram', 'location') && opts.instagram.location" x-text="opts.instagram.location ? opts.instagram.location.name : ''"></p>
           </div>
           <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
             <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
@@ -450,7 +580,8 @@
         {# Media #}
         <template x-if="previewMediaUrls.length > 0 && _isImageUrl(previewMediaUrls[0])">
           <div class="relative aspect-square tone-neutral-bg overflow-hidden">
-            <img :src="previewMediaUrls[0]" class="w-full h-full object-cover" alt="Preview of the first image">
+            <img :src="previewMediaUrls[0]" class="w-full h-full object-cover"
+                 :alt="(_can('instagram', 'alt_text') && opts.instagram.alt_text.trim()) || 'Preview of the first image'">
             <span x-show="previewMediaUrls.length > 1" class="absolute top-2 right-2 text-xs font-semibold px-1.5 rounded bg-gray-900/60 text-white"
                   x-text="'1/' + previewMediaUrls.length"></span>
           </div>
@@ -481,6 +612,8 @@
           <p class="text-xs text-gray-400 mt-1"
              x-show="_previewCaption('instagram').length > 0"
              x-text="_previewCaption('instagram').length + ' / 2200 chars'"></p>
+          <p class="text-xs text-ink leading-relaxed break-words whitespace-pre-wrap mt-2 pt-2 border-t border-surface-subtle"
+             x-show="_firstComment('instagram')"><span class="font-semibold">your_account</span> <span x-text="_firstComment('instagram')"></span></p>
         </div>
       </div>
 
@@ -542,6 +675,14 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             Share
           </span>
+        </div>
+        {# First comment from the Page #}
+        <div class="flex items-start gap-2 px-3 pb-3 pt-1" x-show="_firstComment('facebook')">
+          <div class="w-6 h-6 rounded-full bg-blue-600 flex-shrink-0" aria-hidden="true"></div>
+          <p class="text-xs rounded-2xl tone-neutral-bg px-3 py-1.5 break-words whitespace-pre-wrap min-w-0">
+            <span class="block font-semibold text-ink">Your Page</span>
+            <span class="text-ink" x-text="_firstComment('facebook')"></span>
+          </p>
         </div>
       </div>
     </div>
@@ -718,6 +859,28 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     channelTimes: Object.assign({ instagram: '', facebook: '' }, editorData().channel_times || {}),
     previewPlatform: 'instagram',
     previewMediaUrls: [],
+    caps: editorData().option_caps || {},
+    opts: (() => {
+      const saved = editorData().options || {};
+      const ig = saved.instagram || {};
+      const fb = saved.facebook || {};
+      return {
+        instagram: {
+          alt_text: ig.alt_text || '',
+          location: ig.location || null,
+          collaborators: (ig.collaborators || []).map(n => '@' + n).join(', '),
+          share_to_feed: ig.share_to_feed !== false,
+          cover_url: ig.cover_url || '',
+          thumb_offset: ig.thumb_offset ? String(ig.thumb_offset / 1000) : '',
+          first_comment: ig.first_comment || '',
+        },
+        facebook: { first_comment: fb.first_comment || '' },
+      };
+    })(),
+    moreOpen: Object.values(editorData().options || {}).some(o => o && Object.keys(o).length),
+    loc: { query: '', results: [], loading: false, error: '', searched: false },
+    coverUploading: false,
+    coverError: '',
 
     init() {
       window.addEventListener('media-updated', e => { this.previewMediaUrls = e.detail.urls; });
@@ -757,6 +920,78 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
     _previewCaption(platform) {
       return [this._previewBody(platform), this._ctaLine(platform), this._previewTags()]
         .filter(Boolean).join('\n\n');
+    },
+
+    // Whether a channel takes an option for the current media type (post_options.CAPABILITIES).
+    _can(platform, option) {
+      if (!this.selectedPlatforms.includes(platform)) return false;
+      return ((this.caps[platform] || {})[option] || []).includes(this.mediaType);
+    },
+
+    _anyOption(platform) {
+      const platforms = platform ? [platform] : Object.keys(this.caps);
+      return platforms.some(p => Object.keys(this.caps[p] || {}).some(o => this._can(p, o)));
+    },
+
+    _optionsSummary() {
+      const ig = this.opts.instagram, fb = this.opts.facebook, set = [];
+      if (this._can('instagram', 'alt_text') && ig.alt_text.trim()) set.push('Alt text');
+      if (this._can('instagram', 'location') && ig.location) set.push(ig.location.name);
+      const collabs = this._collaborators();
+      if (this._can('instagram', 'collaborators') && collabs.length) set.push(collabs.length + ' collaborator' + (collabs.length > 1 ? 's' : ''));
+      if (this._can('instagram', 'cover_url') && (ig.cover_url || Number(ig.thumb_offset) > 0)) set.push('Cover');
+      if (this._can('instagram', 'share_to_feed') && !ig.share_to_feed) set.push('Reels tab only');
+      if ((this._can('instagram', 'first_comment') && ig.first_comment.trim()) ||
+          (this._can('facebook', 'first_comment') && fb.first_comment.trim())) set.push('First comment');
+      return set.join(' · ');
+    },
+
+    _collaborators() {
+      return (this.opts.instagram.collaborators || '').split(/[\s,]+/).map(n => n.replace(/^@/, '')).filter(Boolean).slice(0, 3);
+    },
+
+    _firstComment(platform) {
+      return this._can(platform, 'first_comment') ? (this.opts[platform].first_comment || '').trim() : '';
+    },
+
+    async searchLocations() {
+      const q = this.loc.query.trim();
+      this.loc.error = '';
+      if (q.length < 2) { this.loc.results = []; this.loc.searched = false; return; }
+      this.loc.loading = true;
+      try {
+        const r = await fetch('{% url "publishing:location-search" %}?q=' + encodeURIComponent(q));
+        const d = await r.json();
+        if (q !== this.loc.query.trim()) return;  // a newer search is under way
+        this.loc.results = d.results || [];
+        this.loc.error = d.error || '';
+        this.loc.searched = true;
+      } catch (e) {
+        this.loc.error = 'Couldn’t search right now. Try again.';
+      } finally {
+        this.loc.loading = false;
+      }
+    },
+
+    async uploadCover(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      this.coverError = '';
+      this.coverUploading = true;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+      try {
+        const r = await fetch('{% url "publishing:post-media-upload" %}', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || 'Upload failed.');
+        this.opts.instagram.cover_url = d.url;
+      } catch (e) {
+        this.coverError = e.message || 'Upload failed. Try again.';
+      } finally {
+        this.coverUploading = false;
+      }
     },
 
     _hostname(url) {

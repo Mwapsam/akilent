@@ -36,6 +36,7 @@ from .models import (
 )
 from .providers.facebook import (
     FacebookPublishError,
+    FacebookPublishProvider,
     exchange_for_long_lived_user_token,
     get_page_token,
     list_pages,
@@ -152,6 +153,23 @@ def _apply_cta(post, cta: dict, data) -> bool:
     return missing_number
 
 
+def _apply_channel_options(post, channel_options: dict) -> None:
+    """Save each channel's options (alt text, location, first comment, …) on the
+    channels that can still change."""
+    for variant in post.variants.filter(
+        platform__in=post.platforms,
+        status__in=(
+            ContentPostVariant.Status.DRAFT,
+            ContentPostVariant.Status.SCHEDULED,
+            ContentPostVariant.Status.FAILED,
+        ),
+    ):
+        options = channel_options.get(variant.platform, {})
+        if variant.options != options:
+            variant.options = options
+            variant.save(update_fields=["options"])
+
+
 def _parse_schedule(raw: str):
     """A datetime-local value read as wall-clock time in the active timezone."""
     value = parse_datetime((raw or "").strip()) if raw else None
@@ -161,9 +179,10 @@ def _parse_schedule(raw: str):
 
 
 # read_insights + pages_read_engagement: post views, reach and reactions (Page/insights).
+# pages_manage_engagement: a post's first comment.
 _FB_SCOPES = (
     "pages_show_list,pages_manage_posts,pages_read_engagement,read_insights,"
-    "business_management"
+    "pages_manage_engagement,business_management"
 )
 
 # Valid status transitions: {from_status: allowed_to_statuses}
@@ -1264,10 +1283,12 @@ def post_new(request):
             channel_times = {p: t for p, t in channel_times.items() if t}
 
         from .links import CtaError, parse_cta
+        from .post_options import OptionsError, parse_options
 
         try:
             cta = parse_cta(request.POST)
-        except CtaError as exc:
+            channel_options = parse_options(request.POST, platforms, media_type)
+        except (CtaError, OptionsError) as exc:
             messages.error(request, str(exc))
             return redirect(
                 f"{reverse('publishing:post-new')}?post_id={post.pk}"
@@ -1317,6 +1338,7 @@ def post_new(request):
                 # Before the review check: the CTA and its caption line are part of
                 # what a reviewer approves.
                 missing_wa_number = _apply_cta(post, cta, request.POST)
+                _apply_channel_options(post, channel_options)
                 # Checked after the variants exist, since the approval covers them. An
                 # approval of earlier content no longer applies, so the post goes back
                 # to draft for a fresh review.
@@ -1411,6 +1433,7 @@ def post_new(request):
         short_url,
         whatsapp_number_for,
     )
+    from .post_options import caps_for_js
 
     wa_links = links_for_post(existing_post) if existing_post else {}
     return render(
@@ -1439,6 +1462,15 @@ def post_new(request):
                 "channel_times": channel_times,
                 "per_channel": len(set(channel_times.values())) > 1,
                 "cta": cta_for(existing_post) if existing_post else {},
+                "options": {
+                    v.platform: v.options
+                    for v in existing_post.variants.exclude(
+                        status=ContentPostVariant.Status.CANCELLED
+                    )
+                }
+                if existing_post
+                else {},
+                "option_caps": caps_for_js(),
                 "wa_link_urls": {p: short_url(link) for p, link in wa_links.items()},
                 "cta_defaults": {
                     "whatsapp": DEFAULT_WHATSAPP_TEXT,
@@ -1463,6 +1495,31 @@ def post_new(request):
             "wa_links": wa_links,
         },
     )
+
+
+def _channel_options_for_display(post) -> list[dict]:
+    """Each channel's saved options (only those valid for the post's media type) and
+    its first comment's progress, for the post page."""
+    from .post_options import supports
+    from .services import FIRST_COMMENT_KEY
+
+    rows = []
+    for v in post.variants.exclude(status=ContentPostVariant.Status.CANCELLED):
+        opts = {
+            k: val
+            for k, val in (v.options or {}).items()
+            if supports(v.platform, k, post.media_type)
+        }
+        if not opts:
+            continue
+        rows.append(
+            {
+                "variant": v,
+                "options": opts,
+                "comment_state": (v.metadata or {}).get(FIRST_COMMENT_KEY) or {},
+            }
+        )
+    return rows
 
 
 @login_required
@@ -1500,6 +1557,7 @@ def post_detail(request, pk):
             "results": results_for(post),
             "cta": cta_for(post),
             "cta_links": cta_links,
+            "channel_options": _channel_options_for_display(post),
         },
     )
 
@@ -1715,6 +1773,82 @@ def variant_reschedule(request, pk, platform):
         f"{date_format(local, 'N j')}, {local:%H:%M}.",
     )
     return detail
+
+
+@login_required
+@require_POST
+def first_comment_retry(request, pk, variant_pk):
+    """Queue a channel's failed first comment again."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    variant = get_object_or_404(
+        ContentPostVariant, pk=variant_pk, post__pk=pk, post__account=account
+    )
+    from .services import retry_first_comment
+
+    if retry_first_comment(variant):
+        messages.success(
+            request,
+            f"Posting the first comment on {variant.get_platform_display()} again.",
+        )
+    else:
+        messages.error(request, "That comment isn't waiting for a retry.")
+    return redirect("publishing:post-detail", pk=pk)
+
+
+@login_required
+def location_search(request):
+    """Places to tag on an Instagram post, from the Pages Search API.
+
+    Uses the connected Facebook Page's token. Returns {"results": [...]} or
+    {"error": "..."} with a message the composer shows as is.
+    """
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "No account"}, status=403)
+    query = " ".join(request.GET.get("q", "").split())[:100]
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+
+    conn = FacebookPageConnection.objects.filter(
+        account=account, status=FacebookPageConnection.Status.ACTIVE
+    ).first()
+    if conn is None or not conn.access_token:
+        return JsonResponse(
+            {"error": "Connect your Facebook Page in Channels to search for locations."}
+        )
+    from .providers.errors import MetaPublishError
+
+    try:
+        pages = FacebookPublishProvider(
+            conn.page_id, conn.access_token
+        ).search_location_pages(query)
+    except MetaPublishError as exc:
+        logger.info("Location search failed for account=%s: %s", account.pk, exc)
+        return JsonResponse(
+            {
+                "error": "Location search isn't available right now. You can post "
+                "without a location."
+            }
+        )
+    except Exception:
+        logger.exception("Location search error for account=%s", account.pk)
+        return JsonResponse({"error": "Couldn't reach Facebook. Try again."})
+
+    results = []
+    for page in pages:
+        loc = page.get("location") or {}
+        detail = ", ".join(
+            part
+            for part in (loc.get("street"), loc.get("city"), loc.get("country"))
+            if part
+        )
+        results.append(
+            {"id": str(page["id"]), "name": page.get("name", ""), "detail": detail}
+        )
+    return JsonResponse({"results": results})
 
 
 @login_required

@@ -68,6 +68,27 @@ class FacebookPublishProvider:
         data = self._post("videos", **payload)
         return data["id"]
 
+    def create_comment(self, object_id: str, message: str) -> str:
+        """Comment on a published post, photo or video as the Page
+        (pages_manage_engagement). Returns the comment id."""
+        payload = {"message": message, "access_token": self._token}
+        r = requests.post(f"{_BASE}/{object_id}/comments", data=payload, timeout=30)
+        data = r.json()
+        if "error" in data:
+            raise FacebookPublishError.from_response(r, data)
+        return data["id"]
+
+    def search_location_pages(self, query: str, limit: int = 8) -> list[dict]:
+        """Pages for physical places matching ``query`` (Pages Search API), for an
+        Instagram location tag. Only Pages with location data are returned."""
+        data = self._get(
+            "pages/search",
+            q=query,
+            fields="id,name,location",
+            limit=limit * 2,
+        )
+        return [p for p in data.get("data", []) if p.get("location")][:limit]
+
     def _get(self, path: str, **params) -> dict:
         params["access_token"] = self._token
         r = requests.get(f"{_BASE}/{path}", params=params, timeout=30)

@@ -313,6 +313,8 @@ class ContentPost(models.Model):
                     "caption": v.caption or "",
                     "media_urls": v.media_urls or [],
                     "format_choice": v.format_choice or "",
+                    # Only when set, so posts approved before options keep their hash.
+                    **({"options": v.options} if v.options else {}),
                 }
                 for v in variants
             ),
@@ -435,6 +437,8 @@ class ContentPostVariant(models.Model):
     caption = models.TextField(blank=True, default="")
     media_urls = models.JSONField(default=list, blank=True)
     format_choice = models.CharField(max_length=30, blank=True, default="")
+    # Channel options beyond the caption (see apps.publishing.post_options).
+    options = models.JSONField(default=dict, blank=True)
 
     # Scheduling and publication
     scheduled_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -513,6 +517,8 @@ class ContentPostVariant(models.Model):
             "media_urls": self.media_urls or [],
             "format_choice": self.format_choice or "",
         }
+        if self.options:
+            content["options"] = self.options
         content_json = json.dumps(content, sort_keys=True)
         return hashlib.sha256(content_json.encode()).hexdigest()
 

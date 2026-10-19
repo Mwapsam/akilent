@@ -82,31 +82,37 @@ class InstagramPublishProvider:
         return data
 
     def create_image_container(
-        self, ig_user_id: str, image_url: str, caption: str
+        self, ig_user_id: str, image_url: str, caption: str, **extra
     ) -> str:
+        """``extra``: optional fields such as alt_text, location_id, collaborators
+        (see apps.publishing.post_options.instagram_container_params)."""
         data = self._post(
             f"{ig_user_id}/media",
             image_url=image_url,
             caption=caption,
             media_type="IMAGE",
+            **extra,
         )
         return data["id"]
 
     def create_video_container(
-        self, ig_user_id: str, video_url: str, caption: str
+        self, ig_user_id: str, video_url: str, caption: str, **extra
     ) -> str:
+        """``extra``: optional Reel fields such as share_to_feed, cover_url,
+        thumb_offset, location_id, collaborators."""
         data = self._post(
             f"{ig_user_id}/media",
             video_url=video_url,
             caption=caption,
             media_type="REELS",
+            **extra,
         )
         return data["id"]
 
     def create_reel_container(
-        self, ig_user_id: str, video_url: str, caption: str
+        self, ig_user_id: str, video_url: str, caption: str, **extra
     ) -> str:
-        return self.create_video_container(ig_user_id, video_url, caption)
+        return self.create_video_container(ig_user_id, video_url, caption, **extra)
 
     def create_story_image_container(self, ig_user_id: str, image_url: str) -> str:
         data = self._post(
@@ -125,14 +131,17 @@ class InstagramPublishProvider:
         return data["id"]
 
     def create_carousel_container(
-        self, ig_user_id: str, children: list[str], caption: str
+        self, ig_user_id: str, children: list[str], caption: str, **extra
     ) -> str:
-        """children is a list of already-created container IDs (IMAGE type, is_carousel_item=True)."""
+        """children is a list of already-created container IDs (IMAGE type, is_carousel_item=True).
+
+        ``extra``: optional location_id, collaborators."""
         data = self._post(
             f"{ig_user_id}/media",
             media_type="CAROUSEL",
             children=",".join(children),
             caption=caption,
+            **extra,
         )
         return data["id"]
 
@@ -165,6 +174,12 @@ class InstagramPublishProvider:
     def get_permalink(self, media_id: str) -> str:
         data = self._get(media_id, fields="permalink")
         return data.get("permalink", "")
+
+    def create_comment(self, media_id: str, message: str) -> str:
+        """Comment on a published media object as the account
+        (instagram_business_manage_comments). Returns the comment id."""
+        data = self._post(f"{media_id}/comments", message=message)
+        return data["id"]
 
     def publish_container(self, ig_user_id: str, container_id: str) -> str:
         """Returns the published ig_media_id."""
