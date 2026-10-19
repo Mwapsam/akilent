@@ -31,6 +31,7 @@
          class="text-xs text-gray-400 hover:text-gray-600 underline">View recommendation →</a>
     </div>
     {% endif %}
+    {% include "publishing/_source_post.html" with subject=lead %}
     <a href="{% url 'contacts:detail' lead.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 

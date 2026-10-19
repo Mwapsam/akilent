@@ -152,6 +152,24 @@
             <span class="text-sm font-medium">Facebook</span>
           </label>
         </div>
+
+        {# Tracked WhatsApp chat link per channel #}
+        <div class="pt-3 border-t border-border space-y-2">
+          <p class="text-sm font-medium text-ink">WhatsApp chat link</p>
+          {% if wa_number_ready %}
+          <p class="text-xs text-gray-500">A short link that opens a chat with your business. Chats that start from it are linked to this post, so you can see which posts bring customers.</p>
+          <label class="flex items-start gap-2 text-sm" x-show="selectedPlatforms.includes('facebook')">
+            <input type="checkbox" name="wa_link_facebook" value="1" class="rounded mt-0.5" {% if wa_links.facebook %}checked{% endif %}>
+            <span>Facebook: add the link to the end of the caption</span>
+          </label>
+          <label class="flex items-start gap-2 text-sm" x-show="selectedPlatforms.includes('instagram')">
+            <input type="checkbox" name="wa_link_instagram" value="1" class="rounded mt-0.5" {% if wa_links.instagram %}checked{% endif %}>
+            <span>Instagram: make a link for your bio or a story link sticker <span class="text-gray-500">(links in Instagram captions can't be tapped)</span></span>
+          </label>
+          {% else %}
+          <p class="text-xs text-gray-500">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="underline">Connect WhatsApp</a></p>
+          {% endif %}
+        </div>
       </div>
 
       {# Media type #}

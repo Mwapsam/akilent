@@ -17,7 +17,7 @@ from datetime import datetime
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.conversations import metrics
+from apps.conversations import entry_points, metrics
 from apps.conversations.models import Conversation, Event, Message
 from apps.core.actions import run_action
 
@@ -142,6 +142,7 @@ def record_inbound_whatsapp_message(
     )
     if not created:
         return None
+    entry_points.on_inbound_message(conversation, message)
 
     event = emit_event(
         account=conversation.account,
@@ -239,6 +240,7 @@ def record_inbound_instagram_message(
             message.body = instagram_message.body
             message.save(update_fields=["body"])
         return None
+    entry_points.on_inbound_message(conversation, message)
 
     event = emit_event(
         account=conversation.account,

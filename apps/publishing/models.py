@@ -556,6 +556,58 @@ class VariantMetricSnapshot(models.Model):
         return f"{self.variant} @ {self.collected_at:%Y-%m-%d %H:%M}"
 
 
+class TrackedLink(models.Model):
+    """A short link for one channel of a post that opens a WhatsApp chat with the business.
+
+    ``/go/<code>`` counts the click and opens WhatsApp with ``prefill_text`` plus
+    "(ref CODE)". When the customer sends that message, the conversation is linked to
+    this post and channel (apps.conversations.entry_points), and any lead or order from
+    it carries the post as its source. Only chats that used the link are counted.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="tracked_links"
+    )
+    post = models.ForeignKey(
+        ContentPost, on_delete=models.CASCADE, related_name="tracked_links"
+    )
+    variant = models.OneToOneField(
+        ContentPostVariant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tracked_link",
+    )
+    campaign = models.ForeignKey(
+        ContentCampaign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tracked_links",
+    )
+    code = models.CharField(max_length=12, unique=True)
+    wa_number = models.CharField(max_length=20)
+    prefill_text = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.code} → {self.variant or self.post}"
+
+
+class LinkClick(models.Model):
+    """One open of a tracked link. No IP is stored; ``visitor_hash`` is a salted,
+    daily-rotating hash used only to count distinct visitors."""
+
+    link = models.ForeignKey(
+        TrackedLink, on_delete=models.CASCADE, related_name="clicks"
+    )
+    clicked_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    visitor_hash = models.CharField(max_length=64, blank=True, default="")
+    referer_host = models.CharField(max_length=255, blank=True, default="")
+    is_bot = models.BooleanField(default=False)
+
+
 class ApprovalLog(models.Model):
     """Audit trail for content approval actions."""
 

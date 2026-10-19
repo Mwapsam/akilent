@@ -51,6 +51,15 @@ class CommentThread(models.Model):
         related_name="instagram_comment_threads",
     )
 
+    # The Content Studio channel that published this post, when Akilent published it.
+    content_variant = models.ForeignKey(
+        "publishing.ContentPostVariant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comment_threads",
+    )
+
     # Set when a CommentTrigger fires; used as idempotency anchor so repeated
     # webhook deliveries do not send multiple private replies.
     trigger_fired_at = models.DateTimeField(null=True, blank=True)

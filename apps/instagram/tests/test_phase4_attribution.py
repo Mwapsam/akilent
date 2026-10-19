@@ -6,7 +6,7 @@ Checklist:
   P4-02  CommentThreads in period are counted as comments_received
   P4-03  Threads with trigger_fired_at set are counted as threads_triggered
   P4-04  Threads with a linked conversation are counted as dms_opened
-  P4-05  Leads with source='instagram' are counted as leads_confirmed
+  P4-05  Leads credited to an Instagram conversation are counted as leads_confirmed
   P4-06  Paid orders with instagram attribution are counted; revenue is summed per currency
   P4-07  period_metrics includes 'instagram' key with funnel sub-dict
   P4-08  CommentThread outside the period is excluded from all counts
@@ -63,7 +63,10 @@ def make_instagram_conversation(account, ig_account, ig_contact):
     return ig_convo, spine
 
 
-def make_lead(account, contact, source="instagram", *, created_at=None):
+def make_lead(
+    account, contact, source="instagram", *, created_at=None, conversation=None
+):
+    """A lead; with ``conversation`` it is credited to that Instagram chat."""
     from apps.crm.models import Lead
 
     lead = Lead.objects.create(
@@ -71,6 +74,14 @@ def make_lead(account, contact, source="instagram", *, created_at=None):
         contact=contact,
         source=source,
     )
+    if conversation is not None:
+        ConversationAttribution.objects.create(
+            account=account,
+            conversation=conversation,
+            channel=Conversation.Channel.INSTAGRAM,
+            lead=lead,
+            method=ConversationAttribution.Method.EXPLICIT,
+        )
     if created_at:
         Lead.objects.filter(pk=lead.pk).update(created_at=created_at)
         lead.refresh_from_db()
@@ -182,7 +193,7 @@ class TestP404DmsOpened(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# P4-05  Leads with source='instagram' counted
+# P4-05  Leads credited to an Instagram conversation counted
 # ---------------------------------------------------------------------------
 
 
@@ -192,8 +203,12 @@ class TestP405LeadsConfirmed(TestCase):
         ig_account = make_instagram_account(account)
         ig_contact1, contact1 = make_instagram_contact(account, ig_account)
         ig_contact2, contact2 = make_instagram_contact(account, ig_account)
-        make_lead(account, contact1, source="instagram")
-        make_lead(account, contact2, source="whatsapp")  # excluded — different source
+        _, spine = make_instagram_conversation(account, ig_account, ig_contact1)
+        # Auto-captured leads say source="conversation"; the channel comes from the
+        # attribution, so this one counts.
+        make_lead(account, contact1, source="conversation", conversation=spine)
+        # A label alone is not evidence: no Instagram conversation, not counted.
+        make_lead(account, contact2, source="instagram")
         result = instagram_funnel(account, PERIOD)
         self.assertEqual(result["leads_confirmed"], 1)
 
@@ -306,7 +321,7 @@ class TestP409ConversionRates(TestCase):
         make_thread(ig_account, ig_contact)
         make_thread(ig_account, ig_contact, trigger_fired=True)
         make_thread(ig_account, ig_contact, trigger_fired=True, conversation=spine)
-        make_lead(account, contact, source="instagram")
+        make_lead(account, contact, source="conversation", conversation=spine)
         result = instagram_funnel(account, PERIOD)
         self.assertEqual(result["comments_received"], 4)
         self.assertEqual(result["threads_triggered"], 2)

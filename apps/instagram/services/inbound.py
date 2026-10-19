@@ -326,6 +326,8 @@ def _process_comment_entry(
             "received_at": timestamp,
         },
     )
+    if thread.content_variant_id is None:
+        link_thread_to_content(thread)
 
     # Persist the individual Comment (idempotent on thread + comment_id)
     Comment.objects.get_or_create(
@@ -469,3 +471,19 @@ def describe_message(message: dict) -> tuple[str, str]:
 def _synthetic_message_id(igsid: str, ts_ms: int) -> str:
     """Fallback message ID when Meta doesn't provide one."""
     return f"synthetic_{igsid}_{ts_ms}"
+
+
+def link_thread_to_content(thread: CommentThread) -> None:
+    """Point a comment thread at the Content Studio channel that published its post."""
+    from apps.publishing.models import ContentPostVariant
+
+    if not thread.post_id:
+        return
+    variant = ContentPostVariant.objects.filter(
+        platform=ContentPostVariant.Platform.INSTAGRAM,
+        publication_id=thread.post_id,
+        post__account_id=thread.instagram_account.account_id,
+    ).first()
+    if variant is not None:
+        CommentThread.objects.filter(pk=thread.pk).update(content_variant=variant)
+        thread.content_variant = variant

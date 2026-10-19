@@ -611,9 +611,11 @@ def instagram_funnel(account, period: Period) -> dict:
     threads_triggered = threads.filter(trigger_fired_at__isnull=False).count()
     dms_opened = threads.filter(conversation__isnull=False).count()
 
+    # Credited to an Instagram conversation. Lead.source names how a lead was made
+    # ("conversation", "manual"), not the channel, so it can't answer this.
     leads_confirmed = Lead.objects.filter(
         account=account,
-        source="instagram",
+        attribution__channel=Conversation.Channel.INSTAGRAM,
         created_at__gte=period.start,
         created_at__lt=period.end,
     ).count()

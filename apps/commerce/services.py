@@ -44,7 +44,11 @@ def create_order(
             currency=currency,
             conversation=conversation,
         )
-        attribution.record(order, conversation, method)
+        attributed = attribution.record(order, conversation, method)
+        if attributed is not None and attributed.originated_from_id:
+            from apps.insights.actions import record_outcome_signal
+
+            record_outcome_signal(attributed.originated_from, "order_created_at")
         for item in items:
             OrderItem.objects.create(
                 order=order,
@@ -250,7 +254,7 @@ def _record_order_paid_outcome_signal(order) -> None:
             revenue=str(order.total),
             currency=order.currency or "",
         )
-        # order_created_at must be recorded at order-creation time, not here —
+        # order_created_at is recorded in create_order, at creation time, not here:
         # mark_paid fires after the order exists, so timestamping it to now
         # would be wrong (and record_outcome_signal is monotonic, so a later
         # call could silently drop it). Wire it at create_order time instead.

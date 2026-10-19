@@ -18,6 +18,7 @@
     <div class="flex justify-between"><span class="text-gray-500">Total</span><span>{{ order.currency }} {{ order.total }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Placed</span><span>{{ order.created_at|date:"Y-m-d H:i" }}</span></div>
     {% if order.paid_at %}<div class="flex justify-between"><span class="text-gray-500">Paid</span><span>{{ order.paid_at|date:"Y-m-d H:i" }}</span></div>{% endif %}
+    {% include "publishing/_source_post.html" with subject=order %}
     <a href="{% url 'contacts:detail' order.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 

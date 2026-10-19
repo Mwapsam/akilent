@@ -795,6 +795,73 @@ class FollowUp(models.Model):
             self.save(update_fields=["done_at"])
 
 
+class ConversationEntryPoint(models.Model):
+    """Explicit evidence that a published post started (or fed) a conversation.
+
+    Made only from a hard signal: the customer sent a post's tracked-link ref code, or
+    a private reply to a comment on the post opened the DM. Never inferred from timing,
+    so a chat with no entry point stays unattributed.
+    """
+
+    class Kind(models.TextChoices):
+        TRACKED_LINK = "tracked_link", "Tracked link"
+        IG_COMMENT = "ig_comment", "Instagram comment"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="entry_points"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="entry_points"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    link = models.ForeignKey(
+        "publishing.TrackedLink",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
+    post = models.ForeignKey(
+        "publishing.ContentPost",
+        on_delete=models.CASCADE,
+        related_name="entry_points",
+    )
+    variant = models.ForeignKey(
+        "publishing.ContentPostVariant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
+    campaign = models.ForeignKey(
+        "publishing.ContentCampaign",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
+    matched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["matched_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "post", "kind"],
+                name="one_entry_point_per_post_and_kind",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.conversation} ← {self.post} ({self.kind})"
+
+
 class ConversationAttribution(models.Model):
     """Why Akilent credited a lead, deal or order to a conversation. Immutable.
 
@@ -856,6 +923,36 @@ class ConversationAttribution(models.Model):
         related_name="attributions",
     )
     method = models.CharField(max_length=24, choices=Method.choices)
+    # The post that started the conversation, copied from its first entry point when
+    # this record is made. Null means no post is known to have started it.
+    entry_point = models.ForeignKey(
+        "conversations.ConversationEntryPoint",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
+    source_post = models.ForeignKey(
+        "publishing.ContentPost",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
+    source_variant = models.ForeignKey(
+        "publishing.ContentPostVariant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
+    source_campaign = models.ForeignKey(
+        "publishing.ContentCampaign",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
     attributed_at = models.DateTimeField(auto_now_add=True)
     metadata = models.JSONField(default=dict, blank=True)
 

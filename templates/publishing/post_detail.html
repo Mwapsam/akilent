@@ -203,6 +203,8 @@
     {% endif %}
   </div>
 
+  {% include "publishing/_results_card.html" %}
+
   {% with published=post|published_channels %}
   {% if published %}
   <div class="card card-pad space-y-3">

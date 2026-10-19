@@ -191,6 +191,15 @@ def _ensure_conversation(thread: CommentThread, ig_contact) -> None:
         CommentThread.objects.filter(pk=thread.pk).update(conversation=spine)
         thread.conversation_id = spine.pk
 
+    from apps.conversations.entry_points import record_comment_entry
+
+    try:
+        record_comment_entry(thread)
+    except Exception:
+        logger.exception(
+            "Couldn't record the post entry point for thread %s", thread.pk
+        )
+
     logger.debug(
         "_ensure_conversation: thread %s → conversation %s", thread.pk, spine.pk
     )

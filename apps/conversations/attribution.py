@@ -70,9 +70,12 @@ def record(
 ):
     """Write the immutable attribution for a lead, deal or order and set its shortcut field.
 
-    Returns None when there is no conversation to credit. Safe to call twice: an object that
-    already has a record keeps it.
+    Also records, from explicit evidence only, the post that started the conversation
+    (its first entry point) and the insight whose DM started it. Returns None when there
+    is no conversation to credit. Safe to call twice: an object that already has a
+    record keeps it.
     """
+    from apps.conversations.entry_points import first_entry_point
     from apps.conversations.models import ConversationAttribution
 
     if conversation is None:
@@ -81,6 +84,7 @@ def record(
     existing = ConversationAttribution.objects.filter(**{subject: obj}).first()
     if existing is not None:
         return existing
+    entry = first_entry_point(conversation)
     attribution = ConversationAttribution.objects.create(
         account=obj.account,
         conversation=conversation,
@@ -88,12 +92,33 @@ def record(
         method=method,
         workflow_run=workflow_run,
         metadata=metadata or {},
+        entry_point=entry,
+        source_post=entry.post if entry else None,
+        source_variant=entry.variant if entry else None,
+        source_campaign=entry.campaign if entry else None,
+        originated_from=_originating_recommendation(conversation),
         **{subject: obj},
     )
     if obj.conversation_id != conversation.id:
         obj.conversation = conversation
         obj.save(update_fields=["conversation"])
     return attribution
+
+
+def _originating_recommendation(conversation):
+    """The insight action (e.g. a DM sent from an insight) that opened this conversation
+    within WINDOW_DAYS, so Order → attribution → RecommendationLog → Insight holds."""
+    from apps.insights.models import RecommendationLog
+
+    return (
+        RecommendationLog.objects.filter(
+            conversation=conversation,
+            acted_at__isnull=False,
+            acted_at__gte=timezone.now() - timedelta(days=WINDOW_DAYS),
+        )
+        .order_by("-acted_at")
+        .first()
+    )
 
 
 def recent_choices(account, *, limit: int = 30) -> list[dict]:

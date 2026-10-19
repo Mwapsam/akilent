@@ -1,0 +1,13 @@
+{% comment %}
+"Came from post …" for a lead or order whose conversation a Content Studio post started.
+Expects ``subject`` (a Lead or Order). Shows nothing when no post is on record.
+{% endcomment %}
+{% with att=subject.attribution %}{% if att.source_post_id %}
+<div class="pt-2 border-t border-border">
+  <p class="text-gray-500 mb-1">Came from a post</p>
+  <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="font-medium text-ink underline">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
+  <p class="text-xs text-gray-500">
+    {% if att.source_variant %}{{ att.source_variant.get_platform_display }}{% endif %}{% if att.entry_point %} · {% if att.entry_point.kind == 'tracked_link' %}used the post's WhatsApp link{% else %}a reply to their comment on the post{% endif %}{% endif %}{% if att.source_campaign %} · {{ att.source_campaign.name }}{% endif %}
+  </p>
+</div>
+{% endif %}{% endwith %}

@@ -104,6 +104,40 @@ def _in_workspace_tz(view):
     return wrapper
 
 
+def _apply_chat_links(post, data) -> bool:
+    """Create or turn off each channel's tracked WhatsApp link from the composer form.
+
+    Facebook gets the link line at the end of its caption (captions there are
+    clickable); Instagram's link is for the bio or a story sticker. Returns True when
+    a link was asked for but the workspace has no WhatsApp number.
+    """
+    from .links import NoWhatsAppNumber, disable_link, link_for_variant, with_link_line
+
+    missing_number = False
+    for variant in post.variants.filter(
+        platform__in=post.platforms,
+        status__in=(
+            ContentPostVariant.Status.DRAFT,
+            ContentPostVariant.Status.SCHEDULED,
+            ContentPostVariant.Status.FAILED,
+        ),
+    ):
+        if not data.get(f"wa_link_{variant.platform}"):
+            disable_link(variant)
+            continue
+        try:
+            link = link_for_variant(variant)
+        except NoWhatsAppNumber:
+            missing_number = True
+            continue
+        if variant.platform == ContentPostVariant.Platform.FACEBOOK:
+            caption = with_link_line(variant.caption, link)
+            if caption != variant.caption:
+                variant.caption = caption
+                variant.save(update_fields=["caption"])
+    return missing_number
+
+
 def _parse_schedule(raw: str):
     """A datetime-local value read as wall-clock time in the active timezone."""
     value = parse_datetime((raw or "").strip()) if raw else None
@@ -1249,10 +1283,14 @@ def post_new(request):
         from .services import apply_schedule, initialize_post_with_variants
 
         review_blocked = False
+        missing_wa_number = False
         try:
             with transaction.atomic():
                 post.save()
                 initialize_post_with_variants(post, platforms)
+                # Before the review check: the Facebook link line is part of the
+                # caption a reviewer approves.
+                missing_wa_number = _apply_chat_links(post, request.POST)
                 # Checked after the variants exist, since the approval covers them. An
                 # approval of earlier content no longer applies, so the post goes back
                 # to draft for a fresh review.
@@ -1268,6 +1306,11 @@ def post_new(request):
         except ValueError as exc:
             messages.error(request, f"Failed to initialize post: {exc!s}")
             return redirect("publishing:post-new")
+        if missing_wa_number:
+            messages.warning(
+                request,
+                "No WhatsApp chat link was added: connect a WhatsApp number first.",
+            )
 
         if action == "submit_review":
             if post.requires_approval and _submit_for_review(post, request.user):
@@ -1332,6 +1375,8 @@ def post_new(request):
                 )
     from apps.accounts.business_hours import DEFAULT_TIMEZONE, workspace_timezone
 
+    from .links import links_for_post, whatsapp_number_for
+
     return render(
         request,
         "publishing/post_new.html",
@@ -1365,6 +1410,8 @@ def post_new(request):
             "approved_for_publish": requires_review and approved,
             "current_tz_name": timezone.get_current_timezone_name(),
             "tz_is_default": workspace_timezone(account) == DEFAULT_TIMEZONE,
+            "wa_number_ready": bool(whatsapp_number_for(account)),
+            "wa_links": links_for_post(existing_post) if existing_post else {},
         },
     )
 
@@ -1375,6 +1422,8 @@ def post_detail(request, pk):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+
+    from .results import results_for
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
     requires_approval = post.requires_approval
@@ -1394,6 +1443,7 @@ def post_detail(request, pk):
             "approval_logs": post.approval_logs.select_related("performed_by")[:20]
             if requires_approval
             else [],
+            "results": results_for(post),
         },
     )
 
