@@ -1,0 +1,87 @@
+<section class="cmp-section" aria-labelledby="caption-title">
+  <div class="cmp-section-head">
+    <h2 id="caption-title" class="cmp-section-title">Caption</h2>
+    <span class="cmp-hint" x-show="customizedList().length" x-cloak>
+      Customized for <span x-text="customizedList().map(platformName).join(' and ')"></span>
+    </span>
+  </div>
+
+  <div class="cmp-tabs" role="tablist" aria-label="Caption version">
+    <button type="button" role="tab" class="cmp-tab" id="tab-all" aria-controls="panel-all"
+            :aria-selected="captionTab === 'all'" @click="setCaptionTab('all')">All channels</button>
+    <template x-for="p in selectedPlatforms" :key="p">
+      <button type="button" role="tab" class="cmp-tab" :id="'tab-' + p" :aria-controls="'panel-' + p"
+              :aria-selected="captionTab === p" @click="setCaptionTab(p)">
+        <span x-text="platformName(p)"></span>
+        <span class="cmp-tab-badge" x-show="customized[p]">Custom</span>
+      </button>
+    </template>
+  </div>
+
+  {# Shared caption: every channel without its own version uses this. #}
+  <div id="panel-all" role="tabpanel" aria-labelledby="tab-all" x-show="captionTab === 'all'">
+    <label for="caption-input" class="sr-only">Caption for all channels</label>
+    <textarea id="caption-input" name="caption" rows="7" class="input w-full cmp-textarea" x-model="caption"
+              placeholder="Introduce your product, explain why it matters, and give people a clear next step…"></textarea>
+    <p class="cmp-hint mt-2" x-show="customizedList().length" x-cloak>
+      Edits here don't change <span x-text="customizedList().map(platformName).join(' or ')"></span>, which have their own version.
+    </p>
+  </div>
+
+  {# One panel per channel: the shared caption until the user customizes it. #}
+  <template x-for="p in ['instagram', 'facebook']" :key="p">
+    <div :id="'panel-' + p" role="tabpanel" :aria-labelledby="'tab-' + p"
+         x-show="captionTab === p && selectedPlatforms.includes(p)">
+      <template x-if="customized[p]">
+        <div>
+          <label :for="'caption-' + p" class="sr-only" x-text="platformName(p) + ' caption'"></label>
+          <textarea :id="'caption-' + p" :name="'caption_' + p" rows="7" class="input w-full cmp-textarea"
+                    x-model="platformCaptions[p]" @input="touched()"
+                    :placeholder="'Your ' + platformName(p) + ' version. Leave it empty to use the shared caption.'"></textarea>
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-2">
+            <p class="cmp-hint">Only <span x-text="platformName(p)"></span> uses this version.</p>
+            <button type="button" class="text-xs font-medium text-ink-muted hover:text-ink underline" @click="resetOverride(p)">
+              Use the shared caption again
+            </button>
+          </div>
+        </div>
+      </template>
+      <template x-if="!customized[p]">
+        <div>
+          <div class="cmp-shared" x-text="caption || 'The shared caption appears here.'"></div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+            <p class="cmp-hint">Using the shared caption.</p>
+            <button type="button" class="btn btn-secondary btn-sm" @click="customize(p)">
+              Customize for <span x-text="platformName(p)"></span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <div class="tone-info rounded-xl px-3 py-2 mt-3 text-xs flex items-center justify-between gap-3" x-show="undo" x-cloak role="status">
+    <span x-text="undo ? undo.message : ''"></span>
+    <button type="button" class="underline font-medium" @click="undoLast()">Undo</button>
+  </div>
+
+  {# Counted as published: caption, the call to action line, then hashtags. #}
+  <div class="cmp-meter" aria-live="polite">
+    <template x-for="p in meterPlatforms()" :key="p">
+      <span :class="countTone(p)">
+        <span x-text="platformName(p)"></span>
+        <span x-text="fmt(publishedLength(p)) + ' / ' + fmt(limits.caption_max[p])"></span>
+      </span>
+    </template>
+  </div>
+
+  <div class="mt-5">
+    <label for="hashtags-input" class="cmp-label">Hashtags <span class="font-normal text-ink-subtle">(separate with spaces)</span></label>
+    <input type="text" id="hashtags-input" name="hashtags" class="input w-full" x-model="hashtagsText"
+           placeholder="#summer #newin" autocapitalize="off" spellcheck="false">
+    <p class="cmp-meter" x-show="selectedPlatforms.includes('instagram') && hashtags().length" x-cloak>
+      <span :class="hashtags().length > limits.hashtags_max.instagram ? 'is-over' : ''"
+            x-text="hashtags().length + ' / ' + limits.hashtags_max.instagram + ' hashtags on Instagram'"></span>
+    </p>
+  </div>
+</section>

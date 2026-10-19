@@ -1,0 +1,83 @@
+<section class="cmp-section" aria-labelledby="media-title"
+         @dragover.prevent="if (!dragIndex && dragIndex !== 0) dropActive = true"
+         @dragleave.self="dropActive = false"
+         @drop.prevent="onDropFiles($event)">
+  <div class="cmp-section-head flex-wrap">
+    <h2 id="media-title" class="cmp-section-title">Media</h2>
+    <div class="flex items-center gap-2">
+      <label for="media-type" class="cmp-hint">Format</label>
+      <select id="media-type" name="media_type" class="input !py-1.5 !text-sm" x-model="mediaType" @change="touched()">
+        {% for value, label in media_types %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <input type="hidden" name="media_urls_json" :value="JSON.stringify(mediaUrls())">
+
+  <p class="cmp-hint mb-3" x-text="mediaHint()"></p>
+
+  {# Uploaded files, in publishing order. Drag to reorder, or use the arrow buttons. #}
+  <ol class="cmp-media" x-show="media.length" x-cloak aria-label="Media in publishing order">
+    <template x-for="(item, i) in media" :key="item.id">
+      <li class="cmp-tile" draggable="true"
+          :class="{ 'is-dragging': dragIndex === i, 'is-target': dragOver === i && dragIndex !== i }"
+          @dragstart="dragIndex = i; $event.dataTransfer.effectAllowed = 'move'"
+          @dragend="dragIndex = null; dragOver = null"
+          @dragover.prevent.stop="dragOver = i"
+          @drop.prevent.stop="dropOn(i)">
+        <template x-if="item.kind === 'image' && (item.thumb || item.url)">
+          <img :src="item.thumb || item.url" :alt="'Image ' + (i + 1)" loading="lazy">
+        </template>
+        <template x-if="item.kind === 'video' && item.url">
+          <video :src="item.url" muted playsinline preload="metadata" :aria-label="'Video ' + (i + 1)"></video>
+        </template>
+        <template x-if="item.kind === 'video' && !item.url">
+          <div class="w-full h-full flex items-center justify-center text-ink-subtle" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.362a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </div>
+        </template>
+
+        <span class="cmp-tile-pos" x-show="media.length > 1" x-text="i + 1"></span>
+
+        <div class="cmp-tile-state" x-show="item.status === 'uploading'">
+          <span>Uploading</span>
+          <span class="cmp-tile-bar" role="progressbar" :aria-valuenow="item.progress" aria-valuemin="0" aria-valuemax="100"><span :style="`width:${item.progress}%`"></span></span>
+        </div>
+        <div class="cmp-tile-state" x-show="item.status === 'error'" role="alert">
+          <span x-text="item.error"></span>
+          <span class="flex gap-2">
+            <button type="button" class="underline" x-show="item.file" @click="retryUpload(item)">Retry</button>
+            <button type="button" class="underline" @click="removeMedia(i)">Remove</button>
+          </span>
+        </div>
+
+        <div class="cmp-tile-tools" x-show="item.status === 'done'">
+          <button type="button" @click="moveMedia(i, -1)" :disabled="i === 0" :aria-label="'Move item ' + (i + 1) + ' earlier'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button type="button" @click="moveMedia(i, 1)" :disabled="i === media.length - 1" :aria-label="'Move item ' + (i + 1) + ' later'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <button type="button" x-show="item.kind === 'image'" @click="recrop(i)" :aria-label="'Crop item ' + (i + 1)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 2v14a2 2 0 002 2h14M18 22V8a2 2 0 00-2-2H2"/></svg>
+          </button>
+          <button type="button" @click="removeMedia(i)" :aria-label="'Remove item ' + (i + 1)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </li>
+    </template>
+  </ol>
+  <p class="sr-only" aria-live="polite" x-text="mediaAnnouncement"></p>
+
+  <div class="cmp-drop" :class="dropActive && 'is-over'" x-show="mediaType !== 'text'">
+    <input type="file" id="media-file-input" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime" multiple class="sr-only"
+           @change="onFiles($event.target.files); $event.target.value = ''">
+    <svg class="w-7 h-7 text-ink-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    <span class="text-sm text-ink-muted">Drag files here or
+      <label for="media-file-input" id="media-add" tabindex="0" class="text-accent underline cursor-pointer"
+             @keydown.enter.prevent="$el.click()" @keydown.space.prevent="$el.click()">browse</label></span>
+    <span class="cmp-hint">JPEG, PNG, WebP, GIF or MP4, up to 100 MB each. Images open in the cropper first.</span>
+  </div>
+</section>

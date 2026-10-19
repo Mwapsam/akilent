@@ -8,7 +8,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
-from apps.publishing.models import ContentPost, ContentPostVariant
+from apps.publishing.models import (
+    ContentPost,
+    ContentPostVariant,
+    FacebookPageConnection,
+)
 from apps.publishing.tasks import (
     publish_due_posts,
     publish_post_async,
@@ -42,6 +46,10 @@ def _publishing_post(account, variant_status, minutes_ago=30):
 def test_publish_now_enqueue_failure_leaves_a_draft_not_a_stuck_post(account):
     user = User.objects.create_user("maker", "maker@example.com", "pass")
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
+    # Publishing now needs a connected Page (the composer's readiness check).
+    FacebookPageConnection.objects.create(
+        account=account, page_id="p1", page_name="Stuck Co", access_token="t"
+    )
     client = Client()
     client.force_login(user)
 

@@ -24,6 +24,12 @@ from apps.accounts.fields import open_text, seal_text
 from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load
 
+from .composer import (
+    EDITABLE_STATUSES as _EDITABLE_POST_STATUSES,
+)
+from .composer import (
+    parse_schedule as _parse_schedule,
+)
 from .models import (
     ContentCampaign,
     ContentCaption,
@@ -50,24 +56,6 @@ _FB_GRAPH_VERSION = settings.INSTAGRAM_GRAPH_VERSION
 _FB_OAUTH_STATE_TTL = datetime.timedelta(minutes=10)
 _FB_PAGE_CHOICES_KEY = "fb_page_choices"
 
-
-# Posts the composer may still change; later states belong to the publishing pipeline.
-_EDITABLE_POST_STATUSES = (
-    ContentPost.Status.IDEA,
-    ContentPost.Status.DRAFT,
-    ContentPost.Status.IN_REVIEW,
-    ContentPost.Status.APPROVED,
-    ContentPost.Status.SCHEDULED,
-)
-
-_BRIEF_FIELDS = (
-    "brief_objective",
-    "brief_audience",
-    "brief_problem",
-    "brief_offer",
-    "brief_message",
-    "brief_cta",
-)
 
 # Goals the composer's AI brief offers; the generator only accepts these.
 CAPTION_GOAL_CHOICES = [
@@ -103,79 +91,6 @@ def _in_workspace_tz(view):
             return view(request, *args, **kwargs)
 
     return wrapper
-
-
-def _apply_cta(post, cta: dict, data) -> bool:
-    """Save the post's call to action and add its line to each channel's caption.
-
-    A WhatsApp CTA creates (or turns off) each ticked channel's tracked link and sets
-    the customer's first message. Facebook gets a tappable link in the caption;
-    Instagram gets the wording with "(link in bio)". Returns True when a WhatsApp link
-    was asked for but the workspace has no WhatsApp number.
-    """
-    from .links import (
-        CTA_WHATSAPP,
-        NoWhatsAppNumber,
-        cta_caption,
-        disable_link,
-        link_for_variant,
-    )
-
-    if post.cta != cta:
-        post.cta = cta
-        post.save(update_fields=["cta", "updated_at"])
-
-    missing_number = False
-    for variant in post.variants.filter(
-        platform__in=post.platforms,
-        status__in=(
-            ContentPostVariant.Status.DRAFT,
-            ContentPostVariant.Status.SCHEDULED,
-            ContentPostVariant.Status.FAILED,
-        ),
-    ):
-        link = None
-        if cta.get("kind") == CTA_WHATSAPP and data.get(f"wa_link_{variant.platform}"):
-            try:
-                link = link_for_variant(variant)
-            except NoWhatsAppNumber:
-                missing_number = True
-            else:
-                if link.prefill_text != cta["prefill"]:
-                    link.prefill_text = cta["prefill"]
-                    link.save(update_fields=["prefill_text"])
-        else:
-            disable_link(variant)
-        caption = cta_caption(variant.caption, cta, variant.platform, link)
-        if caption != variant.caption:
-            variant.caption = caption
-            variant.save(update_fields=["caption"])
-    return missing_number
-
-
-def _apply_channel_options(post, channel_options: dict) -> None:
-    """Save each channel's options (alt text, location, first comment, …) on the
-    channels that can still change."""
-    for variant in post.variants.filter(
-        platform__in=post.platforms,
-        status__in=(
-            ContentPostVariant.Status.DRAFT,
-            ContentPostVariant.Status.SCHEDULED,
-            ContentPostVariant.Status.FAILED,
-        ),
-    ):
-        options = channel_options.get(variant.platform, {})
-        if variant.options != options:
-            variant.options = options
-            variant.save(update_fields=["options"])
-
-
-def _parse_schedule(raw: str):
-    """A datetime-local value read as wall-clock time in the active timezone."""
-    value = parse_datetime((raw or "").strip()) if raw else None
-    if value and timezone.is_naive(value):
-        value = timezone.make_aware(value)
-    return value
 
 
 # read_insights + pages_read_engagement: post views, reach and reactions (Page/insights).
@@ -1200,6 +1115,243 @@ def post_media_upload(request):
     return JsonResponse({"url": url, "name": f.name, "content_type": f.content_type})
 
 
+def _post_new_submit(request, account):
+    """The composer's buttons: save a draft, submit for review, schedule, publish now."""
+    from . import readiness
+    from .composer import (
+        ComposerError,
+        create_or_get,
+        find_post,
+        parse_client_key,
+        parse_form,
+        save_new_or_existing,
+    )
+
+    client_key = parse_client_key(request.POST.get("client_key"))
+    post = find_post(account, request.POST.get("post_id"), client_key)
+    if post is None:
+        post, _ = create_or_get(account, request.user, client_key)
+
+    if post.pk and post.status not in _EDITABLE_POST_STATUSES:
+        if client_key and post.client_key == client_key:
+            # The same composer page sent twice (a double click, a resubmitted form).
+            messages.info(
+                request, "This post was already sent. Here's where it stands."
+            )
+        else:
+            messages.error(
+                request,
+                f"A {post.get_status_display().lower()} post can't be edited.",
+            )
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    back = redirect(
+        f"{reverse('publishing:post-new')}?post_id={post.pk}"
+        if post.pk
+        else "publishing:post-new"
+    )
+    action = request.POST.get("action", "draft")
+    try:
+        inp = parse_form(request.POST)
+    except ComposerError as exc:
+        messages.error(request, str(exc))
+        return back
+
+    # The same check the composer shows as the user edits. A post that still needs a
+    # review is only saved as a draft whatever the button, so only its content is checked.
+    if action in readiness.GATED_ACTIONS:
+        requires_review = (
+            post.requires_approval
+            if post.pk
+            else PublishingSettings.requires_review_for(account)
+        )
+        gate = action
+        if requires_review and not (post.pk and post.approval_status == "approved"):
+            gate = readiness.SUBMIT_REVIEW
+        blockers = readiness.blocking(readiness.check(inp, account), gate)
+        if blockers:
+            for issue in blockers:
+                messages.error(request, issue["message"])
+            return back
+
+    try:
+        result = save_new_or_existing(post, inp, action, request.user, request.POST)
+    except ValueError as exc:
+        messages.error(request, f"Failed to initialize post: {exc!s}")
+        return redirect("publishing:post-new")
+    post = result.post
+    if result.duplicate:
+        messages.info(request, "This post was already sent. Here's where it stands.")
+        return redirect("publishing:post-detail", pk=post.pk)
+    if result.missing_wa_number:
+        messages.warning(
+            request,
+            "No WhatsApp chat link was added: connect a WhatsApp number first.",
+        )
+
+    if action == "submit_review":
+        if post.requires_approval and _submit_for_review(post, request.user):
+            messages.success(request, "Post saved and submitted for review.")
+        elif post.approval_status == "submitted":
+            messages.success(request, "Post saved. It's still waiting for review.")
+        else:
+            messages.success(request, "Post saved.")
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if result.review_blocked:
+        messages.warning(
+            request,
+            "This workspace requires review before publishing. The post was saved as a "
+            "draft; submit it for review, then schedule or publish it once approved.",
+        )
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    if action == "publish_now":
+        from .tasks import publish_post_async
+
+        try:
+            publish_post_async.delay(post.pk)
+        except Exception:
+            logger.exception("Failed to enqueue publish for post=%s", post.pk)
+            post.status = ContentPost.Status.DRAFT
+            post.save(update_fields=["status", "updated_at"])
+            messages.error(
+                request,
+                "Couldn't start publishing right now. The post was saved as a draft; please try again.",
+            )
+            return redirect("publishing:post-detail", pk=post.pk)
+        messages.success(
+            request, "Publishing has started. Each channel's result shows below."
+        )
+        return redirect("publishing:post-detail", pk=post.pk)
+
+    messages.success(request, "Post saved.")
+    return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@require_POST
+@_in_workspace_tz
+def composer_readiness(request):
+    """What stops the composer's post from going out, as the user edits it."""
+    from . import readiness
+    from .composer import ComposerError, parse_form
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+    try:
+        issues = readiness.check(parse_form(request.POST), account)
+    except ComposerError as exc:
+        issues = readiness.check(None, account, error=exc)
+    return JsonResponse({"issues": issues})
+
+
+@login_required
+@require_POST
+@_in_workspace_tz
+def composer_autosave(request):
+    """Save the composer's draft in the background.
+
+    Only a draft is saved this way: a scheduled or in-review post changes only when the
+    user presses a button. ``version`` is the copy the page last saw; when someone saved
+    the post since, the save is refused (409) unless the page sends ``force``.
+    """
+    from .composer import (
+        AUTOSAVE_STATUSES,
+        ComposerError,
+        StaleVersion,
+        create_or_get,
+        find_post,
+        parse_client_key,
+        parse_form,
+        save_new_or_existing,
+        version_of,
+    )
+    from .links import links_for_post, short_url
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+
+    client_key = parse_client_key(request.POST.get("client_key"))
+    post_id = request.POST.get("post_id")
+    if not post_id and not client_key:
+        return JsonResponse({"saved": False, "reason": "no_key"}, status=400)
+    post = find_post(account, post_id, client_key)
+
+    if post is not None:
+        if post.status not in AUTOSAVE_STATUSES:
+            return JsonResponse(
+                {
+                    "saved": False,
+                    "reason": "not_draft",
+                    "message": f"This post is {post.get_status_display().lower()}, so "
+                    "changes are saved only when you press a button.",
+                },
+                status=409,
+            )
+        version = request.POST.get("version", "")
+        if version and not request.POST.get("force") and version != version_of(post):
+            return JsonResponse(
+                {"saved": False, "reason": "conflict", "version": version_of(post)},
+                status=409,
+            )
+
+    try:
+        inp = parse_form(request.POST)
+    except ComposerError as exc:
+        return JsonResponse(
+            {
+                "saved": False,
+                "reason": "invalid",
+                "message": str(exc),
+                "field": exc.field,
+            },
+            status=422,
+        )
+    if not inp.platforms:
+        return JsonResponse({"saved": False, "reason": "no_destination"})
+    if post is None:
+        if not (inp.caption or inp.media_urls or any(inp.platform_captions.values())):
+            return JsonResponse({"saved": False, "reason": "empty"})
+        post, _ = create_or_get(account, request.user, client_key)
+
+    # The early check above is a fast path; this one runs under the row lock.
+    expected = "" if request.POST.get("force") else request.POST.get("version", "")
+    try:
+        result = save_new_or_existing(
+            post,
+            inp,
+            "draft",
+            request.user,
+            request.POST,
+            editable=AUTOSAVE_STATUSES,
+            expected_version=expected,
+        )
+    except StaleVersion as exc:
+        return JsonResponse(
+            {"saved": False, "reason": "conflict", "version": str(exc)}, status=409
+        )
+    if result.duplicate:
+        return JsonResponse(
+            {"saved": False, "reason": "conflict", "version": version_of(result.post)},
+            status=409,
+        )
+    post = result.post
+    return JsonResponse(
+        {
+            "saved": True,
+            "post_id": post.pk,
+            "version": version_of(post),
+            "wa_link_urls": {
+                p: short_url(link) for p, link in links_for_post(post).items()
+            },
+        }
+    )
+
+
+@full_page_load
 @login_required
 @_in_workspace_tz
 def post_new(request):
@@ -1221,179 +1373,7 @@ def post_new(request):
             return redirect("publishing:post-detail", pk=existing_post.pk)
 
     if request.method == "POST":
-        pk = request.POST.get("post_id", "")
-        if pk:
-            try:
-                post = ContentPost.objects.get(pk=int(pk), account=account)
-            except (ContentPost.DoesNotExist, ValueError):
-                post = ContentPost(account=account, created_by=request.user)
-        else:
-            post = ContentPost(account=account, created_by=request.user)
-
-        if post.pk and post.status not in _EDITABLE_POST_STATUSES:
-            messages.error(
-                request,
-                f"A {post.get_status_display().lower()} post can't be edited.",
-            )
-            return redirect("publishing:post-detail", pk=post.pk)
-
-        caption = request.POST.get("caption", "").strip()
-        hashtags_raw = request.POST.get("hashtags", "").strip()
-        hashtags = [t.lstrip("#").strip() for t in hashtags_raw.split() if t.strip()]
-        platforms = request.POST.getlist("platforms")
-        media_type = request.POST.get("media_type", ContentPost.MediaType.IMAGE)
-        # Accept either a JSON array (from the uploader) or newline-separated URLs (legacy)
-        import json as _json
-
-        media_urls_json = request.POST.get("media_urls_json", "").strip()
-        if media_urls_json:
-            try:
-                media_urls = [
-                    u
-                    for u in _json.loads(media_urls_json)
-                    if isinstance(u, str) and u.strip()
-                ]
-            except (ValueError, TypeError):
-                media_urls = []
-        else:
-            media_urls_raw = request.POST.get("media_urls", "").strip()
-            media_urls = [u.strip() for u in media_urls_raw.splitlines() if u.strip()]
-        scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
-
-        # Platform-specific caption overrides
-        platform_captions = {}
-        for plat in platforms:
-            override = request.POST.get(f"caption_{plat}", "").strip()
-            if override:
-                platform_captions[plat] = override
-
-        scheduled_at = _parse_schedule(scheduled_at_raw)
-        # Per-channel times: each selected channel publishes at its own time, and the
-        # post's time is the earliest of them.
-        channel_times = {}
-        if request.POST.get("schedule_mode") == "per_channel" and len(platforms) > 1:
-            channel_times = {
-                plat: _parse_schedule(request.POST.get(f"scheduled_at_{plat}", ""))
-                for plat in platforms
-            }
-            if all(channel_times.values()):
-                scheduled_at = min(channel_times.values())
-            else:
-                scheduled_at = None
-            channel_times = {p: t for p, t in channel_times.items() if t}
-
-        from .links import CtaError, parse_cta
-        from .post_options import OptionsError, parse_options
-
-        try:
-            cta = parse_cta(request.POST)
-            channel_options = parse_options(request.POST, platforms, media_type)
-        except (CtaError, OptionsError) as exc:
-            messages.error(request, str(exc))
-            return redirect(
-                f"{reverse('publishing:post-new')}?post_id={post.pk}"
-                if post.pk
-                else "publishing:post-new"
-            )
-
-        action = request.POST.get("action", "draft")
-        if action == "schedule" and not scheduled_at:
-            messages.error(request, "Choose a date and time to schedule the post.")
-            return redirect(
-                f"{reverse('publishing:post-new')}?post_id={post.pk}"
-                if post.pk
-                else "publishing:post-new"
-            )
-        if action == "schedule" and scheduled_at:
-            status = ContentPost.Status.SCHEDULED
-        elif action == "publish_now":
-            status = ContentPost.Status.PUBLISHING
-        else:
-            status = ContentPost.Status.DRAFT
-
-        post.caption = caption
-        post.hashtags = hashtags
-        post.platforms = platforms
-        post.media_type = media_type
-        post.media_urls = media_urls
-        post.scheduled_at = scheduled_at
-        post.status = status
-        post.platform_captions = platform_captions
-        # Brief fields are only overwritten when the form sends them, so a composer save
-        # does not wipe a brief copied from the plan item.
-        for field in _BRIEF_FIELDS:
-            if field in request.POST:
-                setattr(post, field, request.POST[field].strip())
-        if not post.pk:
-            post.created_by = request.user
-
-        from .services import apply_schedule, initialize_post_with_variants
-
-        review_blocked = False
-        missing_wa_number = False
-        try:
-            with transaction.atomic():
-                post.save()
-                initialize_post_with_variants(post, platforms)
-                # Before the review check: the CTA and its caption line are part of
-                # what a reviewer approves.
-                missing_wa_number = _apply_cta(post, cta, request.POST)
-                _apply_channel_options(post, channel_options)
-                # Checked after the variants exist, since the approval covers them. An
-                # approval of earlier content no longer applies, so the post goes back
-                # to draft for a fresh review.
-                if not post.is_approval_valid():
-                    if post.approval_status == "approved":
-                        post.approval_status = "draft"
-                    review_blocked = post.status != ContentPost.Status.DRAFT
-                    post.status = ContentPost.Status.DRAFT
-                    post.save(update_fields=["status", "approval_status", "updated_at"])
-                # After the review check, so a post held for review keeps its channels
-                # in draft instead of letting the scheduler pick them up.
-                apply_schedule(post, channel_times)
-        except ValueError as exc:
-            messages.error(request, f"Failed to initialize post: {exc!s}")
-            return redirect("publishing:post-new")
-        if missing_wa_number:
-            messages.warning(
-                request,
-                "No WhatsApp chat link was added: connect a WhatsApp number first.",
-            )
-
-        if action == "submit_review":
-            if post.requires_approval and _submit_for_review(post, request.user):
-                messages.success(request, "Post saved and submitted for review.")
-            elif post.approval_status == "submitted":
-                messages.success(request, "Post saved. It's still waiting for review.")
-            else:
-                messages.success(request, "Post saved.")
-            return redirect("publishing:post-detail", pk=post.pk)
-
-        if review_blocked:
-            messages.warning(
-                request,
-                "This workspace requires review before publishing. The post was saved as a "
-                "draft; submit it for review, then schedule or publish it once approved.",
-            )
-            return redirect("publishing:post-detail", pk=post.pk)
-
-        if action == "publish_now":
-            from .tasks import publish_post_async
-
-            try:
-                publish_post_async.delay(post.pk)
-            except Exception:
-                logger.exception("Failed to enqueue publish for post=%s", post.pk)
-                post.status = ContentPost.Status.DRAFT
-                post.save(update_fields=["status", "updated_at"])
-                messages.error(
-                    request,
-                    "Couldn't start publishing right now. The post was saved as a draft; please try again.",
-                )
-                return redirect("publishing:post-detail", pk=post.pk)
-
-        messages.success(request, "Post saved.")
-        return redirect("publishing:post-detail", pk=post.pk)
+        return _post_new_submit(request, account)
 
     requires_review = (
         existing_post.requires_approval
@@ -1421,8 +1401,12 @@ def post_new(request):
                 channel_times[v.platform] = timezone.localtime(v.scheduled_at).strftime(
                     "%Y-%m-%dT%H:%M"
                 )
+    import uuid
+
     from apps.accounts.business_hours import DEFAULT_TIMEZONE, workspace_timezone
 
+    from . import constraints
+    from .composer import AUTOSAVE_STATUSES, destinations, version_of
     from .links import (
         DEFAULT_LINK_TEXT,
         DEFAULT_PREFILL,
@@ -1436,6 +1420,8 @@ def post_new(request):
     from .post_options import caps_for_js
 
     wa_links = links_for_post(existing_post) if existing_post else {}
+    dests = destinations(account)
+    review_gate = requires_review and not approved
     return render(
         request,
         "publishing/post_new.html",
@@ -1443,7 +1429,36 @@ def post_new(request):
             "account": account,
             "media_types": ContentPost.MediaType.choices,
             "existing_post": existing_post,
+            "destinations": list(dests.values()),
             "editor_data": {
+                "post_id": existing_post.pk if existing_post else None,
+                # Ties autosaves and the final submit of a new post to one row.
+                "client_key": str(
+                    existing_post.client_key
+                    if existing_post and existing_post.client_key
+                    else uuid.uuid4()
+                ),
+                "version": version_of(existing_post) if existing_post else "",
+                "status_label": existing_post.get_status_display()
+                if existing_post
+                else "New",
+                "autosave": existing_post is None
+                or existing_post.status in AUTOSAVE_STATUSES,
+                "review_gate": review_gate,
+                "constraints": constraints.for_js(),
+                "destinations": dests,
+                "tz_name": timezone.get_current_timezone_name(),
+                "urls": {
+                    "upload": reverse("publishing:post-media-upload"),
+                    "readiness": reverse("publishing:composer-readiness"),
+                    "autosave": reverse("publishing:composer-autosave"),
+                    "locations": reverse("publishing:location-search"),
+                    "caption_generate": reverse("publishing:caption-generate"),
+                    "caption_result": reverse(
+                        "publishing:caption-result", args=["PLACEHOLDER"]
+                    ),
+                    "edit": reverse("publishing:post-new"),
+                },
                 "caption": existing_post.caption if existing_post else "",
                 "hashtags": existing_post.hashtags if existing_post else [],
                 "platform_captions": existing_post.platform_captions
@@ -1487,7 +1502,7 @@ def post_new(request):
             "goal_choices": CAPTION_GOAL_CHOICES,
             # Review-only actions until the post holds a still-valid approval; an approved
             # post can be scheduled, and editing its content sends it back for review.
-            "review_gate": requires_review and not approved,
+            "review_gate": review_gate,
             "approved_for_publish": requires_review and approved,
             "current_tz_name": timezone.get_current_timezone_name(),
             "tz_is_default": workspace_timezone(account) == DEFAULT_TIMEZONE,

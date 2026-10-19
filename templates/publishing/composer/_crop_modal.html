@@ -1,0 +1,27 @@
+{% comment %} Crop modal — outside the Alpine scope so Cropper.js can manage the <img> freely. {% endcomment %}
+<div id="ig-crop-modal" class="hidden fixed inset-0 flex items-center justify-center bg-gray-900/50 p-4" style="z-index: var(--z-modal)" role="dialog" aria-modal="true" aria-labelledby="ig-crop-title">
+  <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto flex flex-col gap-4 p-4 sm:p-5" tabindex="-1" id="ig-crop-panel">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="font-semibold text-ink" id="ig-crop-title">Crop image</h3>
+        <p class="text-xs text-ink-subtle mt-0.5">Pick a ratio, drag to reposition, then crop.</p>
+      </div>
+      <button id="ig-crop-skip" type="button" class="text-sm text-ink-subtle hover:text-ink underline">Skip crop</button>
+    </div>
+    <div class="overflow-hidden rounded-lg tone-neutral-bg" style="max-height:380px">
+      <img id="ig-crop-img" class="block max-w-full" alt="">
+    </div>
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Crop ratio">
+      <span class="text-xs text-ink-subtle self-center mr-1">Ratio:</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-ratio="1/1">Square 1:1</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-ratio="4/5">Portrait 4:5</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-ratio="191/100">Landscape 1.91:1</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-ratio="9/16">Story 9:16</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ratio="free">Free</button>
+    </div>
+    <p class="text-xs text-coral-600" id="ig-crop-error" hidden role="alert"></p>
+    <div class="flex gap-2 justify-end pt-1 border-t border-border">
+      <button id="ig-crop-apply" type="button" class="btn btn-primary btn-sm">Crop &amp; upload</button>
+    </div>
+  </div>
+</div>

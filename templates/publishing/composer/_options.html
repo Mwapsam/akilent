@@ -1,0 +1,126 @@
+{# Only what the selected channels accept for this format (post_options.CAPABILITIES). #}
+<section class="cmp-section" x-show="_anyOption()" x-cloak aria-labelledby="opt-title">
+  <button type="button" id="more-options-toggle" class="w-full flex items-center justify-between gap-3 text-left"
+          @click="moreOpen = !moreOpen" :aria-expanded="moreOpen" aria-controls="more-options">
+    <span>
+      <span id="opt-title" class="block cmp-section-title">More options</span>
+      <span class="block cmp-hint mt-0.5"
+            x-text="_optionsSummary() || 'Alt text, location, collaborators, first comment'"></span>
+    </span>
+    <svg class="w-4 h-4 text-ink-subtle transition-transform flex-shrink-0" :class="moreOpen && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+    </svg>
+  </button>
+
+  <div id="more-options" x-show="moreOpen" class="mt-5 space-y-6">
+    <section x-show="_anyOption('instagram')" class="space-y-4" aria-labelledby="opt-ig-title">
+      <h3 id="opt-ig-title" class="text-sm font-semibold text-ink">Instagram</h3>
+
+      <div x-show="_can('instagram', 'alt_text')">
+        <label for="ig-alt-text" class="cmp-label">Alt text</label>
+        <textarea id="ig-alt-text" name="ig_alt_text" rows="2" maxlength="1000" x-model="opts.instagram.alt_text"
+                  placeholder="e.g. Three summer dresses in yellow, coral and teal on a rail"
+                  class="input w-full text-sm"></textarea>
+        <p class="cmp-hint mt-1">Describes the image for people who use screen readers.</p>
+      </div>
+
+      <div x-show="_can('instagram', 'location')">
+        <label for="ig-location-q" class="cmp-label">Location</label>
+        <input type="hidden" name="ig_location_id" :value="opts.instagram.location ? opts.instagram.location.id : ''">
+        <input type="hidden" name="ig_location_name" :value="opts.instagram.location ? opts.instagram.location.name : ''">
+        <template x-if="opts.instagram.location">
+          <div class="flex items-center gap-2 text-sm">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 min-w-0">
+              <svg class="w-3.5 h-3.5 text-ink-subtle flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span class="truncate" x-text="opts.instagram.location.name"></span>
+            </span>
+            <button type="button" class="text-xs text-ink-subtle hover:text-ink underline" @click="opts.instagram.location = null; touched()">Remove</button>
+          </div>
+        </template>
+        <div x-show="!opts.instagram.location" class="relative">
+          <input type="search" id="ig-location-q" x-model="loc.query" autocomplete="off" data-not-post
+                 @input.debounce.350ms="searchLocations()" @keydown.escape="loc.results = []"
+                 placeholder="Search for a place" class="input w-full text-sm"
+                 role="combobox" :aria-expanded="loc.results.length > 0" aria-controls="ig-location-results">
+          <ul id="ig-location-results" role="listbox" x-show="loc.results.length > 0"
+              class="absolute z-10 mt-1 w-full card p-1 max-h-60 overflow-y-auto">
+            <template x-for="r in loc.results" :key="r.id">
+              <li role="option">
+                <button type="button" class="w-full text-left px-3 py-2 rounded-lg hover:bg-hover text-sm"
+                        @click="opts.instagram.location = { id: r.id, name: r.name }; loc.results = []; loc.query = ''; touched()">
+                  <span class="block text-ink" x-text="r.name"></span>
+                  <span class="block text-xs text-ink-subtle" x-show="r.detail" x-text="r.detail"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+          <p class="cmp-hint mt-1" x-show="loc.loading">Searching…</p>
+          <p class="cmp-hint mt-1" x-show="loc.error" x-text="loc.error" role="status"></p>
+          <p class="cmp-hint mt-1" x-show="!loc.loading && !loc.error && loc.searched && loc.results.length === 0">No places found.</p>
+        </div>
+      </div>
+
+      <div x-show="_can('instagram', 'collaborators')">
+        <label for="ig-collaborators" class="cmp-label">Collaborators</label>
+        <input type="text" id="ig-collaborators" name="ig_collaborators" x-model="opts.instagram.collaborators"
+               placeholder="@username, @username" autocomplete="off" autocapitalize="off" spellcheck="false"
+               class="input w-full text-sm">
+        <p class="cmp-hint mt-1">Up to 3 accounts. Each gets an invite to show the post on their profile too.</p>
+      </div>
+
+      <div x-show="_can('instagram', 'share_to_feed')">
+        <input type="hidden" name="ig_share_to_feed" value="0" :disabled="!_can('instagram', 'share_to_feed')">
+        <label class="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="ig_share_to_feed" value="1" class="rounded mt-0.5"
+                 x-model="opts.instagram.share_to_feed" :disabled="!_can('instagram', 'share_to_feed')">
+          <span>Also show the Reel in your feed <span class="block cmp-hint">Off: it only appears in the Reels tab.</span></span>
+        </label>
+      </div>
+
+      <div x-show="_can('instagram', 'cover_url')" class="space-y-2">
+        <p class="cmp-label">Reel cover</p>
+        <input type="hidden" name="ig_cover_url" :value="opts.instagram.cover_url">
+        <div class="flex flex-wrap items-center gap-3">
+          <template x-if="opts.instagram.cover_url">
+            <img :src="opts.instagram.cover_url" alt="Reel cover" class="w-14 h-24 rounded-lg object-cover border border-border">
+          </template>
+          <label class="btn btn-secondary btn-sm cursor-pointer">
+            <input type="file" accept="image/jpeg,image/png" class="sr-only" @change="uploadCover($event)">
+            <span x-text="opts.instagram.cover_url ? 'Change cover image' : 'Upload a cover image'"></span>
+          </label>
+          <button type="button" x-show="opts.instagram.cover_url" class="text-xs text-ink-subtle hover:text-ink underline"
+                  @click="opts.instagram.cover_url = ''; touched()">Remove</button>
+          <span class="cmp-hint" x-show="coverUploading">Uploading…</span>
+        </div>
+        <p class="text-xs text-coral-600" x-show="coverError" x-text="coverError" role="alert"></p>
+        <div x-show="!opts.instagram.cover_url">
+          <label for="ig-thumb-offset" class="cmp-hint block mb-1">Or use a frame from the video, at</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="ig-thumb-offset" name="ig_thumb_offset" min="0" max="900" step="0.1"
+                   x-model="opts.instagram.thumb_offset" placeholder="0" class="input w-24 text-sm">
+            <span class="text-sm text-ink-subtle">seconds</span>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="_can('instagram', 'first_comment')">
+        <label for="ig-first-comment" class="cmp-label">First comment</label>
+        <textarea id="ig-first-comment" name="ig_first_comment" rows="2" maxlength="2200" x-model="opts.instagram.first_comment"
+                  placeholder="e.g. More hashtags, or “Tap the link in our bio to order”"
+                  class="input w-full text-sm"></textarea>
+        <p class="cmp-hint mt-1">Posted from your account right after the post goes live.</p>
+      </div>
+    </section>
+
+    <section x-show="_anyOption('facebook')" class="space-y-4" aria-labelledby="opt-fb-title">
+      <h3 id="opt-fb-title" class="text-sm font-semibold text-ink">Facebook</h3>
+      <div>
+        <label for="fb-first-comment" class="cmp-label">First comment</label>
+        <textarea id="fb-first-comment" name="fb_first_comment" rows="2" maxlength="2200" x-model="opts.facebook.first_comment"
+                  placeholder="e.g. Prices and sizes are in the photo description"
+                  class="input w-full text-sm"></textarea>
+        <p class="cmp-hint mt-1">Posted from your Page right after the post goes live. Needs the Page reconnected once if it was connected before first comments existed.</p>
+      </div>
+    </section>
+  </div>
+</section>

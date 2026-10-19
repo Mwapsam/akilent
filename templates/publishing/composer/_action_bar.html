@@ -1,0 +1,46 @@
+<div class="cmp-bar">
+  <div class="cmp-bar-inner">
+    <div class="flex items-center gap-3 min-w-0">
+      {# Readiness: what stops the main action, and what to know before it. #}
+      <div class="relative" @click.outside="issuesOpen = false" @keydown.escape="issuesOpen = false">
+        <button type="button" class="cmp-ready" @click="issuesOpen = !issuesOpen" :aria-expanded="issuesOpen"
+                aria-controls="readiness-list" :disabled="!selectedPlatforms.length && !issues.length">
+          <span class="cmp-ready-icon" :class="readyTone()" aria-hidden="true" x-text="readyIcon()"></span>
+          <span x-text="readyText()" aria-live="polite"></span>
+        </button>
+        <div id="readiness-list" class="cmp-pop" x-show="issuesOpen" x-cloak x-transition.opacity>
+          <p class="px-2 pt-1 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle" x-text="'Before you ' + actionVerb(primaryAction())"></p>
+          <template x-for="issue in visibleIssues()" :key="issue.code + issue.platform + issue.field">
+            <div>
+              <button type="button" class="cmp-issue" :class="issue.level === 'warning' || !issue.blocks.includes(primaryAction()) ? 'is-warning' : ''"
+                      @click="goToIssue(issue)">
+                <span class="cmp-issue-dot" aria-hidden="true"></span>
+                <span class="flex-1">
+                  <span x-text="issue.message"></span>
+                  <span class="block text-xs text-ink-subtle mt-0.5" x-text="issue.blocks.includes(primaryAction()) ? 'Fix this to ' + actionVerb(primaryAction()) : 'Worth checking'"></span>
+                </span>
+              </button>
+              <a :href="issue.fix_url" x-show="issue.fix_url" class="block pl-8 pb-2 text-xs underline text-ink">Open channel settings</a>
+            </div>
+          </template>
+          <p class="px-2 py-3 text-sm text-ink-muted" x-show="!visibleIssues().length">Everything checks out.</p>
+        </div>
+      </div>
+      <span class="hidden sm:inline text-xs text-ink-subtle truncate" x-text="destinationSummary()"></span>
+    </div>
+
+    <div class="cmp-bar-actions">
+      <a href="{% url 'publishing:index' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" name="action" value="draft" class="btn btn-secondary" :disabled="submitting">Save draft</button>
+      {% if review_gate %}
+      <button type="submit" name="action" value="submit_review" class="btn btn-primary"
+              :disabled="submitting || blockedFor('submit_review')">Submit for review</button>
+      {% else %}
+      <button type="submit" name="action" value="publish_now" class="btn btn-primary" x-show="publishMode === 'now'"
+              :disabled="submitting || blockedFor('publish_now')">Publish now</button>
+      <button type="submit" name="action" value="schedule" class="btn btn-primary" x-show="publishMode === 'schedule'" x-cloak
+              :disabled="submitting || blockedFor('schedule')">Schedule</button>
+      {% endif %}
+    </div>
+  </div>
+</div>

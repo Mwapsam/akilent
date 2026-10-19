@@ -270,11 +270,21 @@ class ContentPost(models.Model):
     created_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # The composer's id for a post before it is first saved. Autosave and the final
+    # submit resolve to the same row, so a repeated submit can't create a second post.
+    client_key = models.UUIDField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-scheduled_at", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "client_key"],
+                condition=models.Q(client_key__isnull=False),
+                name="publishing_post_unique_client_key",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.account} / {self.media_type} / {self.status}"

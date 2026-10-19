@@ -1,0 +1,43 @@
+<header class="cmp-head">
+  <div class="min-w-0">
+    <nav class="cmp-crumbs" aria-label="Breadcrumb">
+      <a href="{% url 'publishing:index' %}">Content Studio</a>
+      <span aria-hidden="true">/</span>
+      <span>{% if existing_post %}Edit post{% else %}New post{% endif %}</span>
+    </nav>
+    <h1 class="cmp-title">
+      {% if existing_post %}Edit post{% else %}Create post{% endif %}
+      <span class="cmp-pill" x-text="statusLabel"></span>
+    </h1>
+  </div>
+
+  {# What happened to the user's work, said plainly. #}
+  <div class="cmp-save" :data-state="saveState" role="status" aria-live="polite">
+    <span class="cmp-save-dot" aria-hidden="true"></span>
+    <span x-text="saveText()"></span>
+    <button type="button" x-show="saveState === 'error' || saveState === 'offline'" x-cloak @click="autosave()">Retry</button>
+  </div>
+</header>
+
+{# Unsaved edits from an earlier visit, kept in this browser. #}
+<div class="cmp-banner" x-show="recovery" x-cloak role="region" aria-label="Unsaved changes">
+  <span>You have unsaved changes from <strong x-text="recovery ? recovery.when : ''"></strong> in this browser.</span>
+  <div class="cmp-banner-actions">
+    <button type="button" class="btn btn-secondary btn-sm" @click="restoreRecovery()">Restore them</button>
+    <button type="button" class="btn btn-ghost btn-sm" @click="discardRecovery()">Discard</button>
+  </div>
+</div>
+
+{# Someone saved this post elsewhere since the page loaded. #}
+<div class="cmp-banner is-danger" x-show="saveState === 'conflict'" x-cloak role="alert">
+  <span>This post was changed somewhere else (another tab or teammate). Your edits here aren't saved yet.</span>
+  <div class="cmp-banner-actions">
+    <button type="button" class="btn btn-secondary btn-sm" @click="reloadServerCopy()">Load their version</button>
+    <button type="button" class="btn btn-ghost btn-sm" @click="autosave(true)">Keep mine</button>
+  </div>
+</div>
+
+{# A post past draft is only changed by a button press. #}
+<div class="cmp-banner" x-show="saveState === 'off' && saveMessage" x-cloak>
+  <span x-text="saveMessage"></span>
+</div>

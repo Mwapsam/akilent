@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
+from .constraints import IG_RATIO_MAX, IG_RATIO_MIN
 from .models import ContentPost, ContentPostVariant, FacebookPageConnection
 from .providers.facebook import FacebookPublishError, FacebookPublishProvider
 from .providers.instagram import (
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Instagram accepted aspect ratio range: width/height must be between 0.8 (4:5)
 # and 1.91 (1.91:1). A 1% tolerance covers minor rounding in image dimensions.
-_IG_RATIO_MIN = 0.8 * 0.99
-_IG_RATIO_MAX = 1.91 * 1.01
+_IG_RATIO_MIN = IG_RATIO_MIN
+_IG_RATIO_MAX = IG_RATIO_MAX
 
 
 # ---------------------------------------------------------------------------

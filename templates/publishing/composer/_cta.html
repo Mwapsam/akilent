@@ -1,0 +1,89 @@
+<fieldset class="cmp-section" id="composer-cta" tabindex="-1" aria-labelledby="cta-title">
+  <div class="cmp-section-head">
+    <h2 id="cta-title" class="cmp-section-title">Call to action</h2>
+    <span class="cmp-hint">Added to the end of the caption.</span>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+    <label class="cta-option" :class="cta.kind === 'none' && 'is-selected'">
+      <input type="radio" name="cta_kind" value="none" x-model="cta.kind" class="sr-only">
+      <span class="font-medium text-ink">None</span>
+      <span class="text-xs text-ink-subtle">Just the caption</span>
+    </label>
+    <label class="cta-option" :class="cta.kind === 'whatsapp' && 'is-selected'"
+           {% if not wa_number_ready %}aria-disabled="true"{% endif %}>
+      <input type="radio" name="cta_kind" value="whatsapp" x-model="cta.kind" class="sr-only"
+             {% if not wa_number_ready %}disabled{% endif %}>
+      <span class="font-medium text-ink">Chat on WhatsApp</span>
+      <span class="text-xs text-ink-subtle">Tracked: see which posts bring chats</span>
+    </label>
+    <label class="cta-option" :class="cta.kind === 'link' && 'is-selected'">
+      <input type="radio" name="cta_kind" value="link" x-model="cta.kind" class="sr-only">
+      <span class="font-medium text-ink">Visit a link</span>
+      <span class="text-xs text-ink-subtle">Your shop, menu or booking page</span>
+    </label>
+  </div>
+  {% if not wa_number_ready %}
+  <p class="text-xs text-ink-subtle mt-3">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="underline">Connect WhatsApp</a></p>
+  {% endif %}
+
+  <div x-show="cta.kind !== 'none'" x-cloak class="space-y-4 pt-4 mt-4 border-t border-border">
+    <div>
+      <label for="cta-text" class="cmp-label">Call to action text</label>
+      <input type="text" id="cta-text" name="cta_text" x-model="cta.text" maxlength="80"
+             :disabled="cta.kind === 'none'"
+             :placeholder="cta.kind === 'link' ? defaults.link : defaults.whatsapp"
+             class="input w-full">
+      <p class="cmp-hint mt-1">Leave it blank to use "<span x-text="cta.kind === 'link' ? defaults.link : defaults.whatsapp"></span>".</p>
+    </div>
+
+    <div x-show="cta.kind === 'link'">
+      <label for="cta-url" class="cmp-label">Link</label>
+      <input type="url" id="cta-url" name="cta_url" x-model="cta.url"
+             :disabled="cta.kind !== 'link'"
+             placeholder="https://yourshop.com/summer" class="input w-full" inputmode="url" autocomplete="url">
+    </div>
+
+    {% if wa_number_ready %}
+    <div x-show="cta.kind === 'whatsapp'" class="space-y-4">
+      <div>
+        <label for="cta-prefill" class="cmp-label">Customer's first message</label>
+        <textarea id="cta-prefill" name="cta_prefill" rows="2" maxlength="200" x-model="cta.prefill"
+                  :disabled="cta.kind !== 'whatsapp'" :placeholder="defaults.prefill"
+                  class="input w-full text-sm"></textarea>
+        <p class="cmp-hint mt-1">WhatsApp opens with this ready to send. We add a short reference so the chat is linked to this post.</p>
+      </div>
+      <div class="space-y-2">
+        <p class="cmp-label">Where</p>
+        <div x-show="selectedPlatforms.includes('facebook')" class="space-y-1">
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="wa_link_facebook" value="1" class="rounded mt-0.5"
+                   x-model="cta.channels.facebook" :disabled="cta.kind !== 'whatsapp'">
+            <span>Facebook: add the chat link to the caption</span>
+          </label>
+          <div class="copy-row flex items-center gap-2 pl-6 text-xs" x-show="waLinkUrls.facebook" {% if not wa_links.facebook %}x-cloak{% endif %}>
+            <code class="copy-value truncate text-ink-muted" x-text="waLinkUrls.facebook">{{ editor_data.wa_link_urls.facebook }}</code>
+            <button type="button" class="copy-btn text-accent hover:underline flex-shrink-0">Copy</button>
+          </div>
+        </div>
+        <div x-show="selectedPlatforms.includes('instagram')" class="space-y-1">
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="wa_link_instagram" value="1" class="rounded mt-0.5"
+                   x-model="cta.channels.instagram" :disabled="cta.kind !== 'whatsapp'">
+            <span>Instagram: make a chat link for your bio or a story link sticker</span>
+          </label>
+          <div class="copy-row flex items-center gap-2 pl-6 text-xs" x-show="waLinkUrls.instagram" {% if not wa_links.instagram %}x-cloak{% endif %}>
+            <code class="copy-value truncate text-ink-muted" x-text="waLinkUrls.instagram">{{ editor_data.wa_link_urls.instagram }}</code>
+            <button type="button" class="copy-btn text-accent hover:underline flex-shrink-0">Copy</button>
+          </div>
+          <p class="pl-6 cmp-hint" x-show="!waLinkUrls.instagram">The link appears here once the draft is saved.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <p x-show="selectedPlatforms.includes('instagram')" class="text-xs rounded-xl p-2.5 tone-info-bg text-ink">
+      Links in Instagram captions can't be tapped. On Instagram we add "<span x-text="_ctaText('instagram')"></span>". Put the link in your bio or a story link sticker.
+    </p>
+  </div>
+</fieldset>

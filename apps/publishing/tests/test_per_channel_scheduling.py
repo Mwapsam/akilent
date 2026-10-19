@@ -354,6 +354,7 @@ def test_composer_same_time_for_every_channel(owner):
             "caption": "Launch",
             "platforms": ["facebook", "instagram"],
             "media_type": "image",
+            "media_urls_json": '["https://example.com/a.jpg"]',
             "schedule_mode": "same",
             "scheduled_at": "2030-01-01T10:00",
             "action": "schedule",

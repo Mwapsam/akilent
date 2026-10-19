@@ -144,6 +144,9 @@
   --color-canvas: #F3F5F7;
   --color-border: #E8EDF3;
   --color-border-strong: #DCE1E8;
+  /* Hairlines inside a surface (list rows, dividers). Follows --color-border, so the
+     dark theme needs no override. */
+  --color-surface-subtle: var(--color-border);
 
   /* Chart tokens.
      Series colours are a *categorical* palette: they say which series, not how

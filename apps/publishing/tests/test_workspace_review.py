@@ -26,6 +26,10 @@ def team():
     member = User.objects.create_user("member", "member@example.com", "pass")
     Membership.objects.create(user=owner, account=account, role=Membership.Role.OWNER)
     Membership.objects.create(user=member, account=account, role=Membership.Role.MEMBER)
+    # Publishing now needs a connected Page (the composer's readiness check).
+    FacebookPageConnection.objects.create(
+        account=account, page_id="p1", page_name="Team Co", access_token="t"
+    )
     return account, owner, member
 
 
@@ -162,9 +166,7 @@ def test_members_cannot_resolve_reconciliation(team):
 
 def test_members_cannot_disconnect_the_facebook_page(team):
     account, _, member = team
-    conn = FacebookPageConnection.objects.create(
-        account=account, page_id="p1", access_token="t"
-    )
+    conn = FacebookPageConnection.objects.get(account=account)
 
     _login(member).post(reverse("publishing:fb-disconnect"))
 

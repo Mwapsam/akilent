@@ -1,0 +1,136 @@
+<div class="pv-stage" aria-live="polite">
+  <div class="pv-top">
+    <p class="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Live preview</p>
+    <div class="pv-chan" role="group" aria-label="Preview channel" x-show="selectedPlatforms.length" x-cloak>
+      <template x-for="p in selectedPlatforms" :key="p">
+        <button type="button" :aria-pressed="previewPlatform === p" @click="previewPlatform = p" x-text="platformName(p)"></button>
+      </template>
+    </div>
+  </div>
+
+  <p class="text-sm text-ink-subtle text-center py-16" x-show="!selectedPlatforms.length" x-cloak>
+    Choose where to publish to see a preview.
+  </p>
+
+  {# ── Instagram ─────────────────────────────────────────────────────────── #}
+  <div class="pv-card" x-show="previewPlatform === 'instagram' && selectedPlatforms.includes('instagram')">
+    <div class="pv-head">
+      <span class="pv-avatar" style="background: linear-gradient(135deg, #833AB4, #E1306C 55%, #F77737); padding: 2px;" aria-hidden="true">
+        <span class="block w-full h-full rounded-full bg-surface"></span>
+      </span>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-xs text-ink leading-tight truncate">
+          <span x-text="igName()"></span><template x-if="_can('instagram', 'collaborators') && _collaborators().length"><span x-text="' and ' + (_collaborators().length === 1 ? _collaborators()[0] : _collaborators().length + ' others')"></span></template>
+        </p>
+        <p class="text-xs text-ink-subtle leading-tight truncate" x-show="_can('instagram', 'location') && opts.instagram.location"
+           x-text="opts.instagram.location ? opts.instagram.location.name : ''"></p>
+      </div>
+      <svg class="w-4 h-4 text-ink-subtle" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+    </div>
+
+    <div class="pv-media" :style="'aspect-ratio:' + igAspect()">
+      <template x-if="mediaType === 'text'">
+        <div class="w-full h-full flex items-center justify-center p-6 text-center text-xs text-ink-subtle">Instagram can't publish a text-only post.</div>
+      </template>
+      <template x-if="mediaType !== 'text' && !previewMedia().length">
+        <div class="w-full h-full flex flex-col items-center justify-center gap-2 text-ink-subtle">
+          <svg class="w-10 h-10 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span class="text-xs">Your media appears here</span>
+        </div>
+      </template>
+      <template x-if="mediaType !== 'text' && currentPreview() && currentPreview().kind === 'image'">
+        <img :src="currentPreview().url" @load="noteRatio($event.target)"
+             :alt="(_can('instagram', 'alt_text') && opts.instagram.alt_text.trim()) || 'Preview image ' + (previewIndex + 1)">
+      </template>
+      <template x-if="mediaType !== 'text' && currentPreview() && currentPreview().kind === 'video'">
+        <video :src="currentPreview().url" muted playsinline controls preload="metadata" aria-label="Preview of the video"></video>
+      </template>
+      <template x-if="previewSlides() > 1">
+        <div>
+          <button type="button" class="pv-nav is-prev" x-show="previewIndex > 0" @click="previewIndex--" aria-label="Previous item">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button type="button" class="pv-nav is-next" x-show="previewIndex < previewSlides() - 1" @click="previewIndex++" aria-label="Next item">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <span class="pv-count" x-text="(previewIndex + 1) + '/' + previewSlides()"></span>
+        </div>
+      </template>
+    </div>
+
+    <div class="flex items-center gap-3 px-3 pt-2.5 text-ink" aria-hidden="true">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      <span class="flex-1"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+    </div>
+    <div class="pv-dots" x-show="previewSlides() > 1" aria-hidden="true">
+      <template x-for="n in previewSlides()" :key="n"><span :class="n - 1 === previewIndex && 'is-on'"></span></template>
+    </div>
+
+    <div class="px-3 pt-2 pb-3 text-xs">
+      <template x-if="mediaType === 'story'">
+        <p class="text-ink-subtle">Stories show no caption.</p>
+      </template>
+      <template x-if="mediaType !== 'story' && _previewCaption('instagram')">
+        <p class="pv-text"><span class="font-semibold" x-text="igName()"></span> <span x-text="clip('instagram', _previewCaption('instagram'), 125)"></span><button type="button" class="pv-more" x-show="isClipped('instagram', _previewCaption('instagram'), 125)" @click="expanded.instagram = true">… more</button></p>
+      </template>
+      <p class="pv-text mt-2 pt-2 border-t border-border" x-show="_firstComment('instagram')"><span class="font-semibold" x-text="igName()"></span> <span x-text="_firstComment('instagram')"></span></p>
+    </div>
+  </div>
+
+  {# ── Facebook ──────────────────────────────────────────────────────────── #}
+  <div class="pv-card" x-show="previewPlatform === 'facebook' && selectedPlatforms.includes('facebook')">
+    <div class="pv-head">
+      <span class="pv-avatar flex items-center justify-center" style="background:#1877F2" aria-hidden="true">
+        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.5V4.4c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8v2.4H8v3h2.5V21h3z"/></svg>
+      </span>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-xs text-ink leading-tight truncate" x-text="fbName()"></p>
+        <p class="text-xs text-ink-subtle">Just now · Public</p>
+      </div>
+    </div>
+
+    <div class="px-3 pb-2 space-y-2 text-xs" x-show="_previewCaption('facebook')">
+      <p class="pv-text" x-show="_previewBody('facebook')"><span x-text="clip('facebook', _previewBody('facebook'), 280)"></span><button type="button" class="pv-more" x-show="isClipped('facebook', _previewBody('facebook'), 280)" @click="expanded.facebook = true">… See more</button></p>
+      <p class="pv-text" x-show="_ctaText('facebook')">
+        <span x-text="_ctaText('facebook') + ':'"></span>
+        <span style="color:#1877F2" x-text="_ctaUrl('facebook')"></span>
+      </p>
+      <p class="pv-text" style="color:#1877F2" x-show="_previewTags()" x-text="_previewTags()"></p>
+    </div>
+
+    <div x-show="mediaType === 'text' && cta.kind === 'link' && _hostname(cta.url)" class="mx-3 mb-2 rounded-lg border border-border tone-neutral-bg px-3 py-2">
+      <p class="text-xs uppercase tracking-wide text-ink-subtle" x-text="_hostname(cta.url)"></p>
+      <p class="text-xs text-ink-subtle">Facebook shows a preview of this page</p>
+    </div>
+
+    {# Facebook publishes only the first file, so the preview shows only that one. #}
+    <template x-if="mediaType !== 'text' && previewMedia().length && previewMedia()[0].kind === 'image'">
+      <div class="pv-media"><img :src="previewMedia()[0].url" alt="Preview of the first image" style="max-height: 28rem"></div>
+    </template>
+    <template x-if="mediaType !== 'text' && previewMedia().length && previewMedia()[0].kind === 'video'">
+      <div class="pv-media bg-gray-900"><video :src="previewMedia()[0].url" muted playsinline controls preload="metadata" aria-label="Preview of the video" style="max-height: 28rem"></video></div>
+    </template>
+    <template x-if="mediaType !== 'text' && !previewMedia().length">
+      <div class="pv-media flex items-center justify-center py-12 text-xs text-ink-subtle">Your media appears here</div>
+    </template>
+    <p class="px-3 pt-2 text-xs text-ink-subtle" x-show="mediaType !== 'text' && previewMedia().length > 1">Facebook publishes the first file only.</p>
+
+    <div class="flex border-t border-border mt-2 text-xs text-ink-subtle" aria-hidden="true">
+      <span class="flex-1 text-center py-2">Like</span>
+      <span class="flex-1 text-center py-2">Comment</span>
+      <span class="flex-1 text-center py-2">Share</span>
+    </div>
+    <div class="flex items-start gap-2 px-3 pb-3 pt-1" x-show="_firstComment('facebook')">
+      <span class="w-6 h-6 rounded-full flex-shrink-0" style="background:#1877F2" aria-hidden="true"></span>
+      <p class="text-xs rounded-2xl tone-neutral-bg px-3 py-1.5 pv-text min-w-0">
+        <span class="block font-semibold" x-text="fbName()"></span>
+        <span x-text="_firstComment('facebook')"></span>
+      </p>
+    </div>
+  </div>
+
+  <p class="pv-note">An illustrative preview of what you prepared. Instagram and Facebook control the final look, which can differ by device.</p>
+</div>

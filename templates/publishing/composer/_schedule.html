@@ -1,0 +1,57 @@
+<section class="cmp-section" aria-labelledby="schedule-title">
+  <div class="cmp-section-head flex-wrap">
+    <h2 id="schedule-title" class="cmp-section-title">Publishing</h2>
+    {% if not review_gate %}
+    <div class="cmp-seg" role="radiogroup" aria-label="When to publish">
+      <label :class="publishMode === 'now' && 'is-on'">
+        <input type="radio" name="ui_publish_mode" value="now" x-model="publishMode" class="sr-only" @change="touched()"> Publish now
+      </label>
+      <label :class="publishMode === 'schedule' && 'is-on'">
+        <input type="radio" name="ui_publish_mode" value="schedule" x-model="publishMode" class="sr-only" @change="touched()"> Schedule
+      </label>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if review_gate %}
+  <p class="cmp-hint mb-3">This workspace reviews posts before they go out. You can pick a time now and schedule it once an Owner or Admin approves it.</p>
+  {% endif %}
+
+  <p class="text-sm text-ink-muted" x-show="publishMode === 'now'" x-cloak>
+    It goes live as soon as you confirm. Each channel's result shows on the post page.
+  </p>
+
+  <div x-show="publishMode === 'schedule'" class="space-y-3">
+    <input type="hidden" name="schedule_mode" :value="perChannel && selectedPlatforms.length > 1 ? 'per_channel' : 'same'"
+           :disabled="publishMode !== 'schedule'">
+    <div x-show="!perChannel || selectedPlatforms.length < 2">
+      <label for="scheduled-at" class="cmp-label">Date and time</label>
+      <input type="datetime-local" name="scheduled_at" id="scheduled-at" x-model="scheduledAt"
+             :disabled="publishMode !== 'schedule'" class="input w-full sm:w-64">
+    </div>
+    <template x-if="selectedPlatforms.length > 1">
+      <label class="flex items-center gap-2 text-sm text-ink-muted">
+        <input type="checkbox" class="rounded" x-model="perChannel"
+               @change="if (perChannel) { selectedPlatforms.forEach(p => { if (!channelTimes[p]) channelTimes[p] = scheduledAt; }); }">
+        Pick a different time for each channel
+      </label>
+    </template>
+    <div x-show="perChannel && selectedPlatforms.length > 1" class="space-y-2">
+      <template x-for="p in selectedPlatforms" :key="p">
+        <div class="flex flex-wrap items-center gap-3">
+          <label :for="'scheduled-at-' + p" class="w-24 text-sm text-ink" x-text="platformName(p)"></label>
+          <input type="datetime-local" :id="'scheduled-at-' + p" :name="'scheduled_at_' + p"
+                 x-model="channelTimes[p]" :disabled="publishMode !== 'schedule'" class="input w-full sm:w-64">
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <p class="cmp-hint mt-3">
+    Times are in {{ current_tz_name }}.
+    {% if tz_is_default %}<a href="{% url 'settings-hours' %}" class="underline">Set your business timezone</a> so times match your clock.{% endif %}
+  </p>
+  {% if approved_for_publish %}
+  <p class="cmp-hint mt-2">Approved. Changing the caption, media or channels sends it back for review.</p>
+  {% endif %}
+</section>

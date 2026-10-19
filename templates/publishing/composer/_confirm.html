@@ -1,0 +1,33 @@
+{# Before anything goes out: where, from which account, and when. #}
+<div class="cmp-dialog-backdrop" x-show="confirmOpen" x-cloak x-transition.opacity
+     @click.self="confirmOpen = false" @keydown.escape.window="confirmOpen && (confirmOpen = false)">
+  <div class="cmp-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" x-trap.noscroll="confirmOpen">
+    <h2 id="confirm-title" class="text-lg font-semibold text-ink"
+        x-text="confirmAction === 'schedule' ? 'Schedule this post?' : 'Publish this post now?'"></h2>
+    <p class="text-sm text-ink-muted mt-1"
+       x-text="confirmAction === 'schedule' ? 'Each channel publishes at its time. You can change or cancel it until then.' : 'It goes live right away on every channel below.'"></p>
+
+    <div class="mt-4">
+      <template x-for="p in selectedPlatforms" :key="p">
+        <div class="cmp-dialog-row">
+          <span class="cmp-dest-icon" :class="p === 'instagram' ? 'is-ig' : 'is-fb'" style="width:2rem;height:2rem" aria-hidden="true"></span>
+          <span class="flex-1 min-w-0">
+            <span class="block font-medium text-ink" x-text="platformName(p)"></span>
+            <span class="block text-xs text-ink-subtle truncate" x-text="destinationAccount(p)"></span>
+          </span>
+          <span class="text-xs text-right text-ink-muted" x-text="confirmAction === 'schedule' ? timeLabel(p) : 'Now'"></span>
+        </div>
+      </template>
+    </div>
+
+    <template x-for="issue in issues.filter(i => i.warns.includes(confirmAction))" :key="issue.code + issue.platform">
+      <p class="text-xs rounded-lg tone-amber px-3 py-2 mt-2" x-text="issue.message"></p>
+    </template>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button type="button" class="btn btn-ghost" @click="confirmOpen = false">Not yet</button>
+      <button type="button" class="btn btn-primary" @click="submitWith(confirmAction)" :disabled="submitting"
+              x-text="confirmAction === 'schedule' ? 'Schedule' : 'Publish now'"></button>
+    </div>
+  </div>
+</div>

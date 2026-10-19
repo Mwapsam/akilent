@@ -1,0 +1,69 @@
+<section class="cmp-section" aria-labelledby="ai-title">
+  <button type="button" class="w-full flex items-center justify-between gap-3 text-left"
+          @click="aiOpen = !aiOpen" :aria-expanded="aiOpen" aria-controls="ai-panel">
+    <span class="flex items-center gap-3">
+      <span class="w-8 h-8 rounded-lg tone-info flex items-center justify-center flex-shrink-0" aria-hidden="true">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </span>
+      <span>
+        <span id="ai-title" class="block cmp-section-title">Start with AI</span>
+        <span class="block cmp-hint">Describe the post and pick one of three captions. Nothing changes until you choose.</span>
+      </span>
+    </span>
+    <svg class="w-4 h-4 text-ink-subtle transition-transform flex-shrink-0" :class="aiOpen && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+  </button>
+
+  <div id="ai-panel" x-show="aiOpen" x-cloak class="mt-5 space-y-4" data-not-post>
+    <div>
+      <label for="brief-topic" class="cmp-label">What is this post about?</label>
+      <input type="text" id="brief-topic" x-model="brief.topic"
+             placeholder="e.g. New summer collection, bright colours, outdoor lifestyle"
+             class="input w-full" @keydown.enter.prevent="generateCaptions()">
+    </div>
+
+    <fieldset>
+      <legend class="cmp-label">Goal</legend>
+      <div class="flex flex-wrap gap-2">
+        {% for val, lbl in goal_choices %}
+        <label class="cta-option !flex-row !py-1.5 !rounded-full" :class="brief.goal === '{{ val }}' && 'is-selected'">
+          <input type="radio" name="ui_brief_goal" value="{{ val }}" x-model="brief.goal" class="sr-only">
+          <span class="text-sm">{{ lbl }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div>
+      <label for="brief-cta" class="cmp-label">What should people do? <span class="font-normal text-ink-subtle">(optional)</span></label>
+      <input type="text" id="brief-cta" x-model="brief.cta" maxlength="200"
+             placeholder="e.g. Message us on WhatsApp to order" class="input w-full">
+    </div>
+
+    <p class="cmp-hint">Written for <span class="font-medium text-ink" x-text="platformName(briefPlatform())"></span>
+      as <span class="font-medium text-ink" x-text="mediaTypeLabel()"></span>. Change these above and below.</p>
+
+    <button type="button" @click="generateCaptions()" :disabled="generating || !brief.topic.trim()" class="btn btn-secondary">
+      <span x-show="!generating">Suggest captions</span>
+      <span x-show="generating" class="flex items-center gap-2">
+        <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+        Writing…
+      </span>
+    </button>
+
+    <div x-show="genError" x-cloak class="tone-coral p-3 rounded-xl text-sm flex items-center justify-between gap-3" role="alert">
+      <span x-text="genError"></span>
+      <button type="button" @click="genError = ''; generateCaptions()" class="text-xs underline">Try again</button>
+    </div>
+
+    <div x-show="captionOptions.length > 0" x-cloak class="space-y-2">
+      <p class="cmp-label">Pick one to use:</p>
+      <template x-for="(opt, i) in captionOptions" :key="i">
+        <button type="button" @click="selectOption(opt)"
+                class="w-full text-left p-3 rounded-xl border border-border hover:border-brand-400 transition-colors">
+          <span class="block text-sm text-ink whitespace-pre-wrap" x-text="opt.caption.slice(0, 220) + (opt.caption.length > 220 ? '…' : '')"></span>
+          <span class="block text-xs text-ink-subtle mt-1" x-text="(opt.hashtags || []).slice(0, 6).map(h => '#' + h).join(' ')"></span>
+        </button>
+      </template>
+    </div>
+  </div>
+</section>

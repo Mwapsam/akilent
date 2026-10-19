@@ -4,6 +4,7 @@ The CTA line goes at the end of each channel's caption: a tappable link on Faceb
 the wording plus "(link in bio)" on Instagram, where caption links can't be tapped.
 """
 
+import re
 from unittest.mock import MagicMock, patch
 from urllib.parse import unquote
 
@@ -189,9 +190,8 @@ def test_without_a_whatsapp_number_the_option_is_disabled(shop):
     html = client.get(reverse("publishing:post-new")).content.decode()
 
     assert "Connect a WhatsApp number" in html
-    assert (
-        'value="whatsapp" x-model="cta.kind" class="sr-only"\n                   disabled'
-        in html
+    assert re.search(
+        r'value="whatsapp" x-model="cta.kind" class="sr-only"\s+disabled', html
     )
 
 

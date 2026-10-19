@@ -30,6 +30,8 @@ urlpatterns = [
     # Posts
     path("posts/media/upload/", views.post_media_upload, name="post-media-upload"),
     path("new/", views.post_new, name="post-new"),
+    path("new/readiness/", views.composer_readiness, name="composer-readiness"),
+    path("new/autosave/", views.composer_autosave, name="composer-autosave"),
     path("posts/<int:pk>/", views.post_detail, name="post-detail"),
     path("posts/<int:pk>/delete/", views.post_delete, name="post-delete"),
     path("posts/<int:pk>/retry/", views.post_retry, name="post-retry"),
