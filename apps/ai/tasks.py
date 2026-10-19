@@ -347,11 +347,17 @@ def build_draft(self, draft_id: int) -> str:
 
 
 def build_caption_draft(
-    account_id: int, prompt: str, media_type: str, platform: str, goal: str = ""
+    account_id: int,
+    prompt: str,
+    media_type: str,
+    platform: str,
+    goal: str = "",
+    cta: str = "",
 ) -> str:
     """Create a CONTENT_CAPTION AIDraft and enqueue it. Returns the draft public_id.
 
-    ``goal`` is a plain-language aim ("Drive sales") the captions should serve.
+    ``goal`` is a plain-language aim ("Drive sales") the captions should serve, and
+    ``cta`` what readers should do ("Message us on WhatsApp to order").
     """
     from apps.accounts.models import Account
     from apps.ai.models import AIDraft
@@ -360,6 +366,8 @@ def build_caption_draft(
     context = {"media_type": media_type, "platform": platform}
     if goal:
         context["goal"] = goal
+    if cta:
+        context["cta"] = cta
     draft = AIDraft.objects.create(
         account=account,
         kind=AIDraft.Kind.CONTENT_CAPTION,

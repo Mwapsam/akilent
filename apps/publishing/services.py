@@ -1050,9 +1050,17 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
 
     mt = post.media_type
 
+    # A "Visit a link" CTA on a text post also becomes Facebook's link preview card.
+    cta = post.cta or {}
+    cta_url = cta.get("url", "") if cta.get("kind") == "link" else ""
+
     try:
         if mt == ContentPost.MediaType.TEXT:
-            post_id = provider.create_text_post(caption)
+            post_id = (
+                provider.create_text_post(caption, link=cta_url)
+                if cta_url
+                else provider.create_text_post(caption)
+            )
         elif mt == ContentPost.MediaType.IMAGE:
             post_id = provider.create_photo_post(url, caption)
         elif mt in (ContentPost.MediaType.VIDEO, ContentPost.MediaType.REEL):

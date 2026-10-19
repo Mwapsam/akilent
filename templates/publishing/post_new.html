@@ -92,6 +92,13 @@
         </div>
       </div>
 
+      <div>
+        <label for="brief-cta" class="block text-sm font-medium text-gray-700 mb-1">What should people do? <span class="font-normal text-gray-500">(optional)</span></label>
+        <input type="text" id="brief-cta" x-model="brief.cta" maxlength="200"
+               placeholder="e.g. Message us on WhatsApp to order"
+               class="input w-full">
+      </div>
+
       <button type="button"
               @click="generateCaptions()"
               :disabled="generating || !brief.topic"
@@ -136,6 +143,7 @@
     <form method="post" class="space-y-4" hx-boost="false" @submit.prevent="submitForm($event)">
       {% csrf_token %}
       <input type="hidden" name="post_id" value="{{ existing_post.pk|default:'' }}" x-ref="postIdField">
+      {% if not existing_post %}<input type="hidden" name="brief_cta" :value="brief.cta">{% endif %}
 
       {# Platforms #}
       <div class="card card-pad space-y-3">
@@ -151,24 +159,6 @@
                    x-model="selectedPlatforms" class="rounded">
             <span class="text-sm font-medium">Facebook</span>
           </label>
-        </div>
-
-        {# Tracked WhatsApp chat link per channel #}
-        <div class="pt-3 border-t border-border space-y-2">
-          <p class="text-sm font-medium text-ink">WhatsApp chat link</p>
-          {% if wa_number_ready %}
-          <p class="text-xs text-gray-500">A short link that opens a chat with your business. Chats that start from it are linked to this post, so you can see which posts bring customers.</p>
-          <label class="flex items-start gap-2 text-sm" x-show="selectedPlatforms.includes('facebook')">
-            <input type="checkbox" name="wa_link_facebook" value="1" class="rounded mt-0.5" {% if wa_links.facebook %}checked{% endif %}>
-            <span>Facebook: add the link to the end of the caption</span>
-          </label>
-          <label class="flex items-start gap-2 text-sm" x-show="selectedPlatforms.includes('instagram')">
-            <input type="checkbox" name="wa_link_instagram" value="1" class="rounded mt-0.5" {% if wa_links.instagram %}checked{% endif %}>
-            <span>Instagram: make a link for your bio or a story link sticker <span class="text-gray-500">(links in Instagram captions can't be tapped)</span></span>
-          </label>
-          {% else %}
-          <p class="text-xs text-gray-500">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="underline">Connect WhatsApp</a></p>
-          {% endif %}
         </div>
       </div>
 
@@ -207,6 +197,105 @@
                  @change="hashtags = $event.target.value.split(/\s+/).filter(Boolean)">
         </div>
       </div>
+
+      {# Call to action #}
+      <fieldset class="card card-pad space-y-4">
+        <div>
+          <legend class="font-semibold text-ink">Call to action</legend>
+          <p class="text-xs text-gray-500 mt-0.5">What should people do after they see this post? We add it to the end of the caption.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <label class="cta-option" :class="cta.kind === 'none' && 'is-selected'">
+            <input type="radio" name="cta_kind" value="none" x-model="cta.kind" class="sr-only">
+            <span class="font-medium text-ink">None</span>
+            <span class="text-xs text-gray-500">Just the caption</span>
+          </label>
+          <label class="cta-option" :class="cta.kind === 'whatsapp' && 'is-selected'"
+                 {% if not wa_number_ready %}aria-disabled="true"{% endif %}>
+            <input type="radio" name="cta_kind" value="whatsapp" x-model="cta.kind" class="sr-only"
+                   {% if not wa_number_ready %}disabled{% endif %}>
+            <span class="font-medium text-ink">Chat on WhatsApp</span>
+            <span class="text-xs text-gray-500">Tracked: see which posts bring chats</span>
+          </label>
+          <label class="cta-option" :class="cta.kind === 'link' && 'is-selected'">
+            <input type="radio" name="cta_kind" value="link" x-model="cta.kind" class="sr-only">
+            <span class="font-medium text-ink">Visit a link</span>
+            <span class="text-xs text-gray-500">Your shop, menu or booking page</span>
+          </label>
+        </div>
+        {% if not wa_number_ready %}
+        <p class="text-xs text-gray-500">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="underline">Connect WhatsApp</a></p>
+        {% endif %}
+
+        <div x-show="cta.kind !== 'none'" x-cloak class="space-y-4 pt-3 border-t border-border">
+          <div>
+            <label for="cta-text" class="block text-sm font-medium text-gray-700 mb-1">Call to action text</label>
+            <input type="text" id="cta-text" name="cta_text" x-model="cta.text" maxlength="80"
+                   :disabled="cta.kind === 'none'"
+                   :placeholder="cta.kind === 'link' ? defaults.link : defaults.whatsapp"
+                   class="input w-full">
+            <p class="text-xs text-gray-500 mt-1">Leave it blank to use "<span x-text="cta.kind === 'link' ? defaults.link : defaults.whatsapp"></span>".</p>
+          </div>
+
+          {# Visit a link #}
+          <div x-show="cta.kind === 'link'">
+            <label for="cta-url" class="block text-sm font-medium text-gray-700 mb-1">Link</label>
+            <input type="url" id="cta-url" name="cta_url" x-model="cta.url"
+                   :disabled="cta.kind !== 'link'" :required="cta.kind === 'link'"
+                   pattern="https://.+" title="A full link that starts with https://"
+                   placeholder="https://yourshop.com/summer" class="input w-full" inputmode="url" autocomplete="url">
+          </div>
+
+          {# Chat on WhatsApp #}
+          {% if wa_number_ready %}
+          <div x-show="cta.kind === 'whatsapp'" class="space-y-4">
+            <div>
+              <label for="cta-prefill" class="block text-sm font-medium text-gray-700 mb-1">Customer's first message</label>
+              <textarea id="cta-prefill" name="cta_prefill" rows="2" maxlength="200" x-model="cta.prefill"
+                        :disabled="cta.kind !== 'whatsapp'" :placeholder="defaults.prefill"
+                        class="input w-full text-sm"></textarea>
+              <p class="text-xs text-gray-500 mt-1">WhatsApp opens with this ready to send. We add a short reference so the chat is linked to this post.</p>
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm font-medium text-gray-700">Where</p>
+              <div x-show="selectedPlatforms.includes('facebook')" class="space-y-1">
+                <label class="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="wa_link_facebook" value="1" class="rounded mt-0.5"
+                         x-model="cta.channels.facebook" :disabled="cta.kind !== 'whatsapp'">
+                  <span>Facebook: add the chat link to the caption</span>
+                </label>
+                {% if wa_links.facebook %}
+                <div class="copy-row flex items-center gap-2 pl-6 text-xs">
+                  <code class="copy-value truncate text-gray-600">{{ editor_data.wa_link_urls.facebook }}</code>
+                  <button type="button" class="copy-btn text-brand-600 hover:underline flex-shrink-0">Copy</button>
+                </div>
+                {% endif %}
+              </div>
+              <div x-show="selectedPlatforms.includes('instagram')" class="space-y-1">
+                <label class="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="wa_link_instagram" value="1" class="rounded mt-0.5"
+                         x-model="cta.channels.instagram" :disabled="cta.kind !== 'whatsapp'">
+                  <span>Instagram: make a chat link for your bio or a story link sticker</span>
+                </label>
+                {% if wa_links.instagram %}
+                <div class="copy-row flex items-center gap-2 pl-6 text-xs">
+                  <code class="copy-value truncate text-gray-600">{{ editor_data.wa_link_urls.instagram }}</code>
+                  <button type="button" class="copy-btn text-brand-600 hover:underline flex-shrink-0">Copy</button>
+                </div>
+                {% else %}
+                <p class="pl-6 text-xs text-gray-500">The link appears here once you save.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <p x-show="selectedPlatforms.includes('instagram')" class="text-xs rounded-lg p-2.5 tone-info-bg text-ink">
+            Links in Instagram captions can't be tapped. On Instagram we add "<span x-text="_ctaText('instagram')"></span>". Put the link in your bio or a story link sticker.
+          </p>
+        </div>
+      </fieldset>
 
       {# Media uploads #}
       <div class="card card-pad space-y-3" x-data="mediaUploader('{% url "publishing:post-media-upload" %}', editorData().media_urls)">
@@ -387,7 +476,7 @@
         </div>
         {# Caption #}
         <div class="px-3 pb-3">
-          <p class="text-xs text-ink leading-relaxed break-words"
+          <p class="text-xs text-ink leading-relaxed break-words whitespace-pre-wrap"
              x-text="_previewCaption('instagram')"></p>
           <p class="text-xs text-gray-400 mt-1"
              x-show="_previewCaption('instagram').length > 0"
@@ -408,9 +497,20 @@
           </div>
         </div>
         {# Caption above media for FB style #}
-        <div class="px-3 pb-2" x-show="_previewCaption('facebook').length > 0">
+        <div class="px-3 pb-2 space-y-2" x-show="_previewCaption('facebook').length > 0">
           <p class="text-xs text-ink leading-relaxed break-words whitespace-pre-wrap"
-             x-text="_previewCaption('facebook')"></p>
+             x-show="_previewBody('facebook')" x-text="_previewBody('facebook')"></p>
+          <p class="text-xs text-ink leading-relaxed break-words" x-show="_ctaText('facebook')">
+            <span x-text="_ctaText('facebook') + ':'"></span>
+            <span class="text-blue-600" x-text="_ctaUrl('facebook')"></span>
+          </p>
+          <p class="text-xs text-blue-600 break-words" x-show="_previewTags()" x-text="_previewTags()"></p>
+        </div>
+        {# Link preview card: a text post with a "Visit a link" CTA #}
+        <div x-show="mediaType === 'text' && cta.kind === 'link' && _hostname(cta.url)"
+             class="mx-3 mb-2 rounded-lg border border-border tone-neutral-bg px-3 py-2">
+          <p class="text-xs uppercase tracking-wide text-gray-500" x-text="_hostname(cta.url)"></p>
+          <p class="text-xs text-gray-500">Facebook shows a preview of this page</p>
         </div>
         {# Media #}
         <template x-if="previewMediaUrls.length > 0 && _isImageUrl(previewMediaUrls[0])">
@@ -586,7 +686,25 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
   return {
     step: existingPostId ? 3 : 1,
     mode: existingPostId ? 'scratch' : '',
-    brief: { topic: '', platform: 'instagram', mediaType: 'image', goal: 'engagement' },
+    brief: { topic: '', platform: 'instagram', mediaType: 'image', goal: 'engagement', cta: '' },
+    defaults: editorData().cta_defaults || {},
+    waLinkUrls: editorData().wa_link_urls || {},
+    cta: (() => {
+      const saved = editorData().cta || {};
+      const links = editorData().wa_link_urls || {};
+      const hasLinks = Object.keys(links).length > 0;
+      return {
+        kind: saved.kind || 'none',
+        text: saved.text || '',
+        url: saved.url || '',
+        prefill: saved.prefill || '',
+        // A new WhatsApp CTA goes on every channel; a saved one keeps its choice.
+        channels: {
+          facebook: hasLinks ? !!links.facebook : true,
+          instagram: hasLinks ? !!links.instagram : true,
+        },
+      };
+    })(),
     generating: false,
     genError: '',
     captionOptions: [],
@@ -605,11 +723,44 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
       window.addEventListener('media-updated', e => { this.previewMediaUrls = e.detail.urls; });
     },
 
-    _previewCaption(platform) {
+    // The preview mirrors what is published: caption, then the CTA line, then hashtags.
+    _previewBody(platform) {
       const override = (this.platformCaptions || {})[platform] || '';
-      const base = override || this.caption || '';
-      const tags = (this.hashtags || []).map(h => '#' + h.replace(/^#/, '')).join(' ');
-      return tags ? base + '\n\n' + tags : base;
+      return override || this.caption || '';
+    },
+
+    _previewTags() {
+      return (this.hashtags || []).map(h => '#' + h.replace(/^#/, '')).join(' ');
+    },
+
+    // The CTA wording for a channel, or '' when the channel gets no CTA line.
+    _ctaText(platform) {
+      const c = this.cta;
+      if (c.kind === 'none' || (c.kind === 'whatsapp' && !c.channels[platform])) return '';
+      const text = (c.text || '').trim() || (c.kind === 'link' ? this.defaults.link : this.defaults.whatsapp);
+      return platform === 'instagram' ? text + (this.defaults.ig_suffix || '') : text;
+    },
+
+    // The tappable URL after the CTA wording (Facebook only).
+    _ctaUrl(platform) {
+      if (platform !== 'facebook' || !this._ctaText(platform)) return '';
+      if (this.cta.kind === 'link') return (this.cta.url || '').trim() || 'https://…';
+      return this.waLinkUrls.facebook || this.defaults.go_placeholder || '';
+    },
+
+    _ctaLine(platform) {
+      const text = this._ctaText(platform);
+      const url = this._ctaUrl(platform);
+      return text && url ? text + ': ' + url : text;
+    },
+
+    _previewCaption(platform) {
+      return [this._previewBody(platform), this._ctaLine(platform), this._previewTags()]
+        .filter(Boolean).join('\n\n');
+    },
+
+    _hostname(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
     },
 
     _isImageUrl(url) {
@@ -654,6 +805,7 @@ function postEditor(existingPostId, existingCaption, existingHashtags, existingP
       fd.append('media_type', this.brief.mediaType);
       fd.append('platform', this.brief.platform);
       fd.append('goal', this.brief.goal);
+      fd.append('cta', this.brief.cta || '');
       fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
       let res, data;

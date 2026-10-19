@@ -227,6 +227,10 @@ class ContentPost(models.Model):
     brief_message = models.TextField(blank=True, default="")
     brief_cta = models.TextField(blank=True, default="")
 
+    # The post's call to action (see apps.publishing.links.parse_cta):
+    # {"kind": "none"|"whatsapp"|"link", "text": str, "url": str, "prefill": str}
+    cta = models.JSONField(default=dict, blank=True)
+
     error = models.TextField(blank=True, default="")
 
     # Approval workflow
@@ -321,6 +325,9 @@ class ContentPost(models.Model):
             "media_urls": self.media_urls or [],
             "variants": variant_contents,
         }
+        # Only when set, so posts approved before the CTA existed keep their hash.
+        if self.cta:
+            content["cta"] = self.cta
         content_json = json.dumps(content, sort_keys=True)
         return hashlib.sha256(content_json.encode()).hexdigest()
 

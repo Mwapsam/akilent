@@ -502,6 +502,9 @@ def run(draft, provider) -> None:
         goal = draft.context.get("goal", "")
         if goal:
             user = f"{user}\nGoal: {goal}"
+        cta = draft.context.get("cta", "")
+        if cta:
+            user = f"{user}\nEnd each caption by asking readers to: {cta}"
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (

@@ -45,9 +45,12 @@ class FacebookPublishProvider:
             raise FacebookPublishError.from_response(r, data)
         return data
 
-    def create_text_post(self, message: str) -> str:
-        """Returns the FB post id."""
-        data = self._post("feed", message=message)
+    def create_text_post(self, message: str, link: str = "") -> str:
+        """Returns the FB post id. ``link`` adds Facebook's link preview card."""
+        payload = {"message": message}
+        if link:
+            payload["link"] = link
+        data = self._post("feed", **payload)
         return data["id"]
 
     def create_photo_post(self, image_url: str, caption: str) -> str:

@@ -104,14 +104,25 @@ def _in_workspace_tz(view):
     return wrapper
 
 
-def _apply_chat_links(post, data) -> bool:
-    """Create or turn off each channel's tracked WhatsApp link from the composer form.
+def _apply_cta(post, cta: dict, data) -> bool:
+    """Save the post's call to action and add its line to each channel's caption.
 
-    Facebook gets the link line at the end of its caption (captions there are
-    clickable); Instagram's link is for the bio or a story sticker. Returns True when
-    a link was asked for but the workspace has no WhatsApp number.
+    A WhatsApp CTA creates (or turns off) each ticked channel's tracked link and sets
+    the customer's first message. Facebook gets a tappable link in the caption;
+    Instagram gets the wording with "(link in bio)". Returns True when a WhatsApp link
+    was asked for but the workspace has no WhatsApp number.
     """
-    from .links import NoWhatsAppNumber, disable_link, link_for_variant, with_link_line
+    from .links import (
+        CTA_WHATSAPP,
+        NoWhatsAppNumber,
+        cta_caption,
+        disable_link,
+        link_for_variant,
+    )
+
+    if post.cta != cta:
+        post.cta = cta
+        post.save(update_fields=["cta", "updated_at"])
 
     missing_number = False
     for variant in post.variants.filter(
@@ -122,19 +133,22 @@ def _apply_chat_links(post, data) -> bool:
             ContentPostVariant.Status.FAILED,
         ),
     ):
-        if not data.get(f"wa_link_{variant.platform}"):
+        link = None
+        if cta.get("kind") == CTA_WHATSAPP and data.get(f"wa_link_{variant.platform}"):
+            try:
+                link = link_for_variant(variant)
+            except NoWhatsAppNumber:
+                missing_number = True
+            else:
+                if link.prefill_text != cta["prefill"]:
+                    link.prefill_text = cta["prefill"]
+                    link.save(update_fields=["prefill_text"])
+        else:
             disable_link(variant)
-            continue
-        try:
-            link = link_for_variant(variant)
-        except NoWhatsAppNumber:
-            missing_number = True
-            continue
-        if variant.platform == ContentPostVariant.Platform.FACEBOOK:
-            caption = with_link_line(variant.caption, link)
-            if caption != variant.caption:
-                variant.caption = caption
-                variant.save(update_fields=["caption"])
+        caption = cta_caption(variant.caption, cta, variant.platform, link)
+        if caption != variant.caption:
+            variant.caption = caption
+            variant.save(update_fields=["caption"])
     return missing_number
 
 
@@ -1249,6 +1263,18 @@ def post_new(request):
                 scheduled_at = None
             channel_times = {p: t for p, t in channel_times.items() if t}
 
+        from .links import CtaError, parse_cta
+
+        try:
+            cta = parse_cta(request.POST)
+        except CtaError as exc:
+            messages.error(request, str(exc))
+            return redirect(
+                f"{reverse('publishing:post-new')}?post_id={post.pk}"
+                if post.pk
+                else "publishing:post-new"
+            )
+
         action = request.POST.get("action", "draft")
         if action == "schedule" and not scheduled_at:
             messages.error(request, "Choose a date and time to schedule the post.")
@@ -1288,9 +1314,9 @@ def post_new(request):
             with transaction.atomic():
                 post.save()
                 initialize_post_with_variants(post, platforms)
-                # Before the review check: the Facebook link line is part of the
-                # caption a reviewer approves.
-                missing_wa_number = _apply_chat_links(post, request.POST)
+                # Before the review check: the CTA and its caption line are part of
+                # what a reviewer approves.
+                missing_wa_number = _apply_cta(post, cta, request.POST)
                 # Checked after the variants exist, since the approval covers them. An
                 # approval of earlier content no longer applies, so the post goes back
                 # to draft for a fresh review.
@@ -1375,8 +1401,18 @@ def post_new(request):
                 )
     from apps.accounts.business_hours import DEFAULT_TIMEZONE, workspace_timezone
 
-    from .links import links_for_post, whatsapp_number_for
+    from .links import (
+        DEFAULT_LINK_TEXT,
+        DEFAULT_PREFILL,
+        DEFAULT_WHATSAPP_TEXT,
+        INSTAGRAM_SUFFIX,
+        cta_for,
+        links_for_post,
+        short_url,
+        whatsapp_number_for,
+    )
 
+    wa_links = links_for_post(existing_post) if existing_post else {}
     return render(
         request,
         "publishing/post_new.html",
@@ -1402,6 +1438,19 @@ def post_new(request):
                 else "",
                 "channel_times": channel_times,
                 "per_channel": len(set(channel_times.values())) > 1,
+                "cta": cta_for(existing_post) if existing_post else {},
+                "wa_link_urls": {p: short_url(link) for p, link in wa_links.items()},
+                "cta_defaults": {
+                    "whatsapp": DEFAULT_WHATSAPP_TEXT,
+                    "link": DEFAULT_LINK_TEXT,
+                    "prefill": DEFAULT_PREFILL,
+                    "ig_suffix": INSTAGRAM_SUFFIX,
+                    # Shown in the preview until the real short link exists.
+                    "go_placeholder": (
+                        (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+                        + "/go/······"
+                    ),
+                },
             },
             "goal_choices": CAPTION_GOAL_CHOICES,
             # Review-only actions until the post holds a still-valid approval; an approved
@@ -1411,7 +1460,7 @@ def post_new(request):
             "current_tz_name": timezone.get_current_timezone_name(),
             "tz_is_default": workspace_timezone(account) == DEFAULT_TIMEZONE,
             "wa_number_ready": bool(whatsapp_number_for(account)),
-            "wa_links": links_for_post(existing_post) if existing_post else {},
+            "wa_links": wa_links,
         },
     )
 
@@ -1423,10 +1472,15 @@ def post_detail(request, pk):
     if account is None:
         return redirect("dashboard")
 
+    from .links import cta_for, links_for_post, short_url
     from .results import results_for
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
     requires_approval = post.requires_approval
+    cta_links = [
+        (ContentPostVariant.Platform(platform).label, short_url(link))
+        for platform, link in sorted(links_for_post(post).items())
+    ]
     can_review = False
     if requires_approval and post.approval_status == "submitted":
         can_review, _ = _can_review(post, request.user, account)
@@ -1444,6 +1498,8 @@ def post_detail(request, pk):
             if requires_approval
             else [],
             "results": results_for(post),
+            "cta": cta_for(post),
+            "cta_links": cta_links,
         },
     )
 
@@ -1966,6 +2022,7 @@ def generate_caption(request):
     platform = request.POST.get("platform", "instagram")
     post_id = request.POST.get("post_id", "")
     goal = dict(CAPTION_GOAL_CHOICES).get(request.POST.get("goal", ""), "")
+    cta = " ".join(request.POST.get("cta", "").split())[:200]
 
     if not prompt:
         return JsonResponse({"error": "Prompt is required."}, status=400)
@@ -1973,7 +2030,7 @@ def generate_caption(request):
     from apps.ai import tasks as ai_tasks
 
     draft_id = ai_tasks.build_caption_draft(
-        account.id, prompt, media_type, platform, goal=goal
+        account.id, prompt, media_type, platform, goal=goal, cta=cta
     )
 
     if post_id:

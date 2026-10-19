@@ -201,6 +201,28 @@
       {% endfor %}
     </div>
     {% endif %}
+    <div class="mt-3 border-t border-surface-subtle pt-3">
+      <p class="text-xs text-gray-500 mb-1">Call to action</p>
+      {% if cta.kind == "whatsapp" %}
+        <p class="text-sm"><span class="font-medium">Chat on WhatsApp</span> · "{{ cta.text }}"</p>
+        {% if cta.prefill %}<p class="text-xs text-gray-500 mt-0.5">First message: {{ cta.prefill }}</p>{% endif %}
+        {% for label, url in cta_links %}
+        <div class="copy-row flex flex-wrap items-center gap-x-2 text-xs mt-1">
+          <span class="text-gray-500">{{ label }}:</span>
+          <code class="copy-value text-gray-600 break-all">{{ url }}</code>
+          <button type="button" class="copy-btn text-brand-600 hover:underline">Copy</button>
+        </div>
+        {% endfor %}
+      {% elif cta.kind == "link" %}
+        <p class="text-sm"><span class="font-medium">Visit a link</span> · "{{ cta.text }}"</p>
+        <div class="copy-row flex flex-wrap items-center gap-x-2 text-xs mt-1">
+          <a href="{{ cta.url }}" class="copy-value text-brand-600 hover:underline break-all" target="_blank" rel="noopener noreferrer">{{ cta.url }}</a>
+          <button type="button" class="copy-btn text-brand-600 hover:underline">Copy</button>
+        </div>
+      {% else %}
+        <p class="text-sm text-gray-500">None{% if editable %} · <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="underline">Add one</a>{% endif %}</p>
+      {% endif %}
+    </div>
   </div>
 
   {% include "publishing/_results_card.html" %}

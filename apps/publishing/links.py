@@ -105,13 +105,120 @@ def whatsapp_url(link: TrackedLink) -> str:
     return f"https://wa.me/{link.wa_number}?text={quote(text)}"
 
 
-def caption_line(link: TrackedLink) -> str:
-    return f"Chat with us on WhatsApp: {short_url(link)}"
+def caption_line(link: TrackedLink, text: str = "") -> str:
+    return f"{text or DEFAULT_WHATSAPP_TEXT}: {short_url(link)}"
 
 
-def with_link_line(caption: str, link: TrackedLink) -> str:
-    """The caption with the link line at the end, added once."""
-    line = caption_line(link)
+def with_link_line(caption: str, link: TrackedLink, text: str = "") -> str:
+    """The caption with the link line at the end, added once (matched on the URL, so
+    a changed CTA text never leaves two lines)."""
+    if short_url(link) in caption:
+        return caption
+    return f"{caption.rstrip()}\n\n{caption_line(link, text)}".strip()
+
+
+# --- Call to action -------------------------------------------------------------
+
+CTA_NONE = "none"
+CTA_WHATSAPP = "whatsapp"
+CTA_LINK = "link"
+CTA_KINDS = (CTA_NONE, CTA_WHATSAPP, CTA_LINK)
+
+DEFAULT_WHATSAPP_TEXT = "Chat with us on WhatsApp"
+DEFAULT_LINK_TEXT = "Shop now"
+CTA_TEXT_MAX = 80
+PREFILL_MAX = 200  # TrackedLink.prefill_text
+# Instagram captions can't hold a tappable link, so the line points to the bio.
+INSTAGRAM_SUFFIX = " (link in bio)"
+
+
+class CtaError(ValueError):
+    """The call to action in the composer form isn't valid."""
+
+
+def parse_cta(data) -> dict:
+    """The CTA from the composer form, cleaned. Raises CtaError on a bad value.
+
+    A form without ``cta_kind`` (an older form or an API-style post) is read from the
+    WhatsApp link checkboxes, so ticking one still means "Chat on WhatsApp".
+    """
+    kind = (data.get("cta_kind") or "").strip()
+    if not kind:
+        wants_link = data.get("wa_link_facebook") or data.get("wa_link_instagram")
+        kind = CTA_WHATSAPP if wants_link else CTA_NONE
+    if kind not in CTA_KINDS:
+        raise CtaError("Choose a call to action.")
+    if kind == CTA_NONE:
+        return {}
+
+    text = " ".join((data.get("cta_text") or "").split())
+    if len(text) > CTA_TEXT_MAX:
+        raise CtaError(f"Keep the call to action under {CTA_TEXT_MAX} characters.")
+    if kind == CTA_WHATSAPP:
+        prefill = " ".join((data.get("cta_prefill") or "").split())
+        if len(prefill) > PREFILL_MAX:
+            raise CtaError(
+                f"Keep the customer's first message under {PREFILL_MAX} characters."
+            )
+        return {
+            "kind": kind,
+            "text": text or DEFAULT_WHATSAPP_TEXT,
+            "prefill": prefill or DEFAULT_PREFILL,
+        }
+
+    from django.core.exceptions import ValidationError
+    from django.core.validators import URLValidator
+
+    url = (data.get("cta_url") or "").strip()
+    if not url:
+        raise CtaError("Add the link people should visit.")
+    try:
+        URLValidator(schemes=["https"])(url)
+    except ValidationError:
+        raise CtaError(
+            "Use a full link that starts with https://, like https://yourshop.com."
+        ) from None
+    return {"kind": kind, "text": text or DEFAULT_LINK_TEXT, "url": url}
+
+
+def cta_for(post: ContentPost) -> dict:
+    """The post's CTA. A post saved before CTAs existed that has a WhatsApp link reads
+    as a WhatsApp CTA with the default wording."""
+    if post.cta:
+        return post.cta
+    if post.pk and links_for_post(post):
+        return {
+            "kind": CTA_WHATSAPP,
+            "text": DEFAULT_WHATSAPP_TEXT,
+            "prefill": DEFAULT_PREFILL,
+        }
+    return {}
+
+
+def cta_caption(caption: str, cta: dict, platform: str, link=None) -> str:
+    """``caption`` with the CTA line for ``platform`` at the end, added once.
+
+    Facebook gets a tappable URL. Instagram gets the wording only, pointing to the bio.
+    A WhatsApp CTA needs that channel's tracked ``link``; without one nothing is added.
+    """
+    kind = (cta or {}).get("kind")
+    text = cta.get("text", "") if cta else ""
+    if kind == CTA_WHATSAPP:
+        if link is None:
+            return caption
+        if platform == ContentPostVariant.Platform.FACEBOOK:
+            return with_link_line(caption, link, text)
+        line = f"{text or DEFAULT_WHATSAPP_TEXT}{INSTAGRAM_SUFFIX}"
+    elif kind == CTA_LINK:
+        url = cta.get("url", "")
+        if platform == ContentPostVariant.Platform.FACEBOOK:
+            if url and url in caption:
+                return caption
+            line = f"{text or DEFAULT_LINK_TEXT}: {url}"
+        else:
+            line = f"{text or DEFAULT_LINK_TEXT}{INSTAGRAM_SUFFIX}"
+    else:
+        return caption
     if line in caption:
         return caption
     return f"{caption.rstrip()}\n\n{line}".strip()

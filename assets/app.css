@@ -562,6 +562,16 @@
   }
   .card-hover:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
 
+  /* A large radio choice (Content Studio call to action). The input is .sr-only, so the
+     label carries the selected and focus states. */
+  .cta-option {
+    @apply flex flex-col gap-0.5 rounded-xl border border-border px-3 py-2.5 text-sm cursor-pointer
+      transition-colors hover:border-brand-300;
+  }
+  .cta-option.is-selected { @apply border-brand-500 tone-info-bg; box-shadow: inset 0 0 0 1px var(--color-brand-500); }
+  .cta-option:has(input:focus-visible) { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  .cta-option[aria-disabled="true"] { @apply opacity-50 cursor-not-allowed hover:border-border; }
+
   /* Stat rows -------------------------------------------------------------
      A row of numbers grouped by a single hairline, not by boxing each one —
      insights/*.html's alternative to a "rounded-xl border p-4" tile per metric.
