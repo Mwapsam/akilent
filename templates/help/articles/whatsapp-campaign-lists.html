@@ -27,13 +27,20 @@
 <p>Sending promotions to people who didn't agree breaks WhatsApp's rules and can get your number blocked or limited by Meta.</p>
 
 <h2>4. Send the campaign</h2>
-<p>From a list, choose <strong>Send WhatsApp campaign</strong> (or go to <a href="/email/campaigns/?channel=whatsapp">Campaigns</a>). Three steps:</p>
+<p>From a list or a segment, choose <strong>Send WhatsApp campaign</strong> (or go to <a href="/email/campaigns/?channel=whatsapp">Campaigns</a>). Four steps:</p>
 <ol>
-  <li><strong>Who gets it</strong> — pick the list. Each list shows how many people are opted in, updates only, opted out and without WhatsApp.</li>
+  <li><strong>Who gets it</strong> — pick a list or a segment. Each shows how many people are opted in, updates only, opted out and without WhatsApp.</li>
   <li><strong>The message</strong> — pick an approved template and fill in its blanks, such as the customer's first name. Set what to use when we don't know a value (“there” instead of a name), otherwise those customers are skipped. The preview shows the message as a real customer will see it.</li>
-  <li><strong>Review and send</strong> — the button tells you exactly how many people it will reach, and the panel lists who won't get it and why.</li>
+  <li><strong>When</strong> — send now, or schedule a day and time. A scheduled campaign goes to whoever is on the list (or matches the segment) at that time, and you can change or cancel it until then.</li>
+  <li><strong>Review</strong> — the button tells you exactly how many people it will reach, and the panel lists who won't get it and why. Use <strong>Send a test to my WhatsApp</strong> to see it on your own phone first.</li>
 </ol>
-<p>Pressing send twice never sends twice.</p>
+<p>Pressing send twice never sends twice. Anyone on your team can prepare a campaign and save it as a draft; only the owner or an admin can send, schedule, pause or cancel one.</p>
+
+<h3 id="segments">Lists or segments?</h3>
+<p>A <strong>list</strong> is a fixed group you build by hand. A <strong>segment</strong> is a set of rules — for example “opted in and active in the last 30 days” or “has the tag VIP and has ordered” — and it updates itself. Make one under <a href="/contacts/segments/">Customers → Segments</a>, or filter your customers and choose <strong>Save as segment</strong>. To freeze who matches today, use <strong>Save who matches now as a list</strong>.</p>
+
+<h3 id="pause-cancel">Pausing and cancelling</h3>
+<p>While a campaign is going out you can <strong>Pause</strong> it: messages not sent yet wait until you <strong>Resume</strong>. <strong>Cancel</strong> stops it for good — messages not sent yet won't go out, but messages already sent can't be called back. <strong>Duplicate</strong> makes a new draft with the same audience and message.</p>
 
 <h2>5. Results, and why someone didn't get it</h2>
 <p>The campaign page updates by itself while it sends: how many messages WhatsApp accepted, delivered and read, and how many failed. Under <strong>Not sent</strong> each reason has a fix:</p>
@@ -41,6 +48,7 @@
   <li><strong>Haven't opted in</strong> — the message was a promotion. Get permission, then mark them opted in.</li>
   <li><strong>Opted out</strong> — they replied STOP.</li>
   <li><strong>No WhatsApp number</strong> — add their number on their profile.</li>
-  <li><strong>Missing details</strong> — a blank (like their name) was empty and no fallback was set. Send again with a fallback.</li>
+  <li><strong>Missing details</strong> — a blank (like their name) was empty and no fallback was set. Copy the campaign and add a fallback.</li>
+  <li><strong>Cancelled</strong> — the campaign was cancelled before their message went out.</li>
 </ul>
-<p>A <strong>failed</strong> message is one WhatsApp couldn't deliver — usually the number isn't on WhatsApp. The recipients table shows the reason for each one. If your plan's monthly WhatsApp limit is reached, remaining messages wait and go out automatically when there's room.</p>
+<p>A <strong>failed</strong> message is one WhatsApp couldn't deliver — usually the number isn't on WhatsApp. The recipients table shows the reason for each one, and <strong>Retry failed</strong> sends the message again to just those customers (leaving out anyone who has since opted out). You can download every recipient and their result as a spreadsheet. If your plan's monthly WhatsApp limit is reached, remaining messages wait and go out automatically when there's room.</p>

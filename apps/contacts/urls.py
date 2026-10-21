@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.contacts import views
+from apps.contacts import manage_views, merge_views, segment_views, views
 
 app_name = "contacts"
 
@@ -14,6 +14,11 @@ urlpatterns = [
         name="import_rejected",
     ),
     path("bulk/add-to-list/", views.bulk_add_to_list, name="bulk_add_to_list"),
+    path("bulk/tag/", manage_views.bulk_tag, name="bulk_tag"),
+    path("bulk/delete/", manage_views.bulk_delete, name="bulk_delete"),
+    path("export.csv", manage_views.contacts_export, name="export"),
+    path("fields/", manage_views.field_index, name="fields"),
+    path("fields/<int:pk>/archive/", manage_views.field_archive, name="field_archive"),
     path(
         "custom-fields/create/", views.create_custom_field, name="create_custom_field"
     ),
@@ -42,8 +47,39 @@ urlpatterns = [
         views.list_remove_contact,
         name="list_remove_contact",
     ),
+    path("duplicates/", merge_views.duplicates, name="duplicates"),
+    path("segments/", segment_views.segment_index, name="segments"),
+    path("segments/new/", segment_views.segment_form, name="segment_new"),
+    path("segments/preview/", segment_views.segment_preview, name="segment_preview"),
+    path("segments/<int:pk>/", segment_views.segment_form, name="segment_edit"),
+    path(
+        "segments/<int:pk>/delete/",
+        segment_views.segment_delete,
+        name="segment_delete",
+    ),
+    path(
+        "segments/<int:pk>/to-list/",
+        segment_views.segment_to_list,
+        name="segment_to_list",
+    ),
     path("<str:public_id>/", views.contact_detail, name="detail"),
     path("<str:public_id>/edit/", views.contact_edit, name="edit"),
+    path("<str:public_id>/merge/", merge_views.contact_merge, name="merge"),
+    path("<str:public_id>/delete/", manage_views.contact_delete, name="delete"),
+    path("<str:public_id>/notes/", manage_views.note_add, name="note_add"),
+    path(
+        "<str:public_id>/notes/<int:pk>/delete/",
+        manage_views.note_delete,
+        name="note_delete",
+    ),
+    path(
+        "<str:public_id>/fields/", manage_views.contact_fields_save, name="fields_save"
+    ),
+    path(
+        "<str:public_id>/not-duplicate/",
+        merge_views.contact_not_duplicate,
+        name="not_duplicate",
+    ),
     path(
         "<str:public_id>/whatsapp-consent/",
         views.contact_whatsapp_consent,

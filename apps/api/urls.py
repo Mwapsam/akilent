@@ -11,6 +11,7 @@ from apps.api import (
     event_views,
     views,
     views_scheduler,
+    whatsapp_campaign_views,
     whatsapp_views,
     workflow_views,
 )
@@ -165,6 +166,31 @@ urlpatterns = [
         "<str:version>/lists",
         contact_views.ListCollectionView.as_view(),
         name="api-v1-lists",
+    ),
+    path(
+        "<str:version>/whatsapp/campaigns",
+        whatsapp_campaign_views.WhatsAppCampaignCollectionView.as_view(),
+        name="api-v1-whatsapp-campaigns",
+    ),
+    path(
+        "<str:version>/whatsapp/campaigns/<int:pk>",
+        whatsapp_campaign_views.WhatsAppCampaignDetailView.as_view(),
+        name="api-v1-whatsapp-campaign-detail",
+    ),
+    path(
+        "<str:version>/whatsapp/campaigns/<int:pk>/<str:action>",
+        whatsapp_campaign_views.WhatsAppCampaignActionView.as_view(),
+        name="api-v1-whatsapp-campaign-action",
+    ),
+    path(
+        "<str:version>/lists/<slug:slug>",
+        contact_views.ListDetailView.as_view(),
+        name="api-v1-list-detail",
+    ),
+    path(
+        "<str:version>/lists/<slug:slug>/members",
+        contact_views.ListMembersView.as_view(),
+        name="api-v1-list-members",
     ),
     path(
         "<str:version>/segments",

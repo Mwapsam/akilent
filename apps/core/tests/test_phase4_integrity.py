@@ -79,7 +79,7 @@ class DuplicateEmailTest(TestCase):
         from apps.contacts.models import Contact
 
         account, _ = _make_account("dup-email")
-        _drop_index("unique_account_contact_email")
+        _drop_index("unique_account_contact_email_ci")
         Contact.objects.create(account=account, email="same@example.com", source="seed")
         Contact.objects.create(account=account, email="same@example.com", source="seed")
 

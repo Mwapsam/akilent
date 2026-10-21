@@ -10,9 +10,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
@@ -23,6 +24,7 @@ from apps.contacts.models import (
     ContactList,
     ContactListMembership,
     CustomAttributeDef,
+    Segment,
     Tag,
 )
 from apps.contacts.services import (
@@ -61,6 +63,18 @@ def _contact_recommendations(contact):
         return []
 
 
+# Sortable columns on the Customers page. -id keeps ties (a bulk import writing
+# many rows at once) in a stable order across pages.
+_SORTS = {
+    "name": ("first_name", "last_name", "-id"),
+    "-name": ("-first_name", "-last_name", "-id"),
+    "active": (F("last_engaged_at").asc(nulls_first=True), "-id"),
+    "-active": (F("last_engaged_at").desc(nulls_last=True), "-id"),
+    "added": ("first_seen", "id"),
+    "-added": ("-first_seen", "-id"),
+}
+
+
 def _filtered_contacts(request, account, params=None):
     """The Customers page's filter, as a queryset + the values it used.
 
@@ -74,14 +88,17 @@ def _filtered_contacts(request, account, params=None):
     # Contact.Meta already orders by -first_seen; -id is added purely as a
     # tiebreaker so rows sharing a first_seen (a bulk import writing many
     # contacts at once) keep a stable position across pages.
-    qs = reachability.annotate(
-        Contact.objects.filter(account=account).order_by("-first_seen", "-id")
-    )
+    sort = (params.get("sort") or "").strip()
+    order = _SORTS.get(sort)
+    if order is None:
+        sort, order = "", ("-first_seen", "-id")
+    qs = reachability.annotate(Contact.objects.filter(account=account).order_by(*order))
     filters = {
         "q": (params.get("q") or "").strip(),
         "wa": (params.get("wa") or "").strip(),
         "tag": (params.get("tag") or "").strip(),
         "list": (params.get("list") or "").strip(),
+        "segment": (params.get("segment") or "").strip(),
     }
     if filters["q"]:
         # Phone-only contacts (e.g. WhatsApp-first customers) have no email.
@@ -102,11 +119,45 @@ def _filtered_contacts(request, account, params=None):
         qs = qs.filter(lists__pk=int(filters["list"]))
     else:
         filters["list"] = ""
-    return qs, filters
+    seg = (
+        Segment.objects.filter(account=account, pk=filters["segment"]).first()
+        if filters["segment"].isdigit()
+        else None
+    )
+    if seg is None:
+        filters["segment"] = ""
+    else:
+        from apps.contacts import segments
+
+        try:
+            matched = segments.contacts_for(seg.definition or {}, account)
+            qs = qs.filter(pk__in=matched.values("pk"))
+        except segments.SegmentError:
+            qs = qs.none()
+    return qs, {**filters, "sort": sort}
+
+
+def _sort_links(request, current: str) -> dict:
+    """For each sortable column: the link that sorts by it (toggling direction) and its state."""
+    out = {}
+    for col, first in (("name", "name"), ("active", "-active"), ("added", "-added")):
+        params = request.GET.copy()
+        params.pop("page", None)
+        if current == first:
+            nxt = first[1:] if first.startswith("-") else f"-{first}"
+        else:
+            nxt = first
+        params["sort"] = nxt
+        state = ""
+        if current.lstrip("-") == col:
+            state = "descending" if current.startswith("-") else "ascending"
+        out[col] = {"url": f"?{params.urlencode()}", "state": state}
+    return out
 
 
 @login_required
 def contact_list(request):
+    from apps.accounts.api import is_account_admin
     from apps.contacts import reachability
 
     account = get_current_account(request)
@@ -117,7 +168,7 @@ def contact_list(request):
     page = Paginator(qs.prefetch_related("tags"), _PAGE_SIZE).get_page(
         request.GET.get("page")
     )
-    filtered = any(filters.values())
+    filtered = any(v for k, v in filters.items() if k != "sort")
     context = {
         "account": account,
         "page": page,
@@ -126,6 +177,10 @@ def contact_list(request):
         "matching": page.paginator.count,
         "tags": Tag.objects.filter(account=account),
         "contact_lists": ContactList.objects.filter(account=account).order_by("name"),
+        "saved_segments": Segment.objects.filter(account=account).order_by("name"),
+        "is_admin": is_account_admin(request.user, account),
+        "sort_links": _sort_links(request, filters.get("sort", "")),
+        "filter_query": request.GET.urlencode(),
         "wa_choices": [(s, reachability.LABELS[s]) for s in reachability.STATES],
         "total": Contact.objects.filter(account=account).count(),
     }
@@ -136,8 +191,90 @@ def contact_list(request):
     return render(request, "contacts/list.html", context)
 
 
+def _activity(contact, events) -> list[dict]:
+    """One timeline (spec S7): what was said on WhatsApp/Instagram, orders,
+    campaign sends, notes and recorded events — newest first."""
+    from apps.conversations.models import Message as SpineMessage
+    from apps.whatsapp.models import WhatsAppCampaignRecipient
+
+    items: list[dict] = []
+    for e in events:
+        items.append(
+            {"at": e.occurred_at, "kind": "event", "title": e.label, "detail": e.detail}
+        )
+    for m in (
+        SpineMessage.objects.filter(conversation__contact=contact)
+        .exclude(direction=SpineMessage.Direction.SYSTEM)
+        .select_related("conversation")
+        .order_by("-timestamp")[:30]
+    ):
+        channel = (m.conversation.channel or "").capitalize() or "Message"
+        items.append(
+            {
+                "at": m.timestamp,
+                "kind": "message",
+                "title": f"{channel} · {'they wrote' if m.direction == 'inbound' else 'you replied'}",
+                "detail": (m.body or "")[:240],
+                "url": f"/inbox/{m.conversation.public_id}/",
+                "inbound": m.direction == "inbound",
+            }
+        )
+    for o in contact.orders.order_by("-created_at")[:10]:
+        items.append(
+            {
+                "at": o.created_at,
+                "kind": "order",
+                "title": f"Order · {o.get_status_display()}",
+                "detail": f"{o.currency} {o.total:,.2f}",
+                "url": f"/orders/{o.public_id}/",
+            }
+        )
+    for r in (
+        WhatsAppCampaignRecipient.objects.filter(contact=contact)
+        .select_related("campaign")
+        .order_by("-created_at")[:10]
+    ):
+        outcome = {
+            "queued": "Sent",
+            "failed": "Failed",
+            "skipped": f"Not sent — {r.get_skip_reason_display().lower()}",
+            "pending": "Waiting",
+            "held": "Waiting",
+        }.get(r.status, r.status)
+        items.append(
+            {
+                "at": r.created_at,
+                "kind": "campaign",
+                "title": f"Campaign · {r.campaign.name}",
+                "detail": outcome,
+                "url": f"/whatsapp/campaigns/{r.campaign_id}/",
+            }
+        )
+    for n in contact.notes.select_related("author")[:30]:
+        items.append(
+            {
+                "at": n.created_at,
+                "kind": "note",
+                "title": "Note"
+                + (
+                    f" · {n.author.get_full_name() or n.author.get_username()}"
+                    if n.author
+                    else ""
+                ),
+                "detail": n.body,
+                "note": n,
+            }
+        )
+    items.sort(key=lambda i: i["at"] or timezone.now(), reverse=True)
+    return items[:80]
+
+
 @login_required
 def contact_detail(request, public_id: str):
+    from apps.contacts import merge, reachability
+    from apps.contacts.event_labels import event_detail, event_label
+    from apps.contacts.manage_views import contact_field_defs, field_rows
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -146,40 +283,41 @@ def contact_detail(request, public_id: str):
     except Contact.DoesNotExist:
         return render(request, "contacts/not_found.html", status=404)
 
-    from apps.contacts.event_labels import event_detail, event_label
-
     events = list(contact.events.all()[:100])
     for e in events:
         e.label = event_label(e.type)  # type: ignore[attr-defined]
         e.detail = event_detail(e.type, e.data)  # type: ignore[attr-defined]
 
-    messages_to = EmailMessage.objects.filter(
-        account=account, to_email__iexact=contact.email
-    ).order_by("-created_at")[:50]
-    # Readable (label, value) pairs instead of a raw attributes dict — R1: no
-    # JSON on a page a business user works from (docs/plans amendment).
-    attribute_rows = sorted(
+    messages_to = (
+        EmailMessage.objects.filter(
+            account=account, to_email__iexact=contact.email
+        ).order_by("-created_at")[:20]
+        if contact.email
+        else []
+    )
+    defs = contact_field_defs(account)
+    defined = {d.key for d in defs}
+    # Values without a field definition (older imports): shown read-only, readable.
+    extra_rows = sorted(
         (k.replace("_", " ").capitalize(), v)
         for k, v in (contact.attributes or {}).items()
-        if v not in (None, "")
+        if v not in (None, "") and k not in defined and not k.startswith("_")
     )
-    contact_recs = _contact_recommendations(contact)
-
-    from apps.contacts import reachability
-
     member_of = list(contact.lists.order_by("name"))
     conversations = list(
         contact.conversations.order_by("-last_message_at", "-created_at").only(
             "public_id", "channel", "last_message_at"
         )[:3]
     )
+    from apps.accounts.api import is_account_admin
+
     return render(
         request,
         "contacts/detail.html",
         {
             "account": account,
             "contact": contact,
-            "events": events,
+            "activity": _activity(contact, events),
             "messages_to": messages_to,
             "lists": member_of,
             "other_lists": ContactList.objects.filter(account=account)
@@ -187,11 +325,24 @@ def contact_detail(request, public_id: str):
             .order_by("name"),
             "wa_state": reachability.state_for(contact),
             "wa_identity": reachability.primary_identity(contact),
+            "instagram_handles": [
+                u
+                for u in contact.instagram_contacts.values_list("username", flat=True)
+                if u
+            ],
             "conversations": conversations,
-            "attribute_rows": attribute_rows,
+            "field_rows": field_rows(contact, defs),
+            "extra_rows": extra_rows,
+            "related": {
+                "orders": contact.orders.count(),
+                "leads": contact.leads.count(),
+                "deals": contact.deals.count(),
+            },
+            "duplicates": merge.suggested_duplicates(contact, limit=1),
             "contact_tags": contact.tags.all(),
             "known_tags": Tag.objects.filter(account=account),
-            "contact_recs": contact_recs,
+            "contact_recs": _contact_recommendations(contact),
+            "is_admin": is_account_admin(request.user, account),
         },
     )
 
@@ -317,6 +468,12 @@ def contact_create(request):
         return redirect("contacts:list")
 
     label = contact.full_name or str(contact)
+    _audit(
+        request,
+        account,
+        "contact.create" if created else "contact.edit",
+        contact.public_id,
+    )
     messages.success(
         request,
         f"{label} added." if created else f"{label} already existed — details updated.",
@@ -365,8 +522,24 @@ def contact_edit(request, public_id: str):
         )
         return redirect("contacts:detail", public_id=public_id)
 
+    _audit(request, account, "contact.edit", public_id)
     messages.success(request, "Customer updated.")
     return redirect("contacts:detail", public_id=public_id)
+
+
+def _audit(
+    request, account, action: str, resource_id: str, *, resource="contact", **meta
+):
+    from apps.core.audit import platform_record
+
+    platform_record(
+        action=action,
+        account=account,
+        actor=request.user,
+        resource_type=resource,
+        resource_id=resource_id,
+        metadata=meta,
+    )
 
 
 def _unique_attribute_key(account, base_key: str) -> str:
@@ -707,6 +880,13 @@ def list_create(request):
                 f'{"" if result.added == 1 else "s"} tagged "{tag.name}".',
             )
             return redirect("contacts:list_detail", pk=contact_list.pk)
+    _audit(
+        request,
+        account,
+        "contact_list.create",
+        str(contact_list.pk),
+        resource="contact_list",
+    )
     messages.success(request, f'"{contact_list.name}" created — now add people to it.')
     return redirect("contacts:list_detail", pk=contact_list.pk)
 
@@ -917,6 +1097,14 @@ def list_rename(request, pk: int):
         contact_list.name = name
         contact_list.slug = slug
         contact_list.save(update_fields=["name", "slug"])
+        _audit(
+            request,
+            account,
+            "contact_list.rename",
+            str(pk),
+            resource="contact_list",
+            name=name,
+        )
         messages.success(request, "List renamed.")
     return redirect("contacts:list_detail", pk=pk)
 
@@ -938,6 +1126,14 @@ def list_delete(request, pk: int):
         return redirect("contacts:list_detail", pk=pk)
     name = contact_list.name
     contact_list.delete()
+    _audit(
+        request,
+        account,
+        "contact_list.delete",
+        str(pk),
+        resource="contact_list",
+        name=name,
+    )
     messages.success(
         request, f'"{name}" deleted. The people on it are still in your customers.'
     )
@@ -970,9 +1166,11 @@ def contact_whatsapp_consent(request, public_id: str):
             messages.error(request, "Confirm that they agreed to hear from you.")
         else:
             identity.record_opt_in(attestation_source(request.user))
+            _audit(request, account, "contact.opt_in", public_id)
             messages.success(request, f"{contact.full_name or contact} is opted in.")
     elif action == "opt_out":
         identity.record_opt_out(f"marked by user {request.user.pk}")
+        _audit(request, account, "contact.opt_out", public_id)
         messages.success(
             request,
             f"{contact.full_name or contact} is opted out. Campaigns will skip them.",

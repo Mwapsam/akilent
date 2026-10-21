@@ -1,0 +1,25 @@
+{% if error %}
+<div class="card card-pad text-sm text-gray-500">{{ error }}</div>
+{% else %}
+<section class="card card-pad text-sm" aria-labelledby="seg-preview-title">
+  <h2 id="seg-preview-title" class="text-sm font-medium text-ink">Matches now</h2>
+  <p class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ reach.total }} <span class="text-sm font-normal text-gray-500">customer{{ reach.total|pluralize }}</span></p>
+  {% if reach.total %}
+  <ul class="mt-2 space-y-1 text-xs text-gray-600">
+    <li>{% include "components/wa_state.html" with state="opted_in" %} {{ reach.opted_in }}</li>
+    <li>{% include "components/wa_state.html" with state="updates" %} {{ reach.updates }}</li>
+    {% if reach.opted_out %}<li>{% include "components/wa_state.html" with state="opted_out" %} {{ reach.opted_out }}</li>{% endif %}
+    {% if reach.none %}<li>{% include "components/wa_state.html" with state="none" %} {{ reach.none }}</li>{% endif %}
+  </ul>
+  <h3 class="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">For example</h3>
+  <ul class="mt-1 divide-y divide-border">
+    {% for c in sample %}
+    <li class="py-1.5 flex items-center justify-between gap-2">
+      <a href="{% url 'contacts:detail' c.public_id %}" class="truncate text-accent hover:text-accent-strong">{{ c.full_name|default:c.phone|default:c.email|default:"Unnamed customer" }}</a>
+      {% include "components/wa_state.html" with state=c.wa_state %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}

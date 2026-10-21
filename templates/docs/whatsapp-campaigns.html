@@ -1,0 +1,84 @@
+{% extends "docs/_layout.html" %}
+{% block docs_content %}
+<p>
+  Send one approved WhatsApp template to everyone on a list or in a segment — now, or at a
+  time you choose — and follow what happened. The API applies the same rules as the app:
+  promotions only reach customers who opted in, nobody who replied STOP is messaged, and a
+  campaign larger than your number's daily limit is spread over several days.
+</p>
+<p>
+  You need a plan with WhatsApp campaigns, a connected number, an approved template, and an
+  API key with the <code>whatsapp:campaigns</code> <a href="{% url 'docs-page' 'authentication' %}#scopes">scope</a>.
+</p>
+
+<h2>Build the audience</h2>
+<p>Add people to a list by phone number. Numbers that aren't customers yet are created.</p>
+<pre><code>curl -X POST https://akilent.com/api/v1/lists/vip-customers/members \
+  -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "phones": ["+260971234567", {"phone": "+260977000111", "name": "Bwalya Phiri"}],
+        "contacts": ["c_8Hk2..."],
+        "attested": true }'</code></pre>
+<p>
+  <code>attested: true</code> records that these customers agreed to receive WhatsApp
+  messages from your business — required for promotions. It never overrides a customer who
+  opted out. Up to 1,000 people per request; the response lists any numbers that couldn't be
+  added and why. <code>DELETE</code> the same path with the same body to take people off the
+  list (they stay customers). <code>GET /api/v1/lists/{id}</code> shows how many on the list
+  WhatsApp can reach.
+</p>
+<p>
+  To add one customer: <code>POST /api/v1/contacts</code> with just a <code>phone</code> (email is
+  optional). Every contact comes back with <code>phone</code>, <code>whatsapp</code>
+  (<code>opted_in</code>, <code>updates</code>, <code>opted_out</code> or <code>none</code>),
+  <code>tags</code> and <code>lists</code>. <code>PATCH</code> a contact with
+  <code>{"whatsapp": "opted_in", "attested": true}</code> or <code>{"whatsapp": "opted_out"}</code>.
+</p>
+
+<h2>Send or schedule a campaign</h2>
+<pre><code>curl -X POST https://akilent.com/api/v1/whatsapp/campaigns \
+  -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: weekend-offer-2026-10-24" \
+  -d '{ "name": "Weekend offer",
+        "list": "vip-customers",
+        "template": "weekend_offer",
+        "variables": { "name": "contact.first_name" },
+        "fallbacks": { "name": "there" },
+        "send_at": "2026-10-24T09:00:00",
+        "timezone": "Africa/Lusaka" }'</code></pre>
+<table>
+  <tr><th>Field</th><th></th></tr>
+  <tr><td><code>list</code> / <code>segment</code></td><td>Exactly one: the list or segment id. A segment is checked again when the campaign sends.</td></tr>
+  <tr><td><code>template</code></td><td>The template's name or numeric id. It must be approved and have no picture or file at the top.</td></tr>
+  <tr><td><code>variables</code></td><td>What goes in each blank: <code>contact.first_name</code>, <code>contact.full_name</code>, <code>contact.phone</code>, <code>contact.&lt;custom field&gt;</code>, <code>account.company_name</code>, or fixed text. Every blank needs one.</td></tr>
+  <tr><td><code>fallbacks</code></td><td>Optional text per blank for customers with no value. Without one, those customers are skipped.</td></tr>
+  <tr><td><code>send_at</code>, <code>timezone</code></td><td>Optional. Leave out to send now. Recipients are chosen when it sends.</td></tr>
+  <tr><td><code>draft</code></td><td><code>true</code> saves it without sending; send it later from the app or with <code>send_now</code>.</td></tr>
+</table>
+<p>
+  Retrying with the same <code>Idempotency-Key</code> returns the same campaign and never sends
+  twice. Problems the owner must fix (an empty list, a plan limit, an unapproved template) come
+  back as <code>422 campaign_error</code> with a readable message.
+</p>
+
+<h2>Follow it</h2>
+<p>
+  <code>GET /api/v1/whatsapp/campaigns/{id}</code> returns <code>status</code>
+  (<code>draft</code>, <code>scheduled</code>, <code>sending</code>, <code>paused</code>,
+  <code>sent</code>, <code>failed</code>, <code>cancelled</code>), <code>delivery</code> counts
+  (sent, delivered, read, failed, held, unconfirmed, pending) and <code>not_sent_reasons</code>
+  (for example <code>not_opted_in</code>, <code>opted_out</code>, <code>missing_value</code>).
+  <code>GET /api/v1/whatsapp/campaigns</code> lists them, newest first.
+</p>
+
+<h2>Pause, resume, cancel, send now</h2>
+<pre><code>curl -X POST https://akilent.com/api/v1/whatsapp/campaigns/42/pause \
+  -H "Authorization: Bearer ak_live_xxxxxxxxxxxxxxxxxxxxxxxx"</code></pre>
+<p>
+  Actions: <code>pause</code>, <code>resume</code>, <code>cancel</code> and
+  <code>send_now</code> (for a draft or scheduled campaign). An action that doesn't fit the
+  campaign's state — pausing one that has finished — returns <code>409 invalid_state</code>.
+  Cancelling stops messages that haven't gone out yet; sent messages can't be called back.
+</p>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Delete customer — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-xl">
+  <a href="{% url 'contacts:detail' contact.public_id %}" class="text-sm text-gray-500 hover:text-ink">&larr; Back to {{ contact.full_name|default:contact.phone|default:contact.email|default:"the customer" }}</a>
+  <h1 class="text-2xl font-semibold tracking-tight text-ink mt-1">Delete {{ contact.full_name|default:contact.phone|default:contact.email|default:"this customer" }}?</h1>
+  <p class="mt-2 text-sm text-gray-600">This permanently removes the customer and everything about them from {{ account.company_name|default:"your business" }}. It can't be undone.</p>
+
+  <div class="card card-pad mt-4 text-sm">
+    <p class="font-medium text-ink">What gets deleted</p>
+    <ul class="mt-2 space-y-1">
+      <li class="flex justify-between"><span>Their customer record, tags, notes and list memberships</span></li>
+      {% for label, n in removes %}<li class="flex justify-between"><span>{{ label }}</span><span class="tabular-nums text-ink font-medium">{{ n }}</span></li>{% endfor %}
+    </ul>
+    <p class="mt-3 text-xs text-gray-500">If you use HubSpot, the contact is removed there too. Messages already delivered to their phone stay on their phone.</p>
+  </div>
+
+  <form method="post" class="mt-6 space-y-3" x-data="{ typed: '' }">
+    {% csrf_token %}
+    <label class="label" for="confirm-delete">Type <strong>delete</strong> to confirm</label>
+    <input id="confirm-delete" name="confirm" class="input" x-model="typed" autocomplete="off">
+    <div class="flex gap-2">
+      <a href="{% url 'contacts:detail' contact.public_id %}" class="btn btn-ghost btn-sm">Cancel</a>
+      <button class="btn btn-danger btn-sm" :disabled="typed.trim().toLowerCase() !== 'delete'">Delete for good</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

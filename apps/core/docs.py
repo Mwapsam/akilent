@@ -74,6 +74,13 @@ PAGES = [
         channel="whatsapp",
     ),
     DocPage(
+        "whatsapp-campaigns",
+        "WhatsApp campaigns",
+        "Build a list by phone number and send, schedule, pause or cancel a WhatsApp campaign.",
+        "API reference",
+        channel="whatsapp",
+    ),
+    DocPage(
         "smtp",
         "SMTP relay",
         "Send directly over SMTP using a per-domain relay credential.",

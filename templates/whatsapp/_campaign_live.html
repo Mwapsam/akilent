@@ -16,6 +16,9 @@ moving, and stops when the campaign is done (the response then has no trigger).{
   </div>
   {% endif %}
 
+  {% if campaign.send_plan.limit %}
+  <p class="alert alert-info mb-4 text-sm">{% include "components/icon.html" with name="clock" %}<span>Meta lets your number start conversations with {{ campaign.send_plan.limit }} customers a day, so this campaign is going out over several days. The rest are waiting their turn.</span></p>
+  {% endif %}
   <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
     {% include "components/stat_card.html" with label="On the list" value=campaign.recipient_count icon="users" %}
     {% include "components/stat_card.html" with label="Sent" value=reached icon="send" sub="Accepted by WhatsApp" %}

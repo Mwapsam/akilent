@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Sending hours — Campaigns{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
+    <span aria-hidden="true">/</span><span class="text-ink">Sending hours</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Sending hours</h1>
+  <p class="mt-1 text-sm text-gray-600 max-w-2xl">Choose when campaign messages may arrive on your customers' phones. A campaign sent outside these hours waits and starts at the next opening. Replies and order updates are never held.</p>
+</header>
+
+{% if error %}
+<div class="alert alert-danger mb-4" role="alert">{% include "components/icon.html" with name="alert-circle" %}<span>{{ error }}</span></div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <form method="post" class="card card-pad space-y-4 lg:col-span-2" x-data="{ on: {{ window.enabled|yesno:'true,false' }} }">
+    {% csrf_token %}
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" name="enabled" class="h-4 w-4 rounded" x-model="on" {% if window.enabled %}checked{% endif %} {% if not can_send %}disabled{% endif %}>
+      <span class="text-ink font-medium">Only send campaigns during these hours</span>
+    </label>
+    <div class="grid gap-3 sm:grid-cols-2" x-show="on">
+      <div><label class="label" for="win-start">From</label><input id="win-start" type="time" name="start" class="input" value="{{ window.start|time:'H:i' }}" {% if not can_send %}disabled{% endif %}></div>
+      <div><label class="label" for="win-end">Until</label><input id="win-end" type="time" name="end" class="input" value="{{ window.end|time:'H:i' }}" {% if not can_send %}disabled{% endif %}></div>
+    </div>
+    <p class="text-xs text-gray-500">In your business's time zone: {{ tz }}. <a href="{% url 'settings-hours' %}" class="text-accent hover:text-accent-strong">Change it with your opening hours</a>.</p>
+    {% if can_send %}<button class="btn btn-primary btn-sm">Save</button>{% else %}<p class="text-sm text-gray-500">Only the business owner or an admin can change these.</p>{% endif %}
+  </form>
+
+  <aside class="card card-pad text-sm space-y-2">
+    <h2 class="font-medium text-ink">Meta's daily limit</h2>
+    {% if limit %}
+      <p class="text-gray-600">Your number can start conversations with <strong class="text-ink">{{ limit|floatformat:"0g" }}</strong> different customers a day. In the last 24 hours you reached <strong class="text-ink">{{ used|floatformat:"0g" }}</strong>.</p>
+      <p class="text-gray-600">A bigger campaign is spread over several days automatically.</p>
+    {% else %}
+      <p class="text-gray-600">Meta hasn't told us your number's limit yet. New numbers usually start at 250 customers a day, and the limit grows as you send good-quality messages.</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

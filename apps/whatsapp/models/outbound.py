@@ -22,6 +22,9 @@ class OutboundMessage(models.Model):
 
     MAX_ATTEMPTS = 5
 
+    PRIORITY_NORMAL = 50
+    PRIORITY_BULK = 10
+
     account = models.ForeignKey("accounts.Account", on_delete=models.CASCADE)
     contact = models.ForeignKey(WhatsAppContact, on_delete=models.CASCADE)
 
@@ -38,6 +41,10 @@ class OutboundMessage(models.Model):
     error_code = models.CharField(max_length=32, blank=True, default="")
 
     scheduled_at = models.DateTimeField(default=timezone.now)
+    # Higher goes first. Replies and one-off sends (a customer is waiting) sit at
+    # NORMAL; campaign messages at BULK, so a 10,000-person campaign never holds
+    # up an order confirmation. See apps.whatsapp.tasks.drain_outbound_queue.
+    priority = models.PositiveSmallIntegerField(default=50)
     attempts = models.PositiveSmallIntegerField(default=0)
     next_attempt_at = models.DateTimeField(blank=True, null=True)
     last_error = models.TextField(blank=True, null=True)
@@ -57,6 +64,7 @@ class OutboundMessage(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["status", "scheduled_at"]),  # drain worker
+            models.Index(fields=["status", "priority", "scheduled_at"]),
             models.Index(fields=["account", "status"]),  # rate limiter
         ]
         constraints = [

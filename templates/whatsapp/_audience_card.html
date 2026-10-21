@@ -1,0 +1,26 @@
+{% comment %}One audience choice in the composer: a list or a segment, with who WhatsApp can reach.
+  kind = "list" | "segment"; value = pk; reach = reachability counts; item = the list/segment.{% endcomment %}
+<label class="card card-pad !p-4 flex items-start gap-3 transition {% if item.broken %}opacity-60 cursor-not-allowed{% else %}cursor-pointer{% endif %}"
+       :class="audience === '{{ kind }}:{{ value }}' ? 'ring-2 ring-brand-500' : 'hover:border-gray-300'">
+  <input type="radio" name="audience" value="{{ kind }}:{{ value }}" x-model="audience" class="mt-1 h-4 w-4" {% if item.broken %}disabled{% endif %}>
+  <span class="min-w-0 flex-1">
+    <span class="flex flex-wrap items-baseline justify-between gap-2">
+      <span class="font-medium text-ink">{{ name }}</span>
+      <span class="text-sm text-gray-500 tabular-nums">{{ reach.total }} customer{{ reach.total|pluralize }}{% if kind == "segment" %} now{% endif %}</span>
+    </span>
+    {% if item.broken %}
+    <span class="mt-1 block text-xs text-gray-500">This segment has a rule that no longer works — <a href="{% url 'contacts:segment_edit' value %}" class="text-accent hover:text-accent-strong">fix it</a>.</span>
+    {% elif reach.total %}
+    <span class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+      <span><span class="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1" aria-hidden="true"></span>{{ reach.opted_in }} opted in</span>
+      <span><span class="inline-block h-2 w-2 rounded-full bg-blue-400 mr-1" aria-hidden="true"></span>{{ reach.updates }} updates only</span>
+      {% if reach.opted_out %}<span><span class="inline-block h-2 w-2 rounded-full bg-coral-500 mr-1" aria-hidden="true"></span>{{ reach.opted_out }} opted out</span>{% endif %}
+      {% if reach.none %}<span><span class="inline-block h-2 w-2 rounded-full bg-gray-300 mr-1" aria-hidden="true"></span>{{ reach.none }} no WhatsApp</span>{% endif %}
+    </span>
+    {% elif kind == "list" %}
+    <span class="mt-1 block text-xs text-gray-500">Empty — <a href="{% url 'contacts:list_detail' value %}" class="text-accent hover:text-accent-strong">add people</a> first.</span>
+    {% else %}
+    <span class="mt-1 block text-xs text-gray-500">Nobody matches right now.</span>
+    {% endif %}
+  </span>
+</label>

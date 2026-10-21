@@ -84,6 +84,8 @@ Evidence is `path::text`: the file must exist and contain the text.
 | customers | Capability | Customer details, tags and message history kept together | apps/contacts/models.py::class Tag( |
 | interested | Capability | Track customers who are interested in buying | apps/crm/services.py::def set_lead_status |
 | campaigns | Capability | Send an approved WhatsApp message or an email to a list of customers | apps/whatsapp/campaigns.py::def |
+| campaign-scheduling | Capability | Schedule a WhatsApp campaign; pause, cancel or resend failed messages | apps/whatsapp/campaigns.py::def dispatch_due_campaigns |
+| segments | Capability | Send a WhatsApp campaign to a segment: customers picked by rules, updated automatically | apps/contacts/segments.py::def builder_fields |
 | payments | Capability | Record an order and send a link to pay online | apps/commerce/services.py::def request_payment |
 | ai | Capability | AI suggests replies; answers simple questions on its own only if allowed; off by default | apps/ai/models.py::enabled = models.BooleanField(default=False) |
 | insights | Capability | See what your conversations turned into: replies, follow-ups and sales | apps/conversations/reporting.py::def proof |

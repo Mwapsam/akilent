@@ -61,7 +61,7 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 | WhatsApp inbound voice, ogg/opus for older Safari | Missing | Stored as-is; no ffmpeg on the inbound path. Matches pilot media gap. |
 | WhatsApp outbound audio transcoding | Implemented (static) | `apps/conversations/outbound_media.py:7-157`, `test_outbound_media.py` |
 | WhatsApp template gating and status sync | Implemented (static) | `apps/whatsapp/tasks.py:645-660, 1251-1293, 1438` |
-| WhatsApp broadcasts with opt-out | Implemented; Release 1 fixes 2026-10-19 | Audit found stats losing failures, stuck campaigns, double sends and unreachable hand-added customers; fixed with tests. Lifecycle (draft/schedule/pause/cancel), segments and scale work are Releases 2–3. See `docs/audits/CAMPAIGNS-CONTACTS-AUDIT.md` |
+| WhatsApp broadcasts with opt-out | Implemented; Release 1 fixes 2026-10-19 | Audit found stats losing failures, stuck campaigns, double sends and unreachable hand-added customers; fixed with tests. Releases 2–3 built 2026-10-21: draft/schedule/pause/cancel/retry, segments, pacing (tier, quiet hours, fairness), merge, self-service delete/export, campaigns API; Postgres/staging run pending. See `docs/audits/CAMPAIGNS-CONTACTS-AUDIT.md` |
 | Instagram DM triggers | Implemented (static) | Via `conversation.message_received`, `apps/automation/workflow_engine.py:114-135` |
 | Instagram comment triggers and moderation | Implemented (static) | `apps/instagram/rules_views.py`, `test_phase3_acceptance.py` |
 | Instagram App Review gate | Implemented but incomplete | Manual; no code checks review or live-mode status. Scopes rejected 2026-10-07, resubmission pending (Blocked). |

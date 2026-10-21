@@ -16,7 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.contacts.models import ContactList, CustomAttributeDef
+from apps.contacts.models import ContactList, CustomAttributeDef, Segment
 from apps.core.module_gate import module_required
 from apps.whatsapp.campaigns import (
     CampaignError,
@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 # --- Templates: a manual "Sync from Meta" action. Meta is the source of
 # truth for approval/status (see docs/plans); Akilent never lets a business
 # edit a template's content locally, since that would silently desync from
-# what Meta actually approved. Creating a new template has to happen in Meta
-# Business Manager (or a future "submit for approval" API call, not built —
-# no evidence yet that a pilot needs it in-app). The list itself lives on the
+# what Meta actually approved. A new template is written here and submitted to
+# Meta for approval (template_create → apps.whatsapp.template_builder); it can't
+# be edited afterwards, only replaced. The list itself lives on the
 # WhatsApp tab of /email/templates/ (apps.email.views.templates_list) — one
 # "Templates" page, two channels, same pattern as Campaigns. -------------
 
@@ -496,13 +496,99 @@ def _campaign_variable_mapping_from_post(request, template) -> tuple[dict, dict,
     return mapping, fallbacks, missing
 
 
-def _composer_state(request, account, templates):
-    """The composer's choices, from the POST (re-shown on error) or the URL."""
-    import secrets
+def _audience_from(src, account):
+    """``(key, contact_list, segment)`` for the composer's audience choice.
+
+    The radio is ``audience=list:<pk>`` / ``segment:<pk>``; ``contact_list`` and
+    ``?list=`` (deep links from a list page) still work.
+    """
+    raw = src.get("audience") or ""
+    if not raw and (src.get("contact_list") or src.get("list")):
+        raw = f"list:{src.get('contact_list') or src.get('list')}"
+    if not raw and src.get("segment"):
+        raw = f"segment:{src.get('segment')}"
+    kind, _, pk = raw.partition(":")
+    if not pk.isdigit():
+        return "", None, None
+    if kind == "list":
+        found = ContactList.objects.filter(account=account, pk=pk).first()
+        return (raw, found, None) if found else ("", None, None)
+    if kind == "segment":
+        seg = Segment.objects.filter(account=account, pk=pk).first()
+        return (raw, None, seg) if seg else ("", None, None)
+    return "", None, None
+
+
+def _send_time(src, account):
+    """``(send_at_utc | None, tz, error)`` from the composer's "When" step."""
+    from datetime import datetime, timedelta
+
+    from django.utils import timezone as dj_tz
+
+    from apps.accounts.business_hours import workspace_timezone
+    from apps.core.scheduling import InvalidTimezone, to_utc
+
+    if (src.get("when") or "now") != "later":
+        return None, "", ""
+    tz = src.get("send_tz") or workspace_timezone(account)
+    try:
+        local = datetime.strptime(
+            f"{src.get('send_date', '')} {src.get('send_time', '')}", "%Y-%m-%d %H:%M"
+        )
+        send_at = to_utc(local, tz)
+    except (ValueError, InvalidTimezone):
+        return None, tz, "Choose the day and time to send it."
+    now = dj_tz.now()
+    if send_at <= now + timedelta(minutes=2):
+        return None, tz, "That time has already passed. Choose a time in the future."
+    if send_at > now + timedelta(days=90):
+        return None, tz, "You can schedule up to 90 days ahead."
+    return send_at, tz, ""
+
+
+def _draft_src(campaign) -> dict:
+    """A draft's saved choices in the composer's own field names."""
+    from zoneinfo import ZoneInfo
 
     from apps.automation import variables as wa_variables
 
-    src = request.POST if request.method == "POST" else request.GET
+    by_source = {source: key for key, source, _label, _fb in wa_variables.CHOICES}
+    src = {
+        "audience": f"segment:{campaign.segment_id}"
+        if campaign.segment_id
+        else f"list:{campaign.contact_list_id}",
+        "template_id": str(campaign.template_id),
+        "name": campaign.name,
+        "draft_id": str(campaign.pk),
+    }
+    for var, source in (campaign.variable_mapping or {}).items():
+        key = f"{campaign.template_id}__{var}"
+        if isinstance(source, str) and source in by_source:
+            src[f"var__{key}"] = by_source[source]
+            src[f"fb__{key}"] = (campaign.variable_fallbacks or {}).get(var, "")
+        else:
+            src[f"var__{key}"] = "literal"
+            src[f"lit__{key}"] = str(source)
+    if campaign.scheduled_at:
+        local = campaign.scheduled_at.astimezone(ZoneInfo(campaign.timezone or "UTC"))
+        src.update(
+            when="later",
+            send_date=local.strftime("%Y-%m-%d"),
+            send_time=local.strftime("%H:%M"),
+            send_tz=campaign.timezone or "UTC",
+        )
+    return src
+
+
+def _composer_state(request, account, templates, src=None):
+    """The composer's choices, from the POST (re-shown on error), a draft, or the URL."""
+    import secrets
+
+    from apps.accounts.business_hours import workspace_timezone
+    from apps.automation import variables as wa_variables
+
+    if src is None:
+        src = request.POST if request.method == "POST" else request.GET
     picks, lits, fbs = {}, {}, {}
     for t in templates:
         for b in t.blanks:  # type: ignore[attr-defined]
@@ -510,10 +596,16 @@ def _composer_state(request, account, templates):
             picks[key] = src.get(f"var__{key}") or b["default"]
             lits[key] = src.get(f"lit__{key}") or ""
             fbs[key] = src.get(f"fb__{key}") or ""
+    audience, _list, _segment = _audience_from(src, account)
     return {
-        "list": src.get("contact_list") or src.get("list") or "",
+        "audience": audience,
         "template": src.get("template_id") or "",
         "name": src.get("name") or "",
+        "draft_id": src.get("draft_id") or "",
+        "when": src.get("when") or "now",
+        "send_date": src.get("send_date") or "",
+        "send_time": src.get("send_time") or "09:00",
+        "send_tz": src.get("send_tz") or workspace_timezone(account),
         "picks": picks,
         "lits": lits,
         "fbs": fbs,
@@ -540,24 +632,59 @@ def _composer_templates(account):
     return templates
 
 
+def _timezone_options(current: str) -> list[str]:
+    from apps.accounts.business_hours import COMMON_TIMEZONES
+
+    zones = list(COMMON_TIMEZONES)
+    if current and current not in zones:
+        zones.insert(0, current)
+    return zones
+
+
+_SEND_NOT_ALLOWED = (
+    "Only the business owner or an admin can send campaigns. Save it as a draft "
+    "and ask one of them to send it."
+)
+
+
 @login_required
 @module_required("whatsapp_campaigns")
 def campaign_new(request):
-    """The stepped composer (spec S2): who → what → review and send."""
+    """The stepped composer (spec S2): who → what → when → review and send."""
+    from apps.accounts.api import is_account_admin
     from apps.automation import variables as wa_variables
-    from apps.whatsapp.campaign_ui import list_options, readiness
+    from apps.whatsapp.campaign_ui import list_options, readiness, segment_options
+    from apps.whatsapp.campaigns import save_draft
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
 
+    can_send = is_account_admin(request.user, account)
     templates = _composer_templates(account)
     error = ""
     step = 1
-    if request.method == "POST":
-        contact_list = ContactList.objects.filter(
-            account=account, pk=request.POST.get("contact_list") or 0
+    src = None
+    draft = None
+    draft_pk = (
+        request.POST.get("draft_id")
+        if request.method == "POST"
+        else request.GET.get("draft")
+    )
+    if draft_pk and str(draft_pk).isdigit():
+        draft = WhatsAppCampaign.objects.filter(
+            account=account, pk=draft_pk, status__in=WhatsAppCampaign.EDITABLE
         ).first()
+        if draft is None and request.method == "GET":
+            messages.info(request, "That campaign has already been sent.")
+            return redirect("whatsapp-campaign-detail", pk=draft_pk)
+        if draft is not None and request.method == "GET":
+            src = _draft_src(draft)
+            step = 4
+
+    if request.method == "POST":
+        action = request.POST.get("action") or "send"
+        _key, contact_list, segment = _audience_from(request.POST, account)
         template = next(
             (
                 t
@@ -566,7 +693,7 @@ def campaign_new(request):
             ),
             None,
         )
-        if contact_list is None:
+        if contact_list is None and segment is None:
             error = "Choose who to send to."
         elif template is None:
             error, step = "Choose a message to send.", 2
@@ -574,64 +701,127 @@ def campaign_new(request):
             variable_mapping, variable_fallbacks, missing = (
                 _campaign_variable_mapping_from_post(request, template)
             )
-            if missing:
+            if missing and action != "draft":
                 error, step = "Fill in what goes in every blank of the message.", 2
-            else:
+            elif action == "draft":
                 try:
-                    campaign = create_and_queue_campaign(
+                    campaign = save_draft(
                         account=account,
                         name=request.POST.get("name") or "",
-                        contact_list=contact_list,
                         template_id=template.pk,
+                        contact_list=contact_list,
+                        segment=segment,
                         variable_mapping=variable_mapping,
                         variable_fallbacks=variable_fallbacks,
                         created_by=request.user,
-                        submission_key=request.POST.get("submission_key") or "",
+                        draft=draft,
                     )
                 except CampaignError as exc:
-                    error, step = str(exc), 3
+                    error, step = str(exc), 4
                 else:
-                    from apps.core.audit import platform_record
-
-                    platform_record(
-                        action="whatsapp_campaign.send",
-                        account=account,
-                        actor=request.user,
-                        resource_type="whatsapp_campaign",
-                        resource_id=str(campaign.pk),
-                        metadata={
-                            "list": contact_list.pk,
-                            "template": template.pk,
-                            "recipients": campaign.recipient_count,
-                        },
-                    )
                     messages.success(
                         request,
-                        "Your campaign is on its way. Results appear below as they arrive.",
+                        "Draft saved. Nothing has been sent."
+                        if can_send
+                        else "Draft saved. An owner or admin can review and send it.",
                     )
                     return redirect("whatsapp-campaign-detail", pk=campaign.pk)
+            elif not can_send:
+                error, step = _SEND_NOT_ALLOWED, 4
+            else:
+                send_at, tz, when_error = _send_time(request.POST, account)
+                if when_error:
+                    error, step = when_error, 3
+                else:
+                    try:
+                        campaign = create_and_queue_campaign(
+                            account=account,
+                            name=request.POST.get("name") or "",
+                            contact_list=contact_list,
+                            segment=segment,
+                            template_id=template.pk,
+                            variable_mapping=variable_mapping,
+                            variable_fallbacks=variable_fallbacks,
+                            created_by=request.user,
+                            submission_key=request.POST.get("submission_key") or "",
+                            send_at=send_at,
+                            tz=tz,
+                            draft=draft,
+                        )
+                    except CampaignError as exc:
+                        error, step = str(exc), 4
+                    else:
+                        _audit_campaign(
+                            request,
+                            account,
+                            campaign,
+                            "schedule" if send_at else "send",
+                        )
+                        if campaign.status == WhatsAppCampaign.Status.SCHEDULED:
+                            messages.success(
+                                request,
+                                "Scheduled. It goes out at the time you chose — you can "
+                                "change or cancel it until then.",
+                            )
+                        else:
+                            messages.success(
+                                request,
+                                "Your campaign is on its way. Results appear below as they arrive.",
+                            )
+                        return redirect("whatsapp-campaign-detail", pk=campaign.pk)
 
-    state = _composer_state(request, account, templates)
-    if request.method == "GET" and state["list"]:
-        step = 2 if not state["template"] else 3
+    state = _composer_state(request, account, templates, src=src)
+    if request.method == "GET" and src is None and state["audience"]:
+        step = 2 if not state["template"] else 4
     return render(
         request,
         "whatsapp/campaign_new.html",
         {
             "account": account,
             "lists": list_options(account),
+            "segments": segment_options(account),
             "templates": templates,
             "blank_choices": [
                 {"key": key, "label": label}
                 for key, _source, label, _fallback in wa_variables.CHOICES
             ],
             "state": state,
+            "draft": draft,
             "error": error,
             "step": step,
+            "can_send": can_send,
+            "timezones": _timezone_options(state["send_tz"]),
+            "test_phone": account.phone,
             "readiness": readiness(account),
         },
         status=400 if error else 200,
     )
+
+
+def _audit_campaign(request, account, campaign, verb: str, **extra) -> None:
+    from apps.core.audit import platform_record
+
+    platform_record(
+        action=f"whatsapp_campaign.{verb}",
+        account=account,
+        actor=request.user,
+        resource_type="whatsapp_campaign",
+        resource_id=str(campaign.pk),
+        metadata={
+            "list": campaign.contact_list_id,
+            "segment": campaign.segment_id,
+            "template": campaign.template_id,
+            "recipients": campaign.recipient_count,
+            **extra,
+        },
+    )
+
+
+class _GetAsPost:
+    """_campaign_variable_mapping_from_post reads request.POST; the estimate is a GET."""
+
+    def __init__(self, data):
+        self.POST = data
 
 
 @login_required
@@ -639,39 +829,102 @@ def campaign_new(request):
 def campaign_estimate(request):
     """HTMX: who the composer's current choices would reach, plus the preview."""
     from apps.whatsapp.campaign_ui import estimate
+    from apps.whatsapp.campaigns import audience_contacts
 
     account = get_current_account(request)
     if account is None:
         return HttpResponse(status=204)
-    contact_list = ContactList.objects.filter(
-        account=account, pk=request.GET.get("contact_list") or 0
-    ).first()
+    _key, contact_list, segment = _audience_from(request.GET, account)
     template = MessageTemplate.objects.filter(
         account=account,
         pk=request.GET.get("template_id") or 0,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     ).first()
-    if contact_list is None or template is None:
+    if (contact_list is None and segment is None) or template is None:
         return render(request, "whatsapp/_campaign_estimate.html", {"est": None})
 
-    from django.http import QueryDict
+    mapping, fallbacks, missing = _campaign_variable_mapping_from_post(
+        _GetAsPost(request.GET), template
+    )
+    try:
+        audience = audience_contacts(
+            account, contact_list=contact_list, segment=segment
+        )
+        est = estimate(account, audience, template, mapping, fallbacks)
+    except CampaignError as exc:
+        return render(
+            request,
+            "whatsapp/_campaign_estimate.html",
+            {"est": None, "audience_error": str(exc)},
+        )
+    from apps.whatsapp.delivery import forecast
 
-    class _Req:  # _campaign_variable_mapping_from_post reads request.POST
-        POST: QueryDict = request.GET
-
-    mapping, fallbacks, missing = _campaign_variable_mapping_from_post(_Req, template)
-    est = estimate(account, contact_list, template, mapping, fallbacks)
+    send_at, tz, when_error = _send_time(request.GET, account)
     return render(
         request,
         "whatsapp/_campaign_estimate.html",
         {
             "est": est,
+            "pace": forecast(account, est.will_receive, now=send_at),
             "template": template,
             "contact_list": contact_list,
+            "segment": segment,
+            "audience_name": segment.name if segment else contact_list.name,  # type: ignore[union-attr]
             "blanks_missing": missing,
             "is_marketing": template.category == MessageTemplate.Category.MARKETING,
+            "send_at": send_at,
+            "send_tz": tz,
+            "when_error": when_error,
+            "can_send": _can_send(request, account),
         },
     )
+
+
+def _can_send(request, account) -> bool:
+    from apps.accounts.api import is_account_admin
+
+    return is_account_admin(request.user, account)
+
+
+@login_required
+@module_required("whatsapp_campaigns")
+@require_POST
+def campaign_test(request):
+    """HTMX: send the composer's message once to the owner's own number."""
+    from apps.whatsapp.campaigns import send_test
+
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponse(status=204)
+    template = MessageTemplate.objects.filter(
+        account=account,
+        pk=request.POST.get("template_id") or 0,
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    ).first()
+    if template is None:
+        result = {"ok": False, "message": "Choose a message first."}
+    else:
+        mapping, fallbacks, _missing = _campaign_variable_mapping_from_post(
+            request, template
+        )
+        try:
+            send_test(
+                account=account,
+                template=template,
+                mapping=mapping,
+                fallbacks=fallbacks,
+                phone=request.POST.get("test_phone") or "",
+                user=request.user,
+            )
+        except CampaignError as exc:
+            result = {"ok": False, "message": str(exc)}
+        else:
+            result = {
+                "ok": True,
+                "message": "Test sent. It should arrive on your WhatsApp within a minute. "
+                "It isn't counted as a campaign.",
+            }
+    return render(request, "whatsapp/_campaign_test_result.html", result)
 
 
 @login_required
@@ -681,7 +934,14 @@ def campaign_detail(request, pk: int):
     from django.core.paginator import Paginator
     from django.db.models import Count
 
-    from apps.whatsapp.campaign_ui import SKIP_REASON_COPY, lifecycle_state
+    from apps.whatsapp import campaigns as svc
+    from apps.whatsapp.campaign_ui import (
+        SKIP_REASON_COPY,
+        estimate,
+        lifecycle_state,
+        local_label,
+        timeline,
+    )
     from apps.whatsapp.models import WhatsAppCampaignRecipient
 
     account = get_current_account(request)
@@ -689,11 +949,39 @@ def campaign_detail(request, pk: int):
         return redirect("dashboard")
     campaign = get_object_or_404(
         WhatsAppCampaign.objects.select_related(
-            "template", "contact_list", "created_by"
+            "template", "contact_list", "segment", "created_by", "retry_of"
         ),
         account=account,
         pk=pk,
     )
+    _S = WhatsAppCampaign.Status
+    can_send = _can_send(request, account)
+    editable = campaign.status in WhatsAppCampaign.EDITABLE
+
+    preview = None
+    if editable:
+        # Nothing chosen yet: show who it would reach if it went now.
+        try:
+            audience = (
+                None
+                if campaign.retry_of_id
+                else svc.audience_contacts(
+                    account,
+                    contact_list=campaign.contact_list,
+                    segment=campaign.segment,
+                )
+            )
+            if audience is not None:
+                preview = estimate(
+                    account,
+                    audience,
+                    campaign.template,
+                    campaign.variable_mapping,
+                    campaign.variable_fallbacks,
+                )
+        except CampaignError:
+            preview = None
+
     processed = campaign.queued_count + campaign.skipped_count
     remaining = max(campaign.recipient_count - processed, 0)
     skip_breakdown = [
@@ -725,10 +1013,13 @@ def campaign_detail(request, pk: int):
         outcome = ""
     page = Paginator(recipients, 50).get_page(request.GET.get("page"))
 
+    finished = campaign.status in WhatsAppCampaign.FINISHED
     context = {
         "account": account,
         "campaign": campaign,
         "state": lifecycle_state(campaign),
+        "editable": editable,
+        "preview": preview,
         "remaining": remaining,
         "progress_pct": round(processed * 100 / campaign.recipient_count)
         if campaign.recipient_count
@@ -739,13 +1030,183 @@ def campaign_detail(request, pk: int):
         "skip_copy": SKIP_REASON_COPY,
         "page": page,
         "outcome": outcome,
-        "in_progress": campaign.status
-        in (WhatsAppCampaign.Status.QUEUED, WhatsAppCampaign.Status.SENDING)
-        or delivery["pending"] > 0,
+        "timeline": timeline(campaign),
+        "scheduled_local": local_label(campaign.scheduled_at, campaign.timezone),
+        "can_send": can_send,
+        "can_pause": can_send and svc.can_pause(campaign),
+        "can_resume": can_send and campaign.status == _S.PAUSED,
+        "can_cancel": can_send and svc.can_cancel(campaign),
+        "failed_n": svc.failed_count(campaign) if finished else 0,
+        "in_progress": campaign.status in WhatsAppCampaign.ACTIVE
+        or (campaign.status == _S.COMPLETED and delivery["pending"] > 0),
     }
     if request.headers.get("HX-Request") and request.GET.get("part") == "live":
         return render(request, "whatsapp/_campaign_live.html", context)
     return render(request, "whatsapp/campaign_detail.html", context)
+
+
+@login_required
+@module_required("whatsapp_campaigns")
+def campaign_settings(request):
+    """Quiet hours: when campaign messages may arrive (owner/admin)."""
+    from datetime import time
+
+    from apps.accounts.business_hours import workspace_timezone
+    from apps.whatsapp.delivery import daily_limit, send_window, used_last_24h
+    from apps.whatsapp.models import CampaignSendWindow
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    window = send_window(account)
+    error = ""
+    if request.method == "POST":
+        if not _can_send(request, account):
+            messages.error(
+                request, "Only the business owner or an admin can change this."
+            )
+            return redirect("whatsapp-campaign-settings")
+        try:
+            start = time.fromisoformat(request.POST.get("start") or "08:00")
+            end = time.fromisoformat(request.POST.get("end") or "20:00")
+        except ValueError:
+            error = "Choose a start and an end time."
+        else:
+            if start == end and request.POST.get("enabled") == "on":
+                error = "The start and end can't be the same time."
+            else:
+                CampaignSendWindow.objects.update_or_create(
+                    account=account,
+                    defaults={
+                        "enabled": request.POST.get("enabled") == "on",
+                        "start": start,
+                        "end": end,
+                    },
+                )
+                messages.success(
+                    request, "Saved. New campaign messages follow these hours."
+                )
+                return redirect("whatsapp-campaign-settings")
+    return render(
+        request,
+        "whatsapp/campaign_settings.html",
+        {
+            "account": account,
+            "window": window,
+            "tz": workspace_timezone(account),
+            "limit": daily_limit(account),
+            "used": used_last_24h(account),
+            "can_send": _can_send(request, account),
+            "error": error,
+        },
+        status=400 if error else 200,
+    )
+
+
+_ACTION_DONE = {
+    "pause": "Paused. Messages not sent yet are held back until you resume.",
+    "resume": "Resumed. The rest of the messages are going out.",
+    "duplicate": "Copied as a new draft. Change anything you like, then send it.",
+}
+
+
+@login_required
+@module_required("whatsapp_campaigns")
+@require_POST
+def campaign_action(request, pk: int, action: str):
+    """Pause · Resume · Cancel · Send now · Duplicate · Retry failed (spec S3)."""
+    from apps.whatsapp import campaigns as svc
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
+    if action != "duplicate" and not _can_send(request, account):
+        messages.error(request, "Only the business owner or an admin can do that.")
+        return redirect("whatsapp-campaign-detail", pk=pk)
+
+    target = campaign
+    try:
+        if action == "pause":
+            if not svc.pause_campaign(campaign, user=request.user):
+                raise CampaignError(
+                    "It has already finished, so there's nothing to pause."
+                )
+            messages.success(request, _ACTION_DONE["pause"])
+        elif action == "resume":
+            if not svc.resume_campaign(campaign, user=request.user):
+                raise CampaignError("This campaign isn't paused.")
+            messages.success(request, _ACTION_DONE["resume"])
+        elif action == "cancel":
+            was_scheduled = campaign.status == WhatsAppCampaign.Status.SCHEDULED
+            if not svc.can_cancel(campaign):
+                raise CampaignError(
+                    "It has already finished, so there's nothing to cancel."
+                )
+            n = svc.cancel_campaign(campaign, user=request.user)
+            messages.success(
+                request,
+                "Cancelled. Nothing was sent."
+                if was_scheduled
+                else f"Cancelled. {n:,} customer{'s' if n != 1 else ''} won't get it.",
+            )
+        elif action == "send_now":
+            target = svc.start_campaign(campaign.pk, user=request.user)
+            messages.success(
+                request,
+                "Your campaign is on its way. Results appear below as they arrive.",
+            )
+        elif action == "duplicate":
+            target = svc.duplicate_campaign(campaign, user=request.user)
+            messages.success(request, _ACTION_DONE["duplicate"])
+            return redirect(f"{reverse('whatsapp-campaign-new')}?draft={target.pk}")
+        elif action == "retry":
+            target = svc.retry_failed_campaign(campaign, user=request.user)
+            messages.success(
+                request,
+                f"Sending again to the {target.recipient_count:,} customer"
+                f"{'s' if target.recipient_count != 1 else ''} whose message failed.",
+            )
+        else:
+            return HttpResponse(status=404)
+    except CampaignError as exc:
+        messages.error(request, str(exc))
+        return redirect("whatsapp-campaign-detail", pk=pk)
+    _audit_campaign(request, account, target, action, source=campaign.pk)
+    return redirect("whatsapp-campaign-detail", pk=target.pk)
+
+
+@login_required
+@module_required("whatsapp_campaigns")
+def campaign_export(request, pk: int):
+    """Every recipient and what happened, as a spreadsheet (formula-safe)."""
+    import csv
+
+    from apps.core.csv_safe import safe_cell
+    from apps.whatsapp.campaigns import recipients_with_outcome
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    campaign = get_object_or_404(WhatsAppCampaign, account=account, pk=pk)
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = (
+        f'attachment; filename="campaign-{campaign.pk}-recipients.csv"'
+    )
+    writer = csv.writer(response)
+    writer.writerow(["name", "phone", "email", "result", "details"])
+    for r in recipients_with_outcome(campaign).iterator(chunk_size=1000):
+        details = r.get_skip_reason_display() if r.skip_reason else (r.error or "")
+        writer.writerow(
+            [
+                safe_cell(r.contact.full_name),
+                safe_cell(r.contact.phone or ""),
+                safe_cell(r.contact.email or ""),
+                r.outcome,
+                safe_cell(details),
+            ]
+        )
+    return response
 
 
 def _verify_meta_signature(request) -> bool:

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import secrets
 
+from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -107,10 +109,13 @@ class Contact(models.Model):
 
     class Meta:
         constraints = [
+            # Case-insensitive: "Ada@x.com" and "ada@x.com" are the same person.
+            # Existing duplicates are merged first (manage.py check_contact_emails).
             models.UniqueConstraint(
-                fields=["account", "email"],
+                "account",
+                Lower("email"),
                 condition=models.Q(email__isnull=False),
-                name="unique_account_contact_email",
+                name="unique_account_contact_email_ci",
             ),
             models.UniqueConstraint(
                 fields=["account", "phone"],
@@ -122,7 +127,9 @@ class Contact(models.Model):
             models.Index(fields=["account", "status"]),
             models.Index(fields=["account", "consent_status"]),
             models.Index(fields=["account", "last_engaged_at"]),
-            models.Index(fields=["account", "phone"]),
+            # Customers page default order; (account, phone) is covered by the
+            # unique constraint's index.
+            models.Index(fields=["account", "first_seen"]),
         ]
         ordering = ["-first_seen"]
 
@@ -441,6 +448,31 @@ class ContactEvent(models.Model):
 
     def __str__(self):
         return f"{self.type} @ {self.occurred_at:%Y-%m-%d}"
+
+
+class ContactNote(models.Model):
+    """A private note the team keeps about a customer (never sent to them).
+
+    Separate from conversations.ConversationNote, which belongs to one
+    conversation: plenty of customers (a walk-in, an import) have none.
+    """
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="contact_notes"
+    )
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="notes")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["contact", "created_at"])]
+
+    def __str__(self):
+        return f"Note on {self.contact_id}"
 
 
 class Segment(models.Model):

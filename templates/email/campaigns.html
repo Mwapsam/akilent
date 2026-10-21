@@ -42,6 +42,16 @@
 {% endif %}
 
 {% if channel == 'whatsapp' %}
+  {% if whatsapp_any %}
+  <p class="mb-2 text-right text-sm"><a href="{% url 'whatsapp-campaign-settings' %}" class="text-accent hover:text-accent-strong">Sending hours</a></p>
+  <div class="tabs mb-3" role="tablist" aria-label="Filter campaigns">
+    <a href="?channel=whatsapp" role="tab" class="tab{% if not whatsapp_tab %} tab-active{% endif %}" aria-selected="{% if not whatsapp_tab %}true{% else %}false{% endif %}">All</a>
+    <a href="?channel=whatsapp&wa_status=draft" role="tab" class="tab{% if whatsapp_tab == 'draft' %} tab-active{% endif %}" aria-selected="{% if whatsapp_tab == 'draft' %}true{% else %}false{% endif %}">Drafts <span class="text-gray-400 tabular-nums">{{ whatsapp_tab_counts.draft }}</span></a>
+    <a href="?channel=whatsapp&wa_status=scheduled" role="tab" class="tab{% if whatsapp_tab == 'scheduled' %} tab-active{% endif %}" aria-selected="{% if whatsapp_tab == 'scheduled' %}true{% else %}false{% endif %}">Scheduled <span class="text-gray-400 tabular-nums">{{ whatsapp_tab_counts.scheduled }}</span></a>
+    <a href="?channel=whatsapp&wa_status=sending" role="tab" class="tab{% if whatsapp_tab == 'sending' %} tab-active{% endif %}" aria-selected="{% if whatsapp_tab == 'sending' %}true{% else %}false{% endif %}">Sending <span class="text-gray-400 tabular-nums">{{ whatsapp_tab_counts.sending }}</span></a>
+    <a href="?channel=whatsapp&wa_status=finished" role="tab" class="tab{% if whatsapp_tab == 'finished' %} tab-active{% endif %}" aria-selected="{% if whatsapp_tab == 'finished' %}true{% else %}false{% endif %}">Finished</a>
+  </div>
+  {% endif %}
   {% if whatsapp_campaigns %}
   <div class="table-wrap">
     <table class="table table--cards">
@@ -51,7 +61,7 @@
         <tr>
           <td data-label="Campaign">
             <a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
-            <span class="block text-xs text-gray-500">{{ c.contact_list.name }} · {{ c.started_at|default:c.created_at|date:"j M, H:i" }}</span>
+            <span class="block text-xs text-gray-500">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|date:"j M, H:i" }}{% endif %}</span>
           </td>
           <td data-label="Status">{% include "components/status.html" with state=c.state badge=True %}</td>
           <td data-label="Sent to" class="tabular-nums">{{ c.reached }}<span class="text-gray-400"> / {{ c.recipient_count }}</span></td>
@@ -65,6 +75,8 @@
       </tbody>
     </table>
   </div>
+  {% elif whatsapp_any %}
+    <div class="table-wrap">{% include "components/empty_state.html" with icon="send" title="Nothing here" message="No campaigns match this filter." %}</div>
   {% else %}
     {% include "whatsapp/_campaign_readiness.html" with readiness=whatsapp_readiness %}
   {% endif %}

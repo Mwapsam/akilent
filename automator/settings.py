@@ -878,6 +878,18 @@ BACKUP_S3_BUCKET = os.getenv("BACKUP_S3_BUCKET", "")
 # of deferring; existing jobs still drain.
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "1") != "0"
 
+# Campaign quiet hours (08:00-20:00 in the business's timezone) for businesses that
+# haven't chosen their own sending hours. apps.whatsapp.delivery.send_window.
+WHATSAPP_CAMPAIGN_QUIET_HOURS_DEFAULT = (
+    os.getenv("WHATSAPP_CAMPAIGN_QUIET_HOURS_DEFAULT", "1") != "0"
+)
+# Messages one outbound drain pass sends (apps.whatsapp.tasks.drain_outbound_queue).
+WHATSAPP_OUTBOUND_BATCH = int(os.getenv("WHATSAPP_OUTBOUND_BATCH", "50") or 50)
+# Hours a campaign message may wait for plan room before it's dropped.
+WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS = int(
+    os.getenv("WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS", "72") or 72
+)
+
 if WHATSAPP_ENABLED:
     CELERY_TASK_ROUTES.update(
         {
@@ -885,6 +897,13 @@ if WHATSAPP_ENABLED:
             "apps.whatsapp.tasks.drain_outbound_queue": {"queue": "outbound"},
             "apps.whatsapp.tasks.mark_read": {"queue": "whatsapp"},
             "apps.whatsapp.tasks.sweep_stuck_whatsapp_campaigns": {
+                "queue": "campaigns"
+            },
+            "apps.whatsapp.campaigns.dispatch_due_campaigns": {"queue": "campaigns"},
+            "apps.whatsapp.campaigns.cancel_stale_campaign_holds": {
+                "queue": "campaigns"
+            },
+            "apps.whatsapp.campaigns.alert_on_campaign_failure_rate": {
                 "queue": "campaigns"
             },
         }
@@ -914,6 +933,18 @@ if WHATSAPP_ENABLED:
             "sweep-stuck-whatsapp-campaigns": {
                 "task": "apps.whatsapp.tasks.sweep_stuck_whatsapp_campaigns",
                 "schedule": 900.0,  # every 15 min, mirrors retry-held-email-recipients
+            },
+            "dispatch-due-whatsapp-campaigns": {
+                "task": "apps.whatsapp.campaigns.dispatch_due_campaigns",
+                "schedule": 60.0,  # scheduled campaigns start within a minute
+            },
+            "cancel-stale-campaign-holds": {
+                "task": "apps.whatsapp.campaigns.cancel_stale_campaign_holds",
+                "schedule": 3600.0,
+            },
+            "alert-on-campaign-failure-rate": {
+                "task": "apps.whatsapp.campaigns.alert_on_campaign_failure_rate",
+                "schedule": 900.0,
             },
         }
     )

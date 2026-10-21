@@ -29,13 +29,15 @@ no endpoint rather than implying it does.
   <li><a href="{% url 'docs-page' 'whatsapp-codes' %}">WhatsApp one-time codes</a>: <code>POST /api/v1/whatsapp/verification-codes</code> delivers a login or confirmation code, and <code>GET</code> on the same path returns its delivery status.</li>
 </ul>
 <p>
-  These are only in the app for now: connecting numbers, WhatsApp templates, WhatsApp
-  campaigns, and replying to customers in the inbox. There's no endpoint to send a free-form
-  WhatsApp message.
+  <a href="{% url 'docs-page' 'whatsapp-campaigns' %}">WhatsApp campaigns</a> can be sent,
+  scheduled and followed through the API. These are only in the app for now: connecting
+  numbers, creating WhatsApp templates, and replying to customers in the inbox. There's no
+  endpoint to send a free-form WhatsApp message.
 </p>
 <p>
   People who message you on WhatsApp become contacts. The Contacts API returns them with
-  <code>"source": "whatsapp"</code>.
+  <code>"source": "whatsapp"</code>, their <code>phone</code> and their <code>whatsapp</code>
+  status (<code>opted_in</code>, <code>updates</code>, <code>opted_out</code> or <code>none</code>).
 </p>
 {% endif %}
 
@@ -47,7 +49,7 @@ no endpoint rather than implying it does.
 </p>
 <p>
   People who message you on Instagram become contacts. The Contacts API returns them with
-  <code>"source": "instagram"</code>.
+  <code>"source": "instagram"</code>; their Instagram username isn't returned yet.
 </p>
 {% endif %}
 

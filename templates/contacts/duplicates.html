@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Possible duplicates — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Possible duplicates</h1>
+  <p class="mt-1 text-sm text-gray-600 max-w-2xl">Customers who share an email or a phone number, or have the same full name. Compare each pair and merge, or mark them as different people.</p>
+</header>
+
+{% if pairs %}
+<ul class="card divide-y divide-border">
+  {% for a, b in pairs %}
+  <li class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+    <span class="min-w-0 text-sm">
+      <a href="{% url 'contacts:detail' a.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ a.full_name|default:a.phone|default:a.email }}</a>
+      <span class="text-gray-400">and</span>
+      <a href="{% url 'contacts:detail' b.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ b.full_name|default:b.phone|default:b.email }}</a>
+    </span>
+    <span class="flex gap-2">
+      <a href="{% url 'contacts:merge' a.public_id %}?with={{ b.public_id }}" class="btn btn-secondary btn-sm">Compare</a>
+      <form method="post" action="{% url 'contacts:not_duplicate' a.public_id %}">
+        {% csrf_token %}<input type="hidden" name="other" value="{{ b.public_id }}"><input type="hidden" name="next" value="{{ request.path }}">
+        <button class="btn btn-ghost btn-sm">Different people</button>
+      </form>
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="table-wrap">{% include "components/empty_state.html" with icon="users" title="No duplicates found" message="Every customer looks like a different person." %}</div>
+{% endif %}
+{% endblock %}

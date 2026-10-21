@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{% if segment %}{{ segment.name }}{% else %}New segment{% endif %} — Segments{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <a href="{% url 'contacts:segments' %}" class="hover:text-ink">Segments</a>
+    <span aria-hidden="true">/</span><span class="text-ink">{% if segment %}{{ segment.name }}{% else %}New segment{% endif %}</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if segment %}Edit segment{% else %}New segment{% endif %}</h1>
+  <p class="mt-1 text-sm text-gray-600">Choose the rules. The count on the right updates as you go.</p>
+</header>
+
+{% if error %}
+<div class="alert alert-danger mb-4" role="alert">{% include "components/icon.html" with name="alert-circle" %}<span>{{ error }}</span></div>
+{% endif %}
+
+{{ fields|json_script:"segment-fields" }}
+{{ definition|json_script:"segment-definition" }}
+<form id="segment-form" method="post" novalidate
+      x-data="segmentBuilder()"
+      @submit="busy = true">
+  {% csrf_token %}
+  <input type="hidden" name="definition" :value="json" id="segment-definition-input">
+
+  <div class="grid gap-6 lg:grid-cols-5">
+    <div class="lg:col-span-3 space-y-5">
+      <div>
+        <label class="label" for="segment-name">Name</label>
+        <input id="segment-name" name="name" class="input" value="{{ name }}" maxlength="150" placeholder="e.g. Opted in, active this month" required>
+      </div>
+
+      <fieldset class="card card-pad space-y-3">
+        <legend class="sr-only">Rules</legend>
+        <div class="flex flex-wrap items-center gap-2 text-sm text-ink">
+          <span>Customers who match</span>
+          <select class="select w-auto" x-model="op" aria-label="Match all or any rule">
+            <option value="and">all</option>
+            <option value="or">any</option>
+          </select>
+          <span>of these rules:</span>
+        </div>
+
+        <template x-for="(rule, i) in rules" :key="rule.id">
+          <div class="rounded-xl border border-border p-3 flex flex-wrap items-end gap-2">
+            <div class="min-w-[10rem] flex-1">
+              <label class="label text-xs" :for="'f-' + rule.id">Rule</label>
+              <select class="select" :id="'f-' + rule.id" x-model="rule.field" @change="resetRule(rule)">
+                <template x-for="f in fields" :key="f.key"><option :value="f.key" x-text="f.label" :selected="f.key === rule.field"></option></template>
+              </select>
+            </div>
+            <div class="min-w-[8rem]">
+              <label class="label text-xs" :for="'o-' + rule.id">&nbsp;<span class="sr-only">Condition</span></label>
+              <select class="select" :id="'o-' + rule.id" x-model="rule.operator">
+                <template x-for="o in field(rule).operators" :key="o[0]"><option :value="o[0]" x-text="o[1]" :selected="o[0] === rule.operator"></option></template>
+              </select>
+            </div>
+            <div class="min-w-[8rem] flex-1" x-show="needsValue(rule)">
+              <label class="label text-xs" :for="'v-' + rule.id"><span class="sr-only">Value</span>&nbsp;</label>
+              <template x-if="field(rule).type === 'choice'">
+                <select class="select" :id="'v-' + rule.id" x-model="rule.value">
+                  <option value="">Choose…</option>
+                  <template x-for="c in field(rule).choices" :key="c[0]"><option :value="c[0]" x-text="c[1]" :selected="c[0] === rule.value"></option></template>
+                </select>
+              </template>
+              <template x-if="field(rule).type === 'bool'">
+                <select class="select" :id="'v-' + rule.id" x-model="rule.value">
+                  <option value="true">Yes</option><option value="false">No</option>
+                </select>
+              </template>
+              <template x-if="field(rule).type === 'number'">
+                <span class="flex items-center gap-2"><input type="number" min="0" class="input" :id="'v-' + rule.id" x-model="rule.value"><span class="text-sm text-gray-600" x-text="field(rule).unit"></span></span>
+              </template>
+              <template x-if="field(rule).type === 'text'">
+                <input type="text" class="input" :id="'v-' + rule.id" x-model="rule.value">
+              </template>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm min-h-[44px]" @click="rules.splice(i, 1)" :aria-label="'Remove rule ' + (i + 1)">{% include "components/icon.html" with name="x" class="w-4 h-4" %}</button>
+          </div>
+        </template>
+        <p x-show="!rules.length" class="text-sm text-gray-500">No rules yet.</p>
+        <button type="button" class="btn btn-secondary btn-sm" @click="addRule()">{% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add a rule</button>
+      </fieldset>
+    </div>
+
+    <aside class="lg:col-span-2">
+      <div class="lg:sticky lg:top-6 space-y-4">
+        <div id="segment-preview"
+             hx-post="{% url 'contacts:segment_preview' %}"
+             hx-include="#segment-form"
+             hx-trigger="load, segment-changed from:body delay:400ms"
+             aria-live="polite">
+          <div class="card card-pad text-sm text-gray-500">Add a rule to see who matches.</div>
+        </div>
+        {% if segment %}
+        <div class="card card-pad text-sm space-y-2">
+          <p class="font-medium text-ink">Use it</p>
+          <a href="{% url 'whatsapp-campaign-new' %}?segment={{ segment.pk }}" class="btn btn-secondary btn-sm w-full justify-center">Send a WhatsApp campaign</a>
+          <a href="{% url 'contacts:list' %}?segment={{ segment.pk }}" class="btn btn-ghost btn-sm w-full justify-center">See these customers</a>
+        </div>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+
+  <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'contacts:segments' %}" class="btn btn-ghost btn-sm">Cancel</a>
+    </div>
+    <button class="btn btn-primary btn-sm" :aria-busy="busy" :disabled="busy"><span class="btn-spinner" x-show="busy"></span>Save segment</button>
+  </div>
+</form>
+
+{% if segment %}
+<div class="mt-8 flex flex-wrap gap-3 border-t border-border pt-6">
+  <form method="post" action="{% url 'contacts:segment_to_list' segment.pk %}">
+    {% csrf_token %}
+    <button class="btn btn-secondary btn-sm">Save who matches now as a list</button>
+  </form>
+  {% if used_by %}
+  <p class="text-sm text-gray-500 self-center">Used by {{ used_by }} campaign{{ used_by|pluralize }}, so it can't be deleted.</p>
+  {% else %}
+  <form method="post" action="{% url 'contacts:segment_delete' segment.pk %}"
+        x-data @submit.prevent="$store.confirm.ask({title: 'Delete this segment?', message: 'Only the rules are deleted. No customers are removed.', confirmLabel: 'Delete', danger: true}).then(ok => ok && $el.submit())">
+    {% csrf_token %}
+    <button class="btn btn-ghost btn-sm text-coral-700">Delete segment</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+  function segmentBuilder() {
+    const fields = JSON.parse(document.getElementById('segment-fields').textContent);
+    const saved = JSON.parse(document.getElementById('segment-definition').textContent) || {};
+    let seq = 0;
+    const byKey = Object.fromEntries(fields.map(f => [f.key, f]));
+    // Flatten nested groups (e.g. a saved search) into the rows we can show; a
+    // nested group is kept as-is and shown as one read-only rule.
+    const toRule = (c) => {
+      if (c.conditions) return { id: ++seq, group: c };
+      const f = byKey[c.field];
+      return { id: ++seq, field: c.field, operator: c.operator, value: c.value === undefined ? '' : String(c.value), known: !!f };
+    };
+    return {
+      fields,
+      op: saved.op || 'and',
+      rules: (saved.conditions || []).map(toRule),
+      busy: false,
+      field(rule) {
+        if (rule.group) return { operators: [['group', 'matches the search']], type: 'none' };
+        return byKey[rule.field] || { operators: [[rule.operator, rule.operator]], type: 'text' };
+      },
+      needsValue(rule) { return !rule.group && !['exists', 'not_exists'].includes(rule.operator) },
+      addRule() {
+        const f = fields[0];
+        this.rules.push({ id: ++seq, field: f.key, operator: f.operators[0][0], value: f.type === 'bool' ? 'true' : '' });
+      },
+      resetRule(rule) {
+        const f = byKey[rule.field];
+        rule.operator = f.operators[0][0];
+        rule.value = f.type === 'bool' ? 'true' : '';
+      },
+      cast(rule) {
+        const f = byKey[rule.field] || {};
+        if (f.type === 'bool') return rule.value === 'true';
+        if (f.type === 'number') return rule.value === '' ? null : Number(rule.value);
+        return rule.value;
+      },
+      get json() {
+        const conditions = this.rules.map(r => r.group ? r.group
+          : (this.needsValue(r) ? { field: r.field, operator: r.operator, value: this.cast(r) } : { field: r.field, operator: r.operator }));
+        return JSON.stringify({ op: this.op, conditions });
+      },
+      init() {
+        this.$watch('json', () => this.$nextTick(() => document.body.dispatchEvent(new Event('segment-changed'))));
+      },
+    };
+  }
+</script>
+{% endblock %}

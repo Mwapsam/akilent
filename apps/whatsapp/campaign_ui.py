@@ -33,15 +33,82 @@ SKIP_REASON_COPY = {
         "The message needs something we don't have for them (like their name) and no "
         "fallback was set.",
     ),
+    "cancelled": (
+        "Cancelled",
+        "The campaign was cancelled before their message went out.",
+    ),
+    "plan_limit": (
+        "Plan limit",
+        "Your plan's monthly WhatsApp limit stayed full for days, so their message "
+        "wasn't sent late.",
+    ),
+    "not_on_whatsapp": (
+        "Not on WhatsApp",
+        "WhatsApp told us this number isn't on WhatsApp.",
+    ),
+    "template_stopped": (
+        "Template stopped",
+        "Meta paused or rejected the message template while the campaign was sending.",
+    ),
 }
 
 STATUS_STATE = {
     WhatsAppCampaign.Status.DRAFT: "draft",
+    WhatsAppCampaign.Status.SCHEDULED: "scheduled",
     WhatsAppCampaign.Status.QUEUED: "sending",
     WhatsAppCampaign.Status.SENDING: "sending",
+    WhatsAppCampaign.Status.PAUSED: "paused",
     WhatsAppCampaign.Status.COMPLETED: "sent",
     WhatsAppCampaign.Status.FAILED: "failed",
+    WhatsAppCampaign.Status.CANCELLED: "cancelled",
 }
+
+EVENT_COPY = {
+    "drafted": "Saved as a draft",
+    "edited": "Draft updated",
+    "scheduled": "Scheduled",
+    "sent": "Sent",
+    "started": "Started sending",
+    "paused": "Paused",
+    "resumed": "Resumed",
+    "cancelled": "Cancelled",
+    "completed": "Every message handed to WhatsApp",
+    "failed": "Stopped with a problem",
+}
+
+
+def timeline(campaign) -> list[dict]:
+    """The history entries as the detail page shows them, oldest first."""
+    from django.utils.dateparse import parse_datetime
+
+    out = []
+    for entry in campaign.history or []:
+        at = parse_datetime(entry.get("at") or "")
+        when = parse_datetime(entry.get("when") or "") if entry.get("when") else None
+        out.append(
+            {
+                "at": at,
+                "label": EVENT_COPY.get(entry.get("event", ""), entry.get("event", "")),
+                "by": entry.get("by", ""),
+                "when": when,
+                "recipients": entry.get("recipients"),
+                "not_sent": entry.get("not_sent"),
+            }
+        )
+    return out
+
+
+def local_label(dt, tz: str) -> str:
+    """``dt`` as the owner reads it in ``tz``: "Fri 3 Oct 2026, 09:00"."""
+    from zoneinfo import ZoneInfo
+
+    if dt is None:
+        return ""
+    try:
+        local = dt.astimezone(ZoneInfo(tz or "UTC"))
+    except (ValueError, KeyError):
+        local = dt
+    return f"{local:%a} {local.day} {local:%b %Y, %H:%M}"
 
 
 def lifecycle_state(campaign) -> str:
@@ -117,6 +184,25 @@ def readiness(account) -> Readiness:
     )
 
 
+def segment_options(account) -> list:
+    """Every saved segment with who it reaches right now, for the audience step."""
+    from apps.contacts import reachability, segments
+    from apps.contacts.models import Segment
+
+    out = list(Segment.objects.filter(account=account).order_by("name"))
+    for seg in out:
+        try:
+            qs = segments.contacts_for(seg.definition or {}, account)
+            seg.reach = reachability.counts(  # type: ignore[attr-defined]
+                qs.model.objects.filter(pk__in=qs.values("pk"))
+            )
+            seg.broken = False  # type: ignore[attr-defined]
+        except segments.SegmentError:
+            seg.reach = {"total": 0}  # type: ignore[attr-defined]
+            seg.broken = True  # type: ignore[attr-defined]
+    return out
+
+
 def list_options(account) -> list:
     """Every list with its WhatsApp reachability counts, for the audience step."""
     from apps.contacts import reachability
@@ -186,15 +272,19 @@ class Estimate:
         return [(key, n, *SKIP_REASON_COPY[key]) for key, n in rows if n]
 
 
-def estimate(
-    account, contact_list, template, mapping: dict, fallbacks: dict
-) -> Estimate:
-    """Who this list + template + blanks would reach — the same rules as the send."""
+def estimate(account, audience, template, mapping: dict, fallbacks: dict) -> Estimate:
+    """Who this audience + template + blanks would reach — the same rules as the send.
+
+    ``audience`` is the Contact queryset of a list or a segment
+    (``apps.whatsapp.campaigns.audience_contacts``).
+    """
     from apps.automation import variables
     from apps.contacts import reachability
 
-    members = reachability.annotate(contact_list.contacts.filter(account=account))
-    counts = reachability.counts(contact_list.contacts.filter(account=account))
+    # Re-rooted on pk so a segment's distinct()/joins can't skew the counts.
+    base = audience.model.objects.filter(account=account, pk__in=audience.values("pk"))
+    members = reachability.annotate(base)
+    counts = reachability.counts(base)
     est = Estimate(total=counts["total"])
     est.opted_out = counts[reachability.OPTED_OUT]
     est.no_whatsapp = counts[reachability.NONE]

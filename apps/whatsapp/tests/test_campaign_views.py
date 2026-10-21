@@ -189,7 +189,7 @@ def test_campaign_new_shows_the_form_when_both_exist(
 ):
     client, _ = logged_in
     body = client.get("/whatsapp/campaigns/new/").content.decode()
-    assert 'name="contact_list"' in body
+    assert 'name="audience"' in body
     assert 'name="template_id"' in body
     assert "Make a list of people to send to" not in body
 
@@ -277,7 +277,7 @@ def test_composer_opens_on_the_message_step_when_linked_from_a_list(
         f"/whatsapp/campaigns/new/?list={contact_list.pk}"
     ).content.decode()
     assert "step: 2" in body
-    assert f"list: '{contact_list.pk}'" in body
+    assert f"audience: 'list:{contact_list.pk}'" in body
 
 
 @_wa_urls

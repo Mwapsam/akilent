@@ -189,11 +189,14 @@ class HubSpotSyncJob(models.Model):
     class ObjectType(models.TextChoices):
         CONTACT = "contact", "Contact"
         DEAL = "deal", "Deal"
+        # The customer was deleted in Akilent: archive them in HubSpot too.
+        # Carries the HubSpot id itself, since the link is gone by then.
+        CONTACT_DELETE = "contact_delete", "Contact deletion"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="hs_sync_jobs"
     )
-    object_type = models.CharField(max_length=10, choices=ObjectType.choices)
+    object_type = models.CharField(max_length=16, choices=ObjectType.choices)
     contact_link = models.ForeignKey(
         HubSpotContactLink,
         on_delete=models.CASCADE,
@@ -212,6 +215,7 @@ class HubSpotSyncJob(models.Model):
         max_length=10, choices=Status.choices, default=Status.PENDING
     )
     sent_payload = models.JSONField(null=True, blank=True)
+    hs_object_id = models.CharField(max_length=50, blank=True, default="")
     attempts = models.PositiveSmallIntegerField(default=0)
     last_error = models.TextField(blank=True, default="")
     retry_after = models.DateTimeField(blank=True, null=True)
@@ -313,6 +317,9 @@ class ReconcileCursor(models.Model):
     class ObjectType(models.TextChoices):
         CONTACT = "contact", "Contact"
         DEAL = "deal", "Deal"
+        # The customer was deleted in Akilent: archive them in HubSpot too.
+        # Carries the HubSpot id itself, since the link is gone by then.
+        CONTACT_DELETE = "contact_delete", "Contact deletion"
         ARCHIVED_CONTACT = "archived_contact", "Archived Contact"
         ARCHIVED_DEAL = "archived_deal", "Archived Deal"
 

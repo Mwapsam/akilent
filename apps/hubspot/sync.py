@@ -34,6 +34,16 @@ def enqueue_contact_sync(contact_link: HubSpotContactLink) -> None:
     _enqueue_job(contact_link.account, "contact", contact_link=contact_link)
 
 
+def enqueue_contact_delete(account, hs_object_id: str) -> None:
+    """Archive a HubSpot contact whose Akilent customer was deleted."""
+    if hs_object_id:
+        HubSpotSyncJob.objects.create(
+            account=account,
+            object_type=HubSpotSyncJob.ObjectType.CONTACT_DELETE,
+            hs_object_id=hs_object_id,
+        )
+
+
 def enqueue_deal_sync(deal_link: HubSpotDealLink) -> None:
     """Create or coalesce a pending sync job for this deal link."""
     _enqueue_job(deal_link.account, "deal", deal_link=deal_link)
@@ -88,6 +98,19 @@ def process_sync_job(job: HubSpotSyncJob) -> None:
         _push_contact(client, job)
     elif job.object_type == HubSpotSyncJob.ObjectType.DEAL:
         _push_deal(client, job)
+    elif job.object_type == HubSpotSyncJob.ObjectType.CONTACT_DELETE:
+        _delete_contact(client, job)
+
+
+def _delete_contact(client, job: HubSpotSyncJob) -> None:
+    try:
+        client.delete(f"/crm/v3/objects/contacts/{job.hs_object_id}")
+    except HubSpotAPIError as exc:
+        if exc.status_code != 404:  # already gone there
+            _fail_job(job, str(exc))
+            return
+    job.status = HubSpotSyncJob.Status.DONE
+    job.save(update_fields=["status", "updated_at"])
 
 
 def _push_contact(client, job: HubSpotSyncJob) -> None:

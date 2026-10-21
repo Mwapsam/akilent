@@ -73,9 +73,29 @@ class WhatsAppBusinessNumber(models.Model):
     # Max outbound messages/second for this number. Meta's throughput tiers are
     # 80/s (default) rising to 1000/s; start conservative and raise per number.
     send_rate_limit = models.PositiveSmallIntegerField(default=20)
+    # Meta's business-initiated messaging limit for this number ("TIER_1K" ...),
+    # from the phone_number_quality_update webhook. Blank until Meta tells us.
+    messaging_limit = models.CharField(max_length=20, blank=True, default="")
+    messaging_limit_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # How many different customers a business can start conversations with in a
+    # rolling 24 hours, per tier. None = no limit.
+    TIER_LIMITS = {
+        "TIER_50": 50,
+        "TIER_250": 250,
+        "TIER_1K": 1000,
+        "TIER_2K": 2000,
+        "TIER_10K": 10000,
+        "TIER_100K": 100000,
+        "TIER_UNLIMITED": None,
+    }
+
+    @property
+    def daily_limit(self) -> int | None:
+        return self.TIER_LIMITS.get((self.messaging_limit or "").upper())
 
     class Meta:
         unique_together = ("account", "phone_number_id")

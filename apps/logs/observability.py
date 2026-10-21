@@ -161,6 +161,14 @@ def idempotency_complete(record, response) -> None:
         record.status = IdempotencyRecord.Status.COMPLETED
         record.response_status = getattr(response, "status_code", 200)
         body = getattr(response, "data", None)
+        if isinstance(body, (dict, list)):
+            # Datetimes, decimals and UUIDs as the API renders them, so the
+            # JSONField can store the replay (a raw datetime would fail the save).
+            import json
+
+            from django.core.serializers.json import DjangoJSONEncoder
+
+            body = json.loads(json.dumps(body, cls=DjangoJSONEncoder))
         record.response_body = body if isinstance(body, (dict, list)) else {}
         record.completed_at = timezone.now()
         record.save(

@@ -1,0 +1,5 @@
+{% if ok %}
+<p class="text-sm text-teal-700 flex items-start gap-1.5">{% include "components/icon.html" with name="check" class="w-4 h-4 mt-0.5" %}<span>{{ message }}</span></p>
+{% else %}
+<p class="text-sm text-coral-700 flex items-start gap-1.5" role="alert">{% include "components/icon.html" with name="alert-circle" class="w-4 h-4 mt-0.5" %}<span>{{ message }}</span></p>
+{% endif %}

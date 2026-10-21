@@ -75,6 +75,7 @@ Draft ─▶ Scheduled ─▶ Sending ─▶ Sent
 | **Sent** | Fully dispatched | `badge-success` | `teal-500` | `check` |
 | **Failed** | Send errored / bounced hard | `badge-danger` | `coral-500` | `alert-triangle` |
 | **Paused** | Halted, resumable | `badge-neutral` | `gray-500` | `pause` |
+| **Cancelled** | Stopped by a person before finishing; not resumable | `badge-neutral` | `gray-400` | `x` |
 
 Rules:
 - The label text is always the capitalised state name above — never synonyms

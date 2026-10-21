@@ -81,8 +81,9 @@ def upsert_contact(
     if not email:
         raise ValueError("email is required")
 
+    # Case-insensitive, like the uniqueness rule: an older "Ada@X.com" is this person.
     contact, created = Contact.objects.get_or_create(
-        account=account, email=email, defaults=fields
+        account=account, email__iexact=email, defaults={"email": email, **fields}
     )
     dirty = []
     for key, value in fields.items():

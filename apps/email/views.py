@@ -1689,25 +1689,44 @@ def campaigns_list(request):
     whatsapp_campaigns = []
     whatsapp_readiness = None
     whatsapp_campaigns_usable = False
+    whatsapp_any = False
+    wa_tab = ""
+    whatsapp_tab_counts: dict = {}
     if whatsapp_enabled:
         from apps.billing import api as billing_api
-        from apps.whatsapp.campaign_ui import lifecycle_state, readiness
+        from apps.whatsapp.campaign_ui import lifecycle_state, local_label, readiness
         from apps.whatsapp.campaigns import delivery_stats_for
         from apps.whatsapp.models import WhatsAppCampaign
 
         whatsapp_campaigns_usable = billing_api.usable(account, "whatsapp_campaigns")
+        _S = WhatsAppCampaign.Status
+        wa_tabs = {
+            "draft": [_S.DRAFT],
+            "scheduled": [_S.SCHEDULED],
+            "sending": [_S.QUEUED, _S.SENDING, _S.PAUSED],
+            "finished": [_S.COMPLETED, _S.FAILED, _S.CANCELLED],
+        }
+        wa_tab = request.GET.get("wa_status") or ""
+        wa_all = WhatsAppCampaign.objects.filter(account=account)
+        whatsapp_tab_counts = {
+            key: wa_all.filter(status__in=statuses).count()
+            for key, statuses in wa_tabs.items()
+        }
+        whatsapp_any = wa_all.exists()
+        wa_qs = (
+            wa_all.filter(status__in=wa_tabs[wa_tab]) if wa_tab in wa_tabs else wa_all
+        )
         whatsapp_campaigns = list(
-            WhatsAppCampaign.objects.filter(account=account).select_related(
-                "template", "contact_list"
-            )[:50]
+            wa_qs.select_related("template", "contact_list", "segment")[:50]
         )
         stats = delivery_stats_for([c.pk for c in whatsapp_campaigns])
         for c in whatsapp_campaigns:
             c.stats = stats[c.pk]  # type: ignore[attr-defined]
             c.state = lifecycle_state(c)  # type: ignore[attr-defined]
+            c.when_label = local_label(c.scheduled_at, c.timezone)  # type: ignore[attr-defined]
             c.delivered = c.stats["delivered"] + c.stats["read"]  # type: ignore[attr-defined]
             c.reached = c.delivered + c.stats["sent"]  # type: ignore[attr-defined]
-        if not whatsapp_campaigns:
+        if not whatsapp_any:
             whatsapp_readiness = readiness(account)
 
     return render(
@@ -1731,6 +1750,9 @@ def campaigns_list(request):
             "whatsapp_campaigns": whatsapp_campaigns,
             "whatsapp_readiness": whatsapp_readiness,
             "whatsapp_campaigns_usable": whatsapp_campaigns_usable,
+            "whatsapp_any": whatsapp_any,
+            "whatsapp_tab": wa_tab,
+            "whatsapp_tab_counts": whatsapp_tab_counts,
         },
     )
 

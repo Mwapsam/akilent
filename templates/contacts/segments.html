@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Segments — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Segments</h1>
+    <p class="mt-1 text-sm text-gray-600 max-w-2xl">A segment picks customers by rules — like “opted in and active in the last 30 days”. Unlike a list, it updates itself: a campaign sent to a segment goes to whoever matches at that moment.</p>
+  </div>
+  <a href="{% url 'contacts:segment_new' %}" class="btn btn-primary btn-sm">{% include "components/icon.html" with name="plus" class="w-4 h-4" %} New segment</a>
+</header>
+
+{% if rows %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead>
+      <tr>
+        <th>Segment</th>
+        <th>Matches now</th>
+        <th>Can receive offers {% include "components/help_tip.html" with text="Opted in: they agreed to hear from you, so they can get promotions as well as updates." %}</th>
+        <th><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td data-label="Segment">
+          <a href="{% url 'contacts:segment_edit' r.segment.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ r.segment.name }}</a>
+          {% if r.broken %}<span class="block text-xs text-coral-700">A rule no longer works — open it to fix.</span>{% endif %}
+        </td>
+        <td data-label="Matches now" class="tabular-nums">{{ r.reach.total }}</td>
+        <td data-label="Can receive offers" class="tabular-nums">{{ r.reach.opted_in|default:0 }}{% if r.reach.total %} <span class="text-gray-400">of {{ r.reach.total }}</span>{% endif %}</td>
+        <td class="text-right whitespace-nowrap">
+          <a href="{% url 'contacts:list' %}?segment={{ r.segment.pk }}" class="btn btn-ghost btn-sm">See customers</a>
+          <a href="{% url 'whatsapp-campaign-new' %}?segment={{ r.segment.pk }}" class="btn btn-secondary btn-sm">Send campaign</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="table-wrap">
+  <div class="empty-state">
+    <span class="empty-state-icon">{% include "components/icon.html" with name="sliders" class="w-6 h-6" %}</span>
+    <p class="empty-state-title">No segments yet</p>
+    <p class="empty-state-message">Make one from rules, or filter your customers and choose “Save as segment”.</p>
+    <a href="{% url 'contacts:segment_new' %}" class="btn btn-primary btn-sm mt-4">New segment</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,13 @@
+{% comment %}Name, objective and dates of a content theme. c = the theme (or nothing for a new one).{% endcomment %}
+<div>
+  <label class="label" for="theme-name-{{ prefix }}">Name</label>
+  <input id="theme-name-{{ prefix }}" type="text" name="name" value="{{ c.name|default:'' }}" placeholder="e.g. October product launch" class="input w-full" maxlength="200" required>
+</div>
+<div>
+  <label class="label" for="theme-objective-{{ prefix }}">What it should achieve <span class="font-normal text-gray-400">(optional)</span></label>
+  <textarea id="theme-objective-{{ prefix }}" name="objective" rows="2" class="input w-full">{{ c.objective|default:'' }}</textarea>
+</div>
+<div class="grid gap-3 sm:grid-cols-2">
+  <div><label class="label" for="theme-start-{{ prefix }}">Starts</label><input id="theme-start-{{ prefix }}" type="date" name="start_date" value="{{ c.start_date|date:'Y-m-d' }}" class="input"></div>
+  <div><label class="label" for="theme-end-{{ prefix }}">Ends</label><input id="theme-end-{{ prefix }}" type="date" name="end_date" value="{{ c.end_date|date:'Y-m-d' }}" class="input"></div>
+</div>

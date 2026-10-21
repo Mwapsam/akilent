@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Merge customers — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <a href="{% url 'contacts:detail' contact.public_id %}" class="text-sm text-gray-500 hover:text-ink">&larr; {{ contact.full_name|default:contact.phone|default:contact.email|default:"Customer" }}</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Merge customers</h1>
+  <p class="mt-1 text-sm text-gray-600 max-w-2xl">When one person was saved twice — for example once from WhatsApp and once from Instagram — merge them so their conversations, orders and history are in one place.</p>
+</header>
+
+{% if not other %}
+  <form method="get" class="flex flex-wrap gap-2 mb-6">
+    <label class="sr-only" for="merge-q">Find the other customer</label>
+    <input id="merge-q" type="search" name="q" value="{{ q }}" class="input w-full sm:w-80" placeholder="Search name, phone or email…" autofocus>
+    <button class="btn btn-secondary btn-sm">Search</button>
+  </form>
+
+  {% if suggestions %}
+  <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Looks like the same person</h2>
+  <ul class="card divide-y divide-border mb-6">
+    {% for c in suggestions %}
+    <li class="px-4 py-3 flex items-center justify-between gap-3">
+      <span class="min-w-0"><span class="font-medium text-ink">{{ c.full_name|default:"Unnamed customer" }}</span> <span class="text-sm text-gray-500">{{ c.phone|default:"" }} {{ c.email|default:"" }}</span></span>
+      <a href="?with={{ c.public_id }}" class="btn btn-secondary btn-sm">Compare</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if q %}
+  <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Results</h2>
+  <ul class="card divide-y divide-border">
+    {% for c in results %}
+    <li class="px-4 py-3 flex items-center justify-between gap-3">
+      <span class="min-w-0"><span class="font-medium text-ink">{{ c.full_name|default:"Unnamed customer" }}</span> <span class="text-sm text-gray-500">{{ c.phone|default:"" }} {{ c.email|default:"" }}</span></span>
+      <a href="?with={{ c.public_id }}" class="btn btn-secondary btn-sm">Compare</a>
+    </li>
+    {% empty %}
+    <li class="px-4 py-3 text-sm text-gray-500">No other customer matches “{{ q }}”.</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% else %}
+  <form method="post" x-data="{ keep: 'this' }">
+    {% csrf_token %}
+    <input type="hidden" name="other" value="{{ other.public_id }}">
+    <p class="text-sm text-gray-600 mb-3">Choose which record to keep. Its name and details win where both have one; anything only the other has is copied over. Nothing else is lost.</p>
+    <div class="grid gap-4 md:grid-cols-2">
+      {% include "contacts/_merge_side.html" with s=left value="this" %}
+      {% include "contacts/_merge_side.html" with s=right value="other" %}
+    </div>
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a href="{% url 'contacts:merge' contact.public_id %}" class="btn btn-ghost btn-sm">Back</a>
+      <button class="btn btn-primary btn-sm" data-confirm="Merge these two customers into one? This can't be undone." data-confirm-label="Merge">Merge into one customer</button>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

@@ -20,7 +20,23 @@ urlpatterns = [
         views.campaign_estimate,
         name="whatsapp-campaign-estimate",
     ),
+    path("campaigns/test/", views.campaign_test, name="whatsapp-campaign-test"),
+    path(
+        "campaigns/settings/",
+        views.campaign_settings,
+        name="whatsapp-campaign-settings",
+    ),
     path("campaigns/<int:pk>/", views.campaign_detail, name="whatsapp-campaign-detail"),
+    path(
+        "campaigns/<int:pk>/export.csv",
+        views.campaign_export,
+        name="whatsapp-campaign-export",
+    ),
+    path(
+        "campaigns/<int:pk>/<str:action>/",
+        views.campaign_action,
+        name="whatsapp-campaign-action",
+    ),
     path("numbers/", numbers.numbers_list, name="whatsapp-numbers"),
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),
     path(

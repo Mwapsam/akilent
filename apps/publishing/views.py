@@ -1040,6 +1040,52 @@ def pillar_manage(request):
     )
 
 
+def _theme_date(raw: str):
+    from datetime import date
+
+    try:
+        return date.fromisoformat(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _save_theme(request, account) -> None:
+    """Create, edit or delete a content theme (ContentCampaign) from the themes page."""
+    action = request.POST.get("action") or "create"
+    if action in ("update", "delete"):
+        theme = ContentCampaign.objects.filter(
+            account=account, pk=request.POST.get("pk") or 0
+        ).first()
+        if theme is None:
+            messages.error(request, "That theme no longer exists.")
+            return
+        if action == "delete":
+            name = theme.name
+            theme.delete()  # posts and plan items keep going, without the theme
+            messages.success(
+                request, f"Deleted the theme “{name}”. Its posts are kept."
+            )
+            return
+    else:
+        theme = ContentCampaign(account=account)
+    name = request.POST.get("name", "").strip()[:200]
+    if not name:
+        messages.error(request, "Give the theme a name.")
+        return
+    start = _theme_date(request.POST.get("start_date", ""))
+    end = _theme_date(request.POST.get("end_date", ""))
+    if start and end and end < start:
+        messages.error(request, "The end date is before the start date.")
+        return
+    theme.name = name
+    theme.objective = request.POST.get("objective", "").strip()
+    theme.start_date, theme.end_date = start, end
+    theme.save()
+    messages.success(
+        request, f"Saved “{name}”." if action == "update" else f"Added “{name}”."
+    )
+
+
 @login_required
 def campaign_manage(request):
     account = get_current_account(request)
@@ -1047,15 +1093,7 @@ def campaign_manage(request):
         return redirect("dashboard")
 
     if request.method == "POST":
-        name = request.POST.get("name", "").strip()
-        objective = request.POST.get("objective", "").strip()
-        if name:
-            ContentCampaign.objects.create(
-                account=account, name=name, objective=objective
-            )
-            messages.success(request, f'Campaign "{name}" created.')
-        else:
-            messages.error(request, "Campaign name is required.")
+        _save_theme(request, account)
         return redirect("publishing:campaigns")
 
     campaigns = ContentCampaign.objects.filter(account=account)

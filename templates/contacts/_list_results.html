@@ -13,7 +13,8 @@ wrapper; this block only knows the ids on the current page.
      x-init="matching = {{ matching }}">
   {% if page %}
   <div class="flex flex-wrap items-center justify-between gap-2 mb-2 text-sm">
-    <p class="text-gray-500" aria-live="polite">{% if filtered %}{{ matching }} match{{ matching|pluralize:"es" }}{% else %}Showing {{ page.start_index }}–{{ page.end_index }} of {{ matching }}{% endif %}</p>
+    <p class="text-gray-500" aria-live="polite">{% if filtered %}{{ matching }} match{{ matching|pluralize:"es" }}{% else %}Showing {{ page.start_index }}–{{ page.end_index }} of {{ matching }}{% endif %}
+      {% if filtered and not segment %}· <a href="{% url 'contacts:segment_new' %}?from=filter&amp;{{ filter_query }}" class="text-accent hover:text-accent-strong">Save as segment</a>{% endif %}</p>
     {% if matching > page|length %}
     <p x-show="pageSelected && !allMatching" x-cloak>
       <button type="button" class="text-accent hover:text-accent-strong font-medium" @click="allMatching = true">
@@ -36,7 +37,9 @@ wrapper; this block only knows the ids on the current page.
                      @change="if ($event.target.checked) { pageIds.forEach(id => { if (!selected.includes(id)) selected.push(id) }) } else { selected = selected.filter(id => !pageIds.includes(id)); allMatching = false }">
             </label>
           </th>
-          <th>Customer</th><th>WhatsApp</th><th>Tags</th><th>Last active</th>
+          <th aria-sort="{{ sort_links.name.state|default:'none' }}"><a href="{{ sort_links.name.url }}" class="inline-flex items-center gap-1 hover:text-ink" hx-get="{{ sort_links.name.url }}" hx-target="#contact-results" hx-swap="outerHTML" hx-push-url="true">Customer{% if sort_links.name.state %}<span aria-hidden="true">{% if sort_links.name.state == 'ascending' %}↑{% else %}↓{% endif %}</span>{% endif %}</a></th>
+          <th>WhatsApp</th><th>Tags</th>
+          <th aria-sort="{{ sort_links.active.state|default:'none' }}"><a href="{{ sort_links.active.url }}" class="inline-flex items-center gap-1 hover:text-ink" hx-get="{{ sort_links.active.url }}" hx-target="#contact-results" hx-swap="outerHTML" hx-push-url="true">Last active{% if sort_links.active.state %}<span aria-hidden="true">{% if sort_links.active.state == 'ascending' %}↑{% else %}↓{% endif %}</span>{% endif %}</a></th>
         </tr>
       </thead>
       <tbody>

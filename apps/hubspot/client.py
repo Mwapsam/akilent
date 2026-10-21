@@ -49,6 +49,9 @@ class HubSpotClient:
     def patch(self, path: str, json: dict) -> dict:
         return self._request("PATCH", path, json=json)
 
+    def delete(self, path: str) -> dict:
+        return self._request("DELETE", path)
+
     def _request(self, method: str, path: str, **kwargs) -> dict:
         url = f"{_BASE}{path}"
         for attempt in range(_MAX_RETRIES):

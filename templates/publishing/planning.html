@@ -112,10 +112,10 @@
 
 </div>
 
-{# Pillars and campaigns quick links #}
+{# Pillars and content themes quick links #}
 <div class="mt-4 flex gap-3 text-xs text-gray-400">
   <a href="{% url 'publishing:pillars' %}" class="hover:text-ink">Manage pillars ({{ pillars|length }})</a>
   <span>·</span>
-  <a href="{% url 'publishing:campaigns' %}" class="hover:text-ink">Manage campaigns ({{ campaigns|length }})</a>
+  <a href="{% url 'publishing:campaigns' %}" class="hover:text-ink">Manage themes ({{ campaigns|length }})</a>
 </div>
 {% endblock %}

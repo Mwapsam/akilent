@@ -7,9 +7,9 @@
   <div class="min-w-0">
     <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">{{ contact.full_name|default:contact.phone|default:contact.email|default:"Unnamed customer" }}</h1>
-    <p class="text-sm text-gray-500 tabular-nums">{{ contact.phone|default:"" }}{% if contact.email and contact.phone %} &middot; {% endif %}{{ contact.email|default:"" }}</p>
+    <p class="text-sm text-gray-500 tabular-nums">{{ contact.phone|default:"" }}{% if contact.email and contact.phone %} &middot; {% endif %}{{ contact.email|default:"" }}{% for h in instagram_handles %} &middot; <span class="inline-flex items-center gap-1">{% include "components/icon.html" with name="instagram" class="w-3.5 h-3.5" %}@{{ h }}</span>{% endfor %}</p>
   </div>
-  <div class="flex flex-wrap gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     {% for conv in conversations|slice:":1" %}
       <a href="{% url 'conversations:detail' conv.public_id %}" class="btn btn-secondary btn-sm">
         {% include "components/icon.html" with name="inbox" class="w-4 h-4" %} Open conversation
@@ -18,8 +18,32 @@
     <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'edit-contact')">
       {% include "components/icon.html" with name="pencil" class="w-4 h-4" %} Edit
     </button>
+    {% dropdown label="More" button_class="btn btn-ghost btn-sm" %}
+      <a href="{% url 'contacts:merge' contact.public_id %}" class="nav-link w-full" role="menuitem">{% include "components/icon.html" with name="users" class="w-4 h-4" %} Merge with another customer</a>
+      {% if is_admin %}
+      <a href="{% url 'contacts:delete' contact.public_id %}" class="nav-link w-full text-coral-700" role="menuitem">{% include "components/icon.html" with name="trash" class="w-4 h-4" %} Delete customer</a>
+      {% endif %}
+    {% enddropdown %}
   </div>
 </div>
+
+{% for d in duplicates %}
+<div class="alert alert-info mb-6" role="status">
+  {% include "components/icon.html" with name="users" %}
+  <div class="flex-1 min-w-0">
+    <p class="font-medium">This might be the same person as <a href="{% url 'contacts:detail' d.public_id %}" class="underline">{{ d.full_name|default:d.phone|default:d.email }}</a></p>
+    <p class="text-sm">Merging puts their conversations, orders and history in one place.</p>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'contacts:merge' contact.public_id %}?with={{ d.public_id }}" class="btn btn-secondary btn-sm">Compare and merge</a>
+    <form method="post" action="{% url 'contacts:not_duplicate' contact.public_id %}">
+      {% csrf_token %}<input type="hidden" name="other" value="{{ d.public_id }}">
+      <button class="btn btn-ghost btn-sm">Different people</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
 <div class="grid gap-6 lg:grid-cols-3">
   <div class="space-y-6">
   <section class="card card-pad text-sm" aria-labelledby="wa-title">
@@ -34,7 +58,7 @@
       {% else %}No phone number yet. <button type="button" class="text-accent hover:text-accent-strong font-medium" @click="$dispatch('modal-open', 'edit-contact')">Add one</button> to reach them on WhatsApp.{% endif %}
     </p>
     {% if wa_identity and wa_identity.opt_in_at and wa_state == 'opted_in' %}
-      <p class="text-xs text-gray-500 mt-1">Since {{ wa_identity.opt_in_at|date:"j M Y" }}{% if wa_identity.opt_in_source %} · {% if 'owner_attestation' in wa_identity.opt_in_source %}marked by your team{% elif 'keyword' in wa_identity.opt_in_source or wa_identity.opt_in_source == 'start' %}replied START{% else %}{{ wa_identity.opt_in_source }}{% endif %}{% endif %}</p>
+      <p class="text-xs text-gray-500 mt-1">Since {{ wa_identity.opt_in_at|date:"j M Y" }}{% if wa_identity.opt_in_source %} · {% if 'owner_attestation' in wa_identity.opt_in_source %}marked by your team{% elif 'campaign_test' in wa_identity.opt_in_source %}your team's own test number{% elif 'keyword' in wa_identity.opt_in_source or wa_identity.opt_in_source == 'start' %}replied START{% else %}{{ wa_identity.opt_in_source }}{% endif %}{% endif %}</p>
     {% elif wa_identity and wa_identity.opt_out_at and wa_state == 'opted_out' %}
       <p class="text-xs text-gray-500 mt-1">Since {{ wa_identity.opt_out_at|date:"j M Y" }}</p>
     {% endif %}
@@ -92,10 +116,15 @@
     {% endif %}
   </section>
 
-  <section class="card card-pad text-sm space-y-2">
+  <section class="card card-pad text-sm space-y-2" aria-labelledby="details-title">
+    <h2 id="details-title" class="font-medium text-ink">Details</h2>
     <div class="flex justify-between"><span class="text-gray-500">Added</span><span>{{ contact.first_seen|date:"j M Y" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Last active</span><span>{{ contact.last_engaged_at|date:"j M Y"|default:"—" }}</span></div>
     {% if contact.source %}<div class="flex justify-between"><span class="text-gray-500">How they arrived</span><span>{{ contact.source|capfirst }}</span></div>{% endif %}
+    {% if related.orders %}<div class="flex justify-between"><span class="text-gray-500">Orders</span><a href="{% url 'commerce:orders' %}?q={{ contact.phone|default:contact.email|urlencode }}" class="text-accent hover:text-accent-strong">{{ related.orders }}</a></div>{% endif %}
+    {% if related.leads %}<div class="flex justify-between"><span class="text-gray-500">Leads</span><span>{{ related.leads }}</span></div>{% endif %}
+    {% if related.deals %}<div class="flex justify-between"><span class="text-gray-500">Deals</span><span>{{ related.deals }}</span></div>{% endif %}
+
     <div class="pt-2">
       <p class="text-gray-500 mb-1">Tags</p>
       <div class="flex flex-wrap gap-1 mb-2">
@@ -117,76 +146,95 @@
         <button class="btn btn-secondary btn-sm">Add</button>
       </form>
     </div>
-    {% if attribute_rows %}
-    <div class="pt-2">
-      <p class="text-gray-500 mb-1">Customer information</p>
-      <dl class="text-sm space-y-1">
-        {% for label, value in attribute_rows %}
-        <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right">{{ value }}</dd></div>
-        {% endfor %}
-      </dl>
+  </section>
+
+  <section class="card card-pad text-sm" aria-labelledby="fields-title">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <h2 id="fields-title" class="font-medium text-ink">Customer information</h2>
+      {% if field_rows %}<button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-open', 'edit-fields')">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %} Edit</button>{% endif %}
     </div>
-    {% endif %}
-    {% if contact_recs %}
-    <div class="pt-2 border-t border-border">
-      <p class="text-gray-500 mb-2 text-sm">Recommended actions</p>
-      <ul class="space-y-2">
-        {% for rec in contact_recs %}
-        {% if rec.insight %}
-        <li class="text-sm">
-          <p class="font-medium text-ink">{{ rec.insight.title }}</p>
-          {% if rec.insight.evidence_count %}
-          <p class="text-xs text-gray-400">{{ rec.insight.evidence_count }} signal{{ rec.insight.evidence_count|pluralize }}</p>
-          {% endif %}
-          <a href="{% url 'insights' %}#insight-{{ rec.insight.pk }}"
-             class="text-xs text-gray-400 hover:text-gray-600 underline">View →</a>
-        </li>
-        {% endif %}
-        {% endfor %}
-      </ul>
-    </div>
+    {% if field_rows or extra_rows %}
+    <dl class="space-y-1">
+      {% for r in field_rows %}
+      <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ r.def.label|default:r.def.key }}</dt><dd class="text-ink text-right">{{ r.shown|default:"—" }}</dd></div>
+      {% endfor %}
+      {% for label, value in extra_rows %}
+      <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right">{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+    {% else %}
+    <p class="text-gray-500">Keep details like birthday or favourite order. <a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Choose what to keep</a></p>
     {% endif %}
   </section>
+
+  {% if contact_recs %}
+  <section class="card card-pad text-sm">
+    <p class="text-gray-500 mb-2">Recommended actions</p>
+    <ul class="space-y-2">
+      {% for rec in contact_recs %}
+      {% if rec.insight %}
+      <li>
+        <p class="font-medium text-ink">{{ rec.insight.title }}</p>
+        {% if rec.insight.evidence_count %}<p class="text-xs text-gray-400">{{ rec.insight.evidence_count }} signal{{ rec.insight.evidence_count|pluralize }}</p>{% endif %}
+        <a href="{% url 'insights' %}#insight-{{ rec.insight.pk }}" class="text-xs text-gray-400 hover:text-gray-600 underline">View →</a>
+      </li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
   </div>
 
-  <section class="lg:col-span-2 card card-pad self-start">
-    <h2 class="text-lg font-semibold text-ink mb-3">Activity</h2>
-    <ol class="relative border-l border-border ml-2 space-y-3">
-      {% for e in events %}
+  <section class="lg:col-span-2 card card-pad self-start" aria-labelledby="activity-title">
+    <h2 id="activity-title" class="text-lg font-semibold text-ink mb-3">Activity</h2>
+    <form method="post" action="{% url 'contacts:note_add' contact.public_id %}" class="mb-5" x-data="{ body: '' }">
+      {% csrf_token %}
+      <label class="sr-only" for="note-body">Add a note</label>
+      <textarea id="note-body" name="body" rows="2" class="input" x-model="body" maxlength="5000" placeholder="Add a private note for your team — they never see it."></textarea>
+      <div class="mt-2 flex justify-end"><button class="btn btn-secondary btn-sm" :disabled="!body.trim()">Add note</button></div>
+    </form>
+    <ol class="relative border-l border-border ml-2 space-y-4">
+      {% for i in activity %}
       <li class="ml-4">
-        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
+        <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full ring-4 ring-canvas {% if i.kind == 'message' %}bg-teal-500{% elif i.kind == 'order' %}bg-amber-400{% elif i.kind == 'note' %}bg-gray-400{% elif i.kind == 'campaign' %}bg-blue-400{% else %}bg-brand-500{% endif %}" aria-hidden="true"></span>
         <div class="flex items-baseline justify-between gap-4">
-          <span class="font-medium">{{ e.label }}</span>
-          <span class="text-xs text-gray-400">{{ e.occurred_at|date:"M j, Y H:i" }}</span>
+          <span class="font-medium text-ink">{% if i.url %}<a href="{{ i.url }}" class="hover:text-accent">{{ i.title }}</a>{% else %}{{ i.title }}{% endif %}</span>
+          <span class="text-xs text-gray-400 whitespace-nowrap">{{ i.at|date:"j M Y, H:i" }}</span>
         </div>
-        {% if e.detail %}<p class="mt-0.5 text-sm text-gray-600">{{ e.detail }}</p>{% endif %}
+        {% if i.detail %}<p class="mt-0.5 text-sm text-gray-600 whitespace-pre-line break-words">{{ i.detail }}</p>{% endif %}
+        {% if i.note and i.note.author_id == request.user.pk or i.note and is_admin %}
+        <form method="post" action="{% url 'contacts:note_delete' contact.public_id i.note.pk %}" class="mt-1"
+              data-confirm="Delete this note?" data-confirm-label="Delete">
+          {% csrf_token %}<button class="text-xs text-gray-500 hover:text-coral-700">Delete note</button>
+        </form>
+        {% endif %}
       </li>
       {% empty %}
-      <li class="ml-4 text-gray-400 text-sm">No activity recorded.</li>
+      <li class="ml-4 text-gray-400 text-sm">Nothing yet. Messages, orders, campaigns and notes show up here.</li>
       {% endfor %}
     </ol>
   </section>
 </div>
 
+{% if messages_to %}
 <div class="card card-pad mt-6">
-  <h2 class="text-lg font-semibold text-ink mb-3">Messages sent to this contact</h2>
+  <h2 class="text-lg font-semibold text-ink mb-3">Emails sent to this customer</h2>
   <div class="table-scroll">
     <table class="table table--cards">
       <tbody>
         {% for m in messages_to %}
         <tr>
-          <td class="py-1.5 font-mono text-xs"><a href="/logs/messages/{{ m.public_id }}/" class="text-accent">{{ m.public_id }}</a></td>
-          <td class="py-1.5">{{ m.subject|default:"—"|truncatechars:50 }}</td>
+          <td class="py-1.5">{{ m.subject|default:"—"|truncatechars:60 }}</td>
           <td data-label="Status">{% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}</td>
-          <td class="py-1.5 text-gray-400">{{ m.created_at|date:"Y-m-d H:i" }}</td>
+          <td class="py-1.5 text-gray-400">{{ m.created_at|date:"j M Y, H:i" }}</td>
+          <td class="text-right"><a href="/logs/messages/{{ m.public_id }}/" class="btn btn-ghost btn-sm">View</a></td>
         </tr>
-        {% empty %}
-        <tr><td class="py-2 text-gray-400">No messages.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endif %}
 
 {% modal "edit-contact" title="Edit customer" %}
   <form method="post" action="{% url 'contacts:edit' contact.public_id %}" class="space-y-4">
@@ -215,4 +263,40 @@
     </div>
   </form>
 {% endmodal %}
+
+{% if field_rows %}
+{% modal "edit-fields" title="Customer information" %}
+  <form method="post" action="{% url 'contacts:fields_save' contact.public_id %}" class="space-y-4">
+    {% csrf_token %}
+    {% for r in field_rows %}
+    <div>
+      <label class="label" for="attr-{{ r.def.key }}">{{ r.def.label|default:r.def.key }}</label>
+      {% if r.def.type == 'choice' %}
+        <select id="attr-{{ r.def.key }}" name="attr__{{ r.def.key }}" class="select">
+          <option value="">—</option>
+          {% for o in r.def.options %}<option value="{{ o.key }}" {% if o.key == r.value %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+        </select>
+      {% elif r.def.type == 'boolean' %}
+        <select id="attr-{{ r.def.key }}" name="attr__{{ r.def.key }}" class="select">
+          <option value="">—</option>
+          <option value="true" {% if r.value is True %}selected{% endif %}>Yes</option>
+          <option value="false" {% if r.value is False %}selected{% endif %}>No</option>
+        </select>
+      {% elif r.def.type == 'date' %}
+        <input id="attr-{{ r.def.key }}" type="date" name="attr__{{ r.def.key }}" class="input" value="{{ r.value }}">
+      {% elif r.def.type == 'number' %}
+        <input id="attr-{{ r.def.key }}" type="number" step="any" name="attr__{{ r.def.key }}" class="input" value="{{ r.value }}">
+      {% else %}
+        <input id="attr-{{ r.def.key }}" name="attr__{{ r.def.key }}" class="input" value="{{ r.value }}" maxlength="500">
+      {% endif %}
+    </div>
+    {% endfor %}
+    <p class="text-xs text-gray-500"><a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Change which details you keep</a></p>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm">Save</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
 {% endblock %}

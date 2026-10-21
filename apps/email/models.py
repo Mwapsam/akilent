@@ -540,6 +540,10 @@ class EmailApiKey(models.Model):
         "messages:send": {"label": "Send messages and one-time codes", "channel": ""},
         "messages:send:bulk": {"label": "Launch campaigns", "channel": "email"},
         "templates:manage": {"label": "Manage email templates", "channel": "email"},
+        "whatsapp:campaigns": {
+            "label": "Send WhatsApp campaigns",
+            "channel": "whatsapp",
+        },
     }
     DEFAULT_SCOPES = ["messages:send"]
 

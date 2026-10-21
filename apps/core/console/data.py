@@ -29,6 +29,7 @@ EXPORT_FIELDS = [
 
 def contacts_csv(account) -> str:
     from apps.contacts.models import Contact
+    from apps.core.csv_safe import safe_cell
 
     out = io.StringIO()
     writer = csv.writer(out)
@@ -41,13 +42,13 @@ def contacts_csv(account) -> str:
     ):
         writer.writerow(
             [
-                c.first_name,
-                c.last_name,
-                c.email or "",
-                c.phone or "",
+                safe_cell(c.first_name),
+                safe_cell(c.last_name),
+                safe_cell(c.email or ""),
+                safe_cell(c.phone or ""),
                 c.status,
                 c.consent_status,
-                ";".join(t.name for t in c.tags.all()),
+                safe_cell(";".join(t.name for t in c.tags.all())),
                 c.first_seen.isoformat() if c.first_seen else "",
                 c.last_engaged_at.isoformat() if c.last_engaged_at else "",
             ]
@@ -83,21 +84,27 @@ def find_customer(account, who: str):
     return list({c.pk: c for c in contacts}.values()), wa
 
 
-def delete_customer(account, who: str) -> dict:
+def delete_customer(account, who: str, *, actor=None) -> dict:
     """Delete one customer's contact record, conversations, messages and related history.
 
-    Contact deletion cascades to spine conversations and messages, orders, leads, deals and
-    automation runs; the WhatsApp contact (and its message log and send queue) is deleted too.
+    Each matching customer goes through apps.contacts.erasure.delete_customer (the same
+    deletion owners run themselves: WhatsApp and Instagram identities, HubSpot). A WhatsApp
+    identity with no customer record is deleted directly.
     """
+    from apps.contacts.erasure import delete_customer as erase
+
     contacts, wa = find_customer(account, who)
     if not contacts and not wa:
         return {"contacts": 0, "whatsapp": 0}
+    removed_wa = 0
     with transaction.atomic():
-        for w in wa:
-            w.delete()
         for c in contacts:
-            c.delete()
-    return {"contacts": len(contacts), "whatsapp": len(wa)}
+            removed_wa += erase(c, actor=actor, source="console")["whatsapp"]
+        for w in wa:
+            if w.contact_id is None and type(w).objects.filter(pk=w.pk).exists():
+                w.delete()
+                removed_wa += 1
+    return {"contacts": len(contacts), "whatsapp": removed_wa}
 
 
 def close_account(account) -> None:

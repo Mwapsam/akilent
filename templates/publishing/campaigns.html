@@ -1,51 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Campaigns — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}Content themes — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <div class="mb-4">
   <a href="{% url 'publishing:planning' %}" class="text-sm text-gray-500 hover:text-ink">← Planning</a>
-  <h1 class="text-xl font-semibold tracking-tight mt-1">Campaigns</h1>
-  <p class="text-sm text-gray-500 mt-0.5">Group related content around a launch, offer, or goal.</p>
+  <h1 class="text-xl font-semibold tracking-tight mt-1">Content themes</h1>
+  <p class="text-sm text-gray-500 mt-0.5">Group related posts around a launch, an offer or a season. To message customers on WhatsApp, use <a href="/email/campaigns/?channel=whatsapp" class="text-accent hover:text-accent-strong">Campaigns</a>.</p>
 </div>
 
-<div class="max-w-lg space-y-4">
+<div class="max-w-2xl space-y-4">
 
   <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Your campaigns</h2>
+    <h2 class="font-semibold text-ink mb-3">Your themes</h2>
     {% if campaigns %}
-    <div class="space-y-2">
+    <ul class="divide-y divide-border">
       {% for campaign in campaigns %}
-      <div class="py-2 border-b border-surface-subtle last:border-0">
-        <p class="text-sm font-medium text-ink">{{ campaign.name }}</p>
-        {% if campaign.objective %}
-        <p class="text-xs text-gray-400 mt-0.5">{{ campaign.objective|truncatechars:80 }}</p>
-        {% endif %}
-        {% if campaign.start_date %}
-        <p class="text-xs text-gray-400">{{ campaign.start_date|date:"N j" }}{% if campaign.end_date %} – {{ campaign.end_date|date:"N j" }}{% endif %}</p>
-        {% endif %}
-      </div>
+      <li class="py-3" x-data="{ editing: false }">
+        <div x-show="!editing" class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-ink">{{ campaign.name }}</p>
+            {% if campaign.objective %}<p class="text-xs text-gray-500 mt-0.5">{{ campaign.objective|truncatechars:120 }}</p>{% endif %}
+            {% if campaign.start_date %}<p class="text-xs text-gray-500">{{ campaign.start_date|date:"j M Y" }}{% if campaign.end_date %} – {{ campaign.end_date|date:"j M Y" }}{% endif %}</p>{% endif %}
+          </div>
+          <div class="flex shrink-0 gap-1">
+            <button type="button" class="btn btn-ghost btn-sm" @click="editing = true">Edit</button>
+            <form method="post" data-confirm="Delete the theme “{{ campaign.name }}”? Its posts and plan items are kept." data-confirm-label="Delete">
+              {% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="pk" value="{{ campaign.pk }}">
+              <button class="btn btn-ghost btn-sm">Delete</button>
+            </form>
+          </div>
+        </div>
+        <form x-show="editing" x-cloak method="post" class="space-y-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update"><input type="hidden" name="pk" value="{{ campaign.pk }}">
+          {% include "publishing/_theme_fields.html" with c=campaign prefix=campaign.pk %}
+          <div class="flex gap-2"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button></div>
+        </form>
+      </li>
       {% endfor %}
-    </div>
+    </ul>
     {% else %}
-    <p class="text-sm text-gray-400 text-center py-4">No campaigns yet.</p>
+    <p class="text-sm text-gray-500 text-center py-4">No themes yet.</p>
     {% endif %}
   </div>
 
   <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Add a campaign</h2>
+    <h2 class="font-semibold text-ink mb-3">Add a theme</h2>
     <form method="post" class="space-y-3">
       {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-        <input type="text" name="name" placeholder="e.g. October product launch"
-               class="input w-full" required>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Objective</label>
-        <textarea name="objective" rows="2" placeholder="What should this campaign achieve?"
-                  class="input w-full"></textarea>
-      </div>
-      <button type="submit" class="btn btn-primary">Add campaign</button>
+      <input type="hidden" name="action" value="create">
+      {% include "publishing/_theme_fields.html" with prefix="new" %}
+      <button type="submit" class="btn btn-primary">Add theme</button>
     </form>
   </div>
 

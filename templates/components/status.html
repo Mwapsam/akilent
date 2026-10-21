@@ -1,12 +1,12 @@
 {% comment %}Message-lifecycle status. Canonical vocabulary — see docs/design/akilent-ui-spec.md §2.
   {% include "components/status.html" with state=campaign.status %}
   {% include "components/status.html" with state="scheduled" badge=True %}
-state ∈ draft | scheduled | sending | sent | failed | paused
+state ∈ draft | scheduled | sending | sent | failed | paused | cancelled
 {% endcomment %}
 {% with s=state|default:"draft" %}
 {% if badge %}
   <span class="badge {% if s == 'sent' %}badge-success{% elif s == 'scheduled' %}badge-info{% elif s == 'sending' %}badge-warning{% elif s == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">
-    {{ s|capfirst }}
+    {% if s == 'cancelled' %}{% include "components/icon.html" with name="x" class="w-3 h-3" %}{% elif s == 'paused' %}{% include "components/icon.html" with name="pause" class="w-3 h-3" %}{% endif %}{{ s|capfirst }}
   </span>
 {% else %}
   <span class="status-indicator" data-state="{{ s }}">{{ s|capfirst }}</span>

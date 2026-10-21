@@ -10,6 +10,32 @@ from __future__ import annotations
 
 CHANGELOG: list[dict] = [
     {
+        "date": "2026-10-21",
+        "version": "v1",
+        "changes": [
+            {
+                "type": "added",
+                "summary": "WhatsApp campaigns API: GET/POST /v1/whatsapp/campaigns, GET /v1/whatsapp/campaigns/{id}, POST .../{id}/pause|resume|cancel|send_now (scope whatsapp:campaigns, Idempotency-Key).",
+            },
+            {
+                "type": "added",
+                "summary": "POST /v1/contacts accepts phone without email; contacts include phone, whatsapp, tags, lists, lifecycle_stage; PATCH sets whatsapp opt-in (attested) or opt-out.",
+            },
+            {
+                "type": "added",
+                "summary": "GET/PATCH/DELETE /v1/lists/{id}; POST/DELETE /v1/lists/{id}/members (up to 1,000 by contact id or phone).",
+            },
+            {
+                "type": "added",
+                "summary": "Segment fields whatsapp, whatsapp_reachable, has_phone, has_order, first_seen_days, phone, lifecycle_stage.",
+            },
+            {
+                "type": "changed",
+                "summary": "DELETE /v1/contacts/{id} also removes the customer's WhatsApp and Instagram identities and archives a linked HubSpot contact.",
+            },
+        ],
+    },
+    {
         "date": "2026-09-10",
         "version": "v1",
         "changes": [

@@ -65,7 +65,7 @@ OBJECTIVES: tuple[Objective, ...] = (
     Objective(
         key="run_campaigns",
         label="Run promotional campaigns",
-        description="Send a WhatsApp message to a list of customers at once.",
+        description="Send a WhatsApp message to a list or segment of customers, now or later.",
         features=("whatsapp_campaigns",),
     ),
     Objective(

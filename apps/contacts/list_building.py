@@ -26,6 +26,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.contacts.models import Contact, ContactImport, ContactListMembership
+from apps.core.csv_safe import safe_cell
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,9 @@ def parse_csv(data: bytes) -> list[Row]:
 
 
 def attestation_source(user) -> str:
+    """Who vouched for the opt-in: a team member, or (a string) an API key."""
+    if isinstance(user, str):
+        return f"api_attestation:{user}"
     return f"owner_attestation:user:{getattr(user, 'pk', '') or ''}"
 
 
@@ -438,11 +442,5 @@ def invalid_rows_csv(result: ListAddResult) -> str:
     writer = csv.writer(out)
     writer.writerow(["row", "phone", "problem"])
     for line, raw, why in result.invalid:
-        # Neutralise spreadsheet formulas in echoed input.
-        safe = (
-            "'" + raw
-            if raw[:1] in ("=", "+", "-", "@") and not raw[1:2].isdigit()
-            else raw
-        )
-        writer.writerow([line, safe, why])
+        writer.writerow([line, safe_cell(raw), why])
     return out.getvalue()

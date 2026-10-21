@@ -37,6 +37,11 @@ _MAX_EVENT_ATTEMPTS = 3
 _SENDING_STALE = timedelta(minutes=10)
 
 
+_PAUSED_CAMPAIGN = Q(
+    campaign_recipient__campaign__status=WhatsAppCampaign.Status.PAUSED
+)
+
+
 def _claim_for_send(msg: OutboundMessage, now) -> bool:
     """Take one queued message for this drain, or say another drain already has it.
 
@@ -54,6 +59,7 @@ def _claim_for_send(msg: OutboundMessage, now) -> bool:
             status__in=[OutboundMessage.Status.QUEUED, OutboundMessage.Status.HELD],
         )
         .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
+        .exclude(_PAUSED_CAMPAIGN)
         .exists()
     )
     if not still_due:
@@ -1029,15 +1035,26 @@ def drain_outbound_queue():
             "drain_outbound_queue: recovered %s stale SENDING messages", len(stale)
         )
 
-    due = (
+    from apps.whatsapp.delivery import fair_slice
+
+    batch = int(
+        getattr(settings, "WHATSAPP_OUTBOUND_BATCH", _OUTBOUND_BATCH) or _OUTBOUND_BATCH
+    )
+    candidates = list(
         OutboundMessage.objects.filter(
             status__in=[OutboundMessage.Status.QUEUED, OutboundMessage.Status.HELD],
             scheduled_at__lte=now,
         )
         # A held message's next_attempt_at is its backoff (see _hold); a queued one is due now.
         .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
-        .select_related("account", "contact")[:_OUTBOUND_BATCH]
+        # A paused campaign's messages wait here until it's resumed.
+        .exclude(_PAUSED_CAMPAIGN)
+        # Replies and one-off sends before campaign messages, then oldest first.
+        .order_by("-priority", "scheduled_at", "pk")
+        .select_related("account", "contact")[: batch * 4]
     )
+    # Share the pass between businesses so one big campaign can't take every slot.
+    due = fair_slice(candidates, batch)
 
     from apps.core.channels import channel_state
 
@@ -1395,6 +1412,28 @@ def _handle_account_health(event: WebhookEventLog) -> None:
     _for_each_item(entries, _process_account_health_change)
 
 
+def _store_messaging_limit(waba_id, number: str, limit: str) -> None:
+    """Remember Meta's messaging tier for the number, so campaigns pace to it."""
+    limit = (limit or "").upper()
+    if not waba_id or not limit.startswith("TIER_"):
+        return
+    numbers = WhatsAppBusinessNumber.objects.filter(waba_id=waba_id)
+    digits = "".join(ch for ch in number or "" if ch.isdigit())
+    if digits:
+        matched = [
+            n.pk
+            for n in numbers
+            if "".join(ch for ch in (n.display_number or "") if ch.isdigit()).endswith(
+                digits[-9:]
+            )
+        ]
+        if matched:
+            numbers = WhatsAppBusinessNumber.objects.filter(pk__in=matched)
+        elif numbers.count() != 1:
+            return
+    numbers.update(messaging_limit=limit, messaging_limit_at=timezone.now())
+
+
 def _process_account_health_change(entry: dict, change: dict) -> None:
     from django.urls import reverse
 
@@ -1413,6 +1452,7 @@ def _process_account_health_change(entry: dict, change: dict) -> None:
         number,
         {k: v for k, v in value.items() if k != "display_phone_number"},
     )
+    _store_messaging_limit(waba_id, number, value.get("current_limit") or "")
     template = _ACCOUNT_HEALTH_ALERTS.get(kind)
     if template is None or not waba_id:
         return
@@ -1467,9 +1507,9 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
         raise TenantResolutionError(f"No WhatsApp account owns WABA id {waba_id!r}")
 
     scoped = MessageTemplate.objects.filter(account_id__in=account_ids)
-    updated = scoped.filter(whatsapp_template_name=name, language_code=language).update(
-        approval_status=mapped
-    )
+    exact = scoped.filter(whatsapp_template_name=name, language_code=language)
+    affected = list(exact.values_list("pk", flat=True))
+    updated = exact.update(approval_status=mapped)
     if not updated:
         # No exact language match (codes can differ, e.g. "en" vs "en_US"). Only a
         # template with a single language is safe to match by name: with several, a
@@ -1477,6 +1517,7 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
         # sync settles those from Meta's own list.
         same_name = scoped.filter(whatsapp_template_name=name)
         if same_name.values("language_code").distinct().count() == 1:
+            affected = list(same_name.values_list("pk", flat=True))
             same_name.update(approval_status=mapped)
         else:
             logger.info(
@@ -1485,6 +1526,17 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
                 mapped,
                 name,
                 language,
+            )
+    if affected and mapped in (
+        MessageTemplate.ApprovalStatus.PAUSED,
+        MessageTemplate.ApprovalStatus.REJECTED,
+    ):
+        from apps.whatsapp.campaigns import stop_campaigns_for_template
+
+        stopped = stop_campaigns_for_template(affected)
+        if stopped:
+            logger.warning(
+                "template %s became %s: stopped %s campaign(s)", name, mapped, stopped
             )
 
 

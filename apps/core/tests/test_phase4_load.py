@@ -36,54 +36,52 @@ def _make_account(slug="load-test-acct"):
 
 @pytest.mark.performance
 class ContactImportLoadTest(TestCase):
-    """import_rows() must handle 5,000 contacts without error within 60 s."""
+    """The live import path (paste / CSV / API list members all go through
+    apps.contacts.list_building.add_people_to_list) handles 5,000 rows in 60 s."""
 
     def setUp(self):
         self.account, _ = _make_account("import-load")
 
-    def test_import_5000_contacts(self):
-        from apps.contacts.importer import import_rows
+    def _rows(self, n, base):
+        from apps.contacts.list_building import Row
 
-        rows = [
-            {"phone": f"+2609{70000000 + i:08d}", "first_name": f"User{i}"}
-            for i in range(5_000)
+        return [
+            Row(line=i + 1, phone=f"+2609{base + i:08d}", first_name=f"User{i}")
+            for i in range(n)
         ]
 
-        # Patch DNS MX checks so the test doesn't hit the network.
-        with patch(
-            "apps.contacts.importer._validate_email",
-            side_effect=lambda e: {
-                "email": e,
-                "is_valid_format": True,
-                "domain_valid": True,
-                "deliverability_status": "valid",
-                "last_checked": None,
-            },
-        ):
-            t0 = time.monotonic()
-            result = import_rows(self.account, rows)
-            elapsed = time.monotonic() - t0
+    def test_import_5000_contacts(self):
+        from apps.contacts.list_building import add_people_to_list
+        from apps.contacts.models import ContactList
 
-        self.assertEqual(result.errors, [], msg="Expected no import errors")
-        self.assertEqual(result.duplicates, 0)
+        clist = ContactList.objects.create(account=self.account, name="Big")
+        t0 = time.monotonic()
+        result = add_people_to_list(
+            self.account, clist, self._rows(5_000, 70000000), source="load"
+        )
+        elapsed = time.monotonic() - t0
+
+        self.assertEqual(result.invalid, [], msg="Expected no invalid rows")
         self.assertEqual(result.created, 5_000)
+        self.assertEqual(clist.contacts.count(), 5_000)
         self.assertLess(
             elapsed, 60, msg=f"Import took {elapsed:.1f}s — over 60s budget"
         )
 
     def test_import_deduplication_at_scale(self):
-        """Re-importing the same 500 rows produces 0 new contacts and 500 duplicates."""
-        from apps.contacts.importer import import_rows
+        """Re-adding the same 500 rows creates no one and adds no one twice."""
+        from apps.contacts.list_building import add_people_to_list
+        from apps.contacts.models import ContactList
 
-        rows = [{"phone": f"+2609{80000000 + i:08d}"} for i in range(500)]
-        import_rows(self.account, rows)  # first pass
-
+        clist = ContactList.objects.create(account=self.account, name="Dups")
+        rows = self._rows(500, 80000000)
+        add_people_to_list(self.account, clist, rows, source="load")
         t0 = time.monotonic()
-        result = import_rows(self.account, rows)  # second pass — all dups
+        result = add_people_to_list(self.account, clist, rows, source="load")
         elapsed = time.monotonic() - t0
 
         self.assertEqual(result.created, 0)
-        self.assertEqual(result.duplicates, 500)
+        self.assertEqual(result.already_on_list, 500)
         self.assertLess(elapsed, 10)
 
 

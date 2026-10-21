@@ -1,3 +1,5 @@
+import datetime
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -25,19 +27,51 @@ class WhatsAppCampaign(models.Model):
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
+        # Waiting for scheduled_at; recipients are only chosen when it fires.
+        SCHEDULED = "scheduled", "Scheduled"
         QUEUED = "queued", "Queued"
         SENDING = "sending", "Sending"
+        # Fan-out stops at the next chunk and the outbound queue holds back its
+        # messages until it's resumed.
+        PAUSED = "paused", "Paused"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    # Recipients exist (or are being created) only from QUEUED on; a draft or a
+    # scheduled campaign is still editable.
+    EDITABLE = (Status.DRAFT, Status.SCHEDULED)
+    ACTIVE = (Status.QUEUED, Status.SENDING)
+    FINISHED = (Status.COMPLETED, Status.FAILED, Status.CANCELLED)
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="whatsapp_campaigns"
     )
     name = models.CharField(max_length=150)
+    # The audience: exactly one of contact_list / segment. A segment is
+    # evaluated when the campaign starts, so it reaches whoever matches then.
     contact_list = models.ForeignKey(
         "contacts.ContactList",
         on_delete=models.PROTECT,
         related_name="whatsapp_campaigns",
+        null=True,
+        blank=True,
+    )
+    segment = models.ForeignKey(
+        "contacts.Segment",
+        on_delete=models.PROTECT,
+        related_name="whatsapp_campaigns",
+        null=True,
+        blank=True,
+    )
+    # "Retry failed": this campaign goes only to the customers whose message
+    # failed in that one (still excluding anyone who has since opted out).
+    retry_of = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="retries",
+        null=True,
+        blank=True,
     )
     template = models.ForeignKey(
         "whatsapp.MessageTemplate", on_delete=models.PROTECT, related_name="campaigns"
@@ -69,6 +103,19 @@ class WhatsAppCampaign(models.Model):
     # tell "still working, just a big list" from "the chunk chain died"
     # (e.g. an on_commit-scheduled .delay() that never reached the broker).
     last_progress_at = models.DateTimeField(blank=True, null=True)
+    scheduled_at = models.DateTimeField(blank=True, null=True)
+    # The IANA zone the owner picked the time in, so the screens show it back
+    # the way they typed it. scheduled_at itself is UTC.
+    timezone = models.CharField(max_length=64, blank=True, default="")
+    # When recipients were chosen from the list/segment (at send, not creation).
+    audience_snapshot_at = models.DateTimeField(blank=True, null=True)
+    # [{"at": iso, "event": "scheduled", "by": "Ada"}...] — the detail page's
+    # timeline. Append-only; see record().
+    history = models.JSONField(default=list, blank=True)
+    # How the sends are spread out, decided when it starts (apps.whatsapp.
+    # campaigns.send_plan_for): Meta's daily limit for the number, the room left
+    # today, and the business's quiet hours. Empty = send as fast as allowed.
+    send_plan = models.JSONField(default=dict, blank=True)
     # One per composer page load: a double-click or re-submitted form carries the
     # same key and gets the campaign already created instead of a second
     # broadcast to the same people.
@@ -76,7 +123,10 @@ class WhatsAppCampaign(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["account", "status"])]
+        indexes = [
+            models.Index(fields=["account", "status"]),
+            models.Index(fields=["status", "scheduled_at"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["account", "submission_key"],
@@ -85,14 +135,44 @@ class WhatsAppCampaign(models.Model):
             ),
         ]
 
+    @property
+    def audience_name(self) -> str:
+        if self.segment_id:
+            return self.segment.name  # type: ignore[union-attr]
+        if self.contact_list_id:
+            return self.contact_list.name  # type: ignore[union-attr]
+        return ""
+
+    def record(self, event: str, user=None, *, save: bool = True, **extra) -> None:
+        """Append one timeline entry (who did what, when)."""
+        entry = {"at": timezone.now().isoformat(), "event": event}
+        if user is not None and getattr(user, "is_authenticated", False):
+            entry["by"] = user.get_full_name() or user.get_username()
+        entry.update(extra)
+        self.history = [*(self.history or []), entry]
+        if save:
+            self.save(update_fields=["history"])
+
     def mark_sending(self) -> None:
         """Idempotent: called at the start of every chunk, but only the first
         call actually transitions status/sets started_at."""
-        if self.status in (self.Status.DRAFT, self.Status.QUEUED):
-            self.status = self.Status.SENDING
-            if self.started_at is None:
-                self.started_at = timezone.now()
-            self.save(update_fields=["status", "started_at"])
+        if self.status not in (self.Status.DRAFT, self.Status.QUEUED):
+            return
+        first = self.started_at is None
+        # Conditional, so a pause or cancel that landed since this copy was
+        # loaded is never overwritten back to Sending.
+        moved = (
+            type(self)
+            .objects.filter(
+                pk=self.pk, status__in=[self.Status.DRAFT, self.Status.QUEUED]
+            )
+            .update(
+                status=self.Status.SENDING, started_at=self.started_at or timezone.now()
+            )
+        )
+        self.refresh_from_db(fields=["status", "started_at"])
+        if moved and first:
+            self.record("started")
 
     def touch_progress(self) -> None:
         self.last_progress_at = timezone.now()
@@ -101,13 +181,15 @@ class WhatsAppCampaign(models.Model):
     def mark_completed(self) -> None:
         self.status = self.Status.COMPLETED
         self.completed_at = timezone.now()
-        self.save(update_fields=["status", "completed_at"])
+        self.record("completed", save=False)
+        self.save(update_fields=["status", "completed_at", "history"])
 
     def mark_failed(self, error: str) -> None:
         self.status = self.Status.FAILED
         self.error = error[:5000]
         self.completed_at = timezone.now()
-        self.save(update_fields=["status", "error", "completed_at"])
+        self.record("failed", save=False)
+        self.save(update_fields=["status", "error", "completed_at", "history"])
 
     def increment_counts(self, *, queued: int = 0, skipped: int = 0) -> None:
         """Processing summary only — never delivery status. Uses F() expressions
@@ -151,6 +233,13 @@ class WhatsAppCampaignRecipient(models.Model):
         # A marketing template only goes to people who agreed to hear from the
         # business (Meta policy; enforced again at send time in _authorize_send).
         NOT_OPTED_IN = "not_opted_in", "Hasn't opted in"
+        CANCELLED = "cancelled", "Campaign cancelled"
+        # Held by the plan's monthly limit for too long; not sent days late.
+        PLAN_LIMIT = "plan_limit", "Plan limit — not sent late"
+        # WhatsApp told us this number isn't on WhatsApp.
+        NOT_ON_WHATSAPP = "not_on_whatsapp", "Not on WhatsApp"
+        # Meta paused or rejected the template while the campaign was sending.
+        TEMPLATE_STOPPED = "template_stopped", "Template stopped by Meta"
 
     campaign = models.ForeignKey(
         WhatsAppCampaign, on_delete=models.CASCADE, related_name="recipients"
@@ -186,3 +275,25 @@ class WhatsAppCampaignRecipient(models.Model):
 
     def __str__(self):
         return f"{self.campaign_id}:{self.contact_id} [{self.status}]"
+
+
+class CampaignSendWindow(models.Model):
+    """The hours a business lets campaign messages arrive (quiet hours).
+
+    In the business's own timezone (apps.accounts.business_hours.
+    workspace_timezone). A campaign message due outside the window waits for
+    the next opening. Replies and other one-off messages are never held.
+    """
+
+    account = models.OneToOneField(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="campaign_send_window",
+    )
+    enabled = models.BooleanField(default=True)
+    start = models.TimeField(default=datetime.time(8, 0))
+    end = models.TimeField(default=datetime.time(20, 0))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Send window {self.start}-{self.end} for {self.account_id}"

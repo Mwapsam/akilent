@@ -97,3 +97,7 @@ MIDDLEWARE = [
         )
     )
 ]
+
+# Campaign quiet hours depend on the time of day; off by default so tests don't.
+# Tests of quiet hours save a CampaignSendWindow explicitly.
+WHATSAPP_CAMPAIGN_QUIET_HOURS_DEFAULT = False

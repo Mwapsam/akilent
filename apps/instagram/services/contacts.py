@@ -46,23 +46,41 @@ def resolve_or_create_contact(
     if ig_contact.contact_id is None:
         _link_canonical_contact(ig_contact)
 
-    # Enrich with IG profile if we still have no name/username
-    if not ig_contact.username and not ig_contact.name:
+    # Enrich with the IG profile when we have no name: always for someone new
+    # (a comment only carries their username), and for anyone we know nothing
+    # about at all. Not on every message for a known username without a name.
+    if not ig_contact.name and (created or not ig_contact.username):
         _enrich_contact_profile(ig_contact, instagram_account)
 
     return ig_contact
 
 
 def _link_canonical_contact(ig_contact: InstagramContact) -> None:
-    """Create a new apps.contacts.Contact and link it to this InstagramContact."""
+    """Create a new apps.contacts.Contact and link it to this InstagramContact.
+
+    Under a row lock on the InstagramContact, re-checked after locking: two
+    webhooks for the same person arriving together (a DM and a comment) would
+    otherwise each create a customer, leaving a duplicate behind.
+    """
+    from django.db import transaction
+
     from apps.contacts.models import Contact
 
-    contact = Contact.objects.create(
-        account=ig_contact.account,
-        source="instagram",
-    )
+    with transaction.atomic():
+        locked = InstagramContact.objects.select_for_update().get(pk=ig_contact.pk)
+        if locked.contact_id is not None:
+            ig_contact.contact_id = locked.contact_id
+            return
+        first, _, last = (locked.name or "").strip().partition(" ")
+        contact = Contact.objects.create(
+            account=locked.account,
+            source="instagram",
+            first_name=first[:150],
+            last_name=last.strip()[:150],
+        )
+        locked.contact = contact
+        locked.save(update_fields=["contact"])
     ig_contact.contact = contact
-    ig_contact.save(update_fields=["contact"])
     logger.debug(
         "Created Contact %s for InstagramContact %s",
         contact.pk,

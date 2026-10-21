@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Customer details you keep — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Customer details you keep</h1>
+  <p class="mt-1 text-sm text-gray-600 max-w-2xl">Add your own details to every customer — like birthday, area or favourite order. They show on each profile, can be used in segments and filled into WhatsApp messages.</p>
+</header>
+
+{% if error %}
+<div class="alert alert-danger mb-4" role="alert">{% include "components/icon.html" with name="alert-circle" %}<span>{{ error }}</span></div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    {% if active %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Detail</th><th>Kind</th><th>Options</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+          {% for d in active %}
+          <tr x-data="{ editing: false }">
+            <td data-label="Detail">
+              <span x-show="!editing" class="font-medium text-ink">{{ d.label|default:d.key }}</span>
+              {% if can_manage %}
+              <form x-show="editing" x-cloak method="post" class="space-y-2">
+                {% csrf_token %}
+                <input type="hidden" name="pk" value="{{ d.pk }}">
+                <input name="label" class="input" value="{{ d.label|default:d.key }}" maxlength="150" aria-label="Name">
+                {% if d.type == 'choice' %}
+                <textarea name="options" rows="3" class="input" aria-label="Options, one per line">{% for o in d.options %}{{ o.label }}
+{% endfor %}</textarea>
+                {% endif %}
+                <div class="flex gap-2"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button></div>
+              </form>
+              {% endif %}
+            </td>
+            <td data-label="Kind" class="text-gray-600">{{ d.get_type_display }}</td>
+            <td data-label="Options" class="text-gray-600">{% for o in d.options %}{{ o.label }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+            <td class="text-right whitespace-nowrap">
+              {% if can_manage %}
+              <button type="button" class="btn btn-ghost btn-sm" x-show="!editing" @click="editing = true">Edit</button>
+              <form method="post" action="{% url 'contacts:field_archive' d.pk %}" class="inline"
+                    data-confirm="Archive “{{ d.label|default:d.key }}”? It disappears from profiles; saved values are kept and you can bring it back." data-confirm-label="Archive">
+                {% csrf_token %}<button class="btn btn-ghost btn-sm">Archive</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="table-wrap">{% include "components/empty_state.html" with icon="list" title="No custom details yet" message="Add the first one on the right." %}</div>
+    {% endif %}
+
+    {% if archived %}
+    <h2 class="mt-8 text-sm font-semibold text-gray-500 uppercase tracking-wide">Archived</h2>
+    <ul class="mt-2 divide-y divide-border card">
+      {% for d in archived %}
+      <li class="px-4 py-2 flex items-center justify-between text-sm">
+        <span class="text-gray-600">{{ d.label|default:d.key }}</span>
+        {% if can_manage %}
+        <form method="post" action="{% url 'contacts:field_archive' d.pk %}">{% csrf_token %}<input type="hidden" name="restore" value="1"><button class="btn btn-ghost btn-sm">Bring back</button></form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  {% if can_manage %}
+  <aside>
+    <form method="post" class="card card-pad space-y-3" x-data="{ type: 'string' }">
+      {% csrf_token %}
+      <h2 class="font-medium text-ink">Add a detail</h2>
+      <div>
+        <label class="label" for="new-label">Name</label>
+        <input id="new-label" name="label" class="input" maxlength="150" placeholder="e.g. Birthday" required>
+      </div>
+      <div>
+        <label class="label" for="new-type">Kind</label>
+        <select id="new-type" name="type" class="select" x-model="type">
+          {% for value, label in types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div x-show="type === 'choice'" x-cloak>
+        <label class="label" for="new-options">Options <span class="font-normal text-gray-400">(one per line)</span></label>
+        <textarea id="new-options" name="options" rows="4" class="input" placeholder="Lusaka&#10;Ndola&#10;Kitwe"></textarea>
+      </div>
+      <button class="btn btn-primary btn-sm">Add detail</button>
+    </form>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

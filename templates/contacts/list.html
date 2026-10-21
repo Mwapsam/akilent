@@ -28,6 +28,14 @@
     <a href="{% url 'contacts:lists' %}" class="btn btn-secondary btn-sm">
       {% include "components/icon.html" with name="list" class="w-4 h-4" %} Lists
     </a>
+    <a href="{% url 'contacts:segments' %}" class="btn btn-secondary btn-sm">
+      {% include "components/icon.html" with name="sliders" class="w-4 h-4" %} Segments
+    </a>
+    {% dropdown label="More" button_class="btn btn-ghost btn-sm" %}
+      <a href="{% url 'contacts:duplicates' %}" class="nav-link w-full" role="menuitem">{% include "components/icon.html" with name="users" class="w-4 h-4" %} Possible duplicates</a>
+      <a href="{% url 'contacts:fields' %}" class="nav-link w-full" role="menuitem">{% include "components/icon.html" with name="settings" class="w-4 h-4" %} Customer details you keep</a>
+      {% if is_admin %}<a href="{% url 'contacts:export' %}" @click.prevent="window.location = '{% url 'contacts:export' %}' + window.location.search" class="nav-link w-full" role="menuitem">{% include "components/icon.html" with name="download" class="w-4 h-4" %} Export{% if filtered %} these{% endif %} to CSV</a>{% endif %}
+    {% enddropdown %}
     {% dropdown label="Add customers" button_class="btn btn-primary btn-sm" %}
       <button type="button" class="nav-link w-full" role="menuitem" @click="open = false; $dispatch('modal-open', 'new-contact')">
         {% include "components/icon.html" with name="user-plus" class="w-4 h-4" %} Add one customer
@@ -74,12 +82,19 @@
     {% for l in contact_lists %}<option value="{{ l.pk }}" {% if l.pk|stringformat:"s" == list %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
   </select>
   {% endif %}
+  {% if saved_segments %}
+  <select name="segment" class="select w-full sm:w-44" aria-label="Filter by segment">
+    <option value="">Any segment</option>
+    {% for sg in saved_segments %}<option value="{{ sg.pk }}" {% if sg.pk|stringformat:"s" == segment %}selected{% endif %}>{{ sg.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
   {% if tags %}
   <select name="tag" class="select w-full sm:w-44" aria-label="Filter by tag">
     <option value="">Any tag</option>
     {% for t in tags %}<option value="{{ t.slug }}" {% if t.slug == tag %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
   </select>
   {% endif %}
+  {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
   <button class="btn btn-secondary btn-sm">Filter</button>
   {% if filtered %}<a href="{% url 'contacts:list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
@@ -97,9 +112,56 @@
     <button type="button" class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'bulk-add')">
       {% include "components/icon.html" with name="list" class="w-4 h-4" %} Add to list
     </button>
+    <button type="button" class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'bulk-tag')">
+      {% include "components/icon.html" with name="layout-template" class="w-4 h-4" %} Tag
+    </button>
+    {% if is_admin %}
+    <button type="button" class="btn btn-ghost btn-sm text-coral-700" @click="$dispatch('modal-open', 'bulk-delete')">
+      {% include "components/icon.html" with name="trash" class="w-4 h-4" %} Delete
+    </button>
+    {% endif %}
     <button type="button" class="btn btn-ghost btn-sm" @click="clear()">Clear selection</button>
   </div>
 </div>
+
+{% modal "bulk-tag" title="Tag customers" %}
+  <form method="post" action="{% url 'contacts:bulk_tag' %}" class="space-y-4" x-data="{ busy: false }" @submit="busy = true">
+    {% csrf_token %}
+    <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
+    <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
+    <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
+    <div>
+      <label class="label" for="bulk-tag-name">Tag</label>
+      <input id="bulk-tag-name" name="tag" class="input" list="bulk-known-tags" maxlength="40" placeholder="e.g. VIP" required>
+      <datalist id="bulk-known-tags">{% for t in tags %}<option value="{{ t.name }}">{% endfor %}</datalist>
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button name="action" value="remove" class="btn btn-secondary btn-sm" :disabled="busy">Remove from <span x-text="count.toLocaleString()"></span></button>
+      <button name="action" value="add" class="btn btn-primary btn-sm" :disabled="busy">Add to <span x-text="count.toLocaleString()"></span></button>
+    </div>
+  </form>
+{% endmodal %}
+
+{% if is_admin %}
+{% modal "bulk-delete" title="Delete customers" %}
+  <form method="post" action="{% url 'contacts:bulk_delete' %}" class="space-y-4" x-data="{ typed: '', busy: false }" @submit="busy = true">
+    {% csrf_token %}
+    <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
+    <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
+    <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
+    <p class="text-sm text-gray-600">This permanently deletes <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> and everything about them — conversations, orders, notes and history. It can't be undone.</p>
+    <div>
+      <label class="label" for="bulk-delete-confirm">Type <strong>delete</strong> to confirm</label>
+      <input id="bulk-delete-confirm" name="confirm" class="input" x-model="typed" autocomplete="off">
+    </div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-danger btn-sm" :disabled="busy || typed.trim().toLowerCase() !== 'delete'">Delete for good</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
 
 {% modal "bulk-add" title="Add to a list" %}
   <form method="post" action="{% url 'contacts:bulk_add_to_list' %}" class="space-y-4"

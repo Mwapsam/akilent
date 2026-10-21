@@ -1,21 +1,24 @@
 {% extends "base.html" %}
-{% block title %}New WhatsApp campaign — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if draft %}Edit campaign{% else %}New WhatsApp campaign{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6">
   <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
     <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
-    <span aria-hidden="true">/</span><span class="text-ink">New WhatsApp campaign</span>
+    <span aria-hidden="true">/</span><span class="text-ink">{% if draft %}{{ draft.name }}{% else %}New WhatsApp campaign{% endif %}</span>
   </nav>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New WhatsApp campaign</h1>
-  <p class="mt-1 text-sm text-gray-600">Send one approved message to everyone on a list. You'll see exactly who gets it before you send.</p>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if draft %}Edit campaign{% else %}New WhatsApp campaign{% endif %}</h1>
+  <p class="mt-1 text-sm text-gray-600">Send one approved message to everyone on a list or in a segment. You'll see exactly who gets it before you send.</p>
 </header>
 
 {% if error %}
 <div class="alert alert-danger mb-4" role="alert">{% include "components/icon.html" with name="alert-circle" %}<span>{{ error }}</span></div>
 {% endif %}
+{% if not can_send %}
+<div class="alert alert-info mb-4">{% include "components/icon.html" with name="info" %}<span>You can prepare and save campaigns. Only the business owner or an admin can send them.</span></div>
+{% endif %}
 
-{% if not lists or not templates %}
+{% if not lists and not segments or not templates %}
   {% include "whatsapp/_campaign_readiness.html" with readiness=readiness %}
 {% else %}
 {{ state.picks|json_script:"composer-picks" }}
@@ -24,76 +27,75 @@
 <form id="composer-form" method="post" novalidate
       x-data="{
         step: {{ step }},
-        list: '{{ state.list|escapejs }}',
+        audience: '{{ state.audience|escapejs }}',
         template: '{{ state.template|escapejs }}',
+        when: '{{ state.when|escapejs }}',
         picks: JSON.parse(document.getElementById('composer-picks').textContent),
         lits: JSON.parse(document.getElementById('composer-lits').textContent),
         fbs: JSON.parse(document.getElementById('composer-fbs').textContent),
         busy: false,
         go(n) { this.step = n; this.$nextTick(() => document.getElementById('step-' + n + '-title')?.focus()); window.scrollTo({ top: 0, behavior: 'smooth' }) },
-        get canContinue() { return (this.step === 1 && this.list) || (this.step === 2 && this.template) },
+        get canContinue() { return (this.step === 1 && this.audience) || (this.step === 2 && this.template) || this.step === 3 },
       }"
       @submit="busy = true">
   {% csrf_token %}
   <input type="hidden" name="submission_key" value="{{ state.submission_key }}">
+  {% if draft %}<input type="hidden" name="draft_id" value="{{ draft.pk }}">{% endif %}
 
-  {% comment %}Step bar: labels on wide screens, "Step n of 3" on a phone.{% endcomment %}
-  <ol class="hidden sm:flex items-center gap-2 mb-6 text-sm" aria-label="Steps">
+  {% comment %}Step bar: labels on wide screens, "Step n of 4" on a phone.{% endcomment %}
+  <ol class="hidden sm:flex flex-wrap items-center gap-2 mb-6 text-sm" aria-label="Steps">
     <li class="flex items-center gap-2" :class="step >= 1 ? 'text-ink font-medium' : 'text-gray-400'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 1 ? 'bg-teal-500 text-white' : (step === 1 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">1</span>
       <button type="button" @click="go(1)" :aria-current="step === 1 ? 'step' : null">Who gets it</button>
     </li>
-    <li class="h-px w-8 bg-border" aria-hidden="true"></li>
+    <li class="h-px w-6 bg-border" aria-hidden="true"></li>
     <li class="flex items-center gap-2" :class="step >= 2 ? 'text-ink font-medium' : 'text-gray-400'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 2 ? 'bg-teal-500 text-white' : (step === 2 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">2</span>
-      <button type="button" @click="list && go(2)" :disabled="!list" :aria-current="step === 2 ? 'step' : null">The message</button>
+      <button type="button" @click="audience && go(2)" :disabled="!audience" :aria-current="step === 2 ? 'step' : null">The message</button>
     </li>
-    <li class="h-px w-8 bg-border" aria-hidden="true"></li>
+    <li class="h-px w-6 bg-border" aria-hidden="true"></li>
     <li class="flex items-center gap-2" :class="step >= 3 ? 'text-ink font-medium' : 'text-gray-400'">
-      <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step === 3 ? 'bg-brand-500 text-white' : 'bg-surface-subtle'" aria-hidden="true">3</span>
-      <button type="button" @click="list && template && go(3)" :disabled="!list || !template" :aria-current="step === 3 ? 'step' : null">Review and send</button>
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 3 ? 'bg-teal-500 text-white' : (step === 3 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">3</span>
+      <button type="button" @click="audience && template && go(3)" :disabled="!audience || !template" :aria-current="step === 3 ? 'step' : null">When</button>
+    </li>
+    <li class="h-px w-6 bg-border" aria-hidden="true"></li>
+    <li class="flex items-center gap-2" :class="step >= 4 ? 'text-ink font-medium' : 'text-gray-400'">
+      <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step === 4 ? 'bg-brand-500 text-white' : 'bg-surface-subtle'" aria-hidden="true">4</span>
+      <button type="button" @click="audience && template && go(4)" :disabled="!audience || !template" :aria-current="step === 4 ? 'step' : null">Review</button>
     </li>
   </ol>
   <div class="sm:hidden mb-4">
-    <p class="text-xs text-gray-500">Step <span x-text="step"></span> of 3</p>
-    <div class="mt-1 h-1.5 rounded-full bg-surface-subtle"><div class="h-1.5 rounded-full bg-brand-500 transition-all" :style="'width:' + (step * 33.4) + '%'"></div></div>
+    <p class="text-xs text-gray-500">Step <span x-text="step"></span> of 4</p>
+    <div class="mt-1 h-1.5 rounded-full bg-surface-subtle"><div class="h-1.5 rounded-full bg-brand-500 transition-all" :style="'width:' + (step * 25) + '%'"></div></div>
   </div>
 
   <div class="grid gap-6 lg:grid-cols-5 pb-24">
     <div class="lg:col-span-3 space-y-6">
 
-      {# ── Step 1: audience ─────────────────────────────── #}
+      {% comment %}Step 1: audience — lists, then saved segments.{% endcomment %}
       <fieldset x-show="step === 1">
         <legend id="step-1-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">Who should get this?</legend>
-        <p class="text-sm text-gray-600 mb-4">Choose a list. The numbers show who WhatsApp can reach on it.</p>
+        <p class="text-sm text-gray-600 mb-4">Choose a list or a segment. The numbers show who WhatsApp can reach.</p>
+        {% if lists %}
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Lists</h3>
         <div class="space-y-3">
           {% for l in lists %}
-          <label class="card card-pad !p-4 flex items-start gap-3 cursor-pointer transition"
-                 :class="list === '{{ l.pk }}' ? 'ring-2 ring-brand-500' : 'hover:border-gray-300'">
-            <input type="radio" name="contact_list" value="{{ l.pk }}" x-model="list" class="mt-1 h-4 w-4">
-            <span class="min-w-0 flex-1">
-              <span class="flex flex-wrap items-baseline justify-between gap-2">
-                <span class="font-medium text-ink">{{ l.name }}</span>
-                <span class="text-sm text-gray-500 tabular-nums">{{ l.reach.total }} customer{{ l.reach.total|pluralize }}</span>
-              </span>
-              {% if l.reach.total %}
-              <span class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
-                <span><span class="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1" aria-hidden="true"></span>{{ l.reach.opted_in }} opted in</span>
-                <span><span class="inline-block h-2 w-2 rounded-full bg-blue-400 mr-1" aria-hidden="true"></span>{{ l.reach.updates }} updates only</span>
-                {% if l.reach.opted_out %}<span><span class="inline-block h-2 w-2 rounded-full bg-coral-500 mr-1" aria-hidden="true"></span>{{ l.reach.opted_out }} opted out</span>{% endif %}
-                {% if l.reach.none %}<span><span class="inline-block h-2 w-2 rounded-full bg-gray-300 mr-1" aria-hidden="true"></span>{{ l.reach.none }} no WhatsApp</span>{% endif %}
-              </span>
-              {% else %}
-              <span class="mt-1 block text-xs text-gray-500">Empty — <a href="{% url 'contacts:list_detail' l.pk %}" class="text-accent hover:text-accent-strong">add people</a> first.</span>
-              {% endif %}
-            </span>
-          </label>
+          {% include "whatsapp/_audience_card.html" with name=l.name reach=l.reach value=l.pk kind="list" item=l %}
           {% endfor %}
         </div>
-        <p class="mt-3 text-sm"><a href="{% url 'contacts:lists' %}" class="text-accent hover:text-accent-strong">+ Make a new list</a> <span class="text-gray-500">— you'll come back here after.</span></p>
+        {% endif %}
+        {% if segments %}
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Segments <span class="normal-case font-normal">— whoever matches when it sends</span></h3>
+        <div class="space-y-3">
+          {% for s in segments %}
+          {% include "whatsapp/_audience_card.html" with name=s.name reach=s.reach value=s.pk kind="segment" item=s %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        <p class="mt-3 text-sm"><a href="{% url 'contacts:lists' %}" class="text-accent hover:text-accent-strong">+ Make a new list</a> · <a href="{% url 'contacts:segments' %}" class="text-accent hover:text-accent-strong">+ Make a segment</a></p>
       </fieldset>
 
-      {# ── Step 2: message ──────────────────────────────── #}
+      {% comment %}Step 2: message.{% endcomment %}
       <fieldset x-show="step === 2" x-cloak>
         <legend id="step-2-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">What do you want to send?</legend>
         <p class="text-sm text-gray-600 mb-4">WhatsApp only allows messages Meta has approved. <a href="/email/templates/" class="text-accent hover:text-accent-strong">Manage templates</a></p>
@@ -144,18 +146,62 @@
         {% endif %}{% endfor %}
       </fieldset>
 
-      {# ── Step 3: review ───────────────────────────────── #}
-      <section x-show="step === 3" x-cloak aria-labelledby="step-3-title">
-        <h2 id="step-3-title" tabindex="-1" class="text-lg font-semibold text-ink mb-4">Review and send</h2>
+      {% comment %}Step 3: when.{% endcomment %}
+      <fieldset x-show="step === 3" x-cloak>
+        <legend id="step-3-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">When should it go out?</legend>
+        <p class="text-sm text-gray-600 mb-4">A scheduled campaign goes to whoever is on the list at that time, so people you add before then are included. Messages only arrive during your <a href="{% url 'whatsapp-campaign-settings' %}" class="text-accent hover:text-accent-strong">sending hours</a>.</p>
+        <div class="space-y-3">
+          <label class="card card-pad !p-4 flex items-start gap-3 cursor-pointer" :class="when === 'now' ? 'ring-2 ring-brand-500' : ''">
+            <input type="radio" name="when" value="now" x-model="when" class="mt-1 h-4 w-4">
+            <span><span class="font-medium text-ink block">Send now</span><span class="text-sm text-gray-600">It starts going out as soon as you press send.</span></span>
+          </label>
+          <label class="card card-pad !p-4 flex items-start gap-3 cursor-pointer" :class="when === 'later' ? 'ring-2 ring-brand-500' : ''">
+            <input type="radio" name="when" value="later" x-model="when" class="mt-1 h-4 w-4">
+            <span class="flex-1 min-w-0">
+              <span class="font-medium text-ink block">Schedule for later</span>
+              <span class="text-sm text-gray-600">You can change or cancel it until it goes out.</span>
+              <span x-show="when === 'later'" x-cloak class="mt-3 grid gap-3 sm:grid-cols-3">
+                <span><label class="label" for="send-date">Day</label><input id="send-date" type="date" name="send_date" class="input" value="{{ state.send_date }}"></span>
+                <span><label class="label" for="send-time">Time</label><input id="send-time" type="time" name="send_time" class="input" value="{{ state.send_time }}"></span>
+                <span><label class="label" for="send-tz">Time zone</label>
+                  <select id="send-tz" name="send_tz" class="select">
+                    {% for z in timezones %}<option value="{{ z }}" {% if z == state.send_tz %}selected{% endif %}>{{ z }}</option>{% endfor %}
+                  </select>
+                </span>
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      {% comment %}Step 4: review.{% endcomment %}
+      <section x-show="step === 4" x-cloak aria-labelledby="step-4-title">
+        <h2 id="step-4-title" tabindex="-1" class="text-lg font-semibold text-ink mb-4">Review</h2>
         <div>
           <label class="label" for="campaign-name">Campaign name <span class="font-normal text-gray-400">(only you see this)</span></label>
           <input id="campaign-name" name="name" class="input" value="{{ state.name }}" placeholder="e.g. December offer" maxlength="150" />
         </div>
         <div id="review-summary" class="mt-4"></div>
+
+        <details class="card card-pad mt-4" x-data="{}">
+          <summary class="cursor-pointer text-sm font-medium text-ink">Send a test to my WhatsApp</summary>
+          <p class="mt-2 text-sm text-gray-600">See it on your own phone first. A test isn't counted as a campaign. Blanks we can't fill for you show as [blank name].</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <div class="flex-1 min-w-[12rem]">
+              <label class="label" for="test-phone">Your WhatsApp number</label>
+              <input id="test-phone" name="test_phone" class="input" value="{{ test_phone }}" placeholder="+260 97 1234567" inputmode="tel" autocomplete="tel">
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm"
+                    hx-post="{% url 'whatsapp-campaign-test' %}" hx-include="#composer-form" hx-target="#test-result" hx-swap="innerHTML">
+              {% include "components/icon.html" with name="send" class="w-4 h-4" %} Send test
+            </button>
+          </div>
+          <div id="test-result" class="mt-2" aria-live="polite"></div>
+        </details>
       </section>
     </div>
 
-    {# ── Live preview + who it reaches (server-computed, same rules as the send) ── #}
+    {% comment %}Live preview + who it reaches (server-computed, same rules as the send).{% endcomment %}
     <aside class="lg:col-span-2">
       <div class="lg:sticky lg:top-6 space-y-4"
            id="estimate"
@@ -164,21 +210,24 @@
            hx-trigger="load, change from:#composer-form, input from:#composer-form delay:500ms"
            hx-swap="innerHTML"
            aria-live="polite">
-        <div class="card card-pad text-sm text-gray-500">Choose a list and a message to see a preview.</div>
+        <div class="card card-pad text-sm text-gray-500">Choose who gets it and a message to see a preview.</div>
       </div>
     </aside>
   </div>
 
-  {# ── Sticky footer: Back / Continue / Send ── #}
+  {% comment %}Sticky footer: Back / Save draft / Continue / Send.{% endcomment %}
   <div class="fixed inset-x-0 bottom-0 border-t border-border bg-surface/95 backdrop-blur lg:pl-64" style="z-index: var(--z-dropdown)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
       <div>
         <button type="button" class="btn btn-ghost btn-sm" x-show="step > 1" @click="go(step - 1)">Back</button>
-        <a href="/email/campaigns/?channel=whatsapp" class="btn btn-ghost btn-sm" x-show="step === 1">Cancel</a>
+        <a href="{% if draft %}{% url 'whatsapp-campaign-detail' draft.pk %}{% else %}/email/campaigns/?channel=whatsapp{% endif %}" class="btn btn-ghost btn-sm" x-show="step === 1">Cancel</a>
       </div>
-      <button type="button" class="btn btn-primary btn-sm" x-show="step < 3" :disabled="!canContinue" @click="go(step + 1)">Continue</button>
-      <div x-show="step === 3" x-cloak id="send-slot">
-        {# The send button lives in the estimate partial so its label carries the real count. #}
+      <div class="flex items-center gap-2">
+        <button type="submit" name="action" value="draft" class="btn btn-secondary btn-sm" x-show="audience && template" x-cloak formnovalidate>Save draft</button>
+        <button type="button" class="btn btn-primary btn-sm" x-show="step < 4" :disabled="!canContinue" @click="go(step + 1)">Continue</button>
+        <div x-show="step === 4" x-cloak id="send-slot">
+          {% comment %}The send button lives in the estimate partial so its label carries the real count.{% endcomment %}
+        </div>
       </div>
     </div>
   </div>
