@@ -60,6 +60,10 @@ def _validate_url_button(button: dict, body_variable_numbers: list[int]) -> None
     numbers = _extract_variable_numbers(url)
     if len(numbers) > 1:
         raise TemplateBuilderError("The button URL can contain only one variable.")
+    if numbers and not url.endswith("}}"):
+        raise TemplateBuilderError(
+            "The button URL's variable must come at the very end of the link, e.g. https://example.com/pay/{{1}}."
+        )
     if numbers and numbers[0] not in body_variable_numbers:
         raise TemplateBuilderError(
             "The button URL must use a variable that's already in the message."
@@ -90,6 +94,8 @@ def _validate_copy_code_button(button: dict) -> None:
         raise TemplateBuilderError(
             "Give an example code for the copy-code button — required by WhatsApp for approval."
         )
+    if len(example) > 20:
+        raise TemplateBuilderError("The example code must be 20 characters or fewer.")
 
 
 def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> None:
@@ -110,8 +116,9 @@ def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> 
 
     if button_type == "url":
         _validate_url_button(button, body_variable_numbers)
-    elif button_type in ("phone_number", "voice_call"):
+    elif button_type == "phone_number":
         _validate_phone_button(button)
+    # voice_call needs nothing more: it calls the business's own WhatsApp number.
     elif button_type == "copy_code":
         _validate_copy_code_button(button)
 
@@ -290,8 +297,14 @@ def validate_fields(
         raise TemplateBuilderError("Choose a language.")
     if not body.strip():
         raise TemplateBuilderError("Write the message body.")
+    if header_format == "text" and "{{" in header:
+        raise TemplateBuilderError(
+            "Headers can't contain variables yet. Put the changing part in the message body."
+        )
 
-    numbers = _extract_variable_numbers(body)
+    # A variable may appear more than once ("Hi {{1}} … thanks {{1}}"); each
+    # distinct number has one label and one example.
+    numbers = sorted(set(_extract_variable_numbers(body)))
     if numbers != list(range(1, len(numbers) + 1)):
         raise TemplateBuilderError(
             "Variables must be numbered in order starting at {{1}} — e.g. {{1}}, {{2}}, {{3}}."
@@ -332,14 +345,21 @@ def _build_button(
             "phone_number": phone_number.strip(),
         }
     if type == "voice_call":
-        return {
-            "type": "VOICE_CALL",
-            "text": text,
-            "phone_number": phone_number.strip(),
-        }
+        # Calls the business's own WhatsApp number; Meta takes no phone number here.
+        return {"type": "VOICE_CALL", "text": text}
     if type == "copy_code":
-        return {"type": "COPY_CODE", "text": text, "example": [example.strip()]}
+        # Meta fixes this button's label itself and wants the example as a string.
+        return {"type": "COPY_CODE", "example": example.strip()}
     raise TemplateBuilderError(f'"{type}" isn\'t a supported button type.')
+
+
+def _meta_button(button: dict) -> dict:
+    """The button as Meta must receive it. Meta numbers a URL button's variable
+    on its own, starting at {{1}}; Akilent stores the body's number (e.g.
+    {{2}}) so ``send_components`` knows which body value fills it."""
+    if button.get("type") == "URL" and _VAR_RE.search(button.get("url") or ""):
+        return {**button, "url": _VAR_RE.sub("{{1}}", button["url"])}
+    return button
 
 
 def build_meta_payload(
@@ -456,7 +476,7 @@ def create_and_submit_template(
         variable_examples=variable_examples,
         header=header,
         footer=footer,
-        buttons=meta_buttons,
+        buttons=[_meta_button(b) for b in meta_buttons],
         header_format=header_format,
         header_media_handle=header_media_handle,
     )

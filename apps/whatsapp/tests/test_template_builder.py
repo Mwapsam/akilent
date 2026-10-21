@@ -274,14 +274,62 @@ class ValidateFieldsTest(TestCase):
             body="Welcome!",
             variable_labels=[],
             variable_examples=[],
-            buttons=[
-                {
-                    "type": "voice_call",
-                    "text": "Call on WhatsApp",
-                    "phone_number": "+15551234567",
-                }
-            ],
+            # No phone number: it calls the business's own WhatsApp number.
+            buttons=[{"type": "voice_call", "text": "Call on WhatsApp"}],
         )
+
+    def test_accepts_repeated_variable(self):
+        validate_fields(
+            name="thanks",
+            category="utility",
+            language="en",
+            body="Hi {{1}}, thanks for your order. See you soon, {{1}}!",
+            variable_labels=["Customer name"],
+            variable_examples=["Ada"],
+        )
+
+    def test_rejects_variable_in_text_header(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome",
+                category="utility",
+                language="en",
+                body="Hi {{1}}, welcome.",
+                variable_labels=["name"],
+                variable_examples=["Ada"],
+                header="Hello {{1}}",
+            )
+
+    def test_rejects_button_url_variable_not_at_end(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="reminder",
+                category="utility",
+                language="en",
+                body="Order {{1}} is unpaid.",
+                variable_labels=["Order number"],
+                variable_examples=["1029"],
+                buttons=[
+                    {
+                        "type": "url",
+                        "text": "Pay",
+                        "url": "https://pay.example.com/{{1}}/now",
+                        "example": "https://pay.example.com/1029/now",
+                    }
+                ],
+            )
+
+    def test_rejects_copy_code_example_over_20_chars(self):
+        with self.assertRaises(TemplateBuilderError):
+            validate_fields(
+                name="welcome",
+                category="marketing",
+                language="en",
+                body="Welcome!",
+                variable_labels=[],
+                variable_examples=[],
+                buttons=[{"type": "copy_code", "text": "Copy", "example": "X" * 21}],
+            )
 
     def test_accepts_copy_code_button(self):
         validate_fields(
@@ -590,3 +638,117 @@ class CreateAndSubmitTemplateTest(TestCase):
                 variable_labels=[],
                 variable_examples=[],
             )
+
+    def _submit_with_button(self, button, body="Hi {{1}}, order {{2}} is unpaid."):
+        provider = _FakeProvider()
+        with patch(
+            "apps.whatsapp.template_builder.get_whatsapp_provider",
+            return_value=provider,
+        ):
+            tpl = create_and_submit_template(
+                self.account,
+                name="with_button",
+                category="marketing",
+                language="en",
+                body=body,
+                variable_labels=["Customer name", "Order number"],
+                variable_examples=["Ada", "1029"],
+                buttons=[button],
+            )
+        sent = next(
+            c for c in provider.calls[0][1]["components"] if c["type"] == "BUTTONS"
+        )["buttons"][0]
+        return tpl, sent
+
+    def test_url_button_renumbered_to_1_for_meta_but_stored_as_body_number(self):
+        tpl, sent = self._submit_with_button(
+            {
+                "type": "url",
+                "text": "Pay now",
+                "url": "https://pay.example.com/{{2}}",
+                "example": "https://pay.example.com/1029",
+            }
+        )
+        self.assertEqual(sent["url"], "https://pay.example.com/{{1}}")
+        # send_components picks the body value from the stored number.
+        self.assertEqual(tpl.buttons[0]["url"], "https://pay.example.com/{{2}}")
+
+    def test_copy_code_button_payload_shape(self):
+        _, sent = self._submit_with_button(
+            {"type": "copy_code", "text": "Copy offer code", "example": "SAVE20"}
+        )
+        self.assertEqual(sent, {"type": "COPY_CODE", "example": "SAVE20"})
+
+    def test_voice_call_button_payload_shape(self):
+        _, sent = self._submit_with_button({"type": "voice_call", "text": "Call us"})
+        self.assertEqual(sent, {"type": "VOICE_CALL", "text": "Call us"})
+
+
+class MetaCreateTemplateErrorTest(TestCase):
+    def test_surfaces_meta_user_message(self):
+        from unittest.mock import MagicMock
+
+        from apps.whatsapp.providers.meta import MetaCloudAPIProvider
+
+        provider = MetaCloudAPIProvider(access_token="tok", phone_number_id="PNID")
+        response = MagicMock(status_code=400)
+        response.json.return_value = {
+            "error": {
+                "message": "Invalid parameter",
+                "code": 100,
+                "error_subcode": 2388043,
+                "error_user_title": "Message template variables are invalid",
+                "error_user_msg": "Variables can't be at the start or end of the template.",
+            }
+        }
+        with patch.object(provider._session, "post", return_value=response):
+            with self.assertRaises(WhatsAppProviderError) as ctx:
+                provider.create_template("WABA1", {"name": "x"})
+        self.assertIn("can't be at the start or end", str(ctx.exception))
+
+
+class TemplateMediaUploadViewTest(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        self.account = Account.objects.create(company_name="Co", slug="co")
+        self.user = get_user_model().objects.create_user(
+            username="owner", email="owner@example.com", password="pw"
+        )
+
+    def test_provider_receives_the_full_file(self):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from django.urls import reverse
+
+        from apps.whatsapp.types import MediaHandleResult
+
+        captured = {}
+
+        class _Provider:
+            def upload_template_media(self, content, mime_type, filename="upload"):
+                captured["content"] = content
+                return MediaHandleResult(handle="h1", success=True)
+
+        self.client.force_login(self.user)
+        with (
+            tempfile.TemporaryDirectory() as media_root,
+            override_settings(MEDIA_ROOT=media_root),
+            patch("apps.whatsapp.views.get_current_account", return_value=self.account),
+            patch(
+                "apps.whatsapp.views.get_whatsapp_provider", return_value=_Provider()
+            ),
+        ):
+            resp = self.client.post(
+                reverse("whatsapp-template-media-upload"),
+                {
+                    "header_format": "image",
+                    "file": SimpleUploadedFile(
+                        "logo.png", b"real-png-bytes", content_type="image/png"
+                    ),
+                },
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(captured["content"], b"real-png-bytes")

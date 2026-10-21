@@ -307,8 +307,19 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             except ValueError:
                 body = {}
             code, message, _ = _classify_meta_error(response.status_code, body)
+            # Template rejections carry the useful reason in error_user_title/_msg;
+            # the plain message is usually just "Invalid parameter".
+            err_body = body.get("error", {}) if isinstance(body, dict) else {}
+            user_msg = " ".join(
+                p
+                for p in (
+                    err_body.get("error_user_title"),
+                    err_body.get("error_user_msg"),
+                )
+                if p
+            )
             err = WhatsAppProviderError(
-                f"Meta API {response.status_code} [{code}]: {message}"
+                f"Meta API {response.status_code} [{code}]: {user_msg or message}"
             )
             err.code = code
             raise err

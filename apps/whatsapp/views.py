@@ -254,13 +254,17 @@ def template_media_upload(request):
             {"error": f"File is too large for a {header_format} header."}, status=400
         )
 
+    # Read before saving: saving the asset consumes the upload stream, which
+    # would leave Meta an empty file.
+    content = f.read()
+    f.seek(0)
     asset = MessageTemplateAsset.objects.create(
         account=account, file=f, content_type=f.content_type
     )
     try:
         provider = get_whatsapp_provider(account)
         result = provider.upload_template_media(
-            f.read(), f.content_type, filename=f.name
+            content, f.content_type, filename=f.name
         )
     except (WhatsAppProviderError, NotImplementedError) as exc:
         asset.delete()
@@ -306,7 +310,7 @@ def template_create(request):
             if button_type == "url":
                 button["url"] = request.POST.get("button_url", "").strip()
                 button["example"] = request.POST.get("button_url_example", "").strip()
-            elif button_type in ("phone_number", "voice_call"):
+            elif button_type == "phone_number":
                 button["phone_number"] = request.POST.get(
                     "button_phone_number", ""
                 ).strip()

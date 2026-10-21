@@ -111,6 +111,7 @@
     var buttonUrlFields = document.getElementById("wa-button-url-fields");
     var buttonPhoneFields = document.getElementById("wa-button-phone-fields");
     var buttonCodeFields = document.getElementById("wa-button-code-fields");
+    var buttonVoiceNote = document.getElementById("wa-button-voice-note");
     var buttonPhoneNumberEl = document.getElementById("tpl-button-phone-number");
     var buttonCodeExampleEl = document.getElementById("tpl-button-code-example");
     var buttonTextEl = document.getElementById("tpl-button-text");
@@ -276,7 +277,8 @@
       var raw = extractVariableNumbers(bodyEl.value);
       var present = distinctSorted(raw);
       renderVariableCards(present);
-      updateVariableWarning(raw);
+      // A variable may repeat ("Hi {{1}} … thanks {{1}}"); only gaps are errors.
+      updateVariableWarning(present);
       refreshButtonVariablePicker();
       renderPreview();
     }
@@ -616,8 +618,9 @@
     function updateButtonTypeVisibility() {
       var type = buttonTypeEl ? buttonTypeEl.value : "url";
       if (buttonUrlFields) buttonUrlFields.classList.toggle("hidden", type !== "url");
-      if (buttonPhoneFields) buttonPhoneFields.classList.toggle("hidden", type !== "phone_number" && type !== "voice_call");
+      if (buttonPhoneFields) buttonPhoneFields.classList.toggle("hidden", type !== "phone_number");
       if (buttonCodeFields) buttonCodeFields.classList.toggle("hidden", type !== "copy_code");
+      if (buttonVoiceNote) buttonVoiceNote.classList.toggle("hidden", type !== "voice_call");
     }
     if (buttonTypeEl) buttonTypeEl.addEventListener("change", function () { updateButtonTypeVisibility(); renderPreview(); });
     updateButtonTypeVisibility();
