@@ -236,6 +236,17 @@ def test_send_test_queues_one_message_and_no_campaign(account, template):
     assert msg.contact.contact is None  # no customer record made
     assert not WhatsAppCampaign.objects.exists()
 
+    for bad in ("", "12"):
+        with pytest.raises(svc.CampaignError, match="country code"):
+            svc.send_test(
+                account=account,
+                template=template,
+                mapping={},
+                fallbacks={},
+                phone=bad,
+                user=user,
+            )
+
     msg.contact.record_opt_out("STOP")
     with pytest.raises(svc.CampaignError, match="STOP"):
         svc.send_test(

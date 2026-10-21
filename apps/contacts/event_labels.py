@@ -30,6 +30,7 @@ _EXACT = {
     "email.unsubscribed": "Unsubscribed from email",
     "tag.added": "Tag added",
     "tag.removed": "Tag removed",
+    "contact.merged": "Merged with a duplicate record",
 }
 
 

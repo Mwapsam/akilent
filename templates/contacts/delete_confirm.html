@@ -10,7 +10,7 @@
   <div class="card card-pad mt-4 text-sm">
     <p class="font-medium text-ink">What gets deleted</p>
     <ul class="mt-2 space-y-1">
-      <li class="flex justify-between"><span>Their customer record, tags, notes and list memberships</span></li>
+      <li class="flex justify-between"><span>Their customer record, tags and list memberships</span></li>
       {% for label, n in removes %}<li class="flex justify-between"><span>{{ label }}</span><span class="tabular-nums text-ink font-medium">{{ n }}</span></li>{% endfor %}
     </ul>
     <p class="mt-3 text-xs text-gray-500">If you use HubSpot, the contact is removed there too. Messages already delivered to their phone stay on their phone.</p>

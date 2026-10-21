@@ -46,7 +46,7 @@ Also refreshes, out of band, the review summary (#review-summary) and the send b
       <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Meta lets your number start conversations with {{ pace.limit|floatformat:"0g" }} customers a day, so this goes out over {{ pace.days }} days — {{ pace.room|floatformat:"0g" }} today, the rest each day after.</span></p>
     {% endif %}
     {% if pace.waits_for_window %}
-      <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Outside your sending hours, so messages start at {{ pace.starts_local|date:"D H:i" }} your time. <a href="{% url 'whatsapp-campaign-settings' %}" class="underline font-medium">Change hours</a></span></p>
+      <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Outside your sending hours, so messages start at {{ pace.starts_local|date:"D H:i" }} ({{ pace.zone }}). <a href="{% url 'whatsapp-campaign-settings' %}" class="underline font-medium">Change hours</a></span></p>
     {% endif %}
     {% if is_marketing and est.not_opted_in %}
       <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="info" %}<span>To reach more people with offers, they need to opt in.{% if contact_list %} <a href="{% url 'contacts:list_detail' contact_list.pk %}?wa=updates" class="underline font-medium">See who hasn't</a>{% endif %}</span></p>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load ui %}
+{% load ui contact_labels %}
 {% block title %}{{ contact.full_name|default:contact.phone|default:contact.email|default:"Customer" }} — Customers{% endblock %}
 
 {% block content %}
@@ -31,7 +31,7 @@
 <div class="alert alert-info mb-6" role="status">
   {% include "components/icon.html" with name="users" %}
   <div class="flex-1 min-w-0">
-    <p class="font-medium">This might be the same person as <a href="{% url 'contacts:detail' d.public_id %}" class="underline">{{ d.full_name|default:d.phone|default:d.email }}</a></p>
+    <p class="font-medium">This might be the same person as <a href="{% url 'contacts:detail' d.public_id %}" class="underline">{{ d.full_name|default:d.phone|default:d.email }}</a>{% if d.full_name %} <span class="font-normal">({{ d.phone|default:d.email|default:"no phone or email" }})</span>{% endif %}</p>
     <p class="text-sm">Merging puts their conversations, orders and history in one place.</p>
   </div>
   <div class="flex flex-wrap gap-2">
@@ -120,7 +120,7 @@
     <h2 id="details-title" class="font-medium text-ink">Details</h2>
     <div class="flex justify-between"><span class="text-gray-500">Added</span><span>{{ contact.first_seen|date:"j M Y" }}</span></div>
     <div class="flex justify-between"><span class="text-gray-500">Last active</span><span>{{ contact.last_engaged_at|date:"j M Y"|default:"—" }}</span></div>
-    {% if contact.source %}<div class="flex justify-between"><span class="text-gray-500">How they arrived</span><span>{{ contact.source|capfirst }}</span></div>{% endif %}
+    {% if contact.source %}<div class="flex justify-between"><span class="text-gray-500">How they arrived</span><span>{{ contact.source|source_label }}</span></div>{% endif %}
     {% if related.orders %}<div class="flex justify-between"><span class="text-gray-500">Orders</span><a href="{% url 'commerce:orders' %}?q={{ contact.phone|default:contact.email|urlencode }}" class="text-accent hover:text-accent-strong">{{ related.orders }}</a></div>{% endif %}
     {% if related.leads %}<div class="flex justify-between"><span class="text-gray-500">Leads</span><span>{{ related.leads }}</span></div>{% endif %}
     {% if related.deals %}<div class="flex justify-between"><span class="text-gray-500">Deals</span><span>{{ related.deals }}</span></div>{% endif %}

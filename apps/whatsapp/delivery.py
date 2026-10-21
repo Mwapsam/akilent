@@ -141,6 +141,7 @@ def forecast(account, recipients: int, now=None) -> dict:
         "days": days,
         "waits_for_window": starts > now,
         "starts_local": starts.astimezone(zone),
+        "zone": str(zone),
         "window": window if window.enabled else None,
     }
 

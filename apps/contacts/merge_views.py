@@ -23,19 +23,28 @@ _COMPARE_FIELDS = (
 )
 
 
+def _counts_line(contact: Contact) -> str:
+    """ "3 conversations · 1 order · 2 lists" — only what they have."""
+    parts = []
+    for n, one, many in (
+        (contact.conversations.count(), "conversation", "conversations"),
+        (contact.orders.count(), "order", "orders"),
+        (contact.leads.count(), "lead", "leads"),
+        (contact.lists.count(), "list", "lists"),
+        (contact.tags.count(), "tag", "tags"),
+    ):
+        if n:
+            parts.append(f"{n} {one if n == 1 else many}")
+    return " · ".join(parts)
+
+
 def _summary(contact: Contact) -> dict:
     """What each side brings, so the owner can see nothing is lost."""
     return {
         "contact": contact,
         "wa_state": reachability.state_for(contact),
         "rows": [(label, getattr(contact, f)) for f, label in _COMPARE_FIELDS],
-        "counts": {
-            "Conversations": contact.conversations.count(),
-            "Orders": contact.orders.count(),
-            "Leads": contact.leads.count(),
-            "Lists": contact.lists.count(),
-            "Tags": contact.tags.count(),
-        },
+        "summary": _counts_line(contact),
         "instagram": [
             u
             for u in contact.instagram_contacts.values_list("username", flat=True)

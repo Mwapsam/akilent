@@ -26,7 +26,11 @@
       <div><label class="label" for="win-start">From</label><input id="win-start" type="time" name="start" class="input" value="{{ window.start|time:'H:i' }}" {% if not can_send %}disabled{% endif %}></div>
       <div><label class="label" for="win-end">Until</label><input id="win-end" type="time" name="end" class="input" value="{{ window.end|time:'H:i' }}" {% if not can_send %}disabled{% endif %}></div>
     </div>
+    {% if tz == "UTC" %}
+    <p class="alert alert-warning !text-sm">{% include "components/icon.html" with name="alert-triangle" %}<span>These hours are in UTC because your business's time zone isn't set yet. <a href="{% url 'settings-hours' %}" class="underline font-medium">Set it with your opening hours</a> so they match your customers' clocks.</span></p>
+    {% else %}
     <p class="text-xs text-gray-500">In your business's time zone: {{ tz }}. <a href="{% url 'settings-hours' %}" class="text-accent hover:text-accent-strong">Change it with your opening hours</a>.</p>
+    {% endif %}
     {% if can_send %}<button class="btn btn-primary btn-sm">Save</button>{% else %}<p class="text-sm text-gray-500">Only the business owner or an admin can change these.</p>{% endif %}
   </form>
 

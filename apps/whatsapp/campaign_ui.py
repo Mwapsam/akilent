@@ -85,10 +85,13 @@ def timeline(campaign) -> list[dict]:
     for entry in campaign.history or []:
         at = parse_datetime(entry.get("at") or "")
         when = parse_datetime(entry.get("when") or "") if entry.get("when") else None
+        label = EVENT_COPY.get(entry.get("event", ""), entry.get("event", ""))
+        if when is not None:
+            label = f"{label} for {local_label(when, campaign.timezone)}"
         out.append(
             {
                 "at": at,
-                "label": EVENT_COPY.get(entry.get("event", ""), entry.get("event", "")),
+                "label": label,
                 "by": entry.get("by", ""),
                 "when": when,
                 "recipients": entry.get("recipients"),

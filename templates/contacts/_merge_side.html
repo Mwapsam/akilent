@@ -1,4 +1,4 @@
-{% comment %}One side of the merge comparison. s = merge_views._summary(); value = "this" | "other".{% endcomment %}
+{% load contact_labels %}{% comment %}One side of the merge comparison. s = merge_views._summary(); value = "this" | "other".{% endcomment %}
 <label class="card card-pad block cursor-pointer transition" :class="keep === '{{ value }}' ? 'ring-2 ring-brand-500' : ''">
   <span class="flex items-center gap-2">
     <input type="radio" name="keep" value="{{ value }}" x-model="keep" class="h-4 w-4">
@@ -7,10 +7,10 @@
   </span>
   <dl class="mt-3 space-y-1 text-sm">
     {% for label, v in s.rows %}
-    <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right break-all">{% if v %}{% if label == "First seen" or label == "Last active" %}{{ v|date:"j M Y" }}{% else %}{{ v }}{% endif %}{% else %}—{% endif %}</dd></div>
+    <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right break-all">{% if v %}{% if label == "First seen" or label == "Last active" %}{{ v|date:"j M Y" }}{% elif label == "Came from" %}{{ v|source_label }}{% else %}{{ v }}{% endif %}{% else %}—{% endif %}</dd></div>
     {% endfor %}
     {% if s.instagram %}<div class="flex justify-between gap-4"><dt class="text-gray-500">Instagram</dt><dd class="text-ink text-right">{% for h in s.instagram %}@{{ h }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>{% endif %}
   </dl>
-  <p class="mt-3 text-xs text-gray-500">{% for label, n in s.counts.items %}{% if n %}{{ n }} {{ label|lower }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</p>
+  <p class="mt-3 text-xs text-gray-500">{{ s.summary|default:"No conversations, orders or lists yet" }}</p>
   <a href="{% url 'contacts:detail' s.contact.public_id %}" class="mt-2 inline-block text-xs text-accent hover:text-accent-strong" target="_blank" rel="noopener">Open profile</a>
 </label>

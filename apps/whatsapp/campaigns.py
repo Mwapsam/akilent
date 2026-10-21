@@ -583,13 +583,17 @@ def send_test(*, account, template, mapping: dict, fallbacks: dict, phone: str, 
     from types import SimpleNamespace
 
     from django.core.cache import cache
+    from django.core.exceptions import ValidationError
 
     from apps.automation import variables
     from apps.automation.workflows import _build_template_payload
     from apps.whatsapp.models.contact import normalize_phone
 
     _check_sendable(template)
-    number = normalize_phone(phone or "")
+    try:
+        number = normalize_phone(phone or "")
+    except ValidationError:
+        number = ""
     if not number:
         raise CampaignError("Enter your WhatsApp number, with the country code.")
     key = f"wa_campaign_test:{account.pk}:{user.pk}"
