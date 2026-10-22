@@ -366,6 +366,12 @@ def template_create(request):
                 header_media=header_media,
             )
         except TemplateBuilderError as exc:
+            logger.warning(
+                "WhatsApp template %r rejected for account %s: %s",
+                request.POST.get("name", ""),
+                account.slug,
+                exc,
+            )
             messages.error(request, str(exc))
             from apps.ai import api as ai_api
 

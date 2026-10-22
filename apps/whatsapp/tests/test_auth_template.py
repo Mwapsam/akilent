@@ -122,3 +122,14 @@ def test_the_form_has_the_one_time_code_options(logged_in):
     client, _ = logged_in
     html = client.get("/whatsapp/templates/new/").content.decode()
     assert 'id="wa-auth-options"' in html and 'name="auth_expiry"' in html
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_builder_form_is_not_boosted(logged_in):
+    # A boosted POST that fails validation is answered with HX-Refresh (the page's scripts need a
+    # real load), which reloads an empty form and loses the error: "Submit does nothing".
+    client, _ = logged_in
+    html = client.get("/whatsapp/templates/new/").content.decode()
+    form_tag = html[html.index('<form method="post" id="wa-form"') :].split(">", 1)[0]
+    assert 'hx-boost="false"' in form_tag

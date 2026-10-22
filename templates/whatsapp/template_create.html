@@ -234,7 +234,10 @@
 
   {# ── Step 2: edit + live preview ── #}
   <div class="grid md:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start scroll-mt-4" id="wa-template-form" {% if not form.name %}hidden{% endif %}>
-    <form method="post" id="wa-form" class="space-y-5 min-w-0">
+    {% comment %}hx-boost="false": a rejected submit re-renders this page, whose scripts need a real
+    page load, so a boosted POST is answered with HX-Refresh (apps.core.htmx.ShellMiddleware) and
+    the reload throws away both what was typed and the error message.{% endcomment %}
+    <form method="post" id="wa-form" class="space-y-5 min-w-0" hx-boost="false">
       {% csrf_token %}
       {% if ai_draft %}
       <section class="rounded-xl border border-border p-4 text-sm" aria-label="Why I built it this way">
@@ -551,8 +554,9 @@
       <div class="wa-actionbar flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Discard</a>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <p class="text-xs text-gray-500">Meta reviews it before you can send. Most reviews finish within a day.</p>
-          <button id="wa-submit-btn" class="btn btn-primary btn-sm">Submit for review</button>
+          <p id="wa-submit-error" class="hidden text-xs text-red-600" role="alert"></p>
+          <p id="wa-submit-hint" class="text-xs text-gray-500">Meta reviews it before you can send. Most reviews finish within a day.</p>
+          <button type="submit" id="wa-submit-btn" class="btn btn-primary btn-sm">Submit for review</button>
         </div>
       </div>
     </form>

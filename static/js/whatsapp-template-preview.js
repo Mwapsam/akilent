@@ -172,25 +172,76 @@
       return true;
     }
 
-    function updateVariableWarning(rawNumbers) {
+    // Submit is never disabled: a greyed-out button far from its explanation
+    // reads as "nothing happens". Problems are reported beside it on submit.
+    var variableError = "";
+
+    function updateVariableWarning(numbers) {
       if (!variableWarningEl) return;
-      var valid = isSequential(rawNumbers);
-      if (valid) {
+      if (isSequential(numbers)) {
+        variableError = "";
         variableWarningEl.classList.add("hidden");
         variableWarningEl.textContent = "";
-        if (submitBtn) submitBtn.disabled = false;
         return;
       }
       var expectedNext = 1;
-      for (var i = 0; i < rawNumbers.length; i++) {
-        if (rawNumbers[i] !== expectedNext) break;
+      for (var i = 0; i < numbers.length; i++) {
+        if (numbers[i] !== expectedNext) break;
         expectedNext++;
       }
-      variableWarningEl.textContent =
+      variableError =
         "Variables must be numbered in order starting at {{1}} — {{" + expectedNext + "}} is missing.";
+      variableWarningEl.textContent = variableError;
       variableWarningEl.classList.remove("hidden");
-      if (submitBtn) submitBtn.disabled = true;
     }
+
+    var submitErrorEl = document.getElementById("wa-submit-error");
+    var submitHintEl = document.getElementById("wa-submit-hint");
+
+    function showSubmitError(message, field) {
+      if (submitErrorEl) {
+        submitErrorEl.textContent = message;
+        submitErrorEl.classList.remove("hidden");
+      }
+      if (submitHintEl) submitHintEl.classList.add("hidden");
+      if (field && field.scrollIntoView) field.scrollIntoView({ block: "center" });
+    }
+
+    function fieldLabel(field) {
+      var label = field.id && document.querySelector('label[for="' + field.id + '"]');
+      return (label && label.textContent.trim()) || field.getAttribute("aria-label") || field.name || "A field";
+    }
+
+    // The browser's own validation bubble can't show on a hidden or
+    // visually-hidden field, so say what's wrong next to the button as well.
+    form.addEventListener("invalid", function (e) {
+      showSubmitError(fieldLabel(e.target) + ": " + e.target.validationMessage, e.target);
+    }, true);
+
+    form.addEventListener("submit", function (e) {
+      if (variableError) {
+        e.preventDefault();
+        showSubmitError(variableError, bodyEl);
+        return;
+      }
+      if (submitErrorEl) submitErrorEl.classList.add("hidden");
+      if (submitHintEl) {
+        submitHintEl.classList.remove("hidden");
+        submitHintEl.textContent = "Sending to WhatsApp… this can take a few seconds.";
+      }
+      if (submitBtn) {
+        submitBtn.disabled = true; // no double submits while Meta answers
+        submitBtn.textContent = "Submitting…";
+      }
+    });
+
+    // Back/forward cache can restore the page mid-submit; re-arm the button.
+    window.addEventListener("pageshow", function () {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit for review";
+      }
+    });
 
     function buildVariableCard(n) {
       var card = document.createElement("div");
