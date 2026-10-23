@@ -289,8 +289,19 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
   }
   .cv-section { padding: 1rem 1.125rem; border-top: 1px solid var(--cv-line); }
   .cv-h { margin-bottom: .625rem; font-size: .8125rem; font-weight: 600; color: var(--cv-ink); }
-  .cv-field { display: flex; align-items: center; gap: .5rem; min-height: 2rem; font-size: .875rem; }
-  .cv-field-label { width: 3.5rem; flex-shrink: 0; color: var(--cv-ink-subtle); }
+  /* Label column fits "Customer since" at 13px (~92px) on one line and no wider — every
+     pixel here comes out of the value column in a 340px sidebar. */
+  .cv-field { display: flex; align-items: center; gap: .5rem; min-width: 0; min-height: 2rem; font-size: .875rem; }
+  .cv-field > * { min-width: 0; }
+  .cv-field .cv-iconbtn { flex-shrink: 0; }
+  .cv-field-label { width: 6rem; flex-shrink: 0; white-space: nowrap; font-size: .8125rem; color: var(--cv-ink-subtle); }
+  .cv-h-sub { display: block; margin-top: .125rem; font-size: .75rem; font-weight: 400; color: var(--cv-ink-subtle); }
+  .cv-activity > li { padding-block: .625rem; line-height: 1.4; }
+  .cv-activity > li:first-child { padding-top: 0; }
+  .cv-activity > li + li { border-top: 1px solid var(--cv-line); }
+  .cv-inline-form { display: flex; gap: .5rem; }
+  .cv-inline-form .input, .cv-inline-form .select { flex: 1 1 0%; min-width: 0; }
+  .cv-inline-form .btn { flex-shrink: 0; }
   .cv-followup-more > summary { cursor: pointer; list-style: none; }
   .cv-followup-more > summary::-webkit-details-marker { display: none; }
   .cv-followup-more > summary:hover, .cv-followup-more > summary:focus-visible { color: var(--cv-ink); text-decoration: underline; }
@@ -938,23 +949,29 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
       {# What automations did #}
       <div class="cv-section">
         <h2 class="cv-h">What automations did</h2>
-        {% for item in automation_activity %}
-        <div class="mb-3 text-sm">
-          <p class="font-medium text-ink">{{ item.automation }} <span class="font-normal text-gray-400">· {{ item.when|date:"j M, H:i" }}</span></p>
-          <ul class="mt-0.5 space-y-0.5">
-            {% for line in item.lines %}
-            <li class="flex items-start gap-1.5 {% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">
-              {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
-              {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
-              <span>{{ line.text }}</span>
-            </li>
-            {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
-          </ul>
-        </div>
-        {% empty %}
-        <p class="text-sm text-gray-400">Nothing yet. <a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" class="underline">Why didn't it reply?</a></p>
-        {% endfor %}
-        {% if automation_activity %}<a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" class="text-xs underline text-gray-500">Why didn't it reply?</a>{% endif %}
+        {% url 'automation:why-not' as why_not_url %}
+        {% if automation_activity %}
+        <ul class="cv-activity">
+          {% for item in automation_activity %}
+          <li class="text-sm">
+            <p class="font-medium text-ink break-words">{{ item.automation }}</p>
+            <p class="text-xs text-gray-500">{{ item.when|date:"j M, H:i" }}</p>
+            <ul class="mt-1.5 space-y-1">
+              {% for line in item.lines %}
+              <li class="flex items-start gap-1.5 {% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">
+                {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
+                {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
+                <span class="min-w-0 break-words">{{ line.text }}</span>
+              </li>
+              {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
+            </ul>
+          </li>
+          {% endfor %}
+        </ul>
+        <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="inline-block mt-2 text-xs underline text-gray-500">Why didn't it reply?</a>
+        {% else %}
+        <p class="text-sm text-gray-400">Nothing yet. <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="underline">Why didn't it reply?</a></p>
+        {% endif %}
       </div>
 
       {# Recommended action — shown when there is an actionable recommendation for this conversation #}
@@ -982,7 +999,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           {% empty %}<span class="text-sm text-gray-400">No tags yet.</span>{% endfor %}
         </div>
         {% url 'contacts:tag_add' conversation.contact.public_id as tag_url %}
-        <form method="post" action="{{ tag_url }}" class="flex gap-2" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+        <form method="post" action="{{ tag_url }}" class="cv-inline-form" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ detail_url }}" />
           <label class="sr-only" for="conversation-add-tag">Add a tag</label>
@@ -1037,11 +1054,11 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
       {% elif published_forms %}
       <div class="cv-section">
         <h2 class="cv-h">Start a form</h2>
-        <form method="post" class="flex gap-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+        <form method="post" class="cv-inline-form" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="action" value="start_form" />
           <label class="sr-only" for="start-form-id">Form</label>
-          <select id="start-form-id" name="form_id" class="select select-sm flex-1">
+          <select id="start-form-id" name="form_id" class="select select-sm">
             {% for f in published_forms %}
             <option value="{{ f.pk }}">{{ f.name }}</option>
             {% endfor %}
@@ -1096,7 +1113,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
 
       {# Internal notes #}
       <div class="cv-section">
-        <h2 class="cv-h">Internal notes <span class="font-normal text-gray-400">· Only your team sees these</span></h2>
+        <h2 class="cv-h">Internal notes <span class="cv-h-sub">Only your team sees these</span></h2>
         <ul class="space-y-2">
           {% for n in notes %}
           <li class="cv-note">
@@ -1107,10 +1124,10 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           <li class="text-sm text-gray-500">No notes yet. Add context for whoever picks this up next.</li>
           {% endfor %}
         </ul>
-        <form method="post" class="flex gap-2 mt-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+        <form method="post" class="cv-inline-form mt-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
           {% csrf_token %}
           <input type="hidden" name="action" value="add_note" />
-          <input type="text" name="body" placeholder="Add a note…" class="input flex-1" aria-label="New internal note" required />
+          <input type="text" name="body" placeholder="Add a note…" class="input" aria-label="New internal note" required />
           <button class="btn btn-secondary btn-sm">Add</button>
         </form>
       </div>
