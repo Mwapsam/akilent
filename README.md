@@ -448,18 +448,23 @@ This includes:
 
 ## Billing and Usage
 
-Akilent includes subscription and usage infrastructure using Flutterwave.
+Akilent runs subscriptions itself: billing periods, account credit, renewals, past-due
+grace and expiry live in `apps/billing` (`payments.py`, `credit.py`, `renewals.py`). A payment
+provider only moves money, through the adapter interface in `apps/billing/providers/`.
 
-Current infrastructure includes:
-
-* Subscription billing
-* Plan-based quotas
-* Usage tracking
-* Payment callbacks
-* Billing state
-* Communication usage accounting
-
-Flutterwave test-mode cards are documented separately for development/testing environments.
+* **Providers:** Stripe and Flutterwave (cards), plus optional bank transfer. The operator
+  picks the active provider in `/manage/settings/`; customers on another provider move over at
+  their next renewal. Adding a provider: see `docs/billing/providers.md`.
+* **Account credit:** operators give credit per business (Billing tab) or to every pilot
+  business (`/manage/pilot/`, or `manage.py grant_early_adopter_credit 150 --days 365`).
+  Credit is used before any charge, at checkout and at every renewal.
+* **Renewals:** hourly `renew_due_subscriptions` uses credit first, then charges the card saved
+  with the active provider; otherwise it emails a pay link. Unpaid renewals keep features for
+  `BILLING_GRACE_DAYS`, then expire.
+* **Legacy provider subscriptions:** `manage.py migrate_legacy_billing --dry-run`, then without
+  `--dry-run`, hands old Stripe/Flutterwave recurring subscriptions to the renewal engine at the
+  end of their paid period.
+* Plan-based quotas and usage tracking: `apps/billing/metering.py`.
 
 ---
 

@@ -44,6 +44,20 @@
           <input type="checkbox" name="payments_enabled" class="rounded border-border-strong" {% if site.payments_enabled %}checked{% endif %}>
           Payments (checkout &amp; billing)
         </label>
+        <fieldset class="text-sm">
+          <legend class="font-medium text-ink mb-1">Payment provider</legend>
+          <p class="text-xs text-gray-500 mb-2">New checkouts and renewals use this provider. Customers who saved a card with another provider keep their plan; at their next renewal they're asked to pay here.</p>
+          <div class="space-y-1.5">
+            {% for p in billing_providers %}
+            <label class="flex items-start gap-3">
+              <input type="radio" name="billing_provider" value="{{ p.code }}" class="mt-0.5" {% if p.active %}checked{% endif %} {% if not p.ready and not p.active %}disabled{% endif %}>
+              <span>{{ p.name }}{% if p.active %} <span class="badge badge-success">In use</span>{% endif %}
+                {% if p.note %}<span class="block text-xs text-red-700">{{ p.note }}</span>{% endif %}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Prices and credit are in {{ billing_currency }}.</p>
+        </fieldset>
         <label class="flex items-start gap-3 text-sm">
           <input type="checkbox" name="automation_events_enabled" class="rounded border-border-strong mt-0.5" {% if site.automation_events_enabled %}checked{% endif %}>
           <span>Start automations and AI from incoming WhatsApp messages

@@ -122,7 +122,7 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
         "account": req.account,
         "plan": req.plan,
         "reference": req.reference,
-        "review_url": _absolute_url("/billing/plans/"),
+        "review_url": _absolute_url("/manage/payments/"),
     }
 
     admin_emails = list(
@@ -170,4 +170,171 @@ def notify_admins_of_manual_payment(request_id: int) -> None:
         logger.exception(
             "notify_admins_of_manual_payment: slack post failed for request=%s",
             request_id,
+        )
+
+
+@shared_task
+def renew_due_subscriptions() -> dict:
+    """The renewal engine (apps.billing.renewals): renew, charge, dun, cancel and expire."""
+    from apps.billing import renewals
+
+    return renewals.run()
+
+
+@shared_task
+def expire_credit_grants() -> int:
+    from apps.billing import credit
+
+    return credit.expire_due()
+
+
+@shared_task
+def abandon_stale_checkouts() -> int:
+    """Payments nobody finished give their held credit back (and an unanswered renewal charge
+    makes the subscription past due)."""
+    from apps.billing import payments
+
+    return payments.abandon_stale()
+
+
+@shared_task
+def notify_provider_change(old_code: str, new_code: str) -> int:
+    """Tell paying customers whose saved method is with the old provider that their next
+    renewal needs the new one. Their access and paid period are unaffected."""
+    from apps.billing.models import SavedPaymentMethod, Subscription
+
+    accounts = set(
+        SavedPaymentMethod.objects.filter(
+            provider=old_code, is_default=True
+        ).values_list("account_id", flat=True)
+    )
+    subs = list(
+        Subscription.objects.filter(
+            account_id__in=accounts,
+            status__in=[Subscription.ACTIVE, Subscription.PAST_DUE],
+            cancel_at_period_end=False,
+        ).values_list("account_id", flat=True)
+    )
+    for account_id in subs:
+        send_billing_notice.delay(account_id, "provider_changed", None)
+    return len(subs)
+
+
+def _notice(sub, kind, payment) -> tuple[str, str] | None:
+    from apps.billing import credit
+    from apps.billing.money import format_money
+    from apps.billing.pricing import price_for
+    from apps.billing.providers import registry
+
+    account = sub.account
+    plan = sub.plan
+    pay_link = _absolute_url(
+        f"/billing/checkout/?plan={plan.slug}&period={sub.billing_period}"
+    )
+    ends = (
+        f"{timezone.localtime(sub.current_period_end):%d %B %Y}"
+        if sub.current_period_end
+        else ""
+    )
+    provider = registry.active()
+    with_provider = f" with {provider.display_name}" if provider else ""
+    if kind == "upcoming":
+        price = price_for(plan, sub.billing_period)
+        covered = min(credit.balance(account), price)
+        lines = [f"Your {plan.name} plan for {account.company_name} renews on {ends}."]
+        if covered > 0:
+            lines.append(
+                f"{format_money(covered)} of your account credit will be used, "
+                f"so {format_money(price - covered)} is due."
+            )
+        else:
+            lines.append(f"The amount due is {format_money(price)}.")
+        return f"Your {plan.name} plan renews on {ends}", "\n\n".join(lines)
+    if kind == "renewed":
+        paid = ""
+        if payment is not None:
+            paid = f"Paid: {format_money(payment.amount_due, payment.currency)}"
+            if payment.credit_applied:
+                paid += f" (plus {format_money(payment.credit_applied, payment.currency)} credit)"
+            paid += ".\n\n"
+        return (
+            f"Your {plan.name} plan has renewed",
+            f"{account.company_name} is on {plan.name} until {ends}.\n\n{paid}"
+            f"Billing: {_absolute_url('/billing/plans/')}",
+        )
+    if kind in ("unpaid", "reminder"):
+        from apps.billing.renewals import grace_period
+
+        until = ""
+        if sub.past_due_since:
+            until = f" until {timezone.localtime(sub.past_due_since + grace_period()):%d %B %Y}"
+        return (
+            f"Action needed: renew your {plan.name} plan",
+            f"We couldn't take the renewal payment for {account.company_name}'s {plan.name} plan."
+            f"\n\nPay{with_provider} here to keep everything running: {pay_link}\n\n"
+            f"Your features stay on{until}.",
+        )
+    if kind == "provider_changed":
+        return (
+            "How you pay for your plan is changing",
+            f"From your next renewal ({ends}), payments for {account.company_name} go through"
+            f"{with_provider or ' a new payment provider'}. Your plan and the time you've paid "
+            f"for don't change.\n\nWhen it's time to renew we'll email you a link to add your "
+            f"payment details. You can also do it now: {pay_link}",
+        )
+    if kind == "expired":
+        return (
+            f"Your {plan.name} plan has ended",
+            f"The {plan.name} plan for {account.company_name} has ended because the renewal "
+            f"wasn't paid. Nothing has been deleted.\n\nRenew{with_provider}: {pay_link}",
+        )
+    if kind == "cancelled":
+        return (
+            f"Your {plan.name} plan has ended",
+            f"As requested, the {plan.name} plan for {account.company_name} has ended. "
+            f"Nothing has been deleted.\n\nYou can subscribe again any time: "
+            f"{_absolute_url('/billing/plans/')}",
+        )
+    return None
+
+
+@shared_task
+def send_billing_notice(
+    account_id: int, kind: str, payment_id: int | None = None
+) -> None:
+    """Email the business about its subscription (renewal, unpaid, ended...)."""
+    from apps.billing.models import BillingPayment, Subscription
+    from apps.email.services.send import send_system_email
+
+    sub = (
+        Subscription.objects.select_related("plan", "account")
+        .filter(account_id=account_id)
+        .first()
+    )
+    if sub is None:
+        return
+    owner = sub.account.owner
+    to = sub.account.billing_email or (owner.email if owner else "")
+    if not to:
+        return
+    payment = (
+        BillingPayment.objects.filter(pk=payment_id).first() if payment_id else None
+    )
+    built = _notice(sub, kind, payment)
+    if built is None:
+        return
+    subject, body = built
+    try:
+        from apps.email.services.html_email import build_transactional_html
+
+        send_system_email(
+            to,
+            subject,
+            text_body=body,
+            html_body=build_transactional_html(body, subject),
+            sender_label="Billing",
+        )
+    except Exception:
+        logger.exception(
+            "send_billing_notice: %s email failed for account %s", kind, account_id
         )

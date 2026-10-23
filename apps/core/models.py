@@ -40,6 +40,10 @@ class SiteSettings(models.Model):
     whatsapp_enabled = models.BooleanField(default=True)
     signups_enabled = models.BooleanField(default=True)
     payments_enabled = models.BooleanField(default=True)
+    # The one payment provider new checkouts and renewals use (a code registered in
+    # apps.billing.providers). Validated against the registry, not fixed choices, so adding a
+    # provider needs no migration here.
+    billing_provider = models.CharField(max_length=30, default="flutterwave")
 
     # Phase 1: temporary gate for automation event publishing until Phase 4's ModuleSubscription exists
     automation_events_enabled = models.BooleanField(

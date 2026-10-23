@@ -5,7 +5,14 @@ from django.contrib.auth.models import User
 from django.core import mail
 
 from apps.accounts.models import Account, Membership
-from apps.billing.models import ManualPaymentRequest, PaymentMethod, Plan
+from apps.billing import payments
+from apps.billing.models import (
+    BillingPayment,
+    ManualPaymentRequest,
+    PaymentMethod,
+    Plan,
+    Subscription,
+)
 
 MANUAL_SUBMIT_URL = "/billing/manual/submit/"
 
@@ -45,6 +52,11 @@ def manual_method(db):
 
 
 @pytest.fixture
+def pending(db, account, plan):
+    return payments.create_payment(account, plan, "quarterly", provider="manual")
+
+
+@pytest.fixture
 def admin_user(db):
     return User.objects.create_user(
         username="admin1",
@@ -56,15 +68,19 @@ def admin_user(db):
 
 @pytest.mark.django_db
 def test_manual_submit_creates_pending_request_and_notifies_admin(
-    client, account, owner, plan, manual_method, admin_user
+    client, account, owner, plan, manual_method, admin_user, pending
 ):
     client.force_login(owner)
-    resp = client.post(MANUAL_SUBMIT_URL, {"plan": plan.slug, "reference": "TXN-123"})
+    resp = client.post(
+        MANUAL_SUBMIT_URL, {"payment": pending.reference, "reference": "TXN-123"}
+    )
 
     assert resp.status_code == 302
     req = ManualPaymentRequest.objects.get(account=account, plan=plan)
     assert req.status == ManualPaymentRequest.PENDING
     assert req.reference == "TXN-123"
+    assert req.payment == pending and req.billing_period == "quarterly"
+    assert "/manage/payments/" in mail.outbox[0].body
 
     assert len(mail.outbox) == 1
     assert mail.outbox[0].to == ["admin@example.com"]
@@ -73,10 +89,12 @@ def test_manual_submit_creates_pending_request_and_notifies_admin(
 
 @pytest.mark.django_db
 def test_manual_submit_requires_reference(
-    client, account, owner, plan, manual_method, admin_user
+    client, account, owner, plan, manual_method, admin_user, pending
 ):
     client.force_login(owner)
-    resp = client.post(MANUAL_SUBMIT_URL, {"plan": plan.slug, "reference": ""})
+    resp = client.post(
+        MANUAL_SUBMIT_URL, {"payment": pending.reference, "reference": ""}
+    )
 
     assert resp.status_code == 302
     assert not ManualPaymentRequest.objects.filter(account=account).exists()
@@ -85,12 +103,52 @@ def test_manual_submit_requires_reference(
 
 @pytest.mark.django_db
 def test_manual_submit_disabled_method_rejected(
-    client, account, owner, plan, admin_user
+    client, account, owner, plan, admin_user, pending
 ):
     # No enabled PaymentMethod(code="manual") fixture here.
     client.force_login(owner)
-    resp = client.post(MANUAL_SUBMIT_URL, {"plan": plan.slug, "reference": "TXN-123"})
+    resp = client.post(
+        MANUAL_SUBMIT_URL, {"payment": pending.reference, "reference": "TXN-123"}
+    )
 
     assert resp.status_code == 302
     assert not ManualPaymentRequest.objects.filter(account=account).exists()
     assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_approval_grants_the_period_paid_for(
+    client, account, owner, plan, manual_method, admin_user, pending
+):
+    Subscription.objects.create(
+        account=account,
+        plan=plan,
+        status=Subscription.INCOMPLETE,
+        current_period_start=pending.created_at,
+    )
+    client.force_login(owner)
+    client.post(MANUAL_SUBMIT_URL, {"payment": pending.reference, "reference": "TXN-9"})
+    req = ManualPaymentRequest.objects.get(account=account)
+
+    client.force_login(admin_user)
+    client.post(f"/manage/payments/{req.pk}/approve/")
+
+    sub = Subscription.objects.get(account=account)
+    pending.refresh_from_db()
+    assert sub.status == Subscription.ACTIVE
+    assert sub.billing_period == "quarterly" and sub.provider == "manual"
+    assert pending.status == BillingPayment.SUCCEEDED
+
+
+@pytest.mark.django_db
+def test_cannot_submit_against_another_business_payment(
+    client, owner, plan, manual_method, admin_user
+):
+    other = Account.objects.create(company_name="Other Co")
+    theirs = payments.create_payment(other, plan, "monthly", provider="manual")
+    client.force_login(owner)
+    resp = client.post(
+        MANUAL_SUBMIT_URL, {"payment": theirs.reference, "reference": "X"}
+    )
+    assert resp.status_code == 404
+    assert not ManualPaymentRequest.objects.exists()

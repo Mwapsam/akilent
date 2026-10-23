@@ -14,6 +14,8 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.models import Account
 from apps.billing.models import ManualPaymentRequest, PaymentMethod, Plan
+from apps.billing.money import billing_currency
+from apps.billing.providers import registry as billing_registry
 from apps.core.audit import audit, label
 from apps.core.channels import (
     CHANNEL_REGISTRY,
@@ -181,6 +183,33 @@ def _act_extend_trial(request, account):
     result = business.extend_trial(account, days)
     audit(request, "subscription.extend_trial", account, target=f"+{days} days")
     return result + "."
+
+
+def _act_credit_grant(request, account):
+    amount = business.grant_credit(
+        account,
+        amount=request.POST.get("amount", ""),
+        reason=request.POST.get("reason", ""),
+        note=request.POST.get("note", ""),
+        days=request.POST.get("days", ""),
+        by=request.user,
+    )
+    audit(
+        request,
+        "business.credit.grant",
+        account,
+        target=amount,
+        reason=request.POST.get("reason", ""),
+        note=request.POST.get("note", "").strip(),
+        days=request.POST.get("days", ""),
+    )
+    return f"Gave {account.company_name} {amount} credit."
+
+
+def _act_credit_revoke(request, account):
+    taken = business.revoke_credit(account, request.POST.get("grant"), by=request.user)
+    audit(request, "business.credit.revoke", account, target=taken)
+    return f"Took back {taken} of credit."
 
 
 def _act_feature(request, account):
@@ -362,6 +391,8 @@ ACTIONS = {
     "suspend": ("overview", _act_suspend),
     "subscription": ("billing", _act_subscription),
     "extend_trial": ("billing", _act_extend_trial),
+    "credit_grant": ("billing", _act_credit_grant),
+    "credit_revoke": ("billing", _act_credit_revoke),
     "feature": ("billing", _act_feature),
     "limit": ("billing", _act_limit),
     "retry_registration": ("whatsapp", _act_retry_registration),
@@ -879,6 +910,45 @@ def pilot_command_center(request):
 
 
 @admin_required
+@require_POST
+def pilot_grant_credit(request):
+    """Give every pilot business early-adopter credit (businesses that have it are skipped)."""
+    from apps.billing import credit
+    from apps.billing.money import format_money
+
+    days = (request.POST.get("days") or "").strip()
+    wave = (request.POST.get("wave") or "").strip()
+    try:
+        expires = timezone.now() + timedelta(days=int(days)) if days else None
+        granted, skipped = credit.grant_early_adopters(
+            request.POST.get("amount", ""),
+            wave=int(wave) if wave else None,
+            note=request.POST.get("note", ""),
+            expires_at=expires,
+            by=request.user,
+        )
+    except (ValueError, credit.CreditError) as exc:
+        messages.error(request, str(exc) or "Check the amount, wave and days.")
+        return redirect("core:pilot")
+    amount = format_money(request.POST.get("amount"))
+    audit(
+        request,
+        "credit.bulk_grant",
+        target=f"{amount} x {len(granted)}",
+        accounts=[a.pk for a in granted],
+        wave=wave,
+        days=days,
+    )
+    messages.success(
+        request,
+        f"Gave {amount} credit to {len(granted)} pilot business"
+        f"{'es' if len(granted) != 1 else ''}"
+        + (f"; skipped {len(skipped)} that already had it." if skipped else "."),
+    )
+    return redirect("core:pilot")
+
+
+@admin_required
 def audit_log(request):
     rows = AdminAction.objects.select_related("actor", "account")
     action = request.GET.get("action") or ""
@@ -938,6 +1008,7 @@ def settings_page(request):
             ]
         )
         audit(request, "settings.site")
+        _save_billing_provider(request, site)
         channel_error = False
         for key, ch in CHANNEL_REGISTRY.items():
             if key not in available_channels():
@@ -968,6 +1039,8 @@ def settings_page(request):
                 "bounce_halt": f"{mail.reputation_bounce_halt * 100:g}",
                 "complaint_halt": f"{mail.reputation_complaint_halt * 100:g}",
             },
+            "billing_providers": _billing_provider_options(site),
+            "billing_currency": billing_currency(),
             "whatsapp_env": settings.WHATSAPP_ENABLED,  # kept as raw setting for the ops console
             "channels": [
                 {
@@ -979,6 +1052,57 @@ def settings_page(request):
                 for key, ch in CHANNEL_REGISTRY.items()
             ],
         },
+    )
+
+
+def _billing_provider_options(site) -> list[dict]:
+    currency = billing_currency()
+    options = []
+    for p in billing_registry.selectable():
+        note = p.config_status()
+        if not note and not p.supports_currency(currency):
+            note = f"Can't charge {currency}."
+        options.append(
+            {
+                "code": p.code,
+                "name": p.display_name,
+                "ready": not note,
+                "note": note,
+                "active": p.code == site.billing_provider,
+            }
+        )
+    return options
+
+
+def _save_billing_provider(request, site) -> None:
+    """Switch the payment provider. Existing customers move over at their next renewal (the
+    renewal engine only charges methods saved with the active provider); they're told now."""
+    code = request.POST.get("billing_provider")
+    old = site.billing_provider
+    if not code or code == old:
+        return
+    provider = billing_registry.get(code)
+    if provider is None or not provider.selectable:
+        messages.error(request, "Unknown payment provider.")
+        return
+    problem = provider.config_status() or (
+        ""
+        if provider.supports_currency(billing_currency())
+        else "it can't charge this currency"
+    )
+    if problem:
+        messages.error(request, f"{provider.display_name} can't be used yet: {problem}")
+        return
+    site.billing_provider = code
+    site.save(update_fields=["billing_provider", "updated_at"])
+    audit(request, "settings.billing_provider", target=code, previous=old)
+    from apps.billing.tasks import notify_provider_change
+
+    notify_provider_change.delay(old, code)
+    messages.info(
+        request,
+        f"Payments now go through {provider.display_name}. Customers paying with "
+        "another provider have been emailed and will switch at their next renewal.",
     )
 
 

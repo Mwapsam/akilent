@@ -580,6 +580,28 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 
+# --- Billing ---
+# One currency for plan prices, credits and every payment provider. Falls back to the old
+# per-provider setting so an existing deployment keeps charging what it charged before.
+BILLING_CURRENCY = (
+    os.getenv("BILLING_CURRENCY")
+    or os.getenv("FLUTTERWAVE_CURRENCY")
+    or os.getenv("STRIPE_CURRENCY")
+    or "USD"
+).upper()
+# Payment provider adapters (apps.billing.providers.base.PaymentProvider). Adding a provider is
+# one module plus one line here; the operator picks the active one in /manage/settings/.
+BILLING_PROVIDERS = [
+    "apps.billing.providers.stripe.StripeProvider",
+    "apps.billing.providers.flutterwave.FlutterwaveProvider",
+    "apps.billing.providers.manual.ManualProvider",
+]
+# Days a renewal can stay unpaid (past due, features kept) before the subscription expires.
+BILLING_GRACE_DAYS = int(os.getenv("BILLING_GRACE_DAYS") or 7)
+# Flutterwave hosted checkout options, e.g. "card,mobilemoneyzambia". Only card payments can be
+# charged again automatically; other methods renew through an emailed pay link.
+FLUTTERWAVE_PAYMENT_OPTIONS = os.getenv("FLUTTERWAVE_PAYMENT_OPTIONS", "card")
+
 # --- HubSpot ---
 
 HUBSPOT_CLIENT_ID = os.getenv("HUBSPOT_CLIENT_ID", "")
@@ -690,6 +712,18 @@ CELERY_BEAT_SCHEDULE = {
     "expire-trials": {
         "task": "apps.billing.tasks.expire_trials",
         "schedule": 3600.0,
+    },
+    "renew-due-subscriptions": {
+        "task": "apps.billing.tasks.renew_due_subscriptions",
+        "schedule": 3600.0,  # Akilent runs renewals; providers only move money
+    },
+    "expire-credit-grants": {
+        "task": "apps.billing.tasks.expire_credit_grants",
+        "schedule": 86400.0,
+    },
+    "abandon-stale-checkouts": {
+        "task": "apps.billing.tasks.abandon_stale_checkouts",
+        "schedule": 3600.0,  # unfinished payments give their held credit back
     },
     "commit-stale-usage-reservations": {
         "task": "apps.billing.tasks.commit_stale_reservations",

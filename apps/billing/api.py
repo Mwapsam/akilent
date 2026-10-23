@@ -80,6 +80,10 @@ SOURCE_RETIRED = "retired"
 SOURCE_NO_PLAN = (
     "no_plan"  # no subscription row at all: keeps the pre-plan module features
 )
+# Subscription states whose plan gives no features (see _state).
+LAPSED_STATUSES = frozenset(
+    {Subscription.INCOMPLETE, Subscription.EXPIRED, Subscription.CANCELLED}
+)
 
 
 class FeatureError(ValueError):
@@ -100,9 +104,17 @@ def _state(account: Account) -> _State:
     queries). Not cached on the account object: the same object often outlives a change."""
     sub = Subscription.objects.filter(account=account).select_related("plan").first()
     plan = sub.plan if sub else None
+    # A plan only gives its features while it's paid for (or trialing, or past due within the
+    # grace period). Unpaid, expired and cancelled businesses keep core features and anything an
+    # operator granted; nothing they made is deleted.
+    lapsed = (
+        sub is not None
+        and sub.status in LAPSED_STATUSES
+        and not getattr(account, "is_platform_account", False)
+    )
     plan_keys = (
         frozenset(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
-        if plan
+        if plan and not lapsed
         else frozenset()
     )
     overrides = {

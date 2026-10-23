@@ -58,9 +58,11 @@ def portal_create(request):
         payment_id = request.GET.get("payment")
         if payment_id:
             try:
-                from apps.payments.models import Payment
+                from apps.billing.models import BillingPayment
 
-                payment = Payment.objects.filter(account=account, pk=payment_id).first()
+                payment = BillingPayment.objects.filter(
+                    account=account, reference=payment_id
+                ).first()
                 if payment:
                     ticket_service.add_reference(
                         ticket=ticket, obj=payment, label="Payment"

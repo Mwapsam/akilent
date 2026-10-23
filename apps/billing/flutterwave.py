@@ -28,6 +28,8 @@ class FlutterwaveClient:
         redirect_url: str,
         payment_plan_id=None,
         meta: dict | None = None,
+        payment_options: str = "card",
+        title: str = "",
     ) -> str:
         payload = {
             "tx_ref": tx_ref,
@@ -35,8 +37,10 @@ class FlutterwaveClient:
             "currency": currency,
             "redirect_url": redirect_url,
             "customer": {"email": customer_email, "name": customer_name},
-            "payment_options": "card",
+            "payment_options": payment_options or "card",
         }
+        if title:
+            payload["customizations"] = {"title": title}
         if payment_plan_id:
             payload["payment_plan"] = payment_plan_id
         if meta:
@@ -107,6 +111,29 @@ class FlutterwaveClient:
             )
 
         return data["data"]
+
+    def charge_token(
+        self, *, token: str, email: str, amount, currency: str, tx_ref: str
+    ) -> dict:
+        """Charge a card saved at an earlier checkout (no customer present)."""
+        payload = {
+            "token": token,
+            "email": email,
+            "amount": str(amount),
+            "currency": currency,
+            "tx_ref": tx_ref,
+        }
+        r = self._session.post(
+            f"{BASE_URL}/tokenized-charges", json=payload, timeout=30
+        )
+        try:
+            data = r.json()
+        except Exception as exc:
+            r.raise_for_status()
+            raise FlutterwaveError("Invalid JSON response from Flutterwave") from exc
+        if data.get("status") != "success" and not data.get("data"):
+            raise FlutterwaveError(data.get("message", "Tokenized charge failed"))
+        return data.get("data") or {}
 
     def cancel_subscription(self, subscription_id) -> dict:
         r = self._session.put(

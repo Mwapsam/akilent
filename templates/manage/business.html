@@ -1,4 +1,5 @@
 {% extends "manage/base.html" %}
+{% load billing_money %}
 {% block title %}{{ business.company_name }} — Operator{% endblock %}
 
 {% block content %}
@@ -138,6 +139,51 @@
     <ul class="text-sm space-y-1">{% for p in d.payments %}<li>{{ p.created_at|date:"j M Y" }} · {{ p.plan.name }} · {{ p.get_status_display }}{% if p.reference %} · <code>{{ p.reference }}</code>{% endif %}</li>{% endfor %}</ul>
     <a href="{% url 'core:payments' %}" class="text-sm text-accent">Approve or reject in Payments</a>
     {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+  </section>
+</div>
+<div class="grid gap-4 lg:grid-cols-2 mt-4">
+  <section class="card card-pad space-y-3" aria-labelledby="h-credit">
+    <h2 id="h-credit" class="font-semibold">Account credit · {{ d.credit.balance|money }}</h2>
+    <p class="text-xs text-gray-500">Used before any card is charged, at checkout and at every renewal{% if d.credit.expires_at %} · some expires {{ d.credit.expires_at|date:"j M Y" }}{% endif %}.</p>
+    <form method="post" action="{% url 'core:business-action' business.pk 'credit_grant' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
+      <label class="text-xs">Amount ({{ d.currency }}) <input type="number" name="amount" min="0.01" step="0.01" required class="input w-28"></label>
+      <label class="text-xs">Reason <select name="reason" class="input">{% for v, t in d.credit_reasons %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select></label>
+      <label class="text-xs">Expires after days <input type="number" name="days" min="1" placeholder="never" class="input w-24"></label>
+      <label class="text-xs grow">Note <input name="note" class="input" maxlength="255" placeholder="e.g. pilot wave 1 thank-you"></label>
+      <button class="btn btn-primary btn-sm">Give credit</button>
+    </form>
+    {% if d.grants %}
+    <ul class="text-sm divide-y divide-border">
+      {% for g in d.grants %}
+      <li class="py-1.5 flex items-center justify-between gap-2">
+        <span class="min-w-0">{{ g.remaining|money:g.currency }} of {{ g.amount|money:g.currency }} left · {{ g.get_reason_display }}
+          <span class="block text-xs text-gray-500">{{ g.created_at|date:"j M Y" }}{% if g.granted_by %} by {{ g.granted_by }}{% endif %}{% if g.note %} · “{{ g.note }}”{% endif %}{% if g.revoked_at %} · revoked {{ g.revoked_at|date:"j M Y" }}{% elif g.expires_at %} · expires {{ g.expires_at|date:"j M Y" }}{% endif %}</span></span>
+        {% if g.is_usable %}
+        <form method="post" action="{% url 'core:business-action' business.pk 'credit_revoke' %}" data-confirm="Take back the {{ g.remaining|money:g.currency }} left on this credit?" data-confirm-danger data-confirm-label="Take back">{% csrf_token %}
+          <input type="hidden" name="grant" value="{{ g.pk }}">
+          <button class="btn btn-danger-ghost btn-sm">Take back</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="text-sm text-gray-600">No credit given yet.</p>{% endif %}
+    {% if d.ledger %}
+    <details class="text-sm"><summary class="cursor-pointer text-gray-600">Credit history</summary>
+      <ul class="mt-2 space-y-1 text-xs text-gray-600">{% for t in d.ledger %}<li>{{ t.created_at|date:"j M Y H:i" }} · {{ t.get_kind_display }} · {{ t.amount|money:t.grant.currency }}{% if t.payment %} · <code>{{ t.payment.reference }}</code>{% endif %}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </section>
+  <section class="card card-pad space-y-3" aria-labelledby="h-billing-payments">
+    <h2 id="h-billing-payments" class="font-semibold">Payments</h2>
+    {% if d.saved_method %}<p class="text-xs text-gray-500">Renews with {{ d.saved_method.brand|default:"card"|title }} ending {{ d.saved_method.last4|default:"····" }} ({{ d.saved_method.provider }}){% if d.saved_method.provider != d.active_provider %} · <span class="text-amber-700">not the active provider, so the next renewal asks the customer to pay again</span>{% endif %}.</p>
+    {% else %}<p class="text-xs text-gray-500">No saved payment method; renewals are paid through an emailed link.</p>{% endif %}
+    {% if d.billing_payments %}
+    <ul class="text-sm divide-y divide-border">{% for p in d.billing_payments %}
+      <li class="py-1.5">{{ p.created_at|date:"j M Y" }} · {{ p.plan.name }} ({{ p.billing_period }}) · {{ p.get_purpose_display }} · <strong>{{ p.get_status_display }}</strong>
+        <span class="block text-xs text-gray-500">{{ p.amount_due|money:p.currency }} via {{ p.provider|default:"—" }}{% if p.credit_applied %} + {{ p.credit_applied|money:p.currency }} credit{% endif %}{% if p.failure_reason %} · {{ p.failure_reason }}{% endif %} · <code>{{ p.reference }}</code></span></li>
+    {% endfor %}</ul>
+    {% else %}<p class="text-sm text-gray-600">None yet.</p>{% endif %}
   </section>
 </div>
 

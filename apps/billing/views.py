@@ -1,12 +1,10 @@
 import json
 import logging
 
-import stripe
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -17,9 +15,9 @@ from apps.core.audit import audit
 from apps.core.models import SiteSettings
 from apps.core.utils import admin_required
 
-from .flutterwave import FlutterwaveError, get_fw_client
-from .gateways import enabled_payment_methods, get_gateway
+from . import credit, payments
 from .models import (
+    BillingPayment,
     ManualPaymentRequest,
     PaymentMethod,
     Plan,
@@ -27,19 +25,10 @@ from .models import (
     Subscription,
 )
 from .pricing import DEFAULT_PERIOD_MULTIPLIERS, PERIOD_MONTH_MULTIPLES
+from .providers import InvalidSignature, ProviderError, registry
 from .services import activate_subscription
 
 logger = logging.getLogger(__name__)
-
-
-def _amount_covers_plan(amount, plan) -> bool:
-    """True if a charged amount is at least the plan's monthly price."""
-    from decimal import Decimal, InvalidOperation
-
-    try:
-        return Decimal(str(amount)) >= plan.price_monthly
-    except (InvalidOperation, TypeError):
-        return False
 
 
 @login_required
@@ -88,9 +77,8 @@ def pricing_page(request):
             ],
             "usage_warnings": billing_api.usage_warnings(account),
             "payments_enabled": site.payments_enabled,
-            "payment_methods": enabled_payment_methods()
-            if site.payments_enabled
-            else [],
+            "payment_methods": checkout_options() if site.payments_enabled else [],
+            "credit": credit.summary(account),
             "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
             "period_pricing_json": json.dumps(period_pricing),
         },
@@ -159,7 +147,6 @@ def _plan_form_fields(post):
         # Limits are set in /manage/plans/limits/ (PlanLimit), features in /manage/plans/features/.
         "trial_days": _int("trial_days"),
         "log_retention_days": _int("log_retention_days"),
-        "flutterwave_plan_id": (post.get("flutterwave_plan_id") or "").strip() or None,
         # What a plan includes is set in the feature matrix (/manage/plans/features/).
         "is_active": "is_active" in post,
     }
@@ -275,6 +262,28 @@ def plan_delete(request, pk):
     return redirect("core:plans")
 
 
+# --- Checkout and payments (provider-neutral) ---------------------------------
+#
+# Providers live in apps.billing.providers; nothing below knows a provider's API. A checkout
+# creates a BillingPayment (credit and unused time already taken off), the active provider takes
+# the customer to its hosted page, and its return and webhooks come back as ProviderResults that
+# payments.record_result turns into subscription state.
+
+
+def checkout_options(account=None) -> list[dict]:
+    """How a business can pay right now: the active provider, plus bank transfer if it's on."""
+    options = []
+    provider = registry.active()
+    if provider is not None:
+        options.append({"code": provider.code, "name": "Pay by card"})
+    if registry.manual_enabled():
+        manual = PaymentMethod.objects.filter(code="manual").first()
+        options.append(
+            {"code": "manual", "name": manual.name if manual else "Bank transfer"}
+        )
+    return options
+
+
 @login_required
 def checkout(request):
     account = get_current_account(request)
@@ -285,175 +294,236 @@ def checkout(request):
         messages.error(request, "Billing is currently disabled. Contact support.")
         return redirect("/billing/plans/")
 
-    plan_slug = request.GET.get("plan")
-    plan = get_object_or_404(Plan, slug=plan_slug, is_active=True)
-    if plan.slug == Plan.TRIAL:
-        messages.error(request, "Trial plan cannot be purchased.")
+    plan = get_object_or_404(Plan, slug=request.GET.get("plan"), is_active=True)
+    if plan.slug == Plan.TRIAL or plan.price_monthly <= 0:
+        messages.error(request, "That plan doesn't need a payment.")
         return redirect("/billing/plans/")
 
-    method_code = request.GET.get("method")
-    method = (
-        PaymentMethod.objects.filter(code=method_code, is_enabled=True).first()
-        if method_code
-        else None
-    )
-    if method is None:
-        method = enabled_payment_methods()[0] if enabled_payment_methods() else None
-    gateway = get_gateway(method.code) if method else None
-    if gateway is None:
+    period = request.GET.get("period") or Subscription.MONTHLY
+    if period not in dict(Subscription.BILLING_PERIOD_CHOICES):
+        messages.error(request, "Invalid billing period selected.")
+        return redirect("/billing/plans/")
+
+    if request.GET.get("method") == "manual" and registry.manual_enabled():
+        provider = registry.get("manual")
+    else:
+        provider = registry.active()
+    if provider is None:
         messages.error(
             request, "No payment method is currently available. Contact support."
         )
         return redirect("/billing/plans/")
 
-    period = request.GET.get("period", Subscription.MONTHLY)
-    if period not in dict(Subscription.BILLING_PERIOD_CHOICES):
-        messages.error(request, "Invalid billing period selected.")
-        return redirect("/billing/plans/")
+    payments.abandon_open_checkouts(account)
+    payment = payments.create_payment(account, plan, period, provider=provider.code)
+    if payment.status == BillingPayment.SUCCEEDED:
+        messages.success(
+            request,
+            f"Paid with your account credit. You're on {plan.name} until "
+            f"{account.subscription.current_period_end:%d %b %Y}.",
+        )
+        return _after_payment(account)
+    return provider.start_checkout(request, payment)
 
-    return gateway.start_checkout(request, account, plan)
+
+def _after_payment(account):
+    from apps.accounts import onboarding as ob
+
+    if account.onboarding_state != account.Onboarding.COMPLETED:
+        return redirect(ob.first_setup_url(account))
+    return redirect("/billing/plans/")
+
+
+@login_required
+def payment_return(request, provider):
+    """Where a provider's hosted page sends the customer back. The redirect alone proves
+    nothing: the provider verifies it, and only the caller's own account's payment is looked at
+    (a reference for someone else's payment gets the same "not finished" page)."""
+    account = get_current_account(request)
+    impl = registry.get(provider)
+    reference = impl.reference_from_return(request) if impl else None
+    payment = (
+        BillingPayment.objects.filter(
+            reference=reference, account=account, provider=provider
+        ).first()
+        if account and reference
+        else None
+    )
+    if payment is not None and payment.status != BillingPayment.SUCCEEDED:
+        try:
+            result = impl.handle_return(request, payment)
+        except ProviderError as exc:
+            logger.warning("payment_return: %s verify failed: %s", provider, exc)
+            result = None
+        if result is not None:
+            payment = payments.record_result(provider, result) or payment
+
+    if payment is not None and payment.status == BillingPayment.SUCCEEDED:
+        messages.success(request, f"Payment confirmed. You're on {payment.plan.name}.")
+        return _after_payment(account)
+    if payment is not None and payment.status in (
+        BillingPayment.FAILED,
+        BillingPayment.ABANDONED,
+    ):
+        messages.error(
+            request, "The payment didn't go through. You haven't been charged."
+        )
+        return redirect("/billing/plans/")
+    return render(request, "billing/payment_pending.html", {"payment": payment})
+
+
+@login_required
+def payment_status(request, reference):
+    """Polled by the pending page while a provider confirms a payment."""
+    account = get_current_account(request)
+    payment = get_object_or_404(BillingPayment, reference=reference, account=account)
+    return JsonResponse({"status": payment.status})
+
+
+@csrf_exempt
+@require_POST
+def provider_webhook(request, provider):
+    """Webhooks for every provider. A bad signature is 401; an error while handling is 500, so
+    the provider retries, and the de-dupe row rolls back with it so the retry is processed."""
+    impl = registry.get(provider)
+    if impl is None or not impl.has_webhooks:
+        return HttpResponse(status=404)
+    try:
+        events = impl.parse_webhook(request)
+    except InvalidSignature as exc:
+        logger.warning("webhook %s: rejected: %s", provider, exc)
+        return HttpResponse(status=401)
+    except ProviderError as exc:
+        logger.error("webhook %s: couldn't read the event: %s", provider, exc)
+        return HttpResponse(status=500)
+
+    for event in events:
+        try:
+            with transaction.atomic():
+                _, created = ProcessedWebhookEvent.objects.get_or_create(
+                    event_key=event.key[:255]
+                )
+                if not created:
+                    logger.info("webhook %s: duplicate %s ignored", provider, event.key)
+                    continue
+                if event.handler is not None:
+                    event.handler()
+                if event.result is not None:
+                    payments.record_result(impl.code, event.result)
+        except ProviderError as exc:
+            logger.error("webhook %s: %s failed: %s", provider, event.key, exc)
+            return HttpResponse(status=500)
+    return HttpResponse(status=200)
+
+
+# Old provider-specific URLs, still configured in the Flutterwave and Stripe dashboards and in
+# links from checkouts started before the switch.
 
 
 def callback(request):
-    status = request.GET.get("status")
-    transaction_id = request.GET.get("transaction_id")
+    return payment_return(request, "flutterwave")
 
-    if status != "successful":
-        messages.error(request, "Payment was not completed successfully.")
-        return redirect("/billing/plans/")
 
-    account_id = request.session.pop("pending_account_id", None)
-    plan_slug = request.session.pop("pending_plan_slug", None)
-    request.session.pop("pending_tx_ref", None)
+@csrf_exempt
+def webhook(request):
+    return provider_webhook(request, "flutterwave")
 
-    if not account_id or not plan_slug:
-        messages.error(request, "Session expired. Please try again.")
-        return redirect("/billing/plans/")
 
-    try:
-        fw = get_fw_client()
-        transaction = fw.verify_transaction(transaction_id)
-    except FlutterwaveError as exc:
-        logger.error("callback: verification failed: %s", exc)
-        messages.error(
-            request, "Payment verification failed. Contact support if charged."
-        )
-        return redirect("/billing/plans/")
+def stripe_success(request):
+    return payment_return(request, "stripe")
 
-    if transaction.get("status") != "successful":
-        messages.error(request, "Payment could not be verified.")
-        return redirect("/billing/plans/")
 
-    try:
-        from apps.accounts.models import Account
+@csrf_exempt
+def stripe_webhook(request):
+    return provider_webhook(request, "stripe")
 
-        account = Account.objects.get(pk=account_id)
-        plan = Plan.objects.get(slug=plan_slug)
-    except Exception as exc:
-        logger.error("callback: account/plan lookup failed: %s", exc)
-        messages.error(request, "Subscription activation failed. Contact support.")
-        return redirect("/dashboard/")
 
-    # Trust the verified transaction, not the redirect: confirm the amount
-    # actually charged covers the plan we're about to grant.
-    if not _amount_covers_plan(transaction.get("amount"), plan):
-        logger.error(
-            "callback: amount mismatch account=%s plan=%s charged=%s expected=%s",
-            account.pk,
-            plan.slug,
-            transaction.get("amount"),
-            plan.price_monthly,
-        )
-        messages.error(
-            request,
-            "Payment amount did not match the plan. Contact support if charged.",
-        )
-        return redirect("/billing/plans/")
+# --- Cancel / resume --------------------------------------------------------------
 
-    cust_email = (transaction.get("customer") or {}).get("email")
-    activate_subscription(
-        account,
-        plan,
-        "flutterwave",
-        billing_period=Subscription.MONTHLY,
-        fw_customer_email=cust_email,
-    )
 
-    # Capture the Flutterwave recurring-subscription id so it can be cancelled later.
-    if plan.flutterwave_plan_id and cust_email:
-        try:
-            subs = get_fw_client().get_subscriptions(
-                email=cust_email, plan_id=plan.flutterwave_plan_id
-            )
-            if subs:
-                Subscription.objects.filter(account=account).update(
-                    fw_subscription_id=str(subs[0].get("id") or "")
-                )
-        except FlutterwaveError as exc:
-            logger.warning("callback: could not capture fw_subscription_id: %s", exc)
+def _can_manage_billing(request, account) -> bool:
+    from apps.accounts.models import Membership
 
-    logger.info(
-        "callback: activated %s subscription for account=%s tx=%s",
-        plan.name,
-        account.pk,
-        transaction_id,
-    )
-    messages.success(request, f"Successfully subscribed to {plan.name}!")
-    return redirect("/dashboard/")
+    return Membership.objects.filter(
+        user=request.user,
+        account=account,
+        role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
+    ).exists()
 
 
 @login_required
 @require_POST
 def cancel_subscription(request):
-    """Tenant cancels their own subscription — cancels the recurring charge on
-    Flutterwave (if any), then marks it cancelled locally."""
+    """Cancel at the end of the paid period: nothing more is charged, and the business keeps
+    what it paid for until then. A legacy provider-side subscription is stopped now."""
     account = get_current_account(request)
     if account is None:
         return redirect("/dashboard/")
-
-    # Only an owner/admin of the account may cancel its billing.
-    from apps.accounts.models import Membership
-
-    is_privileged = Membership.objects.filter(
-        user=request.user,
-        account=account,
-        role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
-    ).exists()
-    if not is_privileged:
+    if not _can_manage_billing(request, account):
         messages.error(
             request, "Only an account owner or admin can cancel the subscription."
         )
         return _back_to_plans(request)
 
     sub = getattr(account, "subscription", None)
-    if not sub or not sub.is_active:
+    if not sub or sub.status not in (Subscription.ACTIVE, Subscription.PAST_DUE):
         messages.error(request, "No active subscription to cancel.")
         return _back_to_plans(request)
 
-    if sub.fw_subscription_id:
-        try:
-            get_fw_client().cancel_subscription(sub.fw_subscription_id)
-        except FlutterwaveError as exc:
-            logger.error(
-                "cancel_subscription: FW error for account=%s: %s", account.pk, exc
-            )
-            messages.error(request, f"Could not cancel recurring billing: {exc}")
-            return _back_to_plans(request)
-    elif sub.payment_method == "stripe" and sub.stripe_subscription_id:
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-        try:
-            stripe.Subscription.delete(sub.stripe_subscription_id)
-        except stripe.error.StripeError as exc:
-            logger.error(
-                "cancel_subscription: Stripe error for account=%s: %s", account.pk, exc
-            )
-            messages.error(request, f"Could not cancel recurring billing: {exc}")
-            return _back_to_plans(request)
+    try:
+        _stop_legacy_recurring(sub)
+    except ProviderError as exc:
+        logger.error("cancel_subscription: account=%s: %s", account.pk, exc)
+        messages.error(request, f"Could not stop recurring billing: {exc}")
+        return _back_to_plans(request)
 
-    sub.status = Subscription.CANCELLED
-    sub.cancelled_at = timezone.now()
-    sub.save(update_fields=["status", "cancelled_at", "updated_at"])
-    messages.success(request, "Your subscription has been cancelled.")
+    if sub.status == Subscription.PAST_DUE or not sub.current_period_end:
+        sub.status = Subscription.CANCELLED
+        sub.cancelled_at = timezone.now()
+        sub.save(update_fields=["status", "cancelled_at", "updated_at"])
+        messages.success(request, "Your subscription has been cancelled.")
+    else:
+        sub.cancel_at_period_end = True
+        sub.save(update_fields=["cancel_at_period_end", "updated_at"])
+        messages.success(
+            request,
+            f"Your subscription will end on {sub.current_period_end:%d %b %Y}. "
+            "You won't be charged again.",
+        )
+    return _back_to_plans(request)
+
+
+def _stop_legacy_recurring(sub) -> None:
+    """Stop a provider-side recurring subscription from before Akilent ran renewals."""
+    for code, field in (
+        ("stripe", "stripe_subscription_id"),
+        ("flutterwave", "fw_subscription_id"),
+    ):
+        if getattr(sub, field):
+            impl = registry.get(code)
+            if impl is not None:
+                impl.cancel_legacy(sub)
+            setattr(sub, field, None)
+            sub.save(update_fields=[field, "updated_at"])
+
+
+@login_required
+@require_POST
+def resume_subscription(request):
+    """Undo a cancel before the period ends."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("/dashboard/")
+    if not _can_manage_billing(request, account):
+        messages.error(
+            request, "Only an account owner or admin can change the subscription."
+        )
+        return _back_to_plans(request)
+    sub = getattr(account, "subscription", None)
+    if sub and sub.cancel_at_period_end and sub.status == Subscription.ACTIVE:
+        sub.cancel_at_period_end = False
+        sub.save(update_fields=["cancel_at_period_end", "updated_at"])
+        messages.success(request, "Your subscription will renew as normal.")
     return _back_to_plans(request)
 
 
@@ -465,486 +535,6 @@ def _back_to_plans(request):
     if is_ajax(request):
         return ajax_redirect("/billing/plans/")
     return redirect("/billing/plans/")
-
-
-@admin_required
-@require_POST
-def plan_sync_fw(request, pk):
-    """Admin: create the Flutterwave recurring payment plan for a package."""
-    plan = get_object_or_404(Plan, pk=pk)
-    if plan.price_monthly <= 0:
-        messages.error(request, "Free/trial packages don't need a Flutterwave plan.")
-        return redirect("core:plans")
-    currency = getattr(settings, "FLUTTERWAVE_CURRENCY", "USD")
-    try:
-        fp = get_fw_client().create_payment_plan(
-            name=plan.name,
-            amount=plan.price_monthly,
-            interval="monthly",
-            currency=currency,
-        )
-        plan.flutterwave_plan_id = str(fp.get("id") or "")
-        plan.save(update_fields=["flutterwave_plan_id"])
-        audit(request, "plan.sync_flutterwave", target=plan.slug)
-        messages.success(
-            request,
-            f"Recurring plan created on Flutterwave (id {plan.flutterwave_plan_id}).",
-        )
-    except FlutterwaveError as exc:
-        messages.error(request, f"Flutterwave error: {exc}")
-    return redirect("core:plans")
-
-
-@csrf_exempt
-@require_POST
-def webhook(request):
-    verif_hash = request.headers.get("verif-hash")
-    expected = getattr(settings, "FLUTTERWAVE_WEBHOOK_HASH", None)
-
-    if not expected or verif_hash != expected:
-        logger.warning("webhook: invalid verif-hash")
-        return HttpResponse(status=401)
-
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return HttpResponse(status=400)
-
-    event = payload.get("event")
-    data = payload.get("data", {}) or {}
-
-    # Idempotency: ignore replays of an event we've already processed. The key is
-    # the event type plus the provider object id (transaction/subscription id).
-    object_id = data.get("id")
-    if object_id is not None:
-        event_key = f"{event}:{object_id}"
-        _, created = ProcessedWebhookEvent.objects.get_or_create(event_key=event_key)
-        if not created:
-            logger.info("webhook: duplicate event ignored key=%s", event_key)
-            return HttpResponse(status=200)
-
-    if event == "charge.completed" and (data.get("meta") or {}).get("order_id"):
-        _handle_commerce_charge_completed(payload)
-    elif event == "charge.completed":
-        _handle_charge_completed(payload)
-    elif event == "subscription.cancelled":
-        _handle_subscription_cancelled(payload)
-    else:
-        logger.debug("webhook: unhandled event type=%s", event)
-
-    return HttpResponse(status=200)
-
-
-def _handle_charge_completed(payload: dict):
-    data = payload.get("data", {})
-    if data.get("status") != "successful":
-        return
-
-    meta = data.get("meta", {}) or {}
-    account_id = meta.get("account_id")
-    plan_slug = meta.get("plan_slug")
-
-    if not account_id:
-        logger.warning("_handle_charge_completed: no account_id in meta")
-        return
-
-    try:
-        sub = Subscription.objects.select_related("plan").get(account_id=account_id)
-    except Subscription.DoesNotExist:
-        logger.warning(
-            "_handle_charge_completed: no subscription for account=%s", account_id
-        )
-        return
-
-    # Resolve the plan we're being asked to grant (fall back to the current one).
-    plan = sub.plan
-    if plan_slug:
-        plan = Plan.objects.filter(slug=plan_slug).first() or plan
-
-    # Don't trust the webhook body alone — independently verify the transaction
-    # with Flutterwave and confirm the charged amount covers the plan.
-    transaction_id = data.get("id")
-    try:
-        verified = get_fw_client().verify_transaction(transaction_id)
-    except FlutterwaveError as exc:
-        logger.error(
-            "_handle_charge_completed: verify failed tx=%s: %s", transaction_id, exc
-        )
-        return
-
-    if verified.get("status") != "successful" or not _amount_covers_plan(
-        verified.get("amount"), plan
-    ):
-        logger.error(
-            "_handle_charge_completed: rejected account=%s plan=%s status=%s amount=%s expected=%s",
-            account_id,
-            plan.slug,
-            verified.get("status"),
-            verified.get("amount"),
-            plan.price_monthly,
-        )
-        return
-
-    cust_email = (verified.get("customer") or {}).get("email") or sub.fw_customer_email
-    activate_subscription(
-        sub.account,
-        plan,
-        "flutterwave",
-        billing_period=Subscription.MONTHLY,
-        fw_customer_email=cust_email,
-    )
-
-    logger.info(
-        "_handle_charge_completed: renewed subscription for account=%s", account_id
-    )
-
-
-def _handle_commerce_charge_completed(payload: dict):
-    """Route a Flutterwave charge tagged with an ``order_id`` to apps.commerce.
-
-    Shares this endpoint, its ``verif-hash`` check, and its
-    ``ProcessedWebhookEvent`` idempotency ledger with the subscription-billing
-    handler above rather than standing up a second webhook — the two are
-    distinguished purely by ``meta.order_id`` being present.
-    """
-    from apps.commerce.models import Payment
-    from apps.commerce.services import mark_failed, mark_paid
-
-    data = payload.get("data", {})
-    meta = data.get("meta") or {}
-    payment_id = meta.get("payment_id")
-    order_id = meta.get("order_id")
-
-    payment = Payment.objects.filter(
-        public_id=payment_id, order__public_id=order_id
-    ).first()
-    if payment is None:
-        logger.warning(
-            "_handle_commerce_charge_completed: no payment for payment_id=%s order_id=%s",
-            payment_id,
-            order_id,
-        )
-        return
-
-    transaction_id = data.get("id")
-    try:
-        verified = get_fw_client().verify_transaction(transaction_id)
-    except FlutterwaveError as exc:
-        logger.error(
-            "_handle_commerce_charge_completed: verify failed tx=%s: %s",
-            transaction_id,
-            exc,
-        )
-        return
-
-    from decimal import Decimal, InvalidOperation
-
-    try:
-        covers = Decimal(str(verified.get("amount"))) >= payment.amount
-    except (InvalidOperation, TypeError):
-        covers = False
-
-    if verified.get("status") != "successful" or not covers:
-        logger.error(
-            "_handle_commerce_charge_completed: rejected payment=%s status=%s amount=%s expected=%s",
-            payment.public_id,
-            verified.get("status"),
-            verified.get("amount"),
-            payment.amount,
-        )
-        mark_failed(
-            payment, error=f"verification rejected: status={verified.get('status')}"
-        )
-        return
-
-    mark_paid(payment, transaction_id=str(transaction_id), raw_payload=verified)
-    logger.info("_handle_commerce_charge_completed: order %s paid", order_id)
-
-
-def _handle_subscription_cancelled(payload: dict):
-    data = payload.get("data", {})
-    meta = data.get("meta") or {}
-    account_id = meta.get("account_id")
-
-    if not account_id:
-        return
-
-    now = timezone.now()
-    updated = Subscription.objects.filter(account_id=account_id).update(
-        status=Subscription.CANCELLED,
-        cancelled_at=now,
-    )
-    if updated:
-        logger.info(
-            "_handle_subscription_cancelled: cancelled subscription for account=%s",
-            account_id,
-        )
-
-
-# --- Stripe -----------------------------------------------------------------
-
-
-@login_required
-def stripe_success(request):
-    """Stripe Checkout's success_url landing page.
-
-    The redirect alone isn't proof of payment, so this independently
-    retrieves and verifies the Checkout Session (same pattern as
-    Flutterwave's callback()) and activates immediately rather than waiting
-    on the webhook — the webhook remains the authoritative idempotent
-    backstop for this and for renewals.
-
-    A bare session_id in the URL is not sufficient authorization to activate
-    a subscription: login is required, and activation is scoped to the
-    caller's own current account. A session that verifies but belongs to a
-    different account is rejected silently (same response as "not paid
-    yet") so we never reveal to the browser that the session belongs to
-    someone else.
-    """
-    account = get_current_account(request)
-    session_id = request.GET.get("session_id")
-    sub = None
-    if account and session_id:
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-        try:
-            session = _stripe_to_dict(stripe.checkout.Session.retrieve(session_id))
-            sub = _activate_stripe_session(session, account=account)
-        except stripe.error.StripeError as exc:
-            logger.warning(
-                "stripe_success: could not retrieve session=%s: %s", session_id, exc
-            )
-
-    if sub is not None:
-        messages.success(request, f"Payment confirmed — you're on {sub.plan.name}.")
-        from apps.accounts import onboarding as ob
-
-        if account.onboarding_state != account.Onboarding.COMPLETED:
-            return redirect(ob.first_setup_url(account))
-        return redirect("/dashboard/")
-
-    return render(request, "billing/stripe_pending.html")
-
-
-@csrf_exempt
-@require_POST
-def stripe_webhook(request):
-    stripe.api_key = settings.STRIPE_SECRET_KEY
-    sig_header = request.headers.get("Stripe-Signature")
-    webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
-
-    if not webhook_secret:
-        logger.warning("stripe_webhook: STRIPE_WEBHOOK_SECRET not configured")
-        return HttpResponse(status=401)
-
-    try:
-        event = stripe.Webhook.construct_event(request.body, sig_header, webhook_secret)
-    except (ValueError, stripe.error.SignatureVerificationError):
-        logger.warning("stripe_webhook: invalid signature")
-        return HttpResponse(status=400)
-
-    event_key = f"{event['type']}:{event['id']}"
-    data = _stripe_to_dict(event["data"]["object"])
-
-    # The dedupe row and the handler share one transaction: if the handler
-    # raises, the row rolls back, so Stripe's retry is processed rather than
-    # ignored as an already-seen event.
-    with transaction.atomic():
-        _, created = ProcessedWebhookEvent.objects.get_or_create(event_key=event_key)
-        if not created:
-            logger.info("stripe_webhook: duplicate event ignored key=%s", event_key)
-            return HttpResponse(status=200)
-
-        if event["type"] == "checkout.session.completed":
-            _handle_stripe_checkout_completed(data)
-        elif event["type"] == "invoice.payment_succeeded":
-            _handle_stripe_invoice_paid(data)
-        elif event["type"] == "invoice.payment_failed":
-            _handle_stripe_payment_failed(data)
-        elif event["type"] == "customer.subscription.deleted":
-            _handle_stripe_subscription_deleted(data)
-        else:
-            logger.debug("stripe_webhook: unhandled event type=%s", event["type"])
-
-    return HttpResponse(status=200)
-
-
-def _stripe_to_dict(obj) -> dict:
-    """Stripe SDK objects (v15+) are not dicts — no .get(). Convert at the
-    boundary so the handlers can treat payloads as plain dicts."""
-    return obj.to_dict() if hasattr(obj, "to_dict") else obj
-
-
-def _verify_stripe_session(session: dict) -> dict | None:
-    """Stripe-level requirements that must hold before ANY caller is allowed
-    to activate from this session — independent of who's asking, and treating
-    the session's metadata as untrusted data to validate, not business state
-    to trust outright."""
-    if session.get("mode") != "subscription":
-        return None
-    if session.get("payment_status") != "paid":
-        return None
-    if not session.get("subscription"):  # the Stripe subscription object id
-        return None
-    meta = session.get("metadata") or {}
-    if not meta.get("account_id") or not meta.get("plan_slug"):
-        return None
-    return session
-
-
-def _activate_stripe_session(session: dict, *, account=None):
-    """Activate a Subscription from a verified Stripe Checkout Session.
-
-    ``account`` is the caller's authorization context:
-    - Webhook caller (server-to-server, Stripe-signature-verified): omit —
-      trusted to activate whichever account the session's metadata names.
-    - Browser caller (stripe_success): MUST pass the requesting user's
-      current account. If the session's metadata.account_id doesn't match,
-      the request is rejected — otherwise anyone who learns/guesses a
-      session_id could activate billing for an account that isn't theirs.
-    """
-    verified = _verify_stripe_session(session)
-    if verified is None:
-        return None
-    session = verified
-
-    meta = session["metadata"]
-    if account is not None and str(account.pk) != str(meta["account_id"]):
-        # Log the mismatch for our own audit trail, but the caller (stripe_success)
-        # must respond identically to this and to "not paid yet" — never reveal
-        # to the browser that the session belongs to a different account.
-        logger.warning(
-            "_activate_stripe_session: session account_id=%s does not match caller account=%s",
-            meta["account_id"],
-            account.pk,
-        )
-        return None
-
-    from apps.accounts.models import Account
-
-    try:
-        target_account = account or Account.objects.get(pk=meta["account_id"])
-        # is_active=True: a plan deactivated between Checkout creation and
-        # completion must not still be grantable.
-        plan = Plan.objects.get(slug=meta["plan_slug"], is_active=True)
-    except (Account.DoesNotExist, Plan.DoesNotExist) as exc:
-        logger.error("_activate_stripe_session: account/plan lookup failed: %s", exc)
-        return None
-
-    # A Subscription row must already exist for this account — activation
-    # only ever rolls an existing row forward (update_or_create inside
-    # activate_subscription), it never conjures one from nothing. Any prior
-    # status is a legitimate starting point (INCOMPLETE from a fresh paid
-    # signup, PAST_DUE recovering via a new Checkout, TRIALING upgrading to
-    # a paid plan, or a replayed ACTIVE session) — the account-id match
-    # above is what actually prevents cross-account activation.
-    existing_subscription = getattr(target_account, "subscription", None)
-    if existing_subscription is None:
-        logger.error(
-            "_activate_stripe_session: no subscription row for account=%s",
-            target_account.pk,
-        )
-        return None
-
-    # If this subscription already has a Stripe customer on file (e.g. a
-    # retry/second Checkout, or the webhook already ran), the session's
-    # customer must match — guards against a stale or cross-account session
-    # id being replayed here.
-    existing_customer_id = existing_subscription.stripe_customer_id
-    session_customer_id = session.get("customer")
-    if (
-        existing_customer_id
-        and session_customer_id
-        and str(existing_customer_id) != str(session_customer_id)
-    ):
-        logger.warning(
-            "_activate_stripe_session: session customer=%s does not match existing stripe_customer_id=%s",
-            session_customer_id,
-            existing_customer_id,
-        )
-        return None
-
-    sub = activate_subscription(
-        target_account,
-        plan,
-        "stripe",
-        billing_period=meta.get("billing_period", Subscription.MONTHLY),
-        stripe_customer_id=session_customer_id,
-        stripe_subscription_id=session["subscription"],
-    )
-    logger.info(
-        "_activate_stripe_session: activated subscription for account=%s",
-        target_account.pk,
-    )
-    return sub
-
-
-def _handle_stripe_checkout_completed(session: dict):
-    _activate_stripe_session(session)
-
-
-def _handle_stripe_invoice_paid(invoice: dict):
-    stripe_subscription_id = invoice.get("subscription")
-    if not stripe_subscription_id:
-        return
-
-    sub = (
-        Subscription.objects.select_related("plan", "account")
-        .filter(stripe_subscription_id=stripe_subscription_id)
-        .first()
-    )
-    if sub is None:
-        logger.warning(
-            "_handle_stripe_invoice_paid: no subscription for stripe_subscription_id=%s",
-            stripe_subscription_id,
-        )
-        return
-
-    # The first invoice of a new subscription (billing_reason=subscription_create)
-    # is already handled by checkout.session.completed — only renewals
-    # (subscription_cycle) should roll the period forward here.
-    if invoice.get("billing_reason") != "subscription_cycle":
-        return
-
-    activate_subscription(
-        sub.account,
-        sub.plan,
-        "stripe",
-        billing_period=sub.billing_period,
-        stripe_customer_id=sub.stripe_customer_id,
-        stripe_subscription_id=sub.stripe_subscription_id,
-    )
-    logger.info(
-        "_handle_stripe_invoice_paid: renewed subscription for account=%s",
-        sub.account_id,
-    )
-
-
-def _handle_stripe_payment_failed(invoice: dict):
-    stripe_subscription_id = invoice.get("subscription")
-    if not stripe_subscription_id:
-        return
-    updated = Subscription.objects.filter(
-        stripe_subscription_id=stripe_subscription_id
-    ).update(status=Subscription.PAST_DUE)
-    if updated:
-        logger.info(
-            "_handle_stripe_payment_failed: marked past_due for stripe_subscription_id=%s",
-            stripe_subscription_id,
-        )
-
-
-def _handle_stripe_subscription_deleted(subscription: dict):
-    stripe_subscription_id = subscription.get("id")
-    if not stripe_subscription_id:
-        return
-    updated = Subscription.objects.filter(
-        stripe_subscription_id=stripe_subscription_id
-    ).update(status=Subscription.CANCELLED, cancelled_at=timezone.now())
-    if updated:
-        logger.info(
-            "_handle_stripe_subscription_deleted: cancelled stripe_subscription_id=%s",
-            stripe_subscription_id,
-        )
 
 
 # --- Manual (offline) payments -------------------------------------------------
@@ -963,20 +553,30 @@ def manual_submit(request):
         messages.error(request, "Billing is currently disabled. Contact support.")
         return redirect("/billing/plans/")
 
-    method = PaymentMethod.objects.filter(code="manual", is_enabled=True).first()
-    if method is None:
+    if not registry.manual_enabled():
         messages.error(request, "Bank transfer is not currently available.")
         return redirect("/billing/plans/")
 
-    plan = get_object_or_404(Plan, slug=request.POST.get("plan"), is_active=True)
+    payment = get_object_or_404(
+        BillingPayment,
+        reference=request.POST.get("payment"),
+        account=account,
+        provider="manual",
+        status=BillingPayment.PENDING,
+    )
     reference = (request.POST.get("reference") or "").strip()
     if not reference:
         messages.error(request, "A payment reference is required.")
-        return redirect(f"/billing/checkout/?plan={plan.slug}&method=manual")
+        return redirect(
+            f"/billing/checkout/?plan={payment.plan.slug}&period={payment.billing_period}"
+            "&method=manual"
+        )
 
     req = ManualPaymentRequest.objects.create(
         account=account,
-        plan=plan,
+        plan=payment.plan,
+        billing_period=payment.billing_period,
+        payment=payment,
         reference=reference,
         proof=request.FILES.get("proof"),
     )
@@ -994,7 +594,17 @@ def manual_approve(request, pk):
     req = get_object_or_404(
         ManualPaymentRequest, pk=pk, status=ManualPaymentRequest.PENDING
     )
-    activate_subscription(req.account, req.plan, "manual")
+    if req.payment is not None:
+        from .providers.manual import approved_result
+
+        payments.record_result("manual", approved_result(req.payment))
+    else:  # submitted before payments were recorded
+        activate_subscription(
+            req.account,
+            req.plan,
+            "manual",
+            billing_period=req.billing_period or Subscription.MONTHLY,
+        )
     req.status = ManualPaymentRequest.APPROVED
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
@@ -1021,6 +631,8 @@ def manual_reject(request, pk):
     req.reviewed_by = request.user
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "note", "reviewed_by", "reviewed_at"])
+    if req.payment is not None:
+        payments.fail(req.payment, "Bank transfer rejected")
     audit(
         request,
         "payment.reject",

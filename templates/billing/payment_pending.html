@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Confirming payment — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+
+<div class="max-w-md mx-auto text-center py-16"
+     {% if payment %}x-data="{ status: '{{ payment.status }}' }"
+     x-init="const poll = setInterval(async () => {
+       const r = await fetch('{% url 'billing:payment-status' payment.reference %}', {headers: {'Accept': 'application/json'}});
+       if (!r.ok) return;
+       status = (await r.json()).status;
+       if (status !== 'pending') { clearInterval(poll); window.location = '/billing/plans/'; }
+     }, 3000); setTimeout(() => clearInterval(poll), 120000)"{% endif %}>
+  <h1 class="text-2xl font-semibold text-ink mb-2">Confirming your payment</h1>
+  <p class="text-sm text-gray-400 mb-6">
+    We're waiting for the payment provider to confirm. This usually takes a few seconds, and this
+    page updates by itself. If you were charged and nothing changes, contact support{% if payment %}
+    with reference <code class="text-xs">{{ payment.reference }}</code>{% endif %}.
+  </p>
+  <a href="/billing/plans/" class="btn btn-primary btn-sm">Back to plans</a>
+</div>
+
+{% endblock %}

@@ -476,7 +476,7 @@ def _apply_selected_plan(account, plan_slug):
 
     A plan priced above $0 is never activated here — it's marked
     INCOMPLETE (no trial grace period, regardless of the plan's trial_days)
-    and signup() redirects straight to Stripe Checkout to collect payment
+    and signup() redirects to checkout with the active payment provider
     before the account is usable.
     """
     if not plan_slug:

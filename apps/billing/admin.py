@@ -2,12 +2,16 @@ from django.contrib import admin
 
 from .models import (
     AccountFeatureOverride,
+    BillingPayment,
     ComingSoonFeature,
+    CreditGrant,
+    CreditTransaction,
     ManualPaymentRequest,
     ModuleSubscription,
     PaymentMethod,
     Plan,
     PlanFeature,
+    SavedPaymentMethod,
     Subscription,
     UsageSummary,
 )
@@ -58,10 +62,11 @@ class SubscriptionAdmin(admin.ModelAdmin):
         "trial_ends_at",
         "current_period_start",
         "current_period_end",
-        "fw_subscription_id",
+        "provider",
+        "cancel_at_period_end",
         "created_at",
     ]
-    list_filter = ["status", "plan"]
+    list_filter = ["status", "plan", "provider"]
     search_fields = ["account__company_name", "account__slug", "fw_customer_email"]
     readonly_fields = ["created_at", "updated_at"]
     raw_id_fields = ["account"]
@@ -127,3 +132,72 @@ class ModuleSubscriptionAdmin(admin.ModelAdmin):
             {"fields": ["created_at", "updated_at"]},
         ),
     )
+
+
+class _ReadOnly(admin.ModelAdmin):
+    """Money records change only through apps.billing (payments, credits) and the Operator
+    console, which audit every change."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BillingPayment)
+class BillingPaymentAdmin(_ReadOnly):
+    list_display = [
+        "reference",
+        "account",
+        "plan",
+        "purpose",
+        "provider",
+        "amount_due",
+        "credit_applied",
+        "currency",
+        "status",
+        "created_at",
+    ]
+    list_filter = ["status", "purpose", "provider"]
+    search_fields = ["reference", "provider_ref", "account__company_name"]
+
+
+@admin.register(CreditGrant)
+class CreditGrantAdmin(_ReadOnly):
+    list_display = [
+        "account",
+        "amount",
+        "remaining",
+        "currency",
+        "reason",
+        "expires_at",
+        "revoked_at",
+    ]
+    list_filter = ["reason"]
+    search_fields = ["account__company_name", "note"]
+
+
+@admin.register(CreditTransaction)
+class CreditTransactionAdmin(_ReadOnly):
+    list_display = ["account", "kind", "amount", "payment", "created_at"]
+    list_filter = ["kind"]
+    search_fields = ["account__company_name"]
+
+
+@admin.register(SavedPaymentMethod)
+class SavedPaymentMethodAdmin(_ReadOnly):
+    list_display = [
+        "account",
+        "provider",
+        "brand",
+        "last4",
+        "expiry",
+        "is_default",
+        "created_at",
+    ]
+    list_filter = ["provider"]
+    exclude = ["token"]

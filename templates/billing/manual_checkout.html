@@ -1,11 +1,15 @@
 {% extends "base.html" %}
+{% load billing_money %}
 {% block title %}Bank transfer — {{ plan.name }}{% endblock %}
 
 {% block content %}
 <div class="max-w-lg mx-auto">
   <div class="mb-6">
     <h1 class="text-2xl font-semibold text-ink">Pay by bank transfer</h1>
-    <p class="text-sm text-gray-400 mt-1">{{ plan.name }} · ${{ plan.price_monthly|floatformat:0 }}/mo</p>
+    <p class="text-sm text-gray-400 mt-1">{{ plan.name }} · amount to transfer <span class="font-semibold text-ink">{{ payment.amount_due|money:payment.currency }}</span></p>
+    {% if payment.credit_applied or payment.unused_time_value %}
+      <p class="text-xs text-gray-400 mt-1">{{ payment.gross_amount|money:payment.currency }}{% if payment.unused_time_value %}, less unused time on your current plan{% endif %}{% if payment.credit_applied %}, less {{ payment.credit_applied|money:payment.currency }} account credit{% endif %}.</p>
+    {% endif %}
   </div>
 
   <div class="card card-pad mb-6">
@@ -21,7 +25,7 @@
     <h2 class="font-semibold mb-4">Submit your payment reference</h2>
     <form method="post" action="{% url 'billing:manual-submit' %}" enctype="multipart/form-data" hx-boost="false" class="space-y-4">
       {% csrf_token %}
-      <input type="hidden" name="plan" value="{{ plan.slug }}">
+      <input type="hidden" name="payment" value="{{ payment.reference }}">
       {% include "components/form_field.html" with name="reference" label="Transaction reference / sender name" required=True %}
       <div>
         <label class="label" for="id_proof">Proof of payment (optional)</label>

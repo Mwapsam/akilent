@@ -1,4 +1,5 @@
 {% extends "manage/base.html" %}
+{% load billing_money %}
 {% block title %}Plans — Operator{% endblock %}
 
 {% block content %}
@@ -33,22 +34,14 @@
 
 <div class="table-wrap mb-8">
   <table class="table table--cards">
-    <thead><tr><th>Package</th><th>Price / month</th><th>Service</th><th>Recurring billing</th><th class="text-right">Actions</th></tr></thead>
+    <thead><tr><th>Package</th><th>Price / month</th><th>Service</th><th class="text-right">Actions</th></tr></thead>
     <tbody>
       {% for plan in plans %}
       <tr x-data="{ edit: false }">
         <td data-label="Package"><span class="font-medium text-ink">{{ plan.name }}</span> <code class="text-xs">{{ plan.slug }}</code>
           {% if not plan.is_active %}<span class="badge badge-neutral">Hidden</span>{% endif %}</td>
-        <td data-label="Price / month">${{ plan.price_monthly|floatformat:2 }}</td>
+        <td data-label="Price / month">{{ plan.price_monthly|money }}</td>
         <td data-label="Service">{{ plan.get_service_type_display }}</td>
-        <td data-label="Recurring billing">
-          {% if plan.price_monthly > 0 %}
-            {% if plan.flutterwave_plan_id %}Flutterwave <code class="text-xs">{{ plan.flutterwave_plan_id }}</code>
-            {% else %}
-            <form method="post" action="{% url 'core:plan-sync-fw' plan.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Create on Flutterwave</button></form>
-            {% endif %}
-          {% else %}—{% endif %}
-        </td>
         <td data-label="Actions" class="text-right">
           <div class="flex items-center justify-end gap-1">
             <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit</button>
@@ -82,9 +75,9 @@
 
 <section class="card card-pad" aria-labelledby="h-methods">
   <h2 id="h-methods" class="font-semibold mb-1">Payment methods</h2>
-  <p class="text-xs text-gray-500 mb-4">Which ways businesses can pay.{% if not payments_enabled %} <strong class="text-red-700">Payments are switched off in Settings, so checkout is hidden.</strong>{% endif %}</p>
+  <p class="text-xs text-gray-500 mb-4">Card payments and renewals go through the payment provider chosen in <a class="text-accent underline" href="{% url 'core:settings' %}">Settings</a>. Bank transfer can be offered alongside it.{% if not payments_enabled %} <strong class="text-red-700">Payments are switched off in Settings, so checkout is hidden.</strong>{% endif %}</p>
   <div class="divide-y divide-border">
-    {% for method in payment_methods %}
+    {% for method in payment_methods %}{% if method.code == 'manual' %}
     <div x-data="{ edit: false }" class="py-3 flex items-center justify-between gap-3">
       <div class="min-w-0">
         <p class="text-sm font-medium text-ink">{{ method.name }} <span class="text-xs text-gray-400">({{ method.code }})</span>
@@ -113,7 +106,7 @@
       </div>
       {% endif %}
     </div>
-    {% endfor %}
+    {% endif %}{% endfor %}
   </div>
 </section>
 {% endblock %}

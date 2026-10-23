@@ -62,6 +62,33 @@ def billing(account) -> dict:
         .order_by("-created_at")[:10],
         "plans": Plan.objects.order_by("price_monthly"),
         "statuses": Subscription.STATUS_CHOICES,
+        **_credit_and_payments(account),
+    }
+
+
+def _credit_and_payments(account) -> dict:
+    from apps.billing import credit
+    from apps.billing.models import BillingPayment, CreditGrant, SavedPaymentMethod
+    from apps.billing.money import billing_currency
+    from apps.core.models import SiteSettings
+
+    return {
+        "credit": credit.summary(account),
+        "currency": billing_currency(),
+        "credit_reasons": [
+            (v, t) for v, t in CreditGrant.REASON_CHOICES if v != CreditGrant.PRORATION
+        ],
+        "grants": CreditGrant.objects.filter(account=account).select_related(
+            "granted_by"
+        )[:20],
+        "ledger": credit.ledger(account, limit=30),
+        "billing_payments": BillingPayment.objects.filter(
+            account=account
+        ).select_related("plan")[:15],
+        "saved_method": SavedPaymentMethod.objects.filter(account=account)
+        .order_by("-is_default", "-created_at")
+        .first(),
+        "active_provider": SiteSettings.load().billing_provider,
     }
 
 
@@ -300,6 +327,40 @@ def set_subscription(account, plan_id, status) -> str:
                 sub.current_period_end = now + timedelta(days=30)
         sub.save()
     return f"{plan.name} ({sub.get_status_display()})"
+
+
+def grant_credit(account, *, amount, reason, note, days, by) -> str:
+    from apps.billing import credit
+    from apps.billing.money import format_money
+
+    expires = None
+    if (days or "").strip():
+        try:
+            expires = timezone.now() + timedelta(days=int(days))
+        except ValueError as exc:
+            raise ConsoleError("Enter the expiry as a whole number of days.") from exc
+    try:
+        g = credit.grant(
+            account, amount, reason=reason, note=note, expires_at=expires, by=by
+        )
+    except credit.CreditError as exc:
+        raise ConsoleError(str(exc)) from exc
+    return format_money(g.amount, g.currency)
+
+
+def revoke_credit(account, grant_id, *, by) -> str:
+    from apps.billing import credit
+    from apps.billing.models import CreditGrant
+    from apps.billing.money import format_money
+
+    g = CreditGrant.objects.filter(account=account, pk=grant_id).first()
+    if g is None:
+        raise ConsoleError("That credit doesn't belong to this business.")
+    try:
+        taken = credit.revoke(g, by=by)
+    except credit.CreditError as exc:
+        raise ConsoleError(str(exc)) from exc
+    return format_money(taken, g.currency)
 
 
 def extend_trial(account, days: int) -> str:

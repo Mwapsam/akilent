@@ -44,7 +44,6 @@ urlpatterns = [
     path("plans/<int:pk>/edit/", billing_views.plan_edit, name="plan-edit"),
     path("plans/<int:pk>/toggle/", billing_views.plan_toggle, name="plan-toggle"),
     path("plans/<int:pk>/delete/", billing_views.plan_delete, name="plan-delete"),
-    path("plans/<int:pk>/sync-fw/", billing_views.plan_sync_fw, name="plan-sync-fw"),
     path("plans/features/", views.plan_features, name="plan-features"),
     path("plans/limits/", views.plan_limits, name="plan-limits"),
     path("plans/costs/", views.plan_costs, name="plan-costs"),
@@ -69,6 +68,7 @@ urlpatterns = [
     path("ux-events/", views.ux_events_list, name="ux-events"),
     # Platform
     path("pilot/", views.pilot_command_center, name="pilot"),
+    path("pilot/grant-credit/", views.pilot_grant_credit, name="pilot-grant-credit"),
     path("health/", views.platform_health, name="platform-health"),
     path("audit/", views.audit_log, name="audit"),
     path("settings/", views.settings_page, name="settings"),

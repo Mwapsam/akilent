@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% load billing_money %}
 {% block title %}Plans — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
 
 <div class="mb-8">
   <h1 class="text-2xl font-semibold text-ink">Plans &amp; billing</h1>
-  <p class="text-sm text-gray-400 mt-1">All paid plans billed monthly · cancel anytime</p>
+  <p class="text-sm text-gray-400 mt-1">Pay monthly, quarterly or yearly · cancel anytime</p>
 </div>
 
 {% if is_operator %}
@@ -29,10 +30,21 @@
         </p>
         {% if subscription.is_trialing and subscription.trial_ends_at %}
           <p class="text-xs text-gray-400 mt-1">Trial ends {{ subscription.trial_ends_at|date:"M j, Y" }}</p>
+        {% elif subscription.cancel_at_period_end and subscription.current_period_end %}
+          <p class="text-xs text-amber-600 mt-1">Ends {{ subscription.current_period_end|date:"M j, Y" }} · won't renew</p>
+        {% elif subscription.status == 'past_due' %}
+          <p class="text-xs text-red-600 mt-1">Renewal not paid yet. Pay below to keep your features.</p>
         {% elif subscription.current_period_end %}
           <p class="text-xs text-gray-400 mt-1">Renews {{ subscription.current_period_end|date:"M j, Y" }}</p>
         {% endif %}
       </div>
+      {% if credit.balance %}
+      <div class="text-right">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Account credit</p>
+        <p class="text-lg font-semibold text-ink mt-1 tabular-nums">{{ credit.balance|money }}</p>
+        <p class="text-xs text-gray-400">Used before your card is charged{% if credit.expires_at %} · some expires {{ credit.expires_at|date:"M j, Y" }}{% endif %}</p>
+      </div>
+      {% endif %}
     </div>
     {% comment %} Usage: one bar per limit with a cap; unlimited ones show the count only {% endcomment %}
     <div class="mt-5 pt-4 border-t border-border">
@@ -53,20 +65,26 @@
         {% endfor %}
       </ul>
     </div>
-    {% if subscription.status == 'incomplete' %}
+    {% if subscription.status == 'incomplete' or subscription.status == 'past_due' or subscription.status == 'expired' %}
       <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-amber-600">Payment required to activate this plan.</p>
-        <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&method=stripe&period={{ subscription.billing_period }}"
-           class="btn btn-primary btn-sm">Complete payment</a>
+        <p class="text-xs text-amber-600">{% if subscription.status == 'incomplete' %}Payment required to activate this plan.{% else %}Pay to keep using {{ subscription.plan.name }}.{% endif %}</p>
+        {% if payments_enabled and payment_methods %}
+        <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&period={{ subscription.billing_period }}"
+           class="btn btn-primary btn-sm">{% if subscription.status == 'incomplete' %}Complete payment{% else %}Renew now{% endif %}</a>
+        {% endif %}
       </div>
-    {% elif subscription.is_active and subscription.plan.slug != 'trial' %}
+    {% elif subscription.status == 'active' and subscription.cancel_at_period_end %}
       <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-gray-400">
-          {% if subscription.stripe_subscription_id %}Recurring {{ subscription.get_billing_period_display|lower }} billing via Stripe.
-          {% elif subscription.fw_subscription_id %}Recurring monthly billing via Flutterwave.
-          {% else %}Billed {{ subscription.get_billing_period_display|lower }}.{% endif %}
-        </p>
-        <form method="post" action="{% url 'billing:cancel' %}" hx-confirm="Cancel your subscription? Recurring billing will stop." hx-confirm-danger
+        <p class="text-xs text-gray-400">You've cancelled. You keep {{ subscription.plan.name }} until {{ subscription.current_period_end|date:"M j, Y" }}.</p>
+        <form method="post" action="{% url 'billing:resume' %}">
+          {% csrf_token %}
+          <button class="btn btn-secondary btn-sm" type="submit">Keep my plan</button>
+        </form>
+      </div>
+    {% elif subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
+      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+        <p class="text-xs text-gray-400">Billed {{ subscription.get_billing_period_display|lower }}. Renews automatically; credit is used first.</p>
+        <form method="post" action="{% url 'billing:cancel' %}" hx-confirm="Cancel your subscription? You keep your plan until the end of the period you paid for, and won't be charged again." hx-confirm-danger
               hx-post="{% url 'billing:cancel' %}" hx-swap="none">
           {% csrf_token %}
           <button class="btn btn-danger-ghost btn-sm" type="submit">Cancel subscription</button>
@@ -96,6 +114,10 @@
   </div>
 </div>
 
+{% if credit.balance %}
+<p class="mb-6 text-center text-sm text-gray-600">Your {{ credit.balance|money }} account credit comes off the price at checkout.</p>
+{% endif %}
+
 {% comment %} Pricing grid {% endcomment %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
   {% for card in cards %}{% with plan=card.plan %}
@@ -117,7 +139,7 @@
           {{ plan.name }}
         </p>
         <div class="mt-1 flex items-end gap-1">
-          <span class="text-3xl font-bold text-ink">$<span x-text="priceFor({{ plan.price_monthly|stringformat:'f' }})">{{ plan.price_monthly|floatformat:0 }}</span></span>
+          <span class="text-3xl font-bold text-ink">{% currency_symbol %}<span x-text="priceFor({{ plan.price_monthly|stringformat:'f' }})">{{ plan.price_monthly|floatformat:0 }}</span></span>
           {% if plan.price_monthly > 0 %}<span class="text-sm text-gray-400 mb-0.5" x-text="pricing[period].label.toLowerCase()"></span>{% endif %}
         </div>
         {% if plan.slug == 'trial' %}

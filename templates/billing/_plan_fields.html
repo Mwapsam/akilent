@@ -14,7 +14,6 @@
   {% include "components/form_field.html" with name="trial_days" label="Trial days" type="number" value=plan.trial_days|default:0 %}
   {% include "components/form_field.html" with name="log_retention_days" label="Log retention (days)" type="number" value=plan.log_retention_days|default:0 %}
 </div>
-{% include "components/form_field.html" with name="flutterwave_plan_id" label="Flutterwave plan ID (optional)" value=plan.flutterwave_plan_id %}
 
 <label class="flex items-center gap-2 text-sm mt-3">
   <input type="checkbox" name="is_active" class="rounded border-border-strong" {% if plan.is_active or not plan %}checked{% endif %}> Active (visible to customers)

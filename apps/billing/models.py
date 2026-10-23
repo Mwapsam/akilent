@@ -5,6 +5,8 @@ from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.accounts.fields import EncryptedTextField
+
 
 class Plan(models.Model):
     TRIAL = "trial"
@@ -135,10 +137,20 @@ class Subscription(models.Model):
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
 
-    # Which payment method activated the current period — audit/display only,
-    # the gateway-specific fields above (fw_*) remain the source of truth for
-    # recurring-billing operations on Flutterwave-activated subscriptions.
+    # Legacy: provider-side recurring subscriptions from before Akilent ran renewals itself.
+    # Read only by the Stripe/Flutterwave adapters and migrate_legacy_billing.
     payment_method = models.CharField(max_length=20, blank=True, default="")
+
+    # Provider code (apps.billing.providers) that took the payment for the current period, or
+    # "credit" when account credit covered it. Display and renewal routing only.
+    provider = models.CharField(max_length=30, blank=True, default="")
+    # Set by cancel: access runs to current_period_end, then the renewal engine cancels.
+    cancel_at_period_end = models.BooleanField(default=False)
+    # When the current renewal went unpaid; the subscription expires after BILLING_GRACE_DAYS.
+    past_due_since = models.DateTimeField(null=True, blank=True)
+    # Which emails the renewal engine already sent, so an hourly run never repeats one.
+    renewal_notice_for = models.DateTimeField(null=True, blank=True)
+    dunning_notices_sent = models.PositiveSmallIntegerField(default=0)
 
     cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -162,9 +174,8 @@ class Subscription(models.Model):
 class PaymentMethod(models.Model):
     """Admin-configurable payment option (gateway).
 
-    ``code`` must match a key registered in ``apps.billing.gateways.registry``.
-    Enabling/disabling here is what controls what tenants see at checkout —
-    the gateway implementation itself stays code-only.
+    Card providers are chosen by ``SiteSettings.billing_provider``; this row now only switches
+    bank transfer (``code="manual"``) on or off and holds its instructions.
     """
 
     code = models.SlugField(max_length=30, unique=True)
@@ -207,6 +218,15 @@ class ManualPaymentRequest(models.Model):
     reference = models.CharField(max_length=255, blank=True, default="")
     proof = models.FileField(upload_to="manual_payments/", blank=True, null=True)
 
+    billing_period = models.CharField(max_length=12, blank=True, default="")
+    payment = models.ForeignKey(
+        "billing.BillingPayment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manual_requests",
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     note = models.TextField(blank=True, default="")
     reviewed_by = models.ForeignKey(
@@ -236,6 +256,187 @@ class ProcessedWebhookEvent(models.Model):
 
     def __str__(self):
         return self.event_key
+
+
+class BillingPayment(models.Model):
+    """One attempt to pay for a plan period, with any provider (or fully with credit).
+
+    ``reference`` is ours and is what every provider carries back (Flutterwave tx_ref, Stripe
+    metadata), so a checkout return and a webhook for the same money resolve to the same row and
+    the status changes once (apps.billing.payments.record_result).
+    """
+
+    CHECKOUT = "checkout"
+    RENEWAL = "renewal"
+    PURPOSE_CHOICES = [(CHECKOUT, "Checkout"), (RENEWAL, "Renewal")]
+
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    REQUIRES_ACTION = "requires_action"
+    ABANDONED = "abandoned"
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (SUCCEEDED, "Paid"),
+        (FAILED, "Failed"),
+        (REQUIRES_ACTION, "Needs customer action"),
+        (ABANDONED, "Abandoned"),
+    ]
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="billing_payments"
+    )
+    reference = models.CharField(max_length=64, unique=True)
+    provider = models.CharField(max_length=30, blank=True, default="")
+    provider_ref = models.CharField(max_length=255, blank=True, default="")
+    purpose = models.CharField(max_length=10, choices=PURPOSE_CHOICES, default=CHECKOUT)
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="+")
+    billing_period = models.CharField(max_length=12)
+    currency = models.CharField(max_length=3)
+    gross_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    credit_applied = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+    # Unused paid time on the plan being left (services.unused_value), worked out when the
+    # payment was created. Up to gross_amount comes off the price; any excess becomes account
+    # credit once the payment succeeds.
+    unused_time_value = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+    amount_due = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    failure_reason = models.CharField(max_length=255, blank=True, default="")
+    action_url = models.URLField(max_length=1000, blank=True, default="")
+    raw = models.JSONField(default=dict, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["account", "status"])]
+
+    def __str__(self):
+        return f"{self.reference} {self.amount_due} {self.currency} ({self.status})"
+
+    @staticmethod
+    def new_reference() -> str:
+        return f"pay_{uuid.uuid4().hex}"
+
+
+class SavedPaymentMethod(models.Model):
+    """A provider token we can charge again off-session (a card saved at checkout)."""
+
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="saved_payment_methods",
+    )
+    provider = models.CharField(max_length=30)
+    token = EncryptedTextField()
+    # sha256 of the token: finds an already-saved method without decrypting every row.
+    token_fingerprint = models.CharField(max_length=64, db_index=True, default="")
+    # Provider-side customer (Stripe cus_..., Flutterwave customer email); some providers need it
+    # alongside the token to charge.
+    customer_ref = models.CharField(max_length=255, blank=True, default="")
+    brand = models.CharField(max_length=30, blank=True, default="")
+    last4 = models.CharField(max_length=4, blank=True, default="")
+    expiry = models.CharField(max_length=7, blank=True, default="")
+    is_default = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "-created_at"]
+
+    def __str__(self):
+        return f"{self.provider} {self.brand} ending {self.last4}"
+
+
+class CreditGrant(models.Model):
+    """Money credit given to a business (e.g. early adopters). Used up before any charge."""
+
+    EARLY_ADOPTER = "early_adopter"
+    GOODWILL = "goodwill"
+    PRORATION = "proration"
+    OTHER = "other"
+    REASON_CHOICES = [
+        (EARLY_ADOPTER, "Early adopter"),
+        (GOODWILL, "Goodwill"),
+        (PRORATION, "Unused time on a plan change"),
+        (OTHER, "Other"),
+    ]
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="credit_grants"
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    remaining = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, default=OTHER)
+    note = models.CharField(max_length=255, blank=True, default="")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    granted_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.account} {self.remaining}/{self.amount} {self.currency}"
+
+    @property
+    def is_usable(self) -> bool:
+        return (
+            self.revoked_at is None
+            and self.remaining > 0
+            and (self.expires_at is None or self.expires_at > timezone.now())
+        )
+
+
+class CreditTransaction(models.Model):
+    """Append-only ledger of every change to a grant's remaining amount."""
+
+    GRANT = "grant"
+    APPLIED = "applied"
+    RESTORED = "restored"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+    KIND_CHOICES = [
+        (GRANT, "Granted"),
+        (APPLIED, "Used for a payment"),
+        (RESTORED, "Returned (payment not completed)"),
+        (REVOKED, "Revoked"),
+        (EXPIRED, "Expired"),
+    ]
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="credit_transactions"
+    )
+    grant = models.ForeignKey(
+        CreditGrant, on_delete=models.CASCADE, related_name="transactions"
+    )
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)  # + adds, - uses
+    payment = models.ForeignKey(
+        BillingPayment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="credit_transactions",
+    )
+    created_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"{self.kind} {self.amount} ({self.grant_id})"
 
 
 class UsageSummary(models.Model):
