@@ -95,9 +95,11 @@ def _in_workspace_tz(view):
 
 # read_insights + pages_read_engagement: post views, reach and reactions (Page/insights).
 # pages_manage_engagement: a post's first comment.
+# pages_read_user_content: a post's comment count (Performance); Meta also requires it
+# alongside pages_manage_engagement.
 _FB_SCOPES = (
     "pages_show_list,pages_manage_posts,pages_read_engagement,read_insights,"
-    "pages_manage_engagement,business_management"
+    "pages_manage_engagement,pages_read_user_content,business_management"
 )
 
 # Valid status transitions: {from_status: allowed_to_statuses}
