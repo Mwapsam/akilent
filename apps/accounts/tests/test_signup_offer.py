@@ -109,6 +109,8 @@ def test_signup_with_email_off_succeeds_on_the_trial(client, plans, settings):
     settings.WHATSAPP_ENABLED = True
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302, resp.content[:2000]
+    # Straight to the channel that's on, not to a checklist that's on hold.
+    assert resp.url == "/whatsapp/numbers/"
     account = Account.objects.get(company_name="New Co")
     # Stored as what was bought, so email setup is there when email comes back.
     assert account.selected_services == Account.Services.BOTH
@@ -211,3 +213,46 @@ def test_resend_says_so_when_the_email_could_not_be_queued(
     texts = [str(m) for m in get_messages(resp.wsgi_request)]
     assert any("couldn't send the email" in t for t in texts), texts
     assert not any("Sent" in t for t in texts)
+
+
+@pytest.mark.django_db
+def test_paid_signup_warns_when_verification_could_not_be_queued(
+    client, plans, settings, monkeypatch
+):
+    from django.contrib.messages import get_messages
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+
+    def boom(*args, **kwargs):
+        raise ConnectionError("broker down")
+
+    monkeypatch.setattr("apps.accounts.tasks.send_verification_email.delay", boom)
+    resp = client.post(
+        SIGNUP_URL,
+        _payload(selected_services=Account.Services.EMAIL, plan=Plan.STARTER),
+    )
+    assert resp.status_code == 302 and resp.url.startswith("/billing/checkout/")
+    texts = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("couldn't send the verification email" in t for t in texts), texts
+
+
+@pytest.mark.django_db
+def test_landing_and_wizard_describe_a_plan_the_same_way(client, db, settings):
+    from apps.accounts.views import _plan_feature_bullets
+    from apps.billing.models import PlanFeature
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    plan = Plan.objects.create(
+        slug=Plan.PROFESSIONAL,
+        name="Professional",
+        price_monthly=49,
+        service_type=Plan.SERVICE_WHATSAPP,
+    )
+    PlanFeature.objects.get_or_create(plan=plan, key="email_campaigns")
+    PlanFeature.objects.get_or_create(plan=plan, key="whatsapp_campaigns")
+    card = client.get("/").context["cards"][0]
+    assert card["limits"] + card["feature_names"] == _plan_feature_bullets(
+        plan, "whatsapp"
+    )

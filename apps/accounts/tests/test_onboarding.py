@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 import pytest
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -247,7 +245,6 @@ def test_every_step_icon_exists():
 def test_every_step_link_opens_for_a_fully_entitled_business(
     client, settings, monkeypatch
 ):
-    from django.utils import timezone
 
     from apps.billing.features import FEATURES
     from apps.billing.models import Plan, PlanFeature, Subscription
@@ -371,12 +368,28 @@ def test_whatsapp_account_with_whatsapp_off_is_paused(db, all_wired):
 def test_both_with_one_channel_off(db, all_wired):
     _switch_off("email")
     acc = _make_account(Account.Services.BOTH)
-    assert _keys(acc, essentials_only=True) == [
+    state = ob.get_state(acc, essentials_only=True)
+    # What can be done today comes first, and is what "next up" points at.
+    assert [s["key"] for s in state["steps"]] == [
         "account",
         "verify_email",
-        "email_paused",
         "whatsapp",
+        "email_paused",
     ]
+    assert state["next_step"]["key"] == "whatsapp"
+
+    # The live channel still moves the stored state along...
+    assert ob.advance_onboarding(acc) == "/whatsapp/numbers/"
+    acc.refresh_from_db()
+    assert acc.onboarding_state == Account.Onboarding.WHATSAPP_SETUP
+
+    # ...but once it's done, COMPLETED waits for the paused one.
+    n = _wa_number(acc, registration_status="registered")
+    n.connection_tests.create(recipient="+260971234567", status="sent")
+    assert ob.advance_onboarding(acc) == ""
+    acc.refresh_from_db()
+    assert acc.onboarding_state == Account.Onboarding.WHATSAPP_SETUP
+    assert ob.get_state(acc)["next_step"]["key"] == "email_paused"
 
 
 @pytest.mark.django_db
@@ -461,7 +474,7 @@ def test_post_step_needs_somewhere_to_publish(account, monkeypatch, settings):
 
 
 @pytest.mark.django_db
-def test_seeded_starter_templates_do_not_count(account, monkeypatch):
+def test_only_a_template_the_business_created_counts(account, monkeypatch):
     from apps.email.models import EmailTemplate
     from apps.email.starter_templates import STARTER_TEMPLATES
 
@@ -475,17 +488,34 @@ def test_seeded_starter_templates_do_not_count(account, monkeypatch):
     assert EmailTemplate.objects.filter(account=account).exists()  # seeded on create
     assert done() is False
 
-    # Refreshing the starters' content (e.g. a data migration) is not an edit.
-    starter = STARTER_TEMPLATES[0]
-    EmailTemplate.objects.filter(account=account, slug=starter["slug"]).update(
-        subject=starter["subject"], updated_at=timezone.now() + timedelta(days=1)
-    )
+    # A starter whose content differs from today's copy (edited, or seeded from an
+    # older version) proves nothing either way.
+    EmailTemplate.objects.filter(
+        account=account, slug=STARTER_TEMPLATES[0]["slug"]
+    ).update(subject="Different")
     assert done() is False
 
-    EmailTemplate.objects.filter(account=account, slug=starter["slug"]).update(
-        subject="Our own subject"
-    )
+    EmailTemplate.objects.create(account=account, name="Ours", slug="ours")
     assert done() is True
+
+
+@pytest.mark.django_db
+def test_one_request_computes_the_checklist_once(rf, account, monkeypatch):
+    calls = []
+    real = ob._whatsapp_step
+
+    def spy(acc):
+        calls.append(acc.pk)
+        return real(acc)
+
+    monkeypatch.setattr(ob, "_whatsapp_step", spy)
+    account.selected_services = Account.Services.BOTH
+    account.save()
+    request = rf.get("/dashboard/")
+    first = ob.get_state(account, essentials_only=True, request=request)
+    assert ob.get_state(account, essentials_only=True, request=request) is first
+    ob.get_state(account, request=request)  # the full list reuses the essentials' work
+    assert len(calls) <= 1
 
 
 @pytest.mark.django_db

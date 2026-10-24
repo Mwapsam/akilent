@@ -94,22 +94,23 @@ def advance_onboarding(account) -> str:
     checklist item in ``get_state`` rather than blocking the state machine, so
     slow DNS never strands a user mid-onboarding.
 
-    While a chosen channel is paused nothing is written: moving on (and above
-    all to COMPLETED, which is never recomputed) would skip that channel's setup
-    for good once it comes back.
+    Channels that are on move along as usual while another is paused, but COMPLETED
+    (which is never recomputed) waits until no chosen channel is paused: writing it
+    earlier would skip that channel's setup for good once it comes back.
     """
     from apps.accounts.models import Account
 
     if account.onboarding_state == Account.Onboarding.COMPLETED:
         return ""
     _, setup, paused = _channel_plan(account)
-    if paused:
-        return ""
 
     if "whatsapp" in setup and not _has_ready_whatsapp_number(account):
         target, url = Account.Onboarding.WHATSAPP_SETUP, WHATSAPP_SETUP_URL
     elif "email" in setup and not _has_sending_domain(account):
         target, url = Account.Onboarding.DOMAIN_SETUP, DOMAIN_SETUP_URL
+    elif paused:
+        # Everything that's on is set up; the rest waits for its channel.
+        return ""
     else:
         target, url = Account.Onboarding.COMPLETED, ""
 
@@ -142,6 +143,17 @@ class _Ctx:
         from apps.billing import api as billing_api
 
         return billing_api.nav_state(self.account)["usable"]
+
+    @cached_property
+    def instagram_ready(self) -> bool:
+        from apps.instagram.models.account import InstagramBusinessAccount
+
+        return any(
+            a.is_ready
+            for a in InstagramBusinessAccount.objects.filter(
+                account=self.account, is_active=True
+            )
+        )
 
     @cached_property
     def whatsapp(self) -> dict:
@@ -223,14 +235,7 @@ def _verify_url(ctx) -> str:
 
 
 def _done_instagram(ctx) -> bool:
-    from apps.instagram.models.account import InstagramBusinessAccount
-
-    return any(
-        a.is_ready
-        for a in InstagramBusinessAccount.objects.filter(
-            account=ctx.account, is_active=True
-        )
-    )
+    return ctx.instagram_ready
 
 
 def _instagram_usable(ctx) -> bool:
@@ -280,29 +285,26 @@ def _done_contacts(ctx) -> bool:
 
 
 def _done_email_template(ctx) -> bool:
-    """A template of their own, or a starter they edited. Every new account is given the
-    starters (apps.email.signals), so their mere presence proves nothing."""
+    """A template the business created. Every new account is seeded with the starters
+    (apps.email.signals), so those prove nothing either way: nothing records whether a
+    starter was edited, and comparing with today's starter copy breaks as soon as that
+    copy changes. A copy of a starter saved as a new template does count."""
     from apps.email.models import EmailTemplate
     from apps.email.starter_templates import STARTER_TEMPLATES
 
-    fields = ("subject", "text_body", "html_body")
-    starters = {t["slug"]: t for t in STARTER_TEMPLATES}
-    templates = EmailTemplate.objects.filter(account=ctx.account)
-    if templates.exclude(slug__in=starters).exists():
-        return True
-    # Edited = its content no longer matches the starter it was seeded from. Compared by
-    # content, not timestamps, so refreshing the starters themselves never counts.
-    for row in templates.filter(slug__in=starters).values("slug", *fields):
-        starter = starters[row["slug"]]
-        if any(row[f] != starter.get(f, row[f]) for f in fields):
-            return True
-    return False
+    return (
+        EmailTemplate.objects.filter(account=ctx.account)
+        .exclude(slug__in=[t["slug"] for t in STARTER_TEMPLATES])
+        .exists()
+    )
 
 
 def _done_automation(ctx) -> bool:
-    from apps.automation import api as automation_api
+    from apps.automation.models import Workflow
 
-    return bool(automation_api.published_slugs(ctx.account))
+    return Workflow.objects.filter(
+        account=ctx.account, status=Workflow.Status.PUBLISHED
+    ).exists()
 
 
 def _ai_configured(ctx) -> bool:
@@ -447,8 +449,8 @@ STEPS: tuple[StepDef, ...] = (
     StepDef(
         key="email_template",
         section="reach",
-        title="Make an email template your own",
-        desc="Edit one of the ready-made templates, or design your own, for campaigns and API sends.",
+        title="Create your own email template",
+        desc="Start from a ready-made design or a blank page, for campaigns and API sends.",
         icon="layout-template",
         cta="Open templates",
         url="email-templates",
@@ -690,14 +692,28 @@ def _render_step(defn: StepDef, ctx) -> dict:
     return step
 
 
-def get_state(account, *, essentials_only: bool = False) -> dict:
+def get_state(account, *, essentials_only: bool = False, request=None) -> dict:
     """The checklist for ``account``.
 
     ``essentials_only`` computes just the required "Get set up" steps — what the
     widget and the dashboard card need on every page — and skips the dozen or so
     queries behind the recommendations.
+
+    Pass ``request`` to share the work within one request: the view, the context
+    processor and the dashboard panels all ask, and the answer can't change in between.
     """
-    ctx = _Ctx(account)
+    if request is not None:
+        cache = request.__dict__.setdefault("_onboarding_cache", {})
+        key = (account.pk, essentials_only)
+        if key not in cache:
+            if account.pk not in cache:
+                cache[account.pk] = _Ctx(account)
+            cache[key] = _build_state(cache[account.pk], essentials_only)
+        return cache[key]
+    return _build_state(_Ctx(account), essentials_only)
+
+
+def _build_state(ctx, essentials_only: bool) -> dict:
     steps: list[dict] = []
     for defn in STEPS:
         if essentials_only and not defn.required:
@@ -705,9 +721,9 @@ def get_state(account, *, essentials_only: bool = False) -> dict:
         if not defn.available(ctx):
             continue
         steps.append(_render_step(defn, ctx))
-        if defn.key == "verify_email":
-            # Paused channels sit where their own setup would have been.
-            steps += [_paused_step(ch) for ch in ctx.paused]
+    # Paused channels close the "Get set up" list, after what can be done today.
+    at = max(i for i, s in enumerate(steps) if s["section"] == "setup") + 1
+    steps[at:at] = [_paused_step(ch) for ch in ctx.paused]
 
     # A step whose prerequisite isn't done yet can't be started; one whose prerequisite
     # isn't on the checklist at all (another channel, or paused) doesn't apply.
@@ -734,8 +750,13 @@ def get_state(account, *, essentials_only: bool = False) -> dict:
     recommended = [s for s in steps if s["optional"]]
     required_done = sum(1 for s in required if s["done"])
     # Only essentials drive "next up", so finishing them surfaces the
-    # completion state even if a recommendation remains.
-    next_step = next((s for s in required if not s["done"]), None)
+    # completion state even if a recommendation remains. Something the business can
+    # do now always comes before a paused channel.
+    open_steps = [s for s in required if not s["done"]]
+    next_step = next(
+        (s for s in open_steps if not s["key"].endswith("_paused")),
+        open_steps[0] if open_steps else None,
+    )
     next_recommended = next(
         (s for s in recommended if not s["done"] and not s["locked"]), None
     )

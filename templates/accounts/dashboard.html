@@ -36,7 +36,12 @@
       <div class="h-full rounded-full bg-brand-600 transition-all"
            style="width: {% widthratio onboarding_done onboarding_total 100 %}%"></div>
     </div>
-    {% if onboarding_next %}
+    {% if onboarding_next.state == "paused" %}
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm text-gray-600">{{ onboarding_next.desc }}</p>
+      <a href="/onboarding/" class="btn btn-ghost btn-sm">View all steps</a>
+    </div>
+    {% elif onboarding_next %}
     <div class="flex flex-wrap gap-2">
       <a href="{{ onboarding_next.url|default:'/onboarding/' }}" class="btn btn-primary btn-sm">
         {{ onboarding_next.cta|default:onboarding_next.title }}

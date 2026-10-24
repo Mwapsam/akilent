@@ -94,7 +94,8 @@ def onboarding_status(request):
         account = get_current_account(request)
         if account is None:
             return {}
-        state = ob.get_state(account, essentials_only=True)
+        # Shared with the view on the same request (the dashboard asks too).
+        state = ob.get_state(account, essentials_only=True, request=request)
         if state["complete"]:
             return {}
         return {

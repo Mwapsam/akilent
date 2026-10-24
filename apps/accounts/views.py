@@ -267,11 +267,11 @@ _ACCOUNT_PROFILE_FIELDS = (
 )
 
 
-def _plan_feature_bullets(plan, service: str) -> list:
-    """Short marketing bullets for a plan card in the signup wizard: the same limits and
-    features the pricing page shows (``billing_api.plan_card``), as plain strings for the
-    wizard's JSON config. ``service`` is what the plan effectively gives right now, so a
-    channel it doesn't cover (or that is switched off) isn't advertised."""
+def _plan_card(plan, service: str) -> dict:
+    """``billing_api.plan_card`` for what the plan gives right now: ``service`` is its
+    effective service (forms.effective_service), so a channel it doesn't cover, or that
+    is switched off, isn't advertised. The landing page and the signup wizard both use
+    this, so the two never describe the same plan differently."""
     from apps.accounts.forms import SERVICE_CHANNELS
     from apps.billing import api as billing_api
     from apps.core.channels import enabled_channels
@@ -280,7 +280,13 @@ def _plan_feature_bullets(plan, service: str) -> list:
     for channel in ("whatsapp", "email"):
         if channel not in SERVICE_CHANNELS[service]:
             channels = channels - {channel}
-    card = billing_api.plan_card(plan, channels=channels)
+    return billing_api.plan_card(plan, channels=channels)
+
+
+def _plan_feature_bullets(plan, service: str) -> list:
+    """Short marketing bullets for a plan card in the signup wizard, as plain strings for
+    the wizard's JSON config."""
+    card = _plan_card(plan, service)
     return card["limits"] + card["feature_names"]
 
 
@@ -400,7 +406,9 @@ def signup(request):
                     Membership.objects.create(
                         user=user, account=account, role=Membership.Role.OWNER
                     )
-                    _apply_selected_plan(account, cd.get("plan"))
+                    # The Plan the form checked, so the subscription and
+                    # selected_services can't come from two different lookups.
+                    _apply_selected_plan(account, form.plan)
                     _set_default_modules(account)
             except IntegrityError:
                 # Two submits raced past clean_email (or two addresses share the
@@ -427,6 +435,12 @@ def signup(request):
 
                 subscription = getattr(account, "subscription", None)
                 if subscription and subscription.status == Subscription.INCOMPLETE:
+                    if not verification_sent:
+                        messages.warning(
+                            request,
+                            "We couldn't send the verification email just now. Use "
+                            "“Resend link” on the setup page once you've paid.",
+                        )
                     messages.success(
                         request,
                         f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
@@ -503,7 +517,7 @@ def _set_default_modules(account):
         logger.exception("could not set default modules for account %s", account.pk)
 
 
-def _apply_selected_plan(account, plan_slug):
+def _apply_selected_plan(account, plan):
     """Honor the plan chosen on the landing page's pricing cards, if any.
 
     The trial Subscription is auto-created by the billing post_save signal;
@@ -515,13 +529,10 @@ def _apply_selected_plan(account, plan_slug):
     and signup() redirects to checkout with the active payment provider
     before the account is usable.
     """
-    if not plan_slug:
-        return
-    from apps.billing.models import Plan, Subscription
-
-    plan = Plan.objects.filter(slug=plan_slug, is_active=True).first()
     if plan is None:
         return
+    from apps.billing.models import Subscription
+
     subscription = getattr(account, "subscription", None)
     if subscription is None:
         return
@@ -654,11 +665,12 @@ def landing(request):
 
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
     by_service, _ = signup_offer()
-    plans = sorted(
-        (p for service_plans in by_service.values() for p in service_plans),
-        key=lambda p: p.price_monthly,
+    offered = sorted(
+        ((p, service) for service, ps in by_service.items() for p in ps),
+        key=lambda item: item[0].price_monthly,
     )
-    cards = [billing_api.plan_card(p) for p in plans]
+    plans = [p for p, _ in offered]
+    cards = [_plan_card(p, service) for p, service in offered]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
     resp = render(
@@ -690,7 +702,7 @@ def onboarding(request):
 
     # Keep the persisted resume-state in step with reality on each visit.
     ob.advance_onboarding(account)
-    state = ob.get_state(account)
+    state = ob.get_state(account, request=request)
     return render(
         request,
         "accounts/onboarding.html",
@@ -724,7 +736,7 @@ def dashboard(request):
         else "Good evening"
     )
 
-    state = ob.get_state(account, essentials_only=True)
+    state = ob.get_state(account, essentials_only=True, request=request)
 
     # Only the work queue is rendered on the first byte - it answers the
     # dashboard's primary question and is cheap (three counts). Everything
@@ -804,9 +816,10 @@ def dashboard_panels(request):
     # Once the essentials are done, point at the next thing worth setting up. Computed
     # here, after first paint, and only then: the full checklist is a dozen-odd queries,
     # the essentials check a handful.
+    # Sharing the request lets the full checklist reuse the essentials' work.
     next_recommended = None
-    if ob.get_state(account, essentials_only=True)["complete"]:
-        next_recommended = ob.get_state(account)["next_recommended"]
+    if ob.get_state(account, essentials_only=True, request=request)["complete"]:
+        next_recommended = ob.get_state(account, request=request)["next_recommended"]
 
     return render(
         request,
