@@ -39,7 +39,8 @@
       </div>
     {% endif %}
 
-    <form method="post" novalidate action="{% url 'signup' %}">
+    <form method="post" novalidate action="{% url 'signup' %}"
+          @submit="$el.querySelectorAll('[type=submit]').forEach(b => { b.disabled = true; b.setAttribute('data-submit-lock', ''); setTimeout(() => { b.disabled = false; b.removeAttribute('data-submit-lock'); }, 15000); })">
       {% csrf_token %}
       <input type="hidden" name="selected_services" :value="services">
       <input type="hidden" name="plan" :value="plan">

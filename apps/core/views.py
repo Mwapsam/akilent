@@ -9,6 +9,7 @@ import logging
 
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from apps.core import docs as docs_kb
@@ -298,3 +299,100 @@ def docs_page(request, slug="index"):
         return markdown_response(text)
 
     return render(request, page.template, ctx)
+
+
+def csrf_failure(request, reason=""):
+    """``CSRF_FAILURE_VIEW``: a rejected form, explained and recovered where it's safe.
+
+    The usual cause in real use is a page that outlived its token. Signing in (signup
+    signs the new owner in) issues a fresh token, so a copy of a form opened before
+    that, in another tab or restored by the Back button, can no longer be submitted.
+
+    Nothing the rejected request asked for is done:
+
+    - The new owner re-sending their own signup form goes where signup would have sent
+      them (checkout for an unpaid plan, else setup).
+    - An HTMX request gets a bare 403 marked ``X-CSRF-Failed``: htmx doesn't swap error
+      responses, so app.js refreshes the page's token in place and says so instead.
+    - Anyone else gets a page that explains, with a link back to the page the form was
+      on (its Referer, so a query string such as ``?plan=`` survives).
+
+    Django's reason is logged with enough context to tell the causes apart (never the
+    token values).
+    """
+    from django.contrib import messages
+    from django.http import HttpResponse
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    user = getattr(request, "user", None)
+    signed_in = bool(user is not None and user.is_authenticated)
+    logger.warning(
+        "csrf: rejected %s %s: %s (cookie=%s origin=%s referer=%s host=%s auth=%s)",
+        request.method,
+        request.path,
+        reason,
+        "csrftoken" in request.COOKIES,
+        request.headers.get("Origin", "-")[:200],
+        request.headers.get("Referer", "-")[:300],
+        # Raw header: get_host() validates it and could raise here.
+        request.META.get("HTTP_HOST", "-")[:200],
+        signed_in,
+    )
+
+    if request.headers.get("HX-Request") == "true":
+        return HttpResponse(status=403, headers={"X-CSRF-Failed": "1"})
+
+    signup_path = reverse("signup")
+    signed_in_as = ""
+    if user is not None and signed_in and request.path == signup_path:
+        posted = (request.POST.get("email") or "").strip().lower()
+        if posted and posted == (user.email or "").lower():
+            from apps.accounts.utils import get_current_account
+            from apps.accounts.views import after_signup_url
+
+            account = get_current_account(request)
+            if account is not None:
+                messages.info(request, "Your account is already set up.")
+                return redirect(after_signup_url(account))
+        # Signed in as someone else (another tab): say so rather than guess.
+        signed_in_as = user.email
+
+    from django.core.exceptions import DisallowedHost
+
+    try:
+        host = request.get_host()
+    except DisallowedHost:
+        host = ""
+    referer = request.headers.get("Referer", "")
+    retry = ""
+    if (
+        host
+        and referer
+        and url_has_allowed_host_and_scheme(
+            referer, allowed_hosts={host}, require_https=request.is_secure()
+        )
+    ):
+        retry = referer
+    elif request.path == signup_path:
+        retry = signup_path
+    return render(
+        request,
+        "csrf_failure.html",
+        {"retry_url": retry, "signed_in_as": signed_in_as},
+        status=403,
+    )
+
+
+@never_cache
+def csrf_token(request):
+    """A current CSRF token for a page the browser restored from its back/forward cache.
+
+    Such a page wasn't re-requested, so its forms can carry a token from before the
+    session changed (signing in issues a new one) and would be rejected. app.js swaps
+    this in on ``pageshow``. The cookie is HttpOnly, so the page can't read it itself.
+    """
+    from django.middleware.csrf import get_token
+
+    return JsonResponse({"token": get_token(request)})

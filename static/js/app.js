@@ -18,6 +18,85 @@
   }
   const CSRF = () => getCookie("csrftoken");
 
+  // --- Stale CSRF tokens -------------------------------------------------
+  // A page can outlive its CSRF token: signing in issues a new one, and a page the
+  // browser restores from its back/forward cache isn't re-requested. refreshCsrf()
+  // fetches a current token (the cookie is HttpOnly, so the page can't read it) and
+  // puts it in every form field and hx-headers on the page. Tokens that scripts keep
+  // in their own config objects are covered by the fetch wrapper below, which swaps
+  // the latest token into same-origin requests once a refresh has happened.
+  let freshCsrf = "";
+
+  function refreshCsrf() {
+    return fetch("/internal/csrf-token/", { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.token) return false;
+        freshCsrf = data.token;
+        document.querySelectorAll('input[name="csrfmiddlewaretoken"]').forEach(function (el) {
+          el.value = freshCsrf;
+        });
+        document.querySelectorAll("[hx-headers]").forEach(function (el) {
+          try {
+            const headers = JSON.parse(el.getAttribute("hx-headers"));
+            if ("X-CSRFToken" in headers) {
+              headers["X-CSRFToken"] = freshCsrf;
+              el.setAttribute("hx-headers", JSON.stringify(headers));
+            }
+          } catch (_) {}
+        });
+        return true;
+      })
+      .catch(function () { return false; });
+  }
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    if (freshCsrf && init) {
+      const url = typeof input === "string" ? input : (input && input.url) || "";
+      let sameOrigin = true;
+      try { sameOrigin = new URL(url, location.href).origin === location.origin; } catch (_) {}
+      if (sameOrigin) {
+        if (init.headers instanceof Headers) {
+          if (init.headers.has("X-CSRFToken")) init.headers.set("X-CSRFToken", freshCsrf);
+        } else if (init.headers && typeof init.headers === "object") {
+          Object.keys(init.headers).forEach(function (k) {
+            if (k.toLowerCase() === "x-csrftoken") init.headers[k] = freshCsrf;
+          });
+        }
+        if (init.body instanceof FormData && init.body.has("csrfmiddlewaretoken")) {
+          init.body.set("csrfmiddlewaretoken", freshCsrf);
+        }
+      }
+    }
+    return nativeFetch(input, init);
+  };
+
+  window.addEventListener("pageshow", function (event) {
+    if (!event.persisted) return;
+    // A submit that was under way when the user went Back must not stay locked.
+    document.querySelectorAll("[data-submit-lock]").forEach(function (b) {
+      b.disabled = false;
+      b.removeAttribute("data-submit-lock");
+    });
+    refreshCsrf();
+  });
+
+  // A boosted form whose token went stale comes back as a 403 that htmx won't swap.
+  // csrf_failure marks it; refresh the token in place, keep what was typed, and say so.
+  document.addEventListener("htmx:responseError", function (e) {
+    const xhr = e.detail.xhr;
+    if (!xhr || xhr.getResponseHeader("X-CSRF-Failed") !== "1") return;
+    refreshCsrf().then(function (ok) {
+      window.toast(
+        ok ? "warning" : "danger",
+        ok
+          ? "This page had expired, so nothing was saved. Please submit again."
+          : "This page has expired. Reload it and try again."
+      );
+    });
+  });
+
   // Parse an X-Toast header: "type|url-encoded-message".
   function decodeToast(header) {
     const i = header.indexOf("|");
@@ -259,6 +338,7 @@
   document.addEventListener("htmx:responseError", function (e) {
     if (isSilent(e.detail.elt)) return;
     if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-Toast")) return; // already toasted above
+    if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-CSRF-Failed") === "1") return; // see refreshCsrf
     window.toast("danger", "Something went wrong.");
   });
   document.addEventListener("htmx:sendError", function (e) {

@@ -1050,6 +1050,8 @@ LOGGING = {
 # --- Production security ---
 
 CSRF_COOKIE_HTTPONLY = True
+# A rejected form gets an explanation (and the reason in the log), not Django's bare 403.
+CSRF_FAILURE_VIEW = "apps.core.views.csrf_failure"
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True

@@ -350,6 +350,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     }
 
 
+@never_cache
 def signup(request):
     """Service-first self-service signup wizard.
 
@@ -445,9 +446,7 @@ def signup(request):
                         request,
                         f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
                     )
-                    return redirect(
-                        f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
-                    )
+                    return redirect(after_signup_url(account))
 
                 if verification_sent:
                     messages.success(
@@ -460,7 +459,7 @@ def signup(request):
                         "Your account is ready, but we couldn't send the verification email "
                         "just now. Use “Resend link” on this page in a few minutes.",
                     )
-                return redirect(ob.first_setup_url(account))
+                return redirect(after_signup_url(account))
 
         config = _build_signup_wizard_config(
             request,
@@ -494,6 +493,18 @@ def signup(request):
     return render(
         request, "accounts/signup.html", {"form": form, "wizard_config": config}
     )
+
+
+def after_signup_url(account) -> str:
+    """Where a new account goes next: checkout while its paid plan is unpaid, else its
+    first setup step. Shared with the CSRF failure view, which resumes a signup the
+    Back button re-sent."""
+    from apps.billing.models import Subscription
+
+    subscription = getattr(account, "subscription", None)
+    if subscription and subscription.status == Subscription.INCOMPLETE:
+        return f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
+    return ob.first_setup_url(account)
 
 
 def _set_default_modules(account):

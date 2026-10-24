@@ -33,6 +33,7 @@ urlpatterns = [
     # Tracked WhatsApp chat link for a post (apps.publishing.links); public, no login.
     path("go/<str:code>", go_link, name="go-link"),
     path("internal/ux-event/", core_views.ingest_ux_event, name="ux-event-ingest"),
+    path("internal/csrf-token/", core_views.csrf_token, name="csrf-token"),
     # Served by a separate ASGI process (docker-compose.yml's `events` service) behind nginx's
     # /events/ location — the main `web` service stays on WSGI. Routed here too so it resolves
     # under DEBUG/runserver and `{% url %}`/reverse() have one definition to agree with.

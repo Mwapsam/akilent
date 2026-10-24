@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Page expired — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+{% comment %}CSRF failure (apps.core.views.csrf_failure): the form was older than the
+visitor's session, usually after signing in in another tab or going Back.{% endcomment %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex mb-4">
+        {% include "components/brand_mark.html" with class="w-12 h-12" %}
+      </div>
+      <h1 class="text-xl font-semibold text-ink">This page expired</h1>
+    </div>
+
+    <div class="card card-pad sm:!p-8">
+      <div class="alert alert-info">
+        {% include "components/icon.html" with name="info" class="w-4 h-4 shrink-0 mt-0.5" %}
+        {% if signed_in_as %}
+          <p>
+            You're signed in as <strong>{{ signed_in_as }}</strong> in another tab, so this
+            sign-up form stopped working. Nothing was saved. To create a new account,
+            sign out first and fill in the form again.
+          </p>
+        {% else %}
+          <p>
+            For your security, forms stop working once your session changes — for
+            example after signing in in another tab. Nothing was saved. Open the page
+            again and resubmit.
+          </p>
+        {% endif %}
+      </div>
+      {% if retry_url %}
+        <a href="{{ retry_url }}" class="btn btn-primary btn-block mt-4">Open the page again</a>
+      {% endif %}
+      <a href="/" class="btn btn-secondary btn-block mt-2">Go to the home page</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
