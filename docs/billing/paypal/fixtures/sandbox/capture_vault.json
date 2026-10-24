@@ -1,0 +1,87 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f244382b01660"
+  },
+  "body": {
+    "id": "9CD35462JE6325649",
+    "status": "COMPLETED",
+    "payment_source": {
+      "paypal": {
+        "email_address": "sb-snlqi53530363@personal.example.com",
+        "account_id": "E8T89S54SB66N",
+        "account_status": "VERIFIED",
+        "name": {
+          "given_name": "John",
+          "surname": "Doe"
+        },
+        "address": {
+          "country_code": "US"
+        }
+      }
+    },
+    "purchase_units": [
+      {
+        "reference_id": "default",
+        "payments": {
+          "captures": [
+            {
+              "id": "98H499808B0798331",
+              "status": "PENDING",
+              "status_details": {
+                "reason": "PENDING_REVIEW"
+              },
+              "amount": {
+                "currency_code": "USD",
+                "value": "19.00"
+              },
+              "final_capture": true,
+              "seller_protection": {
+                "status": "NOT_ELIGIBLE"
+              },
+              "invoice_id": "probe_aa77aa1f512cv",
+              "custom_id": "probe_aa77aa1f512cv",
+              "links": [
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/captures/98H499808B0798331",
+                  "rel": "self",
+                  "method": "GET"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/captures/98H499808B0798331/refund",
+                  "rel": "refund",
+                  "method": "POST"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/checkout/orders/9CD35462JE6325649",
+                  "rel": "up",
+                  "method": "GET"
+                }
+              ],
+              "create_time": "2026-10-24T04:48:58Z",
+              "update_time": "2026-10-24T04:48:58Z"
+            }
+          ]
+        }
+      }
+    ],
+    "payer": {
+      "name": {
+        "given_name": "John",
+        "surname": "Doe"
+      },
+      "email_address": "sb-snlqi53530363@personal.example.com",
+      "payer_id": "E8T89S54SB66N",
+      "address": {
+        "country_code": "US"
+      }
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/9CD35462JE6325649",
+        "rel": "self",
+        "method": "GET"
+      }
+    ]
+  }
+}

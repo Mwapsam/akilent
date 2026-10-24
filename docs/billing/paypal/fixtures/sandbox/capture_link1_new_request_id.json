@@ -1,0 +1,24 @@
+{
+  "http_status": 422,
+  "headers": {
+    "paypal-debug-id": "f667182ce1bed"
+  },
+  "body": {
+    "name": "UNPROCESSABLE_ENTITY",
+    "details": [
+      {
+        "issue": "DUPLICATE_INVOICE_ID",
+        "description": "Duplicate Invoice ID detected. To avoid a potential duplicate transaction your account setting requires that Invoice Id be unique for each transaction."
+      }
+    ],
+    "message": "The requested action could not be performed, semantically incorrect, or failed business validation.",
+    "debug_id": "f667182ce1bed",
+    "links": [
+      {
+        "href": "https://developer.paypal.com/api/rest/reference/orders/v2/errors/#DUPLICATE_INVOICE_ID",
+        "rel": "information_link",
+        "method": "GET"
+      }
+    ]
+  }
+}

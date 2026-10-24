@@ -17,10 +17,23 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from . import credit
-from .models import BillingPayment, CreditGrant, SavedPaymentMethod, Subscription
+from .models import (
+    BillingPayment,
+    BillingRefund,
+    CreditGrant,
+    SavedPaymentMethod,
+    Subscription,
+)
 from .money import billing_currency, covers
 from .pricing import price_for
-from .providers import FAILED, PENDING, REQUIRES_ACTION, SUCCEEDED, ProviderResult
+from .providers import (
+    FAILED,
+    PENDING,
+    REFUNDED,
+    REQUIRES_ACTION,
+    SUCCEEDED,
+    ProviderResult,
+)
 from .services import activate_subscription, unused_value
 
 logger = logging.getLogger(__name__)
@@ -31,6 +44,11 @@ CHARGING = "charging"
 ZERO = Decimal("0.00")
 # A checkout nobody finished gives its credit back after this long.
 ABANDON_AFTER = timedelta(hours=24)
+
+
+class UnresolvedPayment(Exception):
+    """The account has a charge whose outcome isn't known yet; another payment for the same
+    period could charge the customer twice."""
 
 
 def create_payment(
@@ -54,6 +72,8 @@ def create_payment(
         existing = BillingPayment.objects.filter(reference=reference).first()
         if existing is not None:
             return existing
+    if purpose == BillingPayment.CHECKOUT and has_unresolved(account):
+        raise UnresolvedPayment()
     try:
         return _create_payment(
             account, plan, billing_period, provider, purpose, reference
@@ -119,23 +139,37 @@ def _grant_unused_excess(payment) -> None:
 
 def claim_for_charge(payment) -> bool:
     """Mark a pending payment as being charged. Exactly one caller gets True, so overlapping
-    renewal runs can never charge the same saved card twice for one payment."""
+    renewal runs can never charge the same saved card twice for one payment. From here on the
+    charge counts as sent (``charge_started_at``), so it is looked up, never sent again."""
+    now = timezone.now()
     return bool(
         BillingPayment.objects.filter(
             pk=payment.pk, status=BillingPayment.PENDING, provider_ref=""
-        ).update(provider_ref=CHARGING, updated_at=timezone.now())
+        ).update(provider_ref=CHARGING, charge_started_at=now, updated_at=now)
     )
+
+
+def mark_charge_started(payment) -> None:
+    """A provider is about to move money for ``payment`` (e.g. capture an approved order). If
+    we never hear back, abandon_stale reconciles it instead of giving it up."""
+    if payment.charge_started_at is None:
+        now = timezone.now()
+        BillingPayment.objects.filter(
+            pk=payment.pk, charge_started_at__isnull=True
+        ).update(charge_started_at=now)
+        payment.charge_started_at = now
 
 
 def abandon_open_checkouts(account) -> None:
     """Give back the credit held by checkouts the customer started but didn't finish, before they
-    start another one. Bank transfers awaiting review are kept."""
+    start another one. Bank transfers awaiting review, and payments whose outcome isn't known
+    (UNRESOLVED), are kept."""
     for payment in BillingPayment.objects.filter(
         account=account,
         purpose=BillingPayment.CHECKOUT,
         status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
         manual_requests__isnull=True,
-    ):
+    ).exclude(resolution=BillingPayment.UNRESOLVED):
         _abandon(payment)
 
 
@@ -146,6 +180,12 @@ def abandon_stale() -> int:
     confirmed is treated as unpaid, so the subscription goes past due (and through grace to
     expiry) instead of staying active on a period that has ended. If the provider confirms it
     later, record_result still honours it.
+
+    A payment whose money was actually sent for (``charge_started_at``: a renewal charge, or a
+    PayPal capture) is first looked up with a provider that can ``reconcile``. If that can't
+    tell, it is marked UNRESOLVED rather than given up: giving it up would let the customer pay
+    the same period again while the first charge may have gone through. UNRESOLVED payments are
+    looked up again on every run until they settle.
     """
     cutoff = timezone.now() - ABANDON_AFTER
     open_statuses = [BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION]
@@ -156,6 +196,10 @@ def abandon_stale() -> int:
         created_at__lt=cutoff,
         manual_requests__isnull=True,
     ):
+        if payment.charge_started_at is not None and _reconcile(payment):
+            continue
+        if payment.resolution == BillingPayment.UNRESOLVED:
+            continue  # only a confirmed outcome or an operator settles it
         _abandon(payment)
         count += 1
     for payment in BillingPayment.objects.filter(
@@ -163,9 +207,75 @@ def abandon_stale() -> int:
         status=BillingPayment.PENDING,
         updated_at__lt=cutoff,
     ):
+        if payment.charge_started_at is not None and _reconcile(payment):
+            continue
+        if payment.resolution == BillingPayment.UNRESOLVED:
+            continue
         fail(payment, "The provider never confirmed the renewal charge")
         count += 1
     return count
+
+
+def _reconcile(payment) -> bool:
+    """Ask the provider what happened to a charge it was sent. True when the payment was dealt
+    with here (settled, or marked UNRESOLVED) and must not be given up. False when the provider
+    can't look charges up, so the old behaviour (give up after a day) applies."""
+    from .providers import ProviderError, registry
+
+    provider = registry.get(payment.provider)
+    if provider is None or not provider.can_reconcile:
+        return False
+    try:
+        result = provider.reconcile(payment)
+    except ProviderError as exc:
+        logger.warning(
+            "reconcile: %s %s failed: %s", payment.provider, payment.reference, exc
+        )
+        result = None
+    if result is not None and result.status != PENDING:
+        record_result(provider.code, result)
+        return True
+    mark_unresolved(payment)
+    return True
+
+
+@transaction.atomic
+def mark_unresolved(payment) -> None:
+    """Nobody can yet say whether this charge went through. It won't be charged again, the
+    account can't start another checkout, and a renewal's subscription goes past due (grace and
+    dunning apply). Marking an already-UNRESOLVED payment again changes nothing."""
+    payment = BillingPayment.objects.select_for_update().get(pk=payment.pk)
+    if payment.status not in (BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION):
+        return
+    if payment.resolution == BillingPayment.UNRESOLVED:
+        return
+    payment.resolution = BillingPayment.UNRESOLVED
+    payment.save(update_fields=["resolution", "updated_at"])
+    if payment.purpose == BillingPayment.RENEWAL:
+        mark_past_due(payment.account, payment=payment)
+    from apps.core import audit
+
+    logger.error(
+        "payment %s (%s): charge outcome unknown; needs an operator",
+        payment.reference,
+        payment.provider,
+    )
+    audit.system(
+        "billing.unresolved",
+        account=payment.account,
+        target=payment.reference,
+        provider=payment.provider,
+        amount=str(payment.amount_due),
+        currency=payment.currency,
+    )
+
+
+def has_unresolved(account) -> bool:
+    return BillingPayment.objects.filter(
+        account=account,
+        status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
+        resolution=BillingPayment.UNRESOLVED,
+    ).exists()
 
 
 @transaction.atomic
@@ -180,6 +290,8 @@ def _abandon(payment) -> None:
 
 def record_result(provider_code: str, result: ProviderResult) -> BillingPayment | None:
     """Apply what ``provider_code`` reports about one of our payments. Idempotent."""
+    if result.status == REFUNDED:
+        return record_refund(provider_code, result)
     with transaction.atomic():
         payment = (
             BillingPayment.objects.select_for_update()
@@ -201,6 +313,19 @@ def record_result(provider_code: str, result: ProviderResult) -> BillingPayment 
             payment.provider_ref = result.provider_ref[:255]
         if result.raw:
             payment.raw = result.raw
+        if (
+            result.status in (SUCCEEDED, FAILED, REQUIRES_ACTION)
+            and payment.resolution == BillingPayment.UNRESOLVED
+        ):
+            payment.resolution = ""
+            from apps.core import audit
+
+            audit.system(
+                "billing.resolved",
+                account=payment.account,
+                target=payment.reference,
+                status=result.status,
+            )
 
         if result.status == SUCCEEDED:
             if not covers(
@@ -245,6 +370,9 @@ def _succeed(payment, provider_code, result) -> None:
     payment.failure_reason = ""
     payment.paid_at = timezone.now()
     payment.save()
+    if payment.refunds.exists():
+        # A refund arrived before the payment was confirmed; it counts now.
+        _refresh_refund_totals(payment)
     if was_given_up and payment.credit_applied:
         # Its credit went back when it was given up; the customer paid the reduced amount, so
         # take the credit again. If it has since been spent the payment is still honoured.
@@ -265,6 +393,105 @@ def _succeed(payment, provider_code, result) -> None:
         provider_code,
         billing_period=payment.billing_period,
     )
+
+
+def record_refund(provider_code: str, result: ProviderResult) -> BillingPayment | None:
+    """Record one refund, reversal or chargeback of a payment. Idempotent on ``refund_id``.
+
+    The payment keeps its status (a later replay of the original success must still find it
+    granted) and access is left alone: the operator decides what a refund means for the
+    subscription. ``refund_state`` is full only once the refunds add up to what was paid."""
+    if not result.refund_id or result.refund_amount is None:
+        logger.error(
+            "record_refund: %s refund for %s has no id or amount",
+            provider_code,
+            result.reference,
+        )
+        return None
+    with transaction.atomic():
+        payment = (
+            BillingPayment.objects.select_for_update()
+            .select_related("account")
+            .filter(reference=result.reference, provider=provider_code)
+            .first()
+        )
+        if payment is None:
+            logger.warning(
+                "record_refund: no %s payment with reference=%s",
+                provider_code,
+                result.reference,
+            )
+            return None
+        currency = (result.currency or payment.currency).upper()
+        _, created = BillingRefund.objects.get_or_create(
+            provider=provider_code,
+            provider_refund_id=result.refund_id[:255],
+            defaults={
+                "payment": payment,
+                "kind": result.refund_kind,
+                "amount": result.refund_amount,
+                "currency": currency,
+                "raw": result.raw or {},
+            },
+        )
+        if not created:
+            return payment
+        if payment.status != BillingPayment.SUCCEEDED or currency != payment.currency:
+            # Kept as a record, but it only counts once the payment is paid (and only in the
+            # payment's currency): _succeed recomputes the totals when it is.
+            logger.error(
+                "record_refund: %s %s %s for payment=%s (status=%s, %s)",
+                result.refund_kind,
+                result.refund_amount,
+                currency,
+                payment.reference,
+                payment.status,
+                payment.currency,
+            )
+        _refresh_refund_totals(payment)
+
+        from apps.core import audit
+
+        audit.system(
+            f"billing.{result.refund_kind}",
+            account=payment.account,
+            target=payment.reference,
+            provider=provider_code,
+            refund_id=result.refund_id,
+            amount=str(result.refund_amount),
+            currency=currency,
+            refunded_total=str(payment.refunded_amount),
+            refund_state=payment.refund_state,
+        )
+        logger.warning(
+            "payment %s: %s of %s %s (total refunded %s); operator to decide on access",
+            payment.reference,
+            result.refund_kind,
+            result.refund_amount,
+            currency,
+            payment.refunded_amount,
+        )
+    return payment
+
+
+def _refresh_refund_totals(payment) -> None:
+    """refunded_amount / refund_state from the BillingRefund rows. Nothing counts until the
+    payment is paid, and only refunds in the payment's currency are added up."""
+    total = ZERO
+    if payment.status == BillingPayment.SUCCEEDED:
+        total = sum(
+            (r.amount for r in payment.refunds.filter(currency=payment.currency)), ZERO
+        )
+    if total <= 0:
+        state = BillingPayment.REFUND_NONE
+    elif total >= payment.amount_due:
+        state = BillingPayment.REFUND_FULL
+    else:
+        state = BillingPayment.REFUND_PARTIAL
+    if (payment.refunded_amount, payment.refund_state) != (total, state):
+        payment.refunded_amount = total
+        payment.refund_state = state
+        payment.save(update_fields=["refunded_amount", "refund_state", "updated_at"])
 
 
 @transaction.atomic
@@ -310,6 +537,10 @@ def save_method(account, provider_code, data) -> SavedPaymentMethod:
         "brand": (data.brand or "")[:30],
         "last4": (data.last4 or "")[-4:],
         "expiry": (data.expiry or "")[:7],
+        "label": (data.label or "")[:120],
+        "provider_account": (data.provider_account or _merchant_key(provider_code))[
+            :120
+        ],
         "is_default": True,
     }
     method, created = SavedPaymentMethod.objects.get_or_create(
@@ -328,9 +559,18 @@ def save_method(account, provider_code, data) -> SavedPaymentMethod:
     return method
 
 
+def _merchant_key(provider_code) -> str:
+    from .providers import registry
+
+    provider = registry.get(provider_code)
+    return provider.account_key() if provider else ""
+
+
 def default_method(account, provider_code) -> SavedPaymentMethod | None:
-    return (
-        SavedPaymentMethod.objects.filter(account=account, provider=provider_code)
-        .order_by("-is_default", "-created_at")
-        .first()
-    )
+    """The method to charge, never one saved under a different merchant account than the
+    provider's current one (when the provider tells them apart)."""
+    methods = SavedPaymentMethod.objects.filter(account=account, provider=provider_code)
+    key = _merchant_key(provider_code)
+    if key:
+        methods = methods.filter(provider_account=key)
+    return methods.order_by("-is_default", "-created_at").first()

@@ -1,0 +1,1646 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f5986785a8fd7"
+  },
+  "body": {
+    "event_types": [
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.CAPABILITY-UPDATED",
+        "description": "The webhook event that is triggered when a change in an account capability.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.REQUIREMENTS-UPDATED",
+        "description": "Requirements were updated on customer account.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.STAKEHOLDERS.CREATED",
+        "description": "The webhook event that is triggered when a stakeholder for the customer account was created.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.STAKEHOLDERS.REMOVED",
+        "description": "The webhook event that is triggered when a stakeholder for the customer account was removed.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.STAKEHOLDERS.UPDATED",
+        "description": "The webhook event that is triggered when a stakeholder for the customer account was updated.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.DISPUTE.CREATED",
+        "description": "A customer dispute is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.DISPUTE.RESOLVED",
+        "description": "A customer dispute is resolved.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.DISPUTE.UPDATED",
+        "description": "A customer dispute is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.FUNDS-RESERVE.RELEASED",
+        "description": "This event is triggered when a reserved amount is released for a merchant.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.ACTIVATED",
+        "description": "A billing plan is activated.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.CREATED",
+        "description": "A billing plan is created.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.DEACTIVATED",
+        "description": "A billing plan is deactivated.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.PRICING-CHANGE.ACTIVATED",
+        "description": "A billing plan pricing change is activated.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.PRICING-CHANGE.INPROGRESS",
+        "description": "A billing plan pricing change is being processed.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.PLAN.UPDATED",
+        "description": "A billing plan is updated.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SMART-DUNNING.RETRY-NOW",
+        "description": "The webhook event that is triggered when PayPal recommends retrying collection for a failed billing transaction.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.ACTIVATED",
+        "description": "A billing agreement is activated.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.CANCELLED",
+        "description": "A billing agreement is canceled.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.CREATED",
+        "description": "A billing agreement is created.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.EXPIRED",
+        "description": "A billing agreement is expired.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.PAYMENT.FAILED",
+        "description": "Subscription payment failure will trigger this webhook event.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.RE-ACTIVATED",
+        "description": "A billing agreement is re-activated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.RENEWED",
+        "description": "A billing agreement is renewed.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.SUSPENDED",
+        "description": "A billing agreement is suspended.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "BILLING.SUBSCRIPTION.UPDATED",
+        "description": "A billing agreement is updated.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CATALOG.PRODUCT.CREATED",
+        "description": "Product created",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CATALOG.PRODUCT.UPDATED",
+        "description": "Product updated",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.CHECKOUT.BUYER-APPROVED",
+        "description": "Express checkout payment is created and approved by buyer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.ORDER.APPROVED",
+        "description": "An order has been approved by buyer.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.ORDER.COMPLETED",
+        "description": "Webhook event emitted after all the purchase_units have been processed",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.ORDER.DECLINED",
+        "description": "The webhook event that is triggered when the transaction processing has failed due to Risk Carding Fraud Filter preference set by the merchants.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.ORDER.SAVED",
+        "description": "This event is triggered as AS2 Order is saved.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.ORDER.VOIDED",
+        "description": "This event is triggered as AS2 Order is voided.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.PAYMENT-RESOURCE.CREATED",
+        "description": "The webhook event that is triggered after a checkout payment resource was created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.PAYMENT-RESOURCE.DELETED",
+        "description": "The webhook event that is triggered after a checkout payment resource was deleted.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.PAYMENT-RESOURCE.PAYMENT-COMPLETED",
+        "description": "The webhook event that is triggered after a payment is completed for a checkout payment resource.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.PAYMENT-RESOURCE.PAYMENT-ON-HOLD",
+        "description": "The webhook event that is triggered when a payment for a checkout payment resource is placed on hold.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.SUBSCRIPTION.TRAIL.ENDED",
+        "description": "Webhook event that is triggered when a subscription trial period ends for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.SUBSCRIPTION.UPDATED",
+        "description": "Webhook event that is triggered when a subscription is updated for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.CAPABILITY-UPDATED",
+        "description": "This event is triggered as a notification for capability change.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.PRODUCT-SUBSCRIPTION-UPDATED",
+        "description": "This event is triggered as a notification for production subscription status change.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-ALREADY-INTEGRATED",
+        "description": "This event is triggered as a notification for when seller goes through ISU flow but is already fully integrated with partner.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-CONSENT-GRANTED",
+        "description": "This event is triggered as a notification for when seller grants the requested consents to partner.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-EMAIL-CONFIRMED",
+        "description": "This event is triggered as a notification for when seller confirms email.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-ERROR-BAD-REQUEST",
+        "description": "This event is triggered as flow starts by merchant",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-ERROR-INTERNAL-SERVER-ERROR",
+        "description": "This event is triggered as flow starts by merchant",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-ONBOARDING-INITIATED",
+        "description": "This event is triggered as a notification for when seller starts to create an account through partner flow.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-INTEGRATION.SELLER-ONBOARDING-STARTED",
+        "description": "This event is triggered as flow starts by merchant",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-MIGRATION.BILLING-AGREEMENT-MIGRATION.ACCEPTED",
+        "description": "This event is triggered as notification when billing agreement migration is accepted.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CHECKOUT.PAYMENT-RESOURCE.UPDATED",
+        "description": "The webhook event that is triggered after a checkout payment resource was updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COLLECTION.ACTIVITY.EXECUTED",
+        "description": "The webhook event that is triggered when an activity ( notification or placement ) happens on a delinquency",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.ORDER.APPROVAL-FAILED",
+        "description": "Checkout order approval failed using approval token.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.ORDER.APPROVED",
+        "description": "Checkout order approved using approval token.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.ORDER.COMPLETED",
+        "description": "Checkout order completed using approval token.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.PAYMENT-CAPTURE.COMPLETED",
+        "description": "The webhook event that is triggered when an approval-token-backed payment capture completes.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.SHIPMENT.DELIVERED",
+        "description": "The webhook event that is triggered when an approval-token-backed shipment reaches DELIVERED status.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.APPROVAL-TOKEN.SHIPMENT.SHIPPED",
+        "description": "The webhook event that is triggered when an approval-token-backed shipment reaches SHIPPED status.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMMERCE.BILLING.SUBSCRIPTION.TERMINATED",
+        "description": "Webhook event that is triggered when a subscription is terminated for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.INSTRUMENT.UPDATED",
+        "description": "This event is triggered when a instrument attributes is updated.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.NON-REFERENCED-CREDIT.COMPLETED",
+        "description": "Webhook event that is triggered when a non-referenced-credit is successfully completed.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.NON-REFERENCED-CREDIT.FAILED",
+        "description": "Webhook event that is triggered when a non-referenced-credit fails.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.ORDER.CANCELLED",
+        "description": "A payment order is canceled.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.ORDER.CREATED",
+        "description": "A payment order is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.BLOCKED",
+        "description": "A payouts item was blocked.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.CANCELED",
+        "description": "A payouts item is canceled.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.FAILED",
+        "description": "A payouts item fails.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.HELD",
+        "description": "A payouts item is held.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.REFUNDED",
+        "description": "A payouts item is refunded.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.RETURNED",
+        "description": "A payouts item is returned.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.SUCCEEDED",
+        "description": "A payouts item succeeds.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTS-ITEM.UNCLAIMED",
+        "description": "A payouts item is unclaimed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTSBATCH.DENIED",
+        "description": "A batch payout payment is denied.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTSBATCH.PROCESSING",
+        "description": "The state of a batch payout payment changes to processing.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.PAYOUTSBATCH.SUCCESS",
+        "description": "A batch payout payment completes successfully.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.REFUND.CANCELLED",
+        "description": "This event is triggered when a refund is cancelled.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.REFUND.COMPLETED",
+        "description": "This event is triggered when merchant does non referenced credit.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.REFUND.DENIED",
+        "description": "This event is triggered when a refund is denied.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.REFUND.FAILED",
+        "description": "This event is triggered when a refund is failed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.REFUND.PENDING",
+        "description": "This event is triggered when a refund is pending.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.SALE.COMPLETED",
+        "description": "A sale completes.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.PAYMENT.CREATED",
+        "description": "Checkout payment is created and approved by buyer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT_NETWORKS.INSTRUMENT.LINKED-ACCOUNT-FAILED",
+        "description": "This event is triggered when link instrument to the account has failed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT_NETWORKS.INSTRUMENT.LINKED-ACCOUNT-UPDATED",
+        "description": "Webhook event emitted after an instrument was successfully added from the banking partner..",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PRICING.COMMISSION-CONFIG.CREATED",
+        "description": "This event is triggered when a new zettle pricing configuration is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PRICING.COMMISSION-CONFIG.PROVISIONED",
+        "description": "This event is triggered when a PriceConfig is assigned to an organization.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PRICING.COMMISSION-CONFIG.UPDATED",
+        "description": "This event is triggered when there is an update to the existing price category.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "REPORTING.REPORT.AVAILABLE",
+        "description": "The webhook event that is triggered after a report is available.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "RISK.DISPUTE.CREATED",
+        "description": "A risk dispute is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "DEPRECATED"
+      },
+      {
+        "name": "TAXES.REPORTS.DELIVERED",
+        "description": "This event is triggered when report delivery is completed",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "TAXES.REPORTS.GENERATED",
+        "description": "This event is triggered when report generation completed",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.CREDIT-NOTE.CREATED",
+        "description": "Webhook event that is triggered when a credit note is created for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.CREDIT-NOTE.REFUND.FAILED",
+        "description": "Webhook event that is triggered when a refund for a credit note fails.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.INVOICE.CREATED",
+        "description": "Webhook event that is triggered when an invoice is created for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.INVOICE.PAYMENT.FAILED",
+        "description": "Webhook event that is triggered when an invoice payment fails for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.INVOICE.PAYMENT.OVERDUE",
+        "description": "Webhook event that is triggered when an invoice payment is overdue for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.INVOICE.PAYMENT.SUCCEEDED",
+        "description": "Webhook event that is triggered when an invoice payment succeeds for a customer.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.SUBSCRIPTION-ALERT.TRIGGERED",
+        "description": "An event that represents a new alert was triggered.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.CREDIT-CARD.CREATED",
+        "description": "A credit card is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.CREDIT-CARD.DELETED",
+        "description": "A credit card is deleted.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.CREDIT-CARD.UPDATED",
+        "description": "A credit card is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.PAYMENT-TOKEN.CREATED",
+        "description": "This webhook is triggered after a Payment Token has been created.",
+        "resource_versions": [
+          "1.0",
+          "2.0",
+          "3.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.PAYMENT-TOKEN.DELETED",
+        "description": "This webhook is triggered on successful deletion of a payment token.",
+        "resource_versions": [
+          "1.0",
+          "2.0",
+          "3.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.PAYMENT-TOKEN.DELETION-INITIATED",
+        "description": "This webhook is triggered when the deletion of payment method token is initiated. This is currently triggered for PayPal use cases.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "VAULT.PAYMENT-TOKEN.UPDATED",
+        "description": "The webhook is triggered on successful update of a payment source for a given payment token ID.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET-TRANSACTION.CREATED",
+        "description": "Webhook event that is triggered when the wallet transaction is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET-TRANSACTION.UPDATED",
+        "description": "Webhook event that is triggered when the wallet transaction is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET.CREATED",
+        "description": "Webhook event that is triggered when the wallet for prepaid credit is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET.NET-BALANCE-DEPLETED",
+        "description": "Webhook event that is triggered when the wallet net balance is negative or equal to 0.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET.TERMINATED",
+        "description": "Webhook event that is triggered when the wallet is terminated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "USAGE-BILLING.WALLET.UPDATED",
+        "description": "Webhook event that is triggered when the wallet for prepaid credit is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-NETWORKS.ALTERNATIVE-PAYMENT.COMPLETED",
+        "description": "Webhook event payload to send for Alternative Payment Completion.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.BATCH-REQUEST.STATUS-CHANGED",
+        "description": "Webhook event resource emitted after bulk tokenization batch processing status changes.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.ENROLLMENT.CREATED",
+        "description": "Webhook event that is triggered when the enrollment is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.METADATA.CHANGED",
+        "description": "The Payment tokenization metadata has been changed",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.PAYMENT-CREDENTIAL.CREATED",
+        "description": "Webhook event that is triggered when the payment credential for an enrollment is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.PAYMENT-CREDENTIAL.UPDATED",
+        "description": "The Payment tokenization payment credential has been updated",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.TOKEN-REQUESTOR.UPDATED",
+        "description": "Webhook event resource emitted when token requestor record is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.TOKEN-STATUS.CHANGED",
+        "description": "The Payment tokenization token status has been changed",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT-TOKENIZATION.TRANSACTION.CREATED",
+        "description": "The Payment tokenization transaction has been created",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.AUTHORIZATION.CREATED",
+        "description": "A payment authorization is created, approved, executed, or a future payment authorization is created.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.AUTHORIZATION.VOIDED",
+        "description": "A payment authorization is voided.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.COMPLETED",
+        "description": "A payment capture completes.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.DECLINED",
+        "description": "This event is triggered when a payment capture is declined.",
+        "resource_versions": [
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.DENIED",
+        "description": "A payment capture is denied.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.PENDING",
+        "description": "The state of a payment capture changes to pending.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.REFUNDED",
+        "description": "A merchant refunds a payment capture.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.CAPTURE.REVERSED",
+        "description": "PayPal reverses a payment capture.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.INSTRUMENT.REPLACED",
+        "description": "This event is triggered when a instrument replaced with another instrument.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-MIGRATION.BILLING-AGREEMENT-MIGRATION.COMPLETED",
+        "description": "This event is triggered as notification when billing agreement migration request is completed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-MIGRATION.BILLING-AGREEMENT-MIGRATION.FAILED",
+        "description": "This event is triggered as notification when billing agreement migration request is failed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-MIGRATION.BILLING-AGREEMENT-MIGRATION.IN-PROGRESS",
+        "description": "This event is triggered as notification when billing agreement migration request is in-progress.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.NEGATIVE-BALANCE.ACTIVE",
+        "description": "The event is triggered to indicate latest negative balances.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.NEGATIVE-BALANCE.CLEARED",
+        "description": "This event is triggered when the negative balance gets cleared.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.NEGATIVE-BALANCE.CREATED",
+        "description": "This event is triggered when the account goes negative.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.NEGATIVE-BALANCE.RECOUPMENT-COMPLETED",
+        "description": "This event is triggered when the recoupment transaction is completed to recover negative balance.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.NEGATIVE-BALANCE.REVERSE-RECOUPMENT-COMPLETED",
+        "description": "This event is triggered when the reverse recoupment transaction is completed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PARTNER-BALANCE.CHANGED",
+        "description": "Webhook event emitted when there is a change in the balance of a partner account.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PARTNER-FINANCIAL-ACCOUNT.DEBITED",
+        "description": "This event is triggered for partner account debit.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PAYOUT.COMPLETED",
+        "description": "The webhook event payload for the `CUSTOMER.PAYOUT.COMPLETED` event.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PAYOUT.FAILED",
+        "description": "The webhook event payload for the `CUSTOMER.PAYOUTS.FAILED` event.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PAYPAL-ACCOUNT.CHANGED",
+        "description": "This a coarse grained webhook event, triggered by a change (update/remove/add) in one or more attributes of a Paypal account.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.PROFILE.ACCOUNT-CLOSED",
+        "description": "The webhook event that is triggered when account is closed",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.USER-PROFILE.PASSWORD-CHANGED",
+        "description": "The webhook event that is triggered as a result of a password change",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.VALUE-ADDED-SERVICES.CANCELED",
+        "description": "This event is triggered when VAS services for merchant partners change to CANCELED status.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.VALUE-ADDED-SERVICES.ENROLLED",
+        "description": "This event is triggered when VAS services for merchant partners change to ENROLLED status.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.VALUE-ADDED-SERVICES.SUSPENDED",
+        "description": "This event is triggered when VAS services for merchant partners change to SUSPENDED status.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "IDENTITY.AUTHORIZATION-CONSENT.GRANTED",
+        "description": "Webhook event that is triggered When end user grants permissions to third party applications",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "AGGREGATED.TAXES.REPORTABLE.ACCOUNTS.READY",
+        "description": "Aggregated tax reportable accounts are ready for partner review and modification",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "AGGREGATED.TAXES.REPORTS.CORRECTION",
+        "description": "Corrected tax reports are now available for download and review",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "AGGREGATED.TAXES.REPORTS.FILED",
+        "description": "Tax reports have been successfully filed with the IRS",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "AGGREGATED.TAXES.REPORTS.GENERATED",
+        "description": "Tax reports are now available for download and review",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "AGGREGATED.TAXES.TIN.VERIFICATION.RESULTS",
+        "description": "Aggregated TIN Verification data is ready for review",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.FUNDS-RESERVE.WITHHELD",
+        "description": "This event is triggered when a percentage of merchant fund is reserved with partner for a certain amount of time.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.GRANTOR-PERMISSION.CHANGED",
+        "description": "This is a coarse grained webhook event, triggered by a change in any of customer permission attribute.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.ACCOUNT-CREATED",
+        "description": "The webhook event that is triggered when the non-loginable account have been created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.ACCOUNT-LIMIT-APPROACHED",
+        "description": "The webhook event that is triggered when a partner set threshold limit percentage is reached.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.ACCOUNT-PROACTIVE-NOTIFICATION",
+        "description": "Proactive feature notification for your account",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.ACCOUNT-STATUS-CHANGED",
+        "description": "Webhook notification payload for account state changes for Capabilities and Processes",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.ACCOUNT-UPDATED",
+        "description": "The webhook event that is triggered when the non-loginable account is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.CONFIGURATIONS-UPDATED",
+        "description": "The webhook event that is triggered when the non-loginable account configurations are created, modified or removed.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.CREATED",
+        "description": "Webhook event emitted after the non-loginable account have been created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.RISK-ASSESSED",
+        "description": "Webhook event emitted after the account has been risk assessed or the risk assessment of the account has been changed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MANAGED-ACCOUNT.UPDATED",
+        "description": "Webhook event emitted after the non-loginable account have been updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.MERCHANT-BALANCE.CHANGED",
+        "description": "The webhook event that is triggered on any pay-in/pay-out transaction that results in change to available balances for the merchant.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "IDENTITY.AUTHORIZATION-CONSENT.REVOKED",
+        "description": "User consents for merchant were revoked.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.AUTOMATIC-REMINDER-SENT",
+        "description": "This event is triggered when an automatic reminder is sent for an invoice based on the configured reminder schedule.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.CANCELLED",
+        "description": "A merchant or customer cancels an invoice.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.CREATED",
+        "description": "An invoice is created.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.PAID",
+        "description": "An invoice is paid, partially paid, or payment is made and is pending.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.REFUNDED",
+        "description": "An invoice is refunded or partially refunded.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.SCHEDULED",
+        "description": "An invoice is scheduled.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.SENT",
+        "description": "The webhook event that is triggered when an invoice is sent.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.UNPAID",
+        "description": "The webhook event that is triggered when an invoice is shared / marked as unpaid.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.INVOICE.UPDATED",
+        "description": "An invoice is updated.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "INVOICING.RECURRING-INVOICES.EXPIRED",
+        "description": "The webhook event that is triggered when the recurring invoices series expired.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "LOYALTY.REWARDS-PAYOUT.COMPLETED",
+        "description": "This event is triggered as notification of loyalty reward payout to user.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "MERCHANT.ONBOARDING.COMPLETED",
+        "description": "A merchant completes setup.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "MERCHANT.PARTNER-CONSENT.REVOKED",
+        "description": "The consents for a merchant account setup are revoked or an account is closed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.SALE.DENIED",
+        "description": "The state of a sale changes from pending to denied.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.SALE.PENDING",
+        "description": "The state of a sale changes to pending.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.SALE.REFUNDED",
+        "description": "A merchant refunds a sale.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.SALE.REVERSED",
+        "description": "PayPal reverses a sale.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.VERIFICATION.FAILED",
+        "description": "The webhook event that is triggered indicates that Payment verification has failed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENT.VERIFICATION.VERIFIED",
+        "description": "The webhook event that is triggered indicates that Payment verification has verified.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.CANCELED",
+        "description": "The webhook event is triggered when a payout has been canceled.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.COMPLETED",
+        "description": "The webhook event is triggered when the reserved payout is sent to bank for settlement.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.CREATED",
+        "description": "The webhook event is triggered when a payout is watermarked and reserved.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.FAILED",
+        "description": "The webhook event is triggered when a payout has been failed to transfer to merchants bank account",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.PENDING",
+        "description": "The webhook event is triggered when a payout is on hold due to risk/compliance rules.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "PAYMENTS.CUSTOMER-PAYOUTS.REVERSED",
+        "description": "The webhook event is triggered when a payout swept back to available balance after 3 retries or expiry of 30 day grace period.",
+        "resource_versions": [
+          "1.0",
+          "2.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.AGENT-ACTION-INITIATED",
+        "description": "The webhook event that is triggered when process state is changed to Manual Review.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.COMPLETED",
+        "description": "The webhook event that is triggered when process status is Completed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.END-USER-ACTION-REQUIRED",
+        "description": "The webhook event that is triggered when process status is Need More Data.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.EXEMPTED",
+        "description": "The webhook event that is triggered when process status is Exempted.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.FAILED",
+        "description": "The webhook event that is triggered when process status is Failed.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.NOT-APPLIED",
+        "description": "The webhook event that is triggered when process status is Not Applicable.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "COMPLIANCE.PROCESS.SYSTEM-ACTION-INITIATED",
+        "description": "The webhook event that is triggered when process status is Pending System Processing.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER-SUPPORT.CHARGEBACK.DECISION-RESPONDED",
+        "description": "This event is triggered as response notification for a chargeback.",
+        "resource_versions": [
+          "1.0"
+        ],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.ACCOUNT-CREATED",
+        "description": "The webhook event that is triggered when the non-loginable account have been created.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.ACCOUNT-LIMITS",
+        "description": "The webhook event that is triggered when an account threshold limits is approached or breached.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.ACCOUNT-SETTINGS-UPDATED",
+        "description": "The webhook event that is triggered on payout updates and chnages to threshold limits.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.ACCOUNT-UPDATED",
+        "description": "The webhook event that is triggered when the non-loginable account have been created.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.BANK-ACCOUNTS.CREATED",
+        "description": "The webhook event that is triggered when a new bank account is added to a hybrid path account.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.BANK-ACCOUNTS.REMOVED",
+        "description": "The webhook event that is triggered when a bank account for a hybrid path account is removed.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      },
+      {
+        "name": "CUSTOMER.ACCOUNT-ENTITIES.BANK-ACCOUNTS.UPDATED",
+        "description": "The webhook event that is triggered when a bank account for a hybrid path account is updated.",
+        "resource_versions": [],
+        "status": "ENABLED"
+      }
+    ]
+  }
+}

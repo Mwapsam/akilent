@@ -580,6 +580,27 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "USD")
 
+# --- PayPal ---
+# Orders v2 checkout; renewals go out as a pay link (saving PayPal wallets needs a US merchant
+# account). See docs/billing/paypal/CONTRACT.md.
+
+# "sandbox" or "live", never defaulted: an empty value leaves PayPal unconfigured, so production
+# can't drift into sandbox. Sandbox with DEBUG off (staging) also needs PAYPAL_ALLOW_SANDBOX.
+PAYPAL_ENV = (os.getenv("PAYPAL_ENV") or "").strip().lower()
+PAYPAL_ALLOW_SANDBOX = (os.getenv("PAYPAL_ALLOW_SANDBOX") or "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+PAYPAL_CLIENT_ID = (os.getenv("PAYPAL_CLIENT_ID") or "").strip()
+PAYPAL_CLIENT_SECRET = (os.getenv("PAYPAL_CLIENT_SECRET") or "").strip()
+PAYPAL_WEBHOOK_ID = (os.getenv("PAYPAL_WEBHOOK_ID") or "").strip()
+# The business account that must receive every payment (checked on each capture).
+PAYPAL_MERCHANT_ID = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
+PAYPAL_CURRENCIES = frozenset(
+    c.strip().upper() for c in (os.getenv("PAYPAL_CURRENCIES") or "USD").split(",") if c.strip()
+)
+
 # --- Billing ---
 # One currency for plan prices, credits and every payment provider. Falls back to the old
 # per-provider setting so an existing deployment keeps charging what it charged before.
@@ -594,6 +615,7 @@ BILLING_CURRENCY = (
 BILLING_PROVIDERS = [
     "apps.billing.providers.stripe.StripeProvider",
     "apps.billing.providers.flutterwave.FlutterwaveProvider",
+    "apps.billing.providers.paypal.PayPalProvider",
     "apps.billing.providers.manual.ManualProvider",
 ]
 # Days a renewal can stay unpaid (past due, features kept) before the subscription expires.

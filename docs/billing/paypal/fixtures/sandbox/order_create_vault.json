@@ -1,0 +1,25 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f769325f9344d"
+  },
+  "body": {
+    "id": "9CD35462JE6325649",
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {}
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/9CD35462JE6325649",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=9CD35462JE6325649",
+        "rel": "payer-action",
+        "method": "GET"
+      }
+    ]
+  }
+}

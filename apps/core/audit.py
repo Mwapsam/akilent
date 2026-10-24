@@ -91,15 +91,22 @@ LABELS = {
     "job.cancel": "Cancelled a scheduled job",
     "data.export_contacts": "Exported contacts",
     "data.delete_customer": "Deleted a customer's data",
+    "billing.refund": "The payment provider refunded a payment",
+    "billing.reversal": "The payment provider reversed a payment",
+    "billing.chargeback": "The customer charged back a payment",
+    "billing.unresolved": "A charge's outcome couldn't be confirmed",
+    "billing.resolved": "A charge's outcome was confirmed",
 }
 
 
 def audit(request, action: str, account=None, target: str = "", **detail) -> None:
+    """``request`` is None for something the platform did on its own (no actor)."""
     from apps.core.models import AdminAction
 
+    user = getattr(request, "user", None)
     try:
         AdminAction.objects.create(
-            actor=request.user if request.user.is_authenticated else None,
+            actor=user if user is not None and user.is_authenticated else None,
             account=account,
             action=action,
             target=str(target)[:200],
@@ -107,6 +114,12 @@ def audit(request, action: str, account=None, target: str = "", **detail) -> Non
         )
     except Exception:
         logger.exception("audit: couldn't record %s", action)
+
+
+def system(action: str, account=None, target: str = "", **detail) -> None:
+    """Something the platform did on its own that operators must be able to see later (a
+    provider refund, a charge whose outcome is unknown)."""
+    audit(None, action, account=account, target=target, **detail)
 
 
 def label(action: str) -> str:

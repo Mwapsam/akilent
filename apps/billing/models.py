@@ -309,6 +309,38 @@ class BillingPayment(models.Model):
     action_url = models.URLField(max_length=1000, blank=True, default="")
     raw = models.JSONField(default=dict, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+
+    # The provider-side operation behind this payment (e.g. a PayPal order id) and the idempotency
+    # key it was sent with. Kept so a charge whose outcome we never learned is looked up, not sent
+    # again (payments.abandon_stale -> PaymentProvider.reconcile).
+    provider_operation_id = models.CharField(max_length=255, blank=True, default="")
+    provider_request_id = models.CharField(max_length=100, blank=True, default="")
+    charge_started_at = models.DateTimeField(null=True, blank=True)
+    UNRESOLVED = "unresolved"
+    RESOLUTION_CHOICES = [("", "Known"), (UNRESOLVED, "Outcome not confirmed")]
+    # UNRESOLVED: the charge may or may not have gone through. It is never charged again and the
+    # account can't start another checkout until it's settled.
+    resolution = models.CharField(
+        max_length=12, choices=RESOLUTION_CHOICES, blank=True, default=""
+    )
+
+    # Refunds leave ``status`` SUCCEEDED (record_result relies on it to never grant twice); how
+    # much went back is tracked here, from the BillingRefund rows.
+    REFUND_NONE = "none"
+    REFUND_PARTIAL = "partial"
+    REFUND_FULL = "full"
+    REFUND_STATE_CHOICES = [
+        (REFUND_NONE, "Not refunded"),
+        (REFUND_PARTIAL, "Partly refunded"),
+        (REFUND_FULL, "Refunded"),
+    ]
+    refund_state = models.CharField(
+        max_length=8, choices=REFUND_STATE_CHOICES, default=REFUND_NONE
+    )
+    refunded_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -342,6 +374,11 @@ class SavedPaymentMethod(models.Model):
     brand = models.CharField(max_length=30, blank=True, default="")
     last4 = models.CharField(max_length=4, blank=True, default="")
     expiry = models.CharField(max_length=7, blank=True, default="")
+    # Shown instead of brand/last4 for methods that aren't cards ("PayPal · j***@x.com").
+    label = models.CharField(max_length=120, blank=True, default="")
+    # The merchant account the token was saved under (PaymentProvider.account_key); blank for
+    # providers that don't distinguish.
+    provider_account = models.CharField(max_length=120, blank=True, default="")
     is_default = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -350,6 +387,43 @@ class SavedPaymentMethod(models.Model):
 
     def __str__(self):
         return f"{self.provider} {self.brand} ending {self.last4}"
+
+
+class BillingRefund(models.Model):
+    """Money the provider sent back for a paid BillingPayment: one row per refund, reversal or
+    chargeback, so a partial refund is never mistaken for a full one."""
+
+    REFUND = "refund"
+    REVERSAL = "reversal"
+    CHARGEBACK = "chargeback"
+    KIND_CHOICES = [
+        (REFUND, "Refund"),
+        (REVERSAL, "Reversal"),
+        (CHARGEBACK, "Chargeback"),
+    ]
+
+    payment = models.ForeignKey(
+        BillingPayment, on_delete=models.CASCADE, related_name="refunds"
+    )
+    provider = models.CharField(max_length=30)
+    provider_refund_id = models.CharField(max_length=255)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=REFUND)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    raw = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_refund_id"],
+                name="billing_refund_unique_provider_id",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.kind} {self.amount} {self.currency} of {self.payment.reference}"
 
 
 class CreditGrant(models.Model):

@@ -1,0 +1,25 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f1272568e3eaf"
+  },
+  "body": {
+    "id": "67V252639R892800N",
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {}
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/67V252639R892800N",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=67V252639R892800N",
+        "rel": "payer-action",
+        "method": "GET"
+      }
+    ]
+  }
+}

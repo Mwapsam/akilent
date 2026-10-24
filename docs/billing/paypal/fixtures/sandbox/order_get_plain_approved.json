@@ -1,0 +1,44 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f706187d582de"
+  },
+  "body": {
+    "id": "67V252639R892800N",
+    "intent": "CAPTURE",
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {}
+    },
+    "purchase_units": [
+      {
+        "reference_id": "default",
+        "amount": {
+          "currency_code": "USD",
+          "value": "19.00",
+          "breakdown": {}
+        },
+        "payee": {
+          "email_address": "mwapsam@gmail.com",
+          "merchant_id": "CXZJKF9LDQBRY"
+        },
+        "description": "Akilent Starter (Monthly) - probe",
+        "custom_id": "probe_aa77aa1f512c",
+        "invoice_id": "probe_aa77aa1f512c"
+      }
+    ],
+    "create_time": "2026-10-24T04:20:27Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/67V252639R892800N",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=67V252639R892800N",
+        "rel": "payer-action",
+        "method": "GET"
+      }
+    ]
+  }
+}

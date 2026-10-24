@@ -1,0 +1,15 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f68532769a344"
+  },
+  "body": {
+    "event_types": [
+      {
+        "name": "*",
+        "description": "ALL",
+        "status": "ENABLED"
+      }
+    ]
+  }
+}

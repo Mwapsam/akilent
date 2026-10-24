@@ -1,0 +1,35 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f272641541e30"
+  },
+  "body": {
+    "id": "0J7268631P083911C",
+    "customer": {
+      "id": "OpZEypRkVz"
+    },
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {
+        "description": "Akilent subscription",
+        "usage_pattern": "RECURRING_PREPAID",
+        "usage_type": "MERCHANT",
+        "customer_type": "CONSUMER"
+      }
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v3/vault/setup-tokens/0J7268631P083911C",
+        "rel": "self",
+        "method": "GET",
+        "encType": "application/json"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/agreements/approve?approval_session_id=0J7268631P083911C",
+        "rel": "approve",
+        "method": "GET",
+        "encType": "application/json"
+      }
+    ]
+  }
+}

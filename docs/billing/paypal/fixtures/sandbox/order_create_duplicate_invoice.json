@@ -1,0 +1,25 @@
+{
+  "http_status": 200,
+  "headers": {
+    "paypal-debug-id": "f444658424be3"
+  },
+  "body": {
+    "id": "51D18074J08814532",
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {}
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/51D18074J08814532",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=51D18074J08814532",
+        "rel": "payer-action",
+        "method": "GET"
+      }
+    ]
+  }
+}

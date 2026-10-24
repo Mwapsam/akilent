@@ -24,6 +24,13 @@ SUCCEEDED = "succeeded"
 FAILED = "failed"
 PENDING = "pending"
 REQUIRES_ACTION = "requires_action"
+# Money went back to the customer after the payment succeeded (a refund, reversal or
+# chargeback). The payment stays paid; the refund is recorded beside it (payments.record_refund).
+REFUNDED = "refunded"
+
+REFUND = "refund"
+REVERSAL = "reversal"
+CHARGEBACK = "chargeback"
 
 
 class ProviderError(Exception):
@@ -41,11 +48,19 @@ class SavedMethodData:
     brand: str = ""
     last4: str = ""
     expiry: str = ""
+    # What the customer sees for a method that isn't a card, e.g. "PayPal · j***@x.com".
+    label: str = ""
+    # Which merchant account the token belongs to (PaymentProvider.account_key).
+    provider_account: str = ""
 
 
 @dataclass
 class ProviderResult:
-    """What a provider says happened to one of our payments. Amounts are in major units."""
+    """What a provider says happened to one of our payments. Amounts are in major units.
+
+    A ``REFUNDED`` result describes one refund of a paid payment: ``refund_id`` identifies it
+    (so a replay is recorded once), ``refund_amount`` is that refund alone, and
+    ``refund_kind`` is REFUND, REVERSAL or CHARGEBACK."""
 
     reference: str
     status: str
@@ -56,6 +71,9 @@ class ProviderResult:
     action_url: str = ""
     failure_reason: str = ""
     raw: dict = field(default_factory=dict)
+    refund_id: str = ""
+    refund_amount: Decimal | None = None
+    refund_kind: str = REFUND
 
 
 @dataclass
@@ -72,6 +90,8 @@ class ProviderEvent:
 class PaymentProvider(ABC):
     code: str = ""
     display_name: str = ""
+    # The checkout button for this provider.
+    checkout_label: str = "Pay by card"
     # Can the customer's method be saved at checkout and charged again without them?
     off_session_charge: bool = False
     # Can the operator make this the active provider (manual bank transfer can't take renewals
@@ -79,6 +99,9 @@ class PaymentProvider(ABC):
     selectable: bool = True
     # ISO codes this provider can charge; empty means any.
     supported_currencies: frozenset = frozenset()
+    # Can it look up a charge whose outcome we never learned (``reconcile``)? Without it, an
+    # unconfirmed payment is given up after a day, as before.
+    can_reconcile: bool = False
     # Does this provider receive webhooks at /billing/webhooks/<code>/?
     has_webhooks: bool = True
 
@@ -112,6 +135,17 @@ class PaymentProvider(ABC):
 
     def charge_saved_method(self, method, payment) -> ProviderResult:
         raise ProviderError(f"{self.display_name} can't charge a saved payment method")
+
+    def account_key(self) -> str:
+        """The merchant account saved methods belong to, e.g. "live:MERCHANTID". A method saved
+        under one key is never charged under another (switching sandbox to live, or to a
+        different merchant account). Empty means the provider doesn't distinguish."""
+        return ""
+
+    def reconcile(self, payment) -> ProviderResult | None:
+        """Find out what happened to a charge whose outcome we never learned (a timeout after
+        the request was sent). Must not start a new charge. None means still unknown."""
+        return None
 
     def cancel_legacy(self, subscription) -> SavedMethodData | None:
         """Stop a provider-side recurring subscription created before Akilent ran renewals

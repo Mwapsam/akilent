@@ -275,7 +275,7 @@ def checkout_options(account=None) -> list[dict]:
     options = []
     provider = registry.active()
     if provider is not None:
-        options.append({"code": provider.code, "name": "Pay by card"})
+        options.append({"code": provider.code, "name": provider.checkout_label})
     if registry.manual_enabled():
         manual = PaymentMethod.objects.filter(code="manual").first()
         options.append(
@@ -315,7 +315,15 @@ def checkout(request):
         return redirect("/billing/plans/")
 
     payments.abandon_open_checkouts(account)
-    payment = payments.create_payment(account, plan, period, provider=provider.code)
+    try:
+        payment = payments.create_payment(account, plan, period, provider=provider.code)
+    except payments.UnresolvedPayment:
+        messages.error(
+            request,
+            "We're still confirming your last payment with the payment provider, so you "
+            "can't pay again yet. Contact support if this hasn't cleared within a day.",
+        )
+        return redirect("/billing/plans/")
     if payment.status == BillingPayment.SUCCEEDED:
         messages.success(
             request,
