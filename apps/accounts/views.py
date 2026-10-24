@@ -395,8 +395,8 @@ def signup(request):
                         # WhatsApp" plan chosen while email is switched off still
                         # gets email setup (paused) and resumes it when email is back.
                         selected_services=(
-                            form.plan.service_type
-                            if form.plan
+                            form.chosen_plan.service_type
+                            if form.chosen_plan
                             else cd["selected_services"]
                         ),
                         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
@@ -408,7 +408,7 @@ def signup(request):
                     )
                     # The Plan the form checked, so the subscription and
                     # selected_services can't come from two different lookups.
-                    _apply_selected_plan(account, form.plan)
+                    _apply_selected_plan(account, form.chosen_plan)
                     _set_default_modules(account)
             except IntegrityError:
                 # Two submits raced past clean_email (or two addresses share the

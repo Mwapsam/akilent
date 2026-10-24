@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
@@ -7,6 +9,9 @@ from django.contrib.auth.forms import (
 from django.contrib.auth.models import User
 
 from apps.accounts.models import Account, Invitation
+
+if TYPE_CHECKING:
+    from apps.billing.models import Plan
 
 # Channels each signup service needs. A service is offered only when all its channels are on.
 SERVICE_CHANNELS: dict[str, set[str]] = {
@@ -126,7 +131,7 @@ class SignupForm(UserCreationForm):
         field = self.fields["selected_services"]
         assert isinstance(field, forms.ChoiceField)
         self._offer, field.choices = signup_offer()
-        self.plan = None  # the chosen Plan, once clean() has run
+        self.chosen_plan: Plan | None = None  # set by clean()
 
     def clean_email(self):
         email = self.cleaned_data["email"]
@@ -147,7 +152,7 @@ class SignupForm(UserCreationForm):
         from apps.billing.models import Plan
 
         plan = Plan.objects.filter(slug=plan_slug, is_active=True).first()
-        self.plan = plan
+        self.chosen_plan = plan
         if plan is None:
             self.add_error("plan", "That subscription package is no longer available.")
         elif services and plan not in self._offer.get(services, []):
