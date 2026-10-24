@@ -937,6 +937,7 @@ def pilot_command_center(request):
     from apps.automation import api as automation_api
     from apps.conversations import api as conversations_api
     from apps.core import backups
+    from apps.publishing import api as publishing_api
     from apps.whatsapp import api as whatsapp_api
 
     now = timezone.now()
@@ -959,6 +960,10 @@ def pilot_command_center(request):
                 "quiet": last_in is None or now - last_in > QUIET_AFTER,
                 "ai": ai_api.usage_summary(account, since=week),
                 "starting_point": conversations_api.starting_point(account, now),
+                "score": conversations_api.pilot_scorecard(account, now),
+                "posts": publishing_api.journey(
+                    account, conversations_api.last_days(7, now)
+                ),
             }
         )
 

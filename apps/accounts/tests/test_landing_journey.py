@@ -44,7 +44,12 @@ def test_every_channel_that_is_on_is_sold_by_its_features(client, meta_open):
         _open_meta()
     html = _html(client)
     assert "WhatsApp and Instagram messages" in html
-    for gone in ("Opening soon", "waiting for Meta", "Meta approves", "Meta is still reviewing"):
+    for gone in (
+        "Opening soon",
+        "waiting for Meta",
+        "Meta approves",
+        "Meta is still reviewing",
+    ):
         assert gone not in html
     for step in ("Attract", "Engage", "Convert", "Measure"):
         assert step in html

@@ -1,4 +1,5 @@
 {% extends "manage/base.html" %}
+{% load insights_tags %}
 {% block title %}Pilot Command Center — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
@@ -123,6 +124,30 @@
     </table>
   </div>
   <p class="mt-2 text-xs text-gray-500">"Quiet" means no customer message for 3 days: call them before they drift away.</p>
+
+  <h3 id="pc-score" class="mt-8 text-base font-semibold text-ink mb-3">Pilot scorecard, last 7 days</h3>
+  <div class="table-wrap">
+    <table class="table table--cards" aria-labelledby="pc-score">
+      <thead><tr>
+        <th>Business</th><th>Acquisition</th><th>Response</th><th>Conversion</th><th>Revenue</th><th>Retention</th>
+      </tr></thead>
+      <tbody>
+        {% for b in businesses %}
+        {% with s=b.score %}
+        <tr>
+          <td data-label="Business" class="font-medium text-ink">{{ b.account }}</td>
+          <td data-label="Acquisition">{{ s.acquisition }} new conversation{{ s.acquisition|pluralize }}{% if b.posts and b.posts.chats is not None %} <span class="text-xs text-gray-500">· {{ b.posts.chats }} from posts</span>{% endif %}</td>
+          <td data-label="Response">{% if s.response_seconds is not None %}{{ s.response_seconds|duration }} median first reply{% else %}<span class="text-gray-500">No enquiries</span>{% endif %}</td>
+          <td data-label="Conversion">{{ s.leads }} lead{{ s.leads|pluralize }} → {{ s.paid_orders }} paid</td>
+          <td data-label="Revenue">{% for r in s.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}{% if b.posts.revenue %} <span class="text-xs text-gray-500">· from posts: {% for r in b.posts.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}</td>
+          <td data-label="Retention">{{ s.active_weeks }} of the last 4 weeks active</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-2 text-xs text-gray-500">Revenue counts paid orders credited to a conversation. "From posts" counts only chats that used a post's chat link or a comment reply. An active week has at least one customer message.</p>
   {% else %}
   <p class="text-sm text-gray-600">No business has connected WhatsApp yet.</p>
   {% endif %}

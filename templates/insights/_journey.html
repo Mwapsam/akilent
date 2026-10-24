@@ -1,0 +1,66 @@
+{% comment %}
+Your customer journey: posts → clicks → chats → leads → orders → paid revenue, from
+apps.publishing.results.journey. A step that can't be measured yet is None and reads
+"Not tracked yet", never 0. Counts only, from explicit evidence (tracked links and
+comment replies), per the messaging truth rule.
+{% endcomment %}
+<section class="space-y-4" aria-labelledby="journey-h">
+  <h2 id="journey-h" class="text-lg font-semibold text-ink">Your customer journey</h2>
+  <p class="text-sm text-gray-600">From the posts you publish to the orders customers pay.</p>
+
+  <div class="card card-pad space-y-5">
+    <ol class="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-5">
+      <li>
+        <a href="{% url 'publishing:index' %}" class="block hover:text-accent">
+          <p class="stat-value">{{ journey.posts }}</p>
+          <p class="stat-label">post{{ journey.posts|pluralize }} published</p>
+        </a>
+      </li>
+      {% for step in journey_steps %}
+      <li>
+        {% if step.value is None %}
+          <p class="text-sm font-medium text-gray-500 leading-7">Not tracked yet</p>
+          <p class="stat-label">{{ step.label }}</p>
+        {% elif step.href %}
+          <a href="{{ step.href }}" class="block hover:text-accent">
+            <p class="stat-value">{{ step.value }}</p>
+            <p class="stat-label">{{ step.label }}</p>
+          </a>
+        {% else %}
+          <p class="stat-value">{{ step.value }}</p>
+          <p class="stat-label">{{ step.label }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+      <li>
+        {% if journey.revenue is None %}
+          <p class="text-sm font-medium text-gray-500 leading-7">Not tracked yet</p>
+        {% else %}
+          <p class="stat-value">{% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</p>
+        {% endif %}
+        <p class="stat-label">paid from posts</p>
+      </li>
+    </ol>
+
+    {% if journey.chats is None %}
+    <p class="text-sm text-gray-600 border-t border-border pt-4">
+      {% if journey.chat_links %}Add a WhatsApp chat link to a post in <a href="{% url 'publishing:index' %}" class="text-accent hover:text-accent-strong">Content Studio</a> to see the chats, leads and paid orders your posts bring in.{% else %}Chats, leads and orders from posts show here once a customer starts a chat from one of your posts.{% endif %}
+    </p>
+    {% elif journey.top %}
+    <div class="border-t border-border pt-4">
+      <h3 class="text-sm font-semibold text-ink">Posts that started chats</h3>
+      <ul class="mt-2 divide-y divide-border">
+        {% for post in journey.top %}
+        <li>
+          <a href="{% url 'publishing:post-detail' post.pk %}" class="flex items-center justify-between gap-4 py-2 min-h-11 hover:text-accent">
+            <span class="text-sm truncate">{{ post.caption|truncatechars:70|default:"(no caption)" }}</span>
+            <span class="text-sm text-gray-600 shrink-0 tabular-nums">{{ post.chats }} chat{{ post.chats|pluralize }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <p class="text-xs text-gray-500">Counted only when a customer used a post's chat link or a reply to a comment on it, so these are the least your posts brought in. <a href="{% url 'help-article' 'post-results' %}" class="underline">How it's counted</a></p>
+  </div>
+</section>

@@ -384,6 +384,42 @@ def newest_message_ids(conversation) -> tuple[int | None, int | None]:
     return newest(Message.Direction.INBOUND), newest(Message.Direction.OUTBOUND)
 
 
+def pilot_scorecard(account, now=None) -> dict:
+    """The five pilot measures for the last 7 days, for the Pilot Command Center.
+
+    acquisition: conversations customers started; response: median first reply (seconds,
+    None with no enquiries); conversion: leads created and paid orders; revenue: paid
+    orders from conversations, per currency; retention: how many of the last 4 weeks had
+    at least one customer message.
+    """
+    from apps.conversations import reporting
+
+    now = now or timezone.now()
+    period = reporting.last_days(7, now)
+    rows = reporting.first_replies(account, period.start, period.end)
+    sales = reporting.sales(account, period)
+    active_weeks = sum(
+        1
+        for w in range(4)
+        if Message.objects.filter(
+            account=account,
+            direction=Message.Direction.INBOUND,
+            timestamp__gte=now - timedelta(days=7 * (w + 1)),
+            timestamp__lt=now - timedelta(days=7 * w),
+        ).exists()
+    )
+    return {
+        "acquisition": len(rows),
+        "response_seconds": reporting.response(account, period, rows)[
+            "median_first_reply_seconds"
+        ],
+        "leads": sales["leads"],
+        "paid_orders": sales["paid_orders"],
+        "revenue": sales["revenue"],
+        "active_weeks": active_weeks,
+    }
+
+
 # Business Health (Insights) reads through here, like every other app's use of this app.
 from apps.conversations.reporting import (  # noqa: E402, F401
     Period,

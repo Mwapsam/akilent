@@ -48,3 +48,11 @@ def attention_reasons(account, now=None) -> list[str]:
     ).exists():
         out.append("Instagram needs reconnecting")
     return out
+
+
+def journey(account, period) -> dict | None:
+    """Posts → clicks → chats → leads → orders → paid revenue for one period; see
+    ``apps.publishing.results.journey``."""
+    from apps.publishing.results import journey as _journey
+
+    return _journey(account, period)

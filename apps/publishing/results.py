@@ -69,3 +69,90 @@ def results_for(post: ContentPost) -> list[dict]:
             }
         )
     return rows
+
+
+def journey(account, period) -> dict | None:
+    """The whole customer journey for one period: posts published → link clicks → chats
+    from posts → leads → orders → paid revenue (per currency, never summed across them).
+
+    Same evidence as ``results_for``, across every post. A step with no way to measure it
+    yet (no chat link on any post, no chat started from one) is ``None``, shown as "Not
+    tracked yet" rather than a 0 that would read as "it didn't work". None when the
+    business can't publish at all.
+    """
+    from apps.billing import api as billing_api
+    from apps.commerce.models import Order
+    from apps.conversations.models import ConversationEntryPoint
+    from apps.core.channels import enabled_channels
+    from apps.crm.models import Lead
+
+    publishing = {"instagram", "facebook"} & enabled_channels()
+    if not publishing or not billing_api.usable(account, "content_studio"):
+        return None
+
+    in_period = {"__gte": period.start, "__lt": period.end}
+
+    def during(field):
+        return {field + k: v for k, v in in_period.items()}
+
+    published = ContentPostVariant.objects.filter(
+        post__account=account,
+        platform__in=publishing,
+        status=ContentPostVariant.Status.PUBLISHED,
+        **during("published_at"),
+    )
+    has_links = TrackedLink.objects.filter(account=account).exists()
+    entry_points = ConversationEntryPoint.objects.filter(account=account)
+    chats_tracked = has_links or entry_points.exists()
+
+    out = {
+        "posts": published.values("post").distinct().count(),
+        "clicks": LinkClick.objects.filter(
+            link__account=account, is_bot=False, **during("clicked_at")
+        ).count()
+        if has_links
+        else None,
+        "chats": None,
+        "leads": None,
+        "orders": None,
+        "revenue": None,
+        "top": [],
+        # Chat links open WhatsApp: the hint for an untracked step says how to start.
+        "chat_links": "whatsapp" in enabled_channels(),
+    }
+    if not chats_tracked:
+        return out
+
+    out["chats"] = (
+        entry_points.filter(**during("matched_at"))
+        .values("conversation")
+        .distinct()
+        .count()
+    )
+    from_posts = {"attribution__source_post__isnull": False}
+    out["leads"] = Lead.objects.filter(
+        account=account, **from_posts, **during("created_at")
+    ).count()
+    out["orders"] = Order.objects.filter(
+        account=account, **from_posts, **during("created_at")
+    ).count()
+    paid = Order.objects.filter(
+        account=account, status=Order.Status.PAID, **from_posts, **during("paid_at")
+    )
+    out["revenue"] = [
+        {"currency": r["currency"], "total": r["total"] or Decimal("0")}
+        for r in paid.values("currency")
+        .annotate(total=Sum("total"))
+        .order_by("currency")
+    ]
+    # The posts behind the numbers, so each one opens its own results card.
+    out["top"] = list(
+        ContentPost.objects.filter(
+            account=account,
+            entry_points__matched_at__gte=period.start,
+            entry_points__matched_at__lt=period.end,
+        )
+        .annotate(chats=Count("entry_points__conversation", distinct=True))
+        .order_by("-chats", "-pk")[:5]
+    )
+    return out

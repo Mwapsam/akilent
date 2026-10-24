@@ -153,3 +153,33 @@ def test_suggestions_count_only_what_the_model_produced():
 def test_backups_say_not_configured_without_a_bucket(staff, settings):
     settings.BACKUP_S3_BUCKET = ""
     assert "Not configured" in staff.get(URL).content.decode()
+
+
+@pytest.mark.django_db
+def test_scorecard_shows_the_five_pilot_measures(staff, settings):
+    from django.core.management import call_command
+    from django.test import override_settings
+
+    from apps.accounts.management.commands.seed_demo_workspace import DEMO_SLUG
+    from apps.conversations.api import pilot_scorecard
+
+    with override_settings(DEBUG=True):
+        call_command("seed_demo_workspace", password="pw-demo-123")
+    demo = Account.objects.get(slug=DEMO_SLUG)
+    score = pilot_scorecard(demo)
+    assert score["acquisition"] >= 3 and score["leads"] >= 3
+    assert score["paid_orders"] == 2 and score["active_weeks"] >= 1
+    assert score["revenue"]
+
+    # The demo has no WhatsApp number, so it isn't a pilot row; give it one.
+    WhatsAppBusinessNumber.objects.create(
+        account=demo,
+        phone_number_id="PN9",
+        waba_id="W",
+        access_token="t",
+        is_active=True,
+    )
+    html = staff.get(URL).content.decode()
+    assert "Pilot scorecard, last 7 days" in html
+    assert "from posts" in html
+    assert "of the last 4 weeks active" in html

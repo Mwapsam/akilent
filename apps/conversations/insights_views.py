@@ -109,12 +109,38 @@ def insights(request):
         dismissed=Count("id", filter=Q(status=RecommendationLog.Status.DISMISSED)),
     )
 
+    from django.urls import reverse
+
+    from apps.publishing import api as publishing_api
+
+    journey = publishing_api.journey(account, period)
+    journey_steps = (
+        [
+            {"value": journey["clicks"], "label": "chat link clicks", "href": ""},
+            {"value": journey["chats"], "label": "chats from posts", "href": ""},
+            {
+                "value": journey["leads"],
+                "label": "leads from posts",
+                "href": reverse("crm:sales"),
+            },
+            {
+                "value": journey["orders"],
+                "label": "orders from posts",
+                "href": reverse("commerce:orders"),
+            },
+        ]
+        if journey
+        else []
+    )
+
     return render(
         request,
         "insights/index.html",
         {
             "account": account,
             "days": days,
+            "journey": journey,
+            "journey_steps": journey_steps,
             "intelligence_insights": raw_insights,
             "rec_stats": rec_stats,
             # Keys of insight types that have a known automation mapping.  The

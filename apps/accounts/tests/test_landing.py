@@ -43,7 +43,10 @@ def test_renders_without_unbacked_claims(client, settings, plans, whatsapp):
 def test_whatsapp_hero_only_when_whatsapp_is_on(client, settings, plans):
     settings.WHATSAPP_ENABLED = True
     html = _get(client)
-    assert "WhatsApp" in html.split('<section class="hero dark">', 1)[1].split("</section>", 1)[0]
+    assert (
+        "WhatsApp"
+        in html.split('<section class="hero dark">', 1)[1].split("</section>", 1)[0]
+    )
     assert "img/marketing/inbox.webp" in html
 
     settings.WHATSAPP_ENABLED = False
