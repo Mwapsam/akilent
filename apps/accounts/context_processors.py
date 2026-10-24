@@ -105,6 +105,44 @@ def onboarding_status(request):
             "onboarding_wants_facebook": state["wants_facebook"],
             "onboarding_wants_email": state["wants_email"],
             "onboarding_can_publish": state["can_publish"],
+            # Only WhatsApp and Instagram DMs reach the inbox (messaging truth rule).
+            "onboarding_has_inbox": state["wants_whatsapp"] or state["wants_instagram"],
+            "onboarding_tour_channels": [
+                c for c in TOUR_CHANNELS if state[f"wants_{c['key']}"]
+            ],
         }
     except Exception:
         return {}
+
+
+# The welcome tour's "Connect your channels" rows, in setup order.
+TOUR_CHANNELS = (
+    {
+        "key": "whatsapp",
+        "label": "WhatsApp",
+        "icon": "chat",
+        "href": "/whatsapp/numbers/",
+        "note": "Your business number, in the shared inbox",
+    },
+    {
+        "key": "instagram",
+        "label": "Instagram",
+        "icon": "instagram",
+        "href": "/instagram/accounts/",
+        "note": "DMs in the same inbox, comment replies, publishing",
+    },
+    {
+        "key": "facebook",
+        "label": "Facebook Page",
+        "icon": "image",
+        "href": "/publishing/channels/",
+        "note": "Publish and schedule posts to your Page",
+    },
+    {
+        "key": "email",
+        "label": "Email",
+        "icon": "mail",
+        "href": "/email/domains/",
+        "note": "Send from your own domain; we check the DNS for you",
+    },
+)

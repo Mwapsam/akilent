@@ -169,7 +169,28 @@ def test_tour_flags_follow_the_picks(client, monkeypatch):
     acc = _account(["instagram", "facebook"])
     client.force_login(acc.memberships.get().user)
     html = client.get("/dashboard/").content.decode()
-    assert "wantsInstagram: true" in html
-    assert "wantsFacebook: true" in html
+    tour = html.split("open-welcome-tour.window", 1)[1]
+    assert 'href="/instagram/accounts/"' in tour
+    assert 'href="/publishing/channels/"' in tour
+    assert 'href="/whatsapp/numbers/"' not in tour
     assert "canPublish: true" in html
     assert "current === 'journey'" in html
+    # Instagram DMs reach the inbox, so the journey may promise it.
+    assert "your team answers from one inbox" in tour
+
+
+def test_tour_never_promises_an_inbox_without_one(client, monkeypatch):
+    _all_usable(monkeypatch, {"content_studio"})
+    acc = _account(["facebook", "email"])
+    client.force_login(acc.memberships.get().user)
+    tour = (
+        client.get("/dashboard/")
+        .content.decode()
+        .split("open-welcome-tour.window", 1)[1]
+    )
+    assert "inbox" not in tour.lower()
+    assert "Talk" not in tour
+    assert "Email them from your own domain" in tour
+    assert "Some features depend on your plan." in tour
+    # Publish, Automate, Sell & measure: the odd last tile spans the row.
+    assert "col-span-2" in tour

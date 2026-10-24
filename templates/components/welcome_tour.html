@@ -1,17 +1,16 @@
 {% comment %}First-run welcome tour. Renders app-wide while onboarding is
 incomplete; auto-opens once (localStorage), and is replayable via the
 `open-welcome-tour` event dispatched by the setup widget. Slides follow the
-channels the business picked at signup: one "connect" slide lists only those,
-Content Studio shows when it has somewhere to publish, and the journey slide
-ties the steps together. Focus starts on Next; arrow keys move between slides.{% endcomment %}
+channels the business picked at signup (onboarding_tour_channels): the inbox is
+only mentioned for WhatsApp or Instagram, Content Studio shows when it has
+somewhere to publish, and the journey slide ties the steps together.
+Keyboard: focus starts on Next; arrow keys move between slides but never
+finish the tour; Escape closes it. Keys are bound on the dialog, which traps
+focus, so they never act on another open modal.{% endcomment %}
 <div x-data="{
         open: false, step: 0,
-        wantsEmail: {{ onboarding_wants_email|yesno:'true,false' }},
-        wantsWhatsapp: {{ onboarding_wants_whatsapp|yesno:'true,false' }},
-        wantsInstagram: {{ onboarding_wants_instagram|yesno:'true,false' }},
-        wantsFacebook: {{ onboarding_wants_facebook|yesno:'true,false' }},
+        hasChannels: {{ onboarding_tour_channels|yesno:'true,false' }},
         canPublish: {{ onboarding_can_publish|yesno:'true,false' }},
-        get hasChannels() { return this.wantsEmail || this.wantsWhatsapp || this.wantsInstagram || this.wantsFacebook; },
         get slides() {
           var s = ['welcome'];
           if (this.hasChannels) s.push('channels');
@@ -27,38 +26,49 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
         },
         show() { this.step = 0; this.open = true; this.$nextTick(() => this.$refs.next && this.$refs.next.focus()); },
         markSeen() { try { localStorage.setItem('welcomeTourSeen', '1'); } catch (e) {} },
-        next() { if (!this.isLast) this.step++; else this.finish(); },
-        prev() { if (this.step > 0) this.step--; },
+        // When the focused button disappears (Back on the first slide, Skip after it), keep focus on Next.
+        keepFocus() {
+          this.$nextTick(() => {
+            var a = document.activeElement;
+            if (!a || a === document.body || a.offsetParent === null) this.$refs.next.focus();
+          });
+        },
+        forward() { if (!this.isLast) { this.step++; this.keepFocus(); } },
+        back() { if (this.step > 0) { this.step--; this.keepFocus(); } },
+        next() { if (this.isLast) this.finish(); else this.forward(); },
         finish() { this.markSeen(); this.open = false; },
      }"
      @open-welcome-tour.window="show()"
      x-show="open" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
-     style="z-index: var(--z-modal)"
-     @keydown.escape.window="open && finish()"
-     @keydown.arrow-right.window="open && next()"
-     @keydown.arrow-left.window="open && prev()">
+     style="z-index: var(--z-modal)">
 
   <div class="absolute inset-0 bg-gray-900/50" @click="finish()" aria-hidden="true"></div>
 
   <div class="relative card shadow-modal w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
        x-trap.noscroll.noautofocus="open" role="dialog" aria-modal="true"
-       :aria-labelledby="'tour-h-' + current" aria-describedby="tour-progress">
+       :aria-labelledby="'tour-h-' + current" aria-describedby="tour-progress"
+       @keydown.escape.prevent.stop="finish()"
+       @keydown.arrow-right.prevent="forward()"
+       @keydown.arrow-left.prevent="back()">
     <button type="button" @click="finish()" class="absolute top-2 right-2 btn-ghost rounded-lg p-3 text-gray-500 hover:text-ink" aria-label="Close the tour">
       {% include "components/icon.html" with name="x" class="w-5 h-5" %}
     </button>
 
-    <div class="px-5 sm:px-7 pt-8 pb-6 overflow-y-auto min-h-[19rem]">
+    {# Body: a steady height on normal screens; on short ones it shrinks and scrolls so the footer stays visible. #}
+    <div class="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-8 pb-6 [@media(min-height:36rem)]:min-h-[19rem]">
       {# Slide — welcome: the promise, then what's in the box #}
       <div x-show="current === 'welcome'" x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="text-center">
         <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
         </span>
         <h2 id="tour-h-welcome" class="text-lg font-semibold text-ink">Welcome to {{ site.app_name|default:"Akilent" }}</h2>
-        <p class="text-sm text-gray-600 mt-2">Turn customer conversations{% if onboarding_can_publish %} and your posts{% endif %} into sales, from one place. Here's how it fits together.</p>
+        <p class="text-sm text-gray-600 mt-2">Turn {% if onboarding_has_inbox %}customer conversations{% else %}your customers' interest{% endif %}{% if onboarding_can_publish %} and your posts{% endif %} into sales, from one place. Here's how it fits together.</p>
         <ul class="mt-5 grid grid-cols-2 gap-2 text-left">
+          {% if onboarding_has_inbox %}
           <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
             {% include "components/icon.html" with name="inbox" class="w-4 h-4 text-brand-600 shrink-0" %}Talk
           </li>
+          {% endif %}
           {% if onboarding_can_publish %}
           <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
             {% include "components/icon.html" with name="pencil" class="w-4 h-4 text-brand-600 shrink-0" %}Publish
@@ -67,7 +77,8 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
           <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
             {% include "components/icon.html" with name="workflow" class="w-4 h-4 text-brand-600 shrink-0" %}Automate
           </li>
-          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
+          {# Three tiles: the last one spans the row instead of sitting alone in half of it. #}
+          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink{% if onboarding_has_inbox != onboarding_can_publish %} col-span-2 justify-center{% endif %}">
             {% include "components/icon.html" with name="bar-chart" class="w-4 h-4 text-brand-600 shrink-0" %}Sell &amp; measure
           </li>
         </ul>
@@ -83,42 +94,15 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
           <p class="text-sm text-gray-600 mt-2">Start with the ones you picked. You can add the others later.</p>
         </div>
         <ul class="mt-5 space-y-2">
-{% if onboarding_wants_whatsapp %}
+          {% for c in onboarding_tour_channels %}
           <li>
-            <a href="/whatsapp/numbers/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
-              {% include "components/icon.html" with name="chat" class="w-5 h-5 text-brand-600 shrink-0" %}
-              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">WhatsApp</span><span class="block text-xs text-gray-500">Your business number, in the shared inbox</span></span>
+            <a href="{{ c.href }}" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
+              {% include "components/icon.html" with name=c.icon class="w-5 h-5 text-brand-600 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">{{ c.label }}</span><span class="block text-xs text-gray-500">{{ c.note }}</span></span>
               {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
             </a>
           </li>
-{% endif %}
-{% if onboarding_wants_instagram %}
-          <li>
-            <a href="/instagram/accounts/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
-              {% include "components/icon.html" with name="instagram" class="w-5 h-5 text-brand-600 shrink-0" %}
-              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Instagram</span><span class="block text-xs text-gray-500">DMs in the same inbox, comment replies, publishing</span></span>
-              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
-            </a>
-          </li>
-{% endif %}
-{% if onboarding_wants_facebook %}
-          <li>
-            <a href="/publishing/channels/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
-              {% include "components/icon.html" with name="image" class="w-5 h-5 text-brand-600 shrink-0" %}
-              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Facebook Page</span><span class="block text-xs text-gray-500">Publish and schedule posts to your Page</span></span>
-              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
-            </a>
-          </li>
-{% endif %}
-{% if onboarding_wants_email %}
-          <li>
-            <a href="/email/domains/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
-              {% include "components/icon.html" with name="mail" class="w-5 h-5 text-brand-600 shrink-0" %}
-              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Email</span><span class="block text-xs text-gray-500">Send from your own domain; we check the DNS for you</span></span>
-              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
-            </a>
-          </li>
-{% endif %}
+          {% endfor %}
         </ul>
       </div>
 
@@ -132,10 +116,10 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
         <a href="/publishing/new/" @click="markSeen()" class="btn btn-secondary btn-sm min-h-11 mt-5">Plan a post</a>
       </div>
 
-      {# Slide — the journey: four steps, one place #}
+      {# Slide — the journey: only steps this business's channels support #}
       <div x-show="current === 'journey'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-        <h2 id="tour-h-journey" class="text-lg font-semibold text-ink text-center">From a {% if onboarding_can_publish %}post{% else %}message{% endif %} to a paid order</h2>
-        <ol class="mt-5 space-y-0">
+        <h2 id="tour-h-journey" class="text-lg font-semibold text-ink text-center">From a{% if onboarding_can_publish %} post{% elif onboarding_has_inbox %} message{% else %}n email{% endif %} to a paid order</h2>
+        <ol class="mt-5">
           {% if onboarding_can_publish %}
           <li class="relative flex gap-3 pb-4">
             <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
@@ -143,11 +127,13 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
             <div class="pt-1"><p class="text-sm font-semibold text-ink">Attract</p><p class="text-sm text-gray-600">A customer sees your post{% if onboarding_wants_whatsapp %} and taps its chat link{% endif %}.</p></div>
           </li>
           {% endif %}
+          {% if onboarding_has_inbox or onboarding_wants_email %}
           <li class="relative flex gap-3 pb-4">
             <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
-            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="inbox" class="w-4 h-4" %}</span>
-            <div class="pt-1"><p class="text-sm font-semibold text-ink">Engage</p><p class="text-sm text-gray-600">They write in, and your team answers from one inbox.</p></div>
+            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name=onboarding_has_inbox|yesno:"inbox,mail" class="w-4 h-4" %}</span>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Engage</p><p class="text-sm text-gray-600">{% if onboarding_has_inbox %}They write in, and your team answers from one inbox.{% else %}Email them from your own domain, one by one or as a campaign.{% endif %}</p></div>
           </li>
+          {% endif %}
           <li class="relative flex gap-3 pb-4">
             <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
             <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="credit-card" class="w-4 h-4" %}</span>
@@ -155,9 +141,10 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
           </li>
           <li class="relative flex gap-3">
             <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="trending-up" class="w-4 h-4" %}</span>
-            <div class="pt-1"><p class="text-sm font-semibold text-ink">Measure</p><p class="text-sm text-gray-600">Insights shows what your conversations{% if onboarding_can_publish %} and posts{% endif %} turned into.</p></div>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Measure</p><p class="text-sm text-gray-600">Insights shows what your {% if onboarding_has_inbox %}conversations{% else %}customers{% endif %}{% if onboarding_can_publish %} and posts{% endif %} turned into.</p></div>
           </li>
         </ol>
+        <p class="mt-4 text-xs text-gray-500 text-center">Some features depend on your plan.</p>
       </div>
 
       {# Slide — team #}
@@ -166,7 +153,7 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
           {% include "components/icon.html" with name="user-plus" class="w-6 h-6" %}
         </span>
         <h2 id="tour-h-team" class="text-lg font-semibold text-ink">Invite your team</h2>
-        <p class="text-sm text-gray-600 mt-2">Bring colleagues in with the right role, and assign each conversation to whoever should answer it.</p>
+        <p class="text-sm text-gray-600 mt-2">Bring colleagues in with the right role{% if onboarding_has_inbox %}, and assign each conversation to whoever should answer it{% endif %}.</p>
         <a href="/settings/team/" @click="markSeen()" class="btn btn-secondary btn-sm min-h-11 mt-5">Go to Team</a>
       </div>
 
@@ -181,8 +168,8 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
       </div>
     </div>
 
-    {# Footer: progress + nav #}
-    <div class="flex items-center justify-between gap-3 px-5 sm:px-7 py-4 border-t border-border">
+    {# Footer: progress + nav. Never shrinks, so Next is always on screen. #}
+    <div class="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-7 py-4 border-t border-border">
       <div class="flex items-center gap-3">
         <div class="hidden sm:flex items-center gap-1.5" aria-hidden="true">
           <template x-for="(s, i) in slides" :key="s">
@@ -193,7 +180,7 @@ ties the steps together. Focus starts on Next; arrow keys move between slides.{%
         <p id="tour-progress" class="text-xs text-gray-500 tabular-nums whitespace-nowrap" aria-live="polite">Step <span x-text="step + 1"></span> of <span x-text="total"></span></p>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" x-show="step > 0" @click="prev()" class="btn btn-ghost btn-sm min-h-11">Back</button>
+        <button type="button" x-show="step > 0" @click="back()" class="btn btn-ghost btn-sm min-h-11">Back</button>
         <button type="button" x-show="step === 0" @click="finish()" class="btn btn-ghost btn-sm min-h-11">Skip</button>
         <button type="button" x-ref="next" @click="next()" class="btn btn-primary btn-sm min-h-11 min-w-[5.5rem]">
           <span x-text="isLast ? 'Get started' : 'Next'">Next</span>

@@ -100,8 +100,10 @@ class TestRows:
         client, account, _ = logged_in
         _conversation(account, channel="sms")
         body = _inbox(client)
-        # Just the list: the welcome tour further down the page names Email as a channel.
-        row = body[body.index('class="inbox-list"') :].split("open-welcome-tour", 1)[0]
+        # Just the list, up to its own closing tag: other parts of the page (the
+        # welcome tour) can name Email as a channel.
+        start = body.index('<ul class="inbox-list"')
+        row = body[start : body.index("</ul>", start)]
         assert 'data-channel="sms"' in row and "SMS" in row
         assert (
             ">Email<" not in row
