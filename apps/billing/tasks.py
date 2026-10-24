@@ -198,6 +198,24 @@ def abandon_stale_checkouts() -> int:
 
 
 @shared_task
+def stop_recurring(account_id: int) -> int:
+    """Stop, at the provider, recurring subscriptions an account no longer uses (replaced by a
+    plan change, or ended here). One that can't be stopped now is retried by sync_recurring."""
+    from apps.billing import recurring
+
+    return recurring.stop_pending(account_id)
+
+
+@shared_task
+def sync_recurring() -> int:
+    """Daily: compare each provider-run recurring subscription with the provider (payments or
+    an ending a webhook missed), and retry stops that didn't go through."""
+    from apps.billing import recurring
+
+    return recurring.sync_all()
+
+
+@shared_task
 def notify_provider_change(old_code: str, new_code: str) -> int:
     """Tell paying customers whose saved method is with the old provider that their next
     renewal needs the new one. Their access and paid period are unaffected."""
@@ -242,7 +260,15 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
         price = price_for(plan, sub.billing_period)
         covered = min(credit.balance(account), price)
         lines = [f"Your {plan.name} plan for {account.company_name} renews on {ends}."]
-        if covered > 0:
+        recurring = registry.get(sub.recurring_provider) if sub.recurring_id else None
+        if recurring is not None:
+            # The provider charges its subscription price itself; account credit can't reduce it.
+            lines.append(
+                f"{recurring.display_name} will take {format_money(price)} automatically; "
+                "you don't need to do anything. Manage billing: "
+                f"{_absolute_url('/billing/plans/')}"
+            )
+        elif covered > 0:
             lines.append(
                 f"{format_money(covered)} of your account credit will be used, "
                 f"so {format_money(price - covered)} is due."

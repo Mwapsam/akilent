@@ -1,6 +1,8 @@
-"""PayPal: Orders v2 hosted checkout. Renewals go out as an emailed pay link
-(``off_session_charge`` is False): saving PayPal wallets for later charges (Vault) is only
-available to US merchant accounts, so it isn't used. See docs/billing/paypal/CONTRACT.md.
+"""PayPal: Orders v2 hosted checkout, and (with PAYPAL_SUBSCRIPTIONS) PayPal-run subscriptions
+that renew automatically (``paypal_subscriptions``). Akilent never charges a saved PayPal
+account itself (``off_session_charge`` is False): saving wallets (Vault) is only available to US
+merchant accounts. Without subscriptions, renewals go out as an emailed pay link. See
+docs/billing/paypal/CONTRACT.md.
 
 Our payment reference is the order's ``custom_id`` and ``invoice_id``. PayPal refuses a second
 capture with the same invoice id (DUPLICATE_INVOICE_ID), so one payment can't be paid twice.
@@ -22,6 +24,7 @@ from django.shortcuts import redirect
 
 from ..money import billing_currency, quantize, to_decimal
 from ..paypal import PayPalError, PayPalUncertain, config, get_paypal_client
+from . import paypal_subscriptions as subs
 from .base import (
     FAILED,
     PENDING,
@@ -133,6 +136,9 @@ class PayPalProvider(PaymentProvider):
     # account (guest checkout; the live account needs "PayPal account optional" on).
     card_method = "paypal-card"
     card_label = "Pay with debit or credit card"
+    # With PAYPAL_SUBSCRIPTIONS on, the PayPal button starts a subscription that renews itself.
+    subscribe_label = "Subscribe with PayPal"
+    card_once_label = "Pay once with debit or credit card"
 
     @property
     def supported_currencies(self) -> frozenset:
@@ -177,6 +183,12 @@ class PayPalProvider(PaymentProvider):
     # --- checkout --------------------------------------------------------------------------
 
     def checkout_options(self) -> list[dict]:
+        if subs.enabled():
+            # The card button stays a one-off payment (renewed by pay link).
+            return [
+                {"code": self.code, "name": self.subscribe_label},
+                {"code": self.card_method, "name": self.card_once_label},
+            ]
         return [
             {"code": self.code, "name": self.checkout_label},
             {"code": self.card_method, "name": self.card_label},
@@ -191,6 +203,8 @@ class PayPalProvider(PaymentProvider):
             )
             messages.error(request, "PayPal can't take payments in this currency.")
             return redirect("/billing/plans/")
+        if subs.enabled() and request.GET.get("method") != self.card_method:
+            return subs.start(self, request, payment)
         request_id = payment.provider_request_id or f"order-{payment.reference}"
         experience = {
             "return_url": return_url(request, payment),
@@ -243,6 +257,8 @@ class PayPalProvider(PaymentProvider):
         return redirect(approve)
 
     def handle_return(self, request, payment) -> ProviderResult | None:
+        if subs.is_checkout(payment):
+            return subs.handle_return(self, request, payment)
         # PayPal appends ?token=<order id>; it must be the order we created for this payment.
         token = request.GET.get("token") or ""
         if not payment.provider_operation_id or (
@@ -447,6 +463,14 @@ class PayPalProvider(PaymentProvider):
         held for a duplicate invoice id is the operator's to settle, never this order's."""
         from apps.billing.payments import clear_charge_started
 
+        if subs.is_checkout(payment):
+            return subs.checkout_result(self, payment)
+        if subs.is_renewal(payment):
+            sale = subs._get_sale(self, payment.provider_ref)
+            first, owner = subs.payment_for_sale(self, sale)
+            if owner is None or owner.pk != payment.pk:
+                return None
+            return subs.sale_result(payment, sale, expected_custom=first.reference)
         if not payment.provider_operation_id or (payment.raw or {}).get("hold"):
             return None
         order = self._get_order(payment.provider_operation_id)
@@ -515,7 +539,38 @@ class PayPalProvider(PaymentProvider):
                     result=self._refund_event(resource.get("id"), REFUND_EVENTS[kind]),
                 )
             ]
+        # Subscriptions. Every one is re-read from PayPal in its handler; a sale may create a
+        # renewal payment, so it runs after the de-dupe check.
+        if kind in subs.SALE_EVENTS:
+            sale_id = resource.get("id")
+            return [
+                ProviderEvent(key=key, handler=lambda: subs.record_sale(self, sale_id))
+            ]
+        if kind in subs.SALE_REFUND_EVENTS:
+            refund_kind = REVERSAL if kind.endswith("REVERSED") else REFUND
+            return [
+                ProviderEvent(
+                    key=key,
+                    result=subs.refund_result(self, resource.get("id"), refund_kind),
+                )
+            ]
+        if kind == subs.ACTIVATED_EVENT:
+            sub_id = resource.get("id")
+            return [
+                ProviderEvent(key=key, handler=lambda: subs.activated(self, sub_id))
+            ]
+        if kind in subs.ENDED_EVENTS:
+            sub_id = resource.get("id")
+            return [ProviderEvent(key=key, handler=lambda: subs.ended(self, sub_id))]
         return [ProviderEvent(key=key)]
+
+    # --- subscriptions ---------------------------------------------------------------------
+
+    def stop_recurring(self, recurring_id: str) -> None:
+        subs.stop(self, recurring_id)
+
+    def sync_recurring(self, subscription) -> None:
+        subs.sync(self, subscription)
 
     def _payment_for_order(self, order_id):
         from apps.billing.models import BillingPayment

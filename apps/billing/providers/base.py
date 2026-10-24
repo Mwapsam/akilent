@@ -74,6 +74,9 @@ class ProviderResult:
     refund_id: str = ""
     refund_amount: Decimal | None = None
     refund_kind: str = REFUND
+    # The provider-run recurring subscription this payment belongs to (a PayPal subscription).
+    # Once it succeeds, that subscription renews the plan (payments._link_recurring).
+    recurring_id: str = ""
 
 
 @dataclass
@@ -148,6 +151,16 @@ class PaymentProvider(ABC):
 
     def charge_saved_method(self, method, payment) -> ProviderResult:
         raise ProviderError(f"{self.display_name} can't charge a saved payment method")
+
+    def stop_recurring(self, recurring_id: str) -> None:
+        """Stop a recurring subscription this provider runs, so it charges nothing more. Raise
+        ProviderError when that isn't confirmed; it is tried again (recurring.stop_pending)."""
+        raise ProviderError(f"{self.display_name} doesn't run recurring subscriptions")
+
+    def sync_recurring(self, subscription) -> None:
+        """Bring ``subscription`` up to date with the recurring subscription renewing it here:
+        record payments and an ending the webhooks may have missed (daily)."""
+        return
 
     def account_key(self) -> str:
         """The merchant account saved methods belong to, e.g. "live:MERCHANTID". A method saved

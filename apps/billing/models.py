@@ -148,6 +148,16 @@ class Subscription(models.Model):
     cancel_at_period_end = models.BooleanField(default=False)
     # When the current renewal went unpaid; the subscription expires after BILLING_GRACE_DAYS.
     past_due_since = models.DateTimeField(null=True, blank=True)
+    # A provider-run recurring subscription that takes the renewals for this one (a PayPal
+    # subscription, I-...). Akilent still grants every period, from each completed payment; the
+    # renewal engine waits for the provider's charge instead of charging or sending a pay link.
+    recurring_provider = models.CharField(max_length=30, blank=True, default="")
+    recurring_id = models.CharField(
+        max_length=100, blank=True, default="", db_index=True
+    )
+    # One that was replaced (plan change) or ended here and still has to be stopped at the
+    # provider; retried until the provider confirms.
+    recurring_stop_id = models.CharField(max_length=100, blank=True, default="")
     # Which emails the renewal engine already sent, so an hourly run never repeats one.
     renewal_notice_for = models.DateTimeField(null=True, blank=True)
     dunning_notices_sent = models.PositiveSmallIntegerField(default=0)
@@ -424,6 +434,32 @@ class BillingRefund(models.Model):
 
     def __str__(self):
         return f"{self.kind} {self.amount} {self.currency} of {self.payment.reference}"
+
+
+class PayPalPlan(models.Model):
+    """The PayPal billing plan for one Akilent plan, term and price, per merchant account
+    (``account_key``: env and merchant id). A price change gets a new row and PayPal plan;
+    subscribers keep the plan they signed up to."""
+
+    account_key = models.CharField(max_length=120)
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="+")
+    billing_period = models.CharField(max_length=12)
+    currency = models.CharField(max_length=3)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    product_id = models.CharField(max_length=100)
+    paypal_plan_id = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account_key", "plan", "billing_period", "currency", "price"],
+                name="paypal_plan_unique_terms",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.paypal_plan_id}: {self.plan} {self.billing_period} {self.price}"
 
 
 class CreditGrant(models.Model):

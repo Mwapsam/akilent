@@ -1,0 +1,26 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f11684456a647"
+  },
+  "body": {
+    "id": "PROD-7PE52387BM8448647",
+    "name": "Akilent subscription (override probe)",
+    "type": "SERVICE",
+    "category": "SOFTWARE",
+    "create_time": "2026-10-24T17:09:50Z",
+    "update_time": "2026-10-24T17:09:50Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v1/catalogs/products/PROD-7PE52387BM8448647",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/catalogs/products/PROD-7PE52387BM8448647",
+        "rel": "edit",
+        "method": "PATCH"
+      }
+    ]
+  }
+}

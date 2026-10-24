@@ -1,0 +1,84 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f4632970300e2"
+  },
+  "body": {
+    "id": "P-82751737B9283505VNLOOMXY",
+    "product_id": "PROD-7PE52387BM8448647",
+    "name": "Akilent probe - first cycle then USD 1.00 daily",
+    "status": "ACTIVE",
+    "usage_type": "LICENSED",
+    "billing_cycles": [
+      {
+        "pricing_scheme": {
+          "version": 1,
+          "fixed_price": {
+            "currency_code": "USD",
+            "value": "1.0"
+          },
+          "create_time": "2026-10-24T17:09:51Z",
+          "update_time": "2026-10-24T17:09:51Z"
+        },
+        "frequency": {
+          "interval_unit": "DAY",
+          "interval_count": 1
+        },
+        "tenure_type": "TRIAL",
+        "sequence": 1,
+        "total_cycles": 1
+      },
+      {
+        "pricing_scheme": {
+          "version": 1,
+          "fixed_price": {
+            "currency_code": "USD",
+            "value": "1.0"
+          },
+          "create_time": "2026-10-24T17:09:51Z",
+          "update_time": "2026-10-24T17:09:51Z"
+        },
+        "frequency": {
+          "interval_unit": "DAY",
+          "interval_count": 1
+        },
+        "tenure_type": "REGULAR",
+        "sequence": 2,
+        "total_cycles": 0
+      }
+    ],
+    "payment_preferences": {
+      "service_type": "PREPAID",
+      "auto_bill_outstanding": true,
+      "setup_fee": {
+        "currency_code": "USD",
+        "value": "0.0"
+      },
+      "setup_fee_failure_action": "CANCEL",
+      "payment_failure_threshold": 3
+    },
+    "quantity_supported": false,
+    "create_time": "2026-10-24T17:09:51Z",
+    "update_time": "2026-10-24T17:09:51Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v1/billing/plans/P-82751737B9283505VNLOOMXY",
+        "rel": "self",
+        "method": "GET",
+        "encType": "application/json"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/billing/plans/P-82751737B9283505VNLOOMXY",
+        "rel": "edit",
+        "method": "PATCH",
+        "encType": "application/json"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/billing/plans/P-82751737B9283505VNLOOMXY/deactivate",
+        "rel": "self",
+        "method": "POST",
+        "encType": "application/json"
+      }
+    ]
+  }
+}

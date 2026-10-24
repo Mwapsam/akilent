@@ -13,6 +13,11 @@ For each paid subscription whose period has ended:
    link to pay with the active provider. Features are kept for BILLING_GRACE_DAYS, then it
    EXPIRES.
 
+A subscription renewed by a provider-run recurring subscription (``recurring_id``, a PayPal
+subscription) is charged by the provider on its own schedule; each payment it reports renews
+the period. Here it only waits: a renewal that hasn't arrived RECURRING_GRACE after the period
+ended counts as unpaid (past due, then grace, then expiry, which stops it at the provider).
+
 Subscriptions still renewed by a provider-side subscription from before this engine (legacy
 stripe_subscription_id / fw_subscription_id) are skipped until migrate_legacy_billing moves them.
 """
@@ -27,13 +32,16 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from . import payments
+from . import payments, recurring
 from .models import BillingPayment, Subscription
 from .providers import ProviderError, registry
 
 logger = logging.getLogger(__name__)
 
 UPCOMING_NOTICE = timedelta(days=3)
+# How long after the period ends a provider-run renewal may still arrive before it counts as
+# unpaid (the provider charges at its own time of day, and two years can be a day longer).
+RECURRING_GRACE = timedelta(days=2)
 # Days after a renewal went unpaid on which a reminder is sent.
 REMINDER_DAYS = (3, 6)
 FREE = "free"
@@ -85,17 +93,21 @@ def renew(subscription_id: int, *, now=None) -> str:
         ):
             return ""
         if sub.cancel_at_period_end:
+            recurring.retire(sub)
             sub.status = Subscription.CANCELLED
             sub.cancelled_at = now
-            sub.save(update_fields=["status", "cancelled_at", "updated_at"])
+            sub.save()
             _notify(sub, "cancelled")
             return "cancelled"
         if sub.status == Subscription.PAST_DUE and sub.past_due_since:
             if now - sub.past_due_since >= grace_period():
+                recurring.retire(sub)
                 sub.status = Subscription.EXPIRED
-                sub.save(update_fields=["status", "updated_at"])
+                sub.save()
                 _notify(sub, "expired")
                 return "expired"
+        if sub.recurring_id:
+            return _await_provider(sub, now)
         if sub.plan.price_monthly <= 0:
             from .services import activate_subscription
 
@@ -146,6 +158,22 @@ def renew(subscription_id: int, *, now=None) -> str:
     # Still PENDING: the provider is deciding and its webhook will follow. If it never does,
     # payments.abandon_stale treats the charge as unpaid after a day.
     return "" if payment.status == BillingPayment.PENDING else "past_due"
+
+
+def _await_provider(sub, now) -> str:
+    """The provider charges this one itself; a renewal it hasn't started by RECURRING_GRACE
+    after the period ended counts as unpaid."""
+    if (
+        sub.status == Subscription.PAST_DUE
+        or now < sub.current_period_end + RECURRING_GRACE
+    ):
+        return ""
+    if payments.has_unconfirmed_charge(sub.account):
+        return (
+            ""  # the provider took a payment that is still settling (e.g. under review)
+        )
+    payments.mark_past_due(sub.account)
+    return "past_due"
 
 
 def send_due_notices(now=None) -> None:

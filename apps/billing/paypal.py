@@ -1,4 +1,4 @@
-"""PayPal REST client (Orders v2, Payments v2, webhook verification).
+"""PayPal REST client (Orders v2, Payments v2, Subscriptions v1, webhook verification).
 
 Shapes and error codes are pinned in docs/billing/paypal/CONTRACT.md, against recorded sandbox
 responses in docs/billing/paypal/fixtures/sandbox/.
@@ -202,6 +202,52 @@ class PayPalClient:
 
     def get_refund(self, refund_id: str) -> dict:
         return self._request("GET", f"/v2/payments/refunds/{refund_id}")
+
+    # --- Subscriptions v1 (PayPal runs the renewal schedule) ------------------------------------
+
+    def create_product(self, body: dict, *, request_id: str) -> dict:
+        return self._request(
+            "POST", "/v1/catalogs/products", json=body, request_id=request_id
+        )
+
+    def create_plan(self, body: dict, *, request_id: str) -> dict:
+        return self._request(
+            "POST", "/v1/billing/plans", json=body, request_id=request_id
+        )
+
+    def create_subscription(self, body: dict, *, request_id: str) -> dict:
+        return self._request(
+            "POST", "/v1/billing/subscriptions", json=body, request_id=request_id
+        )
+
+    def get_subscription(self, subscription_id: str) -> dict:
+        return self._request("GET", f"/v1/billing/subscriptions/{subscription_id}")
+
+    def cancel_subscription(self, subscription_id: str, reason: str) -> None:
+        """Stops future charges (a 204). Payments already taken are untouched."""
+        self._request(
+            "POST",
+            f"/v1/billing/subscriptions/{subscription_id}/cancel",
+            json={"reason": reason[:128]},
+        )
+
+    def subscription_transactions(
+        self, subscription_id: str, start_time: str, end_time: str
+    ) -> list[dict]:
+        data = self._request(
+            "GET",
+            f"/v1/billing/subscriptions/{subscription_id}/transactions",
+            params={"start_time": start_time, "end_time": end_time},
+        )
+        return data.get("transactions") or []
+
+    def get_sale(self, sale_id: str) -> dict:
+        """A subscription payment: a v1 sale (``state``, ``amount.total``, ``custom``,
+        ``billing_agreement_id``), not a v2 capture."""
+        return self._request("GET", f"/v1/payments/sale/{sale_id}")
+
+    def get_sale_refund(self, refund_id: str) -> dict:
+        return self._request("GET", f"/v1/payments/refund/{refund_id}")
 
     def verify_webhook_signature(self, fields: dict, raw_event: str) -> bool:
         """``fields`` are the transmission headers and webhook_id; ``raw_event`` is the body

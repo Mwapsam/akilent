@@ -18,7 +18,7 @@ from apps.core.audit import audit
 from apps.core.models import SiteSettings
 from apps.core.utils import admin_required
 
-from . import credit, payments
+from . import credit, payments, recurring
 from .models import (
     BillingPayment,
     ManualPaymentRequest,
@@ -76,6 +76,7 @@ def pricing_page(request):
             "payments_enabled": site.payments_enabled,
             "payment_methods": checkout_options() if site.payments_enabled else [],
             "credit": credit.summary(account),
+            "renewal_note": _renewal_note(account, subscription),
             "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
             "period_pricing_json": json.dumps(period_pricing),
         },
@@ -265,6 +266,25 @@ def plan_delete(request, pk):
 # creates a BillingPayment (credit and unused time already taken off), the active provider takes
 # the customer to its hosted page, and its return and webhooks come back as ProviderResults that
 # payments.record_result turns into subscription state.
+
+
+def _renewal_note(account, sub) -> str:
+    """How the current plan renews, as the plans page says it: only "automatically" when
+    something will really take the payment without the customer."""
+    if sub is None:
+        return ""
+    if sub.recurring_id:
+        recurring = registry.get(sub.recurring_provider)
+        name = recurring.display_name if recurring else "your payment provider"
+        return f"Renews automatically through {name}."
+    provider = registry.active()
+    if (
+        provider is not None
+        and provider.off_session_charge
+        and payments.default_method(account, provider.code)
+    ):
+        return "Renews automatically; credit is used first."
+    return "We'll email you a link to pay when it renews; credit is used first."
 
 
 def checkout_options(account=None) -> list[dict]:
@@ -557,9 +577,14 @@ def cancel_subscription(request):
 
     try:
         _stop_legacy_recurring(sub)
+        recurring.end_now(sub)
     except ProviderError as exc:
         logger.error("cancel_subscription: account=%s: %s", account.pk, exc)
-        messages.error(request, f"Could not stop recurring billing: {exc}")
+        messages.error(
+            request,
+            "We couldn't stop the automatic payments with the payment provider, so nothing "
+            "has changed. Please try again in a few minutes.",
+        )
         return _back_to_plans(request)
 
     if sub.status == Subscription.PAST_DUE or not sub.current_period_end:
@@ -608,7 +633,15 @@ def resume_subscription(request):
     if sub and sub.cancel_at_period_end and sub.status == Subscription.ACTIVE:
         sub.cancel_at_period_end = False
         sub.save(update_fields=["cancel_at_period_end", "updated_at"])
-        messages.success(request, "Your subscription will renew as normal.")
+        if sub.recurring_provider and not sub.recurring_id:
+            # Its provider subscription was cancelled and can't be restarted.
+            messages.success(
+                request,
+                "Your plan will continue. Automatic payments were stopped when you cancelled, "
+                "so we'll email you a link to pay when it renews.",
+            )
+        else:
+            messages.success(request, "Your subscription will renew as normal.")
     return _back_to_plans(request)
 
 

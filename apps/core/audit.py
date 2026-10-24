@@ -96,6 +96,7 @@ LABELS = {
     "billing.chargeback": "The customer charged back a payment",
     "billing.unresolved": "A charge's outcome couldn't be confirmed",
     "billing.resolved": "A charge's outcome was confirmed",
+    "billing.orphan_charge": "A cancelled or replaced subscription charged the customer; refund it",
 }
 
 

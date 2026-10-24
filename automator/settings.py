@@ -599,6 +599,13 @@ PAYPAL_CLIENT_SECRET = (os.getenv("PAYPAL_CLIENT_SECRET") or "").strip()
 PAYPAL_WEBHOOK_ID = (os.getenv("PAYPAL_WEBHOOK_ID") or "").strip()
 # The business account that must receive every payment (checked on each capture).
 PAYPAL_MERCHANT_ID = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
+# PayPal-run subscriptions that renew automatically (Subscriptions v1). Off: PayPal is one-off
+# checkout and renewals go out as a pay link.
+PAYPAL_SUBSCRIPTIONS = (os.getenv("PAYPAL_SUBSCRIPTIONS") or "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 PAYPAL_CURRENCIES = frozenset(
     c.strip().upper()
     for c in (os.getenv("PAYPAL_CURRENCIES") or "USD").split(",")
@@ -746,6 +753,10 @@ CELERY_BEAT_SCHEDULE = {
     "expire-credit-grants": {
         "task": "apps.billing.tasks.expire_credit_grants",
         "schedule": 86400.0,
+    },
+    "sync-recurring-subscriptions": {
+        "task": "apps.billing.tasks.sync_recurring",
+        "schedule": 86400.0,  # provider-run subscriptions: catch missed webhooks, retry stops
     },
     "abandon-stale-checkouts": {
         "task": "apps.billing.tasks.abandon_stale_checkouts",

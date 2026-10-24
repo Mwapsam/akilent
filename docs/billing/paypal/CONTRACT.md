@@ -223,3 +223,82 @@ Each one is saved as a fixture in `fixtures/` (secrets and payer details redacte
   preferences). PayPal can still ask a buyer to log in, depending on country and risk.
 - Akilent shows it as a second button, "Pay with debit or credit card" (`method=paypal-card`).
   Renewal pay links carry no method, so they open PayPal's default page.
+
+## 8e. Automatic renewals with PayPal Subscriptions (built 2026-10-24, behind `PAYPAL_SUBSCRIPTIONS`)
+
+PayPal is the only live provider, and Vault is US-only, so automatic renewal uses
+Subscriptions v1: PayPal keeps the schedule and takes each payment; Akilent grants each period
+only from a completed payment. Code: `apps/billing/providers/paypal_subscriptions.py`,
+`apps/billing/recurring.py`. Off by default; with it off nothing changes.
+
+**Checkout.** "Subscribe with PayPal" (`method=paypal`, and pay links, which carry no method)
+creates a subscription; "Pay once with debit or credit card" (`method=paypal-card`) stays a
+one-off Orders v2 payment renewed by pay link.
+
+- **Plans** (`PayPalPlan`): one PayPal plan per merchant account, Akilent plan, term, currency
+  and price, made on first checkout and reused. A price change makes a new one; subscribers
+  keep theirs. Two cycles: `TRIAL` (1 cycle, full price) then `REGULAR` (infinite, full price),
+  so the subscription can override only the first payment. Lengths follow Akilent's periods:
+  30 / 91 / 365 days, and 2 years for biennial (PayPal's DAY maximum is 365).
+- **First payment** = the checkout payment's `amount_due` (price less unused paid time and
+  credit). When it differs from the price, the subscription's `plan.billing_cycles[0]`
+  (sequence 1) is overridden. Sandbox: accepted, `plan_overridden: true`
+  (`fixtures/sandbox/subscriptions_override/`). Credit never reduces later renewals.
+- `custom_id` = the checkout payment's reference; `PayPal-Request-Id` = `sub-{reference}`.
+  The return carries `subscription_id`, checked against the stored one.
+
+**Payments.** A v1 sale (`PAYMENT.SALE.*`, re-fetched with `GET /v1/payments/sale/{id}`)
+counts only when `billing_agreement_id` is our subscription and `custom` is its checkout
+reference. Sale `state`: completed and partially_refunded → paid; pending → pending; denied,
+refunded and reversed → failed; anything else → pending.
+
+- The first sale (or a retry of it) completes the checkout payment and links the subscription
+  (`Subscription.recurring_id`). A replaced subscription is cancelled only once the new one's
+  first payment completes.
+- Each later sale becomes its own renewal payment (`ppsale_{sale id}`, full plan price, no
+  credit) and extends the period; replays and resends record it once.
+- A sale on a subscription that no longer renews the account (replaced or ended here) is never
+  granted: it is logged and audited (`billing.orphan_charge`) for a refund, and the subscription
+  is cancelled again.
+- `BILLING.SUBSCRIPTION.ACTIVATED` never grants. It only looks the first payment up, in case the
+  sale's own webhook is late.
+- From approval on, the payment is in flight, like a capture: it isn't abandoned, the account
+  can't start another checkout, and it is reconciled.
+
+**Renewal engine.** It doesn't charge or send a pay link for a subscription PayPal renews. It
+waits until 2 days after the period end (`RECURRING_GRACE`). After that the renewal counts as
+unpaid: past due, grace, then expiry, and expiry cancels the PayPal subscription. A renewal
+payment still under review holds this off.
+
+**Cancelling.**
+- In Akilent, `POST /v1/billing/subscriptions/{id}/cancel` runs first. Only if PayPal confirms
+  does the plan switch to ending at the period end; if PayPal errors, nothing changes. A 422 or
+  404 for a subscription that has already ended counts as done.
+- In PayPal (`BILLING.SUBSCRIPTION.CANCELLED`, re-read): the plan ends with the paid period.
+  SUSPENDED or EXPIRED there: the plan renews by pay link.
+- Resuming after a cancel can't restart a PayPal subscription; the customer is told renewal
+  will be by pay link.
+
+**Plan changes.**
+- A new subscription replaces the old one, which is listed in `recurring_stop_id` and cancelled
+  once the new first payment completes.
+- A one-off payment for a different plan or term also stops the old subscription, so it can't
+  keep charging for the old plan.
+- Stops that fail are retried daily.
+
+**Daily sync** (`sync-recurring-subscriptions`): retries pending stops, and reads each linked
+subscription's transactions for the last 40 days to record payments a webhook missed. It also
+picks up an ending.
+
+**Webhook events to add to the PayPal app** (sandbox and live):
+- `PAYMENT.SALE.COMPLETED`, `PAYMENT.SALE.PENDING`, `PAYMENT.SALE.DENIED`
+- `PAYMENT.SALE.REFUNDED`, `PAYMENT.SALE.REVERSED`
+- `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.CANCELLED`,
+  `BILLING.SUBSCRIPTION.SUSPENDED`, `BILLING.SUBSCRIPTION.EXPIRED`
+
+**Sandbox notes.** Listing the transactions of a subscription that hasn't been approved answers
+404 `INVALID_RESOURCE_ID`, read as "no payments yet". Still to confirm:
+- a renewal sale (the $1/day probe, due 2026-10-25 10:00 UTC), and whether it is held for review;
+- whether a buyer without a PayPal account can subscribe (`subscriptions_override` approve link,
+  opened logged out);
+- the shape of a real `PAYMENT.SALE.REFUNDED` resource (built from the v1 refund schema).

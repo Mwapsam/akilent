@@ -1,0 +1,24 @@
+{
+  "http_status": 404,
+  "headers": {
+    "paypal-debug-id": "f9441403ee839"
+  },
+  "body": {
+    "name": "RESOURCE_NOT_FOUND",
+    "message": "The specified resource does not exist.",
+    "debug_id": "f9441403ee839",
+    "details": [
+      {
+        "issue": "INVALID_RESOURCE_ID",
+        "description": "Requested resource ID was not found."
+      }
+    ],
+    "links": [
+      {
+        "href": "https://developer.paypal.com/docs/api/v1/billing/subscriptions#RESOURCE_NOT_FOUND",
+        "rel": "information_link",
+        "method": "GET"
+      }
+    ]
+  }
+}

@@ -85,7 +85,7 @@
       </div>
     {% elif subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
       <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-gray-400">Billed {{ subscription.get_billing_period_display|lower }}. Renews automatically; credit is used first.</p>
+        <p class="text-xs text-gray-400">Billed {{ subscription.get_billing_period_display|lower }}. {{ renewal_note }}</p>
         <form method="post" action="{% url 'billing:cancel' %}" hx-confirm="Cancel your subscription? You keep your plan until the end of the period you paid for, and won't be charged again." hx-confirm-danger
               hx-post="{% url 'billing:cancel' %}" hx-swap="none">
           {% csrf_token %}
