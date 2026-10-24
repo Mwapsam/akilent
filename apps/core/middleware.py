@@ -24,6 +24,8 @@ from apps.core.request_context import (
 #     https: in dev (no S3). Avoids the wildcard-directive ZAP warning in prod.
 #   * connect-src: 'self' only — SSE uses HTTP EventSource, not WebSocket.
 #   * script-src: adds googletagmanager.com when GA is configured.
+#   * form-action: adds every payment provider's checkout origins. Browsers apply it to each
+#     redirect after a submit, so a form that ends in checkout (signup) needs the hosted page.
 #   * COEP is intentionally omitted: Cloudflare cdn-cgi resources lack CORP
 #     headers, so require-corp would break error pages served from that origin.
 
@@ -47,6 +49,8 @@ def _build_csp() -> str:
         " https://analytics.google.com https://www.google.com" if ga_id else ""
     )
 
+    form_action = " ".join(["'self'", *_checkout_origins()])
+
     return (
         "default-src 'self'; "
         f"script-src 'self' 'unsafe-inline' 'unsafe-eval' {cdn}"
@@ -57,9 +61,20 @@ def _build_csp() -> str:
         f"connect-src 'self'{connect_src_extra}; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
-        "form-action 'self'; "
+        f"form-action {form_action}; "
         "object-src 'none';"
     )
+
+
+def _checkout_origins() -> list[str]:
+    """Every registered provider's checkout origins, not just the active one's: the operator
+    can switch providers at runtime and the policy is built once per process."""
+    from apps.billing.providers import registry
+
+    origins: list[str] = []
+    for provider in registry.all_providers():
+        origins += [o for o in provider.checkout_origins if o not in origins]
+    return origins
 
 
 def _get_csp() -> str:

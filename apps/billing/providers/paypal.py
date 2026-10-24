@@ -126,6 +126,7 @@ class PayPalProvider(PaymentProvider):
     code = "paypal"
     display_name = "PayPal"
     checkout_label = "Pay with PayPal"
+    checkout_origins = ("https://www.paypal.com", "https://www.sandbox.paypal.com")
     resume_on_return = True
     off_session_charge = False
     can_reconcile = True

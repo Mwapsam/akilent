@@ -26,6 +26,7 @@
       plans: [],
       serviceChoices: [],
       periods: [],
+      currency: { symbol: "$", zeroDecimal: false },
       preselect: { services: "", plan: "", period: "monthly", startStep: 0 },
       formData: {},
       errors: {},
@@ -52,6 +53,11 @@
       // posted value, else ?period=, else monthly) and prices each term with
       // billing.pricing.price_for, as checkout does.
       period: pre.period || "monthly",
+
+      // A paid plan asks first (the "Create your account and pay" dialog):
+      // submitting creates the account and goes straight on to payment.
+      confirmOpen: false,
+      confirmed: false,
 
       // Step 2 ("Your details") fields, bound via x-model so "Continue" can
       // be gated the same way steps 0/1 are, and Review can echo them back.
@@ -176,10 +182,32 @@
         if (i < this.step) this.step = i;
       },
 
+      // The form's submit handler. Enter in a field submits too, so the
+      // dialog is opened here rather than from the button.
+      submit: function (e) {
+        if (this.isPaid(this.selectedPlan) && !this.confirmed) {
+          e.preventDefault();
+          this.confirmOpen = true;
+          return;
+        }
+        this.confirmed = false;
+        // One submit at a time; app.js re-enables these if the page is
+        // restored from the back/forward cache, and they unlock after 15s.
+        e.target.querySelectorAll("[type=submit]").forEach(function (b) {
+          b.disabled = true;
+          b.setAttribute("data-submit-lock", "");
+          setTimeout(function () {
+            b.disabled = false;
+            b.removeAttribute("data-submit-lock");
+          }, 15000);
+        });
+      },
+
       _money: function (amount) {
-        var whole = Math.round(amount * 100) % 100 === 0;
+        var cur = this.cfg.currency || {};
+        var whole = cur.zeroDecimal || Math.round(amount * 100) % 100 === 0;
         var digits = whole ? 0 : 2;
-        return "$" + amount.toLocaleString("en-US", {
+        return (cur.symbol || "$") + amount.toLocaleString("en-US", {
           minimumFractionDigits: digits,
           maximumFractionDigits: digits,
         });

@@ -232,7 +232,7 @@ def test_paid_signup_warns_when_verification_could_not_be_queued(
         SIGNUP_URL,
         _payload(selected_services=Account.Services.EMAIL, plan=Plan.STARTER),
     )
-    assert resp.status_code == 302 and resp.url.startswith("/billing/pay/")
+    assert resp.status_code == 302 and resp.url.startswith("/billing/checkout/")
     texts = [str(m) for m in get_messages(resp.wsgi_request)]
     assert any("couldn't send the verification email" in t for t in texts), texts
 
@@ -306,7 +306,7 @@ def test_paid_signup_is_billed_for_the_chosen_term(client, plans, settings):
         ),
     )
     assert resp.status_code == 302
-    assert resp.url == "/billing/pay/?plan=starter&period=annually"
+    assert resp.url == "/billing/checkout/?plan=starter&period=annually"
     sub = Account.objects.get(company_name="New Co").subscription
     assert sub.status == Subscription.INCOMPLETE
     assert sub.billing_period == "annually"
@@ -407,3 +407,25 @@ def test_free_plan_keeps_no_term(client, plans, settings):
     )
     sub = Account.objects.get(company_name="New Co").subscription
     assert sub.plan.slug == Plan.TRIAL and sub.billing_period == "monthly"
+
+
+@pytest.mark.django_db
+def test_wizard_prices_use_the_billing_currency(client, plans, settings):
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    settings.BILLING_CURRENCY = "ZMW"
+    cfg = _wizard_config(client.get(SIGNUP_URL))
+    assert cfg["currency"] == {"symbol": "K", "zeroDecimal": False}
+
+
+@pytest.mark.django_db
+def test_paid_signup_explains_payment_before_creating_the_account(
+    client, plans, settings
+):
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    html = client.get(SIGNUP_URL).content.decode()
+    assert "Create your account and pay" in html
+    # The dialog's button submits the signup form itself.
+    form = html[html.index('action="/signup/"') : html.index("</form>")]
+    assert 'type="submit" class="btn btn-primary" @click="confirmed = true"' in form

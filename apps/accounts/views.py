@@ -295,6 +295,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
 
     from apps.accounts.forms import signup_offer
     from apps.billing.models import Plan, Subscription
+    from apps.billing.money import SYMBOLS, ZERO_DECIMAL, billing_currency
     from apps.billing.pricing import period_options, price_for
 
     by_service, service_choices = signup_offer()
@@ -346,8 +347,14 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     else:
         start_step = 2
 
+    currency = billing_currency()
     return {
         "csrfToken": get_token(request),
+        # Prices are shown in the billing currency checkout charges in.
+        "currency": {
+            "symbol": SYMBOLS.get(currency, f"{currency} "),
+            "zeroDecimal": currency in ZERO_DECIMAL,
+        },
         "plans": plans,
         "serviceChoices": [{"value": v, "label": l} for v, l in service_choices],
         "periods": period_options(),
@@ -511,20 +518,19 @@ def signup(request):
 
 
 def after_signup_url(account) -> str:
-    """Where a new account goes next: the payment page while its paid plan is unpaid,
-    else its first setup step. Shared with the CSRF failure view, which resumes a
-    signup the Back button re-sent.
+    """Where a new account goes next: checkout while its paid plan is unpaid, else its
+    first setup step. Shared with the CSRF failure view, which resumes a signup the
+    Back button re-sent.
 
-    Not checkout itself: checkout redirects to the payment provider, and a redirect
-    chain that starts at the signup form may not leave the site (CSP form-action), so
-    the browser would stay on the signup page. See billing.views.pay.
+    Checkout redirects on to the provider's hosted page, a hop the CSP's form-action
+    must allow (each provider's ``checkout_origins``), as it follows the signup POST.
     """
     from apps.billing.models import Subscription
 
     subscription = getattr(account, "subscription", None)
     if subscription and subscription.status == Subscription.INCOMPLETE:
         period = subscription.billing_period or Subscription.MONTHLY
-        return f"/billing/pay/?plan={subscription.plan.slug}&period={period}"
+        return f"/billing/checkout/?plan={subscription.plan.slug}&period={period}"
     return ob.first_setup_url(account)
 
 

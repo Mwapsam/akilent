@@ -92,6 +92,10 @@ class PaymentProvider(ABC):
     display_name: str = ""
     # The checkout button for this provider.
     checkout_label: str = "Pay by card"
+    # Origins ``start_checkout`` may redirect to. The CSP's form-action covers every redirect
+    # after a form submit (signup -> checkout -> here), so a host missing from this list leaves
+    # the browser silently stuck on the form.
+    checkout_origins: tuple[str, ...] = ()
     # Does a return in REQUIRES_ACTION send the customer straight to ``action_url`` (PayPal:
     # approve again after a decline)? Otherwise they see the pending page.
     resume_on_return: bool = False

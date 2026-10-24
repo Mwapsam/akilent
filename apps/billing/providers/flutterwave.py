@@ -72,6 +72,7 @@ def _result(verified: dict) -> ProviderResult:
 class FlutterwaveProvider(PaymentProvider):
     code = "flutterwave"
     display_name = "Flutterwave"
+    checkout_origins = ("https://checkout.flutterwave.com",)
     off_session_charge = True
 
     def is_configured(self) -> bool:

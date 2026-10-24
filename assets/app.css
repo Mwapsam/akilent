@@ -1380,6 +1380,19 @@
   .ob-step[data-state="current"] .ob-marker { background-color: var(--tone-brand-bg); color: var(--tone-brand-fg); box-shadow: inset 0 0 0 2px var(--color-accent); }
   .ob-step[data-state="paused"] .ob-marker { background-color: var(--tone-amber-bg); color: var(--tone-amber-fg); box-shadow: inset 0 0 0 1.5px var(--tone-amber-border); }
 
+  /* Signup's "Create your account and pay" dialog. */
+  .signup-pay-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full;
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
+  }
+  .signup-pay-num {
+    @apply mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold;
+    background-color: var(--tone-brand-bg);
+    color: var(--tone-brand-fg);
+    box-shadow: inset 0 0 0 1.5px var(--tone-brand-border);
+  }
+
   .ob-tile {
     @apply flex flex-col h-full rounded-2xl border p-4 sm:p-5 transition-colors;
     background-color: var(--color-surface);

@@ -120,7 +120,7 @@ def test_resent_paid_signup_resumes_at_checkout(trial):
     data = _signup_data(_token(c.get("/signup/")))
     data.update(selected_services="email", plan=Plan.STARTER)
     first = c.post("/signup/", data)
-    assert first.url.startswith("/billing/pay/")
+    assert first.url.startswith("/billing/checkout/")
 
     again = c.post("/signup/", data)
     assert again.status_code == 302 and again.url == first.url
