@@ -48,7 +48,8 @@ The plan is at `C:\Users\hp\.claude\plans\make-a-plan-for-compiled-pillow.md`. I
 | capture | `COMPLETED` | SUCCEEDED |
 | capture | `PENDING` | PENDING (`status_details.reason`, e.g. `PENDING_REVIEW`, `TRANSACTION_APPROVED_AWAITING_FUNDING`) |
 | capture | `DECLINED`, `FAILED` | FAILED |
-| capture | `REFUNDED`, `PARTIALLY_REFUNDED` | cross-check only; each refund is recorded from its own refund resource |
+| capture | `PARTIALLY_REFUNDED` | SUCCEEDED (paid; each refund recorded from its own refund resource, the operator decides) |
+| capture | `REFUNDED` | FAILED: the money went back, so it never pays for a period. A payment already granted is unaffected. |
 | refund | `COMPLETED` | record a `BillingRefund` row |
 | refund | `PENDING` | wait; record when COMPLETED |
 | refund | `FAILED`, `CANCELLED` | ignore (log) |
@@ -138,7 +139,7 @@ Event names found in the schemas:
 
 **[Sandbox]**, to confirm with `GET /v1/notifications/webhooks-event-types` and record: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.REVERSED`, `VAULT.PAYMENT-TOKEN.CREATED`, `VAULT.PAYMENT-TOKEN.DELETED`.
 
-Every event is only a trigger. The provider re-fetches the order, capture, refund or token before acting.
+Every event is only a trigger. The provider re-fetches the order, capture, refund or token before acting. Signature verification sends the event body **exactly as received** (spliced into the request), because a re-serialised copy may not verify. `CHECKOUT.ORDER.APPROVED` captures inside the event's handler, after the de-dupe check and in its transaction. A refund event whose refund isn't `COMPLETED` yet is answered with 500 so PayPal redelivers it; `FAILED`/`CANCELLED` refunds are acknowledged.
 
 ## 7. Idempotency and reconciliation
 

@@ -47,9 +47,12 @@ CAPTURE_STATUS = {
     "PENDING": PENDING,
     "DECLINED": FAILED,
     "FAILED": FAILED,
-    # Refunded captures were paid; each refund is recorded from its own refund resource.
+    # Partly refunded: the customer paid and kept most of it; each refund is recorded from its
+    # own refund resource and the operator decides.
     "PARTIALLY_REFUNDED": SUCCEEDED,
-    "REFUNDED": SUCCEEDED,
+    # Fully refunded: the money went back, so it never pays for a period (a payment that was
+    # already granted keeps its grant; record_result ignores later results for it).
+    "REFUNDED": FAILED,
 }
 
 CAPTURE_EVENTS = (
@@ -60,6 +63,16 @@ CAPTURE_EVENTS = (
 )
 # Capture refusals PayPal says to fix by sending the buyer back to approve again.
 BUYER_CAN_RETRY = ("INSTRUMENT_DECLINED", "PAYER_ACTION_REQUIRED")
+# Capture errors that mean no money moved. Any other error (PREVIOUS_REQUEST_IN_PROGRESS, 401,
+# 403, 404, 429, an issue we don't know) is not taken as a refusal: the order is read back.
+DEFINITE_REFUSALS = (
+    "ORDER_NOT_APPROVED",
+    "TRANSACTION_REFUSED",
+    "PAYER_CANNOT_PAY",
+    "ORDER_EXPIRED",
+    "MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED",
+    *BUYER_CAN_RETRY,
+)
 # Order states in which no money has been taken.
 UNCAPTURED_ORDER_STATUSES = (
     "CREATED",
@@ -113,6 +126,7 @@ class PayPalProvider(PaymentProvider):
     code = "paypal"
     display_name = "PayPal"
     checkout_label = "Pay with PayPal"
+    resume_on_return = True
     off_session_charge = False
     can_reconcile = True
 
@@ -272,34 +286,47 @@ class PayPalProvider(PaymentProvider):
         except PayPalUncertain:
             order = self._get_order(order_id)
         except PayPalError as exc:
-            if exc.issue == "ORDER_ALREADY_CAPTURED":
-                order = self._get_order(order_id)
-            elif exc.issue == "DUPLICATE_INVOICE_ID":
+            if exc.issue == "DUPLICATE_INVOICE_ID":
                 # Another order with this reference was already captured: the money may be
-                # there. Never a decline; hold the payment for an operator to match it up.
+                # there. Never a decline, and not something reconcile can settle from this
+                # order; held for an operator to match up.
                 logger.error(
                     "paypal: payment=%s already captured under another order (debug_id=%s)",
                     payment.reference,
                     exc.debug_id,
                 )
+                self._remember(payment, hold="duplicate_invoice")
                 mark_unresolved(payment)
                 return None
-            elif 400 <= exc.status < 500:
-                # A definite refusal: no money moved.
+            if exc.issue in DEFINITE_REFUSALS:
+                # No money moved. This request id now holds PayPal's refusal, so the next
+                # attempt (after the buyer approves again) must use a new one.
                 clear_charge_started(payment)
-                return self._refused(payment, exc, attempt)
-            else:
-                raise ProviderError(f"capture failed: {exc.issue or exc}") from exc
+                self._remember(payment, capture_attempt=attempt + 1)
+                return self._refused(payment, exc)
+            # ORDER_ALREADY_CAPTURED, a request still in progress, rate limits, auth trouble or
+            # anything unknown: what happened is whatever the order says now.
+            logger.info(
+                "paypal: capture of payment=%s answered %s; reading the order",
+                payment.reference,
+                exc.issue or exc.status,
+            )
+            order = self._get_order(order_id)
         return self._order_result(payment, order)
 
-    def _refused(self, payment, exc, attempt) -> ProviderResult | None:
+    @staticmethod
+    def _remember(payment, **values) -> None:
+        """Keep provider bookkeeping (capture attempt, hold reason) on the payment."""
+        from apps.billing.models import BillingPayment
+
+        raw = {**(payment.raw or {}), **values}
+        BillingPayment.objects.filter(pk=payment.pk).update(raw=raw)
+        payment.raw = raw
+
+    def _refused(self, payment, exc) -> ProviderResult | None:
         if exc.issue == "ORDER_NOT_APPROVED":
             return None  # the buyer hasn't approved (yet)
-        raw = {
-            "capture_attempt": attempt + 1,
-            "issue": exc.issue,
-            "debug_id": exc.debug_id,
-        }
+        raw = {**(payment.raw or {}), "issue": exc.issue, "debug_id": exc.debug_id}
         if exc.issue in BUYER_CAN_RETRY:
             # PayPal: send the buyer back to approve again (e.g. pick another funding source).
             return ProviderResult(
@@ -403,21 +430,26 @@ class PayPalProvider(PaymentProvider):
         )
 
     def reconcile(self, payment) -> ProviderResult | None:
-        """What happened to a capture we never heard back about. An order with no capture was
-        never charged (only we capture, and only an open payment); anything else is read from
-        the capture itself."""
-        if not payment.provider_operation_id:
+        """What happened to a capture we never heard back about.
+
+        An order with no capture was never charged (only we capture): the payment stops being
+        in flight and is an ordinary unfinished checkout again, so the customer can pay (and it
+        is abandoned in the usual way). Anything else is read from the capture itself. A payment
+        held for a duplicate invoice id is the operator's to settle, never this order's."""
+        from apps.billing.payments import clear_charge_started
+
+        if not payment.provider_operation_id or (payment.raw or {}).get("hold"):
             return None
         order = self._get_order(payment.provider_operation_id)
         if order.get("id") != payment.provider_operation_id:
             return None
         if not _first_capture(order):
             if order.get("status") in UNCAPTURED_ORDER_STATUSES:
+                clear_charge_started(payment)
                 return ProviderResult(
                     reference=payment.reference,
-                    status=FAILED,
-                    failure_reason="The PayPal payment was never completed.",
-                    raw={"order": order.get("id"), "status": order.get("status")},
+                    status=PENDING,
+                    raw={**(payment.raw or {}), "order_status": order.get("status")},
                 )
             return None
         return self._order_result(payment, order)
@@ -440,9 +472,12 @@ class PayPalProvider(PaymentProvider):
         }
         if not all(payload.values()):
             raise InvalidSignature("missing PayPal transmission headers")
-        payload.update(webhook_id=webhook_id, webhook_event=event)
+        payload["webhook_id"] = webhook_id
         try:
-            verified = self._client().verify_webhook_signature(payload)
+            # The event exactly as PayPal sent it: a re-serialised copy may not verify.
+            verified = self._client().verify_webhook_signature(
+                payload, request.body.decode("utf-8")
+            )
         except PayPalUncertain as exc:
             raise ProviderError("couldn't verify the signature") from exc
         except PayPalError as exc:
@@ -456,7 +491,10 @@ class PayPalProvider(PaymentProvider):
         resource = event.get("resource") or {}
         key = f"paypal:{kind}:{event['id']}"
         if kind == "CHECKOUT.ORDER.APPROVED":
-            return [ProviderEvent(key=key, result=self._approved(resource.get("id")))]
+            # Moves money, so it runs as the event's handler: after the de-dupe check and in
+            # the same transaction, never for a delivery that was already processed.
+            order_id = resource.get("id")
+            return [ProviderEvent(key=key, handler=lambda: self._approved(order_id))]
         if kind in CAPTURE_EVENTS:
             return [
                 ProviderEvent(key=key, result=self._capture_event(resource.get("id")))
@@ -479,14 +517,17 @@ class PayPalProvider(PaymentProvider):
             provider=self.code, provider_operation_id=order_id
         ).first()
 
-    def _approved(self, order_id) -> ProviderResult | None:
+    def _approved(self, order_id) -> None:
         """The buyer approved but may have closed the tab before returning: capture now."""
         from apps.billing.models import BillingPayment
+        from apps.billing.payments import record_result
 
         payment = self._payment_for_order(order_id)
         if payment is None or payment.status == BillingPayment.SUCCEEDED:
-            return None
-        return self._capture(payment)
+            return
+        result = self._capture(payment)
+        if result is not None:
+            record_result(self.code, result)
 
     def _capture_event(self, capture_id) -> ProviderResult | None:
         from apps.billing.models import BillingPayment
@@ -528,11 +569,14 @@ class PayPalProvider(PaymentProvider):
             refund = client.get_refund(refund_id)
         except PayPalError as exc:
             raise ProviderError(f"couldn't read refund: {exc.issue or exc}") from exc
-        if refund.get("status") != "COMPLETED":
-            logger.info(
-                "paypal: refund %s is %s; waiting", refund_id, refund.get("status")
-            )
+        status = refund.get("status")
+        if status in ("FAILED", "CANCELLED"):
+            logger.info("paypal: refund %s %s; nothing to record", refund_id, status)
             return None
+        if status != "COMPLETED":
+            # Not final yet (e.g. PENDING): answer 500 so PayPal delivers the event again later,
+            # rather than marking it processed and never recording the refund.
+            raise ProviderError(f"refund {refund_id} is {status}; retry later")
         reference = refund.get("custom_id") or refund.get("invoice_id") or ""
         if not reference:
             # Older refunds don't carry our ids; the capture they belong to does.

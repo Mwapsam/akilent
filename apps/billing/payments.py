@@ -45,6 +45,12 @@ CHARGING = "charging"
 ZERO = Decimal("0.00")
 # A checkout nobody finished gives its credit back after this long.
 ABANDON_AFTER = timedelta(hours=24)
+# A charge in flight (sent, outcome not heard) is looked up this soon with a provider that can
+# reconcile, so a lost answer doesn't block the customer for a day.
+RECHECK_IN_FLIGHT_AFTER = timedelta(minutes=15)
+# Still pending at the provider (e.g. a PayPal review) this long after it was sent: an operator
+# is told, and it keeps being looked up.
+ALERT_PENDING_AFTER = timedelta(days=3)
 
 
 class UnresolvedPayment(Exception):
@@ -203,32 +209,44 @@ def abandon_stale() -> int:
     up with a provider that can ``reconcile``. Still pending at the provider (e.g. under review)
     keeps it waiting for the provider's webhook. No answer at all marks it UNRESOLVED rather than
     giving it up: giving it up would let the customer pay the same period again while the first
-    charge may have gone through. UNRESOLVED payments are looked up again on every run.
+    charge may have gone through. UNRESOLVED payments are looked up again on every run, and so
+    is any payment in flight for RECHECK_IN_FLIGHT_AFTER with a provider that can reconcile;
+    one still pending after ALERT_PENDING_AFTER is escalated to an operator.
     """
-    cutoff = timezone.now() - ABANDON_AFTER
+    now = timezone.now()
+    cutoff = now - ABANDON_AFTER
     open_statuses = [BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION]
-    unresolved = Q(resolution=BillingPayment.UNRESOLVED)
+    recheck = Q(resolution=BillingPayment.UNRESOLVED) | Q(
+        status=BillingPayment.PENDING,
+        charge_started_at__lt=now - RECHECK_IN_FLIGHT_AFTER,
+    )
     count = 0
     for payment in BillingPayment.objects.filter(
-        Q(created_at__lt=cutoff) | unresolved,
+        Q(created_at__lt=cutoff) | recheck,
         purpose=BillingPayment.CHECKOUT,
         status__in=open_statuses,
         manual_requests__isnull=True,
     ):
         if payment.charge_started_at is not None and _reconcile(payment):
             continue
-        if payment.resolution == BillingPayment.UNRESOLVED:
-            continue  # only a confirmed outcome or an operator settles it
+        if (
+            payment.resolution == BillingPayment.UNRESOLVED
+            or payment.created_at >= cutoff
+        ):
+            continue  # unresolved: only a confirmed outcome or an operator settles it
         _abandon(payment)
         count += 1
     for payment in BillingPayment.objects.filter(
-        Q(updated_at__lt=cutoff) | unresolved,
+        Q(updated_at__lt=cutoff) | recheck,
         purpose=BillingPayment.RENEWAL,
         status=BillingPayment.PENDING,
     ):
         if payment.charge_started_at is not None and _reconcile(payment):
             continue
-        if payment.resolution == BillingPayment.UNRESOLVED:
+        if (
+            payment.resolution == BillingPayment.UNRESOLVED
+            or payment.updated_at >= cutoff
+        ):
             continue
         fail(payment, "The provider never confirmed the renewal charge")
         count += 1
@@ -254,10 +272,18 @@ def _reconcile(payment) -> bool:
         result = None
     if result is None:
         mark_unresolved(payment)
-    else:
-        # PENDING here is a known state (the provider is still deciding, e.g. a review); its
-        # webhook will settle it, and it stays in flight meanwhile.
-        record_result(provider.code, result)
+        return True
+    # PENDING here is a known state (the provider is still deciding, e.g. a review); its webhook
+    # will settle it, and it stays in flight meanwhile, unless the provider said nothing was
+    # charged (then it is an ordinary unfinished payment again).
+    settled = record_result(provider.code, result) or payment
+    if (
+        result.status == PENDING
+        and settled.status == BillingPayment.PENDING
+        and settled.charge_started_at is not None
+        and timezone.now() - settled.charge_started_at >= ALERT_PENDING_AFTER
+    ):
+        mark_unresolved(settled)
     return True
 
 

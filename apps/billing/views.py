@@ -379,6 +379,8 @@ def payment_return(request, provider):
         return redirect("/billing/plans/")
     if (
         payment is not None
+        and impl is not None
+        and impl.resume_on_return
         and payment.status == BillingPayment.REQUIRES_ACTION
         and payment.action_url
     ):

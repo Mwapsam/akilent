@@ -92,6 +92,9 @@ class PaymentProvider(ABC):
     display_name: str = ""
     # The checkout button for this provider.
     checkout_label: str = "Pay by card"
+    # Does a return in REQUIRES_ACTION send the customer straight to ``action_url`` (PayPal:
+    # approve again after a decline)? Otherwise they see the pending page.
+    resume_on_return: bool = False
     # Can the customer's method be saved at checkout and charged again without them?
     off_session_charge: bool = False
     # Can the operator make this the active provider (manual bank transfer can't take renewals

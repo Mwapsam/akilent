@@ -14,6 +14,7 @@ Safety rules:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import time
 
@@ -108,7 +109,14 @@ class PayPalClient:
     # --- transport -----------------------------------------------------------------------------
 
     def _request(
-        self, method: str, path: str, *, json=None, params=None, request_id=""
+        self,
+        method: str,
+        path: str,
+        *,
+        json=None,
+        data=None,
+        params=None,
+        request_id="",
     ):
         url = f"{self.base_url}{path}"
         is_get = method == "GET"
@@ -128,6 +136,7 @@ class PayPalClient:
                     url,
                     headers=headers,
                     json=json,
+                    data=data,
                     params=params,
                     timeout=TIMEOUT,
                 )
@@ -194,11 +203,16 @@ class PayPalClient:
     def get_refund(self, refund_id: str) -> dict:
         return self._request("GET", f"/v2/payments/refunds/{refund_id}")
 
-    def verify_webhook_signature(self, payload: dict) -> bool:
-        """``payload`` holds the transmission headers, webhook_id and the parsed event. Read-only
-        at PayPal, so it is safe to retry."""
+    def verify_webhook_signature(self, fields: dict, raw_event: str) -> bool:
+        """``fields`` are the transmission headers and webhook_id; ``raw_event`` is the body
+        exactly as PayPal sent it. It is spliced in unchanged, because a re-serialised event
+        (different escaping or spacing) may not verify. Read-only at PayPal."""
+        head = json.dumps(fields)
+        body = head[:-1] + ', "webhook_event": ' + raw_event + "}"
         data = self._request(
-            "POST", "/v1/notifications/verify-webhook-signature", json=payload
+            "POST",
+            "/v1/notifications/verify-webhook-signature",
+            data=body.encode("utf-8"),
         )
         return data.get("verification_status") == "SUCCESS"
 

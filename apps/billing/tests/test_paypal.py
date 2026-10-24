@@ -762,15 +762,21 @@ def test_timed_out_capture_is_marked_sent_then_reconciled(
 
 
 @pytest.mark.django_db
-def test_reconcile_of_an_order_never_captured_gives_it_up(pending, subscription):
+def test_reconcile_of_an_order_never_captured_frees_it(pending, subscription):
+    """No capture on the order: nothing was charged. It stops blocking the customer and is
+    abandoned in the usual way."""
     payments.mark_charge_started(pending)
     _stale(pending)
     approved = _fixture("order_get_vault_approved", order_id="ORDER123")
     with patch(CLIENT, return_value=_client(get_order=approved)):
         payments.abandon_stale()
+        pending.refresh_from_db()
+        assert pending.status == BillingPayment.PENDING
+        assert pending.charge_started_at is None
+        assert not payments.has_unconfirmed_charge(pending.account)
+        payments.abandon_stale()
     pending.refresh_from_db()
-    assert pending.status == BillingPayment.FAILED
-    assert pending.resolution == ""
+    assert pending.status == BillingPayment.ABANDONED
 
 
 @pytest.mark.django_db
@@ -908,3 +914,266 @@ def test_uncertain_capture_blocks_a_second_checkout(
     assert pending.status == BillingPayment.PENDING  # kept, credit still held
     assert resp["Location"] == "/billing/plans/"
     pp.create_order.assert_not_called()
+
+
+# --- review round 3 ----------------------------------------------------------------------------
+
+
+def _ago(**kw):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    return timezone.now() - timedelta(**kw)
+
+
+@pytest.mark.django_db
+def test_duplicate_invoice_hold_survives_reconcile(
+    client, owner, pending, subscription
+):
+    approved = _fixture("order_get_vault_approved", order_id="ORDER123")
+    pp = _client(
+        capture_order=PayPalError("dup", status=422, issue="DUPLICATE_INVOICE_ID"),
+        get_order=approved,
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+        _stale(pending)
+        payments.abandon_stale()
+        payments.abandon_stale()
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING
+    assert pending.resolution == BillingPayment.UNRESOLVED
+    pp.get_order.assert_not_called()  # the order can't settle it; an operator does
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "error",
+    [
+        PayPalError("busy", status=422, issue="PREVIOUS_REQUEST_IN_PROGRESS"),
+        PayPalError("rate", status=429, issue="RATE_LIMIT_REACHED"),
+        PayPalError("auth", status=403, issue="NOT_AUTHORIZED"),
+        PayPalError("odd", status=422, issue="SOMETHING_NEW"),
+    ],
+    ids=["in_progress", "rate_limit", "forbidden", "unknown"],
+)
+def test_capture_error_that_isnt_a_refusal_reads_the_order(
+    client, owner, pending, subscription, error
+):
+    approved = _fixture("order_get_vault_approved", order_id="ORDER123")
+    pp = _client(capture_order=error, get_order=approved)
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING  # not FAILED, credit still held
+    assert pending.charge_started_at is not None  # still in flight
+    pp.get_order.assert_called_with("ORDER123")
+
+
+@pytest.mark.django_db
+def test_in_progress_capture_that_completed_is_recorded(
+    client, owner, pending, subscription
+):
+    pp = _client(
+        capture_order=PayPalError(
+            "busy", status=422, issue="PREVIOUS_REQUEST_IN_PROGRESS"
+        ),
+        get_order=_captured(pending),
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.SUCCEEDED
+
+
+@pytest.mark.django_db
+def test_every_refused_attempt_moves_to_a_new_request_id(
+    client, owner, pending, subscription
+):
+    approved = _fixture("order_get_vault_approved", order_id="ORDER123")
+    pp = _client(
+        capture_order=PayPalError("no", status=422, issue="INSTRUMENT_DECLINED"),
+        get_order=approved,
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)  # declined: attempt 0
+        pp.capture_order.side_effect = PayPalError(
+            "no", status=422, issue="ORDER_NOT_APPROVED"
+        )
+        _post(
+            client, _event("CHECKOUT.ORDER.APPROVED", {"id": "ORDER123"})
+        )  # late webhook
+        pp.capture_order.side_effect = None
+        pp.capture_order.return_value = _captured(pending)
+        pp.get_order.return_value = _captured(pending)
+        pp.verify_webhook_signature.return_value = True
+        _return(client, pending)  # the buyer approved again
+    ids = [c.kwargs["request_id"] for c in pp.capture_order.call_args_list]
+    ref = pending.reference
+    assert ids == [f"capture-{ref}", f"capture-{ref}-1", f"capture-{ref}-2"]
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.SUCCEEDED
+
+
+@pytest.mark.django_db
+def test_lost_capture_answer_is_rechecked_within_minutes(
+    client, owner, pending, plan, subscription
+):
+    approved = _fixture("order_get_vault_approved", order_id="ORDER123")
+    pp = _client(capture_order=PayPalUncertain("timeout"), get_order=approved)
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+        assert payments.has_unconfirmed_charge(pending.account)
+        BillingPayment.objects.filter(pk=pending.pk).update(
+            charge_started_at=_ago(minutes=20)
+        )
+        payments.abandon_stale()  # created minutes ago, but in flight long enough to look up
+    pending.refresh_from_db()
+    assert pending.charge_started_at is None
+    assert not payments.has_unconfirmed_charge(pending.account)
+
+
+@pytest.mark.django_db
+def test_capture_pending_for_days_is_escalated(pending, subscription):
+    review = _fixture(
+        "order_get_vault_after_capture",
+        order_id="ORDER123",
+        reference=pending.reference,
+    )
+    BillingPayment.objects.filter(pk=pending.pk).update(charge_started_at=_ago(days=4))
+    pending.refresh_from_db()
+    with patch(CLIENT, return_value=_client(get_order=review)):
+        payments.abandon_stale()
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING
+    assert pending.resolution == BillingPayment.UNRESOLVED  # an operator is told
+
+
+@pytest.mark.django_db
+def test_capture_pending_for_hours_just_waits(pending, subscription):
+    from apps.core.models import AdminAction
+
+    review = _fixture(
+        "order_get_vault_after_capture",
+        order_id="ORDER123",
+        reference=pending.reference,
+    )
+    BillingPayment.objects.filter(pk=pending.pk).update(charge_started_at=_ago(hours=2))
+    with patch(CLIENT, return_value=_client(get_order=review)):
+        payments.abandon_stale()
+    pending.refresh_from_db()
+    assert pending.resolution == ""
+    assert not AdminAction.objects.filter(action="billing.unresolved").exists()
+
+
+@pytest.mark.django_db
+def test_pending_refund_is_retried_not_dropped(client, pending, subscription):
+    pp = _client(
+        verify_webhook_signature=True,
+        get_refund=_refund("R1", "5.00", pending.reference, "PENDING"),
+    )
+    with patch(CLIENT, return_value=pp):
+        resp = _post(client, _event("PAYMENT.CAPTURE.REFUNDED", {"id": "R1"}))
+    assert resp.status_code == 500
+    assert (
+        not ProcessedWebhookEvent.objects.exists()
+    )  # PayPal's redelivery is processed
+
+
+@pytest.mark.django_db
+def test_failed_refund_is_acknowledged(client, pending, subscription):
+    pp = _client(
+        verify_webhook_signature=True,
+        get_refund=_refund("R1", "5.00", pending.reference, "FAILED"),
+    )
+    with patch(CLIENT, return_value=pp):
+        assert (
+            _post(client, _event("PAYMENT.CAPTURE.REFUNDED", {"id": "R1"})).status_code
+            == 200
+        )
+    assert not pending.refunds.exists()
+
+
+@pytest.mark.django_db
+def test_fully_refunded_capture_never_activates(client, pending, subscription):
+    BillingPayment.objects.filter(pk=pending.pk).update(status=BillingPayment.ABANDONED)
+    pp = _client(
+        verify_webhook_signature=True,
+        get_capture=_capture_resource(pending, "REFUNDED"),
+    )
+    with patch(CLIENT, return_value=pp):
+        _post(client, _event("PAYMENT.CAPTURE.COMPLETED", {"id": "C1"}))
+    pending.refresh_from_db()
+    subscription.refresh_from_db()
+    assert pending.status != BillingPayment.SUCCEEDED
+    assert subscription.status == Subscription.PAST_DUE  # unchanged
+
+
+@pytest.mark.django_db
+def test_already_processed_approval_is_not_captured_again(
+    client, pending, subscription
+):
+    ProcessedWebhookEvent.objects.create(
+        event_key="paypal:CHECKOUT.ORDER.APPROVED:WH-EVT-1"
+    )
+    pp = _client(verify_webhook_signature=True)
+    with patch(CLIENT, return_value=pp):
+        assert (
+            _post(
+                client, _event("CHECKOUT.ORDER.APPROVED", {"id": "ORDER123"})
+            ).status_code
+            == 200
+        )
+    pp.capture_order.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_failed_approval_handling_rolls_back_and_is_retried(
+    client, pending, subscription
+):
+    pp = _client(
+        verify_webhook_signature=True,
+        capture_order=PayPalUncertain("t"),
+        get_order=PayPalError("down", status=503),
+    )
+    with patch(CLIENT, return_value=pp):
+        assert (
+            _post(
+                client, _event("CHECKOUT.ORDER.APPROVED", {"id": "ORDER123"})
+            ).status_code
+            == 500
+        )
+    assert not ProcessedWebhookEvent.objects.exists()
+
+
+def test_signature_check_sends_the_event_exactly_as_received(api):
+    raw = '{"id":"WH-1","event_type":"X","resource":{"name":"Zo\u00eb  Ünïcode"}}'
+    api._session.request.return_value = _response(
+        200, {"verification_status": "SUCCESS"}
+    )
+    assert api.verify_webhook_signature({"auth_algo": "A", "webhook_id": "W"}, raw)
+    sent = api._session.request.call_args.kwargs["data"].decode("utf-8")
+    assert sent.endswith('"webhook_event": ' + raw + "}")
+    assert json.loads(sent)["webhook_id"] == "W"
+    assert api._session.request.call_args.kwargs["json"] is None
+
+
+@pytest.mark.django_db
+def test_other_providers_still_show_the_pending_page(
+    client, owner, account, plan, subscription, fake_provider
+):
+    payment = payments.create_payment(
+        account, plan, Subscription.MONTHLY, provider="fake"
+    )
+    BillingPayment.objects.filter(pk=payment.pk).update(
+        status=BillingPayment.REQUIRES_ACTION, action_url="https://stale.example/3ds"
+    )
+    client.force_login(owner)
+    resp = client.get(f"/billing/return/fake/?ref={payment.reference}")
+    assert resp.status_code == 200  # pending page, no redirect to the stale URL

@@ -534,6 +534,28 @@ def test_audit_failure_doesnt_break_the_callers_transaction(account):
         assert AdminAction.objects.count() == 0  # the transaction is still usable
 
 
+@pytest.mark.django_db
+def test_early_recheck_never_fails_a_charge_for_providers_that_cant_reconcile(
+    account, plan, subscription, fake_provider
+):
+    """Stripe/Flutterwave keep their 24h window even though the charge is in flight."""
+    payment = payments.create_payment(
+        account,
+        plan,
+        "monthly",
+        provider="fake",
+        purpose=BillingPayment.RENEWAL,
+        reference="renew_early",
+    )
+    payments.claim_for_charge(payment)
+    BillingPayment.objects.filter(pk=payment.pk).update(
+        charge_started_at=timezone.now() - timedelta(hours=1)
+    )
+    payments.abandon_stale()
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.PENDING
+
+
 # --- migration ---------------------------------------------------------------------------------
 
 
