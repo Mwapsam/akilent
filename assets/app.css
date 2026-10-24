@@ -1344,4 +1344,58 @@
     @apply mt-1 text-sm max-w-sm mx-auto;
     color: var(--color-ink-subtle);
   }
+
+  /* ---- Onboarding (accounts/onboarding.html) --------------------------------------
+     A progress ring in the header, the essentials as a connected stepper, and the
+     recommendations as a grid of small cards. Tokens only, so dark mode follows. */
+  .ob-ring { @apply relative shrink-0 w-16 h-16 sm:w-20 sm:h-20; }
+  .ob-ring > svg { @apply w-full h-full -rotate-90; }
+  .ob-ring-track { stroke: var(--color-canvas); }
+  .ob-ring-value {
+    stroke: var(--color-accent);
+    transition: stroke-dasharray 200ms var(--ease-emphasized);
+  }
+  .ob-ring[data-complete] .ob-ring-value { stroke: var(--color-teal-600); }
+  .ob-ring-label {
+    @apply absolute inset-0 flex flex-col items-center justify-center leading-none tabular-nums;
+    color: var(--color-ink);
+  }
+
+  .ob-steps { @apply relative; }
+  .ob-step { @apply relative flex gap-4 pb-6 last:pb-0; }
+  /* The connector runs from below one marker to the next. */
+  .ob-step:not(:last-child)::before {
+    content: "";
+    @apply absolute left-[1.0625rem] top-10 bottom-1 w-px;
+    background-color: var(--color-border-strong);
+  }
+  .ob-step[data-state="done"]:not(:last-child)::before { background-color: var(--tone-teal-border); }
+  .ob-marker {
+    @apply relative z-[1] shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold;
+    background-color: var(--color-surface);
+    color: var(--color-ink-subtle);
+    box-shadow: inset 0 0 0 1.5px var(--color-border-strong);
+  }
+  .ob-step[data-state="done"] .ob-marker { background-color: var(--tone-teal-bg); color: var(--tone-teal-fg); box-shadow: inset 0 0 0 1.5px var(--tone-teal-border); }
+  .ob-step[data-state="current"] .ob-marker { background-color: var(--tone-brand-bg); color: var(--tone-brand-fg); box-shadow: inset 0 0 0 2px var(--color-accent); }
+  .ob-step[data-state="paused"] .ob-marker { background-color: var(--tone-amber-bg); color: var(--tone-amber-fg); box-shadow: inset 0 0 0 1.5px var(--tone-amber-border); }
+
+  .ob-tile {
+    @apply flex flex-col h-full rounded-2xl border p-4 sm:p-5 transition-colors;
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-card);
+    transition-timing-function: var(--ease-emphasized);
+  }
+  a.ob-tile:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
+  a.ob-tile:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  .ob-tile[data-state="done"] { background-color: var(--color-surface-muted); box-shadow: none; }
+  .ob-tile[data-state="locked"] { background-color: var(--color-surface-muted); box-shadow: none; border-style: dashed; }
+  .ob-tile-icon { @apply w-10 h-10 rounded-xl flex items-center justify-center shrink-0; }
+
+  .ob-section > summary { @apply flex items-center justify-between gap-3 cursor-pointer list-none select-none rounded-xl py-1; }
+  .ob-section > summary::-webkit-details-marker { display: none; }
+  .ob-section > summary:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  .ob-section[open] .ob-chevron { transform: rotate(180deg); }
+  .ob-chevron { transition: transform 200ms var(--ease-emphasized); }
 }

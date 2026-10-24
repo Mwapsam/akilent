@@ -416,7 +416,9 @@ def test_signup_bullets_match_the_pricing_card(plan):
     from apps.core.channels import enabled_channels
 
     card = billing_api.plan_card(plan, channels=enabled_channels() - {"whatsapp"})
-    assert _plan_feature_bullets(plan) == card["limits"] + ["Detailed insights"]
+    assert _plan_feature_bullets(plan, plan.service_type) == card["limits"] + [
+        "Detailed insights"
+    ]
 
 
 # ---- WhatsApp: templates are core, campaigns and codes are sold --------------------------------

@@ -223,4 +223,8 @@
 {% endmodal %}
 
 {% include "contacts/_add_people_modal.html" with lists=contact_lists %}
+{% if request.GET.add == "csv" or request.GET.add == "paste" %}
+  {% comment %}Deep link (e.g. from the setup checklist) straight into "Add customers".{% endcomment %}
+  <div hidden x-data x-init="$nextTick(() => { $dispatch('add-people-tab', '{{ request.GET.add }}'); $dispatch('modal-open', 'add-people') })"></div>
+{% endif %}
 {% endblock %}

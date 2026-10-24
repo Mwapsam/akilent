@@ -82,6 +82,11 @@ def onboarding_status(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return {}
+    from apps.core.htmx import is_background
+
+    # HTMX fragments never render the widget or the tour, and some are polled.
+    if is_background(request):
+        return {}
     try:
         from apps.accounts import onboarding as ob
         from apps.accounts.utils import get_current_account
@@ -89,13 +94,13 @@ def onboarding_status(request):
         account = get_current_account(request)
         if account is None:
             return {}
-        state = ob.get_state(account)
-        extra = {
-            "onboarding_wants_whatsapp": ob._wants_whatsapp(account),
-            "onboarding_wants_email": ob._wants_email(account),
-        }
+        state = ob.get_state(account, essentials_only=True)
         if state["complete"]:
             return {}
-        return dict({"onboarding": state}, **extra)
+        return {
+            "onboarding": state,
+            "onboarding_wants_whatsapp": state["wants_whatsapp"],
+            "onboarding_wants_email": state["wants_email"],
+        }
     except Exception:
         return {}

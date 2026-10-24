@@ -8,6 +8,23 @@ hx-trigger of its own, so it loads exactly once.
 
   {% include "billing/_usage_warnings.html" %}
 
+  {% if next_recommended %}
+  <div class="card card-pad flex flex-wrap items-center gap-4" data-testid="next-recommended">
+    <div class="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center tone-brand">
+      {% include "components/icon.html" with name=next_recommended.icon class="w-5 h-5" %}
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Get more out of Akilent</p>
+      <p class="font-medium text-ink">{{ next_recommended.title }}</p>
+      <p class="text-sm text-gray-600 mt-0.5">{{ next_recommended.desc }}</p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="{{ next_recommended.url }}" class="btn btn-primary btn-sm">{{ next_recommended.cta }}</a>
+      <a href="{% url 'onboarding' %}" class="btn btn-ghost btn-sm">All suggestions</a>
+    </div>
+  </div>
+  {% endif %}
+
   {% include "conversations/_starting_point.html" %}
 
   {# ── Upcoming sends (2 cols) + Setup (1 col), per spec §12 ──────────── #}

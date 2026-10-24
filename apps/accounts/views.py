@@ -11,7 +11,8 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,7 +23,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from apps.accounts import onboarding as ob
-from apps.accounts.forms import SignupForm, enabled_service_choices
+from apps.accounts.forms import SignupForm
 from apps.accounts.models import (
     Account,
     EmailMfaEnrolment,
@@ -211,6 +212,8 @@ class PasswordResetView(auth_views.PasswordResetView):
 def _send_verification_email(request, user):
     """Queue an email with a tokened link to confirm the owner's address.
 
+    Returns whether it was queued.
+
     Sent via Celery rather than inline so a slow/unreachable mail server
     retries in the background instead of 500ing the request — the account
     (User/Account/Membership) is already committed by the time this runs.
@@ -227,7 +230,14 @@ def _send_verification_email(request, user):
     path = reverse("verify_email", kwargs={"uidb64": uid, "token": token})
     link = request.build_absolute_uri(path)
 
-    send_verification_email.delay(user.pk, site_name, link)
+    try:
+        send_verification_email.delay(user.pk, site_name, link)
+    except Exception:
+        # The broker being down must not turn a committed signup into a 500. Callers
+        # tell the user it wasn't sent, so they know to try "Resend link" later.
+        logger.exception("could not queue the verification email for user %s", user.pk)
+        return False
+    return True
 
 
 def _mark_email_verified(user):
@@ -257,16 +267,19 @@ _ACCOUNT_PROFILE_FIELDS = (
 )
 
 
-def _plan_feature_bullets(plan) -> list:
+def _plan_feature_bullets(plan, service: str) -> list:
     """Short marketing bullets for a plan card in the signup wizard: the same limits and
     features the pricing page shows (``billing_api.plan_card``), as plain strings for the
-    wizard's JSON config."""
+    wizard's JSON config. ``service`` is what the plan effectively gives right now, so a
+    channel it doesn't cover (or that is switched off) isn't advertised."""
+    from apps.accounts.forms import SERVICE_CHANNELS
     from apps.billing import api as billing_api
     from apps.core.channels import enabled_channels
 
     channels = enabled_channels()
-    if plan.service_type not in ("whatsapp", "both"):
-        channels = channels - {"whatsapp"}
+    for channel in ("whatsapp", "email"):
+        if channel not in SERVICE_CHANNELS[service]:
+            channels = channels - {channel}
     card = billing_api.plan_card(plan, channels=channels)
     return card["limits"] + card["feature_names"]
 
@@ -274,26 +287,27 @@ def _plan_feature_bullets(plan) -> list:
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
 
+    from apps.accounts.forms import signup_offer
     from apps.billing.models import Plan
 
-    enabled_values = {value for value, _ in enabled_service_choices()}
-    plans = [
-        {
-            "slug": p.slug,
-            "name": p.name,
-            "serviceType": p.service_type,
-            "priceMonthly": float(p.price_monthly),
-            "trialDays": p.trial_days,
-            "popular": p.slug == Plan.PROFESSIONAL,
-            "features": _plan_feature_bullets(p),
-        }
-        for p in Plan.objects.filter(is_active=True).order_by("price_monthly")
-        if p.service_type in enabled_values
-    ]
-
-    from apps.core.channels import is_enabled
-
-    whatsapp_enabled = is_enabled("whatsapp")
+    by_service, service_choices = signup_offer()
+    plans = sorted(
+        (
+            {
+                "slug": p.slug,
+                "name": p.name,
+                # The service the plan gives right now (see forms.effective_service).
+                "serviceType": service,
+                "priceMonthly": float(p.price_monthly),
+                "trialDays": p.trial_days,
+                "popular": p.slug == Plan.PROFESSIONAL,
+                "features": _plan_feature_bullets(p, service),
+            }
+            for service, service_plans in by_service.items()
+            for p in service_plans
+        ),
+        key=lambda p: p["priceMonthly"],
+    )
 
     # Figure out where the wizard should open.
     services = (form_data or {}).get("selected_services", "")
@@ -309,7 +323,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         if matched:
             services, plan_slug = matched["serviceType"], matched["slug"]
             start_step = 2
-        elif req_services in dict(enabled_service_choices()):
+        elif req_services in dict(service_choices):
             services, start_step = req_services, 1
         else:
             start_step = 0
@@ -318,11 +332,8 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
 
     return {
         "csrfToken": get_token(request),
-        "whatsappEnabled": whatsapp_enabled,
         "plans": plans,
-        "serviceChoices": [
-            {"value": v, "label": l} for v, l in enabled_service_choices()
-        ],
+        "serviceChoices": [{"value": v, "label": l} for v, l in service_choices],
         "preselect": {
             "services": services,
             "plan": plan_slug,
@@ -360,57 +371,82 @@ def signup(request):
         form = SignupForm(request.POST)
         if form.is_valid():
             cd = form.cleaned_data
-            with transaction.atomic():
-                user = form.save(commit=False)
-                user.email = cd["email"]
-                # Email is the login credential (EmailBackend); username is
-                # just an internal identifier Django's User model requires.
-                user.username = cd["email"][:150]
-                user.first_name = cd["first_name"]
-                user.last_name = cd["last_name"]
-                user.is_active = True
-                user.save()
+            try:
+                with transaction.atomic():
+                    user = form.save(commit=False)
+                    user.email = cd["email"]
+                    # Email is the login credential (EmailBackend); username is
+                    # just an internal identifier Django's User model requires.
+                    user.username = cd["email"][:150]
+                    user.first_name = cd["first_name"]
+                    user.last_name = cd["last_name"]
+                    user.is_active = True
+                    user.save()
 
-                account = Account.objects.create(
-                    company_name=cd["company_name"],
-                    selected_services=cd["selected_services"],
-                    onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
-                    billing_email=cd["email"],
-                    **{f: cd.get(f, "") for f in _ACCOUNT_PROFILE_FIELDS},
+                    account = Account.objects.create(
+                        company_name=cd["company_name"],
+                        # What they bought, not what it gives today: an "Email &
+                        # WhatsApp" plan chosen while email is switched off still
+                        # gets email setup (paused) and resumes it when email is back.
+                        selected_services=(
+                            form.plan.service_type
+                            if form.plan
+                            else cd["selected_services"]
+                        ),
+                        onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
+                        billing_email=cd["email"],
+                        **{f: cd.get(f, "") for f in _ACCOUNT_PROFILE_FIELDS},
+                    )
+                    Membership.objects.create(
+                        user=user, account=account, role=Membership.Role.OWNER
+                    )
+                    _apply_selected_plan(account, cd.get("plan"))
+                    _set_default_modules(account)
+            except IntegrityError:
+                # Two submits raced past clean_email (or two addresses share the
+                # 150-character username): same answer as the form check gives.
+                # Anything else is a real fault and must not be passed off as that.
+                if not User.objects.filter(
+                    Q(email__iexact=cd["email"]) | Q(username=cd["email"][:150])
+                ).exists():
+                    raise
+                logger.warning("signup: lost a duplicate-account race", exc_info=True)
+                form.add_error("email", "An account with this email already exists.")
+            else:
+                login(request, user, backend="apps.accounts.backends.EmailBackend")
+                set_current_account(request, account)
+                verification_sent = _send_verification_email(request, user)
+                logger.info(
+                    "signup: created account %s (%s) for user %s",
+                    account.pk,
+                    account.selected_services,
+                    user.pk,
                 )
-                Membership.objects.create(
-                    user=user, account=account, role=Membership.Role.OWNER
-                )
-                _apply_selected_plan(account, cd.get("plan"))
-                _set_default_modules(account)
 
-            login(request, user, backend="apps.accounts.backends.EmailBackend")
-            set_current_account(request, account)
-            _send_verification_email(request, user)
-            logger.info(
-                "signup: created account %s (%s) for user %s",
-                account.pk,
-                account.selected_services,
-                user.pk,
-            )
+                from apps.billing.models import Subscription
 
-            from apps.billing.models import Subscription
+                subscription = getattr(account, "subscription", None)
+                if subscription and subscription.status == Subscription.INCOMPLETE:
+                    messages.success(
+                        request,
+                        f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
+                    )
+                    return redirect(
+                        f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
+                    )
 
-            subscription = getattr(account, "subscription", None)
-            if subscription and subscription.status == Subscription.INCOMPLETE:
-                messages.success(
-                    request,
-                    f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
-                )
-                return redirect(
-                    f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
-                )
-
-            messages.success(
-                request,
-                "Your account is ready. We've emailed a link to verify your address.",
-            )
-            return redirect(ob.first_setup_url(account))
+                if verification_sent:
+                    messages.success(
+                        request,
+                        "Your account is ready. We've emailed a link to verify your address.",
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        "Your account is ready, but we couldn't send the verification email "
+                        "just now. Use “Resend link” on this page in a few minutes.",
+                    )
+                return redirect(ob.first_setup_url(account))
 
         config = _build_signup_wizard_config(
             request,
@@ -571,11 +607,18 @@ def resend_verification(request):
             messages.info(request, "Your email address is already verified.")
             return redirect("onboarding")
         if request.method == "POST":
-            _send_verification_email(request, request.user)
-            logger.info("resend_verification: resent link to user %s", request.user.pk)
-            messages.success(
-                request, "Sent — check your inbox for the confirmation link."
-            )
+            if _send_verification_email(request, request.user):
+                logger.info(
+                    "resend_verification: resent link to user %s", request.user.pk
+                )
+                messages.success(
+                    request, "Sent — check your inbox for the confirmation link."
+                )
+            else:
+                messages.error(
+                    request,
+                    "We couldn't send the email just now. Please try again in a few minutes.",
+                )
             return redirect("onboarding")
         return render(
             request, "accounts/resend_verification.html", {"email": request.user.email}
@@ -606,10 +649,15 @@ def resend_verification(request):
 
 def landing(request):
     """Public marketing landing page."""
+    from apps.accounts.forms import signup_offer
     from apps.billing import api as billing_api
-    from apps.billing.models import Plan
 
-    plans = Plan.objects.filter(is_active=True).order_by("price_monthly")
+    # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
+    by_service, _ = signup_offer()
+    plans = sorted(
+        (p for service_plans in by_service.values() for p in service_plans),
+        key=lambda p: p.price_monthly,
+    )
     cards = [billing_api.plan_card(p) for p in plans]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
@@ -676,7 +724,7 @@ def dashboard(request):
         else "Good evening"
     )
 
-    state = ob.get_state(account)
+    state = ob.get_state(account, essentials_only=True)
 
     # Only the work queue is rendered on the first byte - it answers the
     # dashboard's primary question and is cheap (three counts). Everything
@@ -749,8 +797,16 @@ def dashboard_panels(request):
     subscription = getattr(account, "subscription", None)
     stats = _email_stats(account, subscription)
 
+    from apps.accounts import onboarding as ob
     from apps.billing import api as billing_api
     from apps.conversations import api as conversations_api
+
+    # Once the essentials are done, point at the next thing worth setting up. Computed
+    # here, after first paint, and only then: the full checklist is a dozen-odd queries,
+    # the essentials check a handful.
+    next_recommended = None
+    if ob.get_state(account, essentials_only=True)["complete"]:
+        next_recommended = ob.get_state(account)["next_recommended"]
 
     return render(
         request,
@@ -760,6 +816,7 @@ def dashboard_panels(request):
             "subscription": subscription,
             "usage_warnings": billing_api.usage_warnings(account),
             "starting_point": conversations_api.starting_point(account),
+            "next_recommended": next_recommended,
             "attention_items": _attention_items(
                 account, stats, numbers, email_domains, subscription
             ),

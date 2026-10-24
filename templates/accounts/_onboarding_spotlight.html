@@ -1,0 +1,19 @@
+{% comment %}The one thing to do next on the setup page: ``spot`` is a step from
+apps.accounts.onboarding.get_state, ``eyebrow`` the small label above it. Holds the
+page's only primary (amber) button.{% endcomment %}
+<section class="card card-pad tone-brand-bg flex flex-col sm:flex-row sm:items-center gap-4"
+         style="border-color: var(--tone-brand-border)" aria-labelledby="ob-spotlight" data-testid="onboarding-spotlight">
+  <div class="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+    <span class="ob-tile-icon {% if spot.state == 'paused' %}tone-amber{% else %}tone-brand{% endif %} sm:w-12 sm:h-12" aria-hidden="true">
+      {% include "components/icon.html" with name=spot.icon class="w-5 h-5 sm:w-6 sm:h-6" %}
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{{ eyebrow }}</p>
+      <h2 id="ob-spotlight" class="mt-0.5 text-base sm:text-lg font-semibold text-ink">{{ spot.title }}</h2>
+      <p class="text-sm text-gray-600 mt-0.5">{{ spot.desc }}</p>
+    </div>
+  </div>
+  {% if spot.url %}
+    <a href="{{ spot.url }}" class="btn btn-primary shrink-0 w-full sm:w-auto">{{ spot.cta }}</a>
+  {% endif %}
+</section>

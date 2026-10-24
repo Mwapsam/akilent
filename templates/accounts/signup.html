@@ -3,7 +3,7 @@
 {% block title %}Create your account — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
-<script src="{% static 'js/signup-wizard.js' %}?v=1"></script>
+<script src="{% static 'js/signup-wizard.js' %}?v=2"></script>
 
 <div class="min-h-screen flex items-start justify-center px-4 py-12">
   <div class="w-full max-w-2xl" x-data="signupWizard()" x-cloak>
@@ -47,6 +47,11 @@
       {# ---- Step 0: Select services ---- #}
       <div x-show="step === 0" class="card card-pad sm:!p-8 space-y-3" role="radiogroup" aria-label="Which services do you want to set up?">
         <p class="text-sm text-gray-500 mb-2">Which services do you want to set up?</p>
+        {% if not wizard_config.serviceChoices %}
+          <div class="card card-pad text-sm text-gray-500" data-testid="signup-unavailable">
+            Sign-ups are temporarily unavailable. Please check back soon.
+          </div>
+        {% endif %}
         <template x-for="c in serviceCards" :key="c.value">
           <button type="button" @click="selectService(c.value)" role="radio" :aria-checked="services === c.value"
                   class="w-full text-left rounded-xl border px-4 py-4 flex items-center gap-3 transition"

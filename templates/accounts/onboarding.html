@@ -1,88 +1,171 @@
 {% extends "base.html" %}
 {% block title %}Get started — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
+{% comment %}
+  Setup checklist. Three layers, read top to bottom:
+  1. Header: what this page is, and one progress ring for the essentials.
+  2. Spotlight: the single next thing to do (the page's only amber button).
+  3. Essentials as a connected stepper, then the recommendations as tile grids,
+     one collapsible group per section (a finished group starts closed).
+  Step data comes from apps.accounts.onboarding.get_state; each step has a
+  ``state`` of done / current / paused / locked / todo.
+{% endcomment %}
 
-<div class="max-w-2xl mx-auto">
+<div class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
 
-  {% include "components/page_header.html" with title="Get started" description="A few quick steps to set up your workspace and start sending." %}
-
-  {# Progress #}
-  <div class="mb-6">
-    <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
-      <span>{{ required_done }} of {{ required_total }} essentials complete</span>
-      {% if complete %}<span class="text-teal-700 font-medium">All set 🎉</span>{% endif %}
-    </div>
-    <div class="h-2 rounded-full bg-canvas overflow-hidden">
-      <div class="h-full bg-brand-600 rounded-full transition-all" style="width: {{ pct }}%"></div>
-    </div>
-  </div>
-
-  {# Next step / completion callout #}
-  {% if next_step %}
-  <div class="alert alert-info mb-6">
-    {% include "components/icon.html" with name="sparkles" %}
-    <div class="flex-1">
-      <p class="text-[11px] font-semibold uppercase tracking-wider mb-1">Next up</p>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="font-medium text-ink">{{ next_step.title }}</p>
-          <p class="text-sm text-gray-600 mt-0.5">{{ next_step.desc }}</p>
-        </div>
-        {% if next_step.url %}
-        <a href="{{ next_step.url }}" class="btn btn-primary btn-sm shrink-0">{{ next_step.cta }}</a>
+  {# ── 1. Header ─────────────────────────────────────────────── #}
+  <header class="card card-pad flex items-center gap-4 sm:gap-6">
+    <div class="ob-ring" {% if complete %}data-complete{% endif %}
+         role="img" aria-label="{{ required_done }} of {{ required_total }} essentials complete">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <circle class="ob-ring-track" cx="20" cy="20" r="17" fill="none" stroke-width="4"/>
+        <circle class="ob-ring-value" cx="20" cy="20" r="17" fill="none" stroke-width="4"
+                stroke-linecap="round" pathLength="100" stroke-dasharray="{{ pct }} 100"/>
+      </svg>
+      <span class="ob-ring-label" aria-hidden="true">
+        {% if complete %}
+          <span class="text-teal-700">{% include "components/icon.html" with name="check" class="w-6 h-6 sm:w-7 sm:h-7" %}</span>
+        {% else %}
+          <span class="text-base sm:text-lg font-semibold">{{ required_done }}/{{ required_total }}</span>
         {% endif %}
-      </div>
+      </span>
     </div>
-  </div>
-  {% elif complete %}
-  <div class="alert alert-success mb-6">
-    {% include "components/icon.html" with name="check-circle" %}
-    <div class="flex-1">
-      <p class="font-medium">You're all set up! 🎉</p>
-      <p class="text-sm mt-0.5">Your workspace is ready.</p>
-      <a href="/dashboard/" class="btn btn-primary btn-sm mt-3">Go to dashboard</a>
+    <div class="min-w-0 flex-1">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Get started</p>
+      <h1 class="mt-1 text-xl sm:text-2xl font-semibold tracking-tight text-ink">
+        {% if complete %}{{ account.company_name|default:"Your workspace" }} is ready{% else %}Set up {{ account.company_name|default:"your workspace" }}{% endif %}
+      </h1>
+      <p class="mt-1 text-sm text-gray-600">
+        {% if complete %}
+          The essentials are done.{% if recommended_total %} {{ recommended_done }} of {{ recommended_total }} suggestions tried — each one takes a few minutes.{% endif %}
+        {% else %}
+          {{ required_done }} of {{ required_total }} essentials done. Finish them to start reaching your customers.
+        {% endif %}
+      </p>
     </div>
+  </header>
+
+  {# ── 2. Spotlight: the one next thing ──────────────────────── #}
+  {% if next_step %}
+    {% if next_step.state == "paused" %}
+      {% include "accounts/_onboarding_spotlight.html" with spot=next_step eyebrow="On hold" %}
+    {% else %}
+      {% include "accounts/_onboarding_spotlight.html" with spot=next_step eyebrow="Next up" %}
+    {% endif %}
+  {% elif next_recommended %}
+    {% include "accounts/_onboarding_spotlight.html" with spot=next_recommended eyebrow="Suggested next" %}
+  {% endif %}
+
+  {# ── 3a. Essentials: connected stepper ─────────────────────── #}
+  {% for section in sections %}{% if section.key == "setup" %}
+  {% comment %}Once everything here is done it folds away, so the suggestions lead.{% endcomment %}
+  <details class="ob-section card card-pad" {% if not complete %}open{% endif %}>
+    <summary>
+      <span class="flex items-center gap-2">
+        <h2 class="text-lg font-semibold text-ink">Essentials</h2>
+        <span class="badge {% if complete %}badge-success{% else %}badge-neutral{% endif %} tabular-nums">{{ section.done }}/{{ section.total }}</span>
+      </span>
+      <span class="ob-chevron text-gray-400">{% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}</span>
+    </summary>
+    <ol class="ob-steps mt-5">
+      {% for step in section.steps %}
+      <li class="ob-step" data-state="{{ step.state }}" data-step="{{ step.key }}"
+          {% if step.state == "current" %}aria-current="step"{% endif %}>
+        <span class="ob-marker" aria-hidden="true">
+          {% if step.state == "done" %}{% include "components/icon.html" with name="check" class="w-4 h-4" %}
+          {% elif step.state == "paused" %}{% include "components/icon.html" with name="pause" class="w-4 h-4" %}
+          {% elif step.state == "locked" %}{% include "components/icon.html" with name="lock" class="w-4 h-4" %}
+          {% else %}{{ forloop.counter }}{% endif %}
+        </span>
+        <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-3 pt-1.5">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium {% if step.state == 'done' %}text-gray-500{% else %}text-ink{% endif %}">
+              {{ step.title }}
+              <span class="sr-only">— {% if step.state == "done" %}done{% elif step.state == "paused" %}paused{% elif step.state == "current" %}next{% else %}to do{% endif %}</span>
+            </p>
+            {% if step.state != "done" %}
+              <p class="text-sm text-gray-600 mt-0.5">{{ step.desc }}</p>
+            {% endif %}
+            {% if step.locked %}
+              <p class="text-xs text-gray-500 mt-1">Available once “{{ step.locked }}” is done.</p>
+            {% endif %}
+          </div>
+          {% if step.url and step.state != "done" %}
+            <a href="{{ step.url }}" class="btn btn-secondary btn-sm self-start sm:self-center shrink-0">{{ step.cta }}</a>
+          {% elif step.url %}
+            <a href="{{ step.url }}" class="btn btn-ghost btn-sm self-start sm:self-center shrink-0">Manage</a>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </details>
+  {% endif %}{% endfor %}
+
+  {# ── 3b. Recommendations: one group per section ───────────── #}
+  {% if recommended_total %}
+  <div class="space-y-6">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">Get more out of Akilent</h2>
+      <p class="text-sm text-gray-600 mt-0.5">Optional, in any order. Each one shows you something else Akilent can do for your business.</p>
+    </div>
+
+    {% for section in sections %}{% if section.key != "setup" %}
+    <details class="ob-section" {% if section.done < section.total %}open{% endif %}>
+      <summary>
+        <span class="flex items-center gap-2 min-w-0">
+          <span class="text-sm font-semibold text-ink">{{ section.label }}</span>
+          <span class="badge {% if section.done == section.total %}badge-success{% else %}badge-neutral{% endif %} tabular-nums">{{ section.done }}/{{ section.total }}</span>
+        </span>
+        <span class="ob-chevron text-gray-400">{% include "components/icon.html" with name="chevron-down" class="w-4 h-4" %}</span>
+      </summary>
+      <ul class="mt-3 grid gap-3 sm:grid-cols-2" role="list">
+        {% for step in section.steps %}
+        <li data-step="{{ step.key }}">
+          {% if step.url %}<a href="{{ step.url }}" class="ob-tile" data-state="{{ step.state }}">{% else %}<div class="ob-tile" data-state="{{ step.state }}">{% endif %}
+            <div class="flex items-start gap-3">
+              <span class="ob-tile-icon {% if step.state == 'done' %}tone-teal{% elif step.state == 'locked' %}tone-neutral{% else %}tone-brand{% endif %}" aria-hidden="true">
+                {% if step.state == "done" %}{% include "components/icon.html" with name="check" class="w-5 h-5" %}
+                {% elif step.state == "locked" %}{% include "components/icon.html" with name="lock" class="w-5 h-5" %}
+                {% else %}{% include "components/icon.html" with name=step.icon class="w-5 h-5" %}{% endif %}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="font-medium {% if step.state == 'done' %}text-gray-500{% else %}text-ink{% endif %}">{{ step.title }}</p>
+                <p class="text-sm text-gray-600 mt-0.5">{{ step.desc }}</p>
+              </div>
+            </div>
+            <div class="mt-auto pt-3 text-sm">
+              {% if step.state == "done" %}
+                <span class="inline-flex items-center gap-1 text-teal-700 font-medium">{% include "components/icon.html" with name="check-circle" class="w-4 h-4" %} Done</span>
+                {% if step.url %}<span class="text-gray-400"> · Manage</span>{% endif %}
+              {% elif step.state == "locked" %}
+                <span class="text-gray-500">Available once “{{ step.locked }}” is done</span>
+              {% elif step.url %}
+                <span class="font-medium text-accent">{{ step.cta }} <span aria-hidden="true">→</span></span>
+              {% endif %}
+            </div>
+          {% if step.url %}</a>{% else %}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}{% endfor %}
   </div>
   {% endif %}
 
-  {# Steps #}
-  <ol class="space-y-3">
-    {% for step in steps %}
-      <li class="card card-pad flex items-start gap-4
-                 {% if step.key == next_step.key %}ring-1 ring-brand-200{% endif %}">
-        <div class="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center
-          {% if step.done %}tone-teal{% else %}bg-canvas text-gray-400{% endif %}">
-          {% if step.done %}
-            {% include "components/icon.html" with name="check" class="w-5 h-5" %}
-          {% else %}
-            {% include "components/icon.html" with name=step.icon class="w-5 h-5" %}
-          {% endif %}
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="font-medium flex items-center gap-2 {% if step.done %}text-gray-500{% else %}text-ink{% endif %}">
-            {{ step.title }}
-            {% if step.optional %}<span class="text-[11px] font-normal text-gray-400">optional</span>{% endif %}
-          </p>
-          <p class="text-sm text-gray-600 mt-0.5">{{ step.desc }}</p>
-        </div>
-        {% if step.url %}
-          <a href="{{ step.url }}" class="shrink-0 self-center btn btn-sm {% if step.done %}btn-secondary{% else %}btn-primary{% endif %}">
-            {% if step.done %}Manage{% else %}{{ step.cta }}{% endif %}
-          </a>
-        {% endif %}
-      </li>
-    {% endfor %}
-  </ol>
-
-  <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex items-center gap-4">
+  {# ── Footer ────────────────────────────────────────────────── #}
+  <footer class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 sm:pt-4">
       <a href="/billing/plans/" class="text-sm text-gray-500 hover:text-ink">View plans</a>
-      {% include "components/help_link.html" with slug="getting-started" text="Setup guide" %}
+      {% comment %}The setup guide is about email, so it only exists while email is on.{% endcomment %}
+      {% if "email" in enabled_channels %}
+        {% include "components/help_link.html" with slug="getting-started" text="Setup guide" %}
+      {% endif %}
     </div>
-    <a href="/dashboard/" class="btn btn-sm {% if complete %}btn-primary{% else %}btn-secondary{% endif %}">
+    <a href="/dashboard/" class="btn btn-sm btn-secondary self-start sm:self-auto sm:mt-4 mt-3">
       {% if complete %}Go to dashboard{% else %}Skip for now{% endif %}
     </a>
-  </div>
+  </footer>
 
 </div>
 

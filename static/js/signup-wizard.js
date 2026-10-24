@@ -24,7 +24,6 @@
     var cfg = {
       plans: [],
       serviceChoices: [],
-      whatsappEnabled: false,
       preselect: { services: "", plan: "", startStep: 0 },
       formData: {},
       errors: {},
@@ -85,11 +84,9 @@
         }
       },
 
+      // The server only sends services that are on and have at least one plan.
       get serviceCards() {
-        var self = this;
-        return this.cfg.serviceChoices.filter(function (c) {
-          return c.value === "email" || self.cfg.whatsappEnabled;
-        });
+        return this.cfg.serviceChoices;
       },
       get filteredPlans() {
         var s = this.services;

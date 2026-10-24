@@ -170,9 +170,13 @@ def test_webhook_and_tracking_paths_still_reachable_when_disabled(
 @pytest.mark.django_db
 def test_signup_offers_only_enabled_services(all_wired, operator):
     from apps.accounts.forms import enabled_service_choices
+    from apps.billing.models import Plan
 
+    Plan.objects.create(slug="e", name="E", service_type=Plan.SERVICE_EMAIL)
+    Plan.objects.create(slug="b", name="B", service_type=Plan.SERVICE_BOTH)
     ch.set_channel_enabled("email", False, request=_fake_request(user=operator))
     values = [v for v, _ in enabled_service_choices()]
+    # The email plan has nothing left to give; the "both" plan is a WhatsApp plan for now.
     assert values == ["whatsapp"]
 
 

@@ -16,15 +16,41 @@ SERVICE_CHANNELS: dict[str, set[str]] = {
 }
 
 
-def enabled_service_choices() -> list[tuple[str, str]]:
+def effective_service(service_type: str, enabled) -> str | None:
+    """The service a plan really gives while only ``enabled`` channels are on.
+
+    An "Email & WhatsApp" plan with email switched off is, for now, a WhatsApp plan;
+    a plan none of whose channels are on gives nothing (None).
+    """
+    channels = SERVICE_CHANNELS.get(service_type, set()) & set(enabled)
+    return next(
+        (value for value, needs in SERVICE_CHANNELS.items() if needs == channels),
+        None,
+    )
+
+
+def signup_offer() -> tuple[dict[str, list], list[tuple[str, str]]]:
+    """What signup can sell right now: active plans grouped by the service they
+    effectively give, and the services that have at least one plan (in display order).
+
+    Offering only services that have a plan means a service card can never lead to an
+    empty "No packages" step.
+    """
+    from apps.billing.models import Plan
     from apps.core.channels import enabled_channels
 
     enabled = enabled_channels()
-    return [
-        (value, label)
-        for value, label in Account.Services.choices
-        if SERVICE_CHANNELS.get(value, set()) <= enabled
-    ]
+    by_service: dict[str, list] = {}
+    for plan in Plan.objects.filter(is_active=True).order_by("price_monthly"):
+        service = effective_service(plan.service_type, enabled)
+        if service:
+            by_service.setdefault(service, []).append(plan)
+    choices = [(v, l) for v, l in Account.Services.choices if v in by_service]
+    return by_service, choices
+
+
+def enabled_service_choices() -> list[tuple[str, str]]:
+    return signup_offer()[1]
 
 
 class SignupForm(UserCreationForm):
@@ -99,7 +125,8 @@ class SignupForm(UserCreationForm):
         # Only services whose channels are enabled are valid, so a disabled one is rejected too.
         field = self.fields["selected_services"]
         assert isinstance(field, forms.ChoiceField)
-        field.choices = enabled_service_choices()
+        self._offer, field.choices = signup_offer()
+        self.plan = None  # the chosen Plan, once clean() has run
 
     def clean_email(self):
         email = self.cleaned_data["email"]
@@ -120,9 +147,10 @@ class SignupForm(UserCreationForm):
         from apps.billing.models import Plan
 
         plan = Plan.objects.filter(slug=plan_slug, is_active=True).first()
+        self.plan = plan
         if plan is None:
             self.add_error("plan", "That subscription package is no longer available.")
-        elif services and plan.service_type != services:
+        elif services and plan not in self._offer.get(services, []):
             self.add_error(
                 "plan",
                 "That package doesn't match the services you selected.",
