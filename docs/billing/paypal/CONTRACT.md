@@ -302,3 +302,29 @@ picks up an ending.
 - whether a buyer without a PayPal account can subscribe (`subscriptions_override` approve link,
   opened logged out);
 - the shape of a real `PAYMENT.SALE.REFUNDED` resource (built from the v1 refund schema).
+
+### 8e review fixes (2026-10-24)
+
+- **Which sale pays what** (`classify_sale`, a lookup with no side effects):
+  - FIRST: the checkout payment, until it's paid.
+  - RENEWAL / NEW_RENEWAL: only on the subscription currently renewing the plan.
+  - ORPHAN: anything else, including a renewal recorded before a plan change that completes
+    after it. An orphan is never granted; its renewal payment is abandoned with no dunning, the
+    operator is audited once per sale, and the subscription is stopped unless PayPal already
+    shows it ended.
+  - Only the first payment links its subscription; a renewal never re-links.
+- **Declined first payment:** a `denied` first sale stays pending while the subscription is
+  live (PayPal retries it), and a completed sale wins over an earlier declined one. It fails
+  only once the subscription is suspended, cancelled or expired.
+- **Missed PayPal renewal:** the unpaid and reminder emails carry no pay link, the plans page
+  shows no "Renew now", and checkout refuses the same plan and term while PayPal still renews
+  it. PayPal retries the outstanding balance, so a second way to pay could pay twice.
+- **Cancelling before the first payment completes:** cancel also stops an approved subscription
+  that isn't linked yet. If its payment completes, the period is granted, the plan still ends
+  with it, and nothing is linked.
+- **Price in emails:** the renewal heads-up quotes the subscribed PayPal plan's price.
+- **Stop list:** `recurring_stop_id` is a text column (migration 0031), and every append goes
+  through `recurring.queue_stop`.
+- **Account with no subscription row:** its first payment still links the subscription.
+- **`recurring_provider`:** set while a subscription is linked, or after a cancel stopped one;
+  cleared on resume, on expiry, and when PayPal ends it (except a customer cancel).

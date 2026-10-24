@@ -262,9 +262,11 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
         lines = [f"Your {plan.name} plan for {account.company_name} renews on {ends}."]
         recurring = registry.get(sub.recurring_provider) if sub.recurring_id else None
         if recurring is not None:
-            # The provider charges its subscription price itself; account credit can't reduce it.
+            # The provider charges the price the customer subscribed at; credit can't reduce it.
+            amount = recurring.recurring_amount(sub)
+            what = format_money(*amount) if amount else "the renewal"
             lines.append(
-                f"{recurring.display_name} will take {format_money(price)} automatically; "
+                f"{recurring.display_name} will take {what} automatically; "
                 "you don't need to do anything. Manage billing: "
                 f"{_absolute_url('/billing/plans/')}"
             )
@@ -294,6 +296,17 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
         until = ""
         if sub.past_due_since:
             until = f" until {timezone.localtime(sub.past_due_since + grace_period()):%d %B %Y}"
+        recurring = registry.get(sub.recurring_provider) if sub.recurring_id else None
+        if recurring is not None:
+            # The provider retries the payment itself; a pay link as well could pay it twice.
+            return (
+                f"Action needed: your {plan.name} renewal didn't go through",
+                f"{recurring.display_name} couldn't take the renewal payment for "
+                f"{account.company_name}'s {plan.name} plan. It will try again "
+                f"automatically. Please check the card or balance on your "
+                f"{recurring.display_name} account.\n\nYour features stay on{until}. "
+                f"Billing: {_absolute_url('/billing/plans/')}",
+            )
         return (
             f"Action needed: renew your {plan.name} plan",
             f"We couldn't take the renewal payment for {account.company_name}'s {plan.name} plan."

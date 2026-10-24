@@ -3,6 +3,7 @@ import logging
 import math
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.contrib import messages
@@ -295,7 +296,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     offered, channel_choices = signup_offer()
     offered_keys = [value for value, _, _ in channel_choices]
     periods = [value for value, _ in Subscription.BILLING_PERIOD_CHOICES]
-    plans = sorted(
+    plans: list[dict[str, Any]] = sorted(
         (
             {
                 "slug": p.slug,
@@ -422,11 +423,13 @@ def signup(request):
                     user.is_active = True
                     user.save()
 
+                    chosen = form.chosen_plan
+                    assert chosen is not None  # clean() set it for a valid form
                     account = Account.objects.create(
                         company_name=cd["company_name"],
                         # The plan's service type, for billing. Onboarding follows the
                         # channels they picked, which clean() checked the plan gives.
-                        selected_services=form.chosen_plan.service_type,
+                        selected_services=chosen.service_type,
                         selected_channels=sorted(cd["selected_channels"]),
                         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
                         billing_email=cd["email"],
@@ -716,7 +719,7 @@ def marketing_channels() -> dict:
     from apps.core.channels import enabled_channels
 
     enabled = enabled_channels()
-    out = {
+    out: dict[str, str | bool] = {
         k: "live" if k in enabled else ""
         for k in ("whatsapp", "instagram", "facebook", "email")
     }

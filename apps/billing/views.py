@@ -393,6 +393,21 @@ def checkout(request):
         )
         return redirect("/billing/plans/")
 
+    # Queried, not account.subscription: that would cache a copy the payment below changes.
+    sub = Subscription.objects.filter(account=account).first()
+    if (
+        sub is not None
+        and sub.recurring_id
+        and sub.plan_id == plan.pk
+        and sub.billing_period == period
+    ):
+        messages.error(
+            request,
+            "This plan already renews automatically, and a missed renewal is retried "
+            "automatically. Cancel it first if you want to pay another way.",
+        )
+        return redirect("/billing/plans/")
+
     payments.abandon_open_checkouts(account)
     try:
         payment = payments.create_payment(account, plan, period, provider=provider.code)
@@ -582,8 +597,8 @@ def cancel_subscription(request):
         logger.error("cancel_subscription: account=%s: %s", account.pk, exc)
         messages.error(
             request,
-            "We couldn't stop the automatic payments with the payment provider, so nothing "
-            "has changed. Please try again in a few minutes.",
+            "We couldn't confirm with the payment provider that automatic payments have "
+            "stopped, so your plan hasn't been cancelled. Please try again in a few minutes.",
         )
         return _back_to_plans(request)
 
@@ -633,8 +648,10 @@ def resume_subscription(request):
     if sub and sub.cancel_at_period_end and sub.status == Subscription.ACTIVE:
         sub.cancel_at_period_end = False
         sub.save(update_fields=["cancel_at_period_end", "updated_at"])
-        if sub.recurring_provider and not sub.recurring_id:
+        if recurring.stopped_automatic_payments(sub):
             # Its provider subscription was cancelled and can't be restarted.
+            sub.recurring_provider = ""
+            sub.save(update_fields=["recurring_provider", "updated_at"])
             messages.success(
                 request,
                 "Your plan will continue. Automatic payments were stopped when you cancelled, "

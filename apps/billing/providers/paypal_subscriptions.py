@@ -289,7 +289,13 @@ def checkout_result(provider, payment) -> ProviderResult | None:
     mark_charge_started(payment)
     sale = _first_sale(provider, payment)
     if sale is not None:
-        return sale_result(payment, sale, expected_custom=payment.reference)
+        return sale_result(
+            payment,
+            sale,
+            expected_custom=payment.reference,
+            link=True,
+            retrying=status not in ENDED,
+        )
     if status in ENDED:
         # Ended before any payment: nothing was charged.
         clear_charge_started(payment)
@@ -314,18 +320,37 @@ def _first_sale(provider, payment) -> dict | None:
         if exc.status == 404:
             return None  # PayPal's answer for a subscription with no payments yet
         raise ProviderError(f"couldn't list payments: {exc.issue or exc}") from exc
+    sales = []
     for tx in sorted(transactions, key=lambda t: t.get("time") or ""):
         sale = _get_sale(provider, tx.get("id"))
         if sale.get("billing_agreement_id") == payment.provider_operation_id:
-            return sale
-    return None
+            sales.append(sale)
+    # A completed payment wins over an earlier attempt PayPal declined and then retried.
+    for wanted in (SUCCEEDED, PENDING):
+        for sale in sales:
+            if SALE_STATE.get((sale.get("state") or "").lower(), PENDING) == wanted:
+                return sale
+    return sales[-1] if sales else None
 
 
 # --- payments ------------------------------------------------------------------------------------
 
 
-def sale_result(payment, sale: dict, *, expected_custom: str) -> ProviderResult | None:
-    """A result for ``payment`` from a sale, only if the sale belongs to its subscription."""
+def sale_result(
+    payment,
+    sale: dict,
+    *,
+    expected_custom: str,
+    link: bool = False,
+    retrying: bool = False,
+) -> ProviderResult | None:
+    """A result for ``payment`` from a sale, only if the sale belongs to its subscription.
+
+    ``link``: this is the subscription's first payment, so once it is paid the subscription
+    renews the plan. Never for a renewal: that could re-link a subscription the customer has
+    since replaced. ``retrying``: the subscription is still live, so a declined first payment
+    stays pending rather than failed. PayPal retries it, and a failed checkout would never be
+    looked at again."""
     problems = []
     if sale.get("billing_agreement_id") != payment.provider_operation_id:
         problems.append("subscription id")
@@ -341,6 +366,8 @@ def sale_result(payment, sale: dict, *, expected_custom: str) -> ProviderResult 
         return None
     state = (sale.get("state") or "").lower()
     mapped = SALE_STATE.get(state, PENDING)
+    if mapped == FAILED and link and retrying and state == "denied":
+        mapped = PENDING
     amount = sale.get("amount") or {}
     reason = sale.get("reason_code") or ""
     return ProviderResult(
@@ -356,36 +383,30 @@ def sale_result(payment, sale: dict, *, expected_custom: str) -> ProviderResult 
             "state": state,
             "reason": reason,
         },
-        recurring_id=payment.provider_operation_id if mapped == SUCCEEDED else "",
+        recurring_id=(
+            payment.provider_operation_id if link and mapped == SUCCEEDED else ""
+        ),
     )
 
 
-def record_sale(provider, sale_id: str) -> BillingPayment | None:
-    """Apply one subscription payment, whichever way we heard of it (webhook or sync)."""
-    from apps.billing.payments import mark_charge_started, record_result
-
-    sale = _get_sale(provider, sale_id)
-    first, payment = payment_for_sale(provider, sale)
-    if payment is None:
-        return None
-    result = sale_result(payment, sale, expected_custom=first.reference)
-    if result is None:
-        return None
-    # PayPal has charged (or is charging): in flight until settled, never abandoned.
-    mark_charge_started(payment)
-    return record_result(provider.code, result)
+FIRST = "first"
+RENEWAL = "renewal"
+NEW_RENEWAL = "new_renewal"
+ORPHAN = "orphan"
 
 
-def payment_for_sale(provider, sale: dict):
-    """(the subscription's checkout payment, the payment this sale pays) or (…, None).
+def classify_sale(provider, sale: dict):
+    """(what the sale pays, the subscription's checkout payment, its payment or None). A lookup:
+    nothing is written.
 
-    A sale already recorded keeps its payment. Otherwise it pays the checkout payment while
-    that isn't paid yet (the first payment, or a retry of it); after that each sale is a
-    renewal, but only of the subscription currently renewing the plan."""
+    FIRST: the checkout payment, while that isn't paid (the first payment, or PayPal's retry of
+    it). RENEWAL / NEW_RENEWAL: a renewal of the subscription currently renewing the plan,
+    already recorded or not yet. ORPHAN: money taken by a subscription that no longer renews the
+    plan (replaced or ended here); never granted, even if its payment was recorded before."""
     sale_id = sale.get("id") or ""
     agreement = sale.get("billing_agreement_id") or ""
     if not sale_id or not agreement:
-        return None, None  # not a subscription payment
+        return None, None, None  # not a subscription payment
     first = BillingPayment.objects.filter(
         provider=provider.code,
         reference=sale.get("custom") or "",
@@ -393,81 +414,174 @@ def payment_for_sale(provider, sale: dict):
     ).first()
     if first is None or not is_checkout(first):
         logger.warning("paypal: sale %s isn't one of our subscriptions", sale_id)
-        return None, None
+        return None, None, None
     existing = BillingPayment.objects.filter(
         provider=provider.code, provider_ref=sale_id
     ).first()
-    if existing is not None:
-        return first, existing
-    if first.status != BillingPayment.SUCCEEDED and (
-        first.provider_ref in ("", sale_id) or first.status != BillingPayment.PENDING
+    if existing is not None and existing.pk == first.pk:
+        return FIRST, first, first
+    if (
+        existing is None
+        and first.status != BillingPayment.SUCCEEDED
+        and (
+            first.provider_ref in ("", sale_id)
+            or first.status != BillingPayment.PENDING
+        )
     ):
-        return first, first
-    sub = Subscription.objects.filter(account=first.account).first()
-    if sub is None or sub.recurring_id != agreement:
-        # Money taken by a subscription that no longer renews this account's plan (replaced or
-        # ended here): never granted; the operator refunds it, and it is stopped again.
-        _orphan(provider, first, sale)
-        return first, None
-    row = PayPalPlan.objects.filter(
-        paypal_plan_id=(first.raw or {}).get("paypal_plan", "")
-    ).first()
-    if row is None:
-        logger.error("paypal: no plan on record for subscription %s", agreement)
-        return first, None
-    from apps.billing.payments import recurring_payment
+        return FIRST, first, first
+    current = (
+        Subscription.objects.filter(account=first.account)
+        .values_list("recurring_id", flat=True)
+        .first()
+    )
+    if current != agreement:
+        return ORPHAN, first, existing
+    if existing is not None:
+        return RENEWAL, first, existing
+    return NEW_RENEWAL, first, None
 
-    return first, recurring_payment(
-        first.account,
-        row.plan,
-        row.billing_period,
-        provider=provider.code,
-        reference=f"ppsale_{sale_id}"[:64],
-        amount=row.price,
-        currency=row.currency,
-        operation_id=agreement,
-        provider_ref=sale_id,
-        raw={"kind": RENEWAL_KIND},
+
+def record_sale(provider, sale_id: str) -> BillingPayment | None:
+    """Apply one subscription payment, whichever way we heard of it (webhook or sync)."""
+    from apps.billing.payments import (
+        mark_charge_started,
+        record_result,
+        recurring_payment,
     )
 
+    sale = _get_sale(provider, sale_id)
+    kind, first, payment = classify_sale(provider, sale)
+    if kind is None:
+        return None
+    if kind == ORPHAN:
+        settle_orphan(provider, first, payment, sale)
+        return None
+    if kind == NEW_RENEWAL:
+        row = PayPalPlan.objects.filter(
+            paypal_plan_id=(first.raw or {}).get("paypal_plan", "")
+        ).first()
+        if row is None:
+            logger.error(
+                "paypal: no plan on record for subscription %s",
+                first.provider_operation_id,
+            )
+            return None
+        payment = recurring_payment(
+            first.account,
+            row.plan,
+            row.billing_period,
+            provider=provider.code,
+            reference=f"ppsale_{sale_id}"[:64],
+            amount=row.price,
+            currency=row.currency,
+            operation_id=first.provider_operation_id,
+            provider_ref=sale_id,
+            raw={"kind": RENEWAL_KIND},
+        )
+    retrying = False
+    if kind == FIRST and (sale.get("state") or "").lower() == "denied":
+        status = _get_subscription(provider, first.provider_operation_id).get("status")
+        retrying = status not in ENDED
+    result = sale_result(
+        payment,
+        sale,
+        expected_custom=first.reference,
+        link=kind == FIRST,
+        retrying=retrying,
+    )
+    if result is None:
+        return None
+    # PayPal has charged (or is charging): in flight until settled, never abandoned.
+    mark_charge_started(payment)
+    return record_result(provider.code, result)
 
-def _orphan(provider, first, sale) -> None:
-    from apps.billing.tasks import stop_recurring
+
+def renewal_result(provider, payment) -> ProviderResult | None:
+    """Reconcile a renewal payment PayPal took: read its sale again."""
+    sale = _get_sale(provider, payment.provider_ref)
+    kind, first, owner = classify_sale(provider, sale)
+    if owner is None or owner.pk != payment.pk:
+        return None
+    if kind == ORPHAN:
+        settle_orphan(provider, first, payment, sale)
+        return None
+    return sale_result(payment, sale, expected_custom=first.reference)
+
+
+def settle_orphan(provider, first, payment, sale) -> None:
+    """Money taken by a subscription that no longer renews the plan: never granted. A renewal
+    payment recorded for it before the switch is abandoned (no dunning: the plan is paid by the
+    subscription that replaced it). The operator is told once per sale, and the subscription is
+    stopped (again)."""
+    from apps.billing.payments import _abandon
+    from apps.billing.recurring import queue_stop
     from apps.core import audit
+    from apps.core.models import AdminAction
 
+    sale_id = sale.get("id", "")
+    agreement = sale.get("billing_agreement_id", "")
     amount = sale.get("amount") or {}
-    logger.error(
-        "paypal: sale %s (%s %s) on subscription %s, which no longer renews account=%s; "
-        "refund it",
-        sale.get("id"),
-        amount.get("total"),
-        amount.get("currency"),
-        sale.get("billing_agreement_id"),
-        first.account_id,
-    )
-    audit.system(
-        "billing.orphan_charge",
-        account=first.account,
-        target=sale.get("id", ""),
-        provider=provider.code,
-        subscription=sale.get("billing_agreement_id", ""),
-        amount=str(amount.get("total")),
-        currency=amount.get("currency", ""),
-        state=sale.get("state", ""),
-    )
-    token = f"{provider.code}:{sale.get('billing_agreement_id')}"
+    if payment is not None and payment.pk != first.pk:
+        _abandon(payment)
+    if not AdminAction.objects.filter(
+        action="billing.orphan_charge", target=sale_id
+    ).exists():
+        logger.error(
+            "paypal: sale %s (%s %s, %s) on subscription %s, which no longer renews "
+            "account=%s; refund it",
+            sale_id,
+            amount.get("total"),
+            amount.get("currency"),
+            sale.get("state"),
+            agreement,
+            first.account_id,
+        )
+        audit.system(
+            "billing.orphan_charge",
+            account=first.account,
+            target=sale_id,
+            provider=provider.code,
+            subscription=agreement,
+            amount=str(amount.get("total")),
+            currency=amount.get("currency", ""),
+            state=sale.get("state", ""),
+        )
+    if _get_subscription(provider, agreement).get("status") in ENDED:
+        return  # already stopped; this was a payment it took before that
     with transaction.atomic():
         sub = (
             Subscription.objects.select_for_update()
             .filter(account=first.account)
             .first()
         )
-        if sub is None or token in sub.recurring_stop_id.split():
-            return
-        sub.recurring_stop_id = " ".join([*sub.recurring_stop_id.split(), token])
-        sub.save(update_fields=["recurring_stop_id", "updated_at"])
-        account_id = sub.account_id
-        transaction.on_commit(lambda: stop_recurring.delay(account_id))
+        if sub is not None:
+            queue_stop(sub, provider.code, agreement)
+
+
+def unlinked(provider, account) -> list:
+    """Checkout payments whose subscription PayPal may already be charging (approved, so in
+    flight) but that don't renew the plan yet."""
+    return [
+        payment
+        for payment in BillingPayment.objects.filter(
+            account=account,
+            provider=provider.code,
+            purpose=BillingPayment.CHECKOUT,
+            status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
+            charge_started_at__isnull=False,
+        ).exclude(provider_operation_id="")
+        if is_checkout(payment)
+    ]
+
+
+def recurring_amount(provider, sub):
+    """(price, currency) of the PayPal plan the customer subscribed to, not today's price."""
+    first = BillingPayment.objects.filter(
+        provider=provider.code, provider_operation_id=sub.recurring_id
+    ).first()
+    paypal_plan_id = (first.raw or {}).get("paypal_plan") if first else None
+    row = PayPalPlan.objects.filter(paypal_plan_id=paypal_plan_id or "").first()
+    return (row.price, row.currency) if row else None
 
 
 def refund_result(provider, refund_id: str, kind: str) -> ProviderResult | None:

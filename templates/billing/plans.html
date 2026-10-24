@@ -70,6 +70,9 @@
         <p class="text-xs text-amber-600">{% if subscription.status == 'incomplete' %}Payment required to activate this plan.{% else %}Pay to keep using {{ subscription.plan.name }}.{% endif %}</p>
         {% if subscription.status == 'incomplete' %}
         <a href="{% url 'billing:pay' %}" class="btn btn-primary btn-sm">Complete payment</a>
+        {% elif subscription.recurring_id %}
+        {% comment %} The provider retries the renewal; a second way to pay could pay it twice {% endcomment %}
+        <span class="text-xs text-gray-400">Your payment provider will retry automatically.</span>
         {% elif payments_enabled and payment_methods %}
         <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&period={{ subscription.billing_period }}"
            class="btn btn-primary btn-sm">Renew now</a>

@@ -466,11 +466,7 @@ class PayPalProvider(PaymentProvider):
         if subs.is_checkout(payment):
             return subs.checkout_result(self, payment)
         if subs.is_renewal(payment):
-            sale = subs._get_sale(self, payment.provider_ref)
-            first, owner = subs.payment_for_sale(self, sale)
-            if owner is None or owner.pk != payment.pk:
-                return None
-            return subs.sale_result(payment, sale, expected_custom=first.reference)
+            return subs.renewal_result(self, payment)
         if not payment.provider_operation_id or (payment.raw or {}).get("hold"):
             return None
         order = self._get_order(payment.provider_operation_id)
@@ -542,25 +538,29 @@ class PayPalProvider(PaymentProvider):
         # Subscriptions. Every one is re-read from PayPal in its handler; a sale may create a
         # renewal payment, so it runs after the de-dupe check.
         if kind in subs.SALE_EVENTS:
-            sale_id = resource.get("id")
-            return [
-                ProviderEvent(key=key, handler=lambda: subs.record_sale(self, sale_id))
-            ]
+            sale_id = resource.get("id") or ""
+
+            def record() -> None:
+                subs.record_sale(self, sale_id)
+
+            return [ProviderEvent(key=key, handler=record)]
         if kind in subs.SALE_REFUND_EVENTS:
             refund_kind = REVERSAL if kind.endswith("REVERSED") else REFUND
             return [
                 ProviderEvent(
                     key=key,
-                    result=subs.refund_result(self, resource.get("id"), refund_kind),
+                    result=subs.refund_result(
+                        self, resource.get("id") or "", refund_kind
+                    ),
                 )
             ]
         if kind == subs.ACTIVATED_EVENT:
-            sub_id = resource.get("id")
+            sub_id = resource.get("id") or ""
             return [
                 ProviderEvent(key=key, handler=lambda: subs.activated(self, sub_id))
             ]
         if kind in subs.ENDED_EVENTS:
-            sub_id = resource.get("id")
+            sub_id = resource.get("id") or ""
             return [ProviderEvent(key=key, handler=lambda: subs.ended(self, sub_id))]
         return [ProviderEvent(key=key)]
 
@@ -571,6 +571,12 @@ class PayPalProvider(PaymentProvider):
 
     def sync_recurring(self, subscription) -> None:
         subs.sync(self, subscription)
+
+    def unlinked_recurring(self, account) -> list:
+        return subs.unlinked(self, account)
+
+    def recurring_amount(self, subscription):
+        return subs.recurring_amount(self, subscription)
 
     def _payment_for_order(self, order_id):
         from apps.billing.models import BillingPayment

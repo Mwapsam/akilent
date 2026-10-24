@@ -190,55 +190,48 @@ def recurring_payment(
 @transaction.atomic
 def _activate(payment, provider_code, recurring_id: str = "") -> None:
     """Grant the period ``payment`` paid for, and keep provider-run recurring billing in step."""
-    sub = (
-        Subscription.objects.select_for_update().filter(account=payment.account).first()
+    from . import recurring
+
+    before = (
+        Subscription.objects.select_for_update()
+        .filter(account=payment.account)
+        .values_list("plan_id", "billing_period")
+        .first()
     )
-    before = (sub.plan_id, sub.billing_period) if sub else None
-    activate_subscription(
+    sub = activate_subscription(
         payment.account,
         payment.plan,
         provider_code,
         billing_period=payment.billing_period,
     )
-    if sub is not None:
-        _link_recurring(payment, provider_code, recurring_id, before)
+    if (payment.raw or {}).get(recurring.RECURRING_STOPPED):
+        # Its recurring subscription was cancelled before this payment completed: the paid
+        # period stands, the plan still ends with it, and nothing renews it.
+        recurring_id = ""
+        sub.cancel_at_period_end = True
+        sub.save(update_fields=["cancel_at_period_end", "updated_at"])
+    _link_recurring(sub, payment, provider_code, recurring_id, before)
 
 
-def _link_recurring(payment, provider_code, recurring_id, before) -> None:
+def _link_recurring(sub, payment, provider_code, recurring_id, before) -> None:
     """A payment that started a recurring subscription makes it the one that renews the plan,
     and the one it replaced (a plan change) is stopped at the provider. A one-off payment for a
     different plan or term stops the old one too: it would keep charging for the plan the
     customer left. A renewal of the same subscription, or paying early for the same plan,
-    changes nothing."""
-    sub = Subscription.objects.select_for_update().get(account=payment.account)
-    stop = ""
+    changes nothing. ``sub`` is locked (activate_subscription)."""
+    from . import recurring
+
     if recurring_id:
         if sub.recurring_id == recurring_id:
             return
-        stop = sub.recurring_id and f"{sub.recurring_provider}:{sub.recurring_id}"
+        if sub.recurring_id:
+            recurring.queue_stop(sub, sub.recurring_provider, sub.recurring_id)
         sub.recurring_provider, sub.recurring_id = provider_code, recurring_id
     elif sub.recurring_id and before != (payment.plan_id, payment.billing_period):
-        stop = f"{sub.recurring_provider}:{sub.recurring_id}"
-        sub.recurring_provider = sub.recurring_id = ""
+        recurring.retire(sub)
     else:
         return
-    if stop:
-        sub.recurring_stop_id = " ".join(
-            dict.fromkeys([*sub.recurring_stop_id.split(), stop])
-        )
-    sub.save(
-        update_fields=[
-            "recurring_provider",
-            "recurring_id",
-            "recurring_stop_id",
-            "updated_at",
-        ]
-    )
-    if stop:
-        from .tasks import stop_recurring
-
-        account_id = sub.account_id
-        transaction.on_commit(lambda: stop_recurring.delay(account_id))
+    sub.save(update_fields=["recurring_provider", "recurring_id", "updated_at"])
 
 
 def _grant_unused_excess(payment) -> None:
@@ -554,7 +547,13 @@ def _succeed(payment, provider_code, result) -> None:
     if result.saved_method and result.saved_method.token:
         save_method(payment.account, provider_code, result.saved_method)
     _activate(payment, provider_code, result.recurring_id)
-    if payment.purpose == BillingPayment.RENEWAL and result.recurring_id:
+    if (
+        payment.purpose == BillingPayment.RENEWAL
+        and payment.provider_operation_id
+        and Subscription.objects.filter(
+            account=payment.account, recurring_id=payment.provider_operation_id
+        ).exists()
+    ):
         # The provider renewed on its own schedule; no renewal run is there to say so.
         from .tasks import send_billing_notice
 

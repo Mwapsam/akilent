@@ -169,9 +169,9 @@ def owner(account):
     return user
 
 
-def _checkout(http, owner, method=""):
+def _checkout(http, owner, method="", period="monthly"):
     http.force_login(owner)
-    url = "/billing/checkout/?plan=starter&period=monthly"
+    url = f"/billing/checkout/?plan=starter&period={period}"
     if method:
         url += f"&method={method}"
     return http.get(url)
@@ -504,7 +504,7 @@ def test_a_new_subscription_replaces_the_old_one_once_it_is_paid(
     client, owner, active, fake, django_capture_on_commit_callbacks
 ):
     subscription, _, old_id = active
-    _checkout(client, owner)
+    _checkout(client, owner, period="annually")
     new = BillingPayment.objects.filter(purpose=BillingPayment.CHECKOUT).latest("pk")
     new_id = new.provider_operation_id
     fake.approve(new_id)
@@ -527,7 +527,7 @@ def test_a_stop_that_fails_is_retried_by_the_daily_sync(
 ):
     subscription, _, old_id = active
     fake.cancel_error = PayPalError("down", status=503)
-    _checkout(client, owner)
+    _checkout(client, owner, period="annually")
     new = BillingPayment.objects.filter(purpose=BillingPayment.CHECKOUT).latest("pk")
     fake.approve(new.provider_operation_id)
     sale_id = fake.charge(new.provider_operation_id, state="completed")
@@ -591,3 +591,171 @@ def test_plans_page_says_how_the_plan_really_renews(active, fake, settings):
     )
     subscription.recurring_id = ""
     assert "email you a link" in _renewal_note(subscription.account, subscription)
+
+
+# --- review round 4 ------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_renewal_completing_after_a_plan_change_is_not_granted(
+    client, owner, active, fake, django_capture_on_commit_callbacks
+):
+    """A renewal on the old subscription, still pending when the customer switched, completes
+    later: it must not grant the old plan, re-link the old subscription or stop the new one."""
+    from apps.core.models import AdminAction
+
+    subscription, _, old_id = active
+    old_sale = fake.charge(old_id, state="pending")
+    _post(client, _sale_event(old_sale, "PAYMENT.SALE.PENDING"))
+    renewal = BillingPayment.objects.get(provider_ref=old_sale)
+    BillingPayment.objects.filter(pk=renewal.pk).update(
+        status=BillingPayment.SUCCEEDED
+    )  # not in flight, so the switch below isn't blocked
+    _checkout(client, owner, period="annually")
+    BillingPayment.objects.filter(pk=renewal.pk).update(status=BillingPayment.PENDING)
+    new = BillingPayment.objects.filter(purpose=BillingPayment.CHECKOUT).latest("pk")
+    fake.approve(new.provider_operation_id)
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(
+            client,
+            _sale_event(fake.charge(new.provider_operation_id, state="completed")),
+        )
+    subscription.refresh_from_db()
+    assert subscription.billing_period == Subscription.ANNUALLY
+
+    fake.sales[old_sale]["state"] = "completed"
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(client, _sale_event(old_sale))
+        _post(client, _sale_event(old_sale, event_id="WH-again"))
+    subscription.refresh_from_db()
+    renewal.refresh_from_db()
+    assert subscription.recurring_id == new.provider_operation_id
+    assert subscription.billing_period == Subscription.ANNUALLY
+    assert renewal.status == BillingPayment.ABANDONED
+    assert fake.cancelled == [old_id]
+    assert AdminAction.objects.filter(action="billing.orphan_charge").count() == 1
+
+
+@pytest.mark.django_db
+def test_a_missed_paypal_renewal_emails_no_pay_link_and_blocks_paying_twice(
+    client, owner, active, fake
+):
+    from apps.billing.tasks import _notice
+
+    subscription, _, _ = active
+    subject, body = _notice(subscription, "unpaid", None)
+    assert "/billing/checkout/" not in body
+    assert "try again automatically" in body
+    resp = _checkout(client, owner)
+    assert resp["Location"] == "/billing/plans/"
+    assert BillingPayment.objects.filter(purpose=BillingPayment.CHECKOUT).count() == 1
+
+
+@pytest.mark.django_db
+def test_a_declined_first_payment_that_paypal_retries_still_activates(
+    client, owner, plan, subscription, paypal, fake
+):
+    _checkout(client, owner)
+    payment = BillingPayment.objects.get(provider="paypal")
+    sub_id = payment.provider_operation_id
+    fake.approve(sub_id)
+    denied = fake.charge(sub_id, state="denied")
+    _post(client, _sale_event(denied, "PAYMENT.SALE.DENIED"))
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.PENDING  # PayPal retries; still in flight
+    assert payment.charge_started_at is not None
+
+    fake.charge(sub_id, state="completed")  # the retry, whose webhook is lost
+    from apps.billing.providers import registry as reg
+
+    result = reg.get("paypal").reconcile(payment)
+    payments.record_result("paypal", result)
+    payment.refresh_from_db()
+    subscription.refresh_from_db()
+    assert payment.status == BillingPayment.SUCCEEDED
+    assert subscription.recurring_id == sub_id
+
+
+@pytest.mark.django_db
+def test_a_declined_first_payment_fails_once_paypal_gives_up(
+    client, owner, plan, subscription, paypal, fake
+):
+    _checkout(client, owner)
+    payment = BillingPayment.objects.get(provider="paypal")
+    sub_id = payment.provider_operation_id
+    fake.approve(sub_id)
+    denied = fake.charge(sub_id, state="denied")
+    fake.subs[sub_id]["status"] = "SUSPENDED"
+    _post(client, _sale_event(denied, "PAYMENT.SALE.DENIED"))
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.FAILED
+
+
+@pytest.mark.django_db
+def test_the_stop_list_has_room_for_many(active):
+    subscription, _, _ = active
+    field = Subscription._meta.get_field("recurring_stop_id")
+    assert field.get_internal_type() == "TextField"
+
+
+@pytest.mark.django_db
+def test_an_account_without_a_subscription_row_is_still_linked(
+    client, owner, plan, account, paypal, fake
+):
+    Subscription.objects.filter(account=account).delete()
+    _checkout(client, owner)
+    payment = BillingPayment.objects.get(provider="paypal")
+    fake.approve(payment.provider_operation_id)
+    _post(
+        client,
+        _sale_event(fake.charge(payment.provider_operation_id, state="completed")),
+    )
+    sub = Subscription.objects.get(account=account)
+    assert sub.status == Subscription.ACTIVE
+    assert sub.recurring_id == payment.provider_operation_id
+
+
+@pytest.mark.django_db
+def test_cancelling_while_the_first_payment_settles_stops_it_and_stays_cancelled(
+    client, owner, plan, subscription, paypal, fake
+):
+    payment, sub_id, sale_id = _subscribed(client, owner, fake, state="pending")
+    Subscription.objects.filter(pk=subscription.pk).update(
+        status=Subscription.ACTIVE,
+        current_period_end=timezone.now() + timedelta(days=3),
+    )
+    client.post("/billing/cancel/")
+    assert fake.cancelled == [sub_id]
+
+    fake.sales[sale_id]["state"] = "completed"
+    _post(client, _sale_event(sale_id))
+    payment.refresh_from_db()
+    subscription.refresh_from_db()
+    assert payment.status == BillingPayment.SUCCEEDED  # paid, so the period is granted
+    assert subscription.cancel_at_period_end  # but the cancel stands
+    assert subscription.recurring_id == ""
+
+
+@pytest.mark.django_db
+def test_the_renewal_notice_quotes_the_price_subscribed_at(active, plan):
+    from apps.billing.tasks import _notice
+
+    subscription, _, _ = active
+    plan.price_monthly = Decimal("29.00")
+    plan.save()
+    subscription.refresh_from_db()
+    _, body = _notice(subscription, "upcoming", None)
+    assert "19.00" in body
+    assert "29.00" not in body
+
+
+@pytest.mark.django_db
+def test_resume_says_automatic_payments_stopped_only_once(client, owner, active, fake):
+    subscription, _, _ = active
+    client.post("/billing/cancel/")
+    client.post("/billing/resume/")
+    subscription.refresh_from_db()
+    assert (
+        subscription.recurring_provider == ""
+    )  # the next cancel/resume is a plain one
+    assert not recurring.stopped_automatic_payments(subscription)

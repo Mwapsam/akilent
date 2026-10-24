@@ -157,7 +157,7 @@ class Subscription(models.Model):
     )
     # One that was replaced (plan change) or ended here and still has to be stopped at the
     # provider; retried until the provider confirms.
-    recurring_stop_id = models.CharField(max_length=100, blank=True, default="")
+    recurring_stop_id = models.TextField(blank=True, default="")
     # Which emails the renewal engine already sent, so an hourly run never repeats one.
     renewal_notice_for = models.DateTimeField(null=True, blank=True)
     dunning_notices_sent = models.PositiveSmallIntegerField(default=0)

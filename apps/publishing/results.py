@@ -9,6 +9,7 @@ credited by timing, so these are lower bounds, and the card says so.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 from django.db.models import Count, Sum
 
@@ -105,7 +106,7 @@ def journey(account, period) -> dict | None:
     entry_points = ConversationEntryPoint.objects.filter(account=account)
     chats_tracked = has_links or entry_points.exists()
 
-    out = {
+    out: dict[str, Any] = {
         "posts": published.values("post").distinct().count(),
         "clicks": LinkClick.objects.filter(
             link__account=account, is_bot=False, **during("clicked_at")

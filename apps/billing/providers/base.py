@@ -157,6 +157,17 @@ class PaymentProvider(ABC):
         ProviderError when that isn't confirmed; it is tried again (recurring.stop_pending)."""
         raise ProviderError(f"{self.display_name} doesn't run recurring subscriptions")
 
+    def unlinked_recurring(self, account) -> list:
+        """Open checkout payments of ``account`` whose recurring subscription was approved but
+        isn't renewing the plan yet (its first payment is still settling). A cancel stops them
+        too. Each one's ``provider_operation_id`` is the recurring subscription."""
+        return []
+
+    def recurring_amount(self, subscription):
+        """What the recurring subscription renewing ``subscription`` charges each period (the
+        price the customer signed up at), or None if unknown."""
+        return
+
     def sync_recurring(self, subscription) -> None:
         """Bring ``subscription`` up to date with the recurring subscription renewing it here:
         record payments and an ending the webhooks may have missed (daily)."""
