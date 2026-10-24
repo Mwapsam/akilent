@@ -128,7 +128,7 @@ def renew(subscription_id: int, *, now=None) -> str:
         if provider and provider.off_session_charge
         else None
     )
-    if method is None:
+    if method is None or provider is None:
         payments.fail(payment, "No saved payment method for this provider")
         return "past_due"
     try:

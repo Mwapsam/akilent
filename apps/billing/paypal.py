@@ -83,7 +83,7 @@ class PayPalClient:
             token = cache.get(self._cache_key)
             if token:
                 return token
-        last = None
+        last: PayPalError | None = None
         for attempt in range(GET_ATTEMPTS):
             try:
                 r = self._session.post(
@@ -104,7 +104,7 @@ class PayPalClient:
                 if r.status_code < 500:
                     break  # bad credentials won't get better
             time.sleep(0.5 * (attempt + 1))
-        raise last
+        raise last or PayPalError("PayPal token request failed")
 
     # --- transport -----------------------------------------------------------------------------
 

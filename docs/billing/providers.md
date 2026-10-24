@@ -19,16 +19,16 @@ Create `apps/billing/providers/<name>.py` with a subclass of `PaymentProvider`:
 
 ```python
 class PaystackProvider(PaymentProvider):
-    code = "paystack"              # used in URLs and stored on payments
+    code = "paystack"  # used in URLs and stored on payments
     display_name = "Paystack"
-    off_session_charge = True      # can a saved card be charged without the customer?
+    off_session_charge = True  # can a saved card be charged without the customer?
     supported_currencies = frozenset({"NGN", "GHS", "ZAR", "KES", "USD"})
 
-    def is_configured(self): ...                       # env keys present?
-    def start_checkout(self, request, payment): ...    # redirect to the hosted page
-    def reference_from_return(self, request): ...      # our reference from the return URL
-    def handle_return(self, request, payment): ...     # verify with the provider API
-    def parse_webhook(self, request): ...              # verify signature, return ProviderEvents
+    def is_configured(self): ...  # env keys present?
+    def start_checkout(self, request, payment): ...  # redirect to the hosted page
+    def reference_from_return(self, request): ...  # our reference from the return URL
+    def handle_return(self, request, payment): ...  # verify with the provider API
+    def parse_webhook(self, request): ...  # verify signature, return ProviderEvents
     def charge_saved_method(self, method, payment): ...
 ```
 

@@ -29,20 +29,21 @@ def activate_subscription(
     """
     now = timezone.now()
     sub = Subscription.objects.select_for_update().filter(account=account).first()
-    start = now
+    start = period_start = now
     if (
         sub is not None
+        and sub.current_period_end is not None
         and _in_paid_period(sub, now)
         and sub.plan_id == plan.pk
         and sub.billing_period == billing_period
     ):
-        start = sub.current_period_end
+        start, period_start = sub.current_period_end, sub.current_period_start
 
     fields = {
         "plan": plan,
         "status": Subscription.ACTIVE,
         "billing_period": billing_period,
-        "current_period_start": now if start == now else sub.current_period_start,
+        "current_period_start": period_start,
         "current_period_end": start + timedelta(days=period_days(billing_period)),
         "provider": provider,
         "trial_ends_at": None,

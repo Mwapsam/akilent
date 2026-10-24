@@ -200,7 +200,7 @@ class StripeProvider(PaymentProvider):
         reference = (intent.get("metadata") or {}).get("reference")
         if not reference:
             return None
-        status = intent.get("status")
+        status = intent.get("status") or ""
         currency = (intent.get("currency") or "").upper()
         error = intent.get("last_payment_error") or {}
         mapped = {

@@ -100,8 +100,13 @@ class PaymentProvider(ABC):
     # Can the operator make this the active provider (manual bank transfer can't take renewals
     # on its own, so it's an extra option rather than the provider).
     selectable: bool = True
-    # ISO codes this provider can charge; empty means any.
-    supported_currencies: frozenset = frozenset()
+
+    # ISO codes this provider can charge; empty means any. A property so a provider can read
+    # it from settings (PayPal); a plain class attribute overrides it too.
+    @property
+    def supported_currencies(self) -> frozenset:
+        return frozenset()
+
     # Can it look up a charge whose outcome we never learned (``reconcile``)? Without it, an
     # unconfirmed payment is given up after a day, as before.
     can_reconcile: bool = False

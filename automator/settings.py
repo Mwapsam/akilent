@@ -598,7 +598,9 @@ PAYPAL_WEBHOOK_ID = (os.getenv("PAYPAL_WEBHOOK_ID") or "").strip()
 # The business account that must receive every payment (checked on each capture).
 PAYPAL_MERCHANT_ID = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
 PAYPAL_CURRENCIES = frozenset(
-    c.strip().upper() for c in (os.getenv("PAYPAL_CURRENCIES") or "USD").split(",") if c.strip()
+    c.strip().upper()
+    for c in (os.getenv("PAYPAL_CURRENCIES") or "USD").split(",")
+    if c.strip()
 )
 
 # --- Billing ---

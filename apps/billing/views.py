@@ -357,7 +357,11 @@ def payment_return(request, provider):
         if account and reference
         else None
     )
-    if payment is not None and payment.status != BillingPayment.SUCCEEDED:
+    if (
+        impl is not None
+        and payment is not None
+        and payment.status != BillingPayment.SUCCEEDED
+    ):
         try:
             result = impl.handle_return(request, payment)
         except ProviderError as exc:
