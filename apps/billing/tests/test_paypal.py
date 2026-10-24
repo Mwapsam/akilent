@@ -1177,3 +1177,53 @@ def test_other_providers_still_show_the_pending_page(
     client.force_login(owner)
     resp = client.get(f"/billing/return/fake/?ref={payment.reference}")
     assert resp.status_code == 200  # pending page, no redirect to the stale URL
+
+
+# --- recorded staging delivery -----------------------------------------------------------------
+
+STAGING_REF = "pay_2757216790db4cf58452e1a06fa2b1d1"
+STAGING_ORDER = "82W2946542670433P"
+
+
+def _staging_event(reference, status=None):
+    """The real PAYMENT.CAPTURE.PENDING body PayPal delivered to staging, re-pointed at our
+    test payment (and optionally moved to another capture status)."""
+    event = json.loads(
+        (FIXTURES / "webhook_capture_pending.json")
+        .read_text(encoding="utf-8")
+        .replace(STAGING_REF, reference)
+        .replace(STAGING_ORDER, "ORDER123")
+    )["body"]
+    if status:
+        event["resource"]["status"] = status
+        event["resource"].pop("status_details", None)
+    return event
+
+
+@pytest.mark.django_db
+def test_recorded_pending_delivery_leaves_the_payment_pending(
+    client, pending, subscription
+):
+    pending.amount_due = Decimal("49.00")
+    pending.save()
+    event = _staging_event(pending.reference)
+    pp = _client(verify_webhook_signature=True, get_capture=event["resource"])
+    with patch(CLIENT, return_value=pp):
+        assert _post(client, event).status_code == 200
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING
+    pp.get_capture.assert_called_with("7AB48525XE290092R")
+
+
+@pytest.mark.django_db
+def test_recorded_delivery_once_completed_activates(client, pending, subscription):
+    pending.amount_due = Decimal("49.00")
+    pending.save()
+    event = _staging_event(pending.reference, status="COMPLETED")
+    pp = _client(verify_webhook_signature=True, get_capture=event["resource"])
+    with patch(CLIENT, return_value=pp):
+        assert _post(client, event).status_code == 200
+    pending.refresh_from_db()
+    subscription.refresh_from_db()
+    assert pending.status == BillingPayment.SUCCEEDED
+    assert subscription.status == Subscription.ACTIVE

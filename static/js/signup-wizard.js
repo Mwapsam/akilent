@@ -5,7 +5,8 @@
  * `x-data="signupWizard()"`, that walks a new customer through:
  *
  *   0. Select services   — Email / WhatsApp / Email & WhatsApp
- *   1. Select package    — plans filtered to the chosen services
+ *   1. Select package    — plans filtered to the chosen services, and the
+ *                          billing term (monthly, yearly, ...) for a paid plan
  *   2. Your details      — personal + business info (the real form fields)
  *   3. Review            — confirm, then submit
  *
@@ -24,7 +25,8 @@
     var cfg = {
       plans: [],
       serviceChoices: [],
-      preselect: { services: "", plan: "", startStep: 0 },
+      periods: [],
+      preselect: { services: "", plan: "", period: "monthly", startStep: 0 },
       formData: {},
       errors: {},
     };
@@ -46,6 +48,10 @@
 
       services: pre.services || fd.selected_services || "",
       plan: pre.plan || fd.plan || "",
+      // Billing term for a paid plan. The server works it out (a re-render's
+      // posted value, else ?period=, else monthly) and prices each term with
+      // billing.pricing.price_for, as checkout does.
+      period: pre.period || "monthly",
 
       // Step 2 ("Your details") fields, bound via x-model so "Continue" can
       // be gated the same way steps 0/1 are, and Review can echo them back.
@@ -71,10 +77,13 @@
         var errs = cfg.errors || {};
         var hasErrors = errs && Object.keys(errs).length > 0;
 
-        // Land on the step the server asked for (or the details step when a
-        // submit bounced back with errors).
+        // Land on the step the server asked for, or, when a submit bounced back
+        // with errors, on the step that shows the first of them.
         var start = typeof pre.startStep === "number" ? pre.startStep : 0;
-        this.step = hasErrors ? 2 : start;
+        if (!hasErrors) this.step = start;
+        else if (errs.selected_services) this.step = 0;
+        else if (errs.plan || errs.billing_period) this.step = 1;
+        else this.step = 2;
 
         // Guard against service/plan drift: a preselected plan that no longer
         // matches the chosen services sends the user back to pick again.
@@ -126,6 +135,24 @@
       selectPlan: function (slug) {
         this.plan = slug;
       },
+      selectPeriod: function (value) {
+        this.period = value;
+      },
+
+      // The term toggle only matters when a paid plan is on offer.
+      get showPeriods() {
+        return this.cfg.periods.length > 1 && this.filteredPlans.some(function (p) {
+          return p.priceMonthly > 0;
+        });
+      },
+      get periodInfo() {
+        var v = this.period;
+        return this.cfg.periods.filter(function (o) { return o.value === v; })[0] ||
+          { value: "monthly", label: "Monthly", per: "month", months: 1, savePct: 0 };
+      },
+      isPaid: function (p) {
+        return !!(p && p.priceMonthly > 0);
+      },
 
       get canAdvance() {
         if (this.step === 0) return !!this.services;
@@ -149,9 +176,36 @@
         if (i < this.step) this.step = i;
       },
 
+      _money: function (amount) {
+        var whole = Math.round(amount * 100) % 100 === 0;
+        var digits = whole ? 0 : 2;
+        return "$" + amount.toLocaleString("en-US", {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        });
+      },
+      // What one term costs, e.g. "$499.80 / year".
       priceLabel: function (p) {
-        if (!p || !p.priceMonthly) return "Free";
-        return "$" + Math.round(p.priceMonthly) + "/mo";
+        if (!this.isPaid(p)) return "Free";
+        var info = this.periodInfo;
+        var total = (p.periodPrices && p.periodPrices[info.value]) || p.priceMonthly;
+        return this._money(total) + " / " + info.per;
+      },
+      // The term's price as a sentence: "$1,009.80 for one year". Checkout takes
+      // any account credit off this, so the review says "up to".
+      dueLabel: function (p) {
+        if (!this.isPaid(p)) return "";
+        var info = this.periodInfo;
+        var total = (p.periodPrices && p.periodPrices[info.value]) || p.priceMonthly;
+        var span = /^\d/.test(info.per) ? info.per : "one " + info.per;
+        return this._money(total) + " for " + span;
+      },
+      // For terms longer than a month: the monthly equivalent, e.g. "$41.65/mo".
+      perMonthLabel: function (p) {
+        var info = this.periodInfo;
+        var total = p && p.periodPrices && p.periodPrices[info.value];
+        if (!this.isPaid(p) || info.months <= 1 || !total) return "";
+        return this._money(total / info.months) + "/mo";
       },
     };
   }

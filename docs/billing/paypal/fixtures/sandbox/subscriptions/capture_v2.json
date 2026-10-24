@@ -1,0 +1,40 @@
+{
+  "http_status": 200,
+  "body": {
+    "id": "1PX02821R0887361C",
+    "amount": {
+      "currency_code": "USD",
+      "value": "1.00"
+    },
+    "final_capture": true,
+    "seller_protection": {
+      "status": "NOT_ELIGIBLE"
+    },
+    "custom_id": "probe_sub_0f50dcac66",
+    "status": "PENDING",
+    "status_details": {
+      "reason": "PENDING_REVIEW"
+    },
+    "supplementary_data": {
+      "related_ids": {}
+    },
+    "payee": {
+      "email_address": "mwapsam@gmail.com",
+      "merchant_id": "CXZJKF9LDQBRY"
+    },
+    "create_time": "2026-10-24T10:04:26Z",
+    "update_time": "2026-10-24T10:04:26Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/captures/1PX02821R0887361C",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/captures/1PX02821R0887361C/refund",
+        "rel": "refund",
+        "method": "POST"
+      }
+    ]
+  }
+}

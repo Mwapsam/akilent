@@ -1,0 +1,48 @@
+{
+  "http_status": 200,
+  "headers": {},
+  "note": "Real PAYMENT.SALE.PENDING delivery to staging, 2026-10-24 (sandbox): the first subscription payment. Transmissions/links omitted. Staging acknowledged it (200) without acting.",
+  "body": {
+    "id": "WH-7X9041095L5897202-45398416GW076634D",
+    "create_time": "2026-10-24T10:04:30.880Z",
+    "resource_type": "sale",
+    "event_type": "PAYMENT.SALE.PENDING",
+    "summary": "Payment pending for $ 1.0 USD",
+    "resource": {
+      "amount": {
+        "total": "1.00",
+        "currency": "USD",
+        "details": {
+          "subtotal": "1.00"
+        }
+      },
+      "payment_mode": "INSTANT_TRANSFER",
+      "create_time": "2026-10-24T10:04:26Z",
+      "custom": "probe_sub_0f50dcac66",
+      "transaction_fee": {
+        "value": "0.34",
+        "currency": "USD"
+      },
+      "reason_code": "PAYMENT_REVIEW",
+      "billing_agreement_id": "I-0UYBHMENVNCS",
+      "update_time": "2026-10-24T10:04:26Z",
+      "protection_eligibility": "INELIGIBLE",
+      "links": [
+        {
+          "href": "https://api.sandbox.paypal.com/v1/payments/sale/1PX02821R0887361C",
+          "rel": "self",
+          "method": "GET"
+        },
+        {
+          "href": "https://api.sandbox.paypal.com/v1/payments/sale/1PX02821R0887361C/refund",
+          "rel": "refund",
+          "method": "POST"
+        }
+      ],
+      "id": "1PX02821R0887361C",
+      "state": "pending",
+      "invoice_number": ""
+    },
+    "event_version": "1.0"
+  }
+}

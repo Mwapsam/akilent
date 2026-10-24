@@ -256,3 +256,154 @@ def test_landing_and_wizard_describe_a_plan_the_same_way(client, db, settings):
     assert card["limits"] + card["feature_names"] == _plan_feature_bullets(
         plan, "whatsapp"
     )
+
+
+# --- Billing term -------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_wizard_shows_what_checkout_charges_for_each_term(client, plans, settings):
+    from apps.billing.pricing import price_for
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    cfg = _wizard_config(client.get(SIGNUP_URL))
+    assert [o["value"] for o in cfg["periods"]] == [
+        "monthly",
+        "quarterly",
+        "annually",
+        "biennial",
+    ]
+    assert next(o for o in cfg["periods"] if o["value"] == "annually")["savePct"] == 15
+    starter = Plan.objects.get(slug=Plan.STARTER)
+    card = next(p for p in cfg["plans"] if p["slug"] == Plan.STARTER)
+    for period, amount in card["periodPrices"].items():
+        assert amount == float(price_for(starter, period))
+    assert cfg["preselect"]["period"] == "monthly"
+
+
+@pytest.mark.django_db
+def test_period_in_the_link_is_preselected(client, plans, settings):
+    settings.EMAIL_ENABLED = True
+    cfg = _wizard_config(client.get(SIGNUP_URL + "?plan=starter&period=annually"))
+    assert cfg["preselect"]["period"] == "annually"
+    cfg = _wizard_config(client.get(SIGNUP_URL + "?period=weekly"))
+    assert cfg["preselect"]["period"] == "monthly"
+
+
+@pytest.mark.django_db
+def test_paid_signup_is_billed_for_the_chosen_term(client, plans, settings):
+    from apps.billing.models import Subscription
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    resp = client.post(
+        SIGNUP_URL,
+        _payload(
+            selected_services=Account.Services.EMAIL,
+            plan=Plan.STARTER,
+            billing_period="annually",
+        ),
+    )
+    assert resp.status_code == 302
+    assert resp.url == "/billing/checkout/?plan=starter&period=annually"
+    sub = Account.objects.get(company_name="New Co").subscription
+    assert sub.status == Subscription.INCOMPLETE
+    assert sub.billing_period == "annually"
+
+
+@pytest.mark.django_db
+def test_unknown_term_is_rejected(client, plans, settings):
+    settings.EMAIL_ENABLED = True
+    resp = client.post(
+        SIGNUP_URL,
+        _payload(
+            selected_services=Account.Services.EMAIL,
+            plan=Plan.STARTER,
+            billing_period="weekly",
+        ),
+    )
+    assert resp.status_code == 400
+    assert not User.objects.filter(email="new@example.com").exists()
+    # Shown on the Package step, where the term is chosen.
+    assert b"Choose how often you&#x27;d like to be billed." in resp.content
+    assert _wizard_config(resp)["errors"]["billing_period"]
+
+
+@pytest.mark.django_db
+def test_a_free_plan_ignores_whatever_term_was_sent(client, plans, settings):
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    resp = client.post(
+        SIGNUP_URL,
+        _payload(selected_services=Account.Services.BOTH, billing_period="weekly"),
+    )
+    assert resp.status_code == 302
+    assert Account.objects.get(company_name="New Co").subscription.billing_period == (
+        "monthly"
+    )
+
+
+@pytest.mark.django_db
+def test_a_partial_discount_override_keeps_the_other_terms(client, plans, settings):
+    """A promo that sets one term must not break signup, and Billing -> Plans agrees."""
+    import json
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from apps.billing.models import Subscription
+    from apps.billing.pricing import price_for
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    settings.BILLING_PERIOD_MULTIPLIERS = {"annually": Decimal("0.80")}
+
+    resp = client.get(SIGNUP_URL)
+    assert resp.status_code == 200
+    cfg = _wizard_config(resp)
+    save = {o["value"]: o["savePct"] for o in cfg["periods"]}
+    assert save == {"monthly": 0, "quarterly": 5, "annually": 20, "biennial": 25}
+    starter = Plan.objects.get(slug=Plan.STARTER)
+    assert price_for(starter, "annually") == Decimal("182.40")  # 19 x 12 x 0.80
+
+    user = User.objects.create_user("p", "p@example.com", PW)
+    acc = Account.objects.create(company_name="P")
+    from apps.accounts.models import Membership
+
+    Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
+    Subscription.objects.update_or_create(
+        account=acc,
+        defaults={
+            "plan": starter,
+            "status": Subscription.ACTIVE,
+            "current_period_start": timezone.now(),
+        },
+    )
+    client.force_login(user)
+    plans_page = client.get("/billing/plans/")
+    pricing = json.loads(plans_page.context["period_pricing_json"])
+    assert pricing["annually"]["multiplier"] == 0.8
+    assert pricing["quarterly"]["multiplier"] == 0.95
+
+
+@pytest.mark.django_db
+def test_paid_plan_needs_a_known_term(plans):
+    from apps.accounts.views import _apply_selected_plan
+
+    acc = Account.objects.create(company_name="T")
+    starter = Plan.objects.get(slug=Plan.STARTER)
+    with pytest.raises(ValueError):
+        _apply_selected_plan(acc, starter, None)
+
+
+@pytest.mark.django_db
+def test_free_plan_keeps_no_term(client, plans, settings):
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    client.post(
+        SIGNUP_URL,
+        _payload(selected_services=Account.Services.BOTH, billing_period="annually"),
+    )
+    sub = Account.objects.get(company_name="New Co").subscription
+    assert sub.plan.slug == Plan.TRIAL and sub.billing_period == "monthly"

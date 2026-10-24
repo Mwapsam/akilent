@@ -1,0 +1,26 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f734565a9a1db"
+  },
+  "body": {
+    "id": "PROD-4C1856704T7877051",
+    "name": "Akilent subscription (probe)",
+    "type": "SERVICE",
+    "category": "SOFTWARE",
+    "create_time": "2026-10-24T09:59:29Z",
+    "update_time": "2026-10-24T09:59:29Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v1/catalogs/products/PROD-4C1856704T7877051",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/catalogs/products/PROD-4C1856704T7877051",
+        "rel": "edit",
+        "method": "PATCH"
+      }
+    ]
+  }
+}

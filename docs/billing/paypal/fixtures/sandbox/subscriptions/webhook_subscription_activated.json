@@ -1,0 +1,65 @@
+{
+  "http_status": 200,
+  "headers": {},
+  "note": "Real BILLING.SUBSCRIPTION.ACTIVATED delivery to staging, 2026-10-24 (sandbox). Subscriber name/email redacted; links/transmissions omitted. Staging acknowledged it (200) without acting.",
+  "body": {
+    "id": "WH-3GD47474BA401541L-7GT9837308856914N",
+    "create_time": "2026-10-24T10:04:31.717Z",
+    "resource_type": "subscription",
+    "event_type": "BILLING.SUBSCRIPTION.ACTIVATED",
+    "summary": "Subscription activated",
+    "resource": {
+      "quantity": "1",
+      "subscriber": {
+        "email_address": "redacted@example.com",
+        "payer_id": "E8T89S54SB66N",
+        "name": {
+          "given_name": "Redacted",
+          "surname": "Buyer"
+        },
+        "tenant": "PAYPAL"
+      },
+      "create_time": "2026-10-24T10:04:26Z",
+      "custom_id": "probe_sub_0f50dcac66",
+      "plan_overridden": false,
+      "shipping_amount": {
+        "currency_code": "USD",
+        "value": "0.0"
+      },
+      "start_time": "2026-10-24T09:59:32Z",
+      "update_time": "2026-10-24T10:04:27Z",
+      "billing_info": {
+        "outstanding_balance": {
+          "currency_code": "USD",
+          "value": "0.0"
+        },
+        "current_cycle_sequence": 1,
+        "cycle_executions": [
+          {
+            "tenure_type": "REGULAR",
+            "sequence": 1,
+            "cycles_completed": 1,
+            "cycles_remaining": 0,
+            "current_pricing_scheme_version": 1,
+            "total_cycles": 0
+          }
+        ],
+        "last_payment": {
+          "amount": {
+            "currency_code": "USD",
+            "value": "1.0"
+          },
+          "time": "2026-10-24T10:04:26Z"
+        },
+        "next_billing_time": "2026-10-25T10:00:00Z",
+        "failed_payments_count": 0
+      },
+      "id": "I-0UYBHMENVNCS",
+      "plan_id": "P-2L167499HR7953808NLOIDAQ",
+      "status": "ACTIVE",
+      "status_update_time": "2026-10-24T10:04:27Z"
+    },
+    "event_version": "1.0",
+    "resource_version": "2.0"
+  }
+}

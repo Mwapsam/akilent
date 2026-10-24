@@ -24,7 +24,7 @@ from .models import (
     ProcessedWebhookEvent,
     Subscription,
 )
-from .pricing import DEFAULT_PERIOD_MULTIPLIERS, PERIOD_MONTH_MULTIPLES
+from .pricing import period_options
 from .providers import InvalidSignature, ProviderError, registry
 from .services import activate_subscription
 
@@ -49,14 +49,8 @@ def pricing_page(request):
     current_plan_slug = subscription.plan.slug if subscription else None
     site = SiteSettings.load()
 
-    period_pricing = {
-        period: {
-            "label": label,
-            "months": float(PERIOD_MONTH_MULTIPLES[period]),
-            "multiplier": float(DEFAULT_PERIOD_MULTIPLIERS[period]),
-        }
-        for period, label in Subscription.BILLING_PERIOD_CHOICES
-    }
+    # The same terms and discounts as signup and checkout (pricing.period_options).
+    period_pricing = {o["value"]: o for o in period_options()}
 
     return render(
         request,

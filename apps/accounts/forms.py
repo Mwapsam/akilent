@@ -100,6 +100,8 @@ class SignupForm(UserCreationForm):
     selected_services = forms.ChoiceField(choices=Account.Services.choices)
     # Chosen on the wizard's Package step; round-tripped through errors.
     plan = forms.CharField(required=False, widget=forms.HiddenInput())
+    # The term a paid plan is billed for (monthly, annually, ...). Ignored for free plans.
+    billing_period = forms.CharField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = User
@@ -121,6 +123,7 @@ class SignupForm(UserCreationForm):
             "country",
             "selected_services",
             "plan",
+            "billing_period",
             "password1",
             "password2",
         )
@@ -160,7 +163,21 @@ class SignupForm(UserCreationForm):
                 "plan",
                 "That package doesn't match the services you selected.",
             )
+        self._clean_billing_period(cleaned, plan)
         return cleaned
+
+    def _clean_billing_period(self, cleaned, plan):
+        """The term a paid plan is billed for. A free plan has none, so whatever was
+        sent is ignored rather than allowed to block the signup."""
+        from apps.billing.models import Subscription
+
+        period = (cleaned.get("billing_period") or "").strip()
+        if plan is None or plan.price_monthly <= 0 or not period:
+            cleaned["billing_period"] = Subscription.MONTHLY
+        elif period not in dict(Subscription.BILLING_PERIOD_CHOICES):
+            self.add_error(
+                "billing_period", "Choose how often you'd like to be billed."
+            )
 
 
 class LoginForm(AuthenticationForm):

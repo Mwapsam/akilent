@@ -175,6 +175,27 @@ No money moved: orders were created but not approved or captured.
 | Duplicate `invoice_id` at **capture** | **Confirmed guard.** The buyer approved link 1, but capturing it was refused with 422 `DUPLICATE_INVOICE_ID` because an order with the same invoice id had already been captured. No money moved. A retry with the same or a new request id is refused the same way. Handling: never treat it as a decline; look up the payment that already holds that reference (§7) instead. |
 | Capture of an already-captured order | 422 `ORDER_ALREADY_CAPTURED` (same or new request id). Handling: `GET` the order and read its capture. |
 
+## 8b. Staging end-to-end (2026-10-24)
+
+The checkout → approve → return → capture flow worked on staging (akilent.com, sandbox keys). Webhooks were verified and answered 200. The capture went to `PENDING` / `PENDING_REVIEW`, as every capture to this ZA sandbox account has, so the plan correctly waited. The real `PAYMENT.CAPTURE.PENDING` delivery is saved as `fixtures/sandbox/webhook_capture_pending.json`: its resource carries `custom_id`, `invoice_id`, `payee.merchant_id` and `supplementary_data.related_ids.order_id`, as the code expects. Still to see: `PAYMENT.CAPTURE.COMPLETED` after the review is accepted, and the refund events.
+
+## 8c. Subscriptions v1 experiment (2026-10-24, sandbox, `fixtures/sandbox/subscriptions/`)
+
+This tests whether PayPal-run subscriptions are a better fit than checkout plus pay-link renewals for this ZA merchant account. It uses a $1.00 daily plan so a renewal shows within a day.
+
+| Check | Result |
+|---|---|
+| Product + plan create | 201; the plan is `ACTIVE`. |
+| Subscription create | 201 `APPROVAL_PENDING`, approve link `/webapps/billing/subscriptions?ba_token=…`. |
+| Buyer approval | **Works** for the ZA merchant account (unlike Vault). The subscription becomes `ACTIVE`. |
+| `custom_id` | Kept on the subscription and carried to its payments (v1 sale `custom`, v2 capture `custom_id`). No `invoice_id`. |
+| First payment | **`PENDING`**, v2 `PENDING_REVIEW` / v1 sale `reason_code: PAYMENT_REVIEW`: the same review hold as checkout captures. |
+| Subscription vs payment | The subscription is `ACTIVE` and `billing_info.last_payment` shows 1.0 **while the payment is still pending**. Like order `COMPLETED` vs capture `PENDING`: the subscription status never proves payment. |
+| Next billing | `2026-10-25T10:00:00Z`; the renewal result is still to check. |
+| `BILLING.SUBSCRIPTION.ACTIVATED` webhook | Sent **5 seconds after approval, while the first payment was still in review** (`fixtures/sandbox/subscriptions/webhook_subscription_activated.json`). Carries `custom_id`, `billing_info.last_payment` (1.0), `next_billing_time`. **It must never grant access**; only the payment's own completion can. Staging acknowledged it (200) without acting. |
+| `PAYMENT.SALE.PENDING` webhook | The first payment, sent 1 s **before** ACTIVATED (`webhook_sale_pending.json`). It is a **v1 "sale"** resource, a different shape from the checkout's v2 capture: `amount.total` / `amount.currency`, lowercase `state`, `custom` (not `custom_id`), `reason_code: PAYMENT_REVIEW`, `billing_agreement_id` = the subscription id, empty `invoice_number`. A subscriptions integration needs its own parser and re-fetch (`GET /v1/payments/sale/{id}`). Fee: USD 0.34 on 1.00. |
+| Billing calendar | The subscription started 09:59:32, was approved 10:04, and its next charge is 10:00:00 the next day: PayPal sets its own schedule, separate from any Akilent period. |
+
 ## 8. Still to confirm in the sandbox (Phase 0, step 2)
 
 Each one is saved as a fixture in `fixtures/` (secrets and payer details redacted):

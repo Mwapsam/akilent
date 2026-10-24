@@ -3,7 +3,7 @@
 {% block title %}Create your account — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
-<script src="{% static 'js/signup-wizard.js' %}?v=2"></script>
+<script src="{% static 'js/signup-wizard.js' %}?v=4"></script>
 
 <div class="min-h-screen flex items-start justify-center px-4 py-12">
   <div class="w-full max-w-2xl" x-data="signupWizard()" x-cloak>
@@ -44,6 +44,7 @@
       {% csrf_token %}
       <input type="hidden" name="selected_services" :value="services">
       <input type="hidden" name="plan" :value="plan">
+      <input type="hidden" name="billing_period" :value="period">
 
       {# ---- Step 0: Select services ---- #}
       <div x-show="step === 0" class="card card-pad sm:!p-8 space-y-3" role="radiogroup" aria-label="Which services do you want to set up?">
@@ -69,9 +70,24 @@
 
       {# ---- Step 1: Select package ---- #}
       <div x-show="step === 1" x-cloak class="space-y-3">
-        <p class="text-sm text-gray-500">
-          Plans for <span class="font-medium text-gray-700" x-text="serviceLabel"></span>
-        </p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-gray-500">
+            Plans for <span class="font-medium text-gray-700" x-text="serviceLabel"></span>
+          </p>
+          {% comment %}Billing term for paid plans. Longer terms cost less per month; the
+          amounts come from billing.pricing.price_for, the same as checkout.{% endcomment %}
+          <div x-show="showPeriods" x-cloak role="radiogroup" aria-label="Billing period"
+               class="inline-flex flex-wrap gap-1 rounded-xl border border-border p-1" style="background-color: var(--color-surface)">
+            <template x-for="o in cfg.periods" :key="o.value">
+              <button type="button" role="radio" :aria-checked="period === o.value" @click="selectPeriod(o.value)"
+                      class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                      :class="period === o.value ? 'tone-brand' : 'text-gray-500 hover:text-ink'">
+                <span x-text="o.label"></span>
+                <span x-show="o.savePct > 0" class="ml-1 text-teal-700" x-text="'−' + o.savePct + '%'"></span>
+              </button>
+            </template>
+          </div>
+        </div>
         <template x-if="filteredPlans.length === 0">
           <div class="card card-pad text-sm text-gray-500">
             No packages are available for that selection yet. Go back and choose different services.
@@ -87,6 +103,10 @@
                 <span x-show="p.popular" class="text-[10px] uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
               </div>
               <div class="mt-1 text-lg font-bold text-ink" x-text="priceLabel(p)"></div>
+              <div x-show="perMonthLabel(p)" class="text-xs text-gray-500">
+                <span x-text="perMonthLabel(p)"></span>
+                <span x-show="periodInfo.savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + periodInfo.savePct + '%'"></span>
+              </div>
               <div x-show="p.trialDays" class="text-xs text-gray-400" x-text="p.trialDays + '-day free trial'"></div>
               <ul class="mt-3 space-y-1 text-xs text-gray-500">
                 <template x-for="f in p.features" :key="f">
@@ -98,6 +118,9 @@
         </div>
         {% if form.plan.errors %}
           <p class="field-error">{{ form.plan.errors|join:" " }}</p>
+        {% endif %}
+        {% if form.billing_period.errors %}
+          <p class="field-error">{{ form.billing_period.errors|join:" " }}</p>
         {% endif %}
       </div>
 
@@ -159,6 +182,13 @@
         <div class="flex justify-between"><span class="text-gray-500">Package</span>
           <span class="font-medium text-ink"><span x-text="selectedPlan ? selectedPlan.name : ''"></span> · <span x-text="selectedPlan ? priceLabel(selectedPlan) : ''"></span></span>
         </div>
+        <div class="flex justify-between" x-show="isPaid(selectedPlan)">
+          <span class="text-gray-500">Billing</span>
+          <span class="font-medium text-ink">
+            <span x-text="periodInfo.label"></span>
+            <button type="button" @click="step = 1" class="ml-1 text-accent hover:text-accent-strong text-xs font-medium">Change</button>
+          </span>
+        </div>
         <div class="border-t border-border pt-3 space-y-2">
           <div class="flex justify-between"><span class="text-gray-500">Name</span><span class="font-medium text-ink" x-text="fields.first_name + ' ' + fields.last_name"></span></div>
           <div class="flex justify-between"><span class="text-gray-500">Email</span><span class="font-medium text-ink" x-text="fields.email"></span></div>
@@ -166,7 +196,8 @@
           <div class="flex justify-between"><span class="text-gray-500">Address</span><span class="font-medium text-ink text-right" x-text="fields.address_line1 + ', ' + fields.city + ', ' + fields.country"></span></div>
         </div>
         <p class="text-xs text-gray-400 pt-2">
-          Your account starts on a trial where available — you can add payment details later from Billing.
+          <span x-show="isPaid(selectedPlan)">At checkout you'll pay <span x-text="dueLabel(selectedPlan)"></span>, less any account credit. It renews each term until you cancel.</span>
+          <span x-show="!isPaid(selectedPlan)">Your account starts on a trial where available — you can add payment details later from Billing.</span>
           We'll email a link to confirm your address; you can keep setting up in the meantime.
           <button type="button" @click="step = 2" class="text-accent hover:text-accent-strong font-medium">Edit details</button>
         </p>

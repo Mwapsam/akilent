@@ -1,0 +1,59 @@
+{
+  "http_status": 200,
+  "headers": {},
+  "note": "Real PAYMENT.CAPTURE.PENDING delivery to staging, 2026-10-24 (sandbox). Payee email redacted; transmissions/links omitted.",
+  "body": {
+    "id": "WH-6JV8129265635111W-95124228HG2169405",
+    "create_time": "2026-10-24T09:25:05.901Z",
+    "resource_type": "capture",
+    "event_type": "PAYMENT.CAPTURE.PENDING",
+    "summary": "Payment pending for $ 49.0 USD",
+    "resource": {
+      "amount": {
+        "currency_code": "USD",
+        "value": "49.00"
+      },
+      "seller_protection": {
+        "status": "NOT_ELIGIBLE"
+      },
+      "create_time": "2026-10-24T09:25:01Z",
+      "custom_id": "pay_2757216790db4cf58452e1a06fa2b1d1",
+      "payee": {
+        "email_address": "redacted@example.com",
+        "merchant_id": "CXZJKF9LDQBRY"
+      },
+      "supplementary_data": {
+        "related_ids": {
+          "order_id": "82W2946542670433P"
+        }
+      },
+      "update_time": "2026-10-24T09:25:01Z",
+      "final_capture": true,
+      "invoice_id": "pay_2757216790db4cf58452e1a06fa2b1d1",
+      "links": [
+        {
+          "href": "https://api.sandbox.paypal.com/v2/payments/captures/7AB48525XE290092R",
+          "rel": "self",
+          "method": "GET"
+        },
+        {
+          "href": "https://api.sandbox.paypal.com/v2/payments/captures/7AB48525XE290092R/refund",
+          "rel": "refund",
+          "method": "POST"
+        },
+        {
+          "href": "https://api.sandbox.paypal.com/v2/checkout/orders/82W2946542670433P",
+          "rel": "up",
+          "method": "GET"
+        }
+      ],
+      "id": "7AB48525XE290092R",
+      "status_details": {
+        "reason": "PENDING_REVIEW"
+      },
+      "status": "PENDING"
+    },
+    "event_version": "1.0",
+    "resource_version": "2.0"
+  }
+}

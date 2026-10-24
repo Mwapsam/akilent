@@ -294,9 +294,11 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
 
     from apps.accounts.forms import signup_offer
-    from apps.billing.models import Plan
+    from apps.billing.models import Plan, Subscription
+    from apps.billing.pricing import period_options, price_for
 
     by_service, service_choices = signup_offer()
+    periods = [value for value, _ in Subscription.BILLING_PERIOD_CHOICES]
     plans = sorted(
         (
             {
@@ -305,6 +307,11 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
                 # The service the plan gives right now (see forms.effective_service).
                 "serviceType": service,
                 "priceMonthly": float(p.price_monthly),
+                # The price of one whole term (discount included), as checkout
+                # works it out before any account credit is taken off.
+                "periodPrices": {
+                    period: float(price_for(p, period)) for period in periods
+                },
                 "trialDays": p.trial_days,
                 "popular": p.slug == Plan.PROFESSIONAL,
                 "features": _plan_feature_bullets(p, service),
@@ -318,6 +325,9 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     # Figure out where the wizard should open.
     services = (form_data or {}).get("selected_services", "")
     plan_slug = (form_data or {}).get("plan", "")
+    period = (form_data or {}).get("billing_period") or request.GET.get("period", "")
+    if period not in periods:
+        period = Subscription.MONTHLY
     if not services and not plan_slug:
         req_plan = request.GET.get("plan", "").strip()
         req_services = request.GET.get("services", "").strip()
@@ -340,9 +350,11 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         "csrfToken": get_token(request),
         "plans": plans,
         "serviceChoices": [{"value": v, "label": l} for v, l in service_choices],
+        "periods": period_options(),
         "preselect": {
             "services": services,
             "plan": plan_slug,
+            "period": period,
             "startStep": start_step,
         },
         "formData": form_data or {},
@@ -409,7 +421,9 @@ def signup(request):
                     )
                     # The Plan the form checked, so the subscription and
                     # selected_services can't come from two different lookups.
-                    _apply_selected_plan(account, form.chosen_plan)
+                    _apply_selected_plan(
+                        account, form.chosen_plan, cd["billing_period"]
+                    )
                     _set_default_modules(account)
             except IntegrityError:
                 # Two submits raced past clean_email (or two addresses share the
@@ -470,6 +484,7 @@ def signup(request):
             form_data={
                 "selected_services": request.POST.get("selected_services", ""),
                 "plan": request.POST.get("plan", ""),
+                "billing_period": request.POST.get("billing_period", ""),
                 "first_name": request.POST.get("first_name", ""),
                 "last_name": request.POST.get("last_name", ""),
                 "email": request.POST.get("email", ""),
@@ -503,7 +518,8 @@ def after_signup_url(account) -> str:
 
     subscription = getattr(account, "subscription", None)
     if subscription and subscription.status == Subscription.INCOMPLETE:
-        return f"/billing/checkout/?plan={subscription.plan.slug}&period=monthly"
+        period = subscription.billing_period or Subscription.MONTHLY
+        return f"/billing/checkout/?plan={subscription.plan.slug}&period={period}"
     return ob.first_setup_url(account)
 
 
@@ -528,7 +544,7 @@ def _set_default_modules(account):
         logger.exception("could not set default modules for account %s", account.pk)
 
 
-def _apply_selected_plan(account, plan):
+def _apply_selected_plan(account, plan, billing_period: str):
     """Honor the plan chosen on the landing page's pricing cards, if any.
 
     The trial Subscription is auto-created by the billing post_save signal;
@@ -538,7 +554,9 @@ def _apply_selected_plan(account, plan):
     A plan priced above $0 is never activated here — it's marked
     INCOMPLETE (no trial grace period, regardless of the plan's trial_days)
     and signup() redirects to checkout with the active payment provider
-    before the account is usable.
+    before the account is usable. Its ``billing_period`` (the term chosen in the
+    wizard, already validated by SignupForm) is what that checkout charges for; a
+    free plan has no term to keep.
     """
     if plan is None:
         return
@@ -548,16 +566,21 @@ def _apply_selected_plan(account, plan):
     if subscription is None:
         return
     subscription.plan = plan
+    fields = ["plan", "trial_ends_at", "status"]
     if plan.price_monthly > Decimal("0"):
         subscription.status = Subscription.INCOMPLETE
         subscription.trial_ends_at = None
+        if billing_period not in dict(Subscription.BILLING_PERIOD_CHOICES):
+            raise ValueError(f"Unknown billing period: {billing_period!r}")
+        subscription.billing_period = billing_period
+        fields.append("billing_period")
     elif plan.trial_days:
         subscription.trial_ends_at = timezone.now() + timedelta(days=plan.trial_days)
         subscription.status = Subscription.TRIALING
     else:
         subscription.trial_ends_at = None
         subscription.status = Subscription.ACTIVE
-    subscription.save(update_fields=["plan", "trial_ends_at", "status"])
+    subscription.save(update_fields=fields)
 
 
 def verify_email(request, uidb64, token):

@@ -1,0 +1,37 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f4110919326ff"
+  },
+  "body": {
+    "status": "APPROVAL_PENDING",
+    "status_update_time": "2026-10-24T09:59:32Z",
+    "id": "I-0UYBHMENVNCS",
+    "plan_id": "P-2L167499HR7953808NLOIDAQ",
+    "start_time": "2026-10-24T09:59:32Z",
+    "quantity": "1",
+    "subscriber": {
+      "tenant": "PAYPAL"
+    },
+    "create_time": "2026-10-24T09:59:32Z",
+    "custom_id": "probe_sub_0f50dcac66",
+    "plan_overridden": false,
+    "links": [
+      {
+        "href": "https://www.sandbox.paypal.com/webapps/billing/subscriptions?ba_token=BA-9FD18119V4497741J",
+        "rel": "approve",
+        "method": "GET"
+      },
+      {
+        "href": "https://api-m.sandbox.paypal.com/v1/billing/subscriptions/I-0UYBHMENVNCS",
+        "rel": "edit",
+        "method": "PATCH"
+      },
+      {
+        "href": "https://api-m.sandbox.paypal.com/v1/billing/subscriptions/I-0UYBHMENVNCS",
+        "rel": "self",
+        "method": "GET"
+      }
+    ]
+  }
+}
