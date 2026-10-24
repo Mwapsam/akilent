@@ -1,0 +1,102 @@
+{
+  "http_status": 201,
+  "headers": {
+    "paypal-debug-id": "f108475e3e750"
+  },
+  "body": {
+    "id": "2XV05299YT521791P",
+    "intent": "CAPTURE",
+    "status": "COMPLETED",
+    "payment_source": {
+      "paypal": {
+        "email_address": "redacted@example.com",
+        "account_id": "433ADFAUVQ5ZC",
+        "account_status": "UNVERIFIED",
+        "name": {
+          "given_name": "John",
+          "surname": "Doe"
+        },
+        "address": {
+          "country_code": "US"
+        }
+      }
+    },
+    "purchase_units": [
+      {
+        "reference_id": "default",
+        "amount": {
+          "currency_code": "USD",
+          "value": "2.00"
+        },
+        "payee": {
+          "email_address": "redacted@example.com",
+          "merchant_id": "CXZJKF9LDQBRY"
+        },
+        "description": "Guest card probe",
+        "custom_id": "probe_guest_0e4fb20d",
+        "invoice_id": "probe_guest_0e4fb20d",
+        "soft_descriptor": "PAYPAL *SAMUELCHIMF",
+        "payments": {
+          "captures": [
+            {
+              "id": "77N83224Y5056330W",
+              "status": "PENDING",
+              "status_details": {
+                "reason": "PENDING_REVIEW"
+              },
+              "amount": {
+                "currency_code": "USD",
+                "value": "2.00"
+              },
+              "final_capture": true,
+              "seller_protection": {
+                "status": "NOT_ELIGIBLE"
+              },
+              "invoice_id": "probe_guest_0e4fb20d",
+              "custom_id": "probe_guest_0e4fb20d",
+              "links": [
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/captures/77N83224Y5056330W",
+                  "rel": "self",
+                  "method": "GET"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/captures/77N83224Y5056330W/refund",
+                  "rel": "refund",
+                  "method": "POST"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2XV05299YT521791P",
+                  "rel": "up",
+                  "method": "GET"
+                }
+              ],
+              "create_time": "2026-10-24T16:55:36Z",
+              "update_time": "2026-10-24T16:55:36Z"
+            }
+          ]
+        }
+      }
+    ],
+    "payer": {
+      "name": {
+        "given_name": "John",
+        "surname": "Doe"
+      },
+      "email_address": "redacted@example.com",
+      "payer_id": "433ADFAUVQ5ZC",
+      "address": {
+        "country_code": "US"
+      }
+    },
+    "create_time": "2026-10-24T16:46:13Z",
+    "update_time": "2026-10-24T16:55:36Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2XV05299YT521791P",
+        "rel": "self",
+        "method": "GET"
+      }
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "http_status": 200,
+  "headers": {},
+  "note": "Real CHECKOUT.ORDER.APPROVED delivery to staging, 2026-10-24 (sandbox), resent by PayPal after the capture had already happened: order COMPLETED, capture PENDING (PENDING_REVIEW). Payee and payer emails redacted; transmissions/links omitted.",
+  "body": {
+    "id": "WH-4C693743EP144991H-25D28137H7574720C",
+    "create_time": "2026-10-24T12:25:42.473Z",
+    "resource_type": "checkout-order",
+    "event_type": "CHECKOUT.ORDER.APPROVED",
+    "summary": "An order has been approved by buyer",
+    "resource": {
+      "update_time": "2026-10-24T12:25:34Z",
+      "create_time": "2026-10-24T12:25:34Z",
+      "purchase_units": [
+        {
+          "reference_id": "default",
+          "amount": {"currency_code": "USD", "value": "139.65", "breakdown": {}},
+          "payee": {"email_address": "redacted@example.com", "merchant_id": "CXZJKF9LDQBRY"},
+          "description": "Professional (Quarterly)",
+          "custom_id": "pay_a61570d450fc4a4fb6a7f9b4bf43c516",
+          "invoice_id": "pay_a61570d450fc4a4fb6a7f9b4bf43c516",
+          "soft_descriptor": "SAMUELCHIMF",
+          "payments": {
+            "captures": [
+              {
+                "id": "7F813771BN182883H",
+                "status": "PENDING",
+                "status_details": {"reason": "PENDING_REVIEW"},
+                "amount": {"currency_code": "USD", "value": "139.65"},
+                "final_capture": true,
+                "seller_protection": {"status": "NOT_ELIGIBLE"},
+                "invoice_id": "pay_a61570d450fc4a4fb6a7f9b4bf43c516",
+                "custom_id": "pay_a61570d450fc4a4fb6a7f9b4bf43c516",
+                "create_time": "2026-10-24T12:25:34Z",
+                "update_time": "2026-10-24T12:25:34Z"
+              }
+            ]
+          }
+        }
+      ],
+      "id": "6PE887148K308752R",
+      "payment_source": {
+        "paypal": {
+          "email_address": "redacted-buyer@example.com",
+          "account_id": "E8T89S54SB66N",
+          "account_status": "VERIFIED",
+          "name": {"given_name": "John", "surname": "Doe"},
+          "address": {"country_code": "US"}
+        }
+      },
+      "intent": "CAPTURE",
+      "payer": {
+        "name": {"given_name": "John", "surname": "Doe"},
+        "email_address": "redacted-buyer@example.com",
+        "payer_id": "E8T89S54SB66N",
+        "address": {"country_code": "US"}
+      },
+      "status": "COMPLETED"
+    },
+    "event_version": "1.0",
+    "resource_version": "2.0"
+  }
+}

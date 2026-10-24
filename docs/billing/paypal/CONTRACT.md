@@ -207,3 +207,19 @@ Each one is saved as a fixture in `fixtures/` (secrets and payer details redacte
 5. Token delete: the webhook body.
 6. Webhook bodies for every event in §6, and the `webhooks-event-types` list.
 7. Whether the request-id retention is 6h or extended on this account.
+
+## 8d. Card payments without a PayPal account (guest checkout), 2026-10-24
+
+- `payment_source.paypal.experience_context.landing_page = "GUEST_CHECKOUT"` opens PayPal's
+  hosted card form instead of the login page. Accepted in sandbox (HTTP 200,
+  `PAYER_ACTION_REQUIRED`); paid with a generated test card in a logged-out window.
+  Fixtures: `order_create_guest_checkout.json`, `capture_guest_checkout.json`.
+- The capture response has the **same shape** as a wallet payment: `payment_source.paypal`
+  with an `UNVERIFIED` guest `account_id`, no `card` source. Capture, webhooks, refunds and
+  verification are unchanged.
+- It was also held (`PENDING_REVIEW`, seller protection `NOT_ELIGIBLE`): 3 of 3 sandbox
+  captures to this ZA account so far.
+- Live needs **PayPal account optional = On** (Account Settings → Website payments → Website
+  preferences). PayPal can still ask a buyer to log in, depending on country and risk.
+- Akilent shows it as a second button, "Pay with debit or credit card" (`method=paypal-card`).
+  Renewal pay links carry no method, so they open PayPal's default page.

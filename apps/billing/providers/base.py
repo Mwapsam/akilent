@@ -128,6 +128,11 @@ class PaymentProvider(ABC):
         """Return the HttpResponse that starts paying ``payment.amount_due`` (usually a redirect
         to the provider's hosted page, returning to ``return_url(request, payment)``)."""
 
+    def checkout_options(self) -> list[dict]:
+        """The checkout buttons for this provider, as {"code", "name"}. The chosen ``code``
+        reaches ``start_checkout`` as the ``method`` query parameter."""
+        return [{"code": self.code, "name": self.checkout_label}]
+
     def reference_from_return(self, request) -> str | None:
         """Our payment reference from the customer's return to /billing/return/<code>/."""
         return request.GET.get("ref") or None

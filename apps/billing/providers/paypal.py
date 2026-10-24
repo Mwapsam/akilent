@@ -129,6 +129,10 @@ class PayPalProvider(PaymentProvider):
     resume_on_return = True
     off_session_charge = False
     can_reconcile = True
+    # The card button: the same order, opened on PayPal's card form for buyers without an
+    # account (guest checkout; the live account needs "PayPal account optional" on).
+    card_method = "paypal-card"
+    card_label = "Pay with debit or credit card"
 
     @property
     def supported_currencies(self) -> frozenset:
@@ -172,6 +176,12 @@ class PayPalProvider(PaymentProvider):
 
     # --- checkout --------------------------------------------------------------------------
 
+    def checkout_options(self) -> list[dict]:
+        return [
+            {"code": self.code, "name": self.checkout_label},
+            {"code": self.card_method, "name": self.card_label},
+        ]
+
     def start_checkout(self, request, payment):
         if not self.supports_currency(payment.currency):
             logger.error(
@@ -182,6 +192,14 @@ class PayPalProvider(PaymentProvider):
             messages.error(request, "PayPal can't take payments in this currency.")
             return redirect("/billing/plans/")
         request_id = payment.provider_request_id or f"order-{payment.reference}"
+        experience = {
+            "return_url": return_url(request, payment),
+            "cancel_url": request.build_absolute_uri("/billing/plans/"),
+            "user_action": "PAY_NOW",
+            "shipping_preference": "NO_SHIPPING",
+        }
+        if request.GET.get("method") == self.card_method:
+            experience["landing_page"] = "GUEST_CHECKOUT"
         body = {
             "intent": "CAPTURE",
             "purchase_units": [
@@ -195,16 +213,7 @@ class PayPalProvider(PaymentProvider):
                     },
                 }
             ],
-            "payment_source": {
-                "paypal": {
-                    "experience_context": {
-                        "return_url": return_url(request, payment),
-                        "cancel_url": request.build_absolute_uri("/billing/plans/"),
-                        "user_action": "PAY_NOW",
-                        "shipping_preference": "NO_SHIPPING",
-                    }
-                }
-            },
+            "payment_source": {"paypal": {"experience_context": experience}},
         }
         try:
             # Same request id for the same payment: starting again returns the same order.

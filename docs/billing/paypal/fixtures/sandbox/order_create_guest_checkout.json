@@ -1,0 +1,25 @@
+{
+  "http_status": 200,
+  "headers": {
+    "Paypal-Debug-Id": "ca4fa74d3fd25"
+  },
+  "body": {
+    "id": "2XV05299YT521791P",
+    "status": "PAYER_ACTION_REQUIRED",
+    "payment_source": {
+      "paypal": {}
+    },
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2XV05299YT521791P",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=2XV05299YT521791P",
+        "rel": "payer-action",
+        "method": "GET"
+      }
+    ]
+  }
+}

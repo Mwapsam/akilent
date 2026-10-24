@@ -268,11 +268,12 @@ def plan_delete(request, pk):
 
 
 def checkout_options(account=None) -> list[dict]:
-    """How a business can pay right now: the active provider, plus bank transfer if it's on."""
+    """How a business can pay right now: the active provider's buttons, plus bank transfer if
+    it's on."""
     options = []
     provider = registry.active()
     if provider is not None:
-        options.append({"code": provider.code, "name": provider.checkout_label})
+        options.extend(provider.checkout_options())
     if registry.manual_enabled():
         manual = PaymentMethod.objects.filter(code="manual").first()
         options.append(

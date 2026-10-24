@@ -1227,3 +1227,94 @@ def test_recorded_delivery_once_completed_activates(client, pending, subscriptio
     subscription.refresh_from_db()
     assert pending.status == BillingPayment.SUCCEEDED
     assert subscription.status == Subscription.ACTIVE
+
+
+@pytest.mark.django_db
+def test_recorded_late_approval_of_a_held_order_grants_nothing(
+    client, pending, subscription
+):
+    """PayPal resent ORDER.APPROVED hours after the capture, which was still under review."""
+    pending.amount_due = Decimal("139.65")
+    pending.save()
+    event = json.loads(
+        (FIXTURES / "webhook_order_approved.json")
+        .read_text(encoding="utf-8")
+        .replace("pay_a61570d450fc4a4fb6a7f9b4bf43c516", pending.reference)
+        .replace("6PE887148K308752R", "ORDER123")
+    )["body"]
+    pp = _client(
+        verify_webhook_signature=True,
+        capture_order=PayPalError("dup", status=422, issue="ORDER_ALREADY_CAPTURED"),
+        get_order=event["resource"],
+    )
+    with patch(CLIENT, return_value=pp):
+        assert _post(client, event).status_code == 200
+    pending.refresh_from_db()
+    subscription.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING
+    assert subscription.status != Subscription.ACTIVE
+    pp.get_order.assert_called_with("ORDER123")
+
+
+# --- card button (guest checkout) --------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_paypal_offers_a_card_button(paypal):
+    from apps.billing.views import checkout_options
+
+    assert [o["code"] for o in checkout_options()] == ["paypal", "paypal-card"]
+
+
+@pytest.mark.django_db
+def test_card_button_opens_paypals_card_form(client, owner, plan, subscription, paypal):
+    created = _fixture("order_create_plain")
+    pp = _client(create_order=created)
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        resp = client.get(
+            "/billing/checkout/?plan=starter&period=monthly&method=paypal-card"
+        )
+
+    payment = BillingPayment.objects.get(provider="paypal")
+    assert resp.status_code == 302
+    body = pp.create_order.call_args.args[0]
+    experience = body["payment_source"]["paypal"]["experience_context"]
+    assert experience["landing_page"] == "GUEST_CHECKOUT"
+    assert body["purchase_units"][0]["invoice_id"] == payment.reference
+
+
+@pytest.mark.django_db
+def test_paypal_button_leaves_the_landing_page_to_paypal(
+    client, owner, plan, subscription, paypal
+):
+    pp = _client(create_order=_fixture("order_create_plain"))
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        client.get("/billing/checkout/?plan=starter&period=monthly&method=paypal")
+    body = pp.create_order.call_args.args[0]
+    assert "landing_page" not in body["payment_source"]["paypal"]["experience_context"]
+
+
+@pytest.mark.django_db
+def test_recorded_guest_card_capture_is_read_like_any_paypal_capture(
+    client, owner, pending, subscription
+):
+    """A card payment without a PayPal account comes back as payment_source.paypal too."""
+    pending.amount_due = Decimal("2.00")
+    pending.save()
+    captured = json.loads(
+        (FIXTURES / "capture_guest_checkout.json")
+        .read_text(encoding="utf-8")
+        .replace("probe_guest_0e4fb20d", pending.reference)
+        .replace("2XV05299YT521791P", "ORDER123")
+    )["body"]
+    completed = _set_capture(captured, status="COMPLETED", status_details=None)
+    pp = _client(capture_order=completed, get_order=completed)
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        client.get(
+            f"/billing/return/paypal/?ref={pending.reference}&token=ORDER123&PayerID=X"
+        )
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.SUCCEEDED
