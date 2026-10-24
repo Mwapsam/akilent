@@ -812,3 +812,99 @@ def test_client_is_reused_for_the_same_credentials(settings):
     assert get_paypal_client() is first
     settings.PAYPAL_CLIENT_SECRET = "s2"
     assert get_paypal_client() is not first
+
+
+# --- review round 2 ----------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_declined_capture_sends_the_buyer_back_and_retries_with_a_new_request_id(
+    client, owner, pending, subscription
+):
+    approved = _fixture("order_get_vault_approved", order_id="ORDER123")
+    pp = _client(
+        capture_order=PayPalError("no", status=422, issue="INSTRUMENT_DECLINED"),
+        get_order=approved,
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        resp = _return(client, pending)
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.REQUIRES_ACTION
+    assert pending.charge_started_at is None  # nothing moved
+    assert resp.status_code == 302
+    assert (
+        resp["Location"] == "https://www.sandbox.paypal.com/checkoutnow?token=ORDER123"
+    )
+
+    # The buyer approves again with another funding source.
+    pp.capture_order.side_effect = None
+    pp.capture_order.return_value = _captured(pending)
+    pp.get_order.return_value = _captured(pending)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.SUCCEEDED
+    ids = [c.kwargs["request_id"] for c in pp.capture_order.call_args_list]
+    assert ids == [f"capture-{pending.reference}", f"capture-{pending.reference}-1"]
+
+
+@pytest.mark.django_db
+def test_definite_refusal_by_webhook_fails_without_a_retry_loop(
+    client, pending, subscription
+):
+    pp = _client(
+        verify_webhook_signature=True,
+        capture_order=PayPalError("expired", status=422, issue="ORDER_EXPIRED"),
+    )
+    with patch(CLIENT, return_value=pp):
+        resp = _post(client, _event("CHECKOUT.ORDER.APPROVED", {"id": "ORDER123"}))
+    assert resp.status_code == 200
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.FAILED
+
+
+@pytest.mark.django_db
+def test_return_before_approval_is_not_in_flight(client, owner, pending, subscription):
+    pp = _client(
+        capture_order=PayPalError("no", status=422, issue="ORDER_NOT_APPROVED")
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+    pending.refresh_from_db()
+    assert pending.charge_started_at is None
+    _stale(pending)
+    with patch(CLIENT, return_value=pp):
+        payments.abandon_stale()
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.ABANDONED
+    pp.get_order.assert_not_called()  # no reconcile for a checkout that never captured
+
+
+@pytest.mark.django_db
+def test_misconfigured_client_on_return_is_not_a_server_error(
+    client, owner, pending, subscription
+):
+    client.force_login(owner)
+    with patch(CLIENT, side_effect=PayPalError("not configured")):
+        resp = _return(client, pending)
+    assert resp.status_code == 200  # the pending page, not a 500
+
+
+@pytest.mark.django_db
+def test_uncertain_capture_blocks_a_second_checkout(
+    client, owner, pending, plan, subscription
+):
+    pp = _client(
+        capture_order=PayPalUncertain("timeout"),
+        get_order=PayPalError("down", status=503),
+    )
+    client.force_login(owner)
+    with patch(CLIENT, return_value=pp):
+        _return(client, pending)
+        resp = client.get("/billing/checkout/?plan=starter&period=monthly")
+    pending.refresh_from_db()
+    assert pending.status == BillingPayment.PENDING  # kept, credit still held
+    assert resp["Location"] == "/billing/plans/"
+    pp.create_order.assert_not_called()

@@ -21,12 +21,13 @@ from django.contrib import messages
 from django.shortcuts import redirect
 
 from ..money import billing_currency, quantize, to_decimal
-from ..paypal import PayPalError, PayPalUncertain, get_paypal_client
+from ..paypal import PayPalError, PayPalUncertain, config, get_paypal_client
 from .base import (
     FAILED,
     PENDING,
     REFUND,
     REFUNDED,
+    REQUIRES_ACTION,
     REVERSAL,
     SUCCEEDED,
     InvalidSignature,
@@ -57,6 +58,8 @@ CAPTURE_EVENTS = (
     "PAYMENT.CAPTURE.DECLINED",
     "PAYMENT.CAPTURE.DENIED",
 )
+# Capture refusals PayPal says to fix by sending the buyer back to approve again.
+BUYER_CAN_RETRY = ("INSTRUMENT_DECLINED", "PAYER_ACTION_REQUIRED")
 # Order states in which no money has been taken.
 UNCAPTURED_ORDER_STATUSES = (
     "CREATED",
@@ -84,10 +87,6 @@ REQUIRED_SETTINGS = (
     "PAYPAL_WEBHOOK_ID",
     "PAYPAL_MERCHANT_ID",
 )
-
-
-def _setting(name: str) -> str:
-    return (getattr(settings, name, "") or "").strip()
 
 
 def _first_capture(order: dict) -> dict:
@@ -123,7 +122,7 @@ class PayPalProvider(PaymentProvider):
 
     @staticmethod
     def _env_problem() -> str:
-        env = _setting("PAYPAL_ENV")
+        env = config("PAYPAL_ENV")
         if env not in ("sandbox", "live"):
             return "PAYPAL_ENV must be set to sandbox or live."
         if (
@@ -137,13 +136,12 @@ class PayPalProvider(PaymentProvider):
 
     def is_configured(self) -> bool:
         return (
-            all(_setting(name) for name in REQUIRED_SETTINGS)
-            and not self._env_problem()
+            all(config(name) for name in REQUIRED_SETTINGS) and not self._env_problem()
         )
 
     def config_status(self) -> str:
         problems = []
-        missing = [name for name in REQUIRED_SETTINGS if not _setting(name)]
+        missing = [name for name in REQUIRED_SETTINGS if not config(name)]
         if missing:
             problems.append(f"Missing {', '.join(missing)}.")
         if self._env_problem():
@@ -156,7 +154,7 @@ class PayPalProvider(PaymentProvider):
         return " ".join(problems)
 
     def account_key(self) -> str:
-        return f"{_setting('PAYPAL_ENV')}:{_setting('PAYPAL_MERCHANT_ID')}"
+        return f"{config('PAYPAL_ENV')}:{config('PAYPAL_MERCHANT_ID')}"
 
     # --- checkout --------------------------------------------------------------------------
 
@@ -240,9 +238,17 @@ class PayPalProvider(PaymentProvider):
 
         Only an open payment is captured. One that was abandoned (the customer started another
         checkout) or failed is left uncaptured even if its order gets approved later, so the
-        customer can't pay twice; PayPal lets the approved order expire."""
+        customer can't pay twice; PayPal lets the approved order expire.
+
+        Each attempt has its own PayPal-Request-Id: after a decline the buyer approves again
+        (often with another funding source) and the next capture must not get PayPal's stored
+        answer to the first one."""
         from apps.billing.models import BillingPayment
-        from apps.billing.payments import mark_charge_started
+        from apps.billing.payments import (
+            clear_charge_started,
+            mark_charge_started,
+            mark_unresolved,
+        )
 
         if payment.status not in (
             BillingPayment.PENDING,
@@ -255,26 +261,22 @@ class PayPalProvider(PaymentProvider):
                 payment.reference,
             )
             return None
-        client = get_paypal_client()
+        client = self._client()
         order_id = payment.provider_operation_id
-        # From here money may move: if we never learn the outcome, it is reconciled, not dropped.
+        attempt = int((payment.raw or {}).get("capture_attempt") or 0)
+        request_id = f"capture-{payment.reference}" + (f"-{attempt}" if attempt else "")
+        # Money may move from here: until we know, the payment is in flight (kept, reconciled).
         mark_charge_started(payment)
         try:
-            order = client.capture_order(
-                order_id, request_id=f"capture-{payment.reference}"
-            )
+            order = client.capture_order(order_id, request_id=request_id)
         except PayPalUncertain:
             order = self._get_order(order_id)
         except PayPalError as exc:
             if exc.issue == "ORDER_ALREADY_CAPTURED":
                 order = self._get_order(order_id)
-            elif exc.issue == "ORDER_NOT_APPROVED":
-                return None  # the buyer hasn't approved (yet)
             elif exc.issue == "DUPLICATE_INVOICE_ID":
                 # Another order with this reference was already captured: the money may be
                 # there. Never a decline; hold the payment for an operator to match it up.
-                from apps.billing.payments import mark_unresolved
-
                 logger.error(
                     "paypal: payment=%s already captured under another order (debug_id=%s)",
                     payment.reference,
@@ -282,13 +284,69 @@ class PayPalProvider(PaymentProvider):
                 )
                 mark_unresolved(payment)
                 return None
+            elif 400 <= exc.status < 500:
+                # A definite refusal: no money moved.
+                clear_charge_started(payment)
+                return self._refused(payment, exc, attempt)
             else:
                 raise ProviderError(f"capture failed: {exc.issue or exc}") from exc
         return self._order_result(payment, order)
 
+    def _refused(self, payment, exc, attempt) -> ProviderResult | None:
+        if exc.issue == "ORDER_NOT_APPROVED":
+            return None  # the buyer hasn't approved (yet)
+        raw = {
+            "capture_attempt": attempt + 1,
+            "issue": exc.issue,
+            "debug_id": exc.debug_id,
+        }
+        if exc.issue in BUYER_CAN_RETRY:
+            # PayPal: send the buyer back to approve again (e.g. pick another funding source).
+            return ProviderResult(
+                reference=payment.reference,
+                status=REQUIRES_ACTION,
+                action_url=self._approve_url(payment.provider_operation_id),
+                failure_reason="PayPal declined the payment method; choose another one.",
+                raw=raw,
+            )
+        logger.warning(
+            "paypal: capture of payment=%s refused: %s debug_id=%s",
+            payment.reference,
+            exc.issue,
+            exc.debug_id,
+        )
+        return ProviderResult(
+            reference=payment.reference,
+            status=FAILED,
+            failure_reason=f"PayPal refused the payment ({exc.issue or exc.status}).",
+            raw=raw,
+        )
+
+    def _approve_url(self, order_id: str) -> str:
+        try:
+            order = self._get_order(order_id)
+        except ProviderError:
+            order = {}
+        link = _link(order, "payer-action") or _link(order, "approve")
+        if link:
+            return link
+        host = (
+            "www.sandbox.paypal.com"
+            if config("PAYPAL_ENV") == "sandbox"
+            else "www.paypal.com"
+        )
+        return f"https://{host}/checkoutnow?token={order_id}"
+
+    @staticmethod
+    def _client():
+        try:
+            return get_paypal_client()
+        except PayPalError as exc:
+            raise ProviderError(f"PayPal isn't configured: {exc}") from exc
+
     def _get_order(self, order_id: str) -> dict:
         try:
-            return get_paypal_client().get_order(order_id)
+            return self._client().get_order(order_id)
         except PayPalError as exc:
             raise ProviderError(f"couldn't read order: {exc.issue or exc}") from exc
 
@@ -301,12 +359,12 @@ class PayPalProvider(PaymentProvider):
         if order.get("id") != payment.provider_operation_id:
             problems.append("order id")
         payee = _payee(order)
-        if payee and payee != _setting("PAYPAL_MERCHANT_ID"):
+        if payee and payee != config("PAYPAL_MERCHANT_ID"):
             problems.append("payee")
         if not payee:
             # A minimal capture response has no payee; read the order once to check it.
             full = self._get_order(payment.provider_operation_id)
-            if _payee(full) != _setting("PAYPAL_MERCHANT_ID"):
+            if _payee(full) != config("PAYPAL_MERCHANT_ID"):
                 problems.append("payee")
         problems += self._identity_problems(payment, capture)
         if problems:
@@ -367,7 +425,7 @@ class PayPalProvider(PaymentProvider):
     # --- webhooks --------------------------------------------------------------------------
 
     def parse_webhook(self, request) -> list[ProviderEvent]:
-        webhook_id = _setting("PAYPAL_WEBHOOK_ID")
+        webhook_id = config("PAYPAL_WEBHOOK_ID")
         if not webhook_id:
             raise InvalidSignature("PAYPAL_WEBHOOK_ID is not configured")
         try:
@@ -384,7 +442,7 @@ class PayPalProvider(PaymentProvider):
             raise InvalidSignature("missing PayPal transmission headers")
         payload.update(webhook_id=webhook_id, webhook_event=event)
         try:
-            verified = get_paypal_client().verify_webhook_signature(payload)
+            verified = self._client().verify_webhook_signature(payload)
         except PayPalUncertain as exc:
             raise ProviderError("couldn't verify the signature") from exc
         except PayPalError as exc:
@@ -436,7 +494,7 @@ class PayPalProvider(PaymentProvider):
         if not capture_id:
             return None
         try:
-            capture = get_paypal_client().get_capture(capture_id)
+            capture = self._client().get_capture(capture_id)
         except PayPalError as exc:
             raise ProviderError(f"couldn't read capture: {exc.issue or exc}") from exc
         reference = capture.get("custom_id") or ""
@@ -465,7 +523,7 @@ class PayPalProvider(PaymentProvider):
     def _refund_event(self, refund_id, kind) -> ProviderResult | None:
         if not refund_id:
             return None
-        client = get_paypal_client()
+        client = self._client()
         try:
             refund = client.get_refund(refund_id)
         except PayPalError as exc:

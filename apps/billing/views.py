@@ -377,6 +377,18 @@ def payment_return(request, provider):
             request, "The payment didn't go through. You haven't been charged."
         )
         return redirect("/billing/plans/")
+    if (
+        payment is not None
+        and payment.status == BillingPayment.REQUIRES_ACTION
+        and payment.action_url
+    ):
+        # e.g. PayPal declined the funding source: the buyer approves again with another one.
+        messages.error(
+            request,
+            payment.failure_reason
+            or "The payment needs another step. Please try again.",
+        )
+        return redirect(payment.action_url)
     return render(request, "billing/payment_pending.html", {"payment": payment})
 
 

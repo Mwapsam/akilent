@@ -14,6 +14,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from . import credit
@@ -72,7 +73,7 @@ def create_payment(
         existing = BillingPayment.objects.filter(reference=reference).first()
         if existing is not None:
             return existing
-    if purpose == BillingPayment.CHECKOUT and has_unresolved(account):
+    if purpose == BillingPayment.CHECKOUT and has_unconfirmed_charge(account):
         raise UnresolvedPayment()
     try:
         return _create_payment(
@@ -150,8 +151,9 @@ def claim_for_charge(payment) -> bool:
 
 
 def mark_charge_started(payment) -> None:
-    """A provider is about to move money for ``payment`` (e.g. capture an approved order). If
-    we never hear back, abandon_stale reconciles it instead of giving it up."""
+    """A provider is about to move money for ``payment`` (e.g. capture an approved order). Until
+    the outcome is known the payment is in flight: it isn't abandoned, the account can't pay for
+    the same thing again, and abandon_stale reconciles it rather than giving it up."""
     if payment.charge_started_at is None:
         now = timezone.now()
         BillingPayment.objects.filter(
@@ -160,40 +162,57 @@ def mark_charge_started(payment) -> None:
         payment.charge_started_at = now
 
 
+def clear_charge_started(payment) -> None:
+    """The provider definitely refused, so no money moved: the payment is an ordinary unfinished
+    one again (abandoned after a day, or replaced by a new checkout)."""
+    if payment.charge_started_at is not None:
+        BillingPayment.objects.filter(pk=payment.pk).update(charge_started_at=None)
+        payment.charge_started_at = None
+
+
+def _in_flight():
+    """Open payments whose charge may already have taken money: one was sent and hasn't
+    settled, or its outcome couldn't be confirmed (UNRESOLVED)."""
+    return Q(resolution=BillingPayment.UNRESOLVED) | Q(
+        status=BillingPayment.PENDING, charge_started_at__isnull=False
+    )
+
+
 def abandon_open_checkouts(account) -> None:
     """Give back the credit held by checkouts the customer started but didn't finish, before they
-    start another one. Bank transfers awaiting review, and payments whose outcome isn't known
-    (UNRESOLVED), are kept."""
+    start another one. Bank transfers awaiting review, and payments whose charge may already have
+    gone through (in flight), are kept."""
     for payment in BillingPayment.objects.filter(
         account=account,
         purpose=BillingPayment.CHECKOUT,
         status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
         manual_requests__isnull=True,
-    ).exclude(resolution=BillingPayment.UNRESOLVED):
+    ).exclude(_in_flight()):
         _abandon(payment)
 
 
 def abandon_stale() -> int:
-    """Payments still open after ABANDON_AFTER (beat task).
+    """Payments still open after ABANDON_AFTER (beat task, hourly).
 
     A checkout nobody finished releases its credit. A renewal charge the provider never
     confirmed is treated as unpaid, so the subscription goes past due (and through grace to
     expiry) instead of staying active on a period that has ended. If the provider confirms it
     later, record_result still honours it.
 
-    A payment whose money was actually sent for (``charge_started_at``: a renewal charge, or a
-    PayPal capture) is first looked up with a provider that can ``reconcile``. If that can't
-    tell, it is marked UNRESOLVED rather than given up: giving it up would let the customer pay
-    the same period again while the first charge may have gone through. UNRESOLVED payments are
-    looked up again on every run until they settle.
+    A payment in flight (a charge was sent: a renewal charge, or a PayPal capture) is first looked
+    up with a provider that can ``reconcile``. Still pending at the provider (e.g. under review)
+    keeps it waiting for the provider's webhook. No answer at all marks it UNRESOLVED rather than
+    giving it up: giving it up would let the customer pay the same period again while the first
+    charge may have gone through. UNRESOLVED payments are looked up again on every run.
     """
     cutoff = timezone.now() - ABANDON_AFTER
     open_statuses = [BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION]
+    unresolved = Q(resolution=BillingPayment.UNRESOLVED)
     count = 0
     for payment in BillingPayment.objects.filter(
+        Q(created_at__lt=cutoff) | unresolved,
         purpose=BillingPayment.CHECKOUT,
         status__in=open_statuses,
-        created_at__lt=cutoff,
         manual_requests__isnull=True,
     ):
         if payment.charge_started_at is not None and _reconcile(payment):
@@ -203,9 +222,9 @@ def abandon_stale() -> int:
         _abandon(payment)
         count += 1
     for payment in BillingPayment.objects.filter(
+        Q(updated_at__lt=cutoff) | unresolved,
         purpose=BillingPayment.RENEWAL,
         status=BillingPayment.PENDING,
-        updated_at__lt=cutoff,
     ):
         if payment.charge_started_at is not None and _reconcile(payment):
             continue
@@ -218,8 +237,9 @@ def abandon_stale() -> int:
 
 def _reconcile(payment) -> bool:
     """Ask the provider what happened to a charge it was sent. True when the payment was dealt
-    with here (settled, or marked UNRESOLVED) and must not be given up. False when the provider
-    can't look charges up, so the old behaviour (give up after a day) applies."""
+    with here (settled, confirmed still pending, or marked UNRESOLVED) and must not be given up.
+    False when the provider can't look charges up, so the old behaviour (give up after a day)
+    applies."""
     from .providers import ProviderError, registry
 
     provider = registry.get(payment.provider)
@@ -232,18 +252,21 @@ def _reconcile(payment) -> bool:
             "reconcile: %s %s failed: %s", payment.provider, payment.reference, exc
         )
         result = None
-    if result is not None and result.status != PENDING:
+    if result is None:
+        mark_unresolved(payment)
+    else:
+        # PENDING here is a known state (the provider is still deciding, e.g. a review); its
+        # webhook will settle it, and it stays in flight meanwhile.
         record_result(provider.code, result)
-        return True
-    mark_unresolved(payment)
     return True
 
 
 @transaction.atomic
 def mark_unresolved(payment) -> None:
-    """Nobody can yet say whether this charge went through. It won't be charged again, the
-    account can't start another checkout, and a renewal's subscription goes past due (grace and
-    dunning apply). Marking an already-UNRESOLVED payment again changes nothing."""
+    """Nobody can yet say whether this charge went through. It won't be charged again and the
+    account can't pay for the same thing again until it settles (the provider confirms, or an
+    operator does). A renewal's subscription is left as it is rather than sent to dunning: the
+    customer couldn't use the pay link anyway, and may well have paid. Idempotent."""
     payment = BillingPayment.objects.select_for_update().get(pk=payment.pk)
     if payment.status not in (BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION):
         return
@@ -251,8 +274,6 @@ def mark_unresolved(payment) -> None:
         return
     payment.resolution = BillingPayment.UNRESOLVED
     payment.save(update_fields=["resolution", "updated_at"])
-    if payment.purpose == BillingPayment.RENEWAL:
-        mark_past_due(payment.account, payment=payment)
     from apps.core import audit
 
     logger.error(
@@ -270,12 +291,16 @@ def mark_unresolved(payment) -> None:
     )
 
 
-def has_unresolved(account) -> bool:
-    return BillingPayment.objects.filter(
-        account=account,
-        status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
-        resolution=BillingPayment.UNRESOLVED,
-    ).exists()
+def has_unconfirmed_charge(account) -> bool:
+    """Is a charge for this account in flight? Then another payment could charge it twice."""
+    return (
+        BillingPayment.objects.filter(
+            account=account,
+            status__in=[BillingPayment.PENDING, BillingPayment.REQUIRES_ACTION],
+        )
+        .filter(_in_flight())
+        .exists()
+    )
 
 
 @transaction.atomic
@@ -365,7 +390,12 @@ def record_result(provider_code: str, result: ProviderResult) -> BillingPayment 
 
 
 def _succeed(payment, provider_code, result) -> None:
-    was_given_up = payment.status in (BillingPayment.ABANDONED, BillingPayment.FAILED)
+    # fail() gave the credit back for each of these, so it is taken again below.
+    was_given_up = payment.status in (
+        BillingPayment.ABANDONED,
+        BillingPayment.FAILED,
+        BillingPayment.REQUIRES_ACTION,
+    )
     payment.status = BillingPayment.SUCCEEDED
     payment.failure_reason = ""
     payment.paid_at = timezone.now()

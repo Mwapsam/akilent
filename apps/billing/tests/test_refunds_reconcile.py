@@ -155,7 +155,9 @@ def test_unknown_outcome_is_held_not_failed(account, plan, subscription, fake_pr
     subscription.refresh_from_db()
     assert payment.status == BillingPayment.PENDING
     assert payment.resolution == BillingPayment.UNRESOLVED
-    assert subscription.status == Subscription.PAST_DUE
+    # Not sent to dunning: the pay link couldn't be used, and the charge may have gone through.
+    assert subscription.status == Subscription.ACTIVE
+    assert subscription.past_due_since is None
     assert AdminAction.objects.filter(action="billing.unresolved").count() == 1
     assert fake_provider.charges == []  # never charged again
 
@@ -232,16 +234,20 @@ def test_reconcile_error_is_treated_as_unknown(
 
 
 @pytest.mark.django_db
-def test_still_pending_at_the_provider_is_unknown(
+def test_still_pending_at_the_provider_keeps_waiting(
     account, plan, subscription, fake_provider
 ):
+    """e.g. a capture under PayPal review: a known state, not an operator problem."""
     payment = _stuck_renewal(account, plan, subscription)
     fake_provider.reconcile = lambda p: ProviderResult(
         reference=p.reference, status=PENDING
     )
     payments.abandon_stale()
     payment.refresh_from_db()
-    assert payment.resolution == BillingPayment.UNRESOLVED
+    assert payment.status == BillingPayment.PENDING
+    assert payment.resolution == ""
+    assert not AdminAction.objects.filter(action="billing.unresolved").exists()
+    assert payments.has_unconfirmed_charge(account)  # still can't pay twice
 
 
 @pytest.mark.django_db
@@ -256,7 +262,7 @@ def test_late_confirmation_resolves_and_unblocks(
     payment.refresh_from_db()
     assert payment.status == BillingPayment.SUCCEEDED
     assert payment.resolution == ""
-    assert not payments.has_unresolved(account)
+    assert not payments.has_unconfirmed_charge(account)
     assert AdminAction.objects.filter(action="billing.resolved").exists()
 
 
@@ -407,16 +413,13 @@ def test_repeated_reconcile_passes_have_no_side_effects(
     payment.refresh_from_db()
     since, touched = subscription.past_due_since, payment.updated_at
 
-    BillingPayment.objects.filter(pk=payment.pk).update(
-        updated_at=timezone.now() - timedelta(days=2)
-    )
-    payments.abandon_stale()
+    payments.abandon_stale()  # looked up again straight away, not after another day
 
     subscription.refresh_from_db()
     payment.refresh_from_db()
     assert subscription.past_due_since == since
     assert payment.status == BillingPayment.PENDING
-    assert payment.updated_at < touched  # not re-saved
+    assert payment.updated_at == touched  # not re-saved
     assert AdminAction.objects.filter(action="billing.unresolved").count() == 1
 
 
@@ -450,6 +453,85 @@ def test_refund_in_another_currency_is_not_counted(
     assert payment.refunds.count() == 1
     assert payment.refund_state == BillingPayment.REFUND_NONE
     assert payment.refunded_amount == D("0")
+
+
+# --- review round 2 ----------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_in_flight_checkout_is_kept_and_blocks_another(
+    account, plan, subscription, fake_provider
+):
+    """A capture was sent, the outcome isn't known yet (not yet UNRESOLVED)."""
+    payment = payments.create_payment(account, plan, "monthly", provider="fake")
+    payments.mark_charge_started(payment)
+    payments.abandon_open_checkouts(account)
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.PENDING
+    with pytest.raises(payments.UnresolvedPayment):
+        payments.create_payment(account, plan, "monthly", provider="fake")
+
+
+@pytest.mark.django_db
+def test_refused_charge_is_an_ordinary_checkout_again(
+    account, plan, subscription, fake_provider
+):
+    payment = payments.create_payment(account, plan, "monthly", provider="fake")
+    payments.mark_charge_started(payment)
+    payments.clear_charge_started(payment)
+    payments.abandon_open_checkouts(account)
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.ABANDONED
+
+
+@pytest.mark.django_db
+def test_unresolved_payment_is_looked_up_on_every_run(
+    account, plan, subscription, fake_provider
+):
+    calls = []
+    payment = _stuck_renewal(account, plan, subscription)
+    fake_provider.reconcile = lambda p: calls.append(p.pk)
+    payments.abandon_stale()
+    payments.abandon_stale()
+    payments.abandon_stale()
+    assert calls == [payment.pk] * 3
+
+
+@pytest.mark.django_db
+def test_credit_is_taken_again_when_a_payment_needing_action_succeeds(
+    account, plan, subscription, fake_provider
+):
+    from apps.billing import credit
+    from apps.billing.providers import REQUIRES_ACTION
+
+    credit.grant(account, "5.00")
+    payment = payments.create_payment(account, plan, "monthly", provider="fake")
+    assert payment.credit_applied == D("5.00")
+    assert credit.balance(account) == D("0.00")
+
+    payments.record_result(
+        "fake",
+        ProviderResult(
+            reference=payment.reference, status=REQUIRES_ACTION, action_url="https://x"
+        ),
+    )
+    assert credit.balance(account) == D("5.00")  # given back while it waits
+
+    payments.record_result("fake", fake_provider.paid(payment, card=None))
+    payment.refresh_from_db()
+    assert payment.status == BillingPayment.SUCCEEDED
+    assert credit.balance(account) == D("0.00")  # paid the reduced amount, so it's used
+
+
+@pytest.mark.django_db
+def test_audit_failure_doesnt_break_the_callers_transaction(account):
+    from django.db import transaction
+
+    from apps.core import audit
+
+    with transaction.atomic():
+        audit.system("billing.refund", account=account, target="x", bad=object())
+        assert AdminAction.objects.count() == 0  # the transaction is still usable
 
 
 # --- migration ---------------------------------------------------------------------------------

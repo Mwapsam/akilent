@@ -206,12 +206,17 @@ class PayPalClient:
 _clients: dict[tuple, PayPalClient] = {}
 
 
+def config(name: str) -> str:
+    """A PAYPAL_* setting. settings.py has already normalised it (stripped, env lower-cased)."""
+    return getattr(settings, name, "") or ""
+
+
 def get_paypal_client() -> PayPalClient:
     """One client per environment and credentials, so its connection pool is reused across the
     several calls a return or webhook makes. Changing the settings gives a new client."""
-    client_id = (getattr(settings, "PAYPAL_CLIENT_ID", "") or "").strip()
-    secret = (getattr(settings, "PAYPAL_CLIENT_SECRET", "") or "").strip()
-    env = (getattr(settings, "PAYPAL_ENV", "") or "").strip()
+    client_id = config("PAYPAL_CLIENT_ID")
+    secret = config("PAYPAL_CLIENT_SECRET")
+    env = config("PAYPAL_ENV")
     if not client_id or not secret:
         raise PayPalError("PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are not configured")
     key = (env, client_id, hashlib.sha256(secret.encode()).hexdigest())

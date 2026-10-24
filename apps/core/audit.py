@@ -101,17 +101,22 @@ LABELS = {
 
 def audit(request, action: str, account=None, target: str = "", **detail) -> None:
     """``request`` is None for something the platform did on its own (no actor)."""
+    from django.db import transaction
+
     from apps.core.models import AdminAction
 
     user = getattr(request, "user", None)
     try:
-        AdminAction.objects.create(
-            actor=user if user is not None and user.is_authenticated else None,
-            account=account,
-            action=action,
-            target=str(target)[:200],
-            detail=detail,
-        )
+        # Its own savepoint: callers record from inside their transactions (a payment or refund
+        # being applied), and a failed insert must not abort theirs.
+        with transaction.atomic():
+            AdminAction.objects.create(
+                actor=user if user is not None and user.is_authenticated else None,
+                account=account,
+                action=action,
+                target=str(target)[:200],
+                detail=detail,
+            )
     except Exception:
         logger.exception("audit: couldn't record %s", action)
 
