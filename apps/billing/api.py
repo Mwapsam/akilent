@@ -516,12 +516,13 @@ _PRICING_LIMITS = (
 def plan_card(plan: Plan, *, channels=None) -> dict:
     """What a pricing card says about ``plan``: its limits, the features it includes in catalog
     order, and coming-soon teasers. The pricing page, signup wizard and landing page all use it,
-    so what's advertised is what the plan gives. ``channels`` defaults to the enabled ones."""
+    so what's advertised is what the plan gives. ``channels`` defaults to the ones offered
+    to the public (on, and not restricted while Meta reviews the app)."""
     from apps.billing.models import PlanLimit
-    from apps.core.channels import enabled_channels, feature_visible, limit_visible
+    from apps.core.channels import feature_visible, limit_visible, public_channels
 
     if channels is None:
-        channels = enabled_channels()
+        channels = public_channels()
 
     keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
     values = dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
@@ -575,10 +576,10 @@ def core_features() -> list:
 
 def compare_plans(plans, *, channels=None) -> list[dict]:
     """Rows for a features x plans comparison table: [{feature, cells: [bool per plan]}]."""
-    from apps.core.channels import enabled_channels, feature_visible
+    from apps.core.channels import feature_visible, public_channels
 
     if channels is None:
-        channels = enabled_channels()
+        channels = public_channels()
 
     plans = list(plans)
     matrix = plan_feature_matrix()

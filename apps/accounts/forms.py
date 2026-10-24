@@ -13,58 +13,83 @@ from apps.accounts.models import Account, Invitation
 if TYPE_CHECKING:
     from apps.billing.models import Plan
 
-# Channels each signup service needs. A service is offered only when all its channels are on.
+# Channels each plan service type covers (Plan.service_type / Account.selected_services).
 SERVICE_CHANNELS: dict[str, set[str]] = {
     Account.Services.EMAIL.value: {"email"},
     Account.Services.WHATSAPP.value: {"whatsapp"},
     Account.Services.BOTH.value: {"email", "whatsapp"},
 }
 
+# The channels a business can pick at signup, in display order, with what each one does
+# here (docs/marketing/messaging.md, section 2). Facebook is Page publishing only.
+CHANNEL_CHOICES: tuple[tuple[str, str, str], ...] = (
+    ("whatsapp", "WhatsApp", "A shared inbox, auto-replies and campaigns"),
+    ("instagram", "Instagram", "DMs in the same inbox, comment replies and posts"),
+    ("facebook", "Facebook Page", "Publish and schedule posts to your Page"),
+    ("email", "Email", "Send from your own domain, with templates and campaigns"),
+)
 
-def effective_service(service_type: str, enabled) -> str | None:
-    """The service a plan really gives while only ``enabled`` channels are on.
 
-    An "Email & WhatsApp" plan with email switched off is, for now, a WhatsApp plan;
-    a plan none of whose channels are on gives nothing (None).
+def plan_channels(plan, channels, features=None) -> frozenset[str]:
+    """The channels ``plan`` gives while only ``channels`` are on offer.
+
+    WhatsApp and Email come from the plan's service type, Instagram from its
+    ``instagram`` feature and Facebook (Page publishing) from ``content_studio``.
+    ``features`` is the plan's feature keys when the caller already has them.
     """
-    channels = SERVICE_CHANNELS.get(service_type, set()) & set(enabled)
-    return next(
-        (value for value, needs in SERVICE_CHANNELS.items() if needs == channels),
-        None,
-    )
+    if features is None:
+        features = set(plan.features.values_list("key", flat=True))
+    given = set(SERVICE_CHANNELS.get(plan.service_type, set()))
+    if "instagram" in features:
+        given.add("instagram")
+    if "content_studio" in features:
+        given.add("facebook")
+    return frozenset(given & set(channels))
 
 
-def signup_offer() -> tuple[dict[str, list], list[tuple[str, str]]]:
-    """What signup can sell right now: active plans grouped by the service they
-    effectively give, and the services that have at least one plan (in display order).
+def signup_offer() -> tuple[
+    list[tuple["Plan", frozenset[str]]], list[tuple[str, str, str]]
+]:
+    """What signup can sell right now: active plans (cheapest first) with the channels each
+    gives, and the channels a business may pick (``CHANNEL_CHOICES`` rows).
 
-    Offering only services that have a plan means a service card can never lead to an
-    empty "No packages" step.
+    Only public channels count (on, and not restricted while Meta reviews the app), and a
+    channel is offered only when some plan gives it, so a pick can never lead to an empty
+    package step.
     """
-    from apps.billing.models import Plan
-    from apps.core.channels import enabled_channels
+    from apps.billing.models import Plan, PlanFeature
+    from apps.core.channels import public_channels
 
-    enabled = enabled_channels()
-    by_service: dict[str, list] = {}
-    for plan in Plan.objects.filter(is_active=True).order_by("price_monthly"):
-        service = effective_service(plan.service_type, enabled)
-        if service:
-            by_service.setdefault(service, []).append(plan)
-    choices = [(v, l) for v, l in Account.Services.choices if v in by_service]
-    return by_service, choices
+    public = public_channels()
+    plans = list(Plan.objects.filter(is_active=True).order_by("price_monthly"))
+    features: dict[int, set[str]] = {}
+    for plan_id, key in PlanFeature.objects.filter(plan__in=plans).values_list(
+        "plan_id", "key"
+    ):
+        features.setdefault(plan_id, set()).add(key)
+    offered = []
+    for plan in plans:
+        given = plan_channels(plan, public, features.get(plan.pk, set()))
+        if given:
+            offered.append((plan, given))
+    covered = set().union(*(given for _, given in offered)) if offered else set()
+    choices = [row for row in CHANNEL_CHOICES if row[0] in covered]
+    return offered, choices
 
 
-def enabled_service_choices() -> list[tuple[str, str]]:
-    return signup_offer()[1]
+def plans_covering(offered, picks) -> list:
+    """The offered plans that give every picked channel."""
+    picks = set(picks)
+    return [plan for plan, given in offered if picks <= given]
 
 
 class SignupForm(UserCreationForm):
-    """Service-first signup: personal + business details that create the User
+    """Channel-first signup: personal + business details that create the User
     and the Account in one step.
 
     Email is the login credential (see apps.accounts.backends.EmailBackend),
     so there's no separate username field — ``User.username`` is set from the
-    email in the signup view. ``selected_services`` and ``plan`` come from the
+    email in the signup view. ``selected_channels`` and ``plan`` come from the
     wizard's earlier steps and are validated against each other here so the
     hidden fields can't be tampered.
     """
@@ -97,7 +122,10 @@ class SignupForm(UserCreationForm):
     postal_code = forms.CharField(max_length=40, required=False, label="Postal code")
     country = forms.CharField(max_length=120, required=True)
 
-    selected_services = forms.ChoiceField(choices=Account.Services.choices)
+    selected_channels = forms.MultipleChoiceField(
+        choices=[(v, label) for v, label, _ in CHANNEL_CHOICES],
+        error_messages={"required": "Choose at least one channel."},
+    )
     # Chosen on the wizard's Package step; round-tripped through errors.
     plan = forms.CharField(required=False, widget=forms.HiddenInput())
     # The term a paid plan is billed for (monthly, annually, ...). Ignored for free plans.
@@ -121,7 +149,7 @@ class SignupForm(UserCreationForm):
             "state_region",
             "postal_code",
             "country",
-            "selected_services",
+            "selected_channels",
             "plan",
             "billing_period",
             "password1",
@@ -130,10 +158,11 @@ class SignupForm(UserCreationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only services whose channels are enabled are valid, so a disabled one is rejected too.
-        field = self.fields["selected_services"]
-        assert isinstance(field, forms.ChoiceField)
-        self._offer, field.choices = signup_offer()
+        # Only channels on offer are valid, so a switched-off or restricted one is rejected.
+        field = self.fields["selected_channels"]
+        assert isinstance(field, forms.MultipleChoiceField)
+        self._offer, choices = signup_offer()
+        field.choices = [(v, label) for v, label, _ in choices]
         self.chosen_plan: Plan | None = None  # set by clean()
 
     def clean_email(self):
@@ -146,7 +175,7 @@ class SignupForm(UserCreationForm):
         cleaned = super().clean()
         if cleaned is None:
             return cleaned
-        services = cleaned.get("selected_services")
+        picks = cleaned.get("selected_channels")
         plan_slug = (cleaned.get("plan") or "").strip()
         if not plan_slug:
             self.add_error("plan", "Choose a subscription package.")
@@ -158,10 +187,10 @@ class SignupForm(UserCreationForm):
         self.chosen_plan = plan
         if plan is None:
             self.add_error("plan", "That subscription package is no longer available.")
-        elif services and plan not in self._offer.get(services, []):
+        elif picks and plan not in plans_covering(self._offer, picks):
             self.add_error(
                 "plan",
-                "That package doesn't match the services you selected.",
+                "That package doesn't include every channel you selected.",
             )
         self._clean_billing_period(cleaned, plan)
         return cleaned

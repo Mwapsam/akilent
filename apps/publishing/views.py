@@ -23,6 +23,7 @@ from apps.accounts.api import is_account_admin
 from apps.accounts.fields import open_text, seal_text
 from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load
+from apps.core.module_gate import module_required
 
 from .composer import (
     EDITABLE_STATUSES as _EDITABLE_POST_STATUSES,
@@ -131,6 +132,7 @@ _TRANSITIONS = {
 
 @full_page_load
 @login_required
+@module_required("content_studio")
 def fb_oauth_connect(request):
     account = get_current_account(request)
     if account is None:
@@ -162,6 +164,7 @@ def fb_oauth_connect(request):
 
 
 @login_required
+@module_required("content_studio")
 def fb_oauth_callback(request):
     account = get_current_account(request)
     if account is None:
@@ -287,6 +290,7 @@ def _activate_fb_page(conn, page_id: str, page_name: str, page_token: str) -> No
 
 @full_page_load
 @login_required
+@module_required("content_studio")
 def fb_select_page(request):
     """Pick which Facebook Page to connect when the user manages more than one."""
     account = get_current_account(request)
@@ -364,6 +368,7 @@ def fb_oauth_disconnect(request):
 
 
 @login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def publishing_index(request):
     account = get_current_account(request)
@@ -495,6 +500,7 @@ def _calendar_entries(account, start, end) -> list[dict]:
 
 
 @login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def publishing_calendar(request):
     account = get_current_account(request)
@@ -602,6 +608,7 @@ def publishing_calendar(request):
 
 
 @login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def publishing_library(request):
     account = get_current_account(request)
@@ -666,6 +673,7 @@ def publishing_library(request):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def publishing_library_bulk(request):
     account = get_current_account(request)
@@ -742,7 +750,10 @@ def publishing_library_bulk(request):
 
 
 @login_required
+@module_required("content_studio")
 def publishing_channels(request):
+    from apps.core.channels import channel_state, restricted_channels
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -769,6 +780,11 @@ def publishing_channels(request):
             "ig_connection": ig,
             "ig_publish_scope": ig_publish_scope,
             "fb_connection": fb_connection,
+            "channel_on": {
+                key: channel_state(key) == "enabled"
+                for key in ("instagram", "facebook")
+            },
+            "restricted": restricted_channels(),
             "recent_failures": recent_failures,
             "requires_review": PublishingSettings.requires_review_for(account),
             "is_admin": is_account_admin(request.user, account),
@@ -777,6 +793,7 @@ def publishing_channels(request):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def publishing_settings_update(request):
     account = get_current_account(request)
@@ -803,6 +820,7 @@ def publishing_settings_update(request):
 
 
 @login_required
+@module_required("content_studio")
 def planning_overview(request):
     account = get_current_account(request)
     if account is None:
@@ -857,6 +875,7 @@ def planning_overview(request):
 
 
 @login_required
+@module_required("content_studio")
 def plan_item_new(request):
     account = get_current_account(request)
     if account is None:
@@ -885,6 +904,7 @@ def plan_item_new(request):
 
 
 @login_required
+@module_required("content_studio")
 def plan_item_edit(request, pk):
     account = get_current_account(request)
     if account is None:
@@ -965,6 +985,7 @@ def _save_plan_item(request, account, instance=None):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def plan_item_delete(request, pk):
     account = get_current_account(request)
@@ -985,6 +1006,7 @@ def plan_item_delete(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def plan_item_create_post(request, pk):
     account = get_current_account(request)
@@ -1019,6 +1041,7 @@ def plan_item_create_post(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 def pillar_manage(request):
     account = get_current_account(request)
     if account is None:
@@ -1089,6 +1112,7 @@ def _save_theme(request, account) -> None:
 
 
 @login_required
+@module_required("content_studio")
 def campaign_manage(request):
     account = get_current_account(request)
     if account is None:
@@ -1124,6 +1148,7 @@ _MAX_MEDIA_BYTES = 100 * 1024 * 1024  # 100 MB
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_media_upload(request):
     """Upload a single media file for a post. Returns {url, name, content_type}."""
@@ -1270,6 +1295,7 @@ def _post_new_submit(request, account):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 @_in_workspace_tz
 def composer_readiness(request):
@@ -1288,6 +1314,7 @@ def composer_readiness(request):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 @_in_workspace_tz
 def composer_autosave(request):
@@ -1393,6 +1420,7 @@ def composer_autosave(request):
 
 @full_page_load
 @login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def post_new(request):
     account = get_current_account(request)
@@ -1578,6 +1606,7 @@ def _channel_options_for_display(post) -> list[dict]:
 
 
 @login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def post_detail(request, pk):
     account = get_current_account(request)
@@ -1618,6 +1647,7 @@ def post_detail(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_delete(request, pk):
     account = get_current_account(request)
@@ -1639,6 +1669,7 @@ def post_delete(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 @_in_workspace_tz
 def post_retry(request, pk):
@@ -1673,6 +1704,7 @@ def post_retry(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_retry_variant(request, pk, platform):
     """Retry a specific failed variant/channel by enqueueing publish_variant_async task.
@@ -1771,6 +1803,7 @@ def post_retry_variant(request, pk, platform):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 @_in_workspace_tz
 def variant_reschedule(request, pk, platform):
@@ -1831,6 +1864,7 @@ def variant_reschedule(request, pk, platform):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def first_comment_retry(request, pk, variant_pk):
     """Queue a channel's failed first comment again."""
@@ -1854,6 +1888,7 @@ def first_comment_retry(request, pk, variant_pk):
 
 
 @login_required
+@module_required("content_studio")
 def location_search(request):
     """Places to tag on an Instagram post, from the Pages Search API.
 
@@ -1907,6 +1942,7 @@ def location_search(request):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_cancel(request, pk):
     account = get_current_account(request)
@@ -1934,6 +1970,7 @@ def post_cancel(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_reopen(request, pk):
     account = get_current_account(request)
@@ -1954,6 +1991,7 @@ def post_reopen(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_refresh_insights(request, pk):
     account = get_current_account(request)
@@ -2010,6 +2048,7 @@ _METRICS_REFRESH_EVERY = datetime.timedelta(minutes=5)
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_submit_for_review(request, pk):
     """Submit a draft post for review."""
@@ -2076,6 +2115,7 @@ def _can_review(post, user, account, action="review") -> tuple[bool, str]:
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_approve(request, pk):
     """Approve a post for publishing."""
@@ -2120,6 +2160,7 @@ def post_approve(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_request_changes(request, pk):
     """Request changes to a submitted post."""
@@ -2161,6 +2202,7 @@ def post_request_changes(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def post_resubmit_after_changes(request, pk):
     """Resubmit a post after changes were requested."""
@@ -2200,6 +2242,7 @@ def post_resubmit_after_changes(request, pk):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def generate_caption(request):
     account = get_current_account(request)
@@ -2238,6 +2281,7 @@ def generate_caption(request):
 
 
 @login_required
+@module_required("content_studio")
 def caption_draft_result(request, draft_id):
     from apps.ai.models import AIDraft
 
@@ -2276,6 +2320,7 @@ def caption_draft_result(request, draft_id):
 
 
 @login_required
+@module_required("content_studio")
 def reconciliation_queue(request):
     """List all variants in RECONCILING state for operator action."""
     from django.core.paginator import Paginator
@@ -2322,6 +2367,7 @@ def _is_safe_public_url(url: str) -> bool:
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def reconciliation_confirm_published(request, variant_id):
     """Operator confirms variant was actually published in provider."""
@@ -2388,6 +2434,7 @@ def reconciliation_confirm_published(request, variant_id):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def reconciliation_retry(request, variant_id):
     """Operator initiates retry for variant after determining it was not published."""
@@ -2433,6 +2480,7 @@ def reconciliation_retry(request, variant_id):
 
 
 @login_required
+@module_required("content_studio")
 @require_POST
 def reconciliation_leave_unresolved(request, variant_id):
     """Operator leaves variant RECONCILING with notes for next investigation step."""

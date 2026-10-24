@@ -69,15 +69,23 @@
     <div class="card card-pad">
       <h2 class="font-semibold mb-1">Channels</h2>
       <p class="help mb-4">Switch a channel off to hide it on every page and stop new sends. Existing messages and data are kept, and switching it back on restores access.</p>
+      <p class="help mb-4"><strong>Offer to new customers</strong> controls signup, the landing page and plan cards. Leave Instagram and Facebook unticked until Meta approves the app's permissions: until then only accounts with a role on the Meta app can connect them.</p>
       <div class="space-y-3">
         {% for ch in channels %}
-        <label class="flex items-center gap-3 text-sm {% if not ch.available %}opacity-60{% endif %}">
-          <input type="checkbox" name="channel_{{ ch.key }}" class="rounded border-border-strong"
-                 {% if ch.enabled %}checked{% endif %} {% if not ch.available %}disabled{% endif %}>
-          {{ ch.label }}
-          <input type="hidden" name="channel_was_{{ ch.key }}" value="{% if ch.enabled %}1{% endif %}">
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm {% if not ch.available %}opacity-60{% endif %}">
+          <label class="flex items-center gap-3 min-w-[9rem]">
+            <input type="checkbox" name="channel_{{ ch.key }}" class="rounded border-border-strong"
+                   {% if ch.enabled %}checked{% endif %} {% if not ch.available %}disabled{% endif %}>
+            {{ ch.label }}{% if ch.key == "facebook" %} <span class="text-xs text-gray-500">(Page publishing)</span>{% endif %}
+            <input type="hidden" name="channel_was_{{ ch.key }}" value="{% if ch.enabled %}1{% endif %}">
+          </label>
+          <label class="flex items-center gap-2 text-xs text-gray-600">
+            <input type="checkbox" name="public_{{ ch.key }}" class="rounded border-border-strong" {% if ch.public %}checked{% endif %}>
+            Offer to new customers{% if ch.meta_review %} <span class="text-gray-500">(after Meta App Review)</span>{% endif %}
+            <input type="hidden" name="public_was_{{ ch.key }}" value="{% if ch.public %}1{% endif %}">
+          </label>
           {% if not ch.available %}<span class="text-xs text-gray-500">not set up on this server</span>{% endif %}
-        </label>
+        </div>
         {% endfor %}
       </div>
     </div>

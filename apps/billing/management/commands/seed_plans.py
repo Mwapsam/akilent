@@ -95,6 +95,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         for data in PLANS:
+            data = dict(
+                data
+            )  # PLANS is module state: popping from it breaks a second run
             slug = data.pop("slug")
             plan, created = Plan.objects.update_or_create(slug=slug, defaults=data)
             action = "Created" if created else "Updated"

@@ -16,6 +16,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from apps.core.channels import channel_state
+
 from .models import ContentPost, ContentPostVariant, FacebookPageConnection
 
 PLATFORM_LABELS = {"instagram": "Instagram", "facebook": "Facebook"}
@@ -60,6 +62,8 @@ class ComposerError(ValueError):
 # --- Destinations -----------------------------------------------------------------------
 
 CONNECTED, RECONNECT, NOT_CONNECTED = "connected", "reconnect", "not_connected"
+# The channel is switched off on Akilent (or its state can't be read yet).
+OFF = "off"
 
 
 def destinations(account) -> dict[str, dict]:
@@ -97,6 +101,9 @@ def destinations(account) -> dict[str, dict]:
         "status": fb_state,
         "connect_url": connect_url,
     }
+    for platform, dest in out.items():
+        if channel_state(platform) != "enabled":
+            dest["status"] = OFF
     return out
 
 

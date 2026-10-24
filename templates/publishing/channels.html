@@ -54,6 +54,12 @@
         {% endif %}
         {% else %}
         <p class="text-sm text-gray-500">Connect Instagram to publish images, reels, and stories from Akilent.</p>
+        {% if channel_on.instagram and "instagram" in restricted %}
+        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing Akilent's access to Instagram. Until it approves, only accounts invited to test the Akilent app can connect.</p>
+        {% endif %}
+        {% endif %}
+        {% if not channel_on.instagram %}
+        <p class="text-xs text-amber-700 mt-1">Instagram is switched off on Akilent right now. Scheduled Instagram posts wait and go out once it's back on.</p>
         {% endif %}
       </div>
     </div>
@@ -94,6 +100,11 @@
         {% if fb_connection and fb_connection.page_name %}
         <p class="text-xs text-gray-400 mt-1">Page: {{ fb_connection.page_name }}</p>
         {% endif %}
+        {% if not channel_on.facebook %}
+        <p class="text-xs text-amber-700 mt-1">Facebook Page publishing is switched off on Akilent right now. Scheduled Facebook posts wait and go out once it's back on.</p>
+        {% elif "facebook" in restricted and not fb_connection or "facebook" in restricted and fb_connection.status != 'active' %}
+        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing Akilent's access to Facebook Pages. Until it approves, only accounts invited to test the Akilent app can connect a Page.</p>
+        {% endif %}
       </div>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">
@@ -103,7 +114,7 @@
         <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
                 data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
-      {% else %}
+      {% elif channel_on.facebook %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
       {% endif %}
     </div>

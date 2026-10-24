@@ -258,7 +258,7 @@ def test_migration_keeps_todays_access(db):
     assert not pilot.is_active
     # Features added to the catalog after this migration ran aren't part of "today's access"
     # it preserved; they reach plans when an operator adds them.
-    added_later = {"instagram"}
+    added_later = {"instagram", "content_studio"}
     assert {f.key for f in catalog.matrix_features()} - added_later <= set(
         pilot.features.values_list("key", flat=True)
     )

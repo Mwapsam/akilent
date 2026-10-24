@@ -279,6 +279,8 @@ def publish_variant_async(self, variant_id: int, scheduled: bool = False) -> str
 
     if result["success"]:
         return "published"
+    if result.get("held"):
+        return "held_channel_off"
     if result.get("status") == ContentPostVariant.Status.PROCESSING:
         return "processing"
     if result.get("reconciling"):

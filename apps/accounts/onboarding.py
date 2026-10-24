@@ -23,10 +23,18 @@ from functools import cached_property
 from django.conf import settings
 from django.urls import reverse
 
-from apps.core.channels import CHANNEL_REGISTRY, channel_state, enabled_channels
+from apps.core.channels import (
+    CHANNEL_REGISTRY,
+    channel_state,
+    enabled_channels,
+    public_channels,
+)
 
 WHATSAPP_SETUP_URL = "/whatsapp/numbers/"
 DOMAIN_SETUP_URL = "/email/domains/"
+# The order channel setup runs in. WhatsApp first: for WhatsApp and Email, Meta onboarding
+# comes before domain setup.
+SETUP_ORDER = ("whatsapp", "instagram", "facebook", "email")
 
 SECTIONS: tuple[tuple[str, str], ...] = (
     ("setup", "Get set up"),
@@ -41,6 +49,9 @@ SECTIONS: tuple[tuple[str, str], ...] = (
 def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
     """The one place that decides what happens to each channel the business chose.
 
+    The choice is ``account.selected_channels`` (picked at signup), never inferred from
+    the plan. An account from before channels were stored falls back to its service.
+
     Returns ``(enabled channels, chosen channels to set up, chosen channels paused)``.
     A chosen channel that is on is set up. One the admin switched off, or whose state
     can't be read yet, is *paused*: it's coming back, so its setup waits rather than
@@ -52,9 +63,10 @@ def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
 
     enabled = enabled_channels()
     available = available_channels()
-    chosen = SERVICE_CHANNELS.get(account.selected_services, set())
-    # WhatsApp first: for "Email & WhatsApp" Meta onboarding comes before domain setup.
-    ordered = [ch for ch in ("whatsapp", "email") if ch in chosen and ch in available]
+    chosen = set(account.selected_channels or []) or SERVICE_CHANNELS.get(
+        account.selected_services, set()
+    )
+    ordered = [ch for ch in SETUP_ORDER if ch in chosen and ch in available]
     setup = frozenset(ch for ch in ordered if ch in enabled)
     paused = tuple(ch for ch in ordered if channel_state(ch) != "enabled")
     return enabled, setup, paused
@@ -73,6 +85,25 @@ def _has_ready_whatsapp_number(account) -> bool:
     )
 
 
+def _has_ready_instagram(account) -> bool:
+    from apps.instagram.models.account import InstagramBusinessAccount
+
+    return any(
+        a.is_ready
+        for a in InstagramBusinessAccount.objects.filter(
+            account=account, is_active=True
+        )
+    )
+
+
+def _has_facebook_page(account) -> bool:
+    from apps.publishing.models import FacebookPageConnection
+
+    return FacebookPageConnection.objects.filter(
+        account=account, status=FacebookPageConnection.Status.ACTIVE
+    ).exists()
+
+
 def _has_sending_domain(account) -> bool:
     from apps.email.models import EmailDomain
 
@@ -87,10 +118,10 @@ def advance_onboarding(account) -> str:
     entirely in the signup wizard; the first persisted state is ACCOUNT_CREATED.
     From there the sequence is, in order, whichever of these still apply:
 
-        WhatsApp connected (Meta Embedded Signup)  →  a sending domain added
+        WhatsApp connected  →  Instagram connected  →  Facebook Page connected
+        →  a sending domain added
 
-    For "Email & WhatsApp" that means Meta onboarding first, then domain setup,
-    matching the documented flow. DNS verification stays a (still-required)
+    So Meta onboarding comes before domain setup, matching the documented flow. DNS verification stays a (still-required)
     checklist item in ``get_state`` rather than blocking the state machine, so
     slow DNS never strands a user mid-onboarding.
 
@@ -106,6 +137,10 @@ def advance_onboarding(account) -> str:
 
     if "whatsapp" in setup and not _has_ready_whatsapp_number(account):
         target, url = Account.Onboarding.WHATSAPP_SETUP, WHATSAPP_SETUP_URL
+    elif "instagram" in setup and not _has_ready_instagram(account):
+        target, url = Account.Onboarding.INSTAGRAM_SETUP, reverse("instagram-accounts")
+    elif "facebook" in setup and not _has_facebook_page(account):
+        target, url = Account.Onboarding.FACEBOOK_SETUP, reverse("publishing:channels")
     elif "email" in setup and not _has_sending_domain(account):
         target, url = Account.Onboarding.DOMAIN_SETUP, DOMAIN_SETUP_URL
     elif paused:
@@ -135,7 +170,19 @@ class _Ctx:
         self.account = account
         self.channels, setup, self.paused = _channel_plan(account)
         self.wants_whatsapp = "whatsapp" in setup
+        self.wants_instagram = "instagram" in setup
+        self.wants_facebook = "facebook" in setup
         self.wants_email = "email" in setup
+
+    @cached_property
+    def public(self) -> frozenset:
+        """Channels offered to new customers (restricted ones, e.g. during Meta App
+        Review, can only be connected by accounts with a role on the Meta app)."""
+        return public_channels()
+
+    @cached_property
+    def facebook_connected(self) -> bool:
+        return _has_facebook_page(self.account)
 
     @cached_property
     def usable(self) -> frozenset:
@@ -146,14 +193,7 @@ class _Ctx:
 
     @cached_property
     def instagram_ready(self) -> bool:
-        from apps.instagram.models.account import InstagramBusinessAccount
-
-        return any(
-            a.is_ready
-            for a in InstagramBusinessAccount.objects.filter(
-                account=self.account, is_active=True
-            )
-        )
+        return _has_ready_instagram(self.account)
 
     @cached_property
     def whatsapp(self) -> dict:
@@ -242,23 +282,57 @@ def _instagram_usable(ctx) -> bool:
     return "instagram" in ctx.channels and "instagram" in ctx.usable
 
 
+def _instagram_offered(ctx) -> bool:
+    """Instagram, recommended to a business that didn't pick it at signup. Never while
+    it's restricted (Meta App Review), unless the business has already connected it."""
+    return (
+        _instagram_usable(ctx)
+        and not ctx.wants_instagram
+        and ("instagram" in ctx.public or ctx.instagram_ready)
+    )
+
+
+def _facebook_offered(ctx) -> bool:
+    """A Facebook Page this business could publish to: the channel is on, the server has
+    the Meta app, and it's open to the public or the business already connected one."""
+    return (
+        "facebook" in ctx.channels
+        and bool(settings.WHATSAPP_APP_ID)
+        and ("facebook" in ctx.public or ctx.wants_facebook or ctx.facebook_connected)
+    )
+
+
+# Picked at signup, where the plan was checked to give them. Like the state machine in
+# advance_onboarding, these don't re-check the plan: a lapsed plan's step opens the
+# feature's locked page, which says why, rather than vanishing from the checklist.
+def _wants_facebook_ctx(ctx) -> bool:
+    return ctx.wants_facebook
+
+
+def _wants_instagram_ctx(ctx) -> bool:
+    return ctx.wants_instagram
+
+
 def _can_publish(ctx) -> bool:
-    """Content Studio needs somewhere this business may publish: Instagram (channel on
-    and in the plan), or a Facebook Page (which connects through the Meta app)."""
-    return _instagram_usable(ctx) or bool(settings.WHATSAPP_APP_ID)
+    """Content Studio needs somewhere this business may publish: Instagram (channel on,
+    in the plan, and open to it) or a Facebook Page."""
+    if "content_studio" not in ctx.usable:
+        return False
+    instagram = _instagram_usable(ctx) and (
+        "instagram" in ctx.public or ctx.wants_instagram or ctx.instagram_ready
+    )
+    return instagram or _facebook_offered(ctx)
 
 
 def _publish_blocked(ctx) -> str:
     """Until a page or account is connected there is nothing to publish to."""
-    from apps.publishing.models import FacebookPageConnection
-
     if _instagram_usable(ctx) and _done_instagram(ctx):
         return ""
-    if FacebookPageConnection.objects.filter(
-        account=ctx.account, status=FacebookPageConnection.Status.ACTIVE
-    ).exists():
+    if ctx.facebook_connected:
         return ""
-    return "Connect Instagram" if _instagram_usable(ctx) else "Connect a Facebook Page"
+    if _instagram_usable(ctx) and ("instagram" in ctx.public or ctx.wants_instagram):
+        return "Connect Instagram"
+    return "Connect a Facebook Page"
 
 
 def _done_profile(ctx) -> bool:
@@ -375,6 +449,30 @@ STEPS: tuple[StepDef, ...] = (
         required=True,
     ),
     StepDef(
+        key="connect_instagram",
+        section="setup",
+        title="Connect Instagram",
+        desc="Connect your Instagram business account so its DMs arrive in your inbox.",
+        icon="instagram",
+        cta="Connect",
+        url="instagram-accounts",
+        done=_done_instagram,
+        available=_wants_instagram_ctx,
+        required=True,
+    ),
+    StepDef(
+        key="connect_facebook",
+        section="setup",
+        title="Connect your Facebook Page",
+        desc="Connect the Facebook Page you want to publish posts to from Content Studio.",
+        icon="image",
+        cta="Connect Page",
+        url="publishing:channels",
+        done=lambda ctx: ctx.facebook_connected,
+        available=_wants_facebook_ctx,
+        required=True,
+    ),
+    StepDef(
         key="domain",
         section="setup",
         title="Add a sending domain",
@@ -408,7 +506,7 @@ STEPS: tuple[StepDef, ...] = (
         cta="Connect",
         url="instagram-accounts",
         done=_done_instagram,
-        available=_instagram_usable,
+        available=_instagram_offered,
     ),
     StepDef(
         key="post",
@@ -801,6 +899,8 @@ def _build_state(ctx, essentials_only: bool) -> dict:
         "next_recommended": next_recommended,
         "paused": list(ctx.paused),
         "wants_whatsapp": ctx.wants_whatsapp,
+        "wants_instagram": ctx.wants_instagram,
+        "wants_facebook": ctx.wants_facebook,
         "wants_email": ctx.wants_email,
         "pct": round(required_done / len(required) * 100) if required else 100,
     }

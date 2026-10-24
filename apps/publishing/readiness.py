@@ -23,6 +23,7 @@ from django.utils import timezone
 from . import constraints as limits
 from .composer import (
     CONNECTED,
+    OFF,
     PLATFORM_LABELS,
     RECONNECT,
     ComposerError,
@@ -244,6 +245,19 @@ def _connection_issues(inp: ComposerInput, dests: dict) -> list[dict]:
         if d is None or d["status"] == CONNECTED:
             continue
         label = PLATFORM_LABELS[p]
+        if d["status"] == OFF:
+            issues.append(
+                _issue(
+                    f"{p}_off",
+                    f"{label} publishing is switched off on Akilent right now. A "
+                    "scheduled post waits and goes out once it's back on.",
+                    "destinations",
+                    [PUBLISH_NOW],
+                    platform=p,
+                    warns=[SCHEDULE, SUBMIT_REVIEW],
+                )
+            )
+            continue
         if d["status"] == RECONNECT:
             message = f"{label} needs reconnecting before it can publish."
         else:

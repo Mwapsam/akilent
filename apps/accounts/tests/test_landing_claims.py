@@ -1,6 +1,6 @@
 """Every claim on the landing page is registered, and every registered claim has evidence.
 
-The register is the table in docs/marketing/messaging.md (section 5). A sentence that describes
+The register is the table in docs/marketing/messaging.md (section 10). A sentence that describes
 what Akilent does carries ``data-claim="<id> ..."``; this test fails when the page uses an id the
 register doesn't have, when a product statement carries no id at all, or when a claim's evidence
 (``path::text``) has gone from the code. See the guide for how to add a claim.

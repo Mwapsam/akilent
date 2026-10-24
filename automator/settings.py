@@ -370,6 +370,8 @@ FIELD_ENCRYPTION_KEYS = [FIELD_ENCRYPTION_KEY]
 WHATSAPP_ENABLED = os.getenv("WHATSAPP_ENABLED", "False").lower() == "true"
 INSTAGRAM_ENABLED = os.getenv("INSTAGRAM_ENABLED", "True").lower() == "true"
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "True").lower() == "true"
+# Facebook Page publishing (Content Studio). Not Messenger. An empty value keeps the default.
+FACEBOOK_ENABLED = (os.getenv("FACEBOOK_ENABLED") or "True").lower() == "true"
 
 # --- WhatsApp ---
 

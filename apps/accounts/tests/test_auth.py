@@ -24,7 +24,7 @@ def _payload(**overrides):
         "address_line1": "1 Main St",
         "city": "Lusaka",
         "country": "Zambia",
-        "selected_services": Account.Services.EMAIL,
+        "selected_channels": ["email"],
         "plan": Plan.STARTER,
         "password1": PW,
         "password2": PW,
@@ -110,7 +110,7 @@ def test_signup_whatsapp_routes_to_meta_onboarding(
         _payload(
             email="wa@example.com",
             company_name="WA Co",
-            selected_services=Account.Services.WHATSAPP,
+            selected_channels=["whatsapp"],
             plan=Plan.PROFESSIONAL,
         ),
     )
@@ -126,7 +126,7 @@ def test_signup_rejects_plan_service_mismatch(
 ):
     resp = client.post(
         SIGNUP_URL,
-        _payload(selected_services=Account.Services.WHATSAPP, plan=Plan.STARTER),
+        _payload(selected_channels=["whatsapp"], plan=Plan.STARTER),
     )
     assert resp.status_code == 400
     assert not Account.objects.filter(company_name="New Co").exists()
@@ -208,7 +208,7 @@ def test_signup_honors_plan_query_param(client, trial_plan, whatsapp_plan):
     assert resp.status_code == 200
     pre = resp.context["wizard_config"]["preselect"]
     assert pre["plan"] == "professional"
-    assert pre["services"] == Plan.SERVICE_WHATSAPP
+    assert pre["channels"] == ["whatsapp"]
     assert pre["startStep"] == 2
 
 

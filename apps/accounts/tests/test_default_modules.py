@@ -26,7 +26,7 @@ def _payload(**overrides):
         "address_line1": "1 Main St",
         "city": "Lusaka",
         "country": "Zambia",
-        "selected_services": Account.Services.BOTH,
+        "selected_channels": ["email", "whatsapp"],
         "plan": Plan.TRIAL,
         "password1": PW,
         "password2": PW,

@@ -795,7 +795,28 @@ def publish_variant(variant: ContentPostVariant) -> dict:
     """
     from django.db import transaction
 
+    from apps.core.channels import CHANNEL_REGISTRY, channel_state
+
     post = variant.post
+
+    # A channel switched off on Akilent (or whose state can't be read yet) holds the
+    # variant as it is: nothing is claimed or recorded, so a scheduled channel is
+    # dispatched again and goes out once the channel is back on.
+    if (
+        variant.platform in CHANNEL_REGISTRY
+        and channel_state(variant.platform) != "enabled"
+    ):
+        return {
+            "success": False,
+            "held": True,
+            "status": variant.status,
+            "publication_id": "",
+            "publication_url": "",
+            "error": f"{CHANNEL_REGISTRY[variant.platform].label} publishing is switched off.",
+            "error_type": ContentPostVariant.ErrorType.VALIDATION,
+            "error_at": timezone.now(),
+            "reconciling": False,
+        }
 
     # Validate approval before publishing (Step 3 integration)
     if not post.is_approval_valid():

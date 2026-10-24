@@ -19,10 +19,13 @@ from apps.billing.providers import registry as billing_registry
 from apps.core.audit import audit, label
 from apps.core.channels import (
     CHANNEL_REGISTRY,
+    META_REVIEW_CHANNELS,
     ChannelUnavailableError,
     available_channels,
     enabled_channels,
+    restricted_channels,
     set_channel_enabled,
+    set_channel_public,
 )
 from apps.core.console import attention, business, data
 from apps.core.console.business import ConsoleError
@@ -1022,11 +1025,17 @@ def settings_page(request):
             except ChannelUnavailableError:
                 channel_error = True
                 messages.error(request, f"{ch.label} is not set up on this server.")
+        for key in CHANNEL_REGISTRY:
+            was_public = request.POST.get(f"public_was_{key}") == "1"
+            want_public = f"public_{key}" in request.POST
+            if want_public != was_public:
+                set_channel_public(key, want_public, request=request)
         if not channel_error:
             messages.success(request, "Settings saved.")
         return redirect("core:settings")
 
     mail = MailProviderSettings.load()
+    restricted = restricted_channels()
     return render(
         request,
         "manage/settings.html",
@@ -1048,6 +1057,8 @@ def settings_page(request):
                     "label": ch.label,
                     "available": key in available_channels(),
                     "enabled": key in enabled_channels(),
+                    "public": key not in restricted,
+                    "meta_review": key in META_REVIEW_CHANNELS,
                 }
                 for key, ch in CHANNEL_REGISTRY.items()
             ],

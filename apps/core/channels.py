@@ -1,9 +1,13 @@
 """Central channel registry.
 
 Each channel is switched on or off by a boolean setting (``WHATSAPP_ENABLED``,
-``INSTAGRAM_ENABLED``, ``EMAIL_ENABLED``) whose default lives in settings.py.
-Code asks ``is_enabled()`` / ``enabled_channels()`` rather than reading those
+``INSTAGRAM_ENABLED``, ``FACEBOOK_ENABLED``, ``EMAIL_ENABLED``) whose default lives in
+settings.py. Code asks ``is_enabled()`` / ``enabled_channels()`` rather than reading those
 settings directly.
+
+A channel that is on can still be *restricted*: it works for the businesses that can
+connect it (e.g. accounts with a role on the Meta app while App Review is pending) but is
+never offered to the public. Signup and marketing ask ``public_channels()``.
 
 A disabled channel keeps its URL module mounted, so ``reverse()`` and links in
 messages already sent keep resolving; ``ChannelGateMiddleware`` 404s its pages
@@ -68,7 +72,20 @@ CHANNEL_REGISTRY: dict[str, ChannelDef] = {
         public_paths=("deauthorize/", "data-deletion/"),
         webhook_path="webhook/",
     ),
+    # Facebook Page publishing from Content Studio. Facebook messages (Messenger) are not
+    # supported, so this channel has no inbox, webhook or API resource.
+    "facebook": ChannelDef(
+        key="facebook",
+        label="Facebook",
+        setting="FACEBOOK_ENABLED",
+        url_prefix="publishing/fb/",
+        # A business can always remove a Page it connected.
+        public_paths=("disconnect/",),
+    ),
 }
+
+# Channels restricted until Meta approves the app's permissions (see restricted_channels).
+META_REVIEW_CHANNELS = ("facebook", "instagram")
 
 # Billing feature keys -> the channel they belong to.
 FEATURE_CHANNEL_DEPS: dict[str, str] = {
@@ -80,6 +97,11 @@ FEATURE_CHANNEL_DEPS: dict[str, str] = {
     "email_templates": "email",
     "email_campaigns": "email",
     "email_tracking": "email",
+}
+
+# Billing feature keys that need at least one of several channels.
+FEATURE_ANY_CHANNEL_DEPS: dict[str, tuple[str, ...]] = {
+    "content_studio": ("instagram", "facebook"),
 }
 
 # Billing limit keys -> the channel they belong to.
@@ -302,8 +324,65 @@ def _kick_webhook_replay() -> None:
         )
 
 
+def restricted_channels() -> frozenset[str]:
+    """Channels that are on but not offered to the public (signup, marketing, plan cards).
+
+    If the setting can't be read, every channel counts as restricted: offering a channel
+    by mistake is worse than briefly hiding one.
+    """
+    from apps.core.models import SiteSettings
+
+    try:
+        raw = SiteSettings.load().restricted_channels or []
+    except Exception:
+        logger.exception("Channel restrictions could not be read")
+        return frozenset(CHANNEL_REGISTRY)
+    return frozenset(k for k in raw if k in CHANNEL_REGISTRY)
+
+
+def public_channels() -> frozenset[str]:
+    """Channels a new customer may be offered: enabled and not restricted."""
+    return enabled_channels() - restricted_channels()
+
+
+def set_channel_public(key: str, public: bool, *, request) -> bool:
+    """Open a channel to the public or restrict it. Returns True if the state changed."""
+    from django.db import transaction
+
+    from apps.core.audit import audit
+    from apps.core.models import SiteSettings
+
+    if key not in CHANNEL_REGISTRY:
+        raise ValueError(f"Unknown channel: {key}")
+    SiteSettings.load()
+    with transaction.atomic():
+        site = SiteSettings.objects.select_for_update().get(pk=1)
+        current = set(site.restricted_channels or [])
+        was_public = key not in current
+        if was_public == public:
+            return False
+        if public:
+            current.discard(key)
+        else:
+            current.add(key)
+        site.restricted_channels = sorted(current)
+        site.save(update_fields=["restricted_channels", "updated_at"])
+        audit(
+            request,
+            "channel.opened" if public else "channel.restricted",
+            target=key,
+            channel=key,
+            previous=was_public,
+            new=public,
+        )
+    return True
+
+
 def feature_visible(key: str, channels: frozenset[str] | set[str]) -> bool:
     dep = FEATURE_CHANNEL_DEPS.get(key)
+    any_of = FEATURE_ANY_CHANNEL_DEPS.get(key)
+    if any_of is not None and not set(any_of) & set(channels):
+        return False
     return dep is None or dep in channels
 
 

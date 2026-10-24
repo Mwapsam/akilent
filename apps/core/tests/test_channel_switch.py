@@ -168,25 +168,73 @@ def test_webhook_and_tracking_paths_still_reachable_when_disabled(
 
 
 @pytest.mark.django_db
-def test_signup_offers_only_enabled_services(all_wired, operator):
-    from apps.accounts.forms import enabled_service_choices
+def test_signup_offers_only_enabled_channels(all_wired, operator):
+    from apps.accounts.forms import signup_offer
     from apps.billing.models import Plan
 
     Plan.objects.create(slug="e", name="E", service_type=Plan.SERVICE_EMAIL)
     Plan.objects.create(slug="b", name="B", service_type=Plan.SERVICE_BOTH)
     ch.set_channel_enabled("email", False, request=_fake_request(user=operator))
-    values = [v for v, _ in enabled_service_choices()]
-    # The email plan has nothing left to give; the "both" plan is a WhatsApp plan for now.
-    assert values == ["whatsapp"]
+    _, choices = signup_offer()
+    # The email plan has nothing left to give; the "both" plan gives only WhatsApp for now.
+    # Instagram and Facebook stay restricted until Meta App Review passes.
+    assert [v for v, _, _ in choices] == ["whatsapp"]
 
 
 @pytest.mark.django_db
-def test_signup_form_rejects_a_disabled_service(all_wired, operator):
+def test_signup_form_rejects_a_disabled_channel(all_wired, operator):
     from apps.accounts.forms import SignupForm
 
     ch.set_channel_enabled("email", False, request=_fake_request(user=operator))
-    form = SignupForm(data={"selected_services": "email"})
-    assert "selected_services" in form.errors
+    form = SignupForm(data={"selected_channels": ["email"]})
+    assert "selected_channels" in form.errors
+
+
+@pytest.mark.django_db
+def test_opening_a_channel_to_the_public_is_audited(all_wired, operator):
+    from apps.core.models import AdminAction
+
+    assert "instagram" in ch.restricted_channels()
+    assert "instagram" not in ch.public_channels()
+    assert ch.set_channel_public(
+        "instagram", True, request=_fake_request(user=operator)
+    )
+    assert "instagram" in ch.public_channels()
+    assert AdminAction.objects.filter(
+        action="channel.opened", target="instagram"
+    ).exists()
+    # A second identical change is a no-op.
+    assert not ch.set_channel_public(
+        "instagram", True, request=_fake_request(user=operator)
+    )
+
+
+@pytest.mark.django_db
+def test_settings_page_opens_and_restricts_channels(client, all_wired, operator):
+    client.force_login(operator)
+    client.post(
+        "/manage/settings/",
+        {
+            "app_name": "Akilent",
+            "channel_was_email": "1",
+            "channel_email": "on",
+            "public_was_instagram": "",
+            "public_instagram": "on",
+            "public_was_email": "1",
+        },
+    )
+    assert "instagram" in ch.public_channels()
+    assert "email" not in ch.public_channels()
+
+
+def test_unreadable_restrictions_offer_nothing(monkeypatch):
+    from apps.core.models import SiteSettings
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(SiteSettings, "load", staticmethod(boom))
+    assert ch.restricted_channels() == frozenset(ch.CHANNEL_REGISTRY)
 
 
 @pytest.mark.django_db

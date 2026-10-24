@@ -29,6 +29,13 @@ class Configurations(models.Model):
         return val[:20] + "..." if len(val) > 20 else val
 
 
+def default_restricted_channels() -> list[str]:
+    """Meta channels start restricted: they're offered once App Review has passed."""
+    from apps.core.channels import META_REVIEW_CHANNELS
+
+    return sorted(META_REVIEW_CHANNELS)
+
+
 class SiteSettings(models.Model):
     # Branding
     app_name = models.CharField(max_length=100, default="Automator")
@@ -64,6 +71,12 @@ class SiteSettings(models.Model):
     # Channels the platform admin has switched off (keys from CHANNEL_REGISTRY). A channel
     # is enabled when the server supports it (env flag) and it is not listed here.
     disabled_channels = models.JSONField(default=list, blank=True)
+    # Channels that are on but not offered to new customers (signup, marketing, plan cards),
+    # e.g. Instagram and Facebook until Meta approves the app's permissions. Businesses that
+    # can already connect (accounts with a role on the Meta app) keep working.
+    restricted_channels = models.JSONField(
+        default=default_restricted_channels, blank=True
+    )
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -85,6 +98,7 @@ class SiteSettings(models.Model):
         if stale:
             logger.warning("Dropping unknown disabled channel(s): %s", sorted(stale))
         self.disabled_channels = sorted(set(self.disabled_channels or []) & known)
+        self.restricted_channels = sorted(set(self.restricted_channels or []) & known)
         super().save(*args, **kwargs)
 
     @classmethod

@@ -267,46 +267,41 @@ _ACCOUNT_PROFILE_FIELDS = (
 )
 
 
-def _plan_card(plan, service: str) -> dict:
-    """``billing_api.plan_card`` for what the plan gives right now: ``service`` is its
-    effective service (forms.effective_service), so a channel it doesn't cover, or that
-    is switched off, isn't advertised. The landing page and the signup wizard both use
+def _plan_card(plan, channels) -> dict:
+    """``billing_api.plan_card`` for what the plan gives right now: ``channels`` are the
+    channels it gives on offer (forms.plan_channels), so a channel it doesn't cover, or
+    that isn't offered, isn't advertised. The landing page and the signup wizard both use
     this, so the two never describe the same plan differently."""
-    from apps.accounts.forms import SERVICE_CHANNELS
     from apps.billing import api as billing_api
-    from apps.core.channels import enabled_channels
 
-    channels = enabled_channels()
-    for channel in ("whatsapp", "email"):
-        if channel not in SERVICE_CHANNELS[service]:
-            channels = channels - {channel}
     return billing_api.plan_card(plan, channels=channels)
 
 
-def _plan_feature_bullets(plan, service: str) -> list:
+def _plan_feature_bullets(plan, channels) -> list:
     """Short marketing bullets for a plan card in the signup wizard, as plain strings for
     the wizard's JSON config."""
-    card = _plan_card(plan, service)
+    card = _plan_card(plan, channels)
     return card["limits"] + card["feature_names"]
 
 
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
 
-    from apps.accounts.forms import signup_offer
+    from apps.accounts.forms import SERVICE_CHANNELS, signup_offer
     from apps.billing.models import Plan, Subscription
     from apps.billing.money import SYMBOLS, ZERO_DECIMAL, billing_currency
     from apps.billing.pricing import period_options, price_for
 
-    by_service, service_choices = signup_offer()
+    offered, channel_choices = signup_offer()
+    offered_keys = [value for value, _, _ in channel_choices]
     periods = [value for value, _ in Subscription.BILLING_PERIOD_CHOICES]
     plans = sorted(
         (
             {
                 "slug": p.slug,
                 "name": p.name,
-                # The service the plan gives right now (see forms.effective_service).
-                "serviceType": service,
+                # The channels the plan gives right now (see forms.plan_channels).
+                "channels": sorted(channels),
                 "priceMonthly": float(p.price_monthly),
                 # The price of one whole term (discount included), as checkout
                 # works it out before any account credit is taken off.
@@ -315,33 +310,42 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
                 },
                 "trialDays": p.trial_days,
                 "popular": p.slug == Plan.PROFESSIONAL,
-                "features": _plan_feature_bullets(p, service),
+                "features": _plan_feature_bullets(p, channels),
             }
-            for service, service_plans in by_service.items()
-            for p in service_plans
+            for p, channels in offered
         ),
         key=lambda p: p["priceMonthly"],
     )
 
     # Figure out where the wizard should open.
-    services = (form_data or {}).get("selected_services", "")
+    picks = [
+        c for c in (form_data or {}).get("selected_channels", []) if c in offered_keys
+    ]
     plan_slug = (form_data or {}).get("plan", "")
     period = (form_data or {}).get("billing_period") or request.GET.get("period", "")
     if period not in periods:
         period = Subscription.MONTHLY
-    if not services and not plan_slug:
+    if not picks and not plan_slug:
         req_plan = request.GET.get("plan", "").strip()
-        req_services = request.GET.get("services", "").strip()
+        # ?channels=whatsapp,instagram, or the older ?services=both.
+        req_channels = [
+            c.strip() for c in request.GET.get("channels", "").split(",") if c.strip()
+        ] or sorted(SERVICE_CHANNELS.get(request.GET.get("services", "").strip(), ()))
+        req_channels = [c for c in req_channels if c in offered_keys]
         matched = (
             next((p for p in plans if p["slug"] == req_plan), None)
             if req_plan
             else None
         )
         if matched:
-            services, plan_slug = matched["serviceType"], matched["slug"]
+            # The channels asked for that this plan gives, else everything it gives.
+            picks = [c for c in req_channels if c in matched["channels"]] or list(
+                matched["channels"]
+            )
+            plan_slug = matched["slug"]
             start_step = 2
-        elif req_services in dict(service_choices):
-            services, start_step = req_services, 1
+        elif req_channels:
+            picks, start_step = req_channels, 1
         else:
             start_step = 0
     else:
@@ -362,10 +366,13 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
             "zeroDecimal": currency in ZERO_DECIMAL,
         },
         "plans": plans,
-        "serviceChoices": [{"value": v, "label": l} for v, l in service_choices],
+        "channelChoices": [
+            {"value": v, "label": label, "description": desc}
+            for v, label, desc in channel_choices
+        ],
         "periods": period_options(),
         "preselect": {
-            "services": services,
+            "channels": picks,
             "plan": plan_slug,
             "period": period,
             "startStep": start_step,
@@ -417,14 +424,10 @@ def signup(request):
 
                     account = Account.objects.create(
                         company_name=cd["company_name"],
-                        # What they bought, not what it gives today: an "Email &
-                        # WhatsApp" plan chosen while email is switched off still
-                        # gets email setup (paused) and resumes it when email is back.
-                        selected_services=(
-                            form.chosen_plan.service_type
-                            if form.chosen_plan
-                            else cd["selected_services"]
-                        ),
+                        # The plan's service type, for billing. Onboarding follows the
+                        # channels they picked, which clean() checked the plan gives.
+                        selected_services=form.chosen_plan.service_type,
+                        selected_channels=sorted(cd["selected_channels"]),
                         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
                         billing_email=cd["email"],
                         **{f: cd.get(f, "") for f in _ACCOUNT_PROFILE_FIELDS},
@@ -455,7 +458,7 @@ def signup(request):
                 logger.info(
                     "signup: created account %s (%s) for user %s",
                     account.pk,
-                    account.selected_services,
+                    ",".join(account.selected_channels),
                     user.pk,
                 )
 
@@ -498,7 +501,7 @@ def signup(request):
             # Review) doesn't blank out what the user already typed.
             # Passwords are deliberately never round-tripped.
             form_data={
-                "selected_services": request.POST.get("selected_services", ""),
+                "selected_channels": request.POST.getlist("selected_channels"),
                 "plan": request.POST.get("plan", ""),
                 "billing_period": request.POST.get("billing_period", ""),
                 "first_name": request.POST.get("first_name", ""),
@@ -713,13 +716,9 @@ def landing(request):
     from apps.billing import api as billing_api
 
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
-    by_service, _ = signup_offer()
-    offered = sorted(
-        ((p, service) for service, ps in by_service.items() for p in ps),
-        key=lambda item: item[0].price_monthly,
-    )
+    offered, _ = signup_offer()
     plans = [p for p, _ in offered]
-    cards = [_plan_card(p, service) for p, service in offered]
+    cards = [_plan_card(p, channels) for p, channels in offered]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
     resp = render(

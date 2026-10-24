@@ -18,7 +18,7 @@ def _payload(**overrides):
         "address_line1": "1 Main St",
         "city": "Lusaka",
         "country": "Zambia",
-        "selected_services": Account.Services.EMAIL,
+        "selected_channels": ["email"],
         "plan": Plan.STARTER,
         "password1": PW,
         "password2": PW,
@@ -65,7 +65,7 @@ def paid_plan_with_long_trial(db):
 @pytest.mark.django_db
 def test_free_plan_signup_skips_checkout(client, trial_plan):
     resp = client.post(
-        SIGNUP_URL, _payload(plan=Plan.TRIAL, selected_services=Account.Services.BOTH)
+        SIGNUP_URL, _payload(plan=Plan.TRIAL, selected_channels=["email", "whatsapp"])
     )
     assert resp.status_code == 302
     assert not resp.url.startswith(("/billing/checkout/", "/billing/pay/"))

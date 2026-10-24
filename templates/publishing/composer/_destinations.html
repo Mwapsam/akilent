@@ -20,6 +20,7 @@
         <span class="cmp-status is-{{ d.status }}">
           {% if d.status == "connected" %}<span class="truncate">{{ d.account_name|default:"Connected" }}</span>
           {% elif d.status == "reconnect" %}Reconnect needed
+          {% elif d.status == "off" %}Switched off
           {% else %}Not connected{% endif %}
         </span>
       </span>
@@ -31,9 +32,10 @@
   </div>
   {% for d in destinations %}{% if d.status != "connected" %}
   <p class="text-xs text-ink-subtle mt-3" x-show="selectedPlatforms.includes('{{ d.platform }}')">
-    {% if d.status == "reconnect" %}{{ d.label }}'s connection expired. You can keep writing; reconnect before it publishes.
+    {% if d.status == "off" %}{{ d.label }} publishing is switched off on Akilent right now. You can keep writing; a scheduled post goes out once it's back on.
+    {% elif d.status == "reconnect" %}{{ d.label }}'s connection expired. You can keep writing; reconnect before it publishes.
     {% else %}{{ d.label }} isn't connected yet. You can write and save now, and connect it before publishing.{% endif %}
-    <a href="{{ d.connect_url }}" class="underline text-ink">{% if d.status == "reconnect" %}Reconnect{% else %}Connect {{ d.label }}{% endif %}</a>
+    {% if d.status != "off" %}<a href="{{ d.connect_url }}" class="underline text-ink">{% if d.status == "reconnect" %}Reconnect{% else %}Connect {{ d.label }}{% endif %}</a>{% endif %}
   </p>
   {% endif %}{% endfor %}
 </section>

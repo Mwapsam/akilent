@@ -155,10 +155,12 @@ def test_feature_steps_hidden_without_the_feature(account, monkeypatch):
 @pytest.mark.django_db
 def test_feature_steps_shown_when_usable(account, monkeypatch, settings):
     settings.INSTAGRAM_ENABLED = True
+    _open_to_public("instagram")
     monkeypatch.setattr("apps.ai.providers.is_configured", lambda: True)
     _usable(
         monkeypatch,
         {
+            "content_studio",
             "orders",
             "sales",
             "ai_assistant",
@@ -462,12 +464,29 @@ def test_paused_prerequisite_drops_the_dependent_steps(db, all_wired, monkeypatc
 def test_post_step_needs_somewhere_to_publish(account, monkeypatch, settings):
     settings.INSTAGRAM_ENABLED = True
     settings.WHATSAPP_APP_ID = ""
-    _usable(monkeypatch, set())  # Instagram not in the plan, no Facebook app
+    _usable(
+        monkeypatch, {"content_studio"}
+    )  # Instagram not in the plan, no Facebook app
     assert "post" not in _keys(account)
 
-    _usable(monkeypatch, {"instagram"})
+    _usable(monkeypatch, {"content_studio", "instagram"})
+    # Restricted while Meta reviews the app: nothing this business could connect.
+    assert "post" not in _keys(account)
+
+    _open_to_public("instagram")
     post = next(s for s in ob.get_state(account)["steps"] if s["key"] == "post")
     assert post["url"] is None and post["locked"] == "Connect Instagram"
+
+    _usable(monkeypatch, {"instagram"})  # no Content Studio on the plan
+    assert "post" not in _keys(account)
+
+
+def _open_to_public(*keys):
+    from apps.core.models import SiteSettings
+
+    site = SiteSettings.load()
+    site.restricted_channels = [k for k in site.restricted_channels if k not in keys]
+    site.save()
 
 
 # --- Email template step ------------------------------------------------------

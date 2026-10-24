@@ -23,7 +23,7 @@ def _signup_data(token):
         "address_line1": "1 Main St",
         "city": "Lusaka",
         "country": "Zambia",
-        "selected_services": "both",
+        "selected_channels": ["email", "whatsapp"],
         "plan": Plan.TRIAL,
         "password1": PW,
         "password2": PW,
@@ -118,7 +118,7 @@ def test_resent_paid_signup_resumes_at_checkout(trial):
     )
     c = Client(enforce_csrf_checks=True)
     data = _signup_data(_token(c.get("/signup/")))
-    data.update(selected_services="email", plan=Plan.STARTER)
+    data.update(selected_channels=["email"], plan=Plan.STARTER)
     first = c.post("/signup/", data)
     assert first.url == "/billing/pay/"
 

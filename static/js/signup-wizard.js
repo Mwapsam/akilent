@@ -1,11 +1,11 @@
 /*
- * Service-first signup wizard (see templates/accounts/signup.html).
+ * Channel-first signup wizard (see templates/accounts/signup.html).
  *
  * Exposes `window.signupWizard`, the Alpine factory behind
  * `x-data="signupWizard()"`, that walks a new customer through:
  *
- *   0. Select services   — Email / WhatsApp / Email & WhatsApp
- *   1. Select package    — plans filtered to the chosen services, and the
+ *   0. Choose channels   — any of WhatsApp, Instagram, Facebook Page, Email
+ *   1. Select package    — plans that give every chosen channel, and the
  *                          billing term (monthly, yearly, ...) for a paid plan
  *   2. Your details      — personal + business info (the real form fields)
  *   3. Review            — confirm, then submit
@@ -24,11 +24,11 @@
   function signupWizard() {
     var cfg = {
       plans: [],
-      serviceChoices: [],
+      channelChoices: [],
       periods: [],
       currency: { symbol: "$", zeroDecimal: false },
       paymentMethods: [],
-      preselect: { services: "", plan: "", period: "monthly", startStep: 0 },
+      preselect: { channels: [], plan: "", period: "monthly", startStep: 0 },
       formData: {},
       errors: {},
     };
@@ -46,9 +46,9 @@
     return {
       cfg: cfg,
       step: 0,
-      stepLabels: ["Services", "Package", "Your details", "Review"],
+      stepLabels: ["Channels", "Package", "Your details", "Review"],
 
-      services: pre.services || fd.selected_services || "",
+      channels: (pre.channels && pre.channels.length ? pre.channels : fd.selected_channels || []).slice(),
       plan: pre.plan || fd.plan || "",
       // Billing term for a paid plan. The server works it out (a re-render's
       // posted value, else ?period=, else monthly) and prices each term with
@@ -87,26 +87,32 @@
         // with errors, on the step that shows the first of them.
         var start = typeof pre.startStep === "number" ? pre.startStep : 0;
         if (!hasErrors) this.step = start;
-        else if (errs.selected_services) this.step = 0;
+        else if (errs.selected_channels) this.step = 0;
         else if (errs.plan || errs.billing_period) this.step = 1;
         else this.step = 2;
 
-        // Guard against service/plan drift: a preselected plan that no longer
-        // matches the chosen services sends the user back to pick again.
+        // Guard against channel/plan drift: a preselected plan that no longer
+        // gives every chosen channel sends the user back to pick again.
         if (this.plan && !this._planInList(this.plan)) {
           this.plan = "";
-          if (this.step > 1) this.step = this.services ? 1 : 0;
+          if (this.step > 1) this.step = this.channels.length ? 1 : 0;
         }
       },
 
-      // The server only sends services that are on and have at least one plan.
-      get serviceCards() {
-        return this.cfg.serviceChoices;
+      // The server only sends channels that are on offer and that some plan gives.
+      get channelCards() {
+        return this.cfg.channelChoices;
       },
+      hasChannel: function (value) {
+        return this.channels.indexOf(value) !== -1;
+      },
+      // Plans that give every chosen channel.
       get filteredPlans() {
-        var s = this.services;
+        var picks = this.channels;
         return this.cfg.plans.filter(function (p) {
-          return !s || p.serviceType === s;
+          return picks.every(function (c) {
+            return p.channels.indexOf(c) !== -1;
+          });
         });
       },
       get selectedPlan() {
@@ -117,12 +123,16 @@
           })[0] || null
         );
       },
-      get serviceLabel() {
-        var s = this.services;
-        var hit = this.cfg.serviceChoices.filter(function (c) {
-          return c.value === s;
-        })[0];
-        return hit ? hit.label : "";
+      get channelLabel() {
+        var picks = this.channels;
+        return this.cfg.channelChoices
+          .filter(function (c) {
+            return picks.indexOf(c.value) !== -1;
+          })
+          .map(function (c) {
+            return c.label;
+          })
+          .join(", ");
       },
 
       _planInList: function (slug) {
@@ -131,12 +141,16 @@
         });
       },
 
-      selectService: function (value) {
-        if (this.services !== value) {
-          this.services = value;
-          // Drop a package that belonged to the previous selection.
-          if (this.plan && !this._planInList(this.plan)) this.plan = "";
+      toggleChannel: function (value) {
+        if (this.hasChannel(value)) {
+          this.channels = this.channels.filter(function (c) {
+            return c !== value;
+          });
+        } else {
+          this.channels = this.channels.concat([value]);
         }
+        // Drop a package that doesn't give the new selection.
+        if (this.plan && !this._planInList(this.plan)) this.plan = "";
       },
       selectPlan: function (slug) {
         this.plan = slug;
@@ -171,7 +185,7 @@
       },
 
       get canAdvance() {
-        if (this.step === 0) return !!this.services;
+        if (this.step === 0) return this.channels.length > 0 && this.filteredPlans.length > 0;
         if (this.step === 1) return !!this.plan && this._planInList(this.plan);
         if (this.step === 2) {
           var f = this.fields;

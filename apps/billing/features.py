@@ -116,6 +116,13 @@ FEATURES: tuple[Feature, ...] = (
         nav_paths=("/instagram/",),
     ),
     Feature(
+        "content_studio",
+        "Content Studio",
+        "Plan, write and schedule posts for Instagram and your Facebook Page in one place.",
+        "Communication",
+        nav_paths=("/publishing/",),
+    ),
+    Feature(
         "verification_codes",
         "Verification codes",
         "Send one-time login codes over WhatsApp from your own system.",
@@ -219,6 +226,7 @@ ISSUED_KEYS = frozenset(
         "webhooks",
         "priority_support",
         "instagram",
+        "content_studio",
     }
 )
 
@@ -245,6 +253,7 @@ OWNER_SWITCH_MODULE = {"sales": "crm", "orders": "commerce"}
 # - a newly created plan starts with these plus its old capability columns (signals.py).
 MODULE_FEATURES = frozenset(
     {
+        "content_studio",  # open to every business before it had a key (billing 0029)
         "whatsapp_campaigns",
         "verification_codes",
         "automations",

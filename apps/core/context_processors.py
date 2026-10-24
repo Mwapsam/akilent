@@ -16,9 +16,13 @@ def site_context(request):
     from apps.core.channels import enabled_channels
 
     ec = enabled_channels()
+    # Restricted channels work for businesses that can connect them but are never offered
+    # to new customers. Unknown settings count as restricted (see restricted_channels).
+    restricted = set(site.restricted_channels or []) if site else set(ec)
     return {
         "site": site,
         "enabled_channels": ec,
+        "public_channels": ec - restricted,
         "WHATSAPP_ENABLED": "whatsapp" in ec,  # backward compat for existing templates
         # Campaigns and Templates are shared pages under /email/ that WhatsApp also uses.
         "CAMPAIGNS_ENABLED": bool(ec & {"email", "whatsapp"}),

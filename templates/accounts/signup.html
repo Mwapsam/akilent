@@ -12,7 +12,7 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">Create your account</h1>
-      <p class="text-sm text-gray-400 mt-1">Pick your services, choose a plan, and tell us about your business</p>
+      <p class="text-sm text-gray-400 mt-1">Pick your channels, choose a plan, and tell us about your business</p>
     </div>
 
     {# Stepper #}
@@ -41,29 +41,38 @@
 
     <form method="post" novalidate action="{% url 'signup' %}" @submit="submit($event)">
       {% csrf_token %}
-      <input type="hidden" name="selected_services" :value="services">
+      <template x-for="c in channels" :key="c">
+        <input type="hidden" name="selected_channels" :value="c">
+      </template>
       <input type="hidden" name="plan" :value="plan">
       <input type="hidden" name="billing_period" :value="period">
 
-      {# ---- Step 0: Select services ---- #}
-      <div x-show="step === 0" class="card card-pad sm:!p-8 space-y-3" role="radiogroup" aria-label="Which services do you want to set up?">
-        <p class="text-sm text-gray-500 mb-2">Which services do you want to set up?</p>
-        {% if not wizard_config.serviceChoices %}
+      {# ---- Step 0: Choose channels ---- #}
+      <div x-show="step === 0" class="card card-pad sm:!p-8 space-y-3" role="group" aria-labelledby="channels-question">
+        <p id="channels-question" class="text-sm text-gray-500 mb-2">Where do your customers reach you? Pick every channel you want to set up.</p>
+        {% if not wizard_config.channelChoices %}
           <div class="card card-pad text-sm text-gray-500" data-testid="signup-unavailable">
             Sign-ups are temporarily unavailable. Please check back soon.
           </div>
         {% endif %}
-        <template x-for="c in serviceCards" :key="c.value">
-          <button type="button" @click="selectService(c.value)" role="radio" :aria-checked="services === c.value"
+        <template x-for="c in channelCards" :key="c.value">
+          <button type="button" @click="toggleChannel(c.value)" role="checkbox" :aria-checked="hasChannel(c.value)"
                   class="w-full text-left rounded-xl border px-4 py-4 flex items-center gap-3 transition"
-                  :class="services === c.value ? 'border-brand-600 ring-2 ring-brand-100 tone-brand-bg' : 'border-border hover:border-gray-300'">
-            <span class="w-4 h-4 rounded-full border flex-shrink-0"
-                  :class="services === c.value ? 'border-brand-600 bg-brand-600' : 'border-gray-300'"></span>
-            <span class="font-medium text-ink" x-text="c.label"></span>
+                  :class="hasChannel(c.value) ? 'border-brand-600 ring-2 ring-brand-100 tone-brand-bg' : 'border-border hover:border-gray-300'">
+            <span class="w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-white"
+                  :class="hasChannel(c.value) ? 'border-brand-600 bg-brand-600' : 'border-gray-300'">
+              <svg x-show="hasChannel(c.value)" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <span class="min-w-0">
+              <span class="block font-medium text-ink" x-text="c.label"></span>
+              <span class="block text-xs text-gray-500" x-text="c.description"></span>
+            </span>
           </button>
         </template>
-        {% if form.selected_services.errors %}
-          <p class="field-error">{{ form.selected_services.errors|join:" " }}</p>
+        <p x-show="channelCards.length" class="text-xs text-gray-500 pt-1">You can add the others later. The packages on the next step include everything you pick.</p>
+        <p x-show="channels.length && !filteredPlans.length" x-cloak class="field-error">No single package includes all of these yet. Untick one to see packages.</p>
+        {% if form.selected_channels.errors %}
+          <p class="field-error">{{ form.selected_channels.errors|join:" " }}</p>
         {% endif %}
       </div>
 
@@ -71,7 +80,7 @@
       <div x-show="step === 1" x-cloak class="space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-gray-500">
-            Plans for <span class="font-medium text-gray-700" x-text="serviceLabel"></span>
+            Plans that include <span class="font-medium text-gray-700" x-text="channelLabel"></span>
           </p>
           {% comment %}Billing term for paid plans. Longer terms cost less per month; the
           amounts come from billing.pricing.price_for, the same as checkout.{% endcomment %}
@@ -89,7 +98,7 @@
         </div>
         <template x-if="filteredPlans.length === 0">
           <div class="card card-pad text-sm text-gray-500">
-            No packages are available for that selection yet. Go back and choose different services.
+            No packages are available for that selection yet. Go back and choose different channels.
           </div>
         </template>
         <div class="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Choose a plan">
@@ -177,7 +186,7 @@
       {# ---- Step 3: Review ---- #}
       <div x-show="step === 3" x-cloak class="card card-pad sm:!p-8 space-y-3 text-sm">
         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Review</p>
-        <div class="flex justify-between"><span class="text-gray-500">Services</span><span class="font-medium text-ink" x-text="serviceLabel"></span></div>
+        <div class="flex justify-between gap-4"><span class="text-gray-500">Channels</span><span class="font-medium text-ink text-right" x-text="channelLabel"></span></div>
         <div class="flex justify-between"><span class="text-gray-500">Package</span>
           <span class="font-medium text-ink"><span x-text="selectedPlan ? selectedPlan.name : ''"></span> · <span x-text="selectedPlan ? priceLabel(selectedPlan) : ''"></span></span>
         </div>

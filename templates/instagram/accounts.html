@@ -7,6 +7,9 @@
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Instagram</h1>
     <p class="mt-1 text-sm text-gray-600">Connect Instagram Business Accounts to receive comments, mentions, and direct messages.</p>
+    {% if "instagram" not in public_channels %}
+    <p class="mt-1 text-xs text-gray-500">Meta is still reviewing Akilent's access to Instagram. Until it approves, only accounts invited to test the Akilent app can connect.</p>
+    {% endif %}
   </div>
   {% if oauth_enabled %}
   <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm shrink-0">Connect Instagram</a>

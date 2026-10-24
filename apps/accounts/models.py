@@ -22,6 +22,8 @@ class Account(models.Model):
         # is ACCOUNT_CREATED.
         ACCOUNT_CREATED = "account_created", "Account created"
         WHATSAPP_SETUP = "whatsapp_setup", "WhatsApp setup"
+        INSTAGRAM_SETUP = "instagram_setup", "Instagram setup"
+        FACEBOOK_SETUP = "facebook_setup", "Facebook Page setup"
         DOMAIN_SETUP = "domain_setup", "Domain setup"
         COMPLETED = "completed", "Completed"
 
@@ -36,11 +38,13 @@ class Account(models.Model):
     # (apps.core.console.data.delete_due_accounts). Reactivating clears it.
     scheduled_deletion_at = models.DateTimeField(null=True, blank=True)
 
-    # Which services this tenant signed up for; set by the signup wizard and
-    # used to route service-specific onboarding and tailor the checklist.
+    # The service type of the plan bought at signup (billing; see Plan.service_type).
     selected_services = models.CharField(
         max_length=10, choices=Services.choices, default=Services.EMAIL
     )
+    # The channels the business chose at signup (keys from apps.core.channels), which
+    # decide the channel setup onboarding asks for. Always a subset of what the plan gives.
+    selected_channels = models.JSONField(default=list, blank=True)
 
     # Accounts are created active (non-blocking verification); this tracks
     # whether the owner has since clicked the emailed confirmation link.
