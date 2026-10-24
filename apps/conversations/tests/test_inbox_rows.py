@@ -100,7 +100,8 @@ class TestRows:
         client, account, _ = logged_in
         _conversation(account, channel="sms")
         body = _inbox(client)
-        row = body[body.index('class="inbox-list"') :]
+        # Just the list: the welcome tour further down the page names Email as a channel.
+        row = body[body.index('class="inbox-list"') :].split("open-welcome-tour", 1)[0]
         assert 'data-channel="sms"' in row and "SMS" in row
         assert (
             ">Email<" not in row

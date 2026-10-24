@@ -1,9 +1,9 @@
 {% comment %}First-run welcome tour. Renders app-wide while onboarding is
 incomplete; auto-opens once (localStorage), and is replayable via the
-`open-welcome-tour` event dispatched by the setup widget. Slide content adapts
-to the channels the business picked at signup, so a WhatsApp-only tenant never
-sees domain instructions and vice versa. Content Studio shows when it has
-somewhere to publish; the journey slide ties the steps together.{% endcomment %}
+`open-welcome-tour` event dispatched by the setup widget. Slides follow the
+channels the business picked at signup: one "connect" slide lists only those,
+Content Studio shows when it has somewhere to publish, and the journey slide
+ties the steps together. Focus starts on Next; arrow keys move between slides.{% endcomment %}
 <div x-data="{
         open: false, step: 0,
         wantsEmail: {{ onboarding_wants_email|yesno:'true,false' }},
@@ -11,138 +11,192 @@ somewhere to publish; the journey slide ties the steps together.{% endcomment %}
         wantsInstagram: {{ onboarding_wants_instagram|yesno:'true,false' }},
         wantsFacebook: {{ onboarding_wants_facebook|yesno:'true,false' }},
         canPublish: {{ onboarding_can_publish|yesno:'true,false' }},
+        get hasChannels() { return this.wantsEmail || this.wantsWhatsapp || this.wantsInstagram || this.wantsFacebook; },
         get slides() {
           var s = ['welcome'];
-          if (this.wantsEmail) s.push('domain');
-          if (this.wantsWhatsapp) s.push('whatsapp');
-          if (this.wantsInstagram) s.push('instagram');
-          if (this.wantsFacebook) s.push('facebook');
+          if (this.hasChannels) s.push('channels');
           if (this.canPublish) s.push('content');
           s.push('journey', 'team', 'help');
           return s;
         },
         get total() { return this.slides.length; },
         get current() { return this.slides[this.step]; },
-        init() { if (!localStorage.getItem('welcomeTourSeen')) this.open = true; },
-        markSeen() { localStorage.setItem('welcomeTourSeen', '1'); },
-        next() { if (this.step < this.total - 1) this.step++; else this.finish(); },
+        get isLast() { return this.step === this.total - 1; },
+        init() {
+          try { if (!localStorage.getItem('welcomeTourSeen')) this.show(); } catch (e) {}
+        },
+        show() { this.step = 0; this.open = true; this.$nextTick(() => this.$refs.next && this.$refs.next.focus()); },
+        markSeen() { try { localStorage.setItem('welcomeTourSeen', '1'); } catch (e) {} },
+        next() { if (!this.isLast) this.step++; else this.finish(); },
         prev() { if (this.step > 0) this.step--; },
         finish() { this.markSeen(); this.open = false; },
      }"
-     @open-welcome-tour.window="step = 0; open = true"
+     @open-welcome-tour.window="show()"
      x-show="open" x-cloak class="fixed inset-0 flex items-center justify-center p-4"
-     style="z-index: var(--z-modal)" @keydown.escape.window="finish()">
+     style="z-index: var(--z-modal)"
+     @keydown.escape.window="open && finish()"
+     @keydown.arrow-right.window="open && next()"
+     @keydown.arrow-left.window="open && prev()">
 
-  <div class="absolute inset-0 bg-gray-900/50" @click="finish()"></div>
+  <div class="absolute inset-0 bg-gray-900/50" @click="finish()" aria-hidden="true"></div>
 
-  <div class="relative card shadow-modal w-full max-w-md" x-trap.noscroll="open" role="dialog" aria-modal="true">
-    <button type="button" @click="finish()" class="absolute top-3 right-3 btn-ghost rounded-lg p-1.5 text-gray-400" aria-label="Close">
+  <div class="relative card shadow-modal w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
+       x-trap.noscroll.noautofocus="open" role="dialog" aria-modal="true"
+       :aria-labelledby="'tour-h-' + current" aria-describedby="tour-progress">
+    <button type="button" @click="finish()" class="absolute top-2 right-2 btn-ghost rounded-lg p-3 text-gray-500 hover:text-ink" aria-label="Close the tour">
       {% include "components/icon.html" with name="x" class="w-5 h-5" %}
     </button>
 
-    <div class="p-7 text-center">
-      {# Slide — welcome #}
-      <div x-show="current === 'welcome'">
+    <div class="px-5 sm:px-7 pt-8 pb-6 overflow-y-auto min-h-[19rem]">
+      {# Slide — welcome: the promise, then what's in the box #}
+      <div x-show="current === 'welcome'" x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="text-center">
         <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
         </span>
-        <h2 class="text-lg font-semibold">Welcome to {{ site.app_name|default:"Automator" }}</h2>
-        <p class="text-sm text-gray-500 mt-2">Let's take 30 seconds to show you around.</p>
+        <h2 id="tour-h-welcome" class="text-lg font-semibold text-ink">Welcome to {{ site.app_name|default:"Akilent" }}</h2>
+        <p class="text-sm text-gray-600 mt-2">Turn customer conversations{% if onboarding_can_publish %} and your posts{% endif %} into sales, from one place. Here's how it fits together.</p>
+        <ul class="mt-5 grid grid-cols-2 gap-2 text-left">
+          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
+            {% include "components/icon.html" with name="inbox" class="w-4 h-4 text-brand-600 shrink-0" %}Talk
+          </li>
+          {% if onboarding_can_publish %}
+          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
+            {% include "components/icon.html" with name="pencil" class="w-4 h-4 text-brand-600 shrink-0" %}Publish
+          </li>
+          {% endif %}
+          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
+            {% include "components/icon.html" with name="workflow" class="w-4 h-4 text-brand-600 shrink-0" %}Automate
+          </li>
+          <li class="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm text-ink">
+            {% include "components/icon.html" with name="bar-chart" class="w-4 h-4 text-brand-600 shrink-0" %}Sell &amp; measure
+          </li>
+        </ul>
       </div>
 
-      {# Slide — domains #}
-      <div x-show="current === 'domain'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="globe" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">Set up a sending domain</h2>
-        <p class="text-sm text-gray-500 mt-2">Add your domain, copy the DNS records we generate, and we'll verify them automatically — no technical know-how required.</p>
-        <a href="/email/domains/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to Domains</a>
-      </div>
-
-      {# Slide — WhatsApp #}
-      <div x-show="current === 'whatsapp'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="chat" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">Connect a WhatsApp number</h2>
-        <p class="text-sm text-gray-500 mt-2">Onboard through Meta — pick or create your WhatsApp Business Account and number. We handle registration and verification automatically.</p>
-        <a href="/whatsapp/numbers/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to WhatsApp</a>
-      </div>
-
-      {# Slide — Instagram #}
-      <div x-show="current === 'instagram'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="instagram" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">Connect Instagram</h2>
-        <p class="text-sm text-gray-500 mt-2">Connect your Instagram business account and its DMs arrive in the same inbox as everything else. Comment rules can answer questions on your posts.</p>
-        <a href="/instagram/accounts/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to Instagram</a>
-      </div>
-
-      {# Slide — Facebook Page #}
-      <div x-show="current === 'facebook'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="image" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">Connect your Facebook Page</h2>
-        <p class="text-sm text-gray-500 mt-2">Connect the Page you post to, then publish and schedule posts to it from Content Studio.</p>
-        <a href="/publishing/channels/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Connect a Page</a>
+      {# Slide — connect the channels picked at signup #}
+      <div x-show="current === 'channels'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+        <div class="text-center">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
+            {% include "components/icon.html" with name="message-circle" class="w-6 h-6" %}
+          </span>
+          <h2 id="tour-h-channels" class="text-lg font-semibold text-ink">Connect your channels</h2>
+          <p class="text-sm text-gray-600 mt-2">Start with the ones you picked. You can add the others later.</p>
+        </div>
+        <ul class="mt-5 space-y-2">
+{% if onboarding_wants_whatsapp %}
+          <li>
+            <a href="/whatsapp/numbers/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
+              {% include "components/icon.html" with name="chat" class="w-5 h-5 text-brand-600 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">WhatsApp</span><span class="block text-xs text-gray-500">Your business number, in the shared inbox</span></span>
+              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
+            </a>
+          </li>
+{% endif %}
+{% if onboarding_wants_instagram %}
+          <li>
+            <a href="/instagram/accounts/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
+              {% include "components/icon.html" with name="instagram" class="w-5 h-5 text-brand-600 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Instagram</span><span class="block text-xs text-gray-500">DMs in the same inbox, comment replies, publishing</span></span>
+              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
+            </a>
+          </li>
+{% endif %}
+{% if onboarding_wants_facebook %}
+          <li>
+            <a href="/publishing/channels/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
+              {% include "components/icon.html" with name="image" class="w-5 h-5 text-brand-600 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Facebook Page</span><span class="block text-xs text-gray-500">Publish and schedule posts to your Page</span></span>
+              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
+            </a>
+          </li>
+{% endif %}
+{% if onboarding_wants_email %}
+          <li>
+            <a href="/email/domains/" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
+              {% include "components/icon.html" with name="mail" class="w-5 h-5 text-brand-600 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">Email</span><span class="block text-xs text-gray-500">Send from your own domain; we check the DNS for you</span></span>
+              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
+            </a>
+          </li>
+{% endif %}
+        </ul>
       </div>
 
       {# Slide — Content Studio #}
-      <div x-show="current === 'content'" x-cloak>
+      <div x-show="current === 'content'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="text-center">
         <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="pencil" class="w-6 h-6" %}
         </span>
-        <h2 class="text-lg font-semibold">Plan your posts in Content Studio</h2>
-        <p class="text-sm text-gray-500 mt-2">Write a post once, with its own version for each channel, and schedule each one for its own time.</p>
-        <a href="/publishing/new/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Plan a post</a>
+        <h2 id="tour-h-content" class="text-lg font-semibold text-ink">Plan your posts in Content Studio</h2>
+        <p class="text-sm text-gray-600 mt-2">Write a post once, with its own version for each channel, and schedule each one for its own time.{% if onboarding_wants_whatsapp %} Add a WhatsApp chat link to see which posts bring customers.{% endif %}</p>
+        <a href="/publishing/new/" @click="markSeen()" class="btn btn-secondary btn-sm min-h-11 mt-5">Plan a post</a>
       </div>
 
-      {# Slide — the journey #}
-      <div x-show="current === 'journey'" x-cloak>
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="trending-up" class="w-6 h-6" %}
-        </span>
-        <h2 class="text-lg font-semibold">From a conversation to a paid order</h2>
-        <p class="text-sm text-gray-500 mt-2">A customer writes in, you mark them interested, set a follow-up and send a payment link. When they came from a post's chat link, the post shows the sale too.</p>
+      {# Slide — the journey: four steps, one place #}
+      <div x-show="current === 'journey'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+        <h2 id="tour-h-journey" class="text-lg font-semibold text-ink text-center">From a {% if onboarding_can_publish %}post{% else %}message{% endif %} to a paid order</h2>
+        <ol class="mt-5 space-y-0">
+          {% if onboarding_can_publish %}
+          <li class="relative flex gap-3 pb-4">
+            <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
+            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="image" class="w-4 h-4" %}</span>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Attract</p><p class="text-sm text-gray-600">A customer sees your post{% if onboarding_wants_whatsapp %} and taps its chat link{% endif %}.</p></div>
+          </li>
+          {% endif %}
+          <li class="relative flex gap-3 pb-4">
+            <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
+            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="inbox" class="w-4 h-4" %}</span>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Engage</p><p class="text-sm text-gray-600">They write in, and your team answers from one inbox.</p></div>
+          </li>
+          <li class="relative flex gap-3 pb-4">
+            <span class="absolute left-[1.0625rem] top-9 bottom-0 w-px bg-border" aria-hidden="true"></span>
+            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="credit-card" class="w-4 h-4" %}</span>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Convert</p><p class="text-sm text-gray-600">Mark them interested, set a follow-up, and send a payment link.</p></div>
+          </li>
+          <li class="relative flex gap-3">
+            <span class="relative inline-flex items-center justify-center w-9 h-9 rounded-full tone-brand shrink-0">{% include "components/icon.html" with name="trending-up" class="w-4 h-4" %}</span>
+            <div class="pt-1"><p class="text-sm font-semibold text-ink">Measure</p><p class="text-sm text-gray-600">Insights shows what your conversations{% if onboarding_can_publish %} and posts{% endif %} turned into.</p></div>
+          </li>
+        </ol>
       </div>
 
       {# Slide — team #}
-      <div x-show="current === 'team'" x-cloak>
+      <div x-show="current === 'team'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="text-center">
         <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
-          {% include "components/icon.html" with name="user" class="w-6 h-6" %}
+          {% include "components/icon.html" with name="user-plus" class="w-6 h-6" %}
         </span>
-        <h2 class="text-lg font-semibold">Invite your team</h2>
-        <p class="text-sm text-gray-500 mt-2">Bring colleagues in and give them the right role. You can also review session and password settings any time under Security.</p>
-        <a href="/settings/team/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Go to Team</a>
+        <h2 id="tour-h-team" class="text-lg font-semibold text-ink">Invite your team</h2>
+        <p class="text-sm text-gray-600 mt-2">Bring colleagues in with the right role, and assign each conversation to whoever should answer it.</p>
+        <a href="/settings/team/" @click="markSeen()" class="btn btn-secondary btn-sm min-h-11 mt-5">Go to Team</a>
       </div>
 
       {# Slide — help #}
-      <div x-show="current === 'help'" x-cloak>
+      <div x-show="current === 'help'" x-cloak x-transition:enter="transition-opacity duration-200 motion-reduce:transition-none" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="text-center">
         <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand mb-4">
           {% include "components/icon.html" with name="book-open" class="w-6 h-6" %}
         </span>
-        <h2 class="text-lg font-semibold">Help is always a click away</h2>
-        <p class="text-sm text-gray-500 mt-2">The <strong>Help &amp; guides</strong> section has step-by-step articles for everything, and your setup checklist lives in the corner whenever you need it.</p>
-        <a href="/help/" @click="markSeen()" class="btn btn-secondary btn-sm mt-4">Browse the help center</a>
+        <h2 id="tour-h-help" class="text-lg font-semibold text-ink">You're ready</h2>
+        <p class="text-sm text-gray-600 mt-2">Your setup checklist tracks what's left, and <strong>Help &amp; guides</strong> has step-by-step articles for everything.</p>
+        <a href="/help/" @click="markSeen()" class="btn btn-secondary btn-sm min-h-11 mt-5">Browse the help center</a>
       </div>
     </div>
 
-    {# Footer: dots + nav #}
-    <div class="flex items-center justify-between px-7 py-4 border-t border-border">
-      <div class="flex items-center gap-1.5">
-        <template x-for="(s, i) in slides" :key="s">
-          <span class="w-1.5 h-1.5 rounded-full transition-colors"
-                :class="i === step ? 'bg-brand-600' : 'tone-neutral-bg'"></span>
-        </template>
+    {# Footer: progress + nav #}
+    <div class="flex items-center justify-between gap-3 px-5 sm:px-7 py-4 border-t border-border">
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-1.5" aria-hidden="true">
+          <template x-for="(s, i) in slides" :key="s">
+            <span class="h-1.5 rounded-full transition-all duration-200 motion-reduce:transition-none"
+                  :class="i === step ? 'w-4 bg-ink' : 'w-1.5 bg-border'"></span>
+          </template>
+        </div>
+        <p id="tour-progress" class="text-xs text-gray-500 tabular-nums whitespace-nowrap" aria-live="polite">Step <span x-text="step + 1"></span> of <span x-text="total"></span></p>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" x-show="step > 0" @click="prev()" class="btn btn-ghost btn-sm">Back</button>
-        <button type="button" @click="next()" class="btn btn-primary btn-sm">
-          <span x-show="step < total - 1">Next</span>
-          <span x-show="step === total - 1" x-cloak>Finish</span>
+        <button type="button" x-show="step > 0" @click="prev()" class="btn btn-ghost btn-sm min-h-11">Back</button>
+        <button type="button" x-show="step === 0" @click="finish()" class="btn btn-ghost btn-sm min-h-11">Skip</button>
+        <button type="button" x-ref="next" @click="next()" class="btn btn-primary btn-sm min-h-11 min-w-[5.5rem]">
+          <span x-text="isLast ? 'Get started' : 'Next'">Next</span>
         </button>
       </div>
     </div>
