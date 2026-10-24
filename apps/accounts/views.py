@@ -511,15 +511,20 @@ def signup(request):
 
 
 def after_signup_url(account) -> str:
-    """Where a new account goes next: checkout while its paid plan is unpaid, else its
-    first setup step. Shared with the CSRF failure view, which resumes a signup the
-    Back button re-sent."""
+    """Where a new account goes next: the payment page while its paid plan is unpaid,
+    else its first setup step. Shared with the CSRF failure view, which resumes a
+    signup the Back button re-sent.
+
+    Not checkout itself: checkout redirects to the payment provider, and a redirect
+    chain that starts at the signup form may not leave the site (CSP form-action), so
+    the browser would stay on the signup page. See billing.views.pay.
+    """
     from apps.billing.models import Subscription
 
     subscription = getattr(account, "subscription", None)
     if subscription and subscription.status == Subscription.INCOMPLETE:
         period = subscription.billing_period or Subscription.MONTHLY
-        return f"/billing/checkout/?plan={subscription.plan.slug}&period={period}"
+        return f"/billing/pay/?plan={subscription.plan.slug}&period={period}"
     return ob.first_setup_url(account)
 
 

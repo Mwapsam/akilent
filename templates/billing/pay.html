@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Complete your payment — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+{% comment %}billing.views.pay: where signup sends a paid plan. Each button is a plain link
+to checkout, which then redirects to the provider (see the view for why signup can't
+go there directly).{% endcomment %}
+<div class="max-w-lg mx-auto space-y-6">
+
+  <header>
+    <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Almost there</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Complete your payment</h1>
+    <p class="mt-1 text-sm text-gray-600">Your account is ready. Pay for your plan to switch it on.</p>
+  </header>
+
+  <section class="card card-pad space-y-3 text-sm" aria-labelledby="pay-summary">
+    <h2 id="pay-summary" class="sr-only">Summary</h2>
+    <div class="flex justify-between gap-3"><span class="text-gray-500">Plan</span><span class="font-medium text-ink">{{ plan.name }}</span></div>
+    <div class="flex justify-between gap-3"><span class="text-gray-500">Billing</span><span class="font-medium text-ink">{{ period_label }}</span></div>
+    <div class="flex justify-between gap-3 border-t border-border pt-3">
+      <span class="text-gray-500">Price</span>
+      <span class="text-lg font-semibold text-ink tabular-nums">${{ amount }} <span class="text-sm font-normal text-gray-500">/ {{ per }}</span></span>
+    </div>
+    {% if credit.balance %}
+      <p class="text-xs text-teal-700">Your account credit of ${{ credit.balance }} is used first, so you'll pay less at checkout.</p>
+    {% endif %}
+    <p class="text-xs text-gray-500">Renews each {{ per }} until you cancel. Cancel any time from Billing.</p>
+  </section>
+
+  {% if payment_methods %}
+    <div class="space-y-2">
+      {% for method in payment_methods %}
+        <a href="{% url 'billing:checkout' %}?plan={{ plan.slug }}&amp;period={{ period }}&amp;method={{ method.code }}"
+           class="btn {% if forloop.first %}btn-primary{% else %}btn-secondary{% endif %} btn-block">
+          {% if forloop.first %}Continue to payment{% else %}Pay by {{ method.name }}{% endif %}
+        </a>
+      {% endfor %}
+      {% if payment_methods|length == 1 %}
+        <p class="text-xs text-gray-500 text-center">You'll pay with {{ payment_methods.0.name }}.</p>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="alert alert-info">
+      {% include "components/icon.html" with name="info" class="w-4 h-4 shrink-0 mt-0.5" %}
+      <p>Online payment isn't available right now. Contact support and we'll switch your plan on.</p>
+    </div>
+  {% endif %}
+
+  <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+    <a href="{% url 'billing:plans' %}" class="text-gray-500 hover:text-ink">Change plan or billing period</a>
+    <a href="{% url 'onboarding' %}" class="text-gray-500 hover:text-ink">Set up first, pay later</a>
+  </div>
+</div>
+{% endblock %}

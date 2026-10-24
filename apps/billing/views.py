@@ -279,6 +279,47 @@ def checkout_options(account=None) -> list[dict]:
 
 
 @login_required
+def pay(request):
+    """ "Complete your payment": the plan, term and amount, then a link per payment method.
+
+    Signup lands here rather than on checkout. Checkout ends by redirecting to the
+    provider's hosted page, and the CSP's ``form-action 'self'`` (which browsers apply to
+    every redirect after a form submit) blocks that hop when it follows the signup POST:
+    the browser stays on the signup page. Clicking a link here is a plain navigation,
+    which form-action doesn't cover.
+    """
+    from .pricing import PERIOD_PER, price_for
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("/dashboard/")
+    plan = Plan.objects.filter(slug=request.GET.get("plan"), is_active=True).first()
+    period = request.GET.get("period") or Subscription.MONTHLY
+    if (
+        plan is None
+        or plan.price_monthly <= 0
+        or period not in dict(Subscription.BILLING_PERIOD_CHOICES)
+    ):
+        return redirect("/billing/plans/")
+
+    site = SiteSettings.load()
+    return render(
+        request,
+        "billing/pay.html",
+        {
+            "plan": plan,
+            "period": period,
+            "period_label": dict(Subscription.BILLING_PERIOD_CHOICES)[period],
+            "per": PERIOD_PER[period],
+            "amount": price_for(plan, period),
+            "credit": credit.summary(account),
+            "payments_enabled": site.payments_enabled,
+            "payment_methods": checkout_options() if site.payments_enabled else [],
+        },
+    )
+
+
+@login_required
 def checkout(request):
     account = get_current_account(request)
     if account is None:
