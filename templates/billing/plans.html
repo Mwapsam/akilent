@@ -68,9 +68,11 @@
     {% if subscription.status == 'incomplete' or subscription.status == 'past_due' or subscription.status == 'expired' %}
       <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
         <p class="text-xs text-amber-600">{% if subscription.status == 'incomplete' %}Payment required to activate this plan.{% else %}Pay to keep using {{ subscription.plan.name }}.{% endif %}</p>
-        {% if payments_enabled and payment_methods %}
+        {% if subscription.status == 'incomplete' %}
+        <a href="{% url 'billing:pay' %}" class="btn btn-primary btn-sm">Complete payment</a>
+        {% elif payments_enabled and payment_methods %}
         <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&period={{ subscription.billing_period }}"
-           class="btn btn-primary btn-sm">{% if subscription.status == 'incomplete' %}Complete payment{% else %}Renew now{% endif %}</a>
+           class="btn btn-primary btn-sm">Renew now</a>
         {% endif %}
       </div>
     {% elif subscription.status == 'active' and subscription.cancel_at_period_end %}

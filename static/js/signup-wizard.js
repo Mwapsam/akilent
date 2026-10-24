@@ -27,6 +27,7 @@
       serviceChoices: [],
       periods: [],
       currency: { symbol: "$", zeroDecimal: false },
+      paymentMethods: [],
       preselect: { services: "", plan: "", period: "monthly", startStep: 0 },
       formData: {},
       errors: {},
@@ -57,7 +58,6 @@
       // A paid plan asks first (the "Create your account and pay" dialog):
       // submitting creates the account and goes straight on to payment.
       confirmOpen: false,
-      confirmed: false,
 
       // Step 2 ("Your details") fields, bound via x-model so "Continue" can
       // be gated the same way steps 0/1 are, and Review can echo them back.
@@ -159,6 +159,16 @@
       isPaid: function (p) {
         return !!(p && p.priceMonthly > 0);
       },
+      // What the dialog says about step 2, from the ways to pay that are on.
+      get payNote() {
+        var m = this.cfg.paymentMethods || [];
+        if (!m.length) {
+          return "Online payment isn't available right now. Contact support and we'll switch your plan on.";
+        }
+        if (m.length > 1) return "You choose how to pay on the next page.";
+        if (m[0].code === "manual") return "By bank transfer. We'll show you the details next.";
+        return "On our payment provider's secure page.";
+      },
 
       get canAdvance() {
         if (this.step === 0) return !!this.services;
@@ -182,15 +192,26 @@
         if (i < this.step) this.step = i;
       },
 
-      // The form's submit handler. Enter in a field submits too, so the
-      // dialog is opened here rather than from the button.
+      // The form's submit handler. Enter in a field submits the form too
+      // (through the hidden Create button), so on the earlier steps it moves
+      // on instead, and only the dialog's own button confirms a paid plan.
       submit: function (e) {
-        if (this.isPaid(this.selectedPlan) && !this.confirmed) {
+        if (this.step !== this.stepLabels.length - 1) {
+          e.preventDefault();
+          this.next();
+          return;
+        }
+        // Browsers without SubmitEvent.submitter: the dialog being open is
+        // the nearest sign its button was used.
+        var confirmed = e.submitter
+          ? e.submitter === this.$refs.payConfirm
+          : this.confirmOpen;
+        if (this.isPaid(this.selectedPlan) && !confirmed) {
           e.preventDefault();
           this.confirmOpen = true;
           return;
         }
-        this.confirmed = false;
+        this.confirmOpen = false;
         // One submit at a time; app.js re-enables these if the page is
         // restored from the back/forward cache, and they unlock after 15s.
         e.target.querySelectorAll("[type=submit]").forEach(function (b) {

@@ -69,7 +69,6 @@ def _card(pm: dict, customer: str = "") -> SavedMethodData | None:
 class StripeProvider(PaymentProvider):
     code = "stripe"
     display_name = "Stripe"
-    checkout_origins = ("https://checkout.stripe.com",)
     off_session_charge = True
 
     def _api(self):

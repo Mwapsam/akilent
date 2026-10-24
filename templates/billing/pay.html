@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load billing_money %}
+{% block title %}Complete your payment — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block content %}
+{% comment %}billing.views.pay. Every way on is a plain link to checkout (never a form): checkout
+redirects to the provider, and form-action would block that after a form submit.{% endcomment %}
+<div class="max-w-lg mx-auto space-y-6">
+
+  <header>
+    <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Almost there</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Complete your payment</h1>
+    <p class="mt-1 text-sm text-gray-600">Your account is created. Your {{ plan.name }} plan switches on once it's paid.</p>
+  </header>
+
+  <section class="card card-pad space-y-3 text-sm" aria-label="Payment summary">
+    <div class="flex justify-between gap-3"><span class="text-gray-500">Plan</span><span class="font-medium text-ink">{{ plan.name }}</span></div>
+    <div class="flex justify-between gap-3"><span class="text-gray-500">Billing</span><span class="font-medium text-ink">{{ period_label }}</span></div>
+    <div class="flex justify-between gap-3"><span class="text-gray-500">Price</span><span class="text-ink tabular-nums">{{ quote.gross|money }} / {{ per }}</span></div>
+    {% if quote.unused %}
+      <div class="flex justify-between gap-3"><span class="text-gray-500">Unused paid time</span><span class="text-ink tabular-nums">−{{ quote.unused|money }}</span></div>
+    {% endif %}
+    {% if quote.credit %}
+      <div class="flex justify-between gap-3"><span class="text-gray-500">Account credit</span><span class="text-ink tabular-nums">−{{ quote.credit|money }}</span></div>
+    {% endif %}
+    <div class="flex justify-between gap-3 border-t border-border pt-3">
+      <span class="font-medium text-ink">Due now</span>
+      <span class="text-lg font-semibold text-ink tabular-nums">{{ quote.due|money }}</span>
+    </div>
+    <p class="text-xs text-gray-500">It renews every {{ per }} until you cancel. Cancel any time from Billing.</p>
+  </section>
+
+  {% if methods %}
+    {% if autostart_url %}
+      <p class="text-sm text-gray-600 text-center" role="status">Taking you to payment…</p>
+      <script>window.location.assign("{{ autostart_url|escapejs }}");</script>
+    {% endif %}
+    <div class="space-y-2" id="pay-methods">
+      {% if not quote.due %}
+        {% comment %}Checkout settles it from credit without visiting a provider.{% endcomment %}
+        <a href="{{ methods.0.url }}" class="btn btn-primary btn-block">Pay with account credit</a>
+      {% else %}
+        {% for method in methods %}
+          <a href="{{ method.url }}"
+             class="btn {% if forloop.first %}btn-primary{% else %}btn-secondary{% endif %} btn-block">
+            {% if methods|length == 1 %}Continue to payment{% else %}{{ method.name }}{% endif %}
+          </a>
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="alert alert-info">
+      {% include "components/icon.html" with name="info" class="w-4 h-4 shrink-0 mt-0.5" %}
+      <p>Online payment isn't available right now. Contact support and we'll switch your plan on.</p>
+    </div>
+  {% endif %}
+
+  <p class="text-center text-sm">
+    <a href="{% url 'billing:plans' %}" class="text-gray-500 hover:text-ink">Change plan or billing period</a>
+  </p>
+</div>
+{% endblock %}

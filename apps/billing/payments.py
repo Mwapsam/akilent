@@ -94,7 +94,8 @@ def create_payment(
 
 
 @transaction.atomic
-def _create_payment(account, plan, billing_period, provider, purpose, reference):
+def _before_credit(account, plan, billing_period, purpose):
+    """(gross, unused paid time, amount due before credit) for a new payment."""
     gross = price_for(plan, billing_period)
     unused = ZERO
     if purpose == BillingPayment.CHECKOUT:
@@ -102,7 +103,26 @@ def _create_payment(account, plan, billing_period, provider, purpose, reference)
             Subscription.objects.filter(account=account).select_related("plan").first()
         )
         unused = unused_value(sub, plan, billing_period)
-    discount = min(unused, gross)
+    return gross, unused, gross - min(unused, gross)
+
+
+def quote(account, plan, billing_period) -> dict:
+    """What a checkout for ``plan`` would charge now, creating nothing: the term's price, less
+    unused paid time, less account credit (as ``create_payment`` takes them off)."""
+    gross, _unused, due = _before_credit(
+        account, plan, billing_period, BillingPayment.CHECKOUT
+    )
+    applied = min(credit.balance(account), due)
+    return {
+        "gross": gross,
+        "unused": gross - due,
+        "credit": applied,
+        "due": due - applied,
+    }
+
+
+def _create_payment(account, plan, billing_period, provider, purpose, reference):
+    gross, unused, due = _before_credit(account, plan, billing_period, purpose)
     payment = BillingPayment.objects.create(
         account=account,
         reference=reference or BillingPayment.new_reference(),
@@ -113,7 +133,7 @@ def _create_payment(account, plan, billing_period, provider, purpose, reference)
         currency=billing_currency(),
         gross_amount=gross,
         unused_time_value=unused,
-        amount_due=gross - discount,
+        amount_due=due,
     )
     if payment.amount_due > 0:
         applied = credit.apply(payment, max_amount=payment.amount_due)

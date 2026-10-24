@@ -7,6 +7,7 @@ app_name = "billing"
 urlpatterns = [
     path("plans/", views.pricing_page, name="plans"),
     path("locked/<slug:key>/", views.feature_locked, name="locked"),
+    path("pay/", views.pay, name="pay"),
     path("checkout/", views.checkout, name="checkout"),
     # Every payment provider returns and posts webhooks to the same two routes.
     path("return/<slug:provider>/", views.payment_return, name="return"),

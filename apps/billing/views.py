@@ -6,7 +6,10 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import urlencode
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -24,7 +27,7 @@ from .models import (
     ProcessedWebhookEvent,
     Subscription,
 )
-from .pricing import period_options
+from .pricing import PERIOD_PER, period_options
 from .providers import InvalidSignature, ProviderError, registry
 from .services import activate_subscription
 
@@ -278,6 +281,70 @@ def checkout_options(account=None) -> list[dict]:
     return options
 
 
+def _not_payable(plan, period) -> str:
+    """Why ``plan`` billed ``period`` can't be checked out, or "" when it can."""
+    if plan.slug == Plan.TRIAL or plan.price_monthly <= 0:
+        return "That plan doesn't need a payment."
+    if period not in dict(Subscription.BILLING_PERIOD_CHOICES):
+        return "Invalid billing period selected."
+    return ""
+
+
+# Set by signup for its one request to billing:pay, which then moves straight on to checkout.
+PAY_AUTOSTART = "billing_pay_autostart"
+
+
+@never_cache
+@login_required
+def pay(request):
+    """The first payment for a new paid signup: plan, term, what checkout will charge and how
+    to pay. Signup redirects here, not to checkout. Checkout ends in a redirect to the
+    provider's hosted page, and the CSP's form-action, which browsers also apply to every
+    redirect after a form submit, would block that hop: the browser would stay on the signup
+    page. Leaving here is a navigation (a link, or the script below), which form-action doesn't
+    govern, whatever host the provider uses.
+
+    It creates nothing, so a re-sent signup (Back from the provider) can land here again
+    safely. Straight after signup, with one way to pay, it moves on to checkout by itself.
+    """
+    autostart = request.session.pop(PAY_AUTOSTART, False)
+    account = get_current_account(request)
+    subscription = getattr(account, "subscription", None) if account else None
+    if subscription is None or subscription.status != Subscription.INCOMPLETE:
+        return redirect("/billing/plans/")
+    plan = subscription.plan
+    period = subscription.billing_period or Subscription.MONTHLY
+    if not plan.is_active or _not_payable(plan, period):
+        return redirect("/billing/plans/")
+
+    site = SiteSettings.load()
+    checkout_url = reverse("billing:checkout")
+    methods = [
+        {
+            **option,
+            "url": f"{checkout_url}?"
+            + urlencode(
+                {"plan": plan.slug, "period": period, "method": option["code"]}
+            ),
+        }
+        for option in (checkout_options() if site.payments_enabled else [])
+    ]
+    return render(
+        request,
+        "billing/pay.html",
+        {
+            "plan": plan,
+            "period_label": subscription.get_billing_period_display(),
+            "per": PERIOD_PER[period],
+            "quote": payments.quote(account, plan, period),
+            "methods": methods,
+            "autostart_url": methods[0]["url"]
+            if autostart and len(methods) == 1
+            else "",
+        },
+    )
+
+
 @login_required
 def checkout(request):
     account = get_current_account(request)
@@ -289,13 +356,10 @@ def checkout(request):
         return redirect("/billing/plans/")
 
     plan = get_object_or_404(Plan, slug=request.GET.get("plan"), is_active=True)
-    if plan.slug == Plan.TRIAL or plan.price_monthly <= 0:
-        messages.error(request, "That plan doesn't need a payment.")
-        return redirect("/billing/plans/")
-
     period = request.GET.get("period") or Subscription.MONTHLY
-    if period not in dict(Subscription.BILLING_PERIOD_CHOICES):
-        messages.error(request, "Invalid billing period selected.")
+    problem = _not_payable(plan, period)
+    if problem:
+        messages.error(request, problem)
         return redirect("/billing/plans/")
 
     if request.GET.get("method") == "manual" and registry.manual_enabled():

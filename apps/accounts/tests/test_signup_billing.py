@@ -68,7 +68,7 @@ def test_free_plan_signup_skips_checkout(client, trial_plan):
         SIGNUP_URL, _payload(plan=Plan.TRIAL, selected_services=Account.Services.BOTH)
     )
     assert resp.status_code == 302
-    assert not resp.url.startswith("/billing/checkout/")
+    assert not resp.url.startswith(("/billing/checkout/", "/billing/pay/"))
 
     account = Account.objects.get(company_name="Paid Co")
     subscription = Subscription.objects.get(account=account)
@@ -79,7 +79,7 @@ def test_free_plan_signup_skips_checkout(client, trial_plan):
 def test_paid_plan_signup_redirects_to_checkout(client, trial_plan, paid_plan):
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302
-    assert resp.url == "/billing/checkout/?plan=starter&period=monthly"
+    assert resp.url == "/billing/pay/"
 
     account = Account.objects.get(company_name="Paid Co")
     subscription = Subscription.objects.get(account=account)
@@ -97,7 +97,7 @@ def test_paid_plan_with_trial_days_still_bills_immediately(
 ):
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302
-    assert resp.url.startswith("/billing/checkout/")
+    assert resp.url == "/billing/pay/"
 
     account = Account.objects.get(company_name="Paid Co")
     subscription = Subscription.objects.get(account=account)

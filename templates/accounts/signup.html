@@ -3,7 +3,7 @@
 {% block title %}Create your account — {{ site.app_name|default:"Automator" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
-<script src="{% static 'js/signup-wizard.js' %}?v=5"></script>
+<script src="{% static 'js/signup-wizard.js' %}?v=6"></script>
 
 <div class="min-h-screen flex items-start justify-center px-4 py-12">
   <div class="w-full max-w-2xl" x-data="signupWizard()" x-cloak>
@@ -215,8 +215,8 @@
       </p>
 
       {% comment %}Paid plans only: say what "Create account" does before it does it. Inside
-      the form, so its button submits it (the click sets `confirmed` before the submit
-      event, which then goes through).{% endcomment %}
+      the form, so its button submits it; submit() lets a paid signup through only when
+      that button (x-ref payConfirm) is the submitter.{% endcomment %}
       <div x-show="confirmOpen" x-cloak
            class="fixed inset-0 overflow-y-auto" style="z-index: var(--z-modal)"
            @keydown.escape.window="confirmOpen = false"
@@ -256,7 +256,7 @@
                 <span class="signup-pay-num">2</span>
                 <div>
                   <p class="font-medium text-ink">You pay <span class="tabular-nums" x-text="dueLabel(selectedPlan)"></span></p>
-                  <p class="text-gray-500">On our payment provider's secure page.</p>
+                  <p class="text-gray-500" x-text="payNote"></p>
                 </div>
               </li>
               <li class="flex gap-3">
@@ -275,7 +275,8 @@
 
             <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" class="btn btn-secondary" @click="confirmOpen = false">Go back</button>
-              <button type="submit" class="btn btn-primary" @click="confirmed = true">Create account and pay</button>
+              <button type="submit" class="btn btn-primary" x-ref="payConfirm"
+                      x-text="cfg.paymentMethods.length ? 'Create account and pay' : 'Create account'">Create account and pay</button>
             </div>
           </div>
         </div>

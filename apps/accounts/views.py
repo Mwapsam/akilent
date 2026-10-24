@@ -347,9 +347,15 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     else:
         start_step = 2
 
+    from apps.billing.views import checkout_options
+    from apps.core.models import SiteSettings
+
     currency = billing_currency()
+    payments_enabled = SiteSettings.load().payments_enabled
     return {
         "csrfToken": get_token(request),
+        # How a paid plan can be paid for, so the confirm dialog says what comes next.
+        "paymentMethods": checkout_options() if payments_enabled else [],
         # Prices are shown in the billing currency checkout charges in.
         "currency": {
             "symbol": SYMBOLS.get(currency, f"{currency} "),
@@ -467,6 +473,9 @@ def signup(request):
                         request,
                         f"Almost there — complete payment to activate your {subscription.plan.name} plan.",
                     )
+                    from apps.billing.views import PAY_AUTOSTART
+
+                    request.session[PAY_AUTOSTART] = True
                     return redirect(after_signup_url(account))
 
                 if verification_sent:
@@ -518,19 +527,14 @@ def signup(request):
 
 
 def after_signup_url(account) -> str:
-    """Where a new account goes next: checkout while its paid plan is unpaid, else its
-    first setup step. Shared with the CSRF failure view, which resumes a signup the
-    Back button re-sent.
-
-    Checkout redirects on to the provider's hosted page, a hop the CSP's form-action
-    must allow (each provider's ``checkout_origins``), as it follows the signup POST.
-    """
+    """Where a new account goes next: the payment page while its paid plan is unpaid,
+    else its first setup step. Shared with the CSRF failure view, which resumes a
+    signup the Back button re-sent. Never checkout itself: see billing.views.pay."""
     from apps.billing.models import Subscription
 
     subscription = getattr(account, "subscription", None)
     if subscription and subscription.status == Subscription.INCOMPLETE:
-        period = subscription.billing_period or Subscription.MONTHLY
-        return f"/billing/checkout/?plan={subscription.plan.slug}&period={period}"
+        return reverse("billing:pay")
     return ob.first_setup_url(account)
 
 

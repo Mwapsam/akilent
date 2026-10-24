@@ -232,7 +232,7 @@ def test_paid_signup_warns_when_verification_could_not_be_queued(
         SIGNUP_URL,
         _payload(selected_services=Account.Services.EMAIL, plan=Plan.STARTER),
     )
-    assert resp.status_code == 302 and resp.url.startswith("/billing/checkout/")
+    assert resp.status_code == 302 and resp.url == "/billing/pay/"
     texts = [str(m) for m in get_messages(resp.wsgi_request)]
     assert any("couldn't send the verification email" in t for t in texts), texts
 
@@ -306,7 +306,7 @@ def test_paid_signup_is_billed_for_the_chosen_term(client, plans, settings):
         ),
     )
     assert resp.status_code == 302
-    assert resp.url == "/billing/checkout/?plan=starter&period=annually"
+    assert resp.url == "/billing/pay/"
     sub = Account.objects.get(company_name="New Co").subscription
     assert sub.status == Subscription.INCOMPLETE
     assert sub.billing_period == "annually"
@@ -428,4 +428,39 @@ def test_paid_signup_explains_payment_before_creating_the_account(
     assert "Create your account and pay" in html
     # The dialog's button submits the signup form itself.
     form = html[html.index('action="/signup/"') : html.index("</form>")]
-    assert 'type="submit" class="btn btn-primary" @click="confirmed = true"' in form
+    assert 'x-ref="payConfirm"' in form
+
+
+@pytest.mark.django_db
+def test_paid_signup_moves_on_to_payment_once(client, plans, settings):
+    from apps.billing.views import PAY_AUTOSTART
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    resp = client.post(
+        SIGNUP_URL,
+        _payload(selected_services=Account.Services.EMAIL, plan=Plan.STARTER),
+    )
+    assert resp.url == "/billing/pay/"
+    assert client.session[PAY_AUTOSTART] is True
+
+
+@pytest.mark.django_db
+def test_dialog_knows_the_ways_to_pay(client, plans, settings):
+    from apps.billing.models import PaymentMethod
+    from apps.core.models import SiteSettings
+
+    settings.EMAIL_ENABLED = True
+    settings.WHATSAPP_ENABLED = True
+    site = SiteSettings.load()
+    site.payments_enabled = False
+    site.save()
+    assert _wizard_config(client.get(SIGNUP_URL))["paymentMethods"] == []
+
+    site.payments_enabled = True
+    site.save()
+    PaymentMethod.objects.update_or_create(
+        code="manual", defaults={"name": "Bank transfer", "is_enabled": True}
+    )
+    methods = _wizard_config(client.get(SIGNUP_URL))["paymentMethods"]
+    assert {"code": "manual", "name": "Bank transfer"} in methods
