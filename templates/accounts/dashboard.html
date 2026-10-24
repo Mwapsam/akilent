@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load onboarding_tags %}
 {% block title %}Dashboard — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
@@ -21,6 +22,8 @@
       {% endif %}
     </p>
   </header>
+
+  {% if onboarding_complete %}{% next_action_card %}{% endif %}
 
   {# ── Onboarding checklist (until complete) ────────────────── #}
   {% if not onboarding_complete %}

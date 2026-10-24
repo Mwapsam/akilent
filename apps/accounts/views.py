@@ -741,6 +741,25 @@ def landing(request):
 
 
 @login_required
+@require_POST
+def next_action_dismiss(request, key):
+    """ "Not now" on a next-step suggestion: hide it for this workspace."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from apps.accounts.utils import viewing_as
+
+    account = get_current_account(request)
+    if account is not None and viewing_as(request) is None:
+        ob.dismiss_next_action(account, key)
+    next_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        next_url = reverse("dashboard")
+    return redirect(next_url)
+
+
+@login_required
 def onboarding(request):
     from apps.accounts import onboarding as ob
 

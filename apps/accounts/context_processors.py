@@ -101,7 +101,10 @@ def onboarding_status(request):
         return {
             "onboarding": state,
             "onboarding_wants_whatsapp": state["wants_whatsapp"],
+            "onboarding_wants_instagram": state["wants_instagram"],
+            "onboarding_wants_facebook": state["wants_facebook"],
             "onboarding_wants_email": state["wants_email"],
+            "onboarding_can_publish": state["can_publish"],
         }
     except Exception:
         return {}

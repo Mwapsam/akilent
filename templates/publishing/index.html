@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% load publishing_filters %}
-{% block title %}Publishing — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% load publishing_filters onboarding_tags %}
+{% block title %}Content Studio — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -12,6 +12,8 @@
 </div>
 
 {% include "publishing/_subnav.html" %}
+
+{% next_action_card %}
 
 {# Stat cards #}
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

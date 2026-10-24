@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load onboarding_tags %}
 {% block title %}Inbox — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
@@ -38,6 +39,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
     </a>
   </div>
 </header>
+{% next_action_card %}
 
 {% comment %}
   Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever

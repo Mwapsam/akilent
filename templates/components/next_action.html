@@ -1,0 +1,24 @@
+{% comment %}The next step in the journey (apps.accounts.onboarding.next_action): one
+card, dismissible for good with "Not now". Never an upgrade prompt.{% endcomment %}
+{% if action %}
+<section class="card card-pad mb-4 flex flex-col sm:flex-row sm:items-center gap-3" aria-labelledby="next-action-title" data-testid="next-action" data-next-action="{{ action.key }}">
+  <div class="flex items-start gap-3 min-w-0 flex-1">
+    <span class="ob-tile-icon tone-brand" aria-hidden="true">
+      {% include "components/icon.html" with name="sparkles" class="w-5 h-5" %}
+    </span>
+    <div class="min-w-0">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Suggested next</p>
+      <h2 id="next-action-title" class="text-sm sm:text-base font-semibold text-ink">{{ action.title }}</h2>
+      <p class="text-sm text-gray-600 mt-0.5">{{ action.desc }}</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2 shrink-0">
+    <form method="post" action="{% url 'next-action-dismiss' action.key %}" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-ghost btn-sm">Not now</button>
+    </form>
+    <a href="{{ action.url }}" class="btn btn-secondary btn-sm">{{ action.cta }}</a>
+  </div>
+</section>
+{% endif %}

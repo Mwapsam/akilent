@@ -39,6 +39,7 @@ SETUP_ORDER = ("whatsapp", "instagram", "facebook", "email")
 SECTIONS: tuple[tuple[str, str], ...] = (
     ("setup", "Get set up"),
     ("reach", "Reach customers"),
+    ("publish", "Publish & grow"),
     ("know", "Know your customers"),
     ("automate", "Automate & AI"),
     ("sell", "Sell & measure"),
@@ -324,6 +325,11 @@ def _can_publish(ctx) -> bool:
     return instagram or _facebook_offered(ctx)
 
 
+def _post_results_available(ctx) -> bool:
+    """Chat links open WhatsApp, so post results need it as well as somewhere to publish."""
+    return _can_publish(ctx) and "whatsapp" in ctx.channels
+
+
 def _publish_blocked(ctx) -> str:
     """Until a page or account is connected there is nothing to publish to."""
     if _instagram_usable(ctx) and _done_instagram(ctx):
@@ -509,16 +515,56 @@ STEPS: tuple[StepDef, ...] = (
         available=_instagram_offered,
     ),
     StepDef(
-        key="post",
+        key="instagram_reply",
         section="reach",
+        title="Answer your first Instagram DM",
+        desc="Instagram messages arrive in the same inbox as WhatsApp. Reply to one from there.",
+        icon="instagram",
+        cta="Open the inbox",
+        url="conversations:inbox",
+        done=_exists(
+            "conversations.Message",
+            direction="outbound",
+            conversation__channel="instagram",
+        ),
+        available=_wants_instagram_ctx,
+        needs="connect_instagram",
+    ),
+    # Publish & grow ---------------------------------------------------------
+    StepDef(
+        key="plan_post",
+        section="publish",
+        title="Plan your first post",
+        desc="Write a post once in Content Studio, with its own version for each channel. Save it as a draft until it's ready.",
+        icon="pencil",
+        cta="Plan a post",
+        url="publishing:post-new",
+        done=_exists("publishing.ContentPost"),
+        available=_can_publish,
+    ),
+    StepDef(
+        key="post",
+        section="publish",
         title="Publish your first post",
-        desc="Write a post once in Content Studio and publish it to your connected pages.",
+        desc="Publish it now, or schedule each channel for its own time.",
         icon="image",
         cta="Create a post",
         url="publishing:post-new",
         done=_exists("publishing.ContentPost", status="published"),
         available=_can_publish,
         blocked=_publish_blocked,
+    ),
+    StepDef(
+        key="post_results",
+        section="publish",
+        title="See which posts bring chats",
+        desc="Add a WhatsApp chat link to a post. Each chat it brings, and the leads and orders that follow, show on the post.",
+        icon="trending-up",
+        cta="Open your posts",
+        url="publishing:library",
+        done=_exists("conversations.ConversationEntryPoint"),
+        available=_post_results_available,
+        needs="post",
     ),
     StepDef(
         key="wa_template",
@@ -898,9 +944,152 @@ def _build_state(ctx, essentials_only: bool) -> dict:
         "next_step": next_step,
         "next_recommended": next_recommended,
         "paused": list(ctx.paused),
+        # Whether Content Studio has somewhere to publish (for the tour's slide).
+        "can_publish": _can_publish(ctx),
         "wants_whatsapp": ctx.wants_whatsapp,
         "wants_instagram": ctx.wants_instagram,
         "wants_facebook": ctx.wants_facebook,
         "wants_email": ctx.wants_email,
         "pct": round(required_done / len(required) * 100) if required else 100,
     }
+
+
+# --- The next useful action -------------------------------------------------
+#
+# Once a business is using Akilent, one suggestion at a time for the next step in the
+# journey (conversation -> lead -> follow-up -> paid order -> post results), from what
+# it has already done. Never an upgrade prompt: a suggestion only appears when the
+# feature is usable. Dismissed per workspace ("Not now"), for good.
+
+NEXT_DISMISS_DAYS = 3650
+
+
+@dataclass(frozen=True)
+class NextActionDef:
+    key: str
+    title: str
+    desc: str
+    cta: str
+    url: Callable  # fn(ctx) -> path
+    when: Callable  # fn(ctx) -> bool
+    feature: str  # billing feature key that must be usable
+
+
+def _has(model_path: str, **filters) -> Callable:
+    return _exists(model_path, **filters)
+
+
+def _latest_url(model_path: str, url_name: str, field: str, **filters) -> Callable:
+    """The page of the newest matching row, e.g. the latest unpaid order."""
+
+    def url(ctx) -> str:
+        from django.apps import apps
+
+        model = apps.get_model(model_path)
+        row = (
+            model.objects.filter(account=ctx.account, **filters)
+            .order_by("-pk")
+            .values_list(field, flat=True)
+            .first()
+        )
+        return reverse(url_name, args=[row]) if row else ""
+
+    return url
+
+
+def _no(model_path: str, **filters) -> Callable:
+    check = _exists(model_path, **filters)
+    return lambda ctx: not check(ctx)
+
+
+def _all(*checks) -> Callable:
+    return lambda ctx: all(check(ctx) for check in checks)
+
+
+NEXT_ACTIONS: tuple[NextActionDef, ...] = (
+    NextActionDef(
+        key="mark_lead",
+        title="Keep track of who's ready to buy",
+        desc="Customers are writing in. Mark the ones who are interested so none of them are forgotten.",
+        cta="Open Sales",
+        url=lambda ctx: reverse("crm:sales"),
+        when=_all(
+            _has("conversations.Message", direction="inbound"),
+            _no("crm.Lead"),
+        ),
+        feature="sales",
+    ),
+    NextActionDef(
+        key="set_followup",
+        title="Set a follow-up for an interested customer",
+        desc="A reminder on the conversation makes sure they hear back from you.",
+        cta="Open the inbox",
+        url=lambda ctx: reverse("conversations:inbox"),
+        when=_all(_has("crm.Lead"), _no("conversations.FollowUp")),
+        feature="follow_ups",
+    ),
+    NextActionDef(
+        key="payment_link",
+        title="Send a payment link for your order",
+        desc="The customer pays online and the order is marked paid on its own.",
+        cta="Open the order",
+        url=_latest_url(
+            "commerce.Order",
+            "commerce:detail",
+            "public_id",
+            status="pending",
+            payments__isnull=True,
+        ),
+        when=_has("commerce.Order", status="pending", payments__isnull=True),
+        feature="orders",
+    ),
+    NextActionDef(
+        key="post_results",
+        title="See what your posts brought in",
+        desc="Each post shows the chats, leads and paid orders that came through its chat link or comment replies.",
+        cta="See results",
+        url=_latest_url(
+            "publishing.ContentPost", "publishing:post-detail", "pk", status="published"
+        ),
+        when=_has("publishing.ContentPost", status="published"),
+        feature="content_studio",
+    ),
+)
+
+
+def next_action(account, *, request=None) -> dict | None:
+    """The one suggestion to show now, or None."""
+    from apps.automation.patterns import dismissed_keys
+
+    if request is not None:
+        cache = request.__dict__.setdefault("_onboarding_cache", {})
+        ctx = cache.setdefault(account.pk, _Ctx(account))
+    else:
+        ctx = _Ctx(account)
+    hidden = dismissed_keys(account)
+    for defn in NEXT_ACTIONS:
+        if f"next:{defn.key}" in hidden or defn.feature not in ctx.usable:
+            continue
+        if not defn.when(ctx):
+            continue
+        url = defn.url(ctx)
+        if not url:
+            continue
+        return {
+            "key": defn.key,
+            "title": defn.title,
+            "desc": defn.desc,
+            "cta": defn.cta,
+            "url": url,
+        }
+    return None
+
+
+def dismiss_next_action(account, key: str) -> bool:
+    """Hide a suggestion for this workspace. False for an unknown key."""
+    from apps.automation.patterns import dismiss
+
+    if key not in {d.key for d in NEXT_ACTIONS}:
+        return False
+    dismiss(account, f"next:{key}", days=NEXT_DISMISS_DAYS)
+    return True

@@ -118,3 +118,58 @@ def test_restricted_instagram_is_not_recommended(monkeypatch):
     assert "instagram" not in _keys(acc)
     _open("instagram")
     assert "instagram" in _keys(acc)
+
+
+def _all_usable(monkeypatch, keys):
+    from apps.billing import api as billing_api
+
+    monkeypatch.setattr(
+        billing_api,
+        "nav_state",
+        lambda account: {
+            "usable": frozenset(keys),
+            "locked": frozenset(),
+            "tools_off": frozenset(),
+        },
+    )
+
+
+def test_publish_and_grow_leads_from_a_plan_to_results(monkeypatch):
+    from apps.publishing.models import ContentPost
+
+    _all_usable(monkeypatch, {"content_studio"})
+    acc = _account(["facebook", "whatsapp"])
+    state = ob.get_state(acc)
+    publish = next(s for s in state["sections"] if s["key"] == "publish")
+    assert [s["key"] for s in publish["steps"]] == ["plan_post", "post", "post_results"]
+    results = next(s for s in publish["steps"] if s["key"] == "post_results")
+    assert results["locked"] == "Publish your first post"
+
+    ContentPost.objects.create(account=acc, platforms=["facebook"], media_type="image")
+    plan = next(s for s in ob.get_state(acc)["steps"] if s["key"] == "plan_post")
+    assert plan["done"]
+
+
+def test_post_results_need_whatsapp(monkeypatch, settings):
+    _all_usable(monkeypatch, {"content_studio"})
+    settings.WHATSAPP_ENABLED = False
+    acc = _account(["facebook"])
+    assert "post_results" not in _keys(acc)
+
+
+def test_picked_instagram_adds_answering_a_dm(monkeypatch):
+    _all_usable(monkeypatch, {"instagram"})
+    acc = _account(["instagram"])
+    step = next(s for s in ob.get_state(acc)["steps"] if s["key"] == "instagram_reply")
+    assert step["locked"] == "Connect Instagram"
+
+
+def test_tour_flags_follow_the_picks(client, monkeypatch):
+    _all_usable(monkeypatch, {"content_studio"})
+    acc = _account(["instagram", "facebook"])
+    client.force_login(acc.memberships.get().user)
+    html = client.get("/dashboard/").content.decode()
+    assert "wantsInstagram: true" in html
+    assert "wantsFacebook: true" in html
+    assert "canPublish: true" in html
+    assert "current === 'journey'" in html
