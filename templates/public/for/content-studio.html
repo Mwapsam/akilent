@@ -1,0 +1,48 @@
+{% extends "public/for/_layout.html" %}
+{% load static %}
+{% block page_title %}Content Studio{% endblock %}
+{% block eyebrow %}Content Studio{% endblock %}
+{% block headline %}Turn your social media activity into measurable results{% endblock %}
+{% block lead %}<p data-claim="content-studio facebook-publishing">Plan, write and schedule posts for Instagram and your Facebook Page in one place{% if ch.results %}, then see which ones bring customers{% endif %}.</p>{% endblock %}
+{% block hero_cta %}<a href="/signup/{{ signup_query }}" class="uc-cta">Start free trial</a>{% endblock %}
+
+{% block body %}
+<section id="use-case-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Posting takes too long, and nobody knows what it brings in</h2>
+  <p data-claim-exempt>Each app wants the post a little differently, so it's written several times, posted when someone remembers, and judged by likes rather than customers.</p>
+</section>
+
+<section id="use-case-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What Content Studio does</h2>
+    <ul class="uc-list">
+      <li data-claim="content-studio">Write a post once, with its own version for Instagram and for your Facebook Page.</li>
+      <li data-claim="content-planning">Plan posts by content pillar and campaign on a calendar.</li>
+      <li data-claim="ai-captions">AI can draft a caption for each channel from your notes.</li>
+      <li data-claim="post-scheduling">Schedule each channel's version for its own time.</li>
+      <li data-claim="post-review">If you want, an owner or admin approves posts before they go out.</li>
+      <li data-claim="post-metrics">See each post's reach and engagement from Instagram and Facebook.</li>
+    </ul>
+  </div>
+  <figure class="uc-shot tall">
+    <div><img src="{% static 'img/marketing/post-channels.webp' %}" width="670" height="1082" loading="lazy" decoding="async"
+              alt="A post published to both Facebook and Instagram, with each channel's status and the post's image."></div>
+    <figcaption>A published post in the demo workspace.</figcaption>
+  </figure>
+</section>
+
+{% if ch.results %}
+<section id="use-case-proof" class="uc-section uc-split" aria-labelledby="uc-proof">
+  <div>
+    <h2 id="uc-proof">See which posts bring customers</h2>
+    <p data-claim="post-chat-link post-results attribution">Add a WhatsApp chat link to a post. Each chat it brings, and the leads, orders and paid revenue that follow, show on the post. Only customers who came through the link or a comment reply are counted, so nothing is guessed.</p>
+  </div>
+  <figure class="uc-shot">
+    <div><img src="{% static 'img/marketing/post-results.webp' %}" width="670" height="484" loading="lazy" decoding="async"
+              alt="A post's results per channel: link clicks, chats, leads, orders and paid revenue."></div>
+  </figure>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block end_cta %}<a href="/signup/{{ signup_query }}" class="uc-cta">Start free trial</a>{% endblock %}

@@ -50,13 +50,10 @@
         {% if ig_connection.token_expired %}
         <p class="text-xs text-amber-700 mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
         {% elif not ig_publish_scope %}
-        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing our permission to publish to Instagram. You can plan and draft Instagram posts now; publishing turns on once Meta approves.</p>
+        <p class="text-xs text-gray-500 mt-1">This connection can't publish yet. You can plan and draft Instagram posts now; reconnect Instagram and allow publishing to post them.</p>
         {% endif %}
         {% else %}
         <p class="text-sm text-gray-500">Connect Instagram to publish images, reels, and stories from Akilent.</p>
-        {% if channel_on.instagram and "instagram" in restricted %}
-        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing Akilent's access to Instagram. Until it approves, only accounts invited to test the Akilent app can connect.</p>
-        {% endif %}
         {% endif %}
         {% if not channel_on.instagram %}
         <p class="text-xs text-amber-700 mt-1">Instagram is switched off on Akilent right now. Scheduled Instagram posts wait and go out once it's back on.</p>
@@ -102,8 +99,6 @@
         {% endif %}
         {% if not channel_on.facebook %}
         <p class="text-xs text-amber-700 mt-1">Facebook Page publishing is switched off on Akilent right now. Scheduled Facebook posts wait and go out once it's back on.</p>
-        {% elif "facebook" in restricted and not fb_connection or "facebook" in restricted and fb_connection.status != 'active' %}
-        <p class="text-xs text-gray-500 mt-1">Meta is still reviewing Akilent's access to Facebook Pages. Until it approves, only accounts invited to test the Akilent app can connect a Page.</p>
         {% endif %}
       </div>
     </div>

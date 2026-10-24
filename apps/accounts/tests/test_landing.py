@@ -42,14 +42,15 @@ def test_renders_without_unbacked_claims(client, settings, plans, whatsapp):
 @pytest.mark.django_db
 def test_whatsapp_hero_only_when_whatsapp_is_on(client, settings, plans):
     settings.WHATSAPP_ENABLED = True
-    assert "Manage your WhatsApp conversations" in _get(client)
+    html = _get(client)
+    assert "WhatsApp" in html.split('<section class="hero dark">', 1)[1].split("</section>", 1)[0]
+    assert "img/marketing/inbox.webp" in html
 
     settings.WHATSAPP_ENABLED = False
     html = _get(client)
-    assert "Manage your WhatsApp conversations" not in html
-    assert 'mock-frame" aria-hidden' not in html
     hero = html.split('<section class="hero dark">', 1)[1].split("</section>", 1)[0]
     assert "WhatsApp" not in hero
+    assert "img/marketing/inbox.webp" not in hero
 
 
 @pytest.mark.django_db

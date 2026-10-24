@@ -120,12 +120,6 @@ def test_connect_is_closed_but_disconnect_stays_open_while_off(owner, client):
     assert client.post("/publishing/fb/disconnect/").status_code != 404
 
 
-def test_channels_page_says_meta_review_is_pending(owner, client):
-    # Facebook starts restricted (Meta App Review): say who can connect.
-    html = client.get("/publishing/channels/").content.decode()
-    assert "only accounts invited to test the Akilent app can connect a Page" in html
-    site = SiteSettings.load()
-    site.restricted_channels = []
-    site.save()
+def test_channels_page_doesnt_talk_about_meta_review(owner, client):
     html = client.get("/publishing/channels/").content.decode()
     assert "only accounts invited to test" not in html

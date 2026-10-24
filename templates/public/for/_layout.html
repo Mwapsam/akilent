@@ -1,0 +1,72 @@
+{% extends "public/_base.html" %}
+{% load static %}
+{% comment %}
+  A use-case page. Pattern (docs/marketing/messaging.md §5): problem -> outcome -> what Akilent
+  does -> what it looks like (a real screenshot from the demo workspace) -> sign up with the
+  right channels preselected. Every product statement carries a data-claim id, checked by
+  apps/accounts/tests/test_landing_claims.py like the landing page.
+{% endcomment %}
+{% block title %}{% block page_title %}{% endblock %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block extra_head %}
+<style>
+  .uc-hero{ background:#0E1526; color:#FAFBFC; position:relative; overflow:hidden; }
+  .uc-hero::before{ content:""; position:absolute; width:520px; height:520px; top:-300px; left:50%; margin-left:-260px;
+    border-radius:999px; background:var(--color-teal-500); opacity:.14; filter:blur(110px); pointer-events:none; }
+  .uc-hero-inner{ position:relative; max-width:48rem; margin:0 auto; padding:3.5rem 1.25rem 3rem; text-align:center; }
+  @media (min-width:640px){ .uc-hero-inner{ padding:4.5rem 1.5rem 3.5rem; } }
+  .uc-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:#74D4C4; margin:0; }
+  .uc-hero h1{ margin:.5rem 0 0; font-size:2rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; text-wrap:balance; }
+  @media (min-width:640px){ .uc-hero h1{ font-size:2.5rem; } }
+  .uc-hero p{ margin:1rem auto 0; max-width:36rem; color:#DCE1E8; font-size:1.0625rem; line-height:1.6; }
+  .uc-cta{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; margin-top:2rem; padding:.75rem 1.5rem;
+    border-radius:10px; background:var(--color-amber-400); color:#12182B; font-weight:600; text-decoration:none; }
+  .uc-cta:hover{ background:var(--color-amber-500); }
+
+  .uc-body{ max-width:64rem; margin:0 auto; padding:3.5rem 1.25rem 0; }
+  @media (min-width:640px){ .uc-body{ padding:4rem 1.5rem 0; } }
+  .uc-section + .uc-section{ margin-top:4rem; }
+  .uc-section h2{ margin:0; font-size:1.5rem; line-height:1.25; font-weight:700; letter-spacing:-0.015em; color:var(--color-ink); }
+  .uc-section > p, .uc-split p{ margin:.75rem 0 0; max-width:40rem; font-size:1.0625rem; line-height:1.65; color:var(--color-ink-muted); }
+  .uc-split{ display:grid; gap:2.5rem; align-items:center; }
+  @media (min-width:900px){ .uc-split{ grid-template-columns:5fr 7fr; gap:3.5rem; } }
+  .uc-list{ list-style:none; margin:1.25rem 0 0; padding:0; display:grid; gap:.75rem; }
+  .uc-list li{ position:relative; padding-left:1.75rem; font-size:1rem; line-height:1.6; color:var(--color-ink); }
+  .uc-list li::before{ content:""; position:absolute; left:.125rem; top:.45em; width:.875rem; height:.5rem;
+    border-left:2px solid var(--color-teal-700); border-bottom:2px solid var(--color-teal-700); transform:rotate(-45deg); }
+  .uc-note{ margin-top:1rem !important; font-size:.9375rem !important; color:var(--color-ink-subtle) !important; }
+  .uc-shot{ margin:0; }
+  .uc-shot.tall{ max-width:24rem; width:100%; justify-self:center; }
+  .uc-shot > div{ overflow:hidden; border-radius:14px; background:var(--color-surface); border:1px solid var(--color-border);
+    box-shadow:0 30px 70px -36px rgba(14,21,38,.45); }
+  .uc-shot img{ display:block; width:100%; height:auto; }
+  .uc-shot figcaption{ margin-top:.75rem; font-size:.8125rem; color:var(--color-ink-subtle); text-align:center; }
+  .uc-end{ margin-top:4rem; padding:2.5rem 1.5rem; border-radius:18px; background:var(--color-surface); border:1px solid var(--color-border); text-align:center; }
+  .uc-end h2{ margin:0; font-size:1.375rem; font-weight:700; color:var(--color-ink); }
+  .uc-end p{ margin:.5rem auto 0; max-width:32rem; color:var(--color-ink-muted); }
+  .uc-end .uc-cta{ margin-top:1.5rem; }
+  .uc-more{ margin-top:1.25rem; font-size:.9375rem; }
+  .uc-more a{ color:var(--color-teal-700); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% with app=site.app_name|default:"Akilent" %}
+<section id="use-case-hero" class="uc-hero" aria-labelledby="uc-title">
+  <div class="uc-hero-inner">
+    <p class="uc-eyebrow" data-claim-exempt>{% block eyebrow %}{% endblock %}</p>
+    <h1 id="uc-title">{% block headline %}{% endblock %}</h1>
+    {% block lead %}{% endblock %}
+    {% block hero_cta %}<a href="/signup/{{ signup_query }}" class="uc-cta">Start free trial</a>{% endblock %}
+  </div>
+</section>
+<div class="uc-body">
+  {% block body %}{% endblock %}
+  <section class="uc-end" aria-labelledby="uc-end-title">
+    <h2 id="uc-end-title">{% block end_title %}See it with your own customers{% endblock %}</h2>
+    {% block end_text %}{% if trial_days %}<p data-claim="trial">Try {{ app }} free for {{ trial_days }} days, no card required.</p>{% endif %}{% endblock %}
+    {% block end_cta %}<a href="/signup/{{ signup_query }}" class="uc-cta">Start free trial</a>{% endblock %}
+    <p class="uc-more" data-claim-exempt><a href="/#how-it-works">See how {{ app }} works from a post to a paid order</a></p>
+  </section>
+</div>
+{% endwith %}
+{% endblock %}

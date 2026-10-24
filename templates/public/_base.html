@@ -118,7 +118,8 @@ Help centre or Developers from the request path.
       </a>
 
       <nav class="pub-nav" aria-label="Primary">
-        <a href="/#how-it-works">Product</a>
+        <a href="/#channels">Channels</a>
+        <a href="/#how-it-works">How it works</a>
         <a href="/#pricing">Pricing</a>
         <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
         <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
@@ -139,7 +140,8 @@ Help centre or Developers from the request path.
     </div>
 
     <nav class="pub-mobile pub-wrap" aria-label="Mobile">
-      <a href="/#how-it-works">Product</a>
+      <a href="/#channels">Channels</a>
+      <a href="/#how-it-works">How it works</a>
       <a href="/#pricing">Pricing</a>
       <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
       <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
@@ -168,7 +170,9 @@ Help centre or Developers from the request path.
       <div>
         <h2>Product</h2>
         <ul>
+          <li><a href="/#channels">Channels</a></li>
           <li><a href="/#how-it-works">How it works</a></li>
+          <li><a href="/#features">Features</a></li>
           <li><a href="/#pricing">Pricing</a></li>
           {% if user.is_authenticated %}
             <li><a href="/dashboard/">Dashboard</a></li>
@@ -183,6 +187,9 @@ Help centre or Developers from the request path.
           <li><a href="{% url 'help' %}">Help centre</a></li>
           <li><a href="{% url 'docs' %}">Developer docs</a></li>
           <li><a href="{% url 'docs-page' 'channels' %}">Channels &amp; the API</a></li>
+          {% if "whatsapp" in public_channels %}<li><a href="{% url 'use-case' 'missed-enquiries' %}">Missed enquiries</a></li>
+          <li><a href="{% url 'use-case' 'shared-inbox' %}">Shared inbox</a></li>{% endif %}
+          {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}<li><a href="{% url 'use-case' 'content-studio' %}">Content Studio</a></li>{% endif %}
         </ul>
       </div>
       <div>

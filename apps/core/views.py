@@ -225,7 +225,7 @@ _LEGAL_PAGES = {
     "data-deletion": ("legal/data_deletion.html", "Data deletion"),
     "cookies": ("legal/cookies.html", "Cookie policy"),
 }
-_LEGAL_UPDATED = "18 October 2026"  # change with the text
+_LEGAL_UPDATED = "24 October 2026"  # change with the text
 
 
 def legal_page(request, slug):

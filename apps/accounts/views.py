@@ -710,10 +710,56 @@ def resend_verification(request):
     )
 
 
+def marketing_channels() -> dict:
+    """What public pages may say about each channel: "live" (switched on: sold by what it
+    does) or "" (off: not mentioned). Content Studio follows its publishing channels."""
+    from apps.core.channels import enabled_channels
+
+    enabled = enabled_channels()
+    out = {
+        k: "live" if k in enabled else ""
+        for k in ("whatsapp", "instagram", "facebook", "email")
+    }
+    out["content"] = "live" if "live" in (out["instagram"], out["facebook"]) else ""
+    # Post results need a chat link, which opens WhatsApp.
+    out["results"] = out["content"] == "live" and out["whatsapp"] == "live"
+    return out
+
+
+def use_case(request, slug):
+    """A public use-case page (templates/public/for/), only for channels that are on."""
+    from django.http import Http404
+
+    from apps.billing import api as billing_api
+
+    ch = marketing_channels()
+    if slug in ("missed-enquiries", "shared-inbox"):
+        if ch["whatsapp"] != "live":
+            raise Http404
+        picks = ["whatsapp"] + (["instagram"] if ch["instagram"] == "live" else [])
+    elif slug == "content-studio":
+        if not ch["content"]:
+            raise Http404
+        picks = [c for c in ("instagram", "facebook") if ch[c] == "live"]
+    else:
+        raise Http404
+    _, trial_days = billing_api.default_signup_trial()
+    return render(
+        request,
+        f"public/for/{slug}.html",
+        {
+            "ch": ch,
+            "trial_days": trial_days,
+            "signup_query": f"?channels={','.join(picks)}" if picks else "",
+        },
+    )
+
+
 def landing(request):
     """Public marketing landing page."""
     from apps.accounts.forms import signup_offer
     from apps.billing import api as billing_api
+    from apps.core.models import Testimonial
 
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
     offered, _ = signup_offer()
@@ -728,6 +774,11 @@ def landing(request):
             "plans": plans,
             "cards": cards,
             "trial_days": trial_days,
+            "ch": marketing_channels(),
+            "testimonials": list(Testimonial.shown()),
+            "coming_soon": [
+                f for f in billing_api.coming_soon_features() if f.is_active
+            ],
         },
     )
     # RFC 8288 / RFC 9727 §3 — advertise machine-readable APIs for agent discovery.

@@ -16,7 +16,7 @@ follow-up and an unanswered enquiry.
 Every record is synthetic:
 - phone numbers are +1 202 555-01xx: 555-0100 to 555-0199 are reserved for fiction;
 - emails use example.com, and the demo logins use the reserved .invalid domain;
-- media are the illustrations in static/img/demo/.
+- media are the PNG illustrations in static/img/demo/.
 
 Conversations, leads and orders go through the same services real traffic uses, so
 lead capture, post attribution and post results are the product's own behaviour.
@@ -241,14 +241,14 @@ class Command(BaseCommand):
 
         dress = published(
             "Our linen summer dress is here: breathable, made locally, sizes S to XL.",
-            image("linen-dress.svg"),
+            image("linen-dress.png"),
             ["instagram", "facebook"],
             days_ago=6,
             clicks={"instagram": 41, "facebook": 17},
         )
         sandals = published(
             "Hand-stitched leather sandals, built to last all summer.",
-            image("leather-sandals.svg"),
+            image("leather-sandals.png"),
             ["instagram"],
             days_ago=2,
             clicks={"instagram": 23},
@@ -258,7 +258,7 @@ class Command(BaseCommand):
             platforms=["instagram", "facebook"],
             media_type=ContentPost.MediaType.IMAGE,
             caption="Weekend sale: 15% off the linen range, Saturday and Sunday only.",
-            media_urls=[image("linen-dress.svg")],
+            media_urls=[image("linen-dress.png")],
             status=ContentPost.Status.DRAFT,
         )
         return {"dress": dress, "sandals": sandals}
@@ -297,9 +297,12 @@ class Command(BaseCommand):
                 mark_paid(payment, transaction_id=f"demo-{uuid.uuid4().hex[:12]}")
             return created
 
-        def lead(contact, conversation, status=None):
+        def lead(contact, conversation, source, status=None):
             found = create_lead(
-                account, contact, source="demo", conversation_id=conversation.public_id
+                account,
+                contact,
+                source=source,
+                conversation_id=conversation.public_id,
             )
             if status:
                 set_lead_status(found, status, actor=owner)
@@ -317,7 +320,7 @@ class Command(BaseCommand):
             ],
         )
         self._reply(chat, "Hi Thandi! It's $45 and we have size M in stock.", 5)
-        lead(thandi, chat, Lead.Status.QUALIFIED)
+        lead(thandi, chat, "Instagram post", Lead.Status.QUALIFIED)
         order(thandi, chat, "Linen summer dress (M)", Decimal("45.00"), paid=True)
 
         # 2. Facebook post link → WhatsApp chat → lead → order waiting for payment.
@@ -331,7 +334,7 @@ class Command(BaseCommand):
         self._reply(
             chat, "We do! Two blue dresses come to $90. Shall I send a payment link?", 4
         )
-        lead(joseph, chat, Lead.Status.CONTACTED)
+        lead(joseph, chat, "Facebook post", Lead.Status.CONTACTED)
         order(
             joseph, chat, "Linen summer dress, blue (x2)", Decimal("90.00"), paid=False
         )
@@ -345,7 +348,7 @@ class Command(BaseCommand):
             [(1, ref(sandals_ig)), (1, "I want the sandals in size 39, can I order?")],
         )
         self._reply(chat, "Yes! Size 39 is $60. Here's how to pay.", 1)
-        lead(grace, chat, Lead.Status.QUALIFIED)
+        lead(grace, chat, "Instagram post", Lead.Status.QUALIFIED)
         order(grace, chat, "Leather sandals (39)", Decimal("60.00"), paid=True)
 
         # 4. Instagram DM → lead with a follow-up due tomorrow.
@@ -353,7 +356,7 @@ class Command(BaseCommand):
             account, "chipo.style", "Chipo", "Is the linen dress still available?", 1
         )
         self._reply(chat, "It is! Which size would you like?", 1)
-        lead(chipo, chat)
+        lead(chipo, chat, "Instagram DM")
         run_action(
             "create_followup",
             {"account": account},

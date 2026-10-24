@@ -47,8 +47,8 @@ The truth rule (§6) is checked against this table. A row that isn't **Live** is
 |---|---|---|
 | WhatsApp inbox, automations, campaigns | Live | Shown while the WhatsApp channel is on |
 | Email sending, templates, campaigns, API/SMTP | Live | Shown while the Email channel is on. Never "email conversations" |
-| Instagram DMs, comment rules, publishing | **Live in the code; Meta App Review pending.** Until Meta approves the permissions, only accounts with a role on the Akilent Meta app can connect | The channel is **restricted**: on for accounts that can already connect, but not offered to anyone new until Meta approves. Operator Console → Settings → Channels → "Offer to new customers" stays unticked, so signup, plan cards and marketing (`public_channels()`) leave it out, and connect pages say access is limited |
-| Facebook Page publishing | **Live in the code; Meta App Review pending** (pages_* scopes, same submission) | Same as Instagram: restricted until approved. Never "Facebook messages" |
+| Instagram DMs, comment rules, publishing | Live | Shown, by what it does, while the Instagram channel is on. Customer-facing copy doesn't mention Meta's app review. Who can sign up with it is a separate switch: Operator Console → Settings → Channels → "Offer to new customers" (`public_channels()`), which only controls signup and plan cards |
+| Facebook Page publishing | Live | Same as Instagram. Never "Facebook messages" |
 | Content Studio | Live (needs Instagram or a Facebook Page to publish to) | Shown when at least one publishing channel is on |
 | Leads, orders, payment links, Business Health, AI answers + knowledge | Live, depending on the plan | "Some features depend on your plan" nearby |
 | Website chatbot, Support tickets, HubSpot, custom fields | **Not released** (open release gates) | Only "Coming soon" via `ComingSoonFeature` |
@@ -127,7 +127,7 @@ Use these on feature cards, use-case pages, onboarding steps and in-app prompts.
 - Use plain words a shop owner uses. Keep "infrastructure", "omnichannel", "platform layer" and "API-first" out of everything except the developer section.
 - Use no numbers we can't prove: no uptime, delivery rate, customer counts or testimonials until we have them.
 - Never present future features as current. Unreleased work appears only as "Coming soon" from `ComingSoonFeature`.
-- Make the promise channel-independent and the facts channel-specific. Public copy for a channel shows only while that channel is offered to new customers (`public_channels()`: on, and not restricted). A deployment never shows a promise for a channel it doesn't offer.
+- Make the promise channel-independent and the facts channel-specific. Public copy for a channel shows only while that channel is on (`enabled_channels()`). A deployment never shows a promise for a channel it doesn't offer.
 - Call Facebook "Facebook Page" or "your Facebook Page" in feature copy. Never call it just "Facebook messages".
 - Put "Some features depend on your plan" near plan-dependent features. Pricing bullets come from the plan's real features and limits (`billing_api.plan_card`), never from copy.
 - Anything that depends on configuration (trial length, which channels are on) comes from the code, not the copy.

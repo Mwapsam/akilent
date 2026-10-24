@@ -317,3 +317,31 @@ class PlatformAuditLog(models.Model):
     def __str__(self) -> str:
         status = "OK" if self.success else "FAIL"
         return f"[{status}] {self.action} {self.resource_id}"
+
+
+class Testimonial(models.Model):
+    """A real customer's words for the public site's proof section.
+
+    Shown only when published *and* the business gave permission (``permission_note`` says
+    who agreed and when). Nothing is ever shown that a real customer didn't say.
+    """
+
+    quote = models.TextField()
+    person_name = models.CharField(max_length=120)
+    business_name = models.CharField(max_length=160, blank=True, default="")
+    # Who agreed to this being published, and when (e.g. "Email from owner, 2026-11-02").
+    permission_note = models.CharField(max_length=255)
+    is_published = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.person_name}, {self.business_name}".strip(", ")
+
+    @classmethod
+    def shown(cls):
+        """Testimonials the public site may show."""
+        return cls.objects.filter(is_published=True).exclude(permission_note="")

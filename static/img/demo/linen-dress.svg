@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" role="img" aria-label="Demo product: linen summer dress">
-  <rect width="1080" height="1080" fill="#F3EDE4"/>
-  <circle cx="830" cy="230" r="120" fill="#E8D9C3"/>
-  <path d="M470 250h140l30 90-40 30 150 470H330l150-470-40-30z" fill="#C9B79C"/>
-  <path d="M470 250c20 40 120 40 140 0" fill="none" stroke="#A8957A" stroke-width="10"/>
-  <text x="540" y="960" text-anchor="middle" font-family="Georgia, serif" font-size="56" fill="#5B4A36">Linen summer dress</text>
-  <text x="540" y="1020" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#8A7861">Demo workspace image</text>
-</svg>

@@ -43,6 +43,27 @@ class DocsPagesSitemap(Sitemap):
         return f"/docs/{page.slug}/"
 
 
+class UseCaseSitemap(Sitemap):
+    """Use-case pages that are open right now (the view 404s the others)."""
+
+    changefreq = "monthly"
+    priority = 0.7
+
+    def items(self):
+        from apps.accounts.views import marketing_channels
+
+        ch = marketing_channels()
+        slugs = []
+        if ch["whatsapp"] == "live":
+            slugs += ["missed-enquiries", "shared-inbox"]
+        if ch["content"]:
+            slugs.append("content-studio")
+        return slugs
+
+    def location(self, slug):
+        return reverse("use-case", args=[slug])
+
+
 class SEOPageSitemap(Sitemap):
     changefreq = "monthly"
     priority = 0.7
@@ -66,5 +87,6 @@ SITEMAPS = {
     "static": StaticPagesSitemap,
     "help": HelpArticlesSitemap,
     "docs": DocsPagesSitemap,
+    "use-cases": UseCaseSitemap,
     "pages": SEOPageSitemap,
 }

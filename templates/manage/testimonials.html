@@ -1,0 +1,44 @@
+{% extends "manage/base.html" %}
+{% block title %}Testimonials — Operator{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-ink">Testimonials</h1>
+  <p class="mt-1 text-sm text-gray-600">Real customers' words for the landing page's proof section. It only appears once at least one testimonial is published.</p>
+</header>
+
+<div class="alert alert-warning mb-6" role="note">
+  {% include "components/icon.html" with name="alert" %}
+  <p>Only publish what a real customer said, with their permission. Write down who agreed and when; a testimonial can't be published without that note.</p>
+</div>
+
+<section class="card card-pad space-y-4" aria-labelledby="h-testimonials">
+  <h2 id="h-testimonials" class="font-semibold">On the landing page</h2>
+  {% for item in testimonials %}
+  <form method="post" action="{% url 'core:testimonial-save' %}" class="rounded-xl border border-border p-3 grid gap-2 sm:grid-cols-2">{% csrf_token %}
+    <input type="hidden" name="pk" value="{{ item.pk }}">
+    <label class="text-sm sm:col-span-2">Quote <textarea name="quote" class="input" rows="3" required>{{ item.quote }}</textarea></label>
+    <label class="text-sm">Person <input name="person_name" value="{{ item.person_name }}" class="input" required maxlength="120"></label>
+    <label class="text-sm">Business <input name="business_name" value="{{ item.business_name }}" class="input" maxlength="160"></label>
+    <label class="text-sm sm:col-span-2">Permission (who agreed, and when) <input name="permission_note" value="{{ item.permission_note }}" class="input" maxlength="255"></label>
+    <label class="text-sm">Order <input type="number" name="order" value="{{ item.order }}" min="0" class="input"></label>
+    <label class="text-sm inline-flex items-center gap-2 self-end"><input type="checkbox" name="is_published" {% if item.is_published %}checked{% endif %}> Published</label>
+    <div class="sm:col-span-2 flex justify-end gap-2">
+      <button class="btn btn-secondary btn-sm">Save</button>
+      <button class="btn btn-danger-ghost btn-sm" formaction="{% url 'core:testimonial-delete' item.pk %}" data-confirm="Remove this testimonial?" data-confirm-danger data-confirm-label="Remove">Remove</button>
+    </div>
+  </form>
+  {% empty %}
+  <p class="text-sm text-gray-600">None yet. The proof section stays hidden until there's a real one to show.</p>
+  {% endfor %}
+  <form method="post" action="{% url 'core:testimonial-save' %}" class="rounded-xl border border-dashed border-border p-3 grid gap-2 sm:grid-cols-2">{% csrf_token %}
+    <label class="text-sm sm:col-span-2">Quote <textarea name="quote" class="input" rows="3" required></textarea></label>
+    <label class="text-sm">Person <input name="person_name" class="input" required maxlength="120"></label>
+    <label class="text-sm">Business <input name="business_name" class="input" maxlength="160"></label>
+    <label class="text-sm sm:col-span-2">Permission (who agreed, and when) <input name="permission_note" class="input" maxlength="255"></label>
+    <label class="text-sm">Order <input type="number" name="order" value="0" min="0" class="input"></label>
+    <label class="text-sm inline-flex items-center gap-2 self-end"><input type="checkbox" name="is_published"> Published</label>
+    <div class="sm:col-span-2 flex justify-end"><button class="btn btn-primary btn-sm">Add testimonial</button></div>
+  </form>
+</section>
+{% endblock %}

@@ -48,6 +48,13 @@ urlpatterns = [
     path("plans/limits/", views.plan_limits, name="plan-limits"),
     path("plans/costs/", views.plan_costs, name="plan-costs"),
     path("plans/coming-soon/", views.coming_soon_save, name="coming-soon-save"),
+    path("testimonials/", views.testimonials, name="testimonials"),
+    path("testimonials/save/", views.testimonial_save, name="testimonial-save"),
+    path(
+        "testimonials/<int:pk>/delete/",
+        views.testimonial_delete,
+        name="testimonial-delete",
+    ),
     path(
         "plans/coming-soon/<int:pk>/delete/",
         views.coming_soon_delete,

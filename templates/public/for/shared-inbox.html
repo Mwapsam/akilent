@@ -1,0 +1,31 @@
+{% extends "public/for/_layout.html" %}
+{% load static %}
+{% block page_title %}A shared inbox for your team{% endblock %}
+{% block eyebrow %}Shared inbox{% endblock %}
+{% block headline %}One inbox for the whole team{% endblock %}
+{% block lead %}<p data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %}">{% if ch.instagram == "live" %}WhatsApp and Instagram messages{% else %}Your WhatsApp conversations{% endif %} in one place everyone can see, so customers are answered once, by the right person.</p>{% endblock %}
+
+{% block body %}
+<section id="use-case-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">One phone, many people</h2>
+  <p data-claim-exempt>When the business number lives on one phone, only one person can answer. Pass it around and chats are answered twice, or not at all.</p>
+</section>
+
+<section id="use-case-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">How the team shares it</h2>
+    <ul class="uc-list">
+      <li data-claim="own-number">Connect your own WhatsApp business number through Meta's guided setup.</li>
+      <li data-claim="roles">Invite teammates as Owner, Admin or Member.</li>
+      <li data-claim="assign">Assign each conversation to a teammate, so everyone knows who's handling it.</li>
+      <li data-claim="customers">Each customer's details, tags and history sit beside the chat.</li>
+      <li data-claim="ai">AI can suggest replies from your business information, once you switch it on.</li>
+    </ul>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" loading="lazy" decoding="async"
+              alt="The shared inbox with a conversation open and the customer's details beside it."></picture></div>
+    <figcaption>The real {{ app }} inbox, in a demo workspace with sample customers.</figcaption>
+  </figure>
+</section>
+{% endblock %}

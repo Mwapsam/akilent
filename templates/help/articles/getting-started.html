@@ -1,27 +1,27 @@
-{% comment %}Body for the "Getting started" guide.{% endcomment %}
-<p>Welcome! This guide walks you through everything needed to start sending email from your own domain. The whole setup usually takes 15–30 minutes, most of which is waiting for DNS changes to take effect.</p>
+{% comment %}Body for the "Getting started" guide. Channel-neutral: each channel's step shows only while that channel is on.{% endcomment %}
+<p>Welcome! This guide gets your workspace ready and then follows one customer from a post to a paid order. Your setup checklist on the <a href="/onboarding/">Setup</a> page shows the same steps for the channels you picked when you signed up.</p>
 
-<h2>The big picture</h2>
-<p>To send email through the platform you need three things, in order:</p>
+<h2>Step 1: Connect your channels</h2>
+<p>Connect the channels your customers already use. You can add the others later.</p>
+<ul>
+  {% if "whatsapp" in enabled_channels %}<li><strong>WhatsApp:</strong> connect your business number through Meta's guided setup. See <a href="{% url 'help-article' 'whatsapp-setup' %}">Connect &amp; use WhatsApp</a>.</li>{% endif %}
+  {% if "instagram" in enabled_channels %}<li><strong>Instagram:</strong> connect your business account so its DMs arrive in the inbox. See <a href="{% url 'help-article' 'instagram-setup' %}">Connect &amp; use Instagram</a>.</li>{% endif %}
+  {% if "facebook" in enabled_channels %}<li><strong>Facebook Page:</strong> connect the Page you post to, for publishing from Content Studio. See <a href="{% url 'help-article' 'facebook-page-setup' %}">Connect your Facebook Page</a>.</li>{% endif %}
+  {% if "email" in enabled_channels %}<li><strong>Email:</strong> add the domain you send from and its DNS records. See <a href="{% url 'help-article' 'domains' %}">Add &amp; configure a sending domain</a>.</li>{% endif %}
+</ul>
+
+<h2>Step 2: Tell Akilent about your business</h2>
+<p>Set your <strong>business hours</strong> so automatic replies know when you're closed, and import your customers from <a href="/contacts/">Customers</a>. If you use AI, teach it your answers under <strong>Settings → AI</strong>.</p>
+
+<h2>Step 3: Follow one customer through</h2>
 <ol>
-  <li>A <strong>sending domain</strong> (for example <code>mail.yourcompany.com</code>) added to your workspace.</li>
-  <li>A few <strong>DNS records</strong> added at your domain provider so the internet trusts your mail.</li>
-  <li>A <strong>verified</strong> domain — once your DNS records are live, we confirm them and switch the domain on.</li>
+  {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}<li><strong>Attract:</strong> write a post in Content Studio{% if "whatsapp" in enabled_channels %} and add a WhatsApp chat link{% endif %}. See <a href="{% url 'help-article' 'content-studio' %}">Plan and publish posts in Content Studio</a>.</li>{% endif %}
+  {% if "whatsapp" in enabled_channels or "instagram" in enabled_channels %}<li><strong>Engage:</strong> answer the customer from the shared inbox. Assign the chat to a teammate if someone else should handle it.</li>{% endif %}
+  <li><strong>Convert:</strong> mark them as interested, set a follow-up, then record the order and send a payment link.</li>
+  <li><strong>Measure:</strong> see what your conversations turned into on <strong>Insights</strong>{% if "whatsapp" in enabled_channels %}, and on each post, the chats, leads and paid orders it brought in (<a href="{% url 'help-article' 'post-results' %}">how it's counted</a>){% endif %}.</li>
 </ol>
-<p>After that you can send campaigns to your contacts and (on supported plans) send through the API.</p>
 
-<h2>Step 1 — Add your domain</h2>
-<p>Go to <a href="/email/domains/">Domains</a> and enter the domain you want to send from, then click <strong>Provision</strong>. We'll generate your DNS records automatically.</p>
-<p>See <a href="{% url 'help-article' 'domains' %}">Add &amp; configure a sending domain</a> for details.</p>
-
-<h2>Step 2 — Add your DNS records</h2>
-<p>Copy the DKIM, SPF, DMARC and verification records shown on the domain card into your DNS provider's dashboard. Our <a href="{% url 'help-article' 'dns-setup' %}">DNS setup guide</a> has step-by-step instructions for Cloudflare, GoDaddy, Namecheap and others.</p>
-
-<h2>Step 3 — Check DNS</h2>
-<p>Once the records are saved, click <strong>Check DNS</strong> on the domain card. Each record shows <em>Found</em> or <em>Not found yet</em>, so you can see exactly what's live. DNS can take a few minutes to a few hours to propagate — the page keeps re-checking automatically, so a domain usually verifies itself once your records go live.</p>
-
-
-<h2>Step 5 — Invite your team</h2>
+<h2>Step 4: Invite your team</h2>
 <p>Bring colleagues into your workspace from <a href="/settings/team/">Settings → Team</a>. See <a href="{% url 'help-article' 'team' %}">Invite &amp; manage your team</a>.</p>
 
-<div class="note">Your progress is tracked on your <a href="/dashboard/">dashboard</a> and the onboarding checklist — you can always pick up where you left off.</div>
+<div class="note">Your progress is tracked on your <a href="/onboarding/">Setup</a> page, and a suggested next step appears in the inbox once you're up and running.</div>

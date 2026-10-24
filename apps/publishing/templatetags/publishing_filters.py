@@ -180,3 +180,11 @@ def reach_summary(post):
         if value is not None:
             parts.append(f"{v.get_platform_display()} {value:,}")
     return f"Reach: {' · '.join(parts)}" if parts else ""
+
+
+@register.filter
+def platform_labels(platforms):
+    """["instagram", "facebook"] -> "Instagram, Facebook"."""
+    from apps.publishing.composer import PLATFORM_LABELS
+
+    return ", ".join(PLATFORM_LABELS.get(p, p.capitalize()) for p in platforms or [])

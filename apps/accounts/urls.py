@@ -7,6 +7,7 @@ from . import settings_views, views
 urlpatterns = [
     path("", views.landing, name="landing"),
     path("signup/", views.signup, name="signup"),
+    path("for/<slug:slug>/", views.use_case, name="use-case"),
     path("verify/<uidb64>/<token>/", views.verify_email, name="verify_email"),
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("onboarding/", views.onboarding, name="onboarding"),

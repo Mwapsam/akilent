@@ -53,6 +53,15 @@ no endpoint rather than implying it does.
 </p>
 {% endif %}
 
+{% if "facebook" in enabled_channels %}
+<h2 id="facebook">Facebook Page</h2>
+<p>
+  There's no Facebook endpoint. Connecting a Page and publishing or scheduling posts to it from
+  Content Studio are only in the app. Facebook messages (Messenger) aren't supported, so they
+  don't reach the inbox or the API.
+</p>
+{% endif %}
+
 {% if WHATSAPP_ENABLED or "instagram" in enabled_channels %}
 <div class="callout callout--note">
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3.5"/><path d="M8 5h.01"/></svg>

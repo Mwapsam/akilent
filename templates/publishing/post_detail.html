@@ -131,7 +131,7 @@
 
     <div>
       <p class="text-sm text-gray-500 mb-0.5">Platforms</p>
-      <p class="text-sm font-medium">{{ post.platforms|join:", "|capfirst }}</p>
+      <p class="text-sm font-medium">{{ post.platforms|platform_labels }}</p>
     </div>
 
     <div>

@@ -21,13 +21,13 @@
           {% else %}
           <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            Pending App Review
+            Not allowed yet
           </span>
           {% endif %}
         </div>
         <p class="text-sm text-gray-500">Publish images, videos, reels, and stories to Instagram directly from Akilent.</p>
         {% if not ig_publish_scope %}
-        <p class="text-xs text-gray-400 mt-1">The <code>instagram_content_publish</code> permission is pending Meta App Review. Connect Instagram messaging first; publishing will activate once Meta approves it.</p>
+        <p class="text-xs text-gray-400 mt-1">This connection can't publish yet. Reconnect Instagram and allow Akilent to publish content.</p>
         {% endif %}
       </div>
     </div>

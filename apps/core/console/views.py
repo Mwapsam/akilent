@@ -840,6 +840,73 @@ def coming_soon_delete(request, pk):
     return redirect("core:plan-features")
 
 
+# --- Testimonials (public site proof) -----------------------------------------------------------
+
+
+@admin_required
+def testimonials(request):
+    from apps.core.models import Testimonial
+
+    return render(
+        request,
+        "manage/testimonials.html",
+        {"testimonials": Testimonial.objects.all()},
+    )
+
+
+@admin_required
+@require_POST
+def testimonial_save(request):
+    """Add or edit one. Publishing needs a permission note: a quote nobody agreed to share
+    never reaches the landing page."""
+    from apps.core.models import Testimonial
+
+    pk = request.POST.get("pk")
+    item = Testimonial.objects.filter(pk=pk).first() if pk else Testimonial()
+    if item is None:
+        messages.error(request, "That testimonial isn't there any more.")
+        return redirect("core:testimonials")
+    item.quote = (request.POST.get("quote") or "").strip()
+    item.person_name = (request.POST.get("person_name") or "").strip()[:120]
+    item.business_name = (request.POST.get("business_name") or "").strip()[:160]
+    item.permission_note = (request.POST.get("permission_note") or "").strip()[:255]
+    item.is_published = "is_published" in request.POST
+    try:
+        item.order = max(0, int(request.POST.get("order") or 0))
+    except ValueError:
+        item.order = 0
+    if not item.quote or not item.person_name:
+        messages.error(request, "A testimonial needs the quote and who said it.")
+        return redirect("core:testimonials")
+    if item.is_published and not item.permission_note:
+        messages.error(
+            request, "Say who gave permission before publishing a testimonial."
+        )
+        return redirect("core:testimonials")
+    item.save()
+    audit(
+        request,
+        "testimonial.save",
+        target=str(item),
+        published=item.is_published,
+    )
+    messages.success(request, f"Saved the testimonial from {item.person_name}.")
+    return redirect("core:testimonials")
+
+
+@admin_required
+@require_POST
+def testimonial_delete(request, pk):
+    from apps.core.models import Testimonial
+
+    item = get_object_or_404(Testimonial, pk=pk)
+    name = str(item)
+    item.delete()
+    audit(request, "testimonial.delete", target=name)
+    messages.success(request, "Removed the testimonial.")
+    return redirect("core:testimonials")
+
+
 # --- Platform -----------------------------------------------------------------------------------
 
 

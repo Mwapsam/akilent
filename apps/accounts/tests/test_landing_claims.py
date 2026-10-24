@@ -21,7 +21,21 @@ _ROW = re.compile(
 )
 
 # Sections whose paragraphs, list items and FAQ answers are product statements.
-CHECKED_SECTIONS = {"how-it-works", "features", "trust", "faq", "developers"}
+CHECKED_SECTIONS = {
+    "channels",
+    "content-studio",
+    "how-it-works",
+    "features",
+    "trust",
+    "faq",
+    "coming-soon",
+    "developers",
+    # Use-case pages (templates/public/for/).
+    "use-case-hero",
+    "use-case-problem",
+    "use-case-how",
+    "use-case-proof",
+}
 
 
 def _register() -> dict[str, tuple[str, str]]:
@@ -123,11 +137,30 @@ def test_register_evidence_still_exists():
     )
 
 
+def _open_meta_channels():
+    from apps.core.models import SiteSettings
+
+    site = SiteSettings.load()
+    site.restricted_channels = []
+    site.save()
+
+
 @pytest.mark.django_db
+@pytest.mark.parametrize("meta_open", [False, True])
+@pytest.mark.parametrize(
+    "url", ["/", "/for/missed-enquiries/", "/for/shared-inbox/", "/for/content-studio/"]
+)
 @pytest.mark.parametrize("whatsapp", [True, False])
-def test_every_claim_on_the_page_is_registered(client, settings, plans, whatsapp):
+def test_every_claim_on_the_page_is_registered(
+    client, settings, plans, whatsapp, url, meta_open
+):
     settings.WHATSAPP_ENABLED = whatsapp
-    html = client.get("/").content.decode()
+    if meta_open:
+        _open_meta_channels()
+    resp = client.get(url)
+    if resp.status_code == 404:
+        return  # that page isn't open with these channels
+    html = resp.content.decode()
     parser = _Claims()
     parser.feed(html)
 

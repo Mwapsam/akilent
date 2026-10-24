@@ -278,12 +278,84 @@
     .final .lead{ margin:1rem auto 0; max-width:36rem; }
     .site-footer{ border-top:1px solid var(--line); font-size:.9375rem; }
     .footer-grid{ display:grid; gap:2rem; padding-top:3rem; padding-bottom:3rem; }
-    @media (min-width:768px){ .footer-grid{ grid-template-columns:1.2fr 1fr 1fr; } }
+    @media (min-width:768px){ .footer-grid{ grid-template-columns:1.4fr repeat(3, 1fr); } }
     .footer-grid h2{ font-size:.875rem; font-weight:600; color:var(--fg); margin:0 0 .75rem; }
     .footer-grid ul{ list-style:none; margin:0; padding:0; display:grid; gap:0; }
     .footer-grid a{ display:inline-flex; align-items:center; min-height:44px; color:var(--fg-mid); text-decoration:none; }
     .footer-grid a:hover{ color:var(--fg); }
     .footer-base{ border-top:1px solid var(--line); padding-top:1.5rem; padding-bottom:2rem; font-size:.875rem; color:var(--fg-lo); }
+
+
+    /* Screenshots: the real product in the demo workspace, framed like a browser window. */
+    .shot{ margin:0; }
+    .shot-frame{ overflow:hidden; border-radius:14px; background:var(--card); border:1px solid var(--card-line);
+      box-shadow:0 30px 70px -36px rgba(14,21,38,.45); }
+    .shot-frame img{ display:block; width:100%; height:auto; }
+    .shot-bar{ display:flex; gap:.375rem; align-items:center; height:1.75rem; padding:0 .75rem;
+      background:var(--card-soft); border-bottom:1px solid var(--card-line); }
+    .shot-bar span{ width:.5rem; height:.5rem; border-radius:999px; background:var(--card-line-strong); }
+    .shot-caption{ margin-top:.75rem; font-size:.8125rem; color:var(--band-soft); text-align:center; }
+    .dark .shot-caption{ color:var(--fg-lo); }
+    .shot-hero{ max-width:60rem; margin:0 auto; padding-bottom:5rem; }
+    .shot-hero .shot-frame{ border-color:var(--line); box-shadow:0 40px 100px -40px rgba(0,0,0,.75); }
+
+    /* Channels */
+    .channels{ display:grid; gap:1.25rem; grid-template-columns:1fr; }
+    @media (min-width:640px){ .channels{ grid-template-columns:repeat(2,1fr); } }
+    @media (min-width:1100px){ .channels{ grid-template-columns:repeat(4,1fr); } }
+    .channel{ display:flex; flex-direction:column; gap:.625rem; padding:1.5rem; }
+    .channel-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+    .channel .h3{ margin:.25rem 0 0; }
+    .channel .small{ margin:0; }
+    .channel-note{ margin:auto 0 0; padding-top:.625rem; border-top:1px solid var(--card-line); font-size:.875rem; line-height:1.55; color:var(--band-soft); }
+    .status-tag{ padding:.1875rem .625rem; border-radius:999px; font-size:.75rem; font-weight:600; white-space:nowrap; }
+    .status-live{ background:var(--signal-tint); color:var(--signal-strong); }
+
+    /* Two columns: copy and a screenshot */
+    .split{ display:grid; gap:3rem; align-items:center; }
+    @media (min-width:1024px){ .split{ grid-template-columns:1fr 1fr; gap:4rem; } }
+    .split .shot{ max-width:34rem; width:100%; justify-self:center; }
+    .ticks{ list-style:none; margin:1.5rem 0 0; padding:0; display:grid; gap:.75rem; }
+    .ticks li{ position:relative; padding-left:1.75rem; }
+    .ticks li::before{ content:""; position:absolute; left:.125rem; top:.45em; width:.875rem; height:.5rem;
+      border-left:2px solid var(--signal-strong); border-bottom:2px solid var(--signal-strong); transform:rotate(-45deg); }
+    .ticks.small{ gap:.5rem; margin-top:1rem; }
+    .ticks.small li{ padding-left:1.5rem; color:var(--band-fg); }
+    .split .channel-note{ margin-top:1.5rem; }
+    .split .shot-tall{ max-width:24rem; }
+
+    /* Journey */
+    .journey{ list-style:none; margin-left:0; margin-right:0; padding:0; display:grid; gap:4rem; }
+    .jrow{ display:grid; gap:1.75rem; align-items:center; }
+    @media (min-width:900px){
+      .jrow{ grid-template-columns:5fr 7fr; gap:4rem; }
+      .jrow:nth-child(even){ grid-template-columns:7fr 5fr; }
+      .jrow:nth-child(even) .jcopy{ order:2; }
+    }
+    .jcopy .h3{ margin-top:.75rem; font-size:1.375rem; }
+    .jcopy p.body{ margin-top:.5rem; max-width:30rem; }
+    .jstep{ display:flex; align-items:center; gap:.75rem; margin:0; font-size:.875rem; font-weight:600; color:var(--signal-strong); }
+    .post-mock{ max-width:22rem; width:100%; justify-self:center; }
+    .post-mock-body{ display:grid; gap:.75rem; padding:1rem 1.125rem 1.25rem; }
+    .post-mock-text{ font-size:.9375rem; line-height:1.5; color:var(--band-fg); }
+    .post-mock-chip{ justify-self:start; padding:.5rem .875rem; border-radius:999px; background:var(--signal-soft);
+      color:var(--signal-strong); font-size:.8125rem; font-weight:600; }
+
+    /* Pillars */
+    .pillars{ display:grid; gap:1.25rem; grid-template-columns:1fr; }
+    @media (min-width:768px){ .pillars{ grid-template-columns:repeat(2,1fr); } }
+    @media (min-width:1100px){ .pillars{ grid-template-columns:repeat(4,1fr); } }
+    .pillar .h3{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+
+    /* Proof */
+    .quote{ margin:0; display:flex; flex-direction:column; justify-content:space-between; gap:1.25rem; }
+    .quote blockquote{ margin:0; color:var(--band-fg); }
+
+    /* Coming soon */
+    .section-sm{ padding-top:3rem; padding-bottom:3rem; }
+    .soon-list{ list-style:none; margin:1.5rem auto 0; padding:0; display:flex; flex-wrap:wrap; justify-content:center; gap:.75rem; max-width:56rem; }
+    .soon-item{ display:flex; flex-direction:column; gap:.125rem; padding:.75rem 1rem; border-radius:var(--radius-md);
+      border:1px dashed var(--card-line-strong); background:var(--card); font-size:.9375rem; color:var(--band-fg); }
 
     .messages{ max-width:72rem; margin:0 auto; padding:1rem 1.25rem 0; }
     .messages div{ border-radius:12px; border:1px solid var(--amber-ink); background:var(--amber-deep); color:var(--amber-pale); padding:.75rem 1rem; font-size:.9375rem; }
@@ -315,8 +387,9 @@
       </a>
 
       <nav class="nav-main" aria-label="Primary">
+        <a href="#channels">Channels</a>
+        {% if ch.content %}<a href="#content-studio">Content Studio</a>{% endif %}
         <a href="#how-it-works">How it works</a>
-        <a href="#features">Features</a>
         <a href="#pricing">Pricing</a>
         <a href="{% url 'help' %}">Help</a>
       </nav>
@@ -338,6 +411,8 @@
     <nav id="mobile-nav" class="nav-mobile" aria-label="Mobile">
       <div>
         <div class="inner">
+          <a href="#channels" class="nav-link">Channels</a>
+          {% if ch.content %}<a href="#content-studio" class="nav-link">Content Studio</a>{% endif %}
           <a href="#how-it-works" class="nav-link">How it works</a>
           <a href="#features" class="nav-link">Features</a>
           <a href="#pricing" class="nav-link">Pricing</a>
@@ -355,21 +430,20 @@
 
   <main id="main">
 
-    {% comment %} Hero {% endcomment %}
+    {% comment %}
+      Hero. Primary angle: lost enquiries (docs/marketing/messaging.md §1). The sentence under
+      the headline names only channels offered to new customers (ch.* is "live"), and the
+      screenshot is the real inbox in the labelled demo workspace.
+    {% endcomment %}
     <section class="hero dark">
       <div class="hero-glow" aria-hidden="true"><span></span></div>
       <div class="wrap" style="position:relative;">
         <div class="hero-copy">
-          {% comment %}
-            Pattern: outcome, then explanation, then concrete capabilities (docs/marketing/messaging.md).
-            The headline is channel-independent; the sentence under it names only the channels that
-            really work. Only WhatsApp messages arrive in the inbox today; email is for sending.
-          {% endcomment %}
-          <h1 class="h1" data-claim="outcome">Turn customer conversations into opportunities you don't miss.</h1>
-          {% if WHATSAPP_ENABLED %}
-            <p class="lead fg-mid" data-claim="inbox email-sending auto-replies follow-ups customers payments">Manage your WhatsApp conversations from one shared inbox and email customers from your own address — with automatic replies, follow-up reminders, customer records, and payment links, all in one place.</p>
+          <h1 class="h1" data-claim="lost-enquiries">Stop losing customers in your inbox.</h1>
+          {% if ch.whatsapp == "live" %}
+            <p class="lead fg-mid" data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} follow-ups payments{% if ch.content == 'live' %} content-studio{% endif %}">{% if ch.instagram == "live" %}WhatsApp and Instagram messages{% else %}Your WhatsApp conversations{% endif %} in one shared inbox, follow-up reminders that don't depend on memory, and payment links when customers are ready to buy.{% if ch.content == "live" %} Plan and publish your posts from the same place.{% endif %}</p>
           {% else %}
-            <p class="lead fg-mid" data-claim="email-sending follow-ups customers payments">Email your customers from your own address, and keep follow-up reminders, customer records, and payment links all in one place.</p>
+            <p class="lead fg-mid" data-claim="email-sending follow-ups customers payments">Email your customers from your own address, and keep follow-up reminders, customer records and payment links in one place.</p>
           {% endif %}
           <div class="hero-ctas" id="hero-ctas">
             <a href="/signup/" class="btn btn-primary">Start free trial</a>
@@ -378,39 +452,14 @@
           {% if trial_days %}<p class="hero-note" data-claim="trial">{{ trial_days }}-day free trial · No card required</p>{% endif %}
         </div>
 
-        {% if WHATSAPP_ENABLED %}
-        <figure style="margin:0; padding-bottom:5rem;">
-          <figcaption class="sr-only">Example: a customer asks on WhatsApp whether an item is in stock, a teammate replies, and a reminder is set to follow up tomorrow.</figcaption>
-          <div class="mock-frame" aria-hidden="true">
-            <div class="mock-label">
-              <span class="mock-pill">Example inbox</span>
-              <span>Illustration — not real data</span>
-            </div>
-            <div class="mock">
-              <div class="mock-rail">
-                <div class="on"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Inbox</div>
-                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Customers</div>
-                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Follow-ups</div>
-                <div><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Automations</div>
-              </div>
-              <div class="mock-list">
-                <div class="on"><strong>Chanda M.</strong><span>Do you have this in stock?</span></div>
-                <div><strong>Grace K.</strong><span>Thank you, see you Saturday</span></div>
-                <div><strong>Joseph B.</strong><span>What time do you close?</span></div>
-              </div>
-              <div class="mock-chat">
-                <div class="mock-chat-head">
-                  <strong>Chanda M.</strong>
-                  <span class="mock-tag">Assigned to Mwila</span>
-                </div>
-                <div class="mock-thread">
-                  <div class="bubble in">Hi, do you have this in stock?<small>10:42</small></div>
-                  <div class="bubble out">Yes, we have it — we're open until 6 PM today.<small>Mwila · 10:44</small></div>
-                  <span class="mock-chip"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Follow up tomorrow</span>
-                </div>
-              </div>
-            </div>
+        {% if ch.whatsapp == "live" %}
+        <figure class="shot shot-hero">
+          <div class="shot-frame">
+            <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+            <picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" fetchpriority="high" decoding="async"
+                 alt="The {{ app }} inbox: a customer who tapped a post's chat link asks the price of a linen dress, the team replies, and the payment is recorded in the conversation."></picture>
           </div>
+          <figcaption class="shot-caption">The real {{ app }} inbox, in a demo workspace with sample customers.</figcaption>
         </figure>
         {% else %}
         <div style="padding-bottom:4rem;"></div>
@@ -418,54 +467,169 @@
       </div>
     </section>
 
-    {% comment %} Problem. Pattern: problem, recognisable situation, Akilent's role. {% endcomment %}
-    <section class="light section" aria-labelledby="problem-title">
+    {% comment %} Channels: what each one does here, and what it doesn't. {% endcomment %}
+    <section id="channels" class="light section" aria-labelledby="channels-title">
       <div class="wrap">
         <div class="section-head center">
-          <p class="eyebrow">The problem</p>
-          <h2 id="problem-title" class="h2">Customer conversations shouldn't fall through the cracks</h2>
-          <p class="body muted">Customers message you at all hours. Your team gets busy. Someone forgets to reply or follow up, and a promising enquiry gets buried under newer messages.</p>
-          {% if WHATSAPP_ENABLED %}
-            <p class="body" data-claim="inbox follow-ups">{{ app }} puts your WhatsApp conversations in one place your whole team can see, and helps you stay on top of what needs a reply, a follow-up, or an action.</p>
-          {% else %}
-            <p class="body" data-claim="follow-ups customers">{{ app }} keeps every customer's details and follow-ups in one place, so your team knows who needs a reply, a follow-up, or an action.</p>
+          <p class="eyebrow">Channels</p>
+          <h2 id="channels-title" class="h2">Meet customers where they already are</h2>
+          <p class="body muted">Each channel does a specific job in {{ app }}. Here's exactly what that is.</p>
+        </div>
+        <div class="channels mt-section">
+          {% if ch.whatsapp %}
+          <article class="card channel">
+            <div class="channel-head">
+              <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+              {% include "accounts/_landing_status.html" with state=ch.whatsapp %}
+            </div>
+            <h3 class="h3">WhatsApp</h3>
+            <p class="small muted" data-claim="inbox auto-replies campaigns">Customer chats arrive in one shared inbox. Auto-replies, follow-ups, and campaigns to approved lists.</p>
+            <p class="channel-note" data-claim="own-number">Uses your own business number, connected through Meta's guided setup.</p>
+          </article>
+          {% endif %}
+          {% if ch.instagram %}
+          <article class="card channel">
+            <div class="channel-head">
+              <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6"/></svg></span>
+              {% include "accounts/_landing_status.html" with state=ch.instagram %}
+            </div>
+            <h3 class="h3">Instagram</h3>
+            <p class="small muted" data-claim="instagram-dms instagram-comments instagram-publishing">DMs arrive in the same inbox as WhatsApp. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
+          </article>
+          {% endif %}
+          {% if ch.facebook %}
+          <article class="card channel">
+            <div class="channel-head">
+              <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></span>
+              {% include "accounts/_landing_status.html" with state=ch.facebook %}
+            </div>
+            <h3 class="h3">Facebook Page</h3>
+            <p class="small muted" data-claim="facebook-publishing">Publish and schedule posts to your Page from Content Studio.</p>
+            <p class="channel-note" data-claim="facebook-publishing">Facebook messages (Messenger) don't come into the inbox.</p>
+          </article>
+          {% endif %}
+          {% if ch.email %}
+          <article class="card channel">
+            <div class="channel-head">
+              <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+              {% include "accounts/_landing_status.html" with state=ch.email %}
+            </div>
+            <h3 class="h3">Email</h3>
+            <p class="small muted" data-claim="email-sending campaigns">Send email, templates and campaigns from your own domain.</p>
+            <p class="channel-note" data-claim="email-sending">Replies to your emails don't come into the inbox.</p>
+          </article>
           {% endif %}
         </div>
       </div>
     </section>
 
-    {% comment %} Who it's for {% endcomment %}
-    <section class="band section" aria-labelledby="who-title">
-      <div class="wrap">
-        <div class="section-head center">
-          <p class="eyebrow">Who it's for</p>
-          <h2 id="who-title" class="h2">Built for small businesses that talk to customers every day</h2>
-          <p class="body muted">If customers message you to ask, book or buy, {{ app }} helps you keep up.</p>
+    {% comment %} Content Studio: the secondary angle (social media that sells). {% endcomment %}
+    {% if ch.content %}
+    <section id="content-studio" class="band section" aria-labelledby="studio-title">
+      <div class="wrap split">
+        <div>
+          <p class="eyebrow">Content Studio</p>
+          <h2 id="studio-title" class="h2" style="margin-top:.75rem;" data-claim="social-results">Turn your social media activity into measurable results</h2>
+          <ul class="ticks body">
+            <li data-claim="content-studio">Write a post once, with its own version for Instagram and for your Facebook Page.</li>
+            <li data-claim="content-planning">Plan posts by content pillar and campaign on a calendar.</li>
+            <li data-claim="ai-captions">AI can draft a caption for each channel from your notes.</li>
+            <li data-claim="post-scheduling post-review">Schedule each channel for its own time, and have an owner approve posts first if you want.</li>
+            {% if ch.whatsapp == "live" %}<li data-claim="post-chat-link post-results">Add a WhatsApp chat link and see the chats, leads and paid orders each post brought in.</li>{% endif %}
+          </ul>
         </div>
-        <div class="grid-4 mt-section">
-          <div class="card who">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" x2="21" y1="6" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-            <div><h3 class="h3">Shops</h3><p class="small muted" data-claim="payments">Answer stock and price questions, then send a payment link.</p></div>
+        <figure class="shot shot-tall">
+          <div class="shot-frame">
+            <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+            <img src="{% static 'img/marketing/post-channels.webp' %}" width="670" height="1082" loading="lazy" decoding="async"
+                 alt="A Content Studio post published to both Facebook and Instagram, with each channel's status and the post's image.">
           </div>
-          <div class="card who">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" x2="8.12" y1="4" y2="15.88"/><line x1="14.47" x2="20" y1="14.48" y2="20"/><line x1="8.12" x2="12" y1="8.12" y2="12"/></svg></span>
-            <div><h3 class="h3">Salons</h3><p class="small muted" data-claim="follow-ups">Reply to booking enquiries and set reminders to confirm them.</p></div>
-          </div>
-          <div class="card who">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
-            <div><h3 class="h3">Clinics</h3><p class="small muted" data-claim="auto-replies business-hours">Let patients know when you'll reply, even outside opening hours.</p></div>
-          </div>
-          <div class="card who">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
-            <div><h3 class="h3">Service businesses</h3><p class="small muted" data-claim="inbox assign">Share enquiries across your team and see who's handling each one.</p></div>
-          </div>
-        </div>
+          <figcaption class="shot-caption">A published post in the demo workspace.</figcaption>
+        </figure>
       </div>
     </section>
+    {% endif %}
 
-    {% comment %} How it works {% endcomment %}
+    {% comment %}
+      The journey: one customer from a post to a paid order. Shown with WhatsApp, which the
+      chat link opens; without it, the email version of how it works.
+    {% endcomment %}
     <section id="how-it-works" class="light section" aria-labelledby="how-title">
       <div class="wrap">
+        {% if ch.whatsapp == "live" %}
+        <div class="section-head center">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title" class="h2">{% if ch.results %}From a post to a paid order, in one place{% else %}From a message to a paid order, in one place{% endif %}</h2>
+          <p class="body muted">One customer's journey, on the real screens of a demo workspace.</p>
+        </div>
+        <ol class="journey mt-section">
+          {% if ch.results %}
+          <li class="jrow">
+            <div class="jcopy">
+              <p class="jstep" data-claim-exempt><span class="step-num" aria-hidden="true">1</span>Attract</p>
+              <h3 class="h3">A customer sees your post</h3>
+              <p class="body muted" data-claim="content-studio post-chat-link">You publish a product post from Content Studio with a WhatsApp chat link in it.</p>
+            </div>
+            <figure class="shot post-mock">
+              <div class="shot-frame">
+                <img src="{% static 'img/demo/linen-dress.png' %}" width="1080" height="1080" loading="lazy" decoding="async" alt="An example product post: a linen summer dress.">
+                <div class="post-mock-body">
+                  <span class="post-mock-text">Our linen summer dress is here: breathable, made locally, sizes S to XL.</span>
+                  <span class="post-mock-chip">Chat with us on WhatsApp</span>
+                </div>
+              </div>
+              <figcaption class="shot-caption">Example post from the demo workspace.</figcaption>
+            </figure>
+          </li>
+          {% endif %}
+          <li class="jrow">
+            <div class="jcopy">
+              <p class="jstep" data-claim-exempt><span class="step-num" aria-hidden="true">{% if ch.results %}2{% else %}1{% endif %}</span>Engage</p>
+              <h3 class="h3">The chat lands in your shared inbox</h3>
+              <p class="body muted" data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} assign auto-replies">They message you on WhatsApp{% if ch.instagram == "live" %} or Instagram{% endif %}. Your team answers from one inbox, and auto-replies cover you when you're closed.</p>
+            </div>
+            <figure class="shot">
+              <div class="shot-frame">
+                <picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" loading="lazy" decoding="async"
+                     alt="A WhatsApp conversation in the inbox, with the customer's details and interest beside it."></picture>
+              </div>
+            </figure>
+          </li>
+          <li class="jrow">
+            <div class="jcopy">
+              <p class="jstep" data-claim-exempt><span class="step-num" aria-hidden="true">{% if ch.results %}3{% else %}2{% endif %}</span>Convert</p>
+              <h3 class="h3">Interest becomes an order</h3>
+              <p class="body muted" data-claim="interested follow-ups payments">When someone asks about buying, they're tracked as interested. Set a follow-up, record the order and send a link to pay online.</p>
+            </div>
+            <figure class="shot">
+              <div class="shot-frame">
+                <picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/interested-narrow.webp' %}" width="804" height="396"><img src="{% static 'img/marketing/interested.webp' %}" width="1184" height="396" loading="lazy" decoding="async"
+                     alt="The list of interested customers, showing where each came from and where they stand."></picture>
+              </div>
+            </figure>
+          </li>
+          <li class="jrow">
+            <div class="jcopy">
+              <p class="jstep" data-claim-exempt><span class="step-num" aria-hidden="true">{% if ch.results %}4{% else %}3{% endif %}</span>Measure</p>
+              {% if ch.results %}
+              <h3 class="h3">See which post brought the sale</h3>
+              <p class="body muted" data-claim="post-results attribution">Each post shows the clicks, chats, leads, orders and paid revenue that came through its chat link or comment replies. Nothing is guessed, so these are lower bounds.</p>
+              {% else %}
+              <h3 class="h3">See what your conversations turned into</h3>
+              <p class="body muted" data-claim="insights">Replies, follow-ups and sales, week by week.</p>
+              {% endif %}
+            </div>
+            {% if ch.results %}
+            <figure class="shot">
+              <div class="shot-frame">
+                <img src="{% static 'img/marketing/post-results.webp' %}" width="670" height="484" loading="lazy" decoding="async"
+                     alt="A post's results per channel: link clicks, chats, leads, orders and paid revenue.">
+              </div>
+            </figure>
+            {% endif %}
+          </li>
+        </ol>
+        {% else %}
         <div class="section-head center">
           <p class="eyebrow">How it works</p>
           <h2 id="how-title" class="h2">From message to action, without the gaps</h2>
@@ -473,83 +637,83 @@
         <ol class="grid-3 mt-section" style="list-style:none; padding:0; margin-left:0; margin-right:0;">
           <li class="card step">
             <span class="step-num" aria-hidden="true">1</span>
-            <h3 class="h3">Bring conversations together</h3>
-            {% if WHATSAPP_ENABLED %}
-              <p class="body muted" data-claim="own-number inbox roles">Connect your WhatsApp business number through Meta's guided setup and invite your team. Customer chats arrive in one shared inbox.</p>
-            {% else %}
-              <p class="body muted" data-claim="email-sending roles">Connect your business email domain with a step-by-step guide and invite your team, so emails come from your own address.</p>
-            {% endif %}
+            <h3 class="h3">Connect your domain</h3>
+            <p class="body muted" data-claim="email-sending roles">Connect your business email domain with a step-by-step guide and invite your team, so emails come from your own address.</p>
           </li>
           <li class="card step">
             <span class="step-num" aria-hidden="true">2</span>
-            <h3 class="h3">Respond and stay organised</h3>
-            {% if WHATSAPP_ENABLED %}
-              <p class="body muted" data-claim="inbox auto-replies customers">Reply from the shared inbox, switch on automatic replies for when you're closed or busy, and keep each customer's details beside the conversation.</p>
-            {% else %}
-              <p class="body muted" data-claim="email-sending customers">Send emails and campaigns from your own address, and keep each customer's details and history together.</p>
-            {% endif %}
+            <h3 class="h3">Reach your customers</h3>
+            <p class="body muted" data-claim="email-sending customers campaigns">Send emails and campaigns from your own address, and keep each customer's details and history together.</p>
           </li>
           <li class="card step">
             <span class="step-num" aria-hidden="true">3</span>
-            <h3 class="h3">Follow up and move things forward</h3>
+            <h3 class="h3">Follow up and get paid</h3>
             <p class="body muted" data-claim="follow-ups interested payments">Get reminded when a customer needs a follow-up, keep track of who's interested in buying, and send a payment link when they're ready.</p>
           </li>
         </ol>
+        {% endif %}
       </div>
     </section>
 
-    {% comment %} Features. Every card maps to a key in apps/billing/features.py. {% endcomment %}
+    {% comment %} Features, as the four pillars of the journey. Every line maps to a register claim. {% endcomment %}
     <section id="features" class="band section" aria-labelledby="features-title">
       <div class="wrap">
         <div class="section-head center">
           <p class="eyebrow">Features</p>
-          <h2 id="features-title" class="h2">Everything your team needs to keep customers moving forward</h2>
+          <h2 id="features-title" class="h2">Everything that keeps a customer moving</h2>
         </div>
-        <div class="grid-4 mt-section">
-          {% if WHATSAPP_ENABLED %}
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
-            <h3 class="h3">One shared inbox</h3>
-            <p class="small muted" data-claim="inbox assign">See every WhatsApp conversation in one place and assign it to a teammate, so everyone knows what needs attention.</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
-            <h3 class="h3">Automatic replies</h3>
-            <p class="small muted" data-claim="auto-replies keywords business-hours">Greet new customers, reply when you're closed, and answer common questions by keyword, so customers aren't left waiting.</p>
-          </div>
+        <div class="pillars mt-section">
+          <article class="card pillar">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+            <h3 class="h3">Talk</h3>
+            <p class="small muted" data-claim-exempt>Capture every enquiry.</p>
+            <ul class="ticks small">
+              {% if ch.whatsapp == "live" %}
+              <li data-claim="inbox assign">A shared inbox, with each chat assigned to a teammate</li>
+              <li data-claim="auto-replies keywords business-hours">Greetings, closed-hours replies and keyword answers</li>
+              {% endif %}
+              <li data-claim="ai ai-knowledge">{% if ch.whatsapp == "live" %}AI answers from your own business information, only if you switch it on{% else %}AI help with email templates, only if you switch it on{% endif %}</li>
+              {% if ch.instagram == "live" %}<li data-claim="instagram-dms instagram-comments">Instagram DMs and comment replies</li>{% endif %}
+              <li data-claim="customers">Customer details, tags and history together</li>
+            </ul>
+          </article>
+          {% if ch.content %}
+          <article class="card pillar">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></span>
+            <h3 class="h3">Publish</h3>
+            <p class="small muted" data-claim-exempt>Stay visible.</p>
+            <ul class="ticks small">
+              <li data-claim="content-studio">One post, a version for each channel</li>
+              <li data-claim="post-scheduling">Scheduling per channel</li>
+              <li data-claim="ai-captions">AI caption drafts</li>
+              <li data-claim="post-metrics">Reach and engagement from Instagram and Facebook</li>
+            </ul>
+          </article>
           {% endif %}
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            <h3 class="h3">Follow-up reminders</h3>
-            <p class="small muted" data-claim="follow-ups{% if WHATSAPP_ENABLED %} missed{% endif %}">Set reminders to get back to customers{% if WHATSAPP_ENABLED %}, and get a nudge when a conversation has gone unanswered{% endif %}, so follow-ups don't depend on memory.</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <h3 class="h3">Customer records</h3>
-            <p class="small muted" data-claim="customers">Each customer's details, tags and message history kept together, so whoever replies has the context.</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
-            <h3 class="h3">Campaigns</h3>
-            <p class="small muted" data-claim="campaigns email-sending">{% if WHATSAPP_ENABLED %}Send an approved WhatsApp message or an email to a list of customers at once, to bring them back when it matters.{% else %}Send an email to a list of customers at once, from your own address.{% endif %}</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></span>
-            <h3 class="h3">Orders &amp; payment links</h3>
-            <p class="small muted" data-claim="payments">Record what a customer bought and send a link to pay online, so a conversation can end in a sale.</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/><path d="M19 17v4"/><path d="M21 19h-4"/></svg></span>
-            <h3 class="h3">AI assistance</h3>
-            <p class="small muted" data-claim="ai">{% if WHATSAPP_ENABLED %}Off until you switch it on. AI suggests replies from your business information, or answers simple questions on its own if you choose to allow it.{% else %}Off until you switch it on. AI helps you write email templates and subject lines.{% endif %}</p>
-          </div>
-          <div class="card">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span>
-            <h3 class="h3">Insights</h3>
-            <p class="small muted" data-claim="insights">See what your conversations turned into: replies, follow-ups and sales.</p>
-          </div>
+          <article class="card pillar">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+            <h3 class="h3">Automate</h3>
+            <p class="small muted" data-claim-exempt>Follow through.</p>
+            <ul class="ticks small">
+              <li data-claim="workflows">Workflows that run when a message, lead or paid order arrives</li>
+              <li data-claim="follow-ups">Follow-up reminders for the team</li>
+              {% if ch.whatsapp == "live" %}<li data-claim="missed">A nudge when a conversation goes unanswered</li>{% endif %}
+            </ul>
+          </article>
+          <article class="card pillar">
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span>
+            <h3 class="h3">Sell &amp; measure</h3>
+            <p class="small muted" data-claim-exempt>Know what works.</p>
+            <ul class="ticks small">
+              <li data-claim="interested">Track who's interested in buying</li>
+              <li data-claim="payments">Orders and payment links</li>
+              <li data-claim="campaigns{% if ch.whatsapp == 'live' %} segments{% endif %}">{% if ch.whatsapp == "live" %}WhatsApp and email campaigns to a segment{% else %}Email campaigns{% endif %}</li>
+              <li data-claim="insights">Business Health: what your conversations turned into</li>
+              {% if ch.results %}<li data-claim="post-results">Chats, leads and paid orders per post</li>{% endif %}
+            </ul>
+          </article>
         </div>
-        <p class="small muted" style="text-align:center; margin-top:2rem;" data-claim-exempt>Some features depend on your plan — <a href="#pricing" class="link">see pricing</a>.</p>
+        <p class="small muted" style="text-align:center; margin-top:2rem;" data-claim-exempt>Some features depend on your plan. <a href="#pricing" class="link">See pricing</a>.</p>
       </div>
     </section>
 
@@ -561,26 +725,28 @@
           <h2 id="trust-title" class="h2">Your business, your customers, your rules</h2>
         </div>
         <div class="grid-3 mt-section">
-          {% if WHATSAPP_ENABLED %}
+          {% if ch.whatsapp == "live" %}
           <div class="trust">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
             <div><h3 class="h3">Your own WhatsApp number</h3><p class="small muted" style="margin-top:.25rem;" data-claim="own-number">Customers message your business number, not ours.</p></div>
           </div>
           {% endif %}
+          {% if ch.email == "live" %}
           <div class="trust">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
             <div><h3 class="h3">Your own email domain</h3><p class="small muted" style="margin-top:.25rem;" data-claim="email-sending">Emails are sent from your business address.</p></div>
           </div>
+          {% endif %}
           <div class="trust">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg></span>
-            <div><h3 class="h3">AI only when you want it</h3><p class="small muted" style="margin-top:.25rem;" data-claim="ai">AI is off until you switch it on.{% if WHATSAPP_ENABLED %} You decide how much it can do, and every reply it sends is marked and logged.{% endif %}</p></div>
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg></span>
+            <div><h3 class="h3">AI only when you want it</h3><p class="small muted" style="margin-top:.25rem;" data-claim="ai">AI is off until you switch it on.{% if ch.whatsapp == "live" %} You decide how much it can do, and every reply it sends is marked and logged.{% endif %}</p></div>
           </div>
           <div class="trust">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
             <div><h3 class="h3">Team roles</h3><p class="small muted" style="margin-top:.25rem;" data-claim="roles">Invite teammates as Owner, Admin or Member.</p></div>
           </div>
           <div class="trust">
-            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+            <span class="ico-tile"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
             <div><h3 class="h3">Your data, on request</h3><p class="small muted" style="margin-top:.25rem;" data-claim="data-deletion">Ask us to delete your data at any time. <a href="{% url 'data-deletion' %}" class="link">How it works</a></p></div>
           </div>
         </div>
@@ -588,9 +754,8 @@
     </section>
 
     {% comment %}
-      Pricing. Cards come from billing_api.plan_card, so what's shown is what each plan gives. Each
-      card links to /signup/?plan=, where only the plan's own trial_days applies
-      (accounts.views._apply_selected_plan), so trial wording here reads plan.trial_days.
+      Pricing. Cards come from billing_api.plan_card for the channels offered, so what's shown
+      is what each plan gives. Each card links to /signup/?plan=.
     {% endcomment %}
     <section id="pricing" class="band section" aria-labelledby="pricing-title">
       <div class="wrap">
@@ -635,15 +800,51 @@
       </div>
     </section>
 
+    {% comment %} Proof: only real, permissioned testimonials (Operator Console → Testimonials). {% endcomment %}
+    {% if testimonials %}
+    <section id="proof" class="light section" aria-labelledby="proof-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="eyebrow">From businesses using {{ app }}</p>
+          <h2 id="proof-title" class="h2">In their words</h2>
+        </div>
+        <div class="grid-3 mt-section">
+          {% for t in testimonials %}
+          <figure class="card quote">
+            <blockquote class="body">“{{ t.quote }}”</blockquote>
+            <figcaption class="small muted"><strong>{{ t.person_name }}</strong>{% if t.business_name %}, {{ t.business_name }}{% endif %}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
     {% comment %} FAQ. Each answer must match what the product does today. {% endcomment %}
-    <section id="faq" class="light section" aria-labelledby="faq-title">
+    <section id="faq" class="{% if testimonials %}band{% else %}light{% endif %} section" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="section-head center">
           <p class="eyebrow">Questions</p>
           <h2 id="faq-title" class="h2">Frequently asked questions</h2>
         </div>
         <div class="faq">
-          {% if WHATSAPP_ENABLED %}
+          <details data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} email-sending{% if ch.facebook %} facebook-publishing{% endif %}">
+            <summary>Which channels can I use?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">{% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" %} and Instagram{% endif %} messages arrive in your shared inbox. {% endif %}{% if ch.email == "live" %}Email is for sending messages and campaigns from your own domain; replies don't come into the inbox. {% endif %}{% if ch.facebook == "live" %}Facebook is for publishing posts to your Page. {% endif %}</p>
+          </details>
+          {% if ch.facebook %}
+          <details data-claim="facebook-publishing">
+            <summary>Do Facebook messages come into the inbox?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">No. Facebook is for publishing and scheduling posts to your Page from Content Studio. Messenger isn't supported.</p>
+          </details>
+          {% endif %}
+          {% if ch.results %}
+          <details data-claim="post-results attribution">
+            <summary>How do you know which post brought a sale?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+            <p class="body muted">Each post can carry its own WhatsApp chat link. When a customer comes through that link, or through a reply to a comment on the post, the chat is linked to the post, and so are the leads and orders that follow. Customers who found you another way aren't counted, so the real total can be higher.</p>
+          </details>
+          {% endif %}
+          {% if ch.whatsapp == "live" %}
           <details data-claim="own-number">
             <summary>Do I need to sign up for the WhatsApp Business API myself?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
             <p class="body muted">No. During setup you connect your business number through Meta's guided sign-in, and {{ app }} handles the rest. The number you connect is used through {{ app }} rather than the WhatsApp Business app.</p>
@@ -654,7 +855,7 @@
           </details>
           <details data-claim="ai">
             <summary>Does AI send messages automatically?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
-            <p class="body muted">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own — every reply it sends is marked and logged.</p>
+            <p class="body muted">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own. Every reply it sends is marked and logged.</p>
           </details>
           {% endif %}
           <details data-claim="cancel">
@@ -670,6 +871,21 @@
       </div>
     </section>
 
+    {% comment %} Coming soon: only ComingSoonFeature entries, clearly not available yet. {% endcomment %}
+    {% if coming_soon %}
+    <section id="coming-soon" class="band section-sm" aria-labelledby="soon-title">
+      <div class="wrap">
+        <h2 id="soon-title" class="h3" style="text-align:center;">Coming soon</h2>
+        <p class="small muted" style="text-align:center; margin-top:.25rem;" data-claim-exempt>Not available yet. We'll add these to plans when they're ready.</p>
+        <ul class="soon-list">
+          {% for f in coming_soon %}
+          <li class="soon-item" data-claim-exempt><strong>{{ f.name }}</strong>{% if f.pitch %}<span class="small muted">{{ f.pitch }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    {% endif %}
+
     {% comment %} For developers: compact, after the business content. {% endcomment %}
     <section id="developers" class="dark section" aria-labelledby="dev-title" style="border-top:1px solid var(--line);">
       <div class="wrap dev-grid">
@@ -678,10 +894,10 @@
           <h2 id="dev-title" class="h2" style="margin-top:.75rem;">Connect {{ app }} to your own systems</h2>
           <p class="body fg-mid" style="margin-top:1rem; max-width:32rem;" data-claim="api webhooks">Have a website or app? Send messages from your own code and get updates back when they're delivered.</p>
           <ul class="dev-list body fg-mid">
-            <li data-claim="api"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong> — send email from your system</span></li>
-            <li data-claim="smtp"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong> — plug into software that already sends email</span></li>
-            <li data-claim="webhooks"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong> — delivery, open and click events</span></li>
-            {% if WHATSAPP_ENABLED %}<li data-claim="verification-codes"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong> — one-time login codes from your app</span></li>{% endif %}
+            <li data-claim="api"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong>: send email from your system</span></li>
+            <li data-claim="smtp"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong>: plug into software that already sends email</span></li>
+            <li data-claim="webhooks"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong>: delivery, open and click events</span></li>
+            {% if ch.whatsapp == "live" %}<li data-claim="verification-codes"><svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong>: one-time login codes from your app</span></li>{% endif %}
           </ul>
           <a href="{% url 'docs' %}" class="btn btn-ghost" style="margin-top:2rem;">Read the documentation</a>
         </div>
@@ -704,8 +920,12 @@
     {% comment %} Final CTA {% endcomment %}
     <section class="dark section final" aria-labelledby="final-title" style="border-top:1px solid var(--line);">
       <div class="wrap">
-        <h2 id="final-title" class="h2" data-claim="outcome">Ready to turn more conversations into opportunities?</h2>
-        <p class="lead fg-mid" data-claim="trial">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days — no card required{% endif %}.</p>
+        {% if ch.content == "live" %}
+        <h2 id="final-title" class="h2" data-claim="promise">Turn customer conversations and social media activity into sales, from one place.</h2>
+        {% else %}
+        <h2 id="final-title" class="h2" data-claim="outcome">Turn customer conversations into opportunities you don't miss.</h2>
+        {% endif %}
+        <p class="lead fg-mid" data-claim="trial">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days, no card required{% endif %}.</p>
         <div class="hero-ctas"><a href="/signup/" class="btn btn-primary">Start free trial</a></div>
       </div>
     </section>
@@ -715,7 +935,7 @@
     <div class="wrap footer-grid">
       <div>
         <a href="/" class="brand"><img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">{{ app }}</a>
-        <p class="fg-mid" style="margin-top:.75rem; max-width:22rem;">Customer conversations, follow-ups and payments for small businesses.</p>
+        <p class="fg-mid" style="margin-top:.75rem; max-width:22rem;">Customer conversations, follow-ups{% if ch.content == "live" %}, posts{% endif %} and payments for small businesses.</p>
         <p class="fg-lo" style="margin-top:1rem;">
           {% if site.support_email %}<a href="mailto:{{ site.support_email }}" style="color:var(--fg-mid); display:inline-flex; align-items:center; min-height:44px;">{{ site.support_email }}</a><br>{% endif %}
           Lusaka, Zambia
@@ -724,6 +944,8 @@
       <nav aria-label="Product">
         <h2>Product</h2>
         <ul>
+          <li><a href="#channels">Channels</a></li>
+          {% if ch.content %}<li><a href="#content-studio">Content Studio</a></li>{% endif %}
           <li><a href="#how-it-works">How it works</a></li>
           <li><a href="#features">Features</a></li>
           <li><a href="#pricing">Pricing</a></li>
@@ -731,6 +953,16 @@
           <li><a href="{% url 'docs' %}">Documentation</a></li>
         </ul>
       </nav>
+      {% if ch.whatsapp == "live" or ch.content == "live" %}
+      <nav aria-label="Use cases">
+        <h2>Use cases</h2>
+        <ul>
+          {% if ch.whatsapp == "live" %}<li><a href="{% url 'use-case' 'missed-enquiries' %}">Missed enquiries</a></li>
+          <li><a href="{% url 'use-case' 'shared-inbox' %}">Shared inbox</a></li>{% endif %}
+          {% if ch.content == "live" %}<li><a href="{% url 'use-case' 'content-studio' %}">Content Studio</a></li>{% endif %}
+        </ul>
+      </nav>
+      {% endif %}
       <nav aria-label="Legal">
         <h2>Legal</h2>
         <ul>

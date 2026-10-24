@@ -1,0 +1,43 @@
+{% extends "public/for/_layout.html" %}
+{% load static %}
+{% block page_title %}Stop losing enquiries{% endblock %}
+{% block eyebrow %}For businesses that sell through chat{% endblock %}
+{% block headline %}Stop losing customers in your inbox{% endblock %}
+{% block lead %}<p data-claim="lost-enquiries">Every enquiry that goes unanswered is a sale someone else makes. {{ app }} keeps each one in view until it's answered, followed up and paid.</p>{% endblock %}
+
+{% block body %}
+<section id="use-case-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Where enquiries get lost</h2>
+  <p data-claim-exempt>Messages arrive on several phones, at all hours. A busy afternoon buries a promising question under newer chats, and the person who meant to follow up forgets.</p>
+</section>
+
+<section id="use-case-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What {{ app }} does about it</h2>
+    <ul class="uc-list">
+      <li data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} assign">{% if ch.instagram == "live" %}WhatsApp and Instagram messages{% else %}WhatsApp conversations{% endif %} arrive in one shared inbox, and each one can be assigned to a teammate.</li>
+      <li data-claim="auto-replies business-hours">Customers get a greeting, and a reply when you're closed, so nobody is left wondering.</li>
+      <li data-claim="missed">When a conversation goes unanswered, your team gets a nudge.</li>
+      <li data-claim="interested follow-ups">When someone asks about buying, they're tracked as interested, and a follow-up reminds you to get back to them.</li>
+      <li data-claim="payments">When they're ready, record the order and send a link to pay online.</li>
+    </ul>
+    <p class="uc-note" data-claim="missed">The nudge goes to your team. {{ app }} doesn't message the customer for you unless you set up an automatic reply.</p>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" loading="lazy" decoding="async"
+              alt="A WhatsApp conversation in the inbox: the customer asked a price, the team replied, and the customer is tracked as interested."></picture></div>
+    <figcaption>The real {{ app }} inbox, in a demo workspace with sample customers.</figcaption>
+  </figure>
+</section>
+
+<section id="use-case-proof" class="uc-section uc-split" aria-labelledby="uc-proof">
+  <div>
+    <h2 id="uc-proof">See who still needs you</h2>
+    <p data-claim="interested">Everyone who showed interest is in one list, with where they came from and where they stand.</p>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/interested-narrow.webp' %}" width="804" height="396"><img src="{% static 'img/marketing/interested.webp' %}" width="1184" height="396" loading="lazy" decoding="async"
+              alt="The list of interested customers with their source and status."></picture></div>
+  </figure>
+</section>
+{% endblock %}
