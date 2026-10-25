@@ -1,44 +1,60 @@
 {% comment %}
-  Toast region - included once in base.html. Driven by Alpine $store.toasts.
+  Toast region - included once in base.html. Driven by Alpine $store.toasts (static/js/app.js).
 
-  The live region is this container, which exists at page load: a live region
-  added to the DOM at the same time as its content is not reliably announced.
+  Announcing and showing are separate:
+  - The two sr-only live regions exist at page load (a live region added to the DOM
+    together with its content is not reliably announced). The store writes each
+    message into one of them exactly once: assertive for a failure, polite otherwise.
+  - The visible stack is not a live region, so re-rendering it (another toast arriving,
+    a timer pausing) never re-reads a message.
 
-  aria-atomic is false so only the toast that was just added gets read. With
-  it true, adding a second toast re-announced the first one as well.
+  data-dialog-exempt keeps this region out of the inert background while a dialog is
+  open, so "Saved" raised from inside a modal is still seen and heard.
 
-  The toasts themselves deliberately carry no role="status" - that would nest
-  a second live region inside this one and announce each message twice.
+  Failures stay until dismissed; hovering or focusing a toast pauses its timer.
 {% endcomment %}
-<div class="fixed top-4 right-4 w-[22rem] max-w-[calc(100vw-2rem)] space-y-2"
-     style="z-index: var(--z-toast)"
-     aria-live="polite" aria-atomic="false" x-data>
-  <template x-for="t in $store.toasts.items" :key="t.id">
-    <div x-transition.opacity.duration.200ms
-         class="card card-pad !p-4 flex items-start gap-3 shadow-pop"
-         :class="{
-           'border-l-4 border-l-green-500': t.type === 'success',
-           'border-l-4 border-l-red-500': t.type === 'danger',
-           'border-l-4 border-l-amber-500': t.type === 'warning',
-           'border-l-4 border-l-brand-500': t.type === 'info' || !t.type,
-         }">
-      <span class="shrink-0 mt-0.5" aria-hidden="true"
-            :class="{
-              'text-green-500': t.type === 'success',
-              'text-red-500': t.type === 'danger',
-              'text-amber-500': t.type === 'warning',
-              'text-brand-500': t.type === 'info' || !t.type,
-            }">
-        <template x-if="t.type === 'success'">{% include "components/icon.html" with name="check-circle" class="w-4 h-4" %}</template>
-        <template x-if="t.type === 'danger'">{% include "components/icon.html" with name="alert-circle" class="w-4 h-4" %}</template>
-        <template x-if="t.type === 'warning'">{% include "components/icon.html" with name="alert-triangle" class="w-4 h-4" %}</template>
-        <template x-if="!t.type || t.type === 'info'">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</template>
-      </span>
-      <p class="flex-1 text-sm text-gray-700" x-text="t.message"></p>
-      <button type="button" class="text-gray-400 hover:text-gray-600 shrink-0"
-              @click="$store.toasts.remove(t.id)" :aria-label="'Dismiss: ' + t.message">
-        {% include "components/icon.html" with name="x" class="w-4 h-4" %}
-      </button>
-    </div>
-  </template>
+<div data-dialog-exempt x-data>
+  <div class="sr-only" aria-live="polite" aria-atomic="true" x-text="$store.toasts.polite"></div>
+  <div class="sr-only" aria-live="assertive" aria-atomic="true" x-text="$store.toasts.assertive"></div>
+
+  <div class="fixed right-4 left-4 sm:left-auto sm:w-[22rem] space-y-2
+              top-[calc(1rem+var(--safe-top))]"
+       style="z-index: var(--z-toast)">
+    <template x-for="t in $store.toasts.items" :key="t.id">
+      <div x-transition.opacity.duration.200ms
+           @mouseenter="$store.toasts.pause(t.id)" @mouseleave="$store.toasts.resume(t.id)"
+           @focusin="$store.toasts.pause(t.id)" @focusout="$store.toasts.resume(t.id)"
+           class="card !p-3 !pl-4 flex items-start gap-3 shadow-pop border-l-4"
+           :style="{
+             borderLeftColor: t.type === 'success' ? 'var(--tone-teal-fg)'
+               : t.type === 'danger' ? 'var(--tone-coral-fg)'
+               : t.type === 'warning' ? 'var(--color-amber-500)'
+               : 'var(--color-focus-ring)'
+           }">
+        <span class="shrink-0 mt-2.5" aria-hidden="true"
+              :style="{
+                color: t.type === 'success' ? 'var(--tone-teal-fg)'
+                  : t.type === 'danger' ? 'var(--tone-coral-fg)'
+                  : t.type === 'warning' ? 'var(--tone-amber-fg)'
+                  : 'var(--tone-info-fg)'
+              }">
+          <template x-if="t.type === 'success'">{% include "components/icon.html" with name="check-circle" class="w-4 h-4" %}</template>
+          <template x-if="t.type === 'danger'">{% include "components/icon.html" with name="alert-circle" class="w-4 h-4" %}</template>
+          <template x-if="t.type === 'warning'">{% include "components/icon.html" with name="alert-triangle" class="w-4 h-4" %}</template>
+          <template x-if="!t.type || t.type === 'info'">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</template>
+        </span>
+        <div class="flex-1 min-w-0 py-2">
+          <p class="text-sm text-ink-muted break-words" x-text="t.message"></p>
+          <template x-if="t.action && !t.expired">
+            <button type="button" class="mt-2 text-sm font-semibold text-accent hover:text-accent-strong underline-offset-2 hover:underline disabled:opacity-60"
+                    :disabled="t.used" @click="$store.toasts.run(t)" x-text="t.action.label"></button>
+          </template>
+        </div>
+        <button type="button" class="btn btn-ghost btn-icon shrink-0 touch-target"
+                @click="$store.toasts.remove(t.id)" :aria-label="'Dismiss: ' + t.message">
+          {% include "components/icon.html" with name="x" class="w-4 h-4" %}
+        </button>
+      </div>
+    </template>
+  </div>
 </div>

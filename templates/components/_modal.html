@@ -1,43 +1,56 @@
 {% comment %}Canonical modal chrome. Rendered by {% modal %} (apps/core/templatetags/ui.py).
 Opens on:  window event "modal-open" whose detail === this modal's id.
-Closes on: backdrop click, Esc, or  $dispatch('modal-close').
+Closes on: backdrop click, the Close button, Esc (topmost dialog only), or
+           $dispatch('modal-close'): with this modal's id as detail it closes this one;
+           with no detail it closes whichever dialog is on top.
+Focus, Esc and background inertness are owned by window.akDialog (static/js/app.js);
+x-trap only keeps Tab inside and locks scroll.
+Below sm it is a bottom sheet: full width, footer pinned above the home indicator so
+the actions stay reachable on a short screen or with the keyboard up.
 {% endcomment %}
 <template x-teleport="body">
-  <div x-data="{ open: false }"
+  <div x-data="{
+         open: false,
+         show() { if (this.open) return; this.open = true; akDialog.open(this.$el, { close: () => this.hide() }); },
+         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$el); },
+       }"
        x-show="open"
        x-cloak
-       @modal-open.window="if ($event.detail === '{{ id }}') { open = true; $nextTick(() => $el.querySelector('[autofocus],h2,button,input,[tabindex=\'0\']')?.focus()) }"
-       @modal-close.window="open = false"
-       @keydown.escape.window="open = false"
-       class="fixed inset-0 overflow-y-auto"
+       @modal-open.window="if ($event.detail === '{{ id }}') show()"
+       @modal-close.window="if ($event.detail ? $event.detail === '{{ id }}' : akDialog.isTop($el)) hide()"
+       class="fixed inset-0 overflow-y-auto overscroll-contain"
        style="z-index: var(--z-modal)"
        role="dialog" aria-modal="true"
-       {% if title %}aria-label="{{ title }}"{% else %}aria-label="Dialog"{% endif %}>
+       {% if title %}aria-labelledby="modal-{{ id }}-title"{% else %}aria-label="Dialog"{% endif %}>
 
     {% comment %}The overlay scrolls, not the page: a dialog taller than a short
     screen (a phone, a laptop with the keyboard up) must still reach its buttons.{% endcomment %}
     <div class="fixed inset-0 bg-gray-900/50" x-transition.opacity
-         @click="open = false" aria-hidden="true"></div>
+         @click="hide()" aria-hidden="true"></div>
 
-    <div class="relative mx-4 my-16 sm:mx-auto sm:my-24 {{ size_class }}"
-         x-trap.noscroll="open"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0 -translate-y-2"
-         x-transition:enter-end="opacity-100 translate-y-0">
-      <div class="card shadow-modal">
-        {% if title %}
-          <div class="flex items-start justify-between gap-4 card-pad pb-0">
-            <h2 class="text-lg font-semibold text-ink">{{ title }}</h2>
-            <button type="button" class="btn btn-ghost btn-icon btn-sm -mt-1 -mr-1"
-                    @click="open = false" aria-label="Close">
-              {% include "components/icon.html" with name="x" class="w-5 h-5" %}
-            </button>
-          </div>
-        {% endif %}
-        <div class="card-pad">{{ slot }}</div>
-        {% if footer %}
-          <div class="card-pad pt-0 flex flex-wrap justify-end gap-2">{{ footer }}</div>
-        {% endif %}
+    <div class="flex min-h-full items-end justify-center sm:block">
+      <div class="relative w-full sm:mx-auto sm:px-4 max-sm:!my-0 dialog-offset {{ size_class }}"
+           x-trap.noscroll.noautofocus.noreturn="open"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 translate-y-4 sm:-translate-y-2"
+           x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="card shadow-modal rounded-b-none sm:rounded-2xl" data-dialog-panel>
+          {% if title %}
+            <div class="flex items-start justify-between gap-4 card-pad pb-0">
+              <h2 id="modal-{{ id }}-title" class="text-lg font-semibold text-ink">{{ title }}</h2>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm -mt-1 -mr-1"
+                      @click="hide()" aria-label="Close">
+                {% include "components/icon.html" with name="x" class="w-5 h-5" %}
+              </button>
+            </div>
+          {% endif %}
+          <div class="card-pad{% if not footer %} pb-[calc(1.25rem+var(--safe-bottom))] sm:pb-6{% endif %}" data-dialog-body>{{ slot }}</div>
+          {% if footer %}
+            <div class="card-pad pt-3 sm:pt-0 flex flex-wrap justify-end gap-2
+                        sticky bottom-0 bg-surface border-t border-border sm:static sm:border-0
+                        pb-[calc(1.25rem+var(--safe-bottom))] sm:pb-6">{{ footer }}</div>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>

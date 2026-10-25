@@ -1216,6 +1216,8 @@ function workflowEditor() {
       window.addEventListener("beforeunload", (e) => {
         if (this.dirty) { e.preventDefault(); e.returnValue = ""; }
       });
+      // In-app navigation (the boosted sidebar) never fires beforeunload (app.js, akDirty).
+      if (window.akDirty) window.akDirty.register(this.$el, () => this.dirty);
     },
     changed() {
       this.dirty = true;

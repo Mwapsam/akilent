@@ -43,7 +43,10 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         /* minmax(0, 1fr) caps the row at the container's height. With the default
            `auto` row, the pane grows to fit every message and the thread never scrolls. */
         grid-template-rows: minmax(0, 1fr);
-        height: calc(100dvh - var(--cv-top)); min-height: min(520px, calc(100dvh - var(--cv-top))); }
+        /* --kb-inset: the on-screen keyboard's height where the browser doesn't shrink the
+           layout for it (iOS Safari), so the reply box stays above the keyboard. 0 otherwise. */
+        height: calc(100dvh - var(--cv-top) - var(--safe-top, 0px) - var(--kb-inset, 0px));
+        min-height: min(520px, calc(100dvh - var(--cv-top) - var(--safe-top, 0px) - var(--kb-inset, 0px))); }
   .cv > * { min-height: 0; }
 
   /* The pane's actual available width is what should drive its layout, not the browser

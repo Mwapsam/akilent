@@ -280,7 +280,7 @@ Every primitive gets a panel in `/styleguide/` (Phase 5).
 
 | Component | Notes |
 |---|---|
-| **StatCard** | `templates/components/stat_card.html` exists — restyle: label (`text-xs uppercase tracking-wide text-gray-500`), value (`text-2xl font-semibold`), delta chip (teal ↑ / coral ↓), optional sparkline slot. |
+| **StatCard** | `templates/components/stat_card.html` exists — restyle: label (`text-xs uppercase tracking-wide text-gray-500`), value (`text-2xl sm:text-3xl font-semibold`, same scale as `.work-tile-value`), delta chip (teal ↑ / coral ↓), optional sparkline slot. |
 | **Timeline** | `.timeline` — vertical rail + nodes; used on campaign detail for the lifecycle (§2) and on message detail for delivery events. |
 | **Skeleton** | `.skeleton` exists. Add composed skeletons: `skeleton-table-row`, `skeleton-card`, `skeleton-stat`. |
 | **Pagination** | `templates/components/pagination.html` — prev / next + page numbers, `.btn-sm btn-secondary`; Django `Paginator` aware. |
@@ -626,3 +626,61 @@ For each: adopt `page_header.html`, the token/component layer, all three §9 sta
       visible focus ring everywhere; `prefers-reduced-motion` disables all motion globally.
 - [ ] `tools/tailwindcss.exe -i assets/app.css -o static/css/app.css --minify` clean;
       `poetry run python manage.py collectstatic --noinput` clean.
+
+---
+
+## 18. Quality contracts (UI quality programme, 2026-10-25)
+
+What every screen can rely on, and must use, since Phase 0 of the programme
+(plan: `~/.claude/plans/audit-the-ui-ux-of-lazy-thompson.md`; evidence:
+[`ui-quality-log.md`](ui-quality-log.md)). The goal is confidence: people always know
+what state things are in, whether their action worked, that their work is safe, and
+what to do next.
+
+### Tokens added
+
+| Token | Meaning |
+|---|---|
+| `--color-focus-ring` | Every focus outline. brand-600 light, brand-400 dark; at least 3:1 on every surface (`test_contrast.py`). |
+| `--color-on-amber` | Text on an amber fill, in both themes. Never `text-ink` on amber. |
+| `--duration-fast/base/slow`, `--radius-control/-sm/surface`, `--shadow-tooltip`, `--z-banner` | Motion, shape, elevation and layer names. |
+| `--safe-top/right/bottom/left` | `env(safe-area-inset-*)`. Pad anything pinned to a viewport edge with these. |
+| `--kb-inset`, `[data-keyboard="open"]` | On-screen keyboard height where the browser doesn't resize for it (iOS). Set by `app.js`. |
+
+### Behavioural contracts (`static/js/app.js`)
+
+- **Dialogs:** `{% modal %}`, `{% drawer %}` and the confirm all join `window.akDialog`.
+  - Focus starts on `[autofocus]`, else the first control.
+  - Esc closes the topmost dialog only.
+  - The page behind is `inert`, except `[data-dialog-exempt]` (the toast region).
+  - Focus returns to the opener.
+  - Below sm, modals and the confirm are bottom sheets, and drawers are full screen.
+  - `$dispatch('modal-close', id)` closes one dialog; with no id, it closes the topmost.
+- **Errors:** a region that loads opts in with `data-error-region`; if its GET fails it shows `components/error_state.html` with Try again. Saves never auto-retry and never get a Retry button. The form keeps its input, and the toast says only what is known. Copy lives in `LOAD_COPY` / `SAVE_COPY`.
+- **Toasts:** `window.toast(type, message, { timeout, action })`.
+  - Failures stay until dismissed. Success and info last 5s, warnings 8s.
+  - Hovering or focusing a toast pauses it.
+  - Each message is announced once (assertive for failures).
+  - Actions are same-origin paths only.
+- **Unsaved work:** editors register `akDirty.register(rootEl, () => hasUnsavedWork)`. Boosted navigation then asks before leaving. Plain forms use `x-data="dirtyGuard"`.
+- **Truthfulness:** a label maps 1:1 to a backend state (§2). An outcome that isn't known is shown as unknown ("may or may not have saved, check before trying again"), never as success or failure.
+
+### Mobile floor (every screen, 360px up)
+
+- No page-level horizontal scroll.
+- Tables use `.table-wrap` or `.table--cards`.
+- Form controls are 16px below sm (`.input` does this).
+- Full-height layouts use `min-h-viewport` / `svh` / `dvh`, never bare `100vh` / `min-h-screen`.
+- Long-form primary actions go in `.action-bar`.
+- Nothing is revealed by hover alone: scope `opacity-0` hides with `pointer-fine:`.
+- Fields rendered with `{% render_field %}` get `inputmode` / `autocomplete` / `enterkeyhint` from their type and name.
+
+### Drift guard
+
+`apps/core/template_drift.py` with `test_template_drift.py`. Each `templates/` directory holds
+a per-rule count in `drift_baseline.json`. The count may not grow, and a fix must lower it
+(`python -m apps.core.template_drift --write`). Justified exceptions (email bodies, embed
+sample, brand-accurate channel previews, prose tables with their own scroll rule) live in
+`drift_exceptions.toml` with a reason each. The dark-theme text bridge at the end of
+`assets/app.css` is temporary: delete each line once its utility has left `templates/`.
+

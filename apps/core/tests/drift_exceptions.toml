@@ -1,0 +1,71 @@
+# Approved exceptions to the template drift guard (apps/core/template_drift.py).
+#
+# Every entry needs a path (glob, relative to templates/), a rule (or "*") and a reason a
+# reviewer can check. Keep them narrow: an exception hides real drift from the ratchet.
+# Drift that is simply not fixed yet does NOT belong here - it lives in
+# drift_baseline.json and goes down as each area is swept.
+
+# --- Email bodies -------------------------------------------------------------------
+# Mail clients drop <link> stylesheets and most <style> blocks, so an email has to carry
+# literal colours inline. Each path below is rendered as a sent email (call sites:
+# apps/accounts/settings_views.py, apps/accounts/tasks.py, apps/accounts/views.py,
+# apps/billing/tasks.py, apps/email/services/html_email.py).
+[[exception]]
+path = "email/base_email.html"
+rule = "*"
+reason = "Base layout for sent emails: inline hex and table layout are required by mail clients."
+
+[[exception]]
+path = "email/generic_transactional.html"
+rule = "hex-style"
+reason = "Sent email body (apps/email/services/html_email.py)."
+
+[[exception]]
+path = "accounts/invite_email.html"
+rule = "hex-style"
+reason = "Sent email body (team invitation, apps/accounts/settings_views.py)."
+
+[[exception]]
+path = "accounts/verify_email.html"
+rule = "hex-style"
+reason = "Sent email body (email verification, apps/accounts/tasks.py)."
+
+[[exception]]
+path = "auth/password_reset_email.html"
+rule = "hex-style"
+reason = "Sent email body (password reset, apps/accounts/views.py)."
+
+[[exception]]
+path = "billing/manual_payment_admin.html"
+rule = "hex-style"
+reason = "Sent email body (manual payment notice to operators, apps/billing/tasks.py)."
+
+# --- Outside the app's stylesheet ---------------------------------------------------
+[[exception]]
+path = "example-embed.html"
+rule = "*"
+reason = "Sample embed snippet that runs on a customer's own website, where assets/app.css and its tokens do not exist."
+
+[[exception]]
+path = "publishing/composer/_preview.html"
+rule = "hex-style"
+reason = "Brand-accurate Instagram/Facebook post previews: they must show the networks' own colours, not Akilent's."
+
+# --- Tables made scrollable by their stylesheet --------------------------------------
+# Hand-authored prose tables on the public shell. `.docs-body table`, `.article-body table`
+# and `.legal-doc table` are display:block + overflow-x:auto, pinned by
+# apps/core/tests/test_docs_shell_tables.py.
+[[exception]]
+path = "docs/*"
+rule = "table-unwrapped"
+reason = "Docs prose tables scroll via `.docs-body table` (pinned by test_docs_shell_tables.py)."
+
+[[exception]]
+path = "help/*"
+rule = "table-unwrapped"
+reason = "Help article tables scroll via `.article-body table` (pinned by test_docs_shell_tables.py)."
+
+[[exception]]
+path = "legal/*"
+rule = "table-unwrapped"
+reason = "Legal page tables scroll via `.legal-doc table` (pinned by test_docs_shell_tables.py)."

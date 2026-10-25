@@ -168,6 +168,13 @@
         this._retryDelay = 0;
         this.checkRecovery();
         if (this.selectedPlatforms.length) this.checkReadiness();
+        // In-app navigation (the boosted sidebar) never fires beforeunload; this makes
+        // it ask before throwing away work the server doesn't have (app.js, akDirty).
+        if (window.akDirty) {
+          window.akDirty.register(this.$el, function () {
+            return !self.submitting && (self.dirty || self.saving || self.uploadsPending());
+          });
+        }
 
         window.addEventListener("online", function () {
           if (self.dirty && self.autosaveEnabled) self.autosave();

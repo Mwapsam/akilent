@@ -220,7 +220,9 @@
 
   --tone-coral-bg: color-mix(in srgb, var(--color-coral-500) 10%, var(--color-surface));
   --tone-coral-border: color-mix(in srgb, var(--color-coral-500) 26%, var(--color-surface));
-  --tone-coral-fg: var(--color-coral-600);
+  /* coral-700, not 600: 600 measured 4.31:1 on the canvas, where field errors
+     and failure lines sit outside a card. */
+  --tone-coral-fg: var(--color-coral-700);
 
   /* The automation canvas tells node types apart by hue, and webhook's is
      the one accent outside the brand palette. Declared here so it follows
@@ -247,8 +249,43 @@
   --z-modal: 1050;
   --z-toast: 1080;
 
-  /* Motion. */
+  /* Banners pinned to the viewport edge (cookie notice). Below the toast so a
+     toast raised while the notice is open still reads on top. */
+  --z-banner: 1060;
+
+  /* Motion. Durations follow the spec: colour/opacity fast, layout base. */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /* Radii. Controls are xl, small controls lg, surfaces 2xl (Tailwind's
+     scale); named here so components and docs agree on which is which. */
+  --radius-control: 0.75rem;
+  --radius-control-sm: 0.5rem;
+  --radius-surface: 1rem;
+
+  /* Text on an amber fill. Fixed in both themes: amber stays amber in the dark
+     theme, so --color-ink (which flips to near-white) measured 1.77:1 on the
+     primary button there. #12182B on amber-400 is 9.6:1. */
+  --color-on-amber: #12182B;
+
+  /* Keyboard focus. 2px outline, 3:1 against what it sits on (WCAG 1.4.11).
+     brand-600 is 8:1 on white but 2.3:1 on the dark canvas, so the dark
+     theme lifts it (see the dark blocks). */
+  --color-focus-ring: var(--color-brand-600);
+
+  --shadow-tooltip: 0 4px 6px -2px rgb(14 21 38 / 0.08), 0 8px 12px -4px rgb(14 21 38 / 0.12);
+}
+
+/* Safe areas: notched phones put the home indicator and rounded corners inside
+   the viewport once viewport-fit=cover is set. Anything pinned to an edge pads
+   by these. They are 0 everywhere else. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 /* Sidebar layout dimensions (icon rail at md, collapsible full at lg).
@@ -328,6 +365,7 @@
     --tone-purple-fg: var(--color-purple-200);
     --color-accent: var(--color-brand-200);
     --color-accent-strong: var(--color-brand-100);
+    --color-focus-ring: var(--color-brand-400);   /* 5.2:1 on the canvas */
   }
 }
 :root[data-theme="dark"] {
@@ -365,6 +403,7 @@
   --tone-purple-fg: var(--color-purple-200);
   --color-accent: var(--color-brand-200);
   --color-accent-strong: var(--color-brand-100);
+  --color-focus-ring: var(--color-brand-400);
 }
 
 /* ---------------------------------------------------------------------------
@@ -469,6 +508,16 @@
   border-color: var(--tone-purple-border);
 }
 
+/* Full-height page on a phone. 100vh is the height with the browser toolbar
+   *hidden*, so a "min-h-screen" page is taller than what you can see and its
+   bottom (often the submit button) sits under the toolbar, jumping as it
+   shows and hides. svh is the height with the toolbar shown; 100vh first is
+   the fallback for browsers without it. */
+@utility min-h-viewport {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
 /* ---------------------------------------------------------------------------
    Base
 --------------------------------------------------------------------------- */
@@ -488,7 +537,7 @@
   }
   /* Visible, consistent focus ring for keyboard users (WCAG 2.2). */
   :focus-visible {
-    outline: 2px solid var(--color-brand-600);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -537,20 +586,23 @@
   .btn-lg { @apply px-5 py-3 text-base; }
   .btn-block { @apply w-full; }
   .btn { transition-timing-function: var(--ease-emphasized); }
-  .btn-primary { @apply bg-amber-400 text-ink font-semibold hover:bg-amber-500 active:bg-amber-600; }
+  .btn-primary { @apply bg-amber-400 font-semibold hover:bg-amber-500 active:bg-amber-600; color: var(--color-on-amber); }
   .btn-secondary {
     background-color: var(--color-surface);
     color: var(--color-ink-muted);
     @apply border border-border-strong;
   }
   .btn-secondary:hover { background-color: var(--color-hover); }
+  /* Pressed: a step past hover, so a tap visibly lands (there is no hover on touch). */
+  .btn-secondary:active { background-color: var(--color-surface-muted); border-color: var(--color-ink-subtle); }
   .btn-ghost { color: var(--color-ink-subtle); }
   .btn-ghost:hover { background-color: var(--color-hover); color: var(--color-ink); }
+  .btn-ghost:active { background-color: var(--color-surface-muted); color: var(--color-ink); }
   .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800; } /* red-600 = coral #CC4530, AA with white */
-  .btn-danger-ghost {
-    @apply text-coral-600;
-  }
+  /* tone-coral-fg, not text-coral-600: coral-600 measured 3.5:1 on the dark surface. */
+  .btn-danger-ghost { color: var(--tone-coral-fg); }
   .btn-danger-ghost:hover { background-color: var(--tone-coral-bg); }
+  .btn-danger-ghost:active { background-color: var(--tone-coral-border); }
   /* Square icon-only button. */
   .btn-icon { @apply p-2 rounded-xl; }
   .btn-icon.btn-sm { @apply p-1.5 rounded-lg; }
@@ -572,7 +624,7 @@
       transition-colors hover:border-brand-300;
   }
   .cta-option.is-selected { @apply border-brand-500 tone-info-bg; box-shadow: inset 0 0 0 1px var(--color-brand-500); }
-  .cta-option:has(input:focus-visible) { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  .cta-option:has(input:focus-visible) { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
   .cta-option[aria-disabled="true"] { @apply opacity-50 cursor-not-allowed hover:border-border; }
 
   /* Stat rows -------------------------------------------------------------
@@ -583,7 +635,7 @@
      .stat-label there without .stat-grid. */
   .stat-grid { @apply grid gap-x-8 gap-y-5 py-5; border-top: 1px solid var(--color-border); }
   .stat-value { @apply text-[1.75rem] leading-none font-semibold text-ink tabular-nums; letter-spacing: -0.01em; }
-  .stat-label { @apply mt-2 text-sm text-gray-600; }
+  .stat-label { @apply mt-2 text-sm; color: var(--color-ink-subtle); }
   .stat-delta { @apply mt-1.5 text-xs; }
   .stat-delta--down { color: var(--color-teal-600); }
   .stat-delta--up { color: var(--color-amber-600); }
@@ -656,7 +708,7 @@
        static/js/inbox_pane.js; 12rem is a fallback until it is. */
     .inbox-split {
       @apply grid gap-4; grid-template-columns: 380px minmax(0, 1fr);
-      height: calc(100dvh - var(--inbox-top, 12rem)); min-height: 32rem;
+      height: calc(100dvh - var(--inbox-top, 12rem) - var(--kb-inset, 0px)); min-height: 32rem;
     }
     .inbox-split .inbox-list-col,
     .inbox-split.has-conversation .inbox-list-col {
@@ -694,8 +746,9 @@
   @media (min-width: 640px) { .inbox-tabs { mask-image: none; } .inbox-tabs::after { content: none; } }
   .inbox-tab {
     @apply inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full
-      border border-border bg-surface px-3.5 text-sm font-medium text-gray-600
+      border border-border bg-surface px-3.5 text-sm font-medium
       transition-colors hover:text-ink hover:border-border-strong;
+    color: var(--color-ink-muted);
     min-height: 2.75rem;
     scroll-snap-align: start;
   }
@@ -743,7 +796,7 @@
   .inbox-name { grid-area: name; @apply min-w-0 truncate text-[0.9375rem] font-medium text-ink; }
   .inbox-row.is-unread .inbox-name { @apply font-semibold; }
   .inbox-when { grid-area: when; @apply flex items-center gap-1.5 justify-self-end; }
-  .inbox-time { @apply text-xs tabular-nums text-gray-500 whitespace-nowrap; }
+  .inbox-time { @apply text-xs tabular-nums whitespace-nowrap; color: var(--color-ink-subtle); }
   /* The wait is the inbox's whole question, so the time carries it — amber,
      with a clock — instead of a separate "Waiting" badge. Past
      conversations.state.OVERDUE_WAITING it escalates to coral (red), the
@@ -755,12 +808,12 @@
   /* Unread is the accent, not amber: amber already means "waiting", and a
      row that was both showed two amber marks side by side. */
   .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full; background-color: var(--color-accent); }
-  .inbox-preview { grid-area: preview; @apply mt-0.5 min-w-0 truncate text-sm text-gray-600; }
+  .inbox-preview { grid-area: preview; @apply mt-0.5 min-w-0 truncate text-sm; color: var(--color-ink-subtle); }
   .inbox-row.is-unread .inbox-preview { @apply text-ink; }
   .inbox-meta { grid-area: meta; @apply mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0; }
   .inbox-meta:empty { @apply hidden; }
-  .inbox-assignee { @apply inline-flex items-center gap-1 text-xs text-gray-600; }
-  .inbox-presence { @apply inline-flex items-center gap-1 text-xs text-gray-600 max-w-40 truncate; }
+  .inbox-assignee { @apply inline-flex items-center gap-1 text-xs; color: var(--color-ink-subtle); }
+  .inbox-presence { @apply inline-flex items-center gap-1 text-xs max-w-40 truncate; color: var(--color-ink-subtle); }
   .inbox-presence.is-typing { @apply font-medium; color: var(--color-accent); }
 
   .inbox-filter { @apply relative shrink-0 flex items-center gap-2; }
@@ -778,10 +831,10 @@
   @media (max-width: 639px) {
     .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; }
   }
-  .inbox-filter-note { @apply -mt-1 mb-3 text-sm text-gray-500; }
+  .inbox-filter-note { @apply -mt-1 mb-3 text-sm; color: var(--color-ink-subtle); }
   .inbox-filter-note a { @apply underline text-accent; }
 
-  .inbox-filter-toggle { @apply inline-flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap cursor-pointer; }
+  .inbox-filter-toggle { @apply inline-flex items-center gap-1.5 text-sm whitespace-nowrap cursor-pointer; color: var(--color-ink-muted); }
   .inbox-filter-toggle input { @apply w-4 h-4; accent-color: var(--tone-coral-fg); }
   /* Phone: a compact pill beside the filter icon (the toolbar has no room for a label
      and a checkbox); sm and up it is the plain checkbox and label. */
@@ -814,12 +867,43 @@
 
   /* Forms --------------------------------------------------------------- */
   .label { @apply block text-sm font-medium mb-1.5; color: var(--color-ink-muted); }
+  /* 16px on phones: iOS Safari zooms the page into any control under 16px on
+     focus and leaves it zoomed. sm and up keeps the denser 14px. */
   .input, .select, .textarea {
     @apply w-full rounded-xl border border-border-strong px-3.5 py-2.5
-      text-sm placeholder:text-gray-400
-      focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500;
+      text-base sm:text-sm
+      focus:outline-none focus:ring-2;
+    --tw-ring-color: var(--color-focus-ring);
     background-color: var(--color-surface);
     color: var(--color-ink);
+    transition: border-color var(--duration-fast) var(--ease-emphasized),
+      box-shadow var(--duration-fast) var(--ease-emphasized);
+  }
+  /* Width alone misses a phone held sideways (844px is "sm") and tablets, which
+     zoom on focus too. Any touch screen gets 16px. */
+  @media (pointer: coarse) {
+    .input, .select, .textarea { font-size: 1rem; line-height: 1.5rem; }
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--color-ink-subtle); }
+  .input:hover:not(:disabled):not(:focus),
+  .select:hover:not(:disabled):not(:focus),
+  .textarea:hover:not(:disabled):not(:focus) { border-color: var(--color-ink-subtle); }
+  .input:focus, .select:focus, .textarea:focus { border-color: var(--color-focus-ring); }
+  /* Disabled reads as unavailable; read-only reads as a value you can select
+     and copy but not change. */
+  .input:disabled, .select:disabled, .textarea:disabled {
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink-subtle);
+    border-style: dashed;
+    cursor: not-allowed;
+  }
+  .input[readonly], .textarea[readonly] {
+    background-color: var(--color-surface-muted);
+    border-color: var(--color-border);
+  }
+  .input[aria-invalid="true"], .select[aria-invalid="true"], .textarea[aria-invalid="true"] {
+    border-color: var(--tone-coral-fg);
+    --tw-ring-color: var(--tone-coral-border);
   }
   /* Native <select>: same box as .input + a chevron affordance. */
   .select {
@@ -833,7 +917,35 @@
     background-color: var(--tone-coral-bg);
   }
   .help { @apply text-xs mt-1; color: var(--color-ink-subtle); }
-  .field-error { @apply text-xs text-red-600 mt-1; }
+  .field-error { @apply text-xs mt-1; color: var(--tone-coral-fg); }
+
+  /* Dialog offset: room above a centred dialog only when the screen is tall
+     enough to spare it. On a phone held sideways or at 200% zoom (~400px tall)
+     the 6rem margin pushed the dialog's buttons below the fold. */
+  .dialog-offset { margin-block: 1rem; }
+  @media (min-width: 640px) and (min-height: 720px) {
+    .dialog-offset { margin-block: 6rem; }
+  }
+
+  /* Mobile action bar --------------------------------------------------
+     The primary action of a long form or editor, pinned where a thumb can reach
+     it on a phone and clear of the home indicator. From sm up it is an ordinary
+     right-aligned footer. While the on-screen keyboard is open (data-keyboard,
+     set in app.js) it steps aside so the field being typed in keeps the space;
+     .action-bar--keep opts out for a composer whose send button must stay. */
+  .action-bar {
+    @apply sticky bottom-0 -mx-4 mt-6 flex flex-wrap items-center justify-end gap-2 border-t px-4 pt-3;
+    z-index: var(--z-sticky);
+    padding-bottom: calc(0.75rem + var(--safe-bottom));
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+  }
+  .action-bar > .btn { @apply flex-1; }
+  @media (min-width: 640px) {
+    .action-bar { position: static; margin-inline: 0; padding: 0; border: 0; background: none; }
+    .action-bar > .btn { flex: none; }
+  }
+  :root[data-keyboard="open"] .action-bar:not(.action-bar--keep) { display: none; }
 
   /* Tables -------------------------------------------------------------- */
   /* Scrolls horizontally rather than clipping. `overflow-hidden` here used to
@@ -974,7 +1086,7 @@
   }
   .nav-link:hover { background-color: var(--color-hover); color: var(--color-ink); }
   .nav-link:focus-visible {
-    outline: 2px solid var(--color-brand-600);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: -2px;
   }
   .nav-link-active,
@@ -1048,7 +1160,7 @@
   /* In a list row the label goes quiet and only the icon keeps the channel
      colour: repeated on every row in full colour, "WhatsApp" was louder than
      the status badge that actually needs reading. */
-  .channel-tag--compact { @apply text-xs gap-1 font-normal text-gray-600; }
+  .channel-tag--compact { @apply text-xs gap-1 font-normal; color: var(--color-ink-subtle); }
   .channel-tag--compact[data-channel] { color: var(--color-ink-muted); }
   .channel-tag--compact[data-channel="email"] > svg { color: var(--tone-amber-fg); }
   .channel-tag--compact[data-channel="whatsapp"] > svg { color: var(--tone-teal-fg); }
@@ -1081,7 +1193,7 @@
   .chart { @apply block w-full; }
   .chart-title { @apply text-sm font-medium text-ink mb-1; }
 
-  .chart-legend { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs text-gray-600; }
+  .chart-legend { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs; color: var(--color-ink-subtle); }
   .chart-legend-item { @apply inline-flex items-center gap-1.5; }
   .chart-swatch { @apply inline-block w-2.5 h-2.5 rounded-sm shrink-0; }
   .chart-swatch--good { background: var(--chart-good); }
@@ -1116,11 +1228,12 @@
       bg-surface px-2.5 py-1.5 text-xs shadow-lg min-w-28;
   }
   .chart-tooltip-label { @apply font-medium text-ink mb-1; }
-  .chart-tooltip-row { @apply flex items-center gap-1.5 text-gray-600; }
+  .chart-tooltip-row { @apply flex items-center gap-1.5; color: var(--color-ink-muted); }
   .chart-tooltip-value { @apply ml-auto font-medium text-ink; }
 
   .chart-table { @apply mt-3 text-sm; }
-  .chart-table summary { @apply cursor-pointer text-gray-500 hover:text-ink text-xs; }
+  .chart-table summary { @apply cursor-pointer text-xs; color: var(--color-ink-subtle); }
+  .chart-table summary:hover { color: var(--color-ink); }
   .chart-table[open] summary { @apply mb-2; }
 
   /* Sparkline: shape only, sized to sit on a line of text. */
@@ -1149,7 +1262,7 @@
   .stacked-bar-segment--critical { background: var(--chart-critical); }
   .stacked-bar-segment--series-1 { background: var(--chart-series-1); }
   .stacked-bar-segment--series-2 { background: var(--chart-series-2); }
-  .stacked-bar-key { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-600; }
+  .stacked-bar-key { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs; color: var(--color-ink-subtle); }
   .stacked-bar-key-item { @apply inline-flex items-center gap-1.5; }
 
   .device-frame {
@@ -1246,7 +1359,8 @@
   }
   .stat-card-label { @apply text-sm font-medium; color: var(--color-ink-subtle); }
   .stat-card-value {
-    @apply mt-3 text-3xl font-semibold tracking-tight tabular-nums;
+    /* 2xl on phones, where 30px figures crowded a two-column grid; same scale as .work-tile-value. */
+    @apply mt-3 text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums;
     color: var(--color-ink);
   }
   .stat-card-sub { @apply mt-1 text-xs; color: var(--color-ink-subtle); }
@@ -1268,8 +1382,8 @@
     color: var(--tone-coral-fg);
   }
   .stat-card-delta { @apply inline-flex items-center gap-1 text-xs font-medium; }
-  .stat-card-delta[data-dir="up"] { @apply text-teal-600; }
-  .stat-card-delta[data-dir="down"] { @apply text-coral-600; }
+  .stat-card-delta[data-dir="up"] { color: var(--tone-teal-fg); }
+  .stat-card-delta[data-dir="down"] { color: var(--tone-coral-fg); }
 
   /* Work queue ---------------------------------------------------------- */
   /* The dashboard's primary tiles. A tile with nothing in it stays quiet; a
@@ -1401,14 +1515,14 @@
     transition-timing-function: var(--ease-emphasized);
   }
   a.ob-tile:hover { border-color: var(--color-brand-300); box-shadow: var(--shadow-pop); }
-  a.ob-tile:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  a.ob-tile:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
   .ob-tile[data-state="done"] { background-color: var(--color-surface-muted); box-shadow: none; }
   .ob-tile[data-state="locked"] { background-color: var(--color-surface-muted); box-shadow: none; border-style: dashed; }
   .ob-tile-icon { @apply w-10 h-10 rounded-xl flex items-center justify-center shrink-0; }
 
   .ob-section > summary { @apply flex items-center justify-between gap-3 cursor-pointer list-none select-none rounded-xl py-1; }
   .ob-section > summary::-webkit-details-marker { display: none; }
-  .ob-section > summary:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  .ob-section > summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
   .ob-section[open] .ob-chevron { transform: rotate(180deg); }
   .ob-chevron { transition: transform 200ms var(--ease-emphasized); }
 
@@ -1420,4 +1534,43 @@
   .wa-button { @apply rounded-xl px-3 py-1.5 text-sm font-medium text-center w-full;
     background-color: var(--color-surface); color: var(--color-brand-600); border: 1px solid var(--color-border); }
   .wf-map li { border-left: 1px dashed var(--color-border); margin-left: 0.25rem; }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark-theme bridge for hard-coded text colours  (UI quality programme, Phase 0)
+
+   Templates written before the semantic tokens use text-gray-600, text-red-700 …
+   Those ramp steps hold the same value in both themes, so on the dark canvas
+   they measured 2–3.7:1 (baseline: 57 of 110 text elements failing on
+   /automations/). This maps each one onto the theme token it was standing in
+   for, in the dark theme only.
+
+   Specificity stays at one class (the :where() adds none), so any variant on
+   the same element - hover:text-ink, focus:… - still wins, and so does a
+   template that already sets a token colour.
+
+   Temporary by design: each area sweep replaces these utilities with tokens and
+   the template drift guard ratchets their count to zero; delete a line once its
+   utility no longer appears in templates/.
+--------------------------------------------------------------------------- */
+@layer utilities {
+  @media (prefers-color-scheme: dark) {
+    :where(:root:not([data-theme="light"])) :is(.text-gray-900, .text-gray-800) { color: var(--color-ink); }
+    :where(:root:not([data-theme="light"])) :is(.text-gray-700, .text-gray-600) { color: var(--color-ink-muted); }
+    :where(:root:not([data-theme="light"])) :is(.text-gray-500, .text-gray-400) { color: var(--color-ink-subtle); }
+    :where(:root:not([data-theme="light"])) :is(.text-red-600, .text-red-700, .text-red-800, .text-coral-600, .text-coral-700, .text-coral-800) { color: var(--tone-coral-fg); }
+    :where(:root:not([data-theme="light"])) :is(.text-blue-600, .text-blue-700, .text-blue-800) { color: var(--tone-info-fg); }
+    :where(:root:not([data-theme="light"])) :is(.text-green-600, .text-green-700, .text-green-800, .text-teal-600, .text-teal-700, .text-teal-800) { color: var(--tone-teal-fg); }
+    :where(:root:not([data-theme="light"])) :is(.text-amber-600, .text-amber-700, .text-amber-800) { color: var(--tone-amber-fg); }
+  }
+  :where(:root[data-theme="dark"]) :is(.text-gray-900, .text-gray-800) { color: var(--color-ink); }
+  :where(:root[data-theme="dark"]) :is(.text-gray-700, .text-gray-600) { color: var(--color-ink-muted); }
+  :where(:root[data-theme="dark"]) :is(.text-gray-500, .text-gray-400) { color: var(--color-ink-subtle); }
+  :where(:root[data-theme="dark"]) :is(.text-red-600, .text-red-700, .text-red-800, .text-coral-600, .text-coral-700, .text-coral-800) { color: var(--tone-coral-fg); }
+  :where(:root[data-theme="dark"]) :is(.text-blue-600, .text-blue-700, .text-blue-800) { color: var(--tone-info-fg); }
+  :where(:root[data-theme="dark"]) :is(.text-green-600, .text-green-700, .text-green-800, .text-teal-600, .text-teal-700, .text-teal-800) { color: var(--tone-teal-fg); }
+  :where(:root[data-theme="dark"]) :is(.text-amber-600, .text-amber-700, .text-amber-800) { color: var(--tone-amber-fg); }
+
+  /* Amber fills keep dark text in both themes (text-ink flips to near-white). */
+  :is(.bg-amber-300, .bg-amber-400, .bg-amber-500).text-ink { color: var(--color-on-amber); }
 }

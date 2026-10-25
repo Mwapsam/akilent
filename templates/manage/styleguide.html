@@ -105,7 +105,12 @@
       <div class="sm:col-span-2"><label class="label" for="sg-ta">Textarea</label><textarea id="sg-ta" class="textarea" placeholder="Multi-line…"></textarea></div>
       <div><label class="label" for="sg-err">With error</label><input id="sg-err" class="input input-error" value="not-an-email"><p class="field-error">Enter a valid email address.</p></div>
       <div><label class="label" for="sg-help">With help</label><input id="sg-help" class="input"><p class="help">We'll never share this.</p></div>
+      <div><label class="label" for="sg-inv">Invalid (aria-invalid)</label><input id="sg-inv" class="input" aria-invalid="true" aria-describedby="sg-inv-err" value="+26"><p id="sg-inv-err" class="field-error">Enter the full number, with the country code.</p></div>
+      <div><label class="label" for="sg-ro">Read-only</label><input id="sg-ro" class="input" readonly value="acct_7Hd2kq"><p class="help">You can select and copy this, not change it.</p></div>
+      <div><label class="label" for="sg-dis">Disabled</label><input id="sg-dis" class="input" disabled value="Not on your plan"></div>
+      <div><label class="label" for="sg-ds">Disabled select</label><select id="sg-ds" class="select" disabled><option>Unavailable</option></select></div>
     </div>
+    <p class="help mt-2">Controls are 16px below sm so iOS doesn't zoom on focus; hover darkens the border, focus uses <code>--color-focus-ring</code>.</p>
   </section>
 
   {# ── Tabs ─────────────────────────────────────────────────── #}
@@ -165,12 +170,49 @@
         <a href="#" class="nav-link w-full">First action</a>
         <a href="#" class="nav-link w-full">Second action</a>
       {% enddropdown %}
-      <button class="btn btn-secondary btn-sm" @click="window.toast('success', 'Saved.')">Fire toast</button>
+      <button class="btn btn-secondary btn-sm" @click="window.toast('success', 'Saved.')">Success toast (5s)</button>
+      <button class="btn btn-secondary btn-sm" @click="window.toast('warning', 'Your WhatsApp number is waiting for Meta to approve it.')">Warning toast (8s)</button>
+      <button class="btn btn-secondary btn-sm" @click="window.toast('danger', 'This didn't save: something went wrong on our side. What you entered is still here.')">Error toast (stays)</button>
+      <button class="btn btn-secondary btn-sm" @click="window.toast('info', 'Customer archived.', { action: { label: 'View archive', href: '/contacts/' } })">Toast with action</button>
       <button class="btn btn-secondary btn-sm" @click="$store.confirm.ask({title:'Delete?', message:'This cannot be undone.', danger:true})">Confirm dialog</button>
+      <button class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'sg-drawer')">Open drawer</button>
     </div>
+    <p class="help mt-2">One dialog stack (<code>window.akDialog</code>): focus starts on the first control, Esc closes only the topmost dialog, the page behind is inert except the toast region, and focus returns to the opener. Hover or focus a toast to pause it.</p>
     {% modal "sg-modal" title="Example modal" %}
-      <p class="text-sm text-gray-600">Canonical modal — <code>--z-modal</code>, backdrop, focus trap, Esc to close.</p>
+      <p class="text-sm text-ink-muted">Canonical modal: a bottom sheet below sm. Open the confirm from here to see stacking: Esc closes the confirm first, then this.</p>
+      <div class="mt-4 flex gap-2">
+        <input class="input" aria-label="Example field" placeholder="Focus starts here">
+        <button class="btn btn-secondary" @click="$store.confirm.ask({title:'Discard changes?', message:'Stacked over the modal.', danger:true})">Ask</button>
+      </div>
     {% endmodal %}
+    {% drawer "sg-drawer" title="Example drawer" %}
+      <p class="text-sm text-ink-muted">Side sheet with the modal's contract. Full screen on a phone; the header stays put while the body scrolls.</p>
+    {% enddrawer %}
+  </section>
+
+  {# ── Error state ──────────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Error state</h2>
+    <p class="help mb-2">A region that loads opts in with <code>data-error-region</code>. If its load fails it shows this, with Try again repeating the same request. Saves never get a Retry: the form keeps what was typed and a toast says what is known.</p>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div class="table-wrap">{% include "components/error_state.html" with title="Couldn't load your orders" message="Akilent didn't answer in time. Nothing you entered was lost." client=True %}</div>
+      <div class="card card-pad" data-error-region id="sg-error-region">
+        <p class="text-sm text-ink-muted">Live demo: load a page that doesn't exist into this region.</p>
+        <button class="btn btn-secondary btn-sm mt-3" hx-get="/manage/styleguide/does-not-exist/" hx-target="#sg-error-region" hx-swap="innerHTML">Load</button>
+      </div>
+    </div>
+  </section>
+
+  {# ── Mobile action bar ────────────────────────────────────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Mobile action bar</h2>
+    <div class="card card-pad">
+      <p class="text-sm text-ink-muted">Below sm the primary action is pinned at the bottom, above the home indicator, and steps aside while the keyboard is open. From sm up it is an ordinary footer.</p>
+      <div class="action-bar">
+        <button class="btn btn-secondary" type="button">Cancel</button>
+        <button class="btn btn-primary" type="button">Save changes</button>
+      </div>
+    </div>
   </section>
 
   {# ── Empty state ──────────────────────────────────────────── #}

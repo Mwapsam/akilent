@@ -3,6 +3,8 @@
   match  — space-separated path fragments / url names for active state
            (defaults to href)
   exact  — match the path exactly rather than by prefix
+  exclude — space-separated sub-sections that belong to another link (Inbox excludes
+            inbox/followups, which is the Follow-ups link), so only one link is current
   badge_url — optional: a URL returning a small count, loaded after the page and refreshed
               live (realtime) and every two minutes
   collapsible — hide the label text when the desktop rail is collapsed
@@ -10,11 +12,11 @@
             plan_features context processor) the link shows a lock and opens the locked page
 {% endcomment %}
 {% load nav %}
-{% is_nav_active match|default:href exact=exact as on %}
+{% is_nav_active match|default:href exact=exact exclude=exclude|default:"" as on %}
 {% if feature and feature in locked_features %}
 <a href="{% url 'billing:locked' feature %}" title="{{ label }} (not in your plan)"
    class="nav-link {% if on %}nav-link-active{% endif %}"
-   data-nav-link data-locked data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}>
+   data-nav-link data-locked data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}{% if exclude %} data-nav-exclude="{% nav_targets exclude %}"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0 opacity-60" %}
   {% if collapsible %}
     <span class="hidden lg:inline-flex items-center gap-1 opacity-70" x-show="!$store.ui.sidebarCollapsed" x-cloak>{{ label }} {% include "components/icon.html" with name="lock" class="w-3.5 h-3.5" %}</span>
@@ -26,7 +28,7 @@
 {% else %}
 <a href="{{ href }}" title="{{ label }}"
    class="nav-link {% if on %}nav-link-active{% endif %}"
-   data-nav-link data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}
+   data-nav-link data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}{% if exclude %} data-nav-exclude="{% nav_targets exclude %}"{% endif %}
    preload="mouseover"
    {% if on %}aria-current="page"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0" %}

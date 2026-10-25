@@ -1,0 +1,26 @@
+{% comment %}Error state - the third of empty / loading / error for any region that loads.
+Says what failed in plain words, and offers Retry only when retrying is safe (loading
+something again). Never used for a failed save: a form keeps what was typed and says so
+in place (see static/js/app.js, "Error-state contract").
+
+Server-side:
+  {% include "components/error_state.html" with title="Couldn't load your orders"
+     message="Akilent didn't answer in time." retry_url=request.get_full_path %}
+Client-side: base.html keeps one copy in <template id="ak-error-state">; app.js clones it
+into a region marked data-error-region when that region's GET fails, filling the
+[data-error-title] / [data-error-message] slots and wiring [data-error-retry].
+{% endcomment %}
+<div class="empty-state" role="alert" data-error-state>
+  <span class="empty-state-icon tone-coral">
+    {% include "components/icon.html" with name="alert-triangle" class="w-6 h-6" %}
+  </span>
+  <p class="empty-state-title" data-error-title>{{ title|default:"Couldn't load this" }}</p>
+  <p class="empty-state-message" data-error-message>{{ message|default:"Something went wrong while loading. Nothing you entered was lost." }}</p>
+  {% if retry_url or client %}
+    <button type="button" class="btn btn-secondary btn-sm mt-4" data-error-retry
+            {% if retry_url %}hx-get="{{ retry_url }}" hx-target="closest [data-error-region]" hx-swap="innerHTML"{% endif %}>
+      {% include "components/icon.html" with name="refresh" class="w-4 h-4" %}
+      Try again
+    </button>
+  {% endif %}
+</div>

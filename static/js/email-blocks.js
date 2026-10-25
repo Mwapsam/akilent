@@ -181,6 +181,10 @@
         this.current = this.serialize();
         this.lastSaved = this.current;
         var self = this;
+        // Covers in-app navigation, which never fires beforeunload (app.js, akDirty).
+        if (window.akDirty) {
+          window.akDirty.register(this.$el, function () { return (self.dirty || self.saving) && !self.leaving; });
+        }
         ["doc", "name", "subject", "samples"].forEach(function (prop) {
           self.$watch(prop, function () { self.changed(); });
         });

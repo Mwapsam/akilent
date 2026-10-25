@@ -107,10 +107,34 @@
   }
 
   // --- Toasts ------------------------------------------------------------
-  // Backed by an Alpine store (see alpine:init); window.toast is the API.
+  // Backed by an Alpine store (see alpine:init); window.toast is the API:
+  //   window.toast(type, message, { timeout, action })
+  // How long a toast stays depends on what it says. A failure stays until it is
+  // dismissed: at 4.5s an error could vanish before anyone read that their
+  // action did not happen. opts.timeout overrides (0 = until dismissed).
+  //
+  // opts.action = { label, href } or { label, hx: { method, url } }, with optional
+  // expires_ms (the button goes away after that) and idempotent (false = it can be
+  // pressed once). Only same-origin paths are accepted: a toast can never be made to
+  // send a request, or a person, somewhere else.
+  const TOAST_TIMEOUTS = { success: 5000, info: 5000, warning: 8000, danger: 0 };
+  function safeAction(a) {
+    if (!a || typeof a.label !== "string" || !a.label) return null;
+    const path = function (u) { return typeof u === "string" && /^\/(?!\/)/.test(u); };
+    if (a.href && path(a.href)) return { label: a.label, href: a.href, expires_ms: a.expires_ms || 0 };
+    if (a.hx && path(a.hx.url)) {
+      const method = String(a.hx.method || "get").toLowerCase();
+      if (["get", "post"].indexOf(method) === -1) return null;
+      return { label: a.label, hx: { method: method, url: a.hx.url }, idempotent: a.idempotent !== false, expires_ms: a.expires_ms || 0 };
+    }
+    return null;
+  }
   let _toastQueue = [];
   window.toast = function (type, message, opts) {
-    const t = { type: type || "info", message: message, timeout: (opts && opts.timeout) || 4500 };
+    type = type || "info";
+    const timeout = opts && opts.timeout !== undefined ? opts.timeout
+      : (TOAST_TIMEOUTS[type] !== undefined ? TOAST_TIMEOUTS[type] : 5000);
+    const t = { type: type, message: message, timeout: timeout, action: safeAction(opts && opts.action) };
     if (window.Alpine && Alpine.store("toasts")) Alpine.store("toasts").push(t);
     else _toastQueue.push(t); // before Alpine boots
   };
@@ -133,16 +157,74 @@
 
   // --- Alpine stores -----------------------------------------------------
   document.addEventListener("alpine:init", function () {
+    // Announcing is separate from showing: the message is written once into a
+    // visually hidden live region (polite, or assertive for a failure), so a
+    // re-render of the visible stack never re-reads anything.
+    const _timers = {};
     Alpine.store("toasts", {
       items: [],
+      polite: "",
+      assertive: "",
       _id: 0,
       push(t) {
         const id = ++this._id;
-        this.items.push(Object.assign({ id }, t));
-        if (t.timeout) setTimeout(() => this.remove(id), t.timeout);
+        const item = Object.assign({ id: id, used: false, expired: false }, t);
+        this.items.push(item);
+        this.announce(item);
+        if (t.timeout) this._schedule(id, t.timeout);
+        if (item.action && item.action.expires_ms) {
+          setTimeout(() => { const i = this._find(id); if (i) i.expired = true; }, item.action.expires_ms);
+        }
+      },
+      announce(t) {
+        const key = t.type === "danger" ? "assertive" : "polite";
+        // Clear first, so the same text twice in a row is still read twice.
+        this[key] = "";
+        setTimeout(() => { this[key] = t.message; }, 50);
+      },
+      _find(id) { return this.items.find((i) => i.id === id); },
+      _schedule(id, ms) {
+        _timers[id] = { left: ms, started: Date.now(), handle: setTimeout(() => this.remove(id), ms) };
+      },
+      // Hovering or focusing a toast stops its clock; leaving restarts it with
+      // whatever time it had left.
+      pause(id) {
+        const tm = _timers[id];
+        if (!tm || tm.paused) return;
+        clearTimeout(tm.handle);
+        tm.left = Math.max(1000, tm.left - (Date.now() - tm.started));
+        tm.paused = true;
+      },
+      resume(id) {
+        const tm = _timers[id];
+        if (!tm || !tm.paused) return;
+        delete _timers[id];
+        this._schedule(id, tm.left);
       },
       remove(id) {
+        if (_timers[id]) { clearTimeout(_timers[id].handle); delete _timers[id]; }
         this.items = this.items.filter((i) => i.id !== id);
+      },
+      run(t) {
+        const a = t.action;
+        if (!a || t.expired || t.used) return;
+        if (a.href) { window.location.assign(a.href); return; }
+        if (!a.idempotent) t.used = true;
+        const post = a.hx.method === "post";
+        fetch(a.hx.url, {
+          method: post ? "POST" : "GET",
+          credentials: "same-origin",
+          headers: Object.assign({ "HX-Request": "true" }, post ? { "X-CSRFToken": CSRF() } : {}),
+        }).then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          this.remove(t.id);
+          const header = r.headers.get("X-Toast");
+          if (header) { const d = decodeToast(header); window.toast(d.type, d.message); }
+        }).catch(() => {
+          // A request that failed in transit may still have reached the server, so
+          // this does not claim nothing changed.
+          window.toast("danger", "That didn't go through. Check the page before trying again.");
+        });
       },
     });
     _toastQueue.forEach((t) => Alpine.store("toasts").push(t));
@@ -199,6 +281,236 @@
         return new Promise((res) => (this._resolve = res));
       },
       respond(ok) { this.open = false; if (this._resolve) this._resolve(ok); this._resolve = null; },
+    });
+  });
+
+  // --- Dialog stack --------------------------------------------------------
+  // One stack for every {% modal %}, drawer and the confirm dialog, so that with
+  // two open (a confirm over a modal, a modal over a drawer):
+  //   - Esc closes only the topmost one; it used to close all of them at once,
+  //     because each bound its own handler on window;
+  //   - everything behind the topmost is inert (no clicks, no tabbing, hidden
+  //     from screen readers), except elements marked data-dialog-exempt: the
+  //     toast region has to stay live, or a "Saved" raised while a dialog is
+  //     open is never announced;
+  //   - focus starts on [autofocus], else the first control in the body, else
+  //     the panel itself (never a heading that cannot take focus), and goes
+  //     back to whatever opened the dialog - or, if a swap removed that, to the
+  //     page heading rather than <body>.
+  // x-trap still contains Tab inside the dialog and locks scroll; it is told
+  // not to move focus itself (.noautofocus.noreturn) so there is one owner.
+  const dialogStack = [];
+  const INERT_MARK = "data-dialog-inert";
+  const FOCUSABLE =
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+    'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function shown(el) {
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  }
+  function syncInert() {
+    document.querySelectorAll("[" + INERT_MARK + "]").forEach(function (el) {
+      el.inert = false;
+      el.removeAttribute(INERT_MARK);
+    });
+    const top = dialogStack[dialogStack.length - 1];
+    if (!top || !top.root.isConnected) return;
+    // Walk from the dialog up to <body>, making every sibling on the way inert.
+    // Only elements this code marked are ever un-inerted, so an element some
+    // other code made inert stays that way.
+    for (let node = top.root; node && node !== document.body; node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      Array.prototype.forEach.call(parent.children, function (sib) {
+        if (sib === node || sib.inert || sib.hasAttribute("data-dialog-exempt")) return;
+        if (sib.tagName === "SCRIPT" || sib.tagName === "TEMPLATE" || sib.tagName === "STYLE") return;
+        sib.inert = true;
+        sib.setAttribute(INERT_MARK, "");
+      });
+    }
+  }
+  function focusInitial(root) {
+    const auto = root.querySelector("[autofocus]");
+    if (auto && shown(auto)) { auto.focus(); return; }
+    const body = root.querySelector("[data-dialog-body]");
+    const pick = function (scope) {
+      return scope && Array.prototype.find.call(scope.querySelectorAll(FOCUSABLE), shown);
+    };
+    const first = pick(body) || pick(root);
+    if (first) { first.focus(); return; }
+    const panel = root.querySelector("[data-dialog-panel]") || root;
+    if (!panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
+    panel.focus();
+  }
+  function restoreFocus(opener) {
+    if (opener && opener.isConnected && opener !== document.body && !opener.closest("[inert]")) {
+      opener.focus();
+      return;
+    }
+    const heading = document.querySelector("#main h1") || document.getElementById("main");
+    if (!heading) return;
+    if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+    heading.focus();
+  }
+
+  window.akDialog = {
+    // opts.close: how to close this dialog when Esc reaches it.
+    open(root, opts) {
+      if (!root || dialogStack.some(function (d) { return d.root === root; })) return;
+      dialogStack.push({ root: root, close: opts && opts.close, opener: document.activeElement });
+      syncInert();
+      // After Alpine has shown it: focus() on a display:none element does nothing.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { if (root.isConnected) focusInitial(root); });
+      });
+    },
+    close(root) {
+      const i = dialogStack.findIndex(function (d) { return d.root === root; });
+      if (i === -1) return; // already closed: a second close is a no-op
+      const d = dialogStack.splice(i, 1)[0];
+      syncInert();
+      // Only the topmost dialog hands focus back; closing one underneath (a
+      // modal-close for it while a confirm is up) must not pull focus out.
+      if (i === dialogStack.length) restoreFocus(d.opener);
+    },
+    isTop(root) {
+      const top = dialogStack[dialogStack.length - 1];
+      return !!top && top.root === root;
+    },
+    get depth() { return dialogStack.length; },
+  };
+
+  // Esc closes the topmost dialog only. A control inside it that uses Esc for
+  // itself (an open dropdown, a combobox) calls preventDefault and keeps it.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || e.defaultPrevented || !dialogStack.length) return;
+    const top = dialogStack[dialogStack.length - 1];
+    if (typeof top.close === "function") {
+      e.preventDefault();
+      top.close();
+    }
+  });
+  // A dialog removed by a swap while open must not leave the page inert.
+  document.addEventListener("htmx:afterSettle", function () {
+    for (let i = dialogStack.length - 1; i >= 0; i--) {
+      if (!dialogStack[i].root.isConnected) dialogStack.splice(i, 1);
+    }
+    syncInert();
+  });
+
+  // --- On-screen keyboard ---------------------------------------------------
+  // Chrome on Android shrinks the layout when the keyboard opens (the viewport meta
+  // asks for interactive-widget=resizes-content). iOS Safari does not: the keyboard
+  // covers the bottom of the layout, which is where the inbox reply box and sticky
+  // action bars live. Publish how much is covered as --kb-inset (0 when nothing is),
+  // and data-keyboard="open" for rules that hide non-essential sticky chrome.
+  (function () {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let frame = 0;
+    function update() {
+      frame = 0;
+      const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      // Under ~80px it's browser toolbar movement, not a keyboard.
+      const inset = covered > 80 ? covered : 0;
+      const root = document.documentElement;
+      root.style.setProperty("--kb-inset", inset + "px");
+      if (inset) root.setAttribute("data-keyboard", "open");
+      else root.removeAttribute("data-keyboard");
+    }
+    function schedule() { if (!frame) frame = requestAnimationFrame(update); }
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+  })();
+
+  // --- Unsaved work ---------------------------------------------------------
+  // The shell navigates in place (hx-boost), which never fires beforeunload, so an
+  // editor's own beforeunload guard did not cover a click on the sidebar: the
+  // composer's work went with the swap, unasked. Anything holding work the
+  // server doesn't have registers a check here:
+  //   const off = akDirty.register(rootEl, () => this.dirty || this.saving);
+  // A boosted navigation is then held while any registered, still-connected
+  // check says yes, and the confirm dialog asks first. Leaving the page for real
+  // (reload, close, typed URL) is covered by one beforeunload for all of them.
+  const dirtyChecks = [];
+  let leavingConfirmed = false;
+  window.akDirty = {
+    register(root, check) {
+      const entry = { root: root, check: check };
+      dirtyChecks.push(entry);
+      return function () {
+        const i = dirtyChecks.indexOf(entry);
+        if (i !== -1) dirtyChecks.splice(i, 1);
+      };
+    },
+    any() {
+      for (let i = dirtyChecks.length - 1; i >= 0; i--) {
+        const c = dirtyChecks[i];
+        if (!c.root || !c.root.isConnected) { dirtyChecks.splice(i, 1); continue; }
+        try { if (c.check()) return true; } catch (_) {}
+      }
+      return false;
+    },
+  };
+  window.addEventListener("beforeunload", function (e) {
+    if (leavingConfirmed || !window.akDirty.any()) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    const d = e.detail;
+    if (leavingConfirmed || !d.requestConfig || !d.requestConfig.boosted) return;
+    if (d.requestConfig.verb !== "get" || !window.akDirty.any()) return;
+    const store = window.Alpine && Alpine.store("confirm");
+    if (!store) return;
+    e.preventDefault();
+    const elt = d.elt;
+    store.ask({
+      title: "Leave without saving?",
+      message: "You have changes that haven't been saved. If you leave now, they'll be lost.",
+      confirmLabel: "Leave without saving",
+      cancelLabel: "Stay on this page",
+      danger: true,
+    }).then(function (ok) {
+      if (!ok) return;
+      leavingConfirmed = true;
+      if (elt && elt.isConnected && elt.click) elt.click();
+      else window.location.href = d.requestConfig.path;
+      setTimeout(function () { leavingConfirmed = false; }, 0);
+    });
+  });
+
+  // A plain form that should not be left half-filled: x-data="dirtyGuard".
+  // Dirty = differs from what it held when the page loaded. A save that comes
+  // back OK (a real submit, or an htmx request answered 2xx) takes a new
+  // snapshot; a failed save leaves it dirty - the work still isn't on the server.
+  document.addEventListener("alpine:init", function () {
+    Alpine.data("dirtyGuard", function () {
+      return {
+        _snap: "",
+        _submitting: false,
+        _off: null,
+        serialize() {
+          const fd = new FormData(this.$el);
+          fd.delete("csrfmiddlewaretoken");
+          return JSON.stringify(Array.from(fd.entries()).map(function (p) {
+            return [p[0], typeof p[1] === "string" ? p[1] : (p[1] && p[1].name) || ""];
+          }));
+        },
+        get dirty() { return !this._submitting && this.serialize() !== this._snap; },
+        init() {
+          this._snap = this.serialize();
+          this._off = window.akDirty.register(this.$el, () => this.dirty);
+          this.$el.addEventListener("submit", () => {
+            // A non-htmx submit leaves the page; let it go without a prompt.
+            if (!this.$el.hasAttribute("hx-post") && !this.$el.closest("[hx-boost=true]")) this._submitting = true;
+          });
+          this.$el.addEventListener("htmx:afterRequest", (e) => {
+            if (e.detail.successful) this._snap = this.serialize();
+          });
+        },
+        destroy() { if (this._off) this._off(); },
+      };
     });
   });
 
@@ -333,17 +645,134 @@
     window.toast(t.type, t.message);
   });
 
-  // 3. A 4xx/5xx or a dropped connection is silent in HTMX by default — it
-  //    swaps nothing and says nothing, so the button just looks broken.
-  document.addEventListener("htmx:responseError", function (e) {
-    if (isSilent(e.detail.elt)) return;
-    if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-Toast")) return; // already toasted above
-    if (e.detail.xhr && e.detail.xhr.getResponseHeader("X-CSRF-Failed") === "1") return; // see refreshCsrf
-    window.toast("danger", "Something went wrong.");
+  // 3. Error-state contract. A 4xx/5xx or a dropped connection is silent in HTMX
+  //    by default - it swaps nothing and says nothing, so the button just looks
+  //    broken. What we say depends on what failed, and it never claims more than
+  //    we know:
+  //    - A load (GET) into a region marked data-error-region: that region shows
+  //      the error state, with a Try again that repeats the same request. Loads
+  //      are safe to repeat. Regions that did not opt in are never touched.
+  //    - A save (POST/PUT/PATCH/DELETE): the form and what was typed stay as they
+  //      are and a toast says what happened. No automatic retry and no Retry
+  //      button - if the connection dropped mid-request the server may already
+  //      have acted, so a blind resend could do it twice.
+  //    - A response for a region that has since started a newer request, or that
+  //      has left the page, is dropped: it would overwrite newer state.
+  const regionSeq = new WeakMap();
+  function errorRegion(detail) {
+    const target = detail.target || detail.elt;
+    return target && target.closest ? target.closest("[data-error-region]") : null;
+  }
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    const region = errorRegion(e.detail);
+    if (!region) return;
+    const seq = (regionSeq.get(region) || 0) + 1;
+    regionSeq.set(region, seq);
+    if (e.detail.xhr) e.detail.xhr._akSeq = seq;
   });
-  document.addEventListener("htmx:sendError", function (e) {
-    if (isSilent(e.detail.elt)) return;
-    window.toast("danger", "Network error — please try again.");
+  function describeFailure(xhr, kind) {
+    const status = xhr ? xhr.status : 0;
+    if (kind === "offline" || (!status && !navigator.onLine)) return { kind: "offline" };
+    if (kind === "timeout") return { kind: "timeout" };
+    if (!status) return { kind: "network" };
+    if (status === 403) return { kind: "forbidden" };
+    if (status === 404 || status === 410) return { kind: "gone" };
+    if (status === 409) return { kind: "conflict" };
+    if (status === 429) return { kind: "busy" };
+    if (status >= 500) return { kind: "server" };
+    return { kind: "client" };
+  }
+  const LOAD_COPY = {
+    offline: ["You're offline", "Reconnect and try again. Nothing you entered was lost."],
+    timeout: ["This is taking too long", "Akilent didn't answer in time. Nothing you entered was lost."],
+    network: ["Couldn't reach Akilent", "Check your connection and try again."],
+    forbidden: ["You don't have access to this", "Ask an owner or admin of this business for access."],
+    gone: ["This isn't here any more", "It may have been deleted or moved."],
+    conflict: ["This changed while you were looking", "Load it again to see the latest."],
+    busy: ["Too many requests", "Wait a few seconds, then try again."],
+    server: ["Couldn't load this", "Something went wrong on our side. Try again in a moment."],
+    client: ["Couldn't load this", "Try again, or reload the page."],
+  };
+  const SAVE_COPY = {
+    // Not sent at all: safe to say nothing happened.
+    offline: "You're offline, so this wasn't sent. What you entered is still here.",
+    // Sent, answer unknown: say exactly that.
+    timeout: "No answer from Akilent, so this may or may not have saved. Check before trying again.",
+    network: "The connection dropped, so this may or may not have saved. Check before trying again.",
+    forbidden: "You don't have permission to do that.",
+    gone: "This no longer exists. It may have been deleted.",
+    conflict: "Someone else changed this first. Reload to see the latest, then try again.",
+    busy: "Too many requests. Wait a few seconds, then try again.",
+    server: "This didn't save: something went wrong on our side. What you entered is still here.",
+    client: "This didn't go through. Check the form and try again.",
+  };
+  function showRegionError(region, detail, failure) {
+    const tpl = document.getElementById("ak-error-state");
+    if (!tpl) return false;
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const copy = LOAD_COPY[failure.kind] || LOAD_COPY.client;
+    node.querySelector("[data-error-title]").textContent = region.getAttribute("data-error-title") || copy[0];
+    node.querySelector("[data-error-message]").textContent = copy[1];
+    const retry = node.querySelector("[data-error-retry]");
+    const cfg = detail.requestConfig || {};
+    if (retry && cfg.path && window.htmx) {
+      retry.addEventListener("click", function () {
+        retry.setAttribute("aria-busy", "true");
+        retry.disabled = true;
+        window.htmx.ajax("GET", cfg.path, {
+          target: detail.target || region,
+          swap: (detail.elt && detail.elt.getAttribute("hx-swap")) || "innerHTML",
+          values: cfg.parameters,
+        });
+      });
+    } else if (retry) {
+      retry.remove();
+    }
+    const swapInto = region.querySelector("[data-error-slot]") || region;
+    swapInto.replaceChildren(node);
+    return true;
+  }
+  function handleFailure(e, kind) {
+    const detail = e.detail;
+    const xhr = detail.xhr;
+    if (xhr && xhr.getResponseHeader("X-CSRF-Failed") === "1") return; // see refreshCsrf
+    const failure = describeFailure(xhr, kind);
+    const verb = ((detail.requestConfig && detail.requestConfig.verb) || "get").toLowerCase();
+    const region = errorRegion(detail);
+    if (region) {
+      if (!region.isConnected) return; // left the page
+      if (xhr && xhr._akSeq && xhr._akSeq !== regionSeq.get(region)) return; // superseded
+    }
+    if (isSilent(detail.elt)) return;
+    // Navigations are handled further down (they fall back to a full page load).
+    if (isBoosted(detail) && verb === "get" && kind !== "response") return;
+    if (verb === "get") {
+      if (region && showRegionError(region, detail, failure)) return;
+      if (xhr && xhr.getResponseHeader("X-Toast")) return; // already toasted above
+      const c = LOAD_COPY[failure.kind] || LOAD_COPY.client;
+      window.toast("danger", c[0] + ". " + c[1]);
+      return;
+    }
+    if (xhr && xhr.getResponseHeader("X-Toast")) return; // the view said what happened
+    window.toast("danger", SAVE_COPY[failure.kind] || SAVE_COPY.client);
+  }
+  document.addEventListener("htmx:responseError", function (e) { handleFailure(e, "response"); });
+  document.addEventListener("htmx:sendError", function (e) { handleFailure(e, navigator.onLine ? "network" : "offline"); });
+  document.addEventListener("htmx:timeout", function (e) { handleFailure(e, "timeout"); });
+
+  // Connection status: one persistent notice while offline, cleared once back.
+  // The notice is a toast so it is announced and sits above any open dialog.
+  let offlineToastId = null;
+  window.addEventListener("offline", function () {
+    if (!window.Alpine || !Alpine.store("toasts") || offlineToastId) return;
+    window.toast("warning", "You're offline. Changes won't send until you reconnect.", { timeout: 0 });
+    const items = Alpine.store("toasts").items;
+    offlineToastId = items.length ? items[items.length - 1].id : null;
+  });
+  window.addEventListener("online", function () {
+    if (offlineToastId && window.Alpine) Alpine.store("toasts").remove(offlineToastId);
+    offlineToastId = null;
+    window.toast("success", "Back online.");
   });
 
   // Silence lasts one request. A successful poll swaps the element away and
@@ -418,11 +847,15 @@
   }
 
   // Back/forward restore only <main>, so re-mark the active nav link the way
-  // apps/core/templatetags/nav.py does (path prefix, or exact).
+  // apps/core/templatetags/nav.py does (path prefix, or exact; data-nav-exclude carves out
+  // sub-sections that have their own link).
   function syncNav() {
     const path = window.location.pathname;
     document.querySelectorAll("a[data-nav-match]").forEach(function (a) {
-      const on = a.getAttribute("data-nav-match").split(" ").some(function (t) {
+      const excluded = (a.getAttribute("data-nav-exclude") || "").split(" ").some(function (t) {
+        return t && (path === t || path.indexOf(t) === 0);
+      });
+      const on = !excluded && a.getAttribute("data-nav-match").split(" ").some(function (t) {
         if (!t) return false;
         if (a.hasAttribute("data-nav-exact")) return path === t;
         return path === t || (t !== "/" && path.indexOf(t) === 0);

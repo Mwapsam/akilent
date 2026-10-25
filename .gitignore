@@ -63,3 +63,6 @@ packages/*/.phpunit.cache/
 .claude/
 # Pre-deploy database snapshots taken on the server by deploy.yml
 /backups/
+
+# UI quality programme screenshots: local evidence only, not committed
+docs/design/qa/

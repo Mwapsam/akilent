@@ -50,3 +50,53 @@ class NavActiveTests(SimpleTestCase):
             _render("/logs/messages/", "{% is_nav_active 'logs' %}"), "True"
         )
         self.assertEqual(_render("/contacts/", "{% is_nav_active 'logs' %}"), "False")
+
+    def test_exclude_carves_out_a_subsection(self):
+        tag = "{% nav_active 'inbox' exclude='inbox/followups inbox/forms' %}"
+        self.assertEqual(_render("/inbox/", tag), "nav-link-active")
+        self.assertEqual(_render("/inbox/conv_abc/", tag), "nav-link-active")
+        self.assertEqual(_render("/inbox/followups/", tag), "")
+        self.assertEqual(_render("/inbox/forms/42/", tag), "")
+
+
+class PrimaryNavCurrentLinkTests(SimpleTestCase):
+    """The rendered sidebar marks exactly one link current on every section.
+
+    Two links marked aria-current="page" tell a screen reader and a sighted user
+    two different answers to "where am I?" - Inbox used to light up on the
+    Follow-ups and Forms pages too.
+    """
+
+    ROUTES = {
+        "/inbox/": "/inbox/",
+        "/inbox/conv_abc/": "/inbox/",
+        "/inbox/followups/": "/inbox/followups/",
+        "/inbox/forms/": "/inbox/forms/",
+        "/inbox/forms/7/": "/inbox/forms/",
+        "/dashboard/": "/dashboard/",
+        "/contacts/12/": "/contacts/",
+        "/publishing/calendar/": "/publishing/",
+        "/insights/": "/insights/",
+        "/logs/messages/": "/logs/messages/",
+    }
+
+    def _current_links(self, path):
+        import re
+
+        request = RequestFactory().get(path)
+        html = Template('{% include "components/_nav.html" %}').render(
+            Context(
+                {
+                    "request": request,
+                    "tools_off": [],
+                    "locked_features": [],
+                    "CAMPAIGNS_ENABLED": True,
+                }
+            )
+        )
+        return re.findall(r'<a href="([^"]+)"[^>]*aria-current="page"', html, re.S)
+
+    def test_exactly_one_current_link_per_route(self):
+        for path, expected in self.ROUTES.items():
+            with self.subTest(path=path):
+                self.assertEqual(self._current_links(path), [expected])

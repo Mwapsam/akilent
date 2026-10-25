@@ -1,0 +1,45 @@
+{% comment %}Drawer chrome - a side sheet for a detail pane or filters. Rendered by {% drawer %}
+(apps/core/templatetags/ui.py). Same contract as the modal, so there is one API to learn:
+opens on window event "modal-open" with this drawer's id as detail; closes on the backdrop,
+the Close button, Esc (topmost dialog only) or $dispatch('modal-close'[, id]).
+Focus, Esc and background inertness come from window.akDialog (static/js/app.js).
+Right-hand sheet from sm up; full screen below, with the header pinned and the body
+scrolling, so a long pane never pushes its Close button off a phone screen.
+{% endcomment %}
+<template x-teleport="body">
+  <div x-data="{
+         open: false,
+         show() { if (this.open) return; this.open = true; akDialog.open(this.$el, { close: () => this.hide() }); },
+         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$el); },
+       }"
+       x-show="open"
+       x-cloak
+       @modal-open.window="if ($event.detail === '{{ id }}') show()"
+       @modal-close.window="if ($event.detail ? $event.detail === '{{ id }}' : akDialog.isTop($el)) hide()"
+       class="fixed inset-0"
+       style="z-index: var(--z-drawer)"
+       role="dialog" aria-modal="true" aria-labelledby="drawer-{{ id }}-title">
+    <div class="fixed inset-0 bg-gray-900/50" x-transition.opacity @click="hide()" aria-hidden="true"></div>
+    <div class="fixed inset-y-0 right-0 flex w-full {{ size_class }} flex-col bg-surface shadow-modal
+                pt-[var(--safe-top)] pb-[var(--safe-bottom)] pr-[var(--safe-right)]"
+         x-trap.noscroll.noautofocus.noreturn="open"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="translate-x-full"
+         x-transition:enter-end="translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="translate-x-0"
+         x-transition:leave-end="translate-x-full"
+         data-dialog-panel>
+      <div class="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+        <h2 id="drawer-{{ id }}-title" class="text-lg font-semibold text-ink truncate">{{ title }}</h2>
+        <button type="button" class="btn btn-ghost btn-icon touch-target -mr-2" @click="hide()" aria-label="Close">
+          {% include "components/icon.html" with name="x" class="w-5 h-5" %}
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6" data-dialog-body>{{ slot }}</div>
+      {% if footer %}
+        <div class="border-t border-border px-5 py-4 sm:px-6 flex flex-wrap justify-end gap-2">{{ footer }}</div>
+      {% endif %}
+    </div>
+  </div>
+</template>

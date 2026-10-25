@@ -46,6 +46,81 @@ def modal(content, id, title="", size="lg", footer=""):
     )
 
 
+# Field names that mean a phone number, a person's name or an organisation. Matched
+# on the whole name or a _-separated part, so "whatsapp_number" counts and
+# "phonetic" does not.
+_PHONE_PARTS = {"phone", "whatsapp", "mobile", "tel", "msisdn"}
+_AUTOCOMPLETE_BY_NAME = {
+    "first_name": "given-name",
+    "last_name": "family-name",
+    "full_name": "name",
+    "company_name": "organization",
+    "legal_name": "organization",
+    "city": "address-level2",
+    "country": "country-name",
+    "password": "current-password",
+    "password1": "new-password",
+    "password2": "new-password",
+    "new_password1": "new-password",
+    "new_password2": "new-password",
+}
+
+
+def _mobile_hints(bound_field, widget):
+    """Attributes that make a phone show the right keyboard and offer autofill.
+
+    Without them every field opened the full letter keyboard - a phone number
+    typed on letters, an email with no @ key - and nothing was offered from the
+    phone's saved details. Only what can be told from the field itself is set;
+    anything the widget already declares wins (render_field skips those keys).
+    """
+    from django.forms import widgets as w
+
+    name = bound_field.html_name.rsplit("-", 1)[-1].lower()
+    parts = set(name.split("_"))
+    hints: dict[str, str] = {}
+    if isinstance(widget, w.EmailInput):
+        hints.update(inputmode="email", autocomplete="email")
+    elif isinstance(widget, w.URLInput):
+        hints["inputmode"] = "url"
+    elif isinstance(widget, w.NumberInput):
+        step = str(widget.attrs.get("step", ""))
+        hints["inputmode"] = "decimal" if step and step not in ("1", "") else "numeric"
+    elif isinstance(widget, w.TextInput) and (parts & _PHONE_PARTS):
+        hints.update(inputmode="tel", autocomplete="tel")
+    if name in _AUTOCOMPLETE_BY_NAME and "autocomplete" not in hints:
+        hints["autocomplete"] = _AUTOCOMPLETE_BY_NAME[name]
+    if name in ("q", "search", "query"):
+        hints["enterkeyhint"] = "search"
+    return hints
+
+
+_DRAWER_SIZES = {
+    "sm": "sm:max-w-sm",
+    "md": "sm:max-w-md",
+    "lg": "sm:max-w-lg",
+    "xl": "sm:max-w-xl",
+}
+
+
+@register.simple_block_tag
+def drawer(content, id, title, size="md", footer=""):
+    """Side sheet with the modal's contract (same open/close events, same dialog
+    stack). Full screen on a phone, a right-hand sheet from sm up."""
+    return mark_safe(  # nosec B703 B308
+        render_to_string(
+            "components/_drawer.html",
+            {
+                "slot": mark_safe(content),  # nosec B703 B308
+                "footer": mark_safe(footer),  # nosec B703 B308
+                "id": id,
+                "title": title,
+                "size_class": _DRAWER_SIZES.get(size, _DRAWER_SIZES["md"]),
+            },
+        )
+    )
+
+
 @register.simple_tag
 def render_field(bound_field, extra_class=""):
     """Render a Django BoundField's widget with the right design-system class
@@ -66,6 +141,9 @@ def render_field(bound_field, extra_class=""):
     existing = widget.attrs.get("class", "")
     css = " ".join(p for p in (existing, base, extra_class) if p)
     attrs = {"class": css} if css else {}
+    for key, value in _mobile_hints(bound_field, widget).items():
+        if key not in widget.attrs:
+            attrs[key] = value
     if bound_field.errors:
         attrs["class"] = (css + " input-error").strip()
         attrs["aria-invalid"] = "true"

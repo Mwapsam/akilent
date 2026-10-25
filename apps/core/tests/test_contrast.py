@@ -117,3 +117,66 @@ def test_hovering_a_link_never_reduces_its_contrast(theme):
     assert hover >= rest, (
         f"{theme} theme: hover contrast {hover:.2f}:1 is below resting {rest:.2f}:1"
     )
+
+
+# --- UI quality programme, Phase 0 -------------------------------------------
+# Supporting evidence only: these check token pairs as declared. Rendered
+# components are measured in the browser (tools/qa/ui_scan.js).
+
+NON_TEXT_MIN = 3.0  # WCAG 1.4.11: focus indicators and control boundaries
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize(
+    "fill", ["--color-amber-300", "--color-amber-400", "--color-amber-500"]
+)
+def test_text_on_amber_fills_is_readable(theme, fill):
+    """The primary button is amber in both themes.
+
+    Its text used --color-ink, which flips to near-white in the dark theme:
+    1.77:1 on amber-400 (measured on /dashboard/, 2026-10-25). The fixed
+    --color-on-amber keeps it dark everywhere.
+    """
+    table = _themes()[theme]
+    value = contrast(_resolve("--color-on-amber", table), _resolve(fill, table))
+    assert value >= AA_BODY_TEXT, f"{theme}: on-amber on {fill} = {value:.2f}:1"
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_focus_ring_is_visible_on_every_surface(theme):
+    """brand-600 measured 2.27:1 on the dark canvas before the token existed."""
+    table = _themes()[theme]
+    ring = _resolve("--color-focus-ring", table)
+    failures = [
+        f"{bg} = {contrast(ring, _resolve(bg, table)):.2f}:1"
+        for bg in BACKGROUNDS
+        if contrast(ring, _resolve(bg, table)) < NON_TEXT_MIN
+    ]
+    assert not failures, f"{theme}: focus ring below {NON_TEXT_MIN}:1 on {failures}"
+
+
+TONE_FOREGROUNDS = [
+    "--tone-brand-fg",
+    "--tone-amber-fg",
+    "--tone-teal-fg",
+    "--tone-neutral-fg",
+    "--tone-info-fg",
+    "--tone-coral-fg",
+    # --tone-purple-fg is not here: it points at Tailwind's built-in purple ramp
+    # (OKLCH, not declared in app.css), so it cannot be resolved to a hex. It is
+    # only the webhook-node accent on the automation canvas; the rendered scan
+    # (tools/qa/ui_scan.js) measures it there.
+]
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_status_tone_text_meets_aa_on_surfaces(theme):
+    """Field errors, danger buttons, deltas and badges use the tone foregrounds."""
+    table = _themes()[theme]
+    failures = []
+    for fg in TONE_FOREGROUNDS:
+        for bg in BACKGROUNDS:
+            value = contrast(_resolve(fg, table), _resolve(bg, table))
+            if value < AA_BODY_TEXT:
+                failures.append(f"{fg} on {bg} = {value:.2f}:1")
+    assert not failures, f"{theme}: {failures}"

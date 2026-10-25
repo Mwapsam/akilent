@@ -137,10 +137,29 @@ def test_command_palette_options_are_not_nested_in_interactive_wrappers():
 
 
 def test_toast_region_announces_once():
-    """role=status inside aria-live nests two live regions, which reads each
-    message twice; aria-atomic=true re-read every toast on each new one."""
-    assert TOAST.count('aria-live="polite"') == 1
-    assert 'role="status"' not in re.sub(
+    """Each message is read exactly once.
+
+    role=status inside aria-live nests two live regions, which reads each
+    message twice. The visible stack used to be the live region, with
+    aria-atomic=false so a new toast did not re-read the old ones; now the
+    store writes each message once into a hidden region that only ever holds
+    the latest message (so atomic is right there), and the visible stack -
+    which re-renders as toasts come and go - is not live at all.
+    """
+    markup = re.sub(
         r"\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}", "", TOAST, flags=re.S
     )
-    assert 'aria-atomic="false"' in TOAST
+    assert markup.count('aria-live="polite"') == 1
+    assert markup.count('aria-live="assertive"') == 1
+    assert markup.count("aria-live=") == 2, (
+        "the visible stack must not be a live region"
+    )
+    assert 'role="status"' not in markup
+    assert 'x-text="$store.toasts.polite"' in markup
+    assert 'x-text="$store.toasts.assertive"' in markup
+
+
+def test_toast_region_stays_live_behind_a_dialog():
+    """A dialog makes the page behind it inert; the toast region is exempt, or a
+    message raised from inside a modal would be neither seen nor heard."""
+    assert "data-dialog-exempt" in TOAST
