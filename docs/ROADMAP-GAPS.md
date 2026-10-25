@@ -377,3 +377,74 @@ Remove it in a cleanup. The IG container poller publishes an already-claimed con
 - Browser check of the composer's AI suggestion: pick, undo, hidden `ai_draft`/`ai_option` fields, and the reviewer label. Covered only by server-side tests so far.
 - PostgreSQL 16 run of the publishing suite (3 row-lock tests skip on SQLite).
 - Real email delivery of the alerts on staging.
+
+### Journey release gate (Workstream 3, 2026-10-25)
+`apps/publishing/tests/test_journey_acceptance.py` drives the real paths:
+1. composer submit;
+2. reviewer approve;
+3. publish-now through the Celery task, with only Meta's Graph HTTP mocked;
+4. `/go/<code>`;
+5. the signed WhatsApp webhook through `process_whatsapp_event`;
+6. the lead and order views;
+7. the payment request and the signed Flutterwave webhook, with only the Flutterwave client mocked.
+
+It asserts saved rows and `results_for()`, `journey()` and `reporting.revenue()`/`sales()` after each step.
+
+Negative controls:
+- an organic chat stays unattributed and is visible in the new `journey()["untracked_chats"]`/`["untracked_revenue"]`;
+- a click with no chat is only a click, and a bot click is not counted;
+- webhook redelivery, repeat messages, a second lead and a replayed charge do not inflate counts or revenue;
+- two currencies are never summed;
+- a recent-conversation guess is never a tracked-post conversion.
+
+**Status:** passes, but code correctness only. The staging journey (Workstream 5) is still required.
+
+Defects the gate exposed, fixed in scope:
+- **A heuristic match was credited to a post.** `attribution.record()` copied the conversation's entry point (`source_post`) even for `RECENT_CONVERSATION`, so an order made from the Orders page without naming the chat counted as a tracked-post sale. The post is now credited only for `EXPLICIT`.
+- **A paid order could be reopened.** `commerce.request_payment` set any order to AWAITING_PAYMENT, so a direct POST or a workflow step dropped a paid order out of revenue and asked the customer to pay again. Paid, refunded and cancelled orders now refuse (`PaymentNotRequestable`, shown as an `ActionError`).
+- **No unattributed bucket existed.** `journey()` now reports `untracked_chats` (chats with inbound messages in the period and no entry point) and `untracked_revenue` (paid orders no post is credited with, per currency). The UI labelling is Workstream 4.
+
+### Attribution states (Workstream 4, 2026-10-25)
+Three states, kept distinct everywhere:
+- **From a post:** the team named the chat (method EXPLICIT) and a tracked post started it.
+- **A guess:** the method is RECENT_CONVERSATION. No chat was named, so the latest one was linked, and no post is credited.
+- **Not from a tracked post:** a named chat no post started, or no chat at all.
+
+How they are kept apart:
+- **One rule, read-time.** `ConversationAttribution.credits_post` and `publishing.results.post_credit_q()` check the method. Rows written before the record-time fix, which can be RECENT_CONVERSATION and still hold a `source_post`, are therefore never reported as a post's sale. The records stay immutable; nothing is rewritten.
+- **Reports.** `results_for()` and `journey()` credit posts only through that rule. `journey()` splits paid revenue into three disjoint per-currency buckets:
+  - `revenue` (from posts);
+  - `guessed_revenue`;
+  - `untracked_revenue` (the rest).
+
+  Separately it reports `untracked_chats`, because chats and orders are different measures. All of these are `None` until post tracking exists.
+- **Pages.** The lead and order pages (`publishing/_source_post.html`) always say which state applies. The Insights journey card shows a "Not credited to a post" panel. The help article `post-results` explains the guess.
+- **Tests.** `test_attribution_states.py` covers the legacy row, disjoint buckets that sum to all paid orders per currency, separate chat and revenue measures, page labels and workspace isolation. The Workstream 3 gate asserts all three buckets.
+
+### Security and live verification (Workstream 5, 2026-10-25)
+- **Cross-workspace (PR-8, publishing and commerce part).**
+  - The reconciliation confirm, retry and leave-unresolved actions now look the channel up inside the workspace. Before, they fetched it and then checked, which answered "Access denied" for another business's id and "not found" for a missing one, so an id could be confirmed to exist.
+  - `test_cross_workspace.py` covers:
+    - the reconciliation actions and queue;
+    - post detail, retry, approve, request-changes, submit, cancel, delete and first-comment retry;
+    - the composer's `?post_id=`;
+    - worklist, library buckets, overview and reports;
+    - another business's ref code sent to this workspace;
+    - order detail and payment request;
+    - crediting another workspace's chat from the order and lead forms.
+  - PR-8 is still open for billing, hubspot and events.
+- **Staging evidence.** The read-only `manage.py journey_evidence --account <slug> --post <id>` prints sanitized JSON: ids, states, approval hashes, entry points, attributions, orders and report outputs. It prints no tokens, no message text, and phone numbers only to the last 4 digits, and it is scoped to the workspace. It is tested in `test_journey_acceptance.py`.
+- **Staging checklist.** `docs/STAGING-VALIDATION-CHECKLIST.md` Phase 5:
+  - J1–J8 is the real FB → WhatsApp → lead → paid order → reports journey, plus the organic control and the isolation check;
+  - J9 is the browser checks;
+  - J10 is real alert delivery.
+
+  **Not yet run** (it needs real accounts). Instagram is recorded as blocked on App Review.
+- **PostgreSQL 16 run (2026-10-25, PostgreSQL 16.15 in a throwaway Docker container, since removed).**
+  - **Suites.** `apps/publishing`, `conversations`, `commerce`, `crm` and `insights` (`-m "not performance"`, 4 workers): **1290 passed, 0 failed, 10 skipped.** The skips are the abstract base cases in `test_cross_channel_contract.py`, which skip on every database.
+  - **Row locks, run serially.** These passed, **5 of 5, 0 skipped**:
+    - `test_alerts_concurrency_pg.py`, which is new: two threads sweep the same failed channel at once and exactly one email is sent;
+    - `test_phase_c_concurrency_pg.py` (3 tests);
+    - `test_2fa_pg_lock.py`.
+  - **Environment note.** The first attempt with 12 workers failed during test-database setup with "out of shared memory" (`max_locks_per_transaction`). That is an environment limit, not a test result. The run used `-c max_locks_per_transaction=512`.
+  - **Not covered.** The accounts suite on PostgreSQL still has its 6 known baseline failures (§9).

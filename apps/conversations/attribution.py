@@ -84,7 +84,14 @@ def record(
     existing = ConversationAttribution.objects.filter(**{subject: obj}).first()
     if existing is not None:
         return existing
-    entry = first_entry_point(conversation)
+    # A post is credited only when the conversation itself was named. A conversation
+    # picked by the recent-conversation fallback is a guess, so the post that started it
+    # is not claimed: a guess must never read as a tracked-post conversion.
+    entry = (
+        first_entry_point(conversation)
+        if method == ConversationAttribution.Method.EXPLICIT
+        else None
+    )
     attribution = ConversationAttribution.objects.create(
         account=obj.account,
         conversation=conversation,

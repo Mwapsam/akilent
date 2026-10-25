@@ -45,9 +45,12 @@ class RequestPaymentAction(Action):
         return {"required": ["order", "redirect_url"]}
 
     def execute(self, context: dict, *, order, redirect_url: str) -> dict:  # type: ignore[override]
-        from apps.commerce.services import request_payment
+        from apps.commerce.services import PaymentNotRequestable, request_payment
 
-        payment = request_payment(order, redirect_url=redirect_url)
+        try:
+            payment = request_payment(order, redirect_url=redirect_url)
+        except PaymentNotRequestable as exc:
+            raise ActionError(str(exc)) from None
         return {"payment_id": payment.public_id, "checkout_url": payment.checkout_url}
 
 

@@ -251,8 +251,9 @@ def test_lead_and_order_from_the_chat_carry_the_post(shop, receive):
 
 
 def test_a_chat_without_evidence_stays_unattributed(shop, receive):
-    account, _ = shop
-    _post(account)
+    account, client = shop
+    post = _post(account)
+    link_for_variant(post.variants.get(platform="facebook"))
     contact, deliver = receive
 
     deliver("How much is the blue dress?")
@@ -260,6 +261,20 @@ def test_a_chat_without_evidence_stays_unattributed(shop, receive):
     lead = Lead.objects.get(account=account, contact=contact)
     assert lead.attribution.source_post is None
     assert lead.attribution.entry_point is None
+    assert not lead.attribution.credits_post
+    # Reported as unattributed, not credited to the post.
+    [row] = [r for r in results_for(post) if r["variant"].platform == "facebook"]
+    assert (row["chats"], row["leads"]) == (0, 0)
+    from apps.conversations import reporting
+    from apps.publishing.results import journey
+
+    j = journey(account, reporting.last_days(30))
+    assert (j["chats"], j["leads"], j["untracked_chats"]) == (0, 0, 1)
+    html = client.get(
+        reverse("crm:lead-detail", args=[lead.public_id])
+    ).content.decode()
+    assert "From a post:" not in html
+    assert 'data-attribution="none"' in html
 
 
 # --- Instagram comments ---------------------------------------------------------
@@ -443,8 +458,9 @@ def test_order_page_says_which_post_it_came_from(shop, receive):
         reverse("commerce:detail", args=[order.public_id])
     ).content.decode()
 
-    assert "Came from a post" in html
+    assert "From a post:" in html
     assert "used the post's WhatsApp link" in html
+    assert 'data-attribution="post"' in html
 
 
 def test_attribution_with_a_post_is_still_immutable(shop, receive):

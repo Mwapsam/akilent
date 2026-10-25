@@ -1,13 +1,32 @@
-{% comment %}
-"Came from post …" for a lead or order whose conversation a Content Studio post started.
-Expects ``subject`` (a Lead or Order). Shows nothing when no post is on record.
+{% load publishing_filters %}{% comment %}
+Where a lead or order came from, and how sure Akilent is. Expects ``subject`` (a Lead or Order).
+Shown only to a business that can publish posts (same gate as the Insights journey), or when
+a post is already credited. Three states, never blurred:
+- from a post: the lead or order was made from a named chat (by the team or an automation)
+  and a tracked post started that chat;
+- a guess: no chat was named, so Akilent linked the customer's latest chat; no post is credited;
+- not from a tracked post: a named chat no post started, or no chat at all.
 {% endcomment %}
-{% with att=subject.attribution %}{% if att.source_post_id %}
-<div class="pt-2 border-t border-border">
-  <p class="text-gray-500 mb-1">Came from a post</p>
-  <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="font-medium text-ink underline">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
-  <p class="text-xs text-gray-500">
-    {% if att.source_variant %}{{ att.source_variant.get_platform_display }}{% endif %}{% if att.entry_point %} · {% if att.entry_point.kind == 'tracked_link' %}used the post's WhatsApp link{% else %}a reply to their comment on the post{% endif %}{% endif %}{% if att.source_campaign %} · {{ att.source_campaign.name }}{% endif %}
+{% post_tracking_on subject.account as tracking_on %}
+{% with att=subject.attribution %}{% if tracking_on or att.credits_post %}
+<div class="pt-2 border-t border-border" data-attribution="{% if att.credits_post %}post{% elif att.is_guess %}guess{% else %}none{% endif %}">
+  <p class="text-gray-500 mb-1">Where this came from</p>
+  {% if att.credits_post %}
+  <p class="font-medium text-ink">From a post:
+    <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="underline">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
   </p>
+  <p class="text-xs text-gray-500">
+    {% if att.source_variant %}{{ att.source_variant.get_platform_display }} · {% endif %}{% if att.entry_point.kind == 'tracked_link' %}the customer used the post's WhatsApp link · {% elif att.entry_point %}a reply to their comment on the post · {% else %}the chat started from the post · {% endif %}{% if att.source_campaign %}{{ att.source_campaign.name }} · {% endif %}made from this chat{% if att.workflow_run_id %} by an automation{% endif %}
+  </p>
+  {% elif att.is_guess %}
+  <p class="font-medium text-ink">Linked to a recent chat (a guess)</p>
+  <p class="text-xs text-gray-500">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="underline">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>
+  {% elif att %}
+  <p class="font-medium text-ink">From a chat, not from a tracked post</p>
+  <p class="text-xs text-gray-500">It was made from a chat, but the customer didn't arrive through a post's chat link or a comment reply.</p>
+  {% else %}
+  <p class="font-medium text-ink">Not from a tracked post</p>
+  <p class="text-xs text-gray-500">It isn't linked to a chat, so no post is credited with it.</p>
+  {% endif %}
 </div>
 {% endif %}{% endwith %}

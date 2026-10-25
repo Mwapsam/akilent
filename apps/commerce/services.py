@@ -83,24 +83,45 @@ def create_order(
     return order
 
 
+class PaymentNotRequestable(ValueError):
+    """The order is already paid, refunded or cancelled, so asking for money again is wrong."""
+
+
+# An order in one of these states must never be sent back to "awaiting payment": that
+# would drop a paid order out of revenue, or ask a customer to pay twice.
+_SETTLED = (Order.Status.PAID, Order.Status.REFUNDED, Order.Status.CANCELLED)
+
+
 def request_payment(order: Order, *, redirect_url: str) -> Payment:
     """Create a pending Payment and a Flutterwave hosted checkout link for it.
 
     Mirrors ``apps.billing``'s Flutterwave flow (same client, same
     verify-then-trust webhook pattern) but tagged with ``order_id`` in
     ``meta`` so the shared webhook can route commerce charges separately
-    from subscription charges.
+    from subscription charges. Raises PaymentNotRequestable for a settled order.
     """
     from apps.billing.flutterwave import FlutterwaveError, get_fw_client
 
-    payment = Payment.objects.create(
-        account=order.account,
-        order=order,
-        amount=order.total,
-        currency=order.currency,
-    )
-    order.status = Order.Status.AWAITING_PAYMENT
-    order.save(update_fields=["status", "updated_at"])
+    # Checked and changed under a row lock on the current row, never on the caller's copy:
+    # a payment webhook may have marked the order paid since it was loaded. If the webhook
+    # commits first, this sees PAID and refuses; if this holds the lock, the webhook's PAID
+    # is written after it and wins.
+    with transaction.atomic():
+        locked = Order.objects.select_for_update().get(pk=order.pk)
+        if locked.status in _SETTLED:
+            order.status = locked.status
+            raise PaymentNotRequestable(
+                f"This order is already {locked.get_status_display().lower()}."
+            )
+        payment = Payment.objects.create(
+            account=locked.account,
+            order=locked,
+            amount=locked.total,
+            currency=locked.currency,
+        )
+        locked.status = Order.Status.AWAITING_PAYMENT
+        locked.save(update_fields=["status", "updated_at"])
+    order.status = locked.status
 
     try:
         link = get_fw_client().initialize_payment(

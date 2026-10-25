@@ -1108,6 +1108,17 @@ class ConversationAttribution(models.Model):
             )
         super().save(*args, **kwargs)
 
+    @property
+    def credits_post(self) -> bool:
+        """True only when this record credits a post: the conversation was named, and a
+        tracked post started it. A recent-conversation guess never credits a post, including
+        rows written before that rule, which may still hold a ``source_post``."""
+        return self.method == self.Method.EXPLICIT and self.source_post_id is not None
+
+    @property
+    def is_guess(self) -> bool:
+        return self.method == self.Method.RECENT_CONVERSATION
+
     def delete(self, *args, **kwargs):
         raise ValueError("An attribution is a historical record and cannot be deleted.")
 

@@ -433,3 +433,49 @@ def test_each_workspace_hears_only_about_its_own_posts(team, outbox):
 
     assert [m["to_email"] for m in outbox] == ["str@example.com"]
     assert "Other Shop" in outbox[0]["text_body"]
+
+
+def test_cancelling_the_channel_closes_its_episode(team, outbox):
+    account, owner, _, _ = team
+    post = _post(account, owner)
+    variant = _fail(post)
+    alerts.send_due_alerts()
+
+    variant.refresh_from_db()
+    variant.status = S.CANCELLED
+    variant.save(update_fields=["status"])
+
+    assert alerts.send_due_alerts()["closed"] == 1
+    variant.refresh_from_db()
+    assert alerts.ALERTS_KEY not in variant.metadata
+
+
+def test_an_episode_sends_at_most_one_alert_of_each_kind(team, outbox):
+    account, owner, _, _ = team
+    post = _post(account, owner)
+    variant = _fail(post)
+    for status in (S.FAILED, S.RECONCILING, S.FAILED, S.RECONCILING, S.FAILED):
+        variant.refresh_from_db()
+        variant.status = status
+        variant.save(update_fields=["status"])
+        alerts.send_due_alerts()
+
+    subjects = [m["subject"] for m in outbox if m["to_email"] == "own@example.com"]
+    assert subjects == [
+        "Your Facebook post didn't publish",
+        "Check whether your Facebook post went live",
+    ]
+
+
+def test_overlapping_sweeps_cannot_both_claim_the_same_alert(team, outbox):
+    """Two sweeps that saw the same candidate: only the first claim wins, because the
+    alert is recorded under the row lock before any email is sent."""
+    account, owner, _, _ = team
+    variant = _fail(_post(account, owner))
+    now = timezone.now()
+
+    first = alerts._claim(variant.pk, now)
+    second = alerts._claim(variant.pk, now)
+
+    assert first is not None and first[1] == "failed"
+    assert second is None

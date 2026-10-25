@@ -188,3 +188,11 @@ def platform_labels(platforms):
     from apps.publishing.composer import PLATFORM_LABELS
 
     return ", ".join(PLATFORM_LABELS.get(p, p.capitalize()) for p in platforms or [])
+
+
+@register.simple_tag
+def post_tracking_on(account) -> bool:
+    """Whether a lead or order page should say where it came from in terms of posts."""
+    from apps.publishing.results import post_tracking_available
+
+    return account is not None and post_tracking_available(account)

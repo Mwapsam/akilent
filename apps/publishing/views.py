@@ -2416,14 +2416,14 @@ def reconciliation_confirm_published(request, variant_id):
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
     # View handles authorization and request parsing only.
+    # Looked up inside the workspace, so another business's channel reads exactly like
+    # one that doesn't exist: no "access denied" that would confirm the id is real.
     try:
-        variant = ContentPostVariant.objects.get(pk=variant_id)
+        variant = ContentPostVariant.objects.select_related("post").get(
+            pk=variant_id, post__account=account
+        )
     except ContentPostVariant.DoesNotExist:
         messages.error(request, "Variant not found.")
-        return redirect("publishing:reconciliation-queue")
-
-    if variant.post.account != account:
-        messages.error(request, "Access denied.")
         return redirect("publishing:reconciliation-queue")
 
     if variant.status != ContentPostVariant.Status.RECONCILING:
@@ -2482,14 +2482,14 @@ def reconciliation_retry(request, variant_id):
         return denied
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
+    # Looked up inside the workspace, so another business's channel reads exactly like
+    # one that doesn't exist: no "access denied" that would confirm the id is real.
     try:
-        variant = ContentPostVariant.objects.get(pk=variant_id)
+        variant = ContentPostVariant.objects.select_related("post").get(
+            pk=variant_id, post__account=account
+        )
     except ContentPostVariant.DoesNotExist:
         messages.error(request, "Variant not found.")
-        return redirect("publishing:reconciliation-queue")
-
-    if variant.post.account != account:
-        messages.error(request, "Access denied.")
         return redirect("publishing:reconciliation-queue")
 
     if variant.status != ContentPostVariant.Status.RECONCILING:
@@ -2528,14 +2528,14 @@ def reconciliation_leave_unresolved(request, variant_id):
         return denied
 
     # Phase A2: Do NOT acquire lock here; service owns the transaction.
+    # Looked up inside the workspace, so another business's channel reads exactly like
+    # one that doesn't exist: no "access denied" that would confirm the id is real.
     try:
-        variant = ContentPostVariant.objects.get(pk=variant_id)
+        variant = ContentPostVariant.objects.select_related("post").get(
+            pk=variant_id, post__account=account
+        )
     except ContentPostVariant.DoesNotExist:
         messages.error(request, "Variant not found.")
-        return redirect("publishing:reconciliation-queue")
-
-    if variant.post.account != account:
-        messages.error(request, "Access denied.")
         return redirect("publishing:reconciliation-queue")
 
     if variant.status != ContentPostVariant.Status.RECONCILING:

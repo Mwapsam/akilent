@@ -460,3 +460,112 @@ Once staging passes:
    - Deploy with monitoring
    - Monitor first week closely
    - Iterate on alerts and dashboards
+
+---
+
+## Phase 5: Real customer journey (Workstream 5, added 2026-10-25)
+
+This is the second half of the journey release gate. The first half is the automated test `apps/publishing/tests/test_journey_acceptance.py`. Both must pass before the tracked-post-to-paid-order claim can even be *considered* for public messaging, and even then the decision is separate (see `docs/strategy/meta-growth-optimisation.md` §D).
+
+**Scope:**
+- **Facebook:** in scope (Page publishing with valid permissions).
+- **Instagram:** stays **blocked** until Meta App Review passes. Do not record an Instagram result here; write "Instagram: blocked on App Review" in the sign-off.
+
+**Evidence rules:**
+- Record timestamps (UTC), internal ids, and the output of `python manage.py journey_evidence --account <slug> --post <id>`. That output is already sanitized: no tokens or secrets, no message text, phone numbers cut to the last 4 digits.
+- Never paste access tokens, app secrets, webhook signatures, raw provider payloads, full phone numbers or customer message text.
+- Screenshots: crop out phone numbers and message content.
+
+### Prerequisites
+- [ ] The staging workspace is on the release commit. Record the SHA: ______
+- [ ] **Facebook:**
+  - [ ] The Page has been reconnected since the `read_insights` and `pages_manage_engagement` scope change.
+  - [ ] The Channels page shows it as connected.
+- [ ] **WhatsApp:**
+  - [ ] The number is registered and receives messages.
+  - [ ] `WHATSAPP_APP_SECRET` is set (non-empty).
+  - [ ] The webhook is subscribed.
+- [ ] **Payments:**
+  - [ ] Flutterwave is in **test mode** for staging. Record which keys: test / live ______
+  - [ ] `FLUTTERWAVE_WEBHOOK_HASH` is set.
+  - [ ] The webhook URL points at staging `/billing/webhook/`.
+- [ ] **Workers:** the Celery worker and beat are running, and beat includes `alert-publishing-problems` and `publish-due-posts`.
+- [ ] **Review:** workspace review is **on** (Channels page), with one Admin as the writer and one Owner as the reviewer.
+- [ ] **Phones:** two test phones that are not team members: phone A (tracked customer) and phone B (organic customer).
+
+### J1. Publish a real Facebook post with the tracked WhatsApp link
+1. As the writer, create a text post for Facebook only, with the "Chat on WhatsApp" call to action and the link ticked. Submit it for review.
+2. As the reviewer, approve it. Then publish now.
+
+- [ ] The overview showed the post under "Awaiting approval" before approval.
+- [ ] The post is live on the Page, and its caption ends with the `/go/<code>` link.
+- [ ] Evidence: post id ______; `channels[0].status` is `published`; `publication_id` ______; the approval trail has `submitted` and `approved`, with the approved `content_hash` equal to `content_hash_now`.
+
+### J2. Open the link and send a real WhatsApp message (phone A)
+1. On phone A, open the Facebook post and tap the link. WhatsApp opens with the prefilled message ending "(ref CODE)".
+2. Send it unchanged.
+
+- [ ] Evidence: `tracked_links[0].clicks` is at least 1; time of the click ______; time of sending ______.
+
+### J3. The webhook creates the conversation, linked to the post
+- [ ] The chat appears in the inbox within 1 minute.
+- [ ] Evidence: in `conversations`, phone A's chat (masked `…NNNN`) has one `entry_points` row with `kind=tracked_link` and `post_id` equal to the J1 post. `reports.post_card[0].chats` is 1.
+
+### J4. Create a lead and an order from that conversation
+1. In the conversation, use "Create lead", then "Create order" (currency ZMW, or the workspace's usual one).
+
+- [ ] The lead page shows **"From a post:"** with the post, and "your team chose the chat".
+- [ ] The order page shows the same.
+- [ ] Evidence: in `attributions`, two rows (lead and order) with `method=explicit` and `credits_post=true`. The order `status` is `pending` and `paid_at` is null. `reports.post_card[0].revenue` is `[]`.
+
+### J5. Pay through the configured payment flow
+1. On the order page, click "Request payment" and open the checkout link.
+2. Pay with a Flutterwave **test** card.
+
+- [ ] The order shows Paid with a time.
+- [ ] Evidence: the order `status` is `paid`; `paid_at` ______; one payment with `status=succeeded` and `transaction_id` ______.
+- [ ] Clicking "Request payment" again is not offered. A forced repeat must not reopen the order.
+
+### J6. The reports agree, with currencies kept apart
+- [ ] The post's Results card, the Insights "Your customer journey" panel and `reports.revenue` all show the same paid amount, in its own currency, with no combined total.
+- [ ] `reports.sales_by_method`: `named` includes this order and `recent` does not.
+- [ ] Optional: a second order from the same chat in another currency shows as a separate line everywhere.
+
+### J7. An organic conversation stays unattributed (phone B)
+1. From phone B, message the business number directly, with no link and no ref code.
+2. Create an order from that chat and pay it (test card).
+
+- [ ] Its order page shows **"From a chat, not from a tracked post"**.
+- [ ] Insights "Not credited to a post": "Chats not from a post" went up by 1, and "Paid, not from a tracked post" shows this order. The post's card is unchanged.
+- [ ] Evidence: phone B's chat has `entry_points: []`; its order attribution has `credits_post=false`; `reports.journey.untracked_revenue` lists it.
+
+### J8. No conflation, and workspace isolation
+- [ ] Phone A's and phone B's chats, leads and orders are separate rows. Nothing from B is on the post's card.
+- [ ] Signed in as a member of a **different** staging workspace:
+  - the J1 post, order and reconciliation URLs return "not found";
+  - that workspace's Insights shows none of these numbers;
+  - `journey_evidence --account <other> --post <J1 id>` says "No such post".
+
+### J9. Browser checks (open since Workstreams 1, 2 and 4)
+- [ ] **AI suggestion:** in the composer, generate captions, pick one, then undo. The caption returns and the post is *not* marked AI-assisted after saving. Pick again and save: the post page shows "AI-assisted caption".
+- [ ] **Overview:** "Where your posts stand" counts match the library's "Where it stands" filter for each bucket. "Needs you" shows one action per post, and a member (not Admin) sees "Waiting for…" instead of "Review it".
+- [ ] **"Not tracked yet" versus zero:** a fresh workspace with no chat links shows "Not tracked yet" on Insights (not 0). After J1, steps with no activity show 0, not "Not tracked yet".
+
+### J10. Failure alert delivery
+1. Create and approve a Facebook post that will fail validation. For example, an image post whose image URL returns 404, or temporarily disconnect the Page.
+2. Wait at least 20 minutes, which covers the 15-minute settle window plus one 5-minute sweep.
+
+- [ ] Each Owner and Admin of **this** workspace gets exactly **one** email, "Your Facebook post didn't publish". It has the reason, a fix that matches the reason (reconnect for a permission error) and a link that opens the post in this workspace.
+- [ ] Retrying it so that it fails again sends **no** second email.
+- [ ] No member of any other workspace receives it.
+- [ ] Evidence: `channels[n].alerts_sent` shows `failed` with a time; the email received time ______ (do not paste the email body if it contains customer data).
+
+### Sign-off
+| Item | Result | Evidence ref | Who / when |
+|---|---|---|---|
+| J1–J8 journey | pass / fail | | |
+| J9 browser checks | pass / fail | | |
+| J10 alert delivery | pass / fail | | |
+| Instagram | blocked on App Review | — | |
+
+Any fail blocks the release gate. Record the failure and fix it; never edit the expected result to match the failure.
