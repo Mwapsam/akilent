@@ -24,9 +24,15 @@ from django.db.models import Q
 from django.utils import timezone
 
 
-def _mask_phone(phone: str) -> str:
+def _mask_phone(phone: str | None) -> str:
     digits = "".join(c for c in (phone or "") if c.isdigit())
     return f"…{digits[-4:]}" if digits else ""
+
+
+def _subject_id(attribution) -> str | None:
+    """The lead, order or deal an attribution is about (the model allows exactly one)."""
+    subject = attribution.lead or attribution.order or attribution.deal
+    return subject.public_id if subject is not None else None
 
 
 def _iso(value):
@@ -154,7 +160,7 @@ class Command(BaseCommand):
                 {
                     "public_id": c.public_id,
                     "channel": c.channel,
-                    "customer": _mask_phone(c.contact.phone if c.contact else ""),
+                    "customer": _mask_phone(c.contact.phone if c.contact else None),
                     "inbound_messages": Message.objects.filter(
                         conversation=c, direction=Message.Direction.INBOUND
                     ).count(),
@@ -177,7 +183,7 @@ class Command(BaseCommand):
                     else "order"
                     if a.order_id
                     else "deal",
-                    "subject_id": (a.lead or a.order or a.deal).public_id,
+                    "subject_id": _subject_id(a),
                     "conversation": a.conversation.public_id,
                     "method": a.method,
                     "credits_post": a.credits_post,

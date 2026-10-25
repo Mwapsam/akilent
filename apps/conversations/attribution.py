@@ -84,14 +84,12 @@ def record(
     existing = ConversationAttribution.objects.filter(**{subject: obj}).first()
     if existing is not None:
         return existing
-    # A post is credited only when the conversation itself was named. A conversation
-    # picked by the recent-conversation fallback is a guess, so the post that started it
-    # is not claimed: a guess must never read as a tracked-post conversion.
-    entry = (
-        first_entry_point(conversation)
-        if method == ConversationAttribution.Method.EXPLICIT
-        else None
-    )
+    # A post or an insight is credited only when the conversation itself was named. A
+    # conversation picked by the recent-conversation fallback is a guess, so neither the
+    # post nor the insight DM that started it is claimed: a guess must never read as a
+    # tracked conversion. (Enforced in the database too; see the model's constraint.)
+    explicit = method == ConversationAttribution.Method.EXPLICIT
+    entry = first_entry_point(conversation) if explicit else None
     attribution = ConversationAttribution.objects.create(
         account=obj.account,
         conversation=conversation,
@@ -103,7 +101,7 @@ def record(
         source_post=entry.post if entry else None,
         source_variant=entry.variant if entry else None,
         source_campaign=entry.campaign if entry else None,
-        originated_from=_originating_recommendation(conversation),
+        originated_from=_originating_recommendation(conversation) if explicit else None,
         **{subject: obj},
     )
     if obj.conversation_id != conversation.id:

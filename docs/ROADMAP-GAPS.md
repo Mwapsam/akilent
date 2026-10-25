@@ -448,3 +448,34 @@ How they are kept apart:
     - `test_2fa_pg_lock.py`.
   - **Environment note.** The first attempt with 12 workers failed during test-database setup with "out of shared memory" (`max_locks_per_transaction`). That is an environment limit, not a test result. The run used `-c max_locks_per_transaction=512`.
   - **Not covered.** The accounts suite on PostgreSQL still has its 6 known baseline failures (§9).
+
+### Review fixes (2026-10-25, two review rounds on the Workstream 1–5 diff)
+**Payments and order state** (`apps/commerce/services.py`):
+- **`request_payment`.**
+  - It locks the order row and checks and charges from that row, so a stale copy can't reopen an order paid in the meantime, or charge an old total.
+  - It reuses a live link for the same amount instead of creating a second one, and withdraws older pending links (marked failed, "superseded"). Only one link is ever live.
+- **`mark_paid`.** It locks the payment and the order. The payment is always recorded as succeeded, because the money was taken. But a paid, refunded or cancelled order is never flipped back to PAID, and its first `paid_at` is kept. A late or duplicate charge is noted in the customer's conversation for a refund check.
+- **`mark_failed`.** A failed old link never sets a settled order to FAILED.
+
+**Attribution:**
+- **One rule.** A guess credits nothing: no post, channel, campaign, entry point or insight (`originated_from`).
+- **Three places enforce it:**
+  - the writer, `attribution.record`;
+  - migration 0025, a one-off `update()` that clears that credit from rows written before the fix and keeps the guess itself;
+  - a database `CheckConstraint`, `attribution_guess_credits_nothing` (migration 0026).
+- **Readers.** These now use `source_post` directly (`post_credit_q`, `credits_post`). The method is no longer re-checked at read time.
+
+**Lead and order pages:**
+- **No wrong route.** A credited post with no entry point left says "the chat started from the post", never "a reply to their comment".
+- **Who made it.** The page says "made from this chat", adding "by an automation" only when the run is on record. It no longer says "your team chose the chat"; the Insights footer and the help article were updated the same way.
+- **Gating.** The block shows only when the business can publish posts (the same `publishing_channels()` gate as the journey), or when a post is credited.
+
+**Reports:**
+- **Chat counts.** Both count chats started in the period. `untracked_chats` is now bounded by the period (with a NOT EXISTS for an earlier inbound message) instead of grouping the account's whole message history.
+- **One channel set.** `PUBLISHING_CHANNELS` and `publishing_channels()` are now the single source.
+
+**`journey_evidence`:**
+- It lists orders created *or paid* in the window, the attributions of the listed leads and orders, and every conversation behind them, so each reported number traces to a row.
+- `sales()` runs once.
+
+**Typing.** mypy is clean (the 5 reported errors are fixed).

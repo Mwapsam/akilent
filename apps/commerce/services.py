@@ -99,20 +99,39 @@ def request_payment(order: Order, *, redirect_url: str) -> Payment:
     verify-then-trust webhook pattern) but tagged with ``order_id`` in
     ``meta`` so the shared webhook can route commerce charges separately
     from subscription charges. Raises PaymentNotRequestable for a settled order.
+
+    Asking again while a link for the same amount is live returns that payment, so a
+    double click or a workflow plus a person never gives the customer two links to pay.
     """
     from apps.billing.flutterwave import FlutterwaveError, get_fw_client
 
     # Checked and changed under a row lock on the current row, never on the caller's copy:
     # a payment webhook may have marked the order paid since it was loaded. If the webhook
     # commits first, this sees PAID and refuses; if this holds the lock, the webhook's PAID
-    # is written after it and wins.
+    # is written after it and wins. Everything the link charges comes from this row too.
     with transaction.atomic():
-        locked = Order.objects.select_for_update().get(pk=order.pk)
+        locked = (
+            Order.objects.select_for_update().select_related("contact").get(pk=order.pk)
+        )
+        order.status = locked.status
         if locked.status in _SETTLED:
-            order.status = locked.status
             raise PaymentNotRequestable(
                 f"This order is already {locked.get_status_display().lower()}."
             )
+        pending = list(locked.payments.filter(status=Payment.Status.PENDING))
+        for live in pending:
+            if (
+                live.checkout_url
+                and live.amount == locked.total
+                and live.currency == locked.currency
+            ):
+                return live
+        # Older links for another amount (the order changed) or that never got a link
+        # are withdrawn, so only one link is ever live.
+        for stale in pending:
+            stale.status = Payment.Status.FAILED
+            stale.raw_payload = {**(stale.raw_payload or {}), "error": "superseded"}
+            stale.save(update_fields=["status", "raw_payload", "updated_at"])
         payment = Payment.objects.create(
             account=locked.account,
             order=locked,
@@ -125,13 +144,13 @@ def request_payment(order: Order, *, redirect_url: str) -> Payment:
 
     try:
         link = get_fw_client().initialize_payment(
-            tx_ref=f"order-{order.public_id}-{uuid.uuid4().hex[:8]}",
-            amount=order.total,
-            currency=order.currency,
-            customer_email=order.contact.email or "customer@example.com",
-            customer_name=order.contact.full_name or str(order.contact),
+            tx_ref=f"order-{locked.public_id}-{uuid.uuid4().hex[:8]}",
+            amount=payment.amount,
+            currency=payment.currency,
+            customer_email=locked.contact.email or "customer@example.com",
+            customer_name=locked.contact.full_name or str(locked.contact),
             redirect_url=redirect_url,
-            meta={"order_id": order.public_id, "payment_id": payment.public_id},
+            meta={"order_id": locked.public_id, "payment_id": payment.public_id},
         )
         payment.checkout_url = link
         payment.save(update_fields=["checkout_url", "updated_at"])
@@ -151,26 +170,54 @@ def mark_paid(
     Safe to call twice for the same payment (e.g. a replayed webhook that
     slipped past the outer ``ProcessedWebhookEvent`` dedupe) — a
     already-succeeded Payment is a no-op.
+
+    The money is always recorded on the Payment (it was taken), but the order only becomes
+    PAID from an open state. A charge on an order that is already paid, refunded or
+    cancelled (an old link paid late, or paid twice) leaves the order as it is, keeps its
+    first ``paid_at``, and is flagged in the customer's conversation for a refund.
     """
-    if payment.status == Payment.Status.SUCCEEDED:
-        return payment.order
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        if payment.status == Payment.Status.SUCCEEDED:
+            return payment.order
+        order = Order.objects.select_for_update().get(pk=payment.order_id)
+        payment.status = Payment.Status.SUCCEEDED
+        payment.transaction_id = transaction_id
+        payment.raw_payload = raw_payload or {}
+        payment.save(
+            update_fields=["status", "transaction_id", "raw_payload", "updated_at"]
+        )
+        settled = order.status in _SETTLED
+        paid_at = timezone.now()
+        if not settled:
+            order.status = Order.Status.PAID
+            order.paid_at = paid_at
+            order.save(update_fields=["status", "paid_at", "updated_at"])
 
-    order = payment.order
-    payment.status = Payment.Status.SUCCEEDED
-    payment.transaction_id = transaction_id
-    payment.raw_payload = raw_payload or {}
-    payment.save(
-        update_fields=["status", "transaction_id", "raw_payload", "updated_at"]
-    )
-
-    order.status = Order.Status.PAID
-    order.paid_at = timezone.now()
-    order.save(update_fields=["status", "paid_at", "updated_at"])
+    if settled:
+        logger.warning(
+            "commerce: payment %s succeeded on order %s that is already %s",
+            payment.public_id,
+            order.public_id,
+            order.status,
+        )
+        _note_in_conversation(
+            order,
+            f"A payment of {payment.currency} {payment.amount} arrived for an order "
+            f"that is already {order.get_status_display().lower()}. Check whether the "
+            "customer needs a refund.",
+            {
+                "kind": "payment.on_settled_order",
+                "order_id": order.public_id,
+                "payment_id": payment.public_id,
+            },
+        )
+        return order
 
     emit_event(
         account=order.account,
         type="payment.succeeded",
-        occurred_at=order.paid_at,
+        occurred_at=paid_at,
         source="commerce",
         source_event_id=transaction_id,
         subject_type="payment",
@@ -180,7 +227,7 @@ def mark_paid(
     emit_event(
         account=order.account,
         type="order.paid",
-        occurred_at=order.paid_at,
+        occurred_at=paid_at,
         source="commerce",
         subject_type="order",
         subject_id=order.public_id,
@@ -223,13 +270,18 @@ def _note_in_conversation(order: Order, body: str, metadata: dict) -> None:
 
 
 def mark_failed(payment: Payment, *, error: str = "") -> Order:
-    order = payment.order
-    payment.status = Payment.Status.FAILED
-    payment.raw_payload = {**payment.raw_payload, "error": error}
-    payment.save(update_fields=["status", "raw_payload", "updated_at"])
-
-    order.status = Order.Status.FAILED
-    order.save(update_fields=["status", "updated_at"])
+    """Record a failed or rejected charge. The order only becomes FAILED while it is still
+    waiting for this money: a failed old link never undoes a paid, refunded or cancelled
+    order."""
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        order = Order.objects.select_for_update().get(pk=payment.order_id)
+        payment.status = Payment.Status.FAILED
+        payment.raw_payload = {**(payment.raw_payload or {}), "error": error}
+        payment.save(update_fields=["status", "raw_payload", "updated_at"])
+        if order.status not in _SETTLED:
+            order.status = Order.Status.FAILED
+            order.save(update_fields=["status", "updated_at"])
 
     emit_event(
         account=order.account,

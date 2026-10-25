@@ -1099,6 +1099,22 @@ class ConversationAttribution(models.Model):
                     )
                 ),
             ),
+            # A guessed conversation credits nothing: no post, channel, campaign, entry
+            # point or insight. This is the one guarantee behind every report that reads
+            # ``source_post`` (rows written before it were cleared by migration 0025).
+            models.CheckConstraint(
+                name="attribution_guess_credits_nothing",
+                condition=(
+                    ~models.Q(method="recent_conversation")
+                    | models.Q(
+                        source_post__isnull=True,
+                        source_variant__isnull=True,
+                        source_campaign__isnull=True,
+                        entry_point__isnull=True,
+                        originated_from__isnull=True,
+                    )
+                ),
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -1110,10 +1126,9 @@ class ConversationAttribution(models.Model):
 
     @property
     def credits_post(self) -> bool:
-        """True only when this record credits a post: the conversation was named, and a
-        tracked post started it. A recent-conversation guess never credits a post, including
-        rows written before that rule, which may still hold a ``source_post``."""
-        return self.method == self.Method.EXPLICIT and self.source_post_id is not None
+        """True when this record credits a post. Only an explicitly named conversation can
+        (the ``attribution_guess_credits_nothing`` constraint), so this is ``source_post``."""
+        return self.source_post_id is not None
 
     @property
     def is_guess(self) -> bool:

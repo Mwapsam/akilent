@@ -2,8 +2,8 @@
 
 Counts only explicit evidence: chats that used the channel's tracked link, or DMs a
 private reply to a comment on it opened (apps.conversations.entry_points). Leads and
-orders count when their attribution names the channel as its source *and* the team named
-the conversation (method EXPLICIT). Nothing is credited by timing or by the
+orders count when their attribution names the channel as its source, which only an
+explicitly named conversation can do. Nothing is credited by timing or by the
 recent-conversation guess, so these are lower bounds, and the card says so.
 """
 
@@ -12,25 +12,17 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Count, Min, Q, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 
 from .links import short_url
 from .models import ContentPost, ContentPostVariant, LinkClick, TrackedLink
 
 
-def _explicit():
-    from apps.conversations.models import ConversationAttribution
-
-    return ConversationAttribution.Method.EXPLICIT
-
-
 def post_credit_q(prefix: str = "attribution__") -> Q:
-    """Orders or leads a post is credited with: explicit attribution naming a post.
-
-    The method is checked here, not only when the record is written, so an older
-    recent-conversation row that kept a ``source_post`` is never read as a post's sale.
-    """
-    return Q(**{f"{prefix}method": _explicit(), f"{prefix}source_post__isnull": False})
+    """Orders or leads a post is credited with. Only an explicitly named conversation can
+    credit a post (the database constraint ``attribution_guess_credits_nothing``), so this
+    is simply "names a post"; it exists so every report spells the rule the same way."""
+    return Q(**{f"{prefix}source_post__isnull": False})
 
 
 def results_for(post: ContentPost) -> list[dict]:
@@ -92,16 +84,26 @@ def results_for(post: ContentPost) -> list[dict]:
     return rows
 
 
-def post_tracking_available(account) -> bool:
-    """Whether this business can publish posts at all, so post results make sense to it:
-    a publishing channel is on and Content Studio is usable. The same gate for the
-    Insights journey and the "where this came from" block on leads and orders."""
+# The channels Content Studio publishes to; posts on them are what post results are about.
+PUBLISHING_CHANNELS = frozenset(
+    {ContentPostVariant.Platform.FACEBOOK, ContentPostVariant.Platform.INSTAGRAM}
+)
+
+
+def publishing_channels(account) -> frozenset:
+    """The publishing channels this business can use now: switched on, and Content Studio
+    usable. Empty means post results don't apply to it."""
     from apps.billing import api as billing_api
     from apps.core.channels import enabled_channels
 
-    return bool({"instagram", "facebook"} & enabled_channels()) and billing_api.usable(
-        account, "content_studio"
-    )
+    on = PUBLISHING_CHANNELS & enabled_channels()
+    return on if on and billing_api.usable(account, "content_studio") else frozenset()
+
+
+def post_tracking_available(account) -> bool:
+    """The same gate for the Insights journey and the "where this came from" block on
+    leads and orders: the business can publish posts at all."""
+    return bool(publishing_channels(account))
 
 
 def journey(account, period) -> dict | None:
@@ -118,8 +120,8 @@ def journey(account, period) -> dict | None:
     from apps.core.channels import enabled_channels
     from apps.crm.models import Lead
 
-    publishing = {"instagram", "facebook"} & enabled_channels()
-    if not post_tracking_available(account):
+    publishing = publishing_channels(account)
+    if not publishing:
         return None
 
     in_period = {"__gte": period.start, "__lt": period.end}
@@ -193,15 +195,22 @@ def journey(account, period) -> dict | None:
     # period), ``untracked_chats`` started with the customer's first message in the period
     # and never linked to a post. A customer who came from a post long ago and writes
     # again now started their chat earlier, so they are in neither.
+    # Bounded by the period, not the account's whole history: conversations with an
+    # inbound message in the period, minus any that already had one before it.
+    inbound = Message.objects.filter(
+        account=account, direction=Message.Direction.INBOUND
+    )
     out["untracked_chats"] = (
-        Conversation.objects.filter(account=account, entry_points__isnull=True)
-        .annotate(
-            first_in=Min(
-                "messages__timestamp",
-                filter=Q(messages__direction=Message.Direction.INBOUND),
+        Conversation.objects.filter(
+            account=account,
+            entry_points__isnull=True,
+            pk__in=inbound.filter(**during("timestamp")).values("conversation"),
+        )
+        .exclude(
+            Exists(
+                inbound.filter(conversation=OuterRef("pk"), timestamp__lt=period.start)
             )
         )
-        .filter(**during("first_in"))
         .count()
     )
     guessed = Q(attribution__method=ConversationAttribution.Method.RECENT_CONVERSATION)

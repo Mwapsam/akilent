@@ -109,29 +109,12 @@ class World:
         order.save(update_fields=["status", "paid_at"])
         return order
 
-    def legacy_guess_order(self, contact, conversation, amount, currency):
-        """An order whose guessed attribution was written before the fix, so it still
-        carries the post that started the chat."""
-        order = Order.objects.create(
-            account=self.account,
-            contact=contact,
-            conversation=conversation,
-            total=Decimal(amount),
-            currency=currency,
-            status=Order.Status.PAID,
-            paid_at=timezone.now(),
-        )
-        entry = conversation.entry_points.first()
-        ConversationAttribution.objects.create(
-            account=self.account,
-            conversation=conversation,
-            channel=conversation.channel,
-            method=A.RECENT_CONVERSATION,
-            order=order,
-            entry_point=entry,
-            source_post=entry.post,
-            source_variant=entry.variant,
-        )
+    def guess_order(self, contact, conversation, amount, currency):
+        """A paid order made without naming a chat, so Akilent guessed ``conversation``
+        (the customer's latest) for it."""
+        order = self.paid_order(contact, amount, currency)
+        assert order.attribution.is_guess
+        assert order.attribution.conversation == conversation
         return order
 
     def journey(self):
@@ -152,9 +135,9 @@ def _by_currency(rows):
     return {r["currency"]: (r["orders"], r["total"]) for r in rows}
 
 
-def test_an_old_guessed_row_is_never_read_as_a_posts_sale(world):
+def test_a_guessed_order_is_never_read_as_a_posts_sale(world):
     conversation, contact = world.chat(from_post=True)
-    order = world.legacy_guess_order(contact, conversation, "60.00", "ZMW")
+    order = world.guess_order(contact, conversation, "60.00", "ZMW")
 
     assert not order.attribution.credits_post and order.attribution.is_guess
     [row] = results_for(world.post)
@@ -177,7 +160,7 @@ def test_the_three_revenue_buckets_are_disjoint_and_per_currency(world):
         tracked_contact, "45.00", "ZMW", tracked
     )  # explicit, from the post
     world.paid_order(tracked_contact, "20.00", "USD", tracked)
-    world.legacy_guess_order(tracked_contact, tracked, "60.00", "ZMW")  # a guess
+    world.guess_order(tracked_contact, tracked, "60.00", "ZMW")  # a guess
     world.paid_order(organic_contact, "30.00", "USD", organic)  # named chat, no post
     Order.objects.create(  # no chat at all
         account=world.account,
@@ -269,7 +252,7 @@ def test_nothing_is_reported_as_untracked_before_tracking_exists(world):
 
 def test_insights_shows_what_is_not_credited_to_a_post(world):
     conversation, contact = world.chat(from_post=True)
-    world.legacy_guess_order(contact, conversation, "60.00", "ZMW")
+    world.guess_order(contact, conversation, "60.00", "ZMW")
     world.chat(from_post=False)
 
     html = world.client.get("/insights/").content.decode()
@@ -282,7 +265,7 @@ def test_another_workspaces_attribution_never_leaks(world):
     other = World("other")
     conversation, contact = other.chat(from_post=True)
     other.paid_order(contact, "99.00", "ZMW", conversation)
-    other.legacy_guess_order(contact, conversation, "50.00", "ZMW")
+    other.guess_order(contact, conversation, "50.00", "ZMW")
     other.chat(from_post=False)
     world.chat(from_post=True)  # this workspace tracks too, with one chat and no orders
 
@@ -366,25 +349,38 @@ def test_a_credited_post_still_shows_when_publishing_is_off(world, settings):
     assert 'data-attribution="post"' in world.page(order)
 
 
-def test_the_cleanup_migration_removes_post_credit_from_old_guesses(world):
-    import importlib
+def test_the_database_refuses_a_guess_that_credits_anything(world):
+    from django.db import IntegrityError, transaction
 
-    from django.apps import apps as django_apps
-
-    migration = importlib.import_module(
-        "apps.conversations.migrations.0025_clear_post_credit_on_guesses"
-    )
     conversation, contact = world.chat(from_post=True)
-    guess = world.legacy_guess_order(contact, conversation, "60.00", "ZMW")
-    named = world.paid_order(contact, "45.00", "ZMW", conversation)
+    order = Order.objects.create(
+        account=world.account, contact=contact, total=Decimal("1"), currency="ZMW"
+    )
 
-    migration.clear(django_apps, None)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ConversationAttribution.objects.create(
+            account=world.account,
+            conversation=conversation,
+            channel=conversation.channel,
+            method=A.RECENT_CONVERSATION,
+            order=order,
+            source_post=world.post,
+        )
 
-    old = ConversationAttribution.objects.get(order=guess)
-    assert old.method == A.RECENT_CONVERSATION and old.conversation == conversation
-    assert (old.source_post, old.source_variant, old.entry_point) == (None, None, None)
-    kept = ConversationAttribution.objects.get(order=named)
-    assert kept.source_post == world.post and kept.entry_point is not None
+
+def test_a_guess_credits_no_insight_either(world):
+    from apps.insights.models import RecommendationLog
+
+    conversation, contact = world.chat(from_post=False)
+    with patch(
+        "apps.conversations.attribution._originating_recommendation",
+        return_value=RecommendationLog(pk=1),
+    ) as insight:
+        order = world.paid_order(contact, "10.00", "ZMW")
+
+    assert order.attribution.is_guess
+    assert order.attribution.originated_from_id is None
+    insight.assert_not_called()
 
 
 def test_chat_counts_are_both_chats_started_in_the_period(world):

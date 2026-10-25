@@ -365,7 +365,7 @@ def build_caption_draft(
     from apps.ai.models import AIDraft
 
     account = Account.objects.get(pk=account_id)
-    context = {"media_type": media_type, "platform": platform}
+    context: dict[str, object] = {"media_type": media_type, "platform": platform}
     if goal:
         context["goal"] = goal
     if cta:
