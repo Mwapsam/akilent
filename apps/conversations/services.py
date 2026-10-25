@@ -162,7 +162,7 @@ def record_inbound_whatsapp_message(
     if event is None:
         return conversation
 
-    handled = False
+    handled = ""
     if enroll_workflows:
         try:
             wa_account_id = (
@@ -192,7 +192,6 @@ def record_inbound_whatsapp_message(
         return conversation
 
     _record_customer_activity(contact, message_log.timestamp, message_log.content)
-    _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, message_log.content)
     return conversation
 
@@ -260,7 +259,7 @@ def record_inbound_instagram_message(
     if event is None:
         return conversation
 
-    handled = False
+    handled = ""
     if enroll_workflows:
         try:
             # Extract the IG quick_reply payload (if any) as the reply_id for
@@ -295,7 +294,6 @@ def record_inbound_instagram_message(
     _record_customer_activity(
         contact, instagram_message.timestamp, instagram_message.body
     )
-    _clear_obsolete_followups(conversation, contact)
     capture_opportunity(conversation, contact, instagram_message.body)
     return conversation
 
@@ -347,25 +345,29 @@ def _record_customer_activity(contact, timestamp, body: str) -> None:
         )
 
 
-def _clear_obsolete_followups(conversation, contact) -> None:
-    """A reminder to chase someone who has just written back is noise.
+def _pause_for_teammate(conversation) -> None:
+    """A person replied: step automations back here, if the business asked for that."""
+    hours = getattr(conversation.account, "pause_automation_hours", 0) or 0
+    if hours:
+        try:
+            conversation.pause_automation(hours)
+        except Exception:
+            logger.exception(
+                "could not pause automations on conversation=%s", conversation.pk
+            )
 
-    The customer replying is the thing the reminder was waiting for, so the
-    business shouldn't have to tick it off by hand. Only *due-in-the-future or
-    overdue but still open* reminders for this customer are closed; anything
-    already marked done is left alone."""
-    from apps.conversations.models import FollowUp
+
+def _close_answered_followups(conversation) -> None:
+    """A reply went out: "the customer is waiting on us" reminders on this conversation are
+    done. Reminders a person set stay; the pane asks whether they're still needed."""
+    from apps.conversations import followups
 
     try:
-        open_followups = FollowUp.objects.filter(
-            account=conversation.account,
-            contact=contact,
-            done_at__isnull=True,
-        )
-        for followup in open_followups:
-            followup.mark_done()
+        followups.close_when_team_replies(conversation)
     except Exception:
-        logger.exception("could not close follow-ups for contact=%s", contact.pk)
+        logger.exception(
+            "could not close answered follow-ups for conversation=%s", conversation.pk
+        )
 
 
 def record_system_message(
@@ -441,7 +443,7 @@ def capture_opportunity(conversation: Conversation, contact, body: str) -> None:
 
 def _enroll_workflows(
     conversation: Conversation, contact, message: dict, reply: dict | None = None
-) -> bool:
+) -> str:
     """Start or resume workflows for this message. True if one resumed or answered it.
 
     Channel-neutral: ``message`` is ``{"body", "type"}``; ``reply`` is a tapped
@@ -465,7 +467,7 @@ def _enroll_workflows(
             reply.get("flow_token", ""),
             reply.get("fields", {}),
         ):
-            return True
+            return HANDLED_FORM
 
     # A customer answering a form question must not also start or resume an
     # unrelated workflow, or reach AI as if it were a normal message — same
@@ -473,29 +475,63 @@ def _enroll_workflows(
     # form in progress takes the message even if it also happens to look like
     # a workflow's wait_for_reply choice.
     if conversation_forms.record_answer(conversation, message["body"]):
-        return True
+        return HANDLED_FORM
+
+    # A teammate took this conversation over: automations stay out of it until the pause
+    # ends (forms already in progress above still finish).
+    if conversation.automation_paused:
+        return ""
 
     # A customer answering a question an automation asked ("Prices or Booking?") continues
     # that conversation; it must not also start unrelated keyword workflows.
     if resume_on_reply(conversation.account_id, contact, message):
-        return True
+        return HANDLED_REPLY
 
     # Only a workflow that actually answered keeps AI out; one that ran and said nothing
     # (a welcome for someone already welcomed) must not silence AI for good.
     # Strip routing-only keys (prefixed with "_") before storing the message in the run context.
     stored_message = {k: v for k, v in message.items() if not k.startswith("_")}
-    return answer_message(
+    answered = answer_message(
         conversation.account_id,
         contact,
         context={"conversation_id": conversation.public_id, "message": stored_message},
     )
+    return HANDLED_AUTOMATION if answered else ""
 
 
-def _announce_processed(
-    conversation: Conversation, message: Message, handled: bool
-) -> None:
-    """Let optional consumers (AI) react once deterministic automation has had its chance."""
+# Who took a customer's message, in the fixed order every inbound message goes through
+# (``_enroll_workflows``): a form in progress, an automation waiting for this answer, the
+# automations that answer messages (one at most, by priority), and otherwise the team (with
+# AI's suggestion, or an automatic AI reply where the owner allowed it).
+HANDLED_FORM = "form"
+HANDLED_REPLY = "automation_reply"
+HANDLED_AUTOMATION = "automation"
+HANDLED_PAUSED = "paused"
+HANDLED_LABELS = {
+    HANDLED_FORM: "Answer to a form in progress",
+    HANDLED_REPLY: "An automation was waiting for this answer",
+    HANDLED_AUTOMATION: "Answered by an automation",
+    HANDLED_PAUSED: "Automations are paused here, so it's yours",
+    "": "Left for your team",
+}
+
+
+def _announce_processed(conversation: Conversation, message: Message, handled) -> None:
+    """Record who took the message, then let optional consumers (AI) react once
+    deterministic automation has had its chance."""
     from apps.conversations.signals import conversation_message_processed
+
+    if message is not None and message.direction == Message.Direction.INBOUND:
+        label = (
+            handled
+            if isinstance(handled, str)
+            else ("" if not handled else HANDLED_AUTOMATION)
+        )
+        if not label and conversation.automation_paused:
+            label = HANDLED_PAUSED
+        if (message.metadata or {}).get("handled_by") != label:
+            message.metadata = {**(message.metadata or {}), "handled_by": label}
+            message.save(update_fields=["metadata"])
 
     for receiver, result in conversation_message_processed.send_robust(
         sender=Conversation,
@@ -568,6 +604,11 @@ def record_outbound_message(
     if created:
         metrics.incr("outbound_projection_created")
         conversation.register_outbound(timestamp)
+        # Only a person's reply answers the customer: an automation, AI, form or campaign
+        # send neither closes "they're waiting on us" reminders nor counts as a takeover.
+        if status != "failed" and not (metadata or {}).get("sent_by"):
+            _close_answered_followups(conversation)
+            _pause_for_teammate(conversation)
     else:
         metrics.incr("outbound_projection_duplicates")
         record_message_status(message, status)

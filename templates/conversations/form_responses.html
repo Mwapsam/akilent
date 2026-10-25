@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Answers — {{ form.name }} — Forms{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+      <a href="{% url 'conversations:forms_list' %}" class="hover:text-ink">Forms</a>
+      <span aria-hidden="true">/</span>
+      <a href="{% url 'conversations:form_detail' form.pk %}" class="hover:text-ink">{{ form.name }}</a>
+      <span aria-hidden="true">/</span><span class="text-ink">Answers</span>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight text-ink">Answers to {{ form.name }}</h1>
+  </div>
+  <a href="?format=csv{% if status %}&status={{ status }}{% endif %}" class="btn btn-secondary btn-sm" hx-boost="false" download>Download CSV</a>
+</header>
+
+<nav class="tabs mb-4" aria-label="Filter">
+  <a href="?" class="tab {% if not status %}tab-active{% endif %}">All</a>
+  <a href="?status=completed" class="tab {% if status == 'completed' %}tab-active{% endif %}">Finished</a>
+  <a href="?status=in_progress" class="tab {% if status == 'in_progress' %}tab-active{% endif %}">Filling it in</a>
+  <a href="?status=abandoned" class="tab {% if status == 'abandoned' %}tab-active{% endif %}">Didn't finish</a>
+</nav>
+
+{% if page.object_list %}
+<div class="table-wrap overflow-x-auto">
+  <table class="table table--cards">
+    <thead>
+      <tr><th>Customer</th><th>Status</th>{% for q in form.questions %}<th>{{ q.label }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for r in page.object_list %}
+      <tr>
+        <td data-label="Customer"><a href="{% url 'conversations:detail' r.conversation.public_id %}" class="text-accent hover:underline">{{ r.contact.display_name }}</a>
+          <span class="block text-xs text-gray-500">{{ r.started_at|date:"j M, H:i" }}</span></td>
+        <td data-label="Status">{{ r.get_status_display }}</td>
+        {% for c in r.cells %}<td>{{ c|default:"—" }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "components/pagination.html" with page=page %}
+{% else %}
+  {% include "components/empty_state.html" with icon="list" title="No answers here yet" message="Answers show up as soon as a customer starts the form." %}
+{% endif %}
+{% endblock %}

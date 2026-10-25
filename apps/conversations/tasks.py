@@ -82,7 +82,23 @@ def remind_missed_conversations() -> int:
     n = create_missed_followups()
     if n:
         logger.info("remind_missed_conversations: created %d follow-up(s)", n)
+    # Same hourly sweep: forms nobody finished in time free their conversation.
+    from apps.conversations.forms import abandon_stale
+
+    abandoned = abandon_stale()
+    if abandoned:
+        logger.info(
+            "remind_missed_conversations: let go of %d unfinished form(s)", abandoned
+        )
     return n
+
+
+@shared_task(queue="celery")
+def notify_due_followups() -> int:
+    """Tell the team about reminders that just fell due (see ``followups.notify_due``)."""
+    from apps.conversations.followups import notify_due
+
+    return notify_due()
 
 
 @shared_task(queue="celery")

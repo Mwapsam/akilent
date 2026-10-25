@@ -25,7 +25,7 @@ apps.conversations.reporting, for the selected ``days`` period.
       </div>
       <div>
         <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
-        <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}){% endif %}</p>
+        <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}{% if followups.on_time_pct is not None %}, {{ followups.on_time_pct }}% on time{% endif %}){% endif %}</p>
       </div>
       <div>
         <p class="stat-value">{{ resolution.median_resolution_seconds|duration }}</p>

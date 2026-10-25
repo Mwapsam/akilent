@@ -116,6 +116,60 @@
     {% endif %}
   </section>
 
+  <section class="card card-pad text-sm space-y-2" aria-labelledby="followups-title">
+    <div class="flex items-center justify-between">
+      <h2 id="followups-title" class="font-medium text-ink">Follow-ups</h2>
+      <a href="{% url 'conversations:followups_due' %}" class="text-xs text-gray-500 hover:underline">All</a>
+    </div>
+    {% for f in open_followups %}
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-ink">{{ f.note|default:"Follow up" }}</p>
+          <p class="text-xs text-gray-500">Due {{ f.due_label }}{% if f.assigned_to %} · {{ f.assigned_to.get_full_name|default:f.assigned_to.email }}{% endif %}</p>
+        </div>
+        <form method="post" action="{% url 'conversations:followup_complete' f.pk %}" hx-boost="false">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="btn btn-ghost btn-xs">Done</button>
+        </form>
+      </div>
+    {% empty %}
+      <p class="text-xs text-gray-500">No reminders. Set one from a conversation with “Remind me”.</p>
+    {% endfor %}
+  </section>
+
+  {% if automations %}
+  <section class="card card-pad text-sm space-y-2" aria-labelledby="automations-title">
+    <h2 id="automations-title" class="font-medium text-ink">Automations</h2>
+    {% for r in automations.running %}
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <a href="{% url 'automation:run' r.run_id %}" class="font-medium text-ink hover:underline">{{ r.workflow }}</a>
+          <p class="text-xs text-gray-500">{{ r.state }}{% if r.step %} · {{ r.step }}{% endif %}{% if r.next_due_at %} · until {{ r.next_due_at|date:"j M, H:i" }}{% endif %}</p>
+        </div>
+        <form method="post" action="{% url 'automation:run-action' r.run_id 'cancel' %}" hx-boost="false"
+              data-confirm="Stop {{ r.workflow }} for this customer?" data-confirm-label="Stop">{% csrf_token %}
+          <button class="btn btn-ghost btn-xs">Stop</button>
+        </form>
+      </div>
+    {% empty %}
+      <p class="text-xs text-gray-500">Nothing is running for them right now.</p>
+    {% endfor %}
+    {% if automations.manual %}
+    <form method="post" class="flex gap-2 pt-1" hx-boost="false"
+          x-data="{ slug: '{{ automations.manual.0.slug }}' }" :action="'/automations/' + slug + '/enroll/'">
+      {% csrf_token %}
+      <input type="hidden" name="contact" value="{{ contact.public_id }}">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <label class="sr-only" for="run-automation">Automation to run</label>
+      <select id="run-automation" class="select select-sm flex-1" x-model="slug">
+        {% for wf in automations.manual %}<option value="{{ wf.slug }}">{{ wf.name }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-secondary btn-sm">Run</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="card card-pad text-sm space-y-2" aria-labelledby="details-title">
     <h2 id="details-title" class="font-medium text-ink">Details</h2>
     <div class="flex justify-between"><span class="text-gray-500">Added</span><span>{{ contact.first_seen|date:"j M Y" }}</span></div>

@@ -19,6 +19,18 @@ _ALIASES: dict[str, str] = {
 }
 
 
+def sending_number(account):
+    """The number this account sends from (see ``get_whatsapp_provider``), or None."""
+    from apps.whatsapp.models import WhatsAppBusinessNumber
+
+    numbers = list(
+        WhatsAppBusinessNumber.objects.filter(account=account, is_active=True).order_by(
+            "created_at", "pk"
+        )
+    )
+    return next((n for n in numbers if n.is_ready), numbers[0] if numbers else None)
+
+
 def get_whatsapp_provider(account) -> WhatsAppProvider:
     from apps.core.models import Configurations
     from apps.whatsapp.models import WhatsAppBusinessNumber

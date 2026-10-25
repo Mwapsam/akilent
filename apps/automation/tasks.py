@@ -82,6 +82,26 @@ def run_due_workflows() -> int:
     return n
 
 
+def _webhook_gave_up(delivery, error: str) -> None:
+    """Show a webhook that will never arrive on its step, and tell the owner.
+
+    The run itself carried on when the step queued the delivery, so it isn't failed here;
+    the step is, so run history and the failure email say what went wrong.
+    """
+    from apps.automation.models import WorkflowStepRun
+    from apps.automation.workflow_engine import _alert_failure
+
+    step_run = WorkflowStepRun.objects.filter(
+        run_id=delivery.run_id, step_id=delivery.step_id
+    ).first()
+    if step_run is not None and step_run.status != "failed":
+        step_run.status = "failed"
+        step_run.result = {**(step_run.result or {}), "error": error}
+        step_run.save(update_fields=["status", "result"])
+    if delivery.run_id:
+        _alert_failure(delivery.run, error)
+
+
 @shared_task(bind=True, max_retries=_WEBHOOK_MAX_RETRIES, queue="webhooks")
 def deliver_workflow_webhook(self, delivery_id: int) -> None:
     """POST a Workflow ``webhook`` step's payload, with exponential backoff.
@@ -114,6 +134,7 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
             delivery_id,
             exc,
         )
+        _webhook_gave_up(delivery, f"The webhook address isn't allowed: {exc}")
         return
 
     try:
@@ -139,6 +160,9 @@ def deliver_workflow_webhook(self, delivery_id: int) -> None:
                 delivery_id,
                 delivery.url,
                 exc,
+            )
+            _webhook_gave_up(
+                delivery, f"The webhook to {delivery.url} kept failing: {exc}"
             )
             return
         raise self.retry(

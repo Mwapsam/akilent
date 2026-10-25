@@ -59,6 +59,20 @@ def _resolve_or_provision_contact(
     )
 
 
+def _flow_token_for(template) -> str:
+    """A fresh token for a template whose button opens a form, naming that form."""
+    buttons = template.buttons or []
+    if not buttons or (buttons[0].get("type") or "").upper() != "FLOW":
+        return ""
+    from apps.conversations.forms import new_flow_token
+    from apps.conversations.models import ConversationForm
+
+    form = ConversationForm.objects.filter(
+        account_id=template.account_id, flow_id=buttons[0].get("flow_id") or ""
+    ).first()
+    return new_flow_token(form) if form is not None else ""
+
+
 def _build_template_payload(
     template,
     params: dict,
@@ -85,7 +99,9 @@ def _build_template_payload(
         # `params` stays the human-readable record (label -> value) that the UI
         # and tests read; `components` is the wire shape Meta actually needs.
         "params": params or {},
-        "components": build_send_components(template, params),
+        "components": build_send_components(
+            template, {**(params or {}), "_flow_token": _flow_token_for(template)}
+        ),
         "_category": template.category,
     }
     if conversation is not None:

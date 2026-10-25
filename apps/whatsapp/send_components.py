@@ -22,7 +22,7 @@ def _ordered_values(template, params: dict) -> list[str]:
     return [str(params.get(label, "") or "") for label in (template.variables or [])]
 
 
-def _button_component(template, values: list[str]) -> dict | None:
+def _button_component(template, values: list[str], flow_token: str = "") -> dict | None:
     """The parameter for a dynamic URL button, if the template has one.
 
     A URL button's variable reuses the body's numbering — ``{{2}}`` in the
@@ -43,6 +43,17 @@ def _button_component(template, values: list[str]) -> dict | None:
             "sub_type": "url",
             "index": "0",
             "parameters": [{"type": "text", "text": values[0]}],
+        }
+    if kind == "FLOW":
+        # Each recipient gets their own token, naming the form, so their answers come
+        # back to the right form and conversation (apps.conversations.forms).
+        return {
+            "type": "button",
+            "sub_type": "flow",
+            "index": "0",
+            "parameters": [
+                {"type": "action", "action": {"flow_token": flow_token or "unused"}}
+            ],
         }
     if kind != "URL":
         return None  # phone and quick-reply buttons carry no send-time parameter
@@ -68,6 +79,7 @@ def build_send_components(template, params: dict | None = None) -> list[dict]:
     the stored creation handle can't supply.
     """
     params = params or {}
+    flow_token = str(params.get("_flow_token") or "")
     values = _ordered_values(template, params)
     components: list[dict] = []
 
@@ -85,7 +97,7 @@ def build_send_components(template, params: dict | None = None) -> list[dict]:
             }
         )
 
-    button = _button_component(template, values)
+    button = _button_component(template, values, flow_token)
     if button:
         components.append(button)
 

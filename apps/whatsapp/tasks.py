@@ -309,8 +309,9 @@ def _sender_of(outbound) -> str:
 
     Insights credits replies by sender, so every automatic send must say so. A sender can mark
     the payload (``_sent_by``); the older paths are recognised by their idempotency key: an
-    automatic AI reply (apps.ai.autonomy) uses "ai-auto:", an automation step "wf:". A STOP
-    confirmation is the system talking, not the business answering.
+    automatic AI reply (apps.ai.autonomy) uses "ai-auto:", an automation step "wf:", a form
+    question "form:". A STOP confirmation or a campaign send is the system talking, not the
+    business answering.
     """
     if outbound is None:
         return ""
@@ -322,8 +323,10 @@ def _sender_of(outbound) -> str:
     key = outbound.idempotency_key or ""
     if key.startswith("ai-auto:"):
         return "ai"
-    if key.startswith("wf:"):
+    if key.startswith(("wf:", "form:")):
         return "automation"
+    if key.startswith("campaign:"):
+        return "system"
     return ""
 
 
@@ -1615,56 +1618,85 @@ def sync_templates_for_account(account) -> dict:
 
 
 def publish_conversation_flow(form) -> None:
-    """Create (if needed), upload, and publish a ``ConversationForm``'s WhatsApp
-    Flow. Public, synchronous entry point (not a Celery task) for the "Publish
-    to WhatsApp" button — mirrors ``sync_templates_for_account``'s shape: a
-    bounded number of Meta API calls a business owner is deliberately
-    triggering, so an immediate result is what they need, not a queue.
+    """Create or update, then publish, a ``ConversationForm``'s WhatsApp Flow.
 
-    Writes the result straight onto ``form`` (``flow_id``/``flow_status``/
-    ``flow_json_hash``/``flow_error``/``flow_published_at``) and saves it —
-    Meta's own publish response is the source of truth, no separate webhook
-    sync needed.
+    Runs in the background (``publish_conversation_flow_task``); the form page shows
+    "Publishing…" until it's done. Writes the outcome onto ``form``.
+
+    * The Flow lives in the WABA of the number the business sends from, so it can be sent.
+      If that changed, a new Flow is made there.
+    * Republishing first updates the existing Flow (Meta allows editing published Flows on
+      current Flow JSON versions). If Meta refuses, a new Flow is published and the old one
+      retired, so customers always get the latest questions.
     """
-    from apps.conversations.flow_json import build, content_hash
-    from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
-
-    number = (
-        WhatsAppBusinessNumber.objects.filter(account=form.account, is_active=True)
-        .exclude(waba_id__isnull=True)
-        .exclude(waba_id="")
-        .first()
+    from apps.conversations.flow_json import FlowJSONError, content_hash
+    from apps.whatsapp.providers import (
+        WhatsAppProviderError,
+        get_whatsapp_provider,
+        sending_number,
     )
-    if number is None:
+
+    def fail(message: str) -> None:
         form.flow_status = form.FlowStatus.ERROR
-        form.flow_error = "No connected WhatsApp number for this account."
-        form.save(update_fields=["flow_status", "flow_error", "updated_at"])
-        return
+        form.flow_error = message
+        form.save(
+            update_fields=[
+                "flow_id",
+                "flow_waba_id",
+                "flow_status",
+                "flow_error",
+                "updated_at",
+            ]
+        )
 
-    assert number.waba_id  # queryset excludes null/empty; narrow for mypy
-    waba_id: str = number.waba_id
-
+    number = sending_number(form.account)
+    if number is None or not number.waba_id:
+        return fail("Connect your WhatsApp number first.")
     try:
-        flow_json = build(form.questions)
-    except ValueError as exc:
-        form.flow_status = form.FlowStatus.ERROR
-        form.flow_error = str(exc)
-        form.save(update_fields=["flow_status", "flow_error", "updated_at"])
-        return
+        flow_json = form.build_flow_json()
+    except FlowJSONError as exc:
+        return fail(str(exc))
 
     provider = get_whatsapp_provider(form.account)
+    old_flow_id = form.flow_id if form.flow_waba_id in ("", number.waba_id) else ""
     try:
-        if not form.flow_id:
-            created = provider.create_flow(waba_id, form.name, ["OTHER"])
-            form.flow_id = created["id"]
-        provider.update_flow_json(form.flow_id, flow_json)
-        provider.publish_flow(form.flow_id)
+        flow_id = ""
+        if old_flow_id:
+            try:
+                provider.update_flow_json(old_flow_id, flow_json)
+                provider.publish_flow(old_flow_id)
+                flow_id = old_flow_id
+            except WhatsAppProviderError as exc:
+                if getattr(exc, "code", "") == "FLOW_VALIDATION":
+                    raise
+                logger.info(
+                    "publish_conversation_flow: form %s: in-place update refused (%s); "
+                    "publishing a new Flow",
+                    form.pk,
+                    exc,
+                )
+        if not flow_id:
+            name = (
+                f"{form.name[:100]} ({form.public_id[-6:]}-{timezone.now():%y%m%d%H%M})"
+            )
+            created = provider.create_flow(number.waba_id, name, ["OTHER"])
+            flow_id = created["id"]
+            form.flow_id, form.flow_waba_id = flow_id, number.waba_id
+            provider.update_flow_json(flow_id, flow_json)
+            provider.publish_flow(flow_id)
+            if old_flow_id and old_flow_id != flow_id:
+                try:
+                    provider.deprecate_flow(old_flow_id)
+                except (WhatsAppProviderError, NotImplementedError) as exc:
+                    logger.warning(
+                        "publish_conversation_flow: couldn't retire old flow %s: %s",
+                        old_flow_id,
+                        exc,
+                    )
     except (WhatsAppProviderError, NotImplementedError, KeyError) as exc:
-        form.flow_status = form.FlowStatus.ERROR
-        form.flow_error = str(exc)
-        form.save(update_fields=["flow_id", "flow_status", "flow_error", "updated_at"])
-        return
+        return fail(str(exc))
 
+    form.flow_id, form.flow_waba_id = flow_id, number.waba_id
     form.flow_status = form.FlowStatus.PUBLISHED
     form.flow_json_hash = content_hash(flow_json)
     form.flow_error = ""
@@ -1672,6 +1704,7 @@ def publish_conversation_flow(form) -> None:
     form.save(
         update_fields=[
             "flow_id",
+            "flow_waba_id",
             "flow_status",
             "flow_json_hash",
             "flow_error",
@@ -1679,6 +1712,15 @@ def publish_conversation_flow(form) -> None:
             "updated_at",
         ]
     )
+
+
+@shared_task
+def publish_conversation_flow_task(form_id: int) -> None:
+    from apps.conversations.models import ConversationForm
+
+    form = ConversationForm.objects.filter(pk=form_id).first()
+    if form is not None:
+        publish_conversation_flow(form)
 
 
 @shared_task

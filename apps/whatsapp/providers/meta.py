@@ -381,6 +381,39 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             )
             err.code = code
             raise err
+        body = response.json()
+        # Meta accepts the upload (200) but lists what's wrong with the Flow JSON here;
+        # publishing would then fail with a vaguer message, so say it now.
+        problems = body.get("validation_errors") or []
+        if problems:
+            err = WhatsAppProviderError(
+                "WhatsApp rejected the form: "
+                + "; ".join(
+                    str(p.get("message") or p.get("error") or p) for p in problems[:3]
+                )
+            )
+            err.code = "FLOW_VALIDATION"
+            raise err
+        return body
+
+    def deprecate_flow(self, flow_id: str) -> dict:
+        """Retire a published Flow; customers who already opened it can still submit."""
+        url = self._url(f"{flow_id}/deprecate")
+        try:
+            response = self._session.post(url, timeout=30)
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to deprecate flow: {e}") from e
+        if response.status_code >= 400:
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            code, message, _ = _classify_meta_error(response.status_code, body)
+            err = WhatsAppProviderError(
+                f"Meta API {response.status_code} [{code}]: {message}"
+            )
+            err.code = code
+            raise err
         return response.json()
 
     def publish_flow(self, flow_id: str) -> dict:

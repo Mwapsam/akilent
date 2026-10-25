@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from django.db.models import F
 from django.utils import timezone
 
 from apps.conversations.models import Conversation, FollowUp
@@ -40,13 +41,26 @@ def followup_completion(
     due = FollowUp.objects.filter(
         account=account, due_at__gte=now - timedelta(days=days), due_at__lte=now
     )
+    # Removed reminders were never meant to be done; leave them out of the count.
+    due = due.exclude(closed_reason=FollowUp.ClosedReason.CANCELLED)
     total = due.count()
-    completed = due.filter(done_at__isnull=False).count()
+    # Done by a person, or the team replied. Blank: closed before reasons were recorded.
+    handled = due.filter(
+        done_at__isnull=False,
+        closed_reason__in=[
+            FollowUp.ClosedReason.DONE,
+            FollowUp.ClosedReason.STAFF_REPLIED,
+            "",
+        ],
+    )
+    completed = handled.count()
+    on_time = handled.filter(done_at__lte=F("due_at") + timedelta(hours=1)).count()
     return {
         "days": days,
         "due": total,
         "completed": completed,
         "completion_pct": round(completed / total * 100) if total else None,
+        "on_time_pct": round(on_time / completed * 100) if completed else None,
         "overdue": FollowUp.objects.filter(
             account=account, done_at__isnull=True, due_at__lt=now
         ).count(),

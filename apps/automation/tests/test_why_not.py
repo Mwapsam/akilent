@@ -288,7 +288,7 @@ def test_pausing_changes_only_the_on_off_state(owner, account):
     before = (wf.version, wf.definition)
     owner.post(f"/automations/{wf.slug}/pause/")
     wf.refresh_from_db()
-    assert wf.status == Workflow.Status.ARCHIVED
+    assert wf.status == Workflow.Status.PAUSED
     owner.post(f"/automations/{wf.slug}/resume/")
     wf.refresh_from_db()
     assert wf.status == Workflow.Status.PUBLISHED
@@ -358,11 +358,7 @@ def test_a_paused_card_says_it_will_not_run(owner, account):
     wf = keyword_wf(account)
     owner.post(f"/automations/{wf.slug}/pause/")
     html = owner.get("/automations/").content.decode()
-    assert (
-        "Paused" in html
-        and "won't run this automation until you turn it on again" in html
-        and "Turn on" in html
-    )
+    assert "Paused" in html and "nothing new starts" in html and "Turn on" in html
 
 
 @pytest.mark.django_db

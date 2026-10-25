@@ -2,71 +2,61 @@
 {% block title %}Follow-ups — {{ site.app_name|default:"Automator" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6">
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
-  <p class="mt-1 text-sm text-gray-600">Customers you asked to be reminded about.</p>
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
+    <p class="mt-1 text-sm text-gray-600">Reminders for your team to get back to a customer. Nothing here is sent to customers. Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
+  </div>
+  <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false" class="flex items-center gap-2 text-sm">
+    {% csrf_token %}
+    <input type="hidden" name="on" value="{% if emails_on %}0{% else %}1{% endif %}">
+    <span class="text-gray-600">Email me when mine are due:</span>
+    <button class="btn btn-ghost btn-sm" aria-pressed="{{ emails_on|yesno:'true,false' }}">{% if emails_on %}On{% else %}Off{% endif %}</button>
+  </form>
 </header>
 
-<section class="mb-8">
-  <h2 class="text-lg font-semibold text-ink mb-3">Due now</h2>
-  {% if due %}
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead><tr><th>Customer</th><th>Note</th><th>Due</th><th></th></tr></thead>
-      <tbody>
-        {% for f in due %}
-        <tr>
-          <td data-label="Customer">
-            {% if f.conversation %}
-            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-accent hover:text-accent-strong">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
-            {% else %}
-            {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
-            {% endif %}
-          </td>
-          <td data-label="Note">{{ f.note|default:"—" }}</td>
-          <td data-label="Due" class="text-gray-500 tabular-nums">{{ f.due_at|date:"Y-m-d H:i" }}</td>
-          <td>
-            <form method="post" action="{% url 'conversations:followup_complete' f.pk %}">
-              {% csrf_token %}
-              <input type="hidden" name="next" value="{% url 'conversations:followups_due' %}" />
-              <button class="btn btn-ghost btn-sm">Mark done</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<nav class="tabs mb-4" aria-label="Whose reminders">
+  <a href="?list=mine" class="tab {% if list == 'mine' %}tab-active{% endif %}">Mine{% if mine_count %} <span class="badge badge-danger ml-1">{{ mine_count }}</span>{% endif %}</a>
+  <a href="?list=team" class="tab {% if list == 'team' %}tab-active{% endif %}">Whole team{% if team_count %} <span class="badge badge-neutral ml-1">{{ team_count }}</span>{% endif %}</a>
+</nav>
+
+{% with next_url=request.get_full_path %}
+<section class="mb-8" aria-labelledby="due-title">
+  <h2 id="due-title" class="text-lg font-semibold text-ink mb-3">Due now</h2>
+  {% if due.object_list %}
+  <ul class="card divide-y divide-border">
+    {% for f in due.object_list %}{% include "conversations/_followup_row.html" with overdue=True %}{% endfor %}
+  </ul>
+  {% if due.has_other_pages %}
+  <nav class="mt-3 flex items-center justify-between text-sm" aria-label="Pages">
+    {% if due.has_previous %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}
+    <span class="text-gray-500">Page {{ due.number }} of {{ due.paginator.num_pages }}</span>
+    {% if due.has_next %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.next_page_number }}">Next</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
   {% else %}
-  <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="check" title="No follow-ups due" message="Nothing needs your attention right now — reminders you set from a conversation will show up here when they're due." %}
+  <div class="card">
+    {% include "components/empty_state.html" with icon="check" title="Nothing due" message="You're all caught up. Reminders you set from a conversation show up here when they're due." %}
   </div>
   {% endif %}
 </section>
 
-{% if upcoming %}
-<section>
-  <h2 class="text-lg font-semibold text-ink mb-3">Coming up</h2>
-  <div class="table-wrap">
-    <table class="table table--cards">
-      <thead><tr><th>Customer</th><th>Note</th><th>Due</th></tr></thead>
-      <tbody>
-        {% for f in upcoming %}
-        <tr>
-          <td data-label="Customer">
-            {% if f.conversation %}
-            <a href="{% url 'conversations:detail' f.conversation.public_id %}" class="text-accent hover:text-accent-strong">{{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}</a>
-            {% else %}
-            {{ f.contact.full_name|default:f.contact.phone|default:f.contact.email }}
-            {% endif %}
-          </td>
-          <td data-label="Note">{{ f.note|default:"—" }}</td>
-          <td data-label="Due" class="text-gray-500 tabular-nums">{{ f.due_at|date:"Y-m-d H:i" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+{% if today %}
+<section class="mb-8" aria-labelledby="today-title">
+  <h2 id="today-title" class="text-lg font-semibold text-ink mb-3">Later today</h2>
+  <ul class="card divide-y divide-border">
+    {% for f in today %}{% include "conversations/_followup_row.html" %}{% endfor %}
+  </ul>
 </section>
 {% endif %}
+
+{% if upcoming %}
+<section aria-labelledby="upcoming-title">
+  <h2 id="upcoming-title" class="text-lg font-semibold text-ink mb-3">Coming up</h2>
+  <ul class="card divide-y divide-border">
+    {% for f in upcoming %}{% include "conversations/_followup_row.html" %}{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endwith %}
 {% endblock %}

@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from apps.api.base import BaseApiView
 from apps.api.permissions import HasAutomationModule, HasEmailApiFeature
 from apps.automation.models import Workflow, WorkflowRun
-from apps.automation.workflow_engine import enroll, validate_definition
+from apps.automation.workflow_engine import enroll
 from apps.automation.workflow_templates import get_template, list_templates
 from apps.contacts.models import Contact
 
@@ -100,8 +100,13 @@ class WorkflowCollectionView(BaseApiView):
                 {"error": {"code": "validation_error", "message": "name is required"}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        from apps.automation import api as automation_api
+
         w = Workflow.objects.create(
-            account=request.user, name=name, definition=definition
+            account=request.user,
+            name=name,
+            slug=automation_api.unique_workflow_slug(request.user, name),
+            definition=definition,
         )
         request.auth.touch()
         return Response(
@@ -149,8 +154,31 @@ class WorkflowDetailView(BaseApiView):
             w.name = d["name"]
             fields.append("name")
         if "definition" in d:
-            w.definition = d["definition"] or {}
-            fields.append("definition")
+            definition = d["definition"] or {}
+            if w.status == Workflow.Status.PUBLISHED:
+                from apps.automation import api as automation_api
+
+                problems = automation_api.live_definition_problems(
+                    w.account, definition
+                )
+                if problems:
+                    return Response(
+                        {
+                            "error": {
+                                "code": "invalid_workflow",
+                                "message": "workflow is published; the new definition "
+                                "is invalid",
+                                "details": problems,
+                            }
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if w.status == Workflow.Status.PUBLISHED and definition != w.definition:
+                w.version += 1
+                fields.append("version")
+            w.definition = definition
+            w.draft_definition = None
+            fields += ["definition", "draft_definition"]
         if fields:
             w.save(update_fields=[*fields, "updated_at"])
         return Response(_workflow_dict(w, with_definition=True))
@@ -175,9 +203,12 @@ class WorkflowPublishView(BaseApiView):
         tags=["Workflows"],
     )
     def post(self, request, slug, *args, **kwargs):
+        from apps.automation import api as automation_api
+
         w = Workflow.objects.get(account=request.user, slug=slug)
-        errors = validate_definition(w.definition, account=w.account)
-        errors = [e for e in errors if e.get("severity", "error") != "warning"]
+        errors = automation_api.live_definition_problems(
+            w.account, automation_api.editable_definition(w)
+        )
         if errors:
             return Response(
                 {
@@ -189,19 +220,18 @@ class WorkflowPublishView(BaseApiView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        from apps.automation import api as automation_api
-
         try:
-            automation_api.ensure_room_to_turn_on(w.account, w)
+            automation_api.publish(w)
         except automation_api.AutomationLimitReached as exc:
             return Response(
                 {"error": {"code": "plan_limit", "message": str(exc)}},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if w.status != Workflow.Status.PUBLISHED:
-            w.version += 1
-        w.status = Workflow.Status.PUBLISHED
-        w.save(update_fields=["status", "version", "updated_at"])
+        except automation_api.WorkflowNotReady as exc:
+            return Response(
+                {"error": {"code": "invalid_workflow", "message": str(exc)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(_workflow_dict(w))
 
 
@@ -215,9 +245,10 @@ class WorkflowArchiveView(BaseApiView):
         tags=["Workflows"],
     )
     def post(self, request, slug, *args, **kwargs):
+        from apps.automation import api as automation_api
+
         w = Workflow.objects.get(account=request.user, slug=slug)
-        w.status = Workflow.Status.ARCHIVED
-        w.save(update_fields=["status", "updated_at"])
+        automation_api.archive(w)
         return Response(_workflow_dict(w))
 
 

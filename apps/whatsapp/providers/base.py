@@ -183,6 +183,12 @@ class WhatsAppProvider(ABC):
             f"{type(self).__name__} does not support Flow JSON upload"
         )
 
+    def deprecate_flow(self, flow_id: str) -> dict:
+        """Retire a published Flow so it can't be sent again (optional capability)."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Flow deprecation"
+        )
+
     def publish_flow(self, flow_id: str) -> dict:
         """Publish a Flow, making it sendable.
 

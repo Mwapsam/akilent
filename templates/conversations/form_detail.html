@@ -1,146 +1,301 @@
 {% extends "base.html" %}
-{% block title %}{{ form.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}{{ form.name }} — Forms{% endblock %}
 
 {% block content %}
-<header class="mb-6">
-  <p class="text-sm"><a href="{% url 'conversations:forms_list' %}" class="text-accent underline">Forms</a></p>
-  <div class="flex items-center justify-between gap-3 flex-wrap">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+      <a href="{% url 'conversations:forms_list' %}" class="hover:text-ink">Forms</a>
+      <span aria-hidden="true">/</span><span class="text-ink">{{ form.name }}</span>
+    </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ form.name }}</h1>
-    <div class="flex items-center gap-2">
-      <span class="badge {% if form.status == 'published' %}badge-success{% elif form.status == 'archived' %}badge-neutral{% else %}badge-warning{% endif %}">{{ form.get_status_display }}</span>
-      <form method="post" class="inline">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="set_status" />
-        {% if form.status == "draft" %}
-        <input type="hidden" name="status" value="published" />
-        <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>Publish</button>
-        {% elif form.status == "published" %}
-        <input type="hidden" name="status" value="archived" />
-        <button class="btn btn-ghost btn-sm">Archive</button>
-        {% else %}
-        <input type="hidden" name="status" value="draft" />
-        <button class="btn btn-ghost btn-sm">Move back to draft</button>
-        {% endif %}
-      </form>
-      <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" data-confirm="Delete this form?" data-confirm-danger data-confirm-label="Delete">
-        {% csrf_token %}
-        <button class="btn btn-ghost btn-sm">Delete</button>
-      </form>
-    </div>
+    <p class="mt-1 text-sm text-gray-600">
+      <span class="badge {% if form.status == 'published' %}badge-success{% elif form.status == 'archived' %}badge-neutral{% else %}badge-warning{% endif %}">{% if form.status == 'published' %}Ready to send{% else %}{{ form.get_status_display }}{% endif %}</span>
+      {% if stats.sent %}· Sent {{ stats.sent }} · finished {{ stats.done }}{% if stats.rate is not None %} ({{ stats.rate }}%){% endif %}{% if stats.waiting %} · {{ stats.waiting }} filling it in{% endif %}{% endif %}
+    </p>
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="{% url 'help-article' 'forms' %}" class="btn btn-ghost btn-sm">Help</a>
+    <a href="{% url 'conversations:form_responses' form.pk %}" class="btn btn-secondary btn-sm">Answers</a>
+    <form method="post" class="inline" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="set_status" />
+      {% if form.status == "draft" %}
+      <input type="hidden" name="status" value="published" />
+      <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>Make it ready to send</button>
+      {% elif form.status == "published" %}
+      <input type="hidden" name="status" value="archived" />
+      <button class="btn btn-ghost btn-sm">Archive</button>
+      {% else %}
+      <input type="hidden" name="status" value="draft" />
+      <button class="btn btn-ghost btn-sm">Move back to draft</button>
+      {% endif %}
+    </form>
+    <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" data-confirm="Delete this form and its answers?" data-confirm-danger data-confirm-label="Delete">
+      {% csrf_token %}
+      <button class="btn btn-danger-ghost btn-sm">Delete</button>
+    </form>
   </div>
 </header>
 
-<div class="grid gap-6 lg:grid-cols-2">
-  <section>
-    <h2 class="font-semibold mb-3">Questions, in order</h2>
-    {% if form.questions %}
-    <ol class="space-y-2">
-      {% for q in form.questions %}
-      <li class="rounded-lg border border-border px-3 py-2 flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-ink">{{ forloop.counter }}. {{ q.label }}</p>
-          <p class="text-xs text-gray-500 mt-0.5">
-            {{ q.field_type }}{% if q.maps_to %} · saves to {{ q.maps_to }}{% endif %}
-          </p>
-        </div>
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="remove_question" />
-          <input type="hidden" name="index" value="{{ forloop.counter0 }}" />
-          <button class="btn btn-ghost btn-sm">Remove</button>
-        </form>
-      </li>
-      {% endfor %}
-    </ol>
-    {% else %}
-    <p class="text-sm text-gray-500">No questions yet. Add the first one.</p>
-    {% endif %}
-  </section>
+{{ builder|json_script:"form-builder-data" }}
 
-  <section>
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Add a question</h2>
-      <form method="post" class="space-y-3" x-data="{ mapsTo: 'none' }">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_question" />
-        <div>
-          <label class="label" for="q-label">Question</label>
-          <input id="q-label" name="label" class="input" placeholder="e.g. What's your email?" required />
-        </div>
-        <div>
-          <label class="label" for="q-type">Answer type</label>
-          <select id="q-type" name="field_type" class="select">
-            {% for t in field_types %}
-            <option value="{{ t }}">{{ t|capfirst }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="label" for="q-maps-to">Save the answer to</label>
-          <select id="q-maps-to" name="maps_to_type" class="select" x-model="mapsTo">
-            <option value="none">Nothing — just record the answer</option>
-            <option value="first_name">Customer's first name</option>
-            <option value="last_name">Customer's last name</option>
-            <option value="custom">A custom field...</option>
-          </select>
-        </div>
-        <div x-show="mapsTo === 'custom'" x-cloak>
-          <label class="label" for="q-maps-to-key">Custom field name</label>
-          <input id="q-maps-to-key" name="maps_to_key" class="input" placeholder="e.g. company" />
-        </div>
-        <button class="btn btn-primary btn-sm w-full">Add question</button>
-      </form>
+<div x-data="formBuilder()" x-init="init()" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+  <div class="space-y-4 min-w-0">
+    <div class="flex items-center justify-between">
+      <h2 class="font-semibold text-ink">Questions</h2>
+      <span class="text-xs" :class="saveState === 'error' ? 'text-red-700' : 'text-gray-400'" x-text="saveLabel()" aria-live="polite"></span>
     </div>
-  </section>
+    <ul class="text-xs text-red-700 space-y-0.5" x-show="problems.length" x-cloak>
+      <template x-for="p in problems" :key="p"><li x-text="'• ' + p"></li></template>
+    </ul>
+
+    <ol class="space-y-3">
+      <template x-for="(q, i) in questions" :key="q._id">
+        <li class="card card-pad space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-gray-500" x-text="'Question ' + (i + 1)"></span>
+            <div class="flex items-center gap-1">
+              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" aria-label="Move up">↑</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === questions.length - 1" aria-label="Move down">↓</button>
+              <button type="button" class="btn btn-danger-ghost btn-xs" @click="questions.splice(i, 1); changed()">Remove</button>
+            </div>
+          </div>
+          <label class="text-xs block">Question
+            <input class="input input-sm w-full mt-0.5" x-model="q.label" @input="changed()" maxlength="200" placeholder="What's your budget?" />
+            <span class="text-xs" :class="labelTooLong(q) ? 'text-amber-700' : 'text-gray-400'"
+                  x-text="labelTooLong(q) ? 'On WhatsApp this kind of question shows at most ' + labelLimit(q) + ' characters. Shorten it, or move the rest into the hint.' : ''"></span>
+          </label>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label class="text-xs">Answer type
+              <select class="select select-sm w-full mt-0.5" x-model="q.field_type" @change="typeChanged(q)">
+                <template x-for="t in data.fieldTypes" :key="t.value"><option :value="t.value" x-text="t.label" :selected="t.value === q.field_type"></option></template>
+              </select>
+            </label>
+            <label class="text-xs">Save the answer to
+              <select class="select select-sm w-full mt-0.5" x-model="q.maps_to" @change="changed()">
+                <template x-for="m in data.mapsTo" :key="m.value"><option :value="m.value" x-text="m.label" :selected="m.value === q.maps_to"></option></template>
+              </select>
+            </label>
+          </div>
+          <div x-show="isChoice(q)" class="space-y-1.5">
+            <p class="text-xs text-gray-600">Choices</p>
+            <template x-for="(o, oi) in q.options" :key="oi">
+              <div class="flex gap-2">
+                <input class="input input-sm flex-1" x-model="q.options[oi]" @input="changed()" maxlength="60" :placeholder="'Choice ' + (oi + 1)" />
+                <button type="button" class="btn btn-ghost btn-xs" @click="q.options.splice(oi, 1); changed()" aria-label="Remove choice">✕</button>
+              </div>
+            </template>
+            <button type="button" class="btn btn-ghost btn-xs" @click="q.options.push(''); changed()">+ Add a choice</button>
+          </div>
+          <label class="text-xs block">Hint <span class="text-gray-400">(optional)</span>
+            <input class="input input-sm w-full mt-0.5" x-model="q.helper" @input="changed()" maxlength="80" placeholder="e.g. A rough figure is fine" />
+          </label>
+          <div class="flex flex-wrap gap-4 text-xs">
+            <label class="inline-flex items-center gap-1.5"><input type="checkbox" x-model="q.required" @change="changed()" /> They must answer</label>
+            <label class="inline-flex items-center gap-1.5" x-show="i > 0"><input type="checkbox" x-model="q.page_break" @change="changed()" /> Start a new page here</label>
+          </div>
+        </li>
+      </template>
+    </ol>
+    <button type="button" class="btn btn-secondary btn-sm" @click="addQuestion()">+ Add a question</button>
+
+    <details class="card card-pad" open>
+      <summary class="cursor-pointer font-semibold text-ink">What the customer sees</summary>
+      <div class="grid gap-3 sm:grid-cols-2 mt-3">
+        <label class="text-xs sm:col-span-2">Message that opens the form
+          <textarea class="textarea w-full mt-0.5" rows="2" x-model="copy.intro_text" @input="changed()" maxlength="500" :placeholder="'Please fill in ' + data.name + '.'"></textarea>
+        </label>
+        <label class="text-xs">Button that opens it
+          <input class="input input-sm w-full mt-0.5" x-model="copy.cta_label" @input="changed()" maxlength="20" placeholder="Start" />
+        </label>
+        <label class="text-xs">Form title
+          <input class="input input-sm w-full mt-0.5" x-model="copy.screen_title" @input="changed()" maxlength="30" placeholder="Your details" />
+        </label>
+        <label class="text-xs">Send button
+          <input class="input input-sm w-full mt-0.5" x-model="copy.submit_label" @input="changed()" maxlength="35" placeholder="Submit" />
+        </label>
+        <label class="text-xs">Stop waiting after (hours)
+          <input type="number" min="1" max="720" class="input input-sm w-full mt-0.5" x-model.number="copy.timeout_hours" @input="changed()" />
+        </label>
+        <label class="text-xs sm:col-span-2">Thank-you message
+          <input class="input input-sm w-full mt-0.5" x-model="copy.thanks_text" @input="changed()" maxlength="500" placeholder="Thanks - got everything I need!" />
+        </label>
+        <label class="text-xs sm:col-span-2">When they finish
+          <select class="select select-sm w-full mt-0.5" x-model="copy.lead_action" @change="changed()">
+            <option value="">Just save the answers</option>
+            <option value="create">Also track them as an interested customer</option>
+            <option value="qualify">Also track them as interested, and mark them qualified</option>
+          </select>
+        </label>
+      </div>
+    </details>
+
+    <section class="card card-pad space-y-3">
+      <h2 class="font-semibold text-ink">How it's sent</h2>
+      <form method="post" class="flex items-end gap-3 flex-wrap" hx-boost="false">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_presentation" />
+        <label class="text-sm">On WhatsApp
+          <select name="presentation" class="select mt-1">
+            <option value="whatsapp_flow" {% if form.presentation == "whatsapp_flow" %}selected{% endif %}>As a native form (WhatsApp Flow)</option>
+            <option value="text" {% if form.presentation == "text" %}selected{% endif %}>One question per message</option>
+          </select>
+        </label>
+        <button class="btn btn-secondary btn-sm">Save</button>
+      </form>
+      <p class="text-xs text-gray-500">On Instagram and other channels it's always asked one question per message, with the same checks.</p>
+      {% if form.presentation == "whatsapp_flow" %}
+        <div class="border-t border-border pt-3">{% include "conversations/_form_flow_status.html" %}</div>
+        {% if flow_problems %}
+        <ul class="text-xs text-amber-700 space-y-0.5">{% for p in flow_problems %}<li>• {{ p }}</li>{% endfor %}</ul>
+        {% endif %}
+      {% endif %}
+    </section>
+  </div>
+
+  {# Live preview, as the customer will see it #}
+  <aside class="lg:sticky lg:top-4 self-start" aria-label="Preview">
+    <p class="text-xs font-medium text-gray-500 mb-2">Preview</p>
+    <div class="rounded-[2rem] border-4 border-ink/80 bg-surface-muted p-3 space-y-2 max-w-xs mx-auto">
+      <div class="wa-bubble" x-text="copy.intro_text || ('Please fill in ' + data.name + '.')"></div>
+      <div class="wa-button" x-text="copy.cta_label || 'Start'"></div>
+      <div class="rounded-2xl bg-surface p-3 space-y-3 shadow-card">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-ink" x-text="copy.screen_title || 'Your details'"></p>
+          <span class="text-xs text-gray-400" x-show="pages().length > 1" x-text="'Page ' + (page + 1) + ' of ' + pages().length"></span>
+        </div>
+        <template x-for="q in (pages()[page] || [])" :key="q._id">
+          <div class="space-y-1">
+            <p class="text-xs font-medium text-ink" x-text="(q.label || 'Question') + (q.required ? '' : ' (optional)')"></p>
+            <template x-if="isChoice(q)">
+              <div class="space-y-1">
+                <template x-for="o in q.options.filter((o) => o.trim())" :key="o">
+                  <div class="flex items-center gap-2 text-xs text-gray-700">
+                    <span class="w-3.5 h-3.5 border border-gray-400" :class="q.field_type === 'multi_choice' ? 'rounded' : 'rounded-full'"></span>
+                    <span x-text="o"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
+            <template x-if="!isChoice(q)">
+              <div class="rounded-lg border border-border px-2 py-1.5 text-xs text-gray-400"
+                   x-text="q.field_type === 'date' ? 'Pick a date' : q.field_type === 'opt_in' ? '☐ I agree' : (q.helper || 'Answer')"></div>
+            </template>
+          </div>
+        </template>
+        <div class="flex gap-2">
+          <button type="button" class="wa-button" x-show="page > 0" @click="page--">Back</button>
+          <button type="button" class="wa-button" @click="page < pages().length - 1 ? page++ : null"
+                  x-text="page < pages().length - 1 ? 'Next' : (copy.submit_label || 'Submit')"></button>
+        </div>
+      </div>
+      <div class="wa-bubble" x-text="copy.thanks_text || 'Thanks - got everything I need!'"></div>
+    </div>
+  </aside>
 </div>
 
-<section class="mt-6 card card-pad">
-  <h2 class="font-semibold mb-3">Presentation</h2>
-  <form method="post" class="flex items-end gap-3 flex-wrap">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="set_presentation" />
-    <div>
-      <label class="label" for="presentation">How to send this form</label>
-      <select id="presentation" name="presentation" class="select">
-        <option value="text" {% if form.presentation == "text" %}selected{% endif %}>Plain text (one question at a time)</option>
-        <option value="whatsapp_flow" {% if form.presentation == "whatsapp_flow" %}selected{% endif %}>WhatsApp Flow (native in-chat UI)</option>
-      </select>
-    </div>
-    <button class="btn btn-primary btn-sm">Save</button>
-  </form>
-
-  {% if form.presentation == "whatsapp_flow" %}
-  <div class="mt-4 border-t border-border pt-4">
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div>
-        <p class="text-sm font-medium">WhatsApp Flow status</p>
-        <p class="text-xs text-gray-500 mt-0.5">
-          {% if form.flow_status == "published" %}
-            <span class="badge badge-success">Published</span>
-            {% if form.flow_published_at %}&nbsp;on {{ form.flow_published_at|date:"N j, Y" }}{% endif %}
-          {% elif form.flow_status == "needs_republish" %}
-            <span class="badge badge-warning">Questions changed — republish needed</span>
-          {% elif form.flow_status == "draft" %}
-            <span class="badge badge-neutral">Draft on Meta (not yet published)</span>
-          {% elif form.flow_status == "error" %}
-            <span class="badge badge-error">Error</span>
-          {% else %}
-            <span class="badge badge-neutral">Not created on Meta yet</span>
-          {% endif %}
-        </p>
-        {% if form.flow_error %}
-        <p class="text-xs text-error mt-1">{{ form.flow_error }}</p>
-        {% endif %}
-      </div>
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="publish_flow" />
-        <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>
-          {% if form.flow_status == "not_created" %}Create &amp; Publish Flow{% elif form.flow_status == "needs_republish" %}Republish Flow{% else %}Publish Flow{% endif %}
-        </button>
-      </form>
-    </div>
+<section class="mt-8">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="font-semibold text-ink">Latest answers</h2>
+    <a href="{% url 'conversations:form_responses' form.pk %}" class="text-sm text-accent hover:underline">See all</a>
   </div>
+  {% if recent %}
+  <ul class="card divide-y divide-border">
+    {% for r in recent %}
+    <li class="px-4 py-2 flex items-center justify-between gap-3 text-sm">
+      <a href="{% url 'conversations:detail' r.conversation.public_id %}" class="text-ink hover:underline truncate">{{ r.contact.display_name }}</a>
+      <span class="text-xs text-gray-500">{{ r.get_status_display }} · {{ r.started_at|timesince }} ago</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-gray-500">Nobody has had this form yet. Send it from a conversation (“Start a form”) or from an automation.</p>
   {% endif %}
 </section>
+
+<script>
+function formBuilder() {
+  const LIMITS = { text: 20, email: 20, phone: 20, number: 20, long_text: 20, dropdown: 20, choice: 30, multi_choice: 30, date: 40, opt_in: 120 };
+  const CHOICE = ["choice", "dropdown", "multi_choice"];
+  let seq = 0;
+  return {
+    data: {},
+    questions: [],
+    copy: {},
+    problems: [],
+    page: 0,
+    saveState: "saved",
+    _timer: null,
+    init() {
+      this.data = JSON.parse(document.getElementById("form-builder-data").textContent);
+      this.questions = (this.data.questions || []).map((q) => this.prepare(q));
+      this.copy = { ...this.data.copy };
+      window.addEventListener("beforeunload", (e) => { if (this.saveState === "dirty") { e.preventDefault(); e.returnValue = ""; } });
+    },
+    prepare(q) {
+      return { _id: ++seq, key: q.key || "", label: q.label || "", field_type: q.field_type || "text",
+               maps_to: q.maps_to || "", required: q.required !== false, helper: q.helper || "",
+               options: Array.isArray(q.options) ? [...q.options] : [], page_break: !!q.page_break };
+    },
+    isChoice(q) { return CHOICE.includes(q.field_type); },
+    labelLimit(q) { return LIMITS[q.field_type] || 20; },
+    labelTooLong(q) { return (q.label || "").trim().length > this.labelLimit(q); },
+    typeChanged(q) {
+      if (this.isChoice(q) && q.options.length < 2) q.options = ["", ""];
+      this.changed();
+    },
+    addQuestion() {
+      this.questions.push(this.prepare({}));
+      this.changed();
+    },
+    move(i, d) {
+      const j = i + d;
+      if (j < 0 || j >= this.questions.length) return;
+      [this.questions[i], this.questions[j]] = [this.questions[j], this.questions[i]];
+      this.changed();
+    },
+    pages() {
+      const pages = [[]];
+      this.questions.forEach((q) => {
+        const last = pages[pages.length - 1];
+        if (last.length && (q.page_break || last.length >= 8)) pages.push([]);
+        pages[pages.length - 1].push(q);
+      });
+      if (this.page >= pages.length) this.page = Math.max(0, pages.length - 1);
+      return pages;
+    },
+    saveLabel() {
+      return { saved: "Saved", dirty: "Unsaved changes…", saving: "Saving…", error: "Couldn't save. Check your connection." }[this.saveState];
+    },
+    changed() {
+      this.saveState = "dirty";
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => this.save(), 1200);
+    },
+    async save() {
+      this.saveState = "saving";
+      const body = {
+        questions: this.questions.map(({ _id, ...q }) => ({ ...q, options: q.options.filter((o) => o.trim()) })),
+        copy: this.copy,
+      };
+      try {
+        const r = await fetch("{% url 'conversations:form_save' form.pk %}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "save failed");
+        // Keep what's on screen; just learn the keys the server gave new questions.
+        (data.questions || []).forEach((q, i) => { if (this.questions[i] && !this.questions[i].key) this.questions[i].key = q.key; });
+        this.problems = [...(data.problems || []), ...(data.flow_problems || [])];
+        this.saveState = this.saveState === "saving" ? "saved" : this.saveState;
+      } catch (e) {
+        this.saveState = "error";
+      }
+    },
+  };
+}
+</script>
 {% endblock %}

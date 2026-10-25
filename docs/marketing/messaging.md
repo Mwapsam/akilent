@@ -23,7 +23,7 @@ The product is one business process, not four products. Each pillar is a step in
 |---|---|---|---|---|
 | **Talk:** capture interest | Enquiries arrive on WhatsApp and Instagram and some are missed or answered late | Fewer missed enquiries, more consistent replies | WhatsApp and Instagram DMs in one shared inbox. Auto-replies (greeting, closed hours, keywords). AI suggests replies from your business knowledge, or answers simple questions only if you allow it | Facebook Messenger is **not** in the inbox. Email does not arrive in the inbox. AI is off by default |
 | **Publish:** stay visible | Posting is ad hoc and done separately on each app | A consistent social presence with less manual work | Content Studio: plan posts, write once with a version per channel, AI caption help, schedule per channel, optional review before publishing, publish to Instagram and a Facebook Page | Facebook means **Page publishing** only |
-| **Automate:** follow through | Follow-ups are forgotten and the same tasks repeat | Less repetitive work, fewer forgotten follow-ups | Workflows, follow-up reminders, a nudge when a conversation goes unanswered (internal, not a customer message) | Automation steps with buttons/lists are WhatsApp-only |
+| **Automate:** follow through | Follow-ups are forgotten and the same tasks repeat | Less repetitive work, fewer forgotten follow-ups | Workflows you can test before they go live, forms (native WhatsApp Flows, or questions one by one elsewhere), follow-up reminders that tell the team when they're due, a nudge when a conversation goes unanswered (internal, not a customer message) | Lists and native forms are WhatsApp-only (forms fall back to one question per message elsewhere). Follow-ups never message the customer |
 | **Sell & measure:** understand what works | No one knows which post or message became a sale | A clear view from marketing activity to paid orders | Leads, orders and payment links. Campaigns by WhatsApp and email. Each post's results (clicks → chats → leads → orders → paid revenue). Business Health | Results count **explicit evidence only** (tracked link or comment reply). They are lower bounds, never estimates. Email is sending and campaigns |
 
 ## 3. The journey (the story every surface tells)
@@ -115,7 +115,8 @@ Use these on feature cards, use-case pages, onboarding steps and in-app prompts.
 | Instagram comment rules | "Comments asking 'price?' go unanswered" | Turn post comments into private conversations | `/instagram/` rules | Add a comment rule |
 | Content Studio | "Posting takes too long and happens irregularly" | Plan, adapt and schedule your posts in one place | `/publishing/`: composer with Instagram and Facebook versions, calendar | Plan your first post |
 | Post results | "We don't know which posts bring customers" | See which posts bring chats, leads and paid orders | Post detail → Results card | Add a chat link to your next post |
-| Workflows + follow-ups | "Follow-ups depend on someone remembering" | Keep every opportunity moving | `/automations/` workflow, a follow-up on a conversation | Set a follow-up |
+| Workflows + follow-ups | "Follow-ups depend on someone remembering" | Keep every opportunity moving | `/automations/` workflow with **Test it**, a follow-up on a conversation and the Follow-ups page | Set a follow-up |
+| Forms | "We collect order details by going back and forth" | Get the details you need in one go | `/inbox/forms/`: a form with its preview and Answers page | Make your first form |
 | Leads | "Interested customers get forgotten" | Know who's ready to buy | `/sales/` leads list | Mark an interested customer |
 | Orders + payment links | "Taking payment means more back-and-forth" | Record the order and send a link to pay | `/orders/`: order with payment link | Create your first order |
 | Campaigns + segments (WhatsApp, email) | "Reaching past customers is manual" | Bring customers back with the right message | Campaign builder with a segment | Send your first campaign |
@@ -160,6 +161,10 @@ Evidence is `path::text`: the file must exist and contain the text.
 | follow-ups | Capability | Follow-up reminders for the team | apps/conversations/models.py::class FollowUp( |
 | missed | Capability | A nudge when a conversation has gone unanswered (internal reminder, not a customer message) | apps/conversations/recovery.py::def create_missed_followups |
 | workflows | Capability | Workflows that run steps for you when something happens (a message, a new lead, a paid order) | apps/automation/workflow_engine.py::def enroll( |
+| workflow-testing | Capability | Try an automation before customers do; nothing is sent | apps/automation/simulate.py::Nothing is written, queued or |
+| workflow-history | Capability | See each customer's path through an automation, and retry a failed step | apps/automation/api.py::def retry_run |
+| followup-due | Capability | Your team is told when a follow-up is due | apps/conversations/followups.py::def notify_due |
+| forms | Capability | Collect details with a form inside the conversation: a native form on WhatsApp, questions one by one elsewhere | apps/conversations/forms.py::def start_form |
 | customers | Capability | Customer details, tags and message history kept together | apps/contacts/models.py::class Tag( |
 | interested | Capability | Track customers who are interested in buying | apps/crm/services.py::def set_lead_status |
 | campaigns | Capability | Send an approved WhatsApp message or an email to a list of customers | apps/whatsapp/campaigns.py::def |

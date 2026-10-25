@@ -284,6 +284,17 @@ def template_media_upload(request):
     )
 
 
+def _flow_forms(account) -> list:
+    """Forms published as WhatsApp Flows, which a template button can open."""
+    from apps.conversations.models import ConversationForm
+
+    return list(
+        ConversationForm.objects.filter(
+            account=account, flow_status=ConversationForm.FlowStatus.PUBLISHED
+        ).order_by("name")
+    )
+
+
 @login_required
 def template_create(request):
     account = get_current_account(request)
@@ -316,6 +327,15 @@ def template_create(request):
                 ).strip()
             elif button_type == "copy_code":
                 button["example"] = request.POST.get("button_code_example", "").strip()
+            elif button_type == "flow":
+                from apps.conversations.models import ConversationForm
+
+                flow_form = ConversationForm.objects.filter(
+                    account=account,
+                    public_id=request.POST.get("button_flow_form", ""),
+                    flow_status=ConversationForm.FlowStatus.PUBLISHED,
+                ).first()
+                button["flow_id"] = flow_form.flow_id if flow_form else ""
             buttons = [button]
 
         header = request.POST.get("header", "")
@@ -389,6 +409,7 @@ def template_create(request):
                     "data_fields_json": _data_fields_json(account),
                     "custom_field_types": CustomAttributeDef.Type.choices,
                     "media_upload_url": reverse("whatsapp-template-media-upload"),
+                    "flow_forms": _flow_forms(account),
                 },
             )
         messages.success(request, "Template submitted to WhatsApp for approval.")
@@ -434,6 +455,7 @@ def template_create(request):
             "data_fields_json": _data_fields_json(account),
             "custom_field_types": CustomAttributeDef.Type.choices,
             "media_upload_url": reverse("whatsapp-template-media-upload"),
+            "flow_forms": _flow_forms(account),
             "languages": _languages(form.get("language")),
             "ai_on": ai_api.is_available(account),
             "ai_draft": ai_draft,

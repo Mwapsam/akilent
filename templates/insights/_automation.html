@@ -31,6 +31,12 @@ No composite score; the one estimate (time saved) always shows its formula.
         <p class="stat-label">AI isn't turned on</p>
         {% endif %}
       </div>
+      {% if forms.sent %}
+      <div>
+        <p class="stat-value">{% if forms.completion_pct is not None %}{{ forms.completion_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-label">of forms finished ({{ forms.completed }} of {{ forms.sent }})</p>
+      </div>
+      {% endif %}
       <div>
         <p class="stat-value">{{ automation.minutes_saved|duration_minutes }}</p>
         <p class="stat-label">estimated time saved</p>

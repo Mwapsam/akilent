@@ -264,7 +264,7 @@ def sender_of(outbound: OutboundMessage) -> str:
     key = outbound.idempotency_key or ""
     if key.startswith("ai-auto:"):
         return "ai"
-    if key.startswith(("wf:", "private_reply:")):
+    if key.startswith(("wf:", "private_reply:", "form:")):
         return "automation"
     return ""
 

@@ -416,6 +416,9 @@
     </div>
   </div>
   {% endif %}
+{% if user.is_authenticated and REALTIME_SSE_ENABLED %}
+<div hidden aria-hidden="true" hx-get="/inbox/followups/badge/?toast=1" hx-trigger="sse:followup.due" hx-swap="none"></div>
+{% endif %}
 </body>
 </html>
 {% endif %}

@@ -191,6 +191,22 @@ def resolution(account, period: Period) -> dict:
     }
 
 
+def forms(account, period: Period) -> dict:
+    """Forms sent in the period and how many customers finished them."""
+    from apps.conversations.models import FormResponse
+
+    rows = FormResponse.objects.filter(
+        account=account, started_at__gte=period.start, started_at__lt=period.end
+    )
+    sent = rows.count()
+    done = rows.filter(status=FormResponse.Status.COMPLETED).count()
+    return {
+        "sent": sent,
+        "completed": done,
+        "completion_pct": round(done / sent * 100) if sent else None,
+    }
+
+
 def recovery(account, period: Period) -> dict:
     """Missed conversations (recovery made a follow-up in the period) and what became of them.
 

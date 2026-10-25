@@ -30,7 +30,7 @@ _PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")
 # Button `type` values Meta's Cloud API accepts at template-creation time.
 # "Share Contact Info" (shown in Meta's own builder) has no equivalent here —
 # surfaced, disabled, in the UI rather than silently omitted.
-BUTTON_TYPES = {"url", "phone_number", "copy_code", "voice_call"}
+BUTTON_TYPES = {"url", "phone_number", "copy_code", "voice_call", "flow"}
 
 
 class TemplateBuilderError(Exception):
@@ -121,6 +121,10 @@ def _validate_buttons(buttons: list[dict], body_variable_numbers: list[int]) -> 
     # voice_call needs nothing more: it calls the business's own WhatsApp number.
     elif button_type == "copy_code":
         _validate_copy_code_button(button)
+    elif button_type == "flow" and not (button.get("flow_id") or "").strip():
+        raise TemplateBuilderError(
+            "Choose which form the button opens (publish it to WhatsApp first)."
+        )
 
 
 # Authentication templates: Meta writes the wording itself ("*{{1}}* is your verification code.")
@@ -329,8 +333,21 @@ def _build_button(
     url: str = "",
     example: str = "",
     phone_number: str = "",
+    flow_id: str = "",
 ) -> dict:
     text = text.strip()
+    if type == "flow":
+        # Opens one of the business's published forms. Each send carries its own token
+        # (see send_components), so the answers find their way back.
+        from apps.conversations.flow_json import SCREEN_ID
+
+        return {
+            "type": "FLOW",
+            "text": text,
+            "flow_id": flow_id.strip(),
+            "flow_action": "navigate",
+            "navigate_screen": SCREEN_ID,
+        }
     if type == "url":
         from typing import Any
 

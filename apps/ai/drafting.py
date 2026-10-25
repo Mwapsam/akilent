@@ -83,7 +83,10 @@ def _business_block(account, business_notes: str) -> str:
 
 
 def automation_prompt(account, business_notes: str) -> str:
+    from apps.automation.compose import GRAMMAR
+
     intents = "\n".join(f'- "{k}": {v}' for k, v in INTENT_DESCRIPTIONS.items())
+    forms = _form_names(account)
     return f"""You help a small business owner set up WhatsApp automations. You only choose WHAT they \
 want from a fixed list; Akilent builds the automation itself.
 
@@ -96,14 +99,31 @@ Answer with ONE JSON object and nothing else:
               "reply_text": "<the reply to send, only if needed>", "topic_label": "<2-3 words>",
               "question": "<menu question>", "options": [{{"title": "<max 20 chars>", "reply": "..."}}]}}}}
 
+If no single intent fits but the request is a clear sequence of steps, answer instead:
+{{"intent": "custom", "confidence": 0.0-1.0, "name": "<short name>",
+ "trigger": <one trigger block>, "steps": [<step blocks>]}}
+using ONLY these blocks and fields:
+{GRAMMAR}
+
 Rules:
-- If the request doesn't fit an intent, or you're unsure, answer {{"intent": "none", "confidence": 0}}.
+- Prefer a single intent when one fits.
+- If the request is unclear, or you're unsure, answer {{"intent": "none", "confidence": 0}}.
 - If the owner pasted a conversation, copy the business's own reply word for word as reply_text.
-- Otherwise write reply_text only from the facts below; never invent prices, times or promises.
+- Otherwise write replies only from the facts below; never invent prices, times or promises.
 - Include only the entities that intent needs.
+- Forms this business has: {forms or "none"}.
 
 About the business:
 {_business_block(account, business_notes)}"""
+
+
+def _form_names(account) -> str:
+    from apps.conversations.models import ConversationForm
+
+    names = ConversationForm.objects.filter(
+        account=account, status=ConversationForm.Status.PUBLISHED
+    ).values_list("name", flat=True)[:20]
+    return ", ".join(f"“{n}”" for n in names)
 
 
 def template_prompt(account, business_notes: str) -> str:
@@ -178,6 +198,19 @@ def check_automation(account, data: dict) -> tuple[dict, list[str]]:
         confidence = float(data.get("confidence") or 0)
     except (TypeError, ValueError):
         confidence = 0.0
+    if intent == "custom" and confidence >= MIN_CONFIDENCE:
+        from apps.automation.compose import compile_plan
+
+        plan = {k: data.get(k) for k in ("name", "trigger", "steps")}
+        built = compile_plan(account, plan)
+        if not built["definition"]["steps"]:
+            raise DraftError(
+                "I couldn't turn that into steps. Try describing what should happen, "
+                "one thing after another."
+            )
+        return {"intent": "custom", "plan": plan, "confidence": confidence}, built[
+            "warnings"
+        ]
     if intent not in INTENTS or confidence < MIN_CONFIDENCE:
         raise DraftError(
             "I couldn't tell what you want to automate. Try something like "

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ run.contact.display_name }} — {{ wf.name }} — Automations{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+  <div class="min-w-0">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+      <a href="{% url 'automation:list' %}" class="hover:text-ink">Automations</a>
+      <span aria-hidden="true">/</span>
+      <a href="{% url 'automation:runs' wf.slug %}" class="hover:text-ink">{{ wf.name }}</a>
+      <span aria-hidden="true">/</span><span class="text-ink">{{ run.contact.display_name }}</span>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight text-ink">{{ run.contact.display_name }}</h1>
+    <p class="mt-1 text-sm text-gray-600">
+      {% if run.status == "failed" %}<span class="badge badge-danger">Failed</span>
+      {% elif run.status == "waiting" %}<span class="badge badge-info">Waiting</span>
+      {% elif run.status == "active" %}<span class="badge badge-info">Running</span>
+      {% elif run.status == "completed" %}<span class="badge badge-success">Finished</span>
+      {% else %}<span class="badge badge-neutral">Stopped</span>{% endif %}
+      Started {{ run.started_at|date:"j M Y, H:i" }}{% if version_number %} · version {{ version_number }}{% endif %}
+      {% if run.status == "waiting" and run.next_due_at %} · next check {{ run.next_due_at|timeuntil }} from now{% endif %}
+    </p>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {% if conversation %}<a href="/inbox/{{ conversation.public_id }}/" class="btn btn-secondary btn-sm">Open conversation</a>{% endif %}
+    {% if run.status == "failed" %}
+      <form method="post" action="{% url 'automation:run-action' run.public_id 'retry' %}" hx-boost="false">{% csrf_token %}
+        <button class="btn btn-primary btn-sm">Try again</button>
+      </form>
+      <form method="post" action="{% url 'automation:run-action' run.public_id 'skip' %}" hx-boost="false"
+            data-confirm="Skip the failed step and carry on with the next one?" data-confirm-label="Skip it">{% csrf_token %}
+        <button class="btn btn-secondary btn-sm">Skip this step</button>
+      </form>
+    {% elif run.status == "waiting" or run.status == "active" %}
+      <form method="post" action="{% url 'automation:run-action' run.public_id 'cancel' %}" hx-boost="false"
+            data-confirm="Stop this automation for {{ run.contact.display_name }}?" data-confirm-danger data-confirm-label="Stop">{% csrf_token %}
+        <button class="btn btn-danger-ghost btn-sm">Stop for this customer</button>
+      </form>
+    {% endif %}
+  </div>
+</header>
+
+<ol class="card card-pad space-y-3" aria-label="What happened">
+  {% for item in timeline %}
+  <li class="flex items-start gap-3">
+    <span class="mt-1 w-2.5 h-2.5 rounded-full shrink-0 {% if item.ok %}bg-teal-500{% else %}bg-red-500{% endif %}" aria-hidden="true"></span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm text-ink"><span class="font-medium">{{ item.label }}</span> · {{ item.text }}</p>
+      <p class="text-xs text-gray-500">{{ item.at|date:"j M, H:i" }}</p>
+      {% if item.ai_labels %}
+      <form method="post" action="{% url 'automation:run-action' run.public_id 'correct' %}" hx-boost="false" class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+        {% csrf_token %}
+        <input type="hidden" name="step_run" value="{{ item.step_run_id }}">
+        <label for="correct-{{ item.step_run_id }}" class="text-gray-500">Should have been</label>
+        <select id="correct-{{ item.step_run_id }}" name="label" class="select select-sm">
+          {% for l in item.ai_labels %}<option value="{{ l }}" {% if l == item.ai_label %}selected{% endif %}>{{ l }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-ghost btn-xs">Save</button>
+      </form>
+      {% endif %}
+      {% if item.error %}
+      <details class="mt-1 text-xs text-gray-500">
+        <summary class="cursor-pointer">Technical details</summary>
+        <p class="mt-1 font-mono break-words">{{ item.error }}</p>
+      </details>
+      {% endif %}
+    </div>
+  </li>
+  {% empty %}
+  <li class="text-sm text-gray-500">Nothing has happened yet.</li>
+  {% endfor %}
+  {% if run.status == "waiting" %}
+  <li class="flex items-start gap-3">
+    <span class="mt-1 w-2.5 h-2.5 rounded-full shrink-0 bg-brand-500 animate-pulse" aria-hidden="true"></span>
+    <p class="text-sm text-gray-600">Waiting{% if run.next_due_at %} until {{ run.next_due_at|date:"j M, H:i" }}{% endif %}.</p>
+  </li>
+  {% endif %}
+</ol>
+{% endblock %}

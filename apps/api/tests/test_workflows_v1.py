@@ -117,7 +117,23 @@ def test_workflow_template_catalog_and_create_from_template(client, api_key):
     assert body["name"] == "Welcome series"
     assert body["definition"]["trigger"] == {"type": "contact.created"}
 
-    # the copied definition is structurally valid and publishes
+    # As copied it still has the placeholder sender and template names, so it must not
+    # go live (it would send from example.com, with empty bodies).
+    pub = client.post(f"/api/v1/workflows/{body['id']}/publish", HTTP_X_API_KEY=key)
+    assert pub.status_code == 400
+
+    # Filled in, it publishes.
+    definition = body["definition"]
+    for step in definition["steps"]:
+        if step["type"] == "send_email":
+            step["from"] = "hello@mwamba.co.zm"
+            step.pop("template", None)
+    client.patch(
+        f"/api/v1/workflows/{body['id']}",
+        data={"definition": definition},
+        content_type="application/json",
+        HTTP_X_API_KEY=key,
+    )
     pub = client.post(f"/api/v1/workflows/{body['id']}/publish", HTTP_X_API_KEY=key)
     assert pub.status_code == 200
 

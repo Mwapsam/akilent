@@ -36,6 +36,12 @@
     <ul class="mt-1 list-disc pl-5 space-y-0.5 text-gray-700">{% for r in built.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
   </section>
 
+  {% if built.needs %}
+  <section class="alert alert-warning text-sm" aria-label="Decide before turning it on">
+    <div><p class="font-medium">A few things to decide</p>
+    <ul class="list-disc pl-5 mt-1">{% for n in built.needs %}<li>{{ n }}</li>{% endfor %}</ul></div>
+  </section>
+  {% endif %}
   {% if built.errors %}
   <div class="alert alert-danger" role="alert"><strong>Fix this before turning it on:</strong> {{ built.errors.0 }}</div>
   {% endif %}
@@ -67,6 +73,7 @@
     {% endif %}
     <div class="flex flex-wrap justify-end gap-2">
       {% if built.editable.reply or built.editable.keywords %}<button name="action" value="check" class="btn btn-ghost btn-sm">Check my changes</button>{% endif %}
+      <button name="action" value="builder" class="btn btn-secondary btn-sm">Edit &amp; test it</button>
       <button name="action" value="save" class="btn btn-secondary btn-sm">Save as draft</button>
       <button name="action" value="turn_on" class="btn btn-primary btn-sm" {% if not built or built.errors %}disabled{% endif %}>Turn on</button>
     </div>

@@ -14,31 +14,68 @@ from __future__ import annotations
 from django.urls import reverse
 
 
+def instagram_connected(account) -> bool:
+    """An Instagram account is connected and its channel is switched on."""
+    from django.apps import apps
+
+    from apps.core.channels import enabled_channels
+
+    if "instagram" not in enabled_channels():
+        return False
+    model = apps.get_model("instagram", "InstagramBusinessAccount")
+    return model.objects.filter(
+        account=account, is_active=True, token_expired=False
+    ).exists()
+
+
 def check(account, starter: dict, *, approved_template_count: int) -> dict:
     """``{"ready": bool, "items": [{"ok", "blocking", "headline", "detail", "fix"}]}`` for one starter."""
     from apps.accounts import business_hours
     from apps.whatsapp import api as whatsapp_api
 
     items = []
-    connected = whatsapp_api.count_active_business_numbers(account) > 0
-    items.append(
-        {
-            "ok": connected,
-            "blocking": not connected,
-            "headline": "WhatsApp is connected"
-            if connected
-            else "Your WhatsApp number isn't connected yet",
-            "detail": ""
-            if connected
-            else "Nothing can be sent until you connect the number your customers message.",
-            "fix": None
-            if connected
-            else {"label": "Connect WhatsApp", "url": "/whatsapp/numbers/"},
-        }
-    )
     needs_template = not (
-        starter.get("reply") or starter.get("menu") or starter.get("team")
+        starter.get("reply")
+        or starter.get("menu")
+        or starter.get("team")
+        or starter.get("qualification")
     )
+    whatsapp = whatsapp_api.count_active_business_numbers(account) > 0
+    if needs_template:
+        # Approved templates are WhatsApp's; nothing else can send these.
+        items.append(
+            {
+                "ok": whatsapp,
+                "blocking": not whatsapp,
+                "headline": "WhatsApp is connected"
+                if whatsapp
+                else "Your WhatsApp number isn't connected yet",
+                "detail": ""
+                if whatsapp
+                else "This one sends an approved WhatsApp message, so it needs WhatsApp.",
+                "fix": None
+                if whatsapp
+                else {"label": "Connect WhatsApp", "url": "/whatsapp/numbers/"},
+            }
+        )
+    else:
+        # Replies, menus and questions work in any conversation customers start with you.
+        connected = whatsapp or instagram_connected(account)
+        items.append(
+            {
+                "ok": connected,
+                "blocking": not connected,
+                "headline": "A messaging channel is connected"
+                if connected
+                else "Connect WhatsApp or Instagram first",
+                "detail": ""
+                if connected
+                else "This answers customers who message you, so connect where they do.",
+                "fix": None
+                if connected
+                else {"label": "Connect a channel", "url": "/onboarding/"},
+            }
+        )
     if needs_template:
         has = approved_template_count > 0
         items.append(

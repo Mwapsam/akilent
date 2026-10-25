@@ -828,6 +828,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.conversations.tasks.remind_missed_conversations",
         "schedule": 3600.0,  # a conversation becomes "missed" at 24h; hourly is prompt enough
     },
+    "notify-due-followups": {
+        "task": "apps.conversations.tasks.notify_due_followups",
+        "schedule": 300.0,  # a reminder for "in 1 hour" should land within a few minutes
+    },
     "escalate-overdue-conversations": {
         "task": "apps.conversations.tasks.escalate_overdue_conversations",
         "schedule": 900.0,  # OVERDUE_WAITING is 2h; 15-minutely matches the campaign sweeper's cadence

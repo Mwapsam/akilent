@@ -103,6 +103,15 @@ _STEP_TYPES = {
     "lookup_product",
     # Publishing — publishes a ContentPost (apps.publishing) immediately.
     "publish_post",
+    # A reminder on the team's follow-up list (never a message to the customer).
+    "create_followup",
+    # Send one of the business's forms (a WhatsApp Flow, or questions one by one) and wait
+    # until the customer finishes it (``next``) or it times out (``on_timeout``).
+    "start_form",
+    # Optional AI, each with a declared way to go without it (apps.automation.ai_steps).
+    "ai_classify",
+    "ai_extract",
+    "ai_answer",
 }
 _TRIGGER_TYPES = {
     "business_event",
@@ -129,6 +138,8 @@ _TRIGGER_TYPES = {
     "lead.status_changed",
     "lead.qualified",
     "lead.lost",
+    # A customer finished one of the business's forms (optionally: a given form).
+    "conversation.form_completed",
 }
 
 # Triggers that carry the customer's message, so a keyword ``match`` can be applied to them.
@@ -254,6 +265,50 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 step_id=sid,
                 field="from",
             )
+        if step.get("type") == "send_email" and str(
+            step.get("from", "")
+        ).lower().endswith("@example.com"):
+            _error(
+                f"step {sid!r}: choose the address this email comes from (it still says "
+                f"{step['from']})",
+                step_id=sid,
+                field="from",
+            )
+        if (
+            step.get("type") == "send_email"
+            and step.get("template")
+            and account is not None
+            and _resolve_template_id(account, step["template"]) is None
+        ):
+            # Without this the step would send a subject with an empty body.
+            _error(
+                f"step {sid!r}: there's no email template called {step['template']!r}; "
+                "pick one of yours or write the message here",
+                step_id=sid,
+                field="template",
+            )
+        if step.get("fallback_template") and account is not None:
+            from apps.whatsapp.models import MessageTemplate
+
+            fb = MessageTemplate.objects.filter(
+                account=account, whatsapp_template_name=step["fallback_template"]
+            ).first()
+            if fb is None:
+                _error(
+                    f"step {sid!r}: fallback template {step['fallback_template']!r} not found",
+                    step_id=sid,
+                    field="fallback_template",
+                )
+            else:
+                mapping = step.get("fallback_variable_mapping") or {}
+                missing = [v for v in (fb.variables or []) if v not in mapping]
+                if missing:
+                    _error(
+                        f"step {sid!r}: fallback template needs a value for "
+                        f"{', '.join(missing)}",
+                        step_id=sid,
+                        field="fallback_variable_mapping",
+                    )
         if step.get("type") == "send_whatsapp" and not step.get("template"):
             _error(
                 f"step {sid!r}: send_whatsapp needs a template",
@@ -473,6 +528,54 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 )
         if step.get("type") == "ask_question":
             _validate_ask_question_step(step, trig, steps, ids, sid, _error, account)
+        if step.get("type") in ("ai_classify", "ai_extract", "ai_answer"):
+            from apps.automation import ai_steps
+
+            ai_steps.validate(step, sid, _error, ids)
+        if step.get("type") == "start_form":
+            if not step.get("form"):
+                _error(
+                    f"step {sid!r}: choose which form to send",
+                    step_id=sid,
+                    field="form",
+                )
+            elif account is not None:
+                from apps.conversations.models import ConversationForm
+
+                form = ConversationForm.objects.filter(
+                    account=account, public_id=step["form"]
+                ).first()
+                if form is None:
+                    _error(
+                        f"step {sid!r}: that form no longer exists",
+                        step_id=sid,
+                        field="form",
+                    )
+                elif form.status != ConversationForm.Status.PUBLISHED:
+                    _error(
+                        f"step {sid!r}: the form “{form.name}” is still a draft; publish it",
+                        step_id=sid,
+                        field="form",
+                    )
+        if step.get("type") == "create_followup":
+            try:
+                hours = float(step.get("due_in_hours") or 24)
+            except (TypeError, ValueError):
+                hours = -1
+            if not 0.25 <= hours <= 24 * 60:
+                _error(
+                    f"step {sid!r}: remind between 15 minutes and 60 days from now",
+                    step_id=sid,
+                    field="due_in_hours",
+                )
+            to = (step.get("assign_to") or "").strip()
+            if to and to != "assignee" and "@" not in to:
+                _error(
+                    f"step {sid!r}: put it on the assignee's list, a teammate's (their "
+                    "email), or leave it for the whole team",
+                    step_id=sid,
+                    field="assign_to",
+                )
         if step.get("type") == "lookup_product":
             if not step.get("on_error"):
                 _error(
@@ -542,15 +645,156 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
             _check(step.get("on_timeout"), sid, "on_timeout")
             _check(step.get("on_invalid"), sid, "on_invalid")
             _check(step.get("on_error"), sid, "on_error")
+        elif step.get("type") in ("ai_classify", "ai_extract", "ai_answer"):
+            for field in ("next", "on_unsure", "on_missing", "on_handoff"):
+                _check(step.get(field), sid, field)
+            for target in (step.get("routes") or {}).values():
+                _check(target, sid, "routes")
+        elif step.get("type") in ("start_form", "lookup_product", "publish_post"):
+            for field in (
+                "next",
+                "on_timeout",
+                "on_error",
+                "on_found",
+                "on_not_found",
+                "on_ambiguous",
+                "on_no_price",
+            ):
+                _check(step.get(field), sid, field)
         elif step.get("type") not in ("stop", "exit"):
             _check(step.get("next"), sid, "next")
+
+    # A step runs at most once per run, so a path that leads back to an earlier step never
+    # repeats it: it would spin through skipped steps and strand the run. Reject loops outright.
+    graph = {
+        step["id"]: [t for t in step_targets(step) if t in ids]
+        for step in steps
+        if step.get("id")
+    }
+    looped = _first_cycle(graph)
+    if looped:
+        _error(
+            f"step {looped!r} leads back to an earlier step. Automations can't loop; "
+            "point it at a later step or a stop.",
+            step_id=looped,
+            field="next",
+        )
     return errors
+
+
+_TARGET_FIELDS = (
+    "next",
+    "on_true",
+    "on_false",
+    "default",
+    "on_timeout",
+    "on_invalid",
+    "on_error",
+    "on_found",
+    "on_not_found",
+    "on_ambiguous",
+    "on_no_price",
+    "on_unsure",
+    "on_missing",
+    "on_handoff",
+)
+
+
+def step_targets(step: dict) -> list[str]:
+    """Every step id ``step`` can hand the run to next, whatever its type."""
+    targets = [
+        step[f] for f in _TARGET_FIELDS if isinstance(step.get(f), str) and step[f]
+    ]
+    targets += [
+        t for t in (step.get("routes") or {}).values() if isinstance(t, str) and t
+    ]
+    return targets
+
+
+def _first_cycle(graph: dict[str, list[str]]) -> str | None:
+    """The id of a step whose edge closes a cycle in ``graph``, or None."""
+    state: dict[str, int] = {}  # 1 = on the current path, 2 = fully explored
+    for root, edges in graph.items():
+        if state.get(root):
+            continue
+        stack = [(root, iter(edges))]
+        state[root] = 1
+        while stack:
+            node, children = stack[-1]
+            child = next(children, None)
+            if child is None:
+                state[node] = 2
+                stack.pop()
+            elif state.get(child) == 1:
+                return node
+            elif not state.get(child):
+                state[child] = 1
+                stack.append((child, iter(graph.get(child, []))))
+    return None
 
 
 def _steps_by_id(workflow: Workflow) -> dict:
     return {
         s["id"]: s for s in (workflow.definition or {}).get("steps", []) if "id" in s
     }
+
+
+def run_definition(run: WorkflowRun) -> dict:
+    """The definition ``run`` follows: its pinned snapshot, else (older runs) the live one."""
+    if run.version is not None:
+        return run.version.definition or {}
+    return run.workflow.definition or {}
+
+
+def _run_steps(run: WorkflowRun) -> dict:
+    return {s["id"]: s for s in run_definition(run).get("steps", []) if "id" in s}
+
+
+def _digest(definition: dict) -> str:
+    import hashlib
+    import json
+
+    canonical = json.dumps(definition or {}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def snapshot(workflow: Workflow):
+    """The ``WorkflowVersion`` holding ``workflow.definition`` as it is now (made if new).
+
+    Keyed by content, so every path that writes a definition (editor, API, starters,
+    Build) gets a snapshot without having to remember to make one.
+    """
+    from django.db import IntegrityError
+    from django.db.models import Max
+
+    from apps.automation.models import WorkflowVersion
+
+    digest = _digest(workflow.definition)
+    found = WorkflowVersion.objects.filter(workflow=workflow, digest=digest).first()
+    if found is not None:
+        return found
+    for _ in range(3):
+        number = (
+            WorkflowVersion.objects.filter(workflow=workflow).aggregate(
+                m=Max("number")
+            )["m"]
+            or 0
+        ) + 1
+        try:
+            with transaction.atomic():
+                return WorkflowVersion.objects.create(
+                    workflow=workflow,
+                    number=number,
+                    digest=digest,
+                    definition=workflow.definition or {},
+                )
+        except IntegrityError:
+            found = WorkflowVersion.objects.filter(
+                workflow=workflow, digest=digest
+            ).first()
+            if found is not None:
+                return found
+    raise RuntimeError(f"could not snapshot workflow {workflow.pk}")
 
 
 def _first_step_id(workflow: Workflow) -> str | None:
@@ -575,18 +819,71 @@ def enroll(
     first = _first_step_id(workflow)
     if first is None:
         return None
-    run, created = WorkflowRun.objects.get_or_create(
+    if _opted_out_of_this(workflow, contact, context or {}):
+        return None  # they said STOP: don't start something that can only fail at send
+    in_flight = dict(
         workflow=workflow,
         contact=contact,
         subject_key=subject_key,
         status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
-        defaults={"context": context or {}, "current_step": first},
+    )
+    # Most messages come from someone already part-way through: answer that cheaply,
+    # before hashing the definition for a version snapshot only a new run needs.
+    existing = WorkflowRun.objects.filter(**in_flight).first()
+    if existing is not None:
+        return existing
+    run, created = WorkflowRun.objects.get_or_create(
+        **in_flight,
+        defaults={
+            "context": context or {},
+            "current_step": first,
+            "version": snapshot(workflow),
+        },
     )
     if not created:
         return run
     _notify_workflow(run, "workflow.started")
     advance_run(run)
     return run
+
+
+# Steps that message the customer on the conversation's own channel.
+_CONVERSATION_SEND_STEPS = frozenset(
+    {"reply_text", "send_buttons", "send_list", "ask_question"}
+)
+
+
+def _opted_out_of_this(workflow: Workflow, contact, context: dict) -> bool:
+    """True when ``contact`` opted out of WhatsApp and ``workflow`` would message them there."""
+    if not getattr(contact, "whatsapp_opted_out", False):
+        return False
+    types = {s.get("type") for s in (workflow.definition or {}).get("steps", [])}
+    if "send_whatsapp" in types:
+        return True
+    if not types & _CONVERSATION_SEND_STEPS:
+        return False
+    conversation_id = context.get("conversation_id")
+    if not conversation_id:
+        return True  # it would fall back to their WhatsApp conversation
+    from apps.conversations.models import Conversation
+
+    channel = (
+        Conversation.objects.filter(public_id=conversation_id)
+        .values_list("channel", flat=True)
+        .first()
+    )
+    return channel in (None, Conversation.Channel.WHATSAPP)
+
+
+def is_consent_keyword(text: str) -> bool:
+    """A lone STOP / START: a consent instruction, never a question for an automation."""
+    from django.conf import settings
+
+    token = (text or "").strip().strip(".!?").upper()
+    return bool(token) and (
+        token in getattr(settings, "WHATSAPP_STOP_KEYWORDS", ())
+        or token in getattr(settings, "WHATSAPP_START_KEYWORDS", ())
+    )
 
 
 def _notify_workflow(run: WorkflowRun, event_type: str) -> None:
@@ -791,6 +1088,18 @@ def _conversation_for_run(run: WorkflowRun, step: dict, *, fallback: bool = Fals
     return conversation
 
 
+def send_key(run: WorkflowRun, step_id) -> str:
+    """The idempotency key for a message ``step_id`` sends in ``run``.
+
+    Fixed per run and step, so a worker retry returns the first message instead of sending a
+    second. An owner's "Retry" from run history bumps the attempt, so the retried step can
+    really send again.
+    """
+    attempt = ((run.context or {}).get("_retries") or {}).get(str(step_id), 0)
+    base = f"wf:{run.pk}:{step_id}"
+    return f"{base}:r{attempt}" if attempt else base
+
+
 def _first_name_merge(run: WorkflowRun, text: str) -> str:
     # Plain replace, not str.format: the text is owner-written and must not be able to
     # reach into objects with "{contact.__class__}" style placeholders.
@@ -798,6 +1107,43 @@ def _first_name_merge(run: WorkflowRun, text: str) -> str:
 
     return merge_business_facts(
         merge_first_name(text, run.contact.first_name), run.contact.account
+    )
+
+
+class WindowClosedError(ValueError):
+    """The customer's messaging window has closed, so only an approved template can go out."""
+
+
+def _window_open_for_run(run: WorkflowRun, conversation) -> bool:
+    """Whether a free-form message may go out on ``conversation`` for this run.
+
+    A run started by the customer's own message opened the window itself, for 24 hours
+    from that message; otherwise the conversation's recorded window decides.
+    """
+    from datetime import timedelta
+
+    if (
+        (run.context or {}).get("message")
+        and run.started_at
+        and (run.started_at >= timezone.now() - timedelta(hours=24))
+    ):
+        return True
+    return _messaging_window_open(conversation)
+
+
+def _require_open_window(run: WorkflowRun, step: dict, conversation) -> None:
+    """Fail the step now, with a fix the owner can act on, when the window is closed.
+
+    Checking here (not only when the outbound queue sends) means the run and the owner see
+    the real reason straight away, instead of a step that says "sent" and fails later.
+    """
+    if _window_open_for_run(run, conversation):
+        return
+    raise WindowClosedError(
+        f"Step {step.get('id')!r} couldn't send: the customer hasn't messaged in the "
+        "last 24 hours, so only an approved WhatsApp template can reach them now. "
+        "Add a fallback template to this step, or start the automation from a "
+        "customer's message."
     )
 
 
@@ -815,6 +1161,7 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
     from apps.conversations.models import Conversation
 
     conversation = _conversation_for_run(run, step)
+    _require_open_window(run, step, conversation)
 
     if conversation.channel == Conversation.Channel.WHATSAPP:
         return _run_interactive_whatsapp(run, step, conversation)
@@ -850,7 +1197,7 @@ def _run_interactive_whatsapp(run: WorkflowRun, step: dict, conversation) -> dic
         run.workflow.account,
         conversation.whatsapp_conversation.contact,
         interactive,
-        idempotency_key=f"wf:{run.pk}:{step.get('id')}",
+        idempotency_key=send_key(run, step.get("id")),
     )
     conversation.whatsapp_conversation.register_outbound(msg.created_at)
     return {"outbound_message_id": msg.id}
@@ -904,7 +1251,7 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
 
     # Workflows authored for WhatsApp put timeout_seconds/on_timeout on the following
     # wait_for_reply step. Inherit those settings when the send_buttons step omits them.
-    _next_step = _steps_by_id(run.workflow).get(step.get("next") or "") or {}
+    _next_step = _run_steps(run).get(step.get("next") or "") or {}
     _next_is_wait = _next_step.get("type") == "wait_for_reply"
     _timeout_src = (
         step if "timeout_seconds" in step else (_next_step if _next_is_wait else step)
@@ -974,7 +1321,7 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
             recipient_igsid,
             text,
             action_type="dm_reply",
-            idempotency_key=f"wf:{run.pk}:{step_id}",
+            idempotency_key=send_key(run, step_id),
             quick_replies=quick_replies,
         )
 
@@ -1402,10 +1749,21 @@ def _run_ask_question(run: WorkflowRun, step: dict) -> dict:
     # ── Send the question (after commit, so a crash is recoverable) ───────────
     try:
         _send_ask_question_text(run, conversation, question, step_id, attempt=0)
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "_run_ask_question: send raised for run=%s step=%s", run.pk, step_id
         )
+        # Don't wait for an answer to a question the customer never got.
+        interaction.status = WorkflowInteraction.Status.CANCELLED
+        interaction.save(update_fields=["status"])
+        run.status = WorkflowRun.Status.ACTIVE
+        run.next_due_at = None
+        run.save(update_fields=["status", "next_due_at"])
+        if on_error:
+            return {"_routed_to": on_error, "reason": "send_failed", "error": str(exc)}
+        raise ValueError(
+            f"ask_question step {step_id!r}: the question couldn't be sent ({exc})"
+        ) from exc
 
     return {"_parked": True, "interaction_token": interaction.token}
 
@@ -1422,7 +1780,7 @@ def _send_ask_question_text(
     """
     from apps.core.actions import ActionError, run_action
 
-    idem_key = f"wf:{run.pk}:{step_id}:aq:{attempt}"
+    idem_key = f"{send_key(run, step_id)}:aq:{attempt}"
     try:
         run_action(
             "reply",
@@ -1510,7 +1868,7 @@ def resume_on_reply(account_id: int, contact, message: dict) -> bool:
         .select_related("workflow")
     )
     for run in waiting:
-        step = _steps_by_id(run.workflow).get(run.current_step)
+        step = _run_steps(run).get(run.current_step)
         if step is None or step.get("type") != "wait_for_reply":
             continue
         target = _route_for_reply(step, message)
@@ -1554,6 +1912,25 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
     from apps.core.actions import ActionError, run_action
 
     conversation = _conversation_for_run(run, step)
+    if not _window_open_for_run(run, conversation):
+        fallback = step.get("fallback_template") or ""
+        if fallback and conversation.channel == conversation.Channel.WHATSAPP:
+            # Outside the window an approved template is the only way through.
+            return {
+                **_run_send_whatsapp(
+                    run,
+                    {
+                        **step,
+                        "type": "send_whatsapp",
+                        "template": fallback,
+                        "variable_mapping": step.get("fallback_variable_mapping") or {},
+                        "variable_fallbacks": step.get("fallback_variable_fallbacks")
+                        or {},
+                    },
+                ),
+                "fallback_template": fallback,
+            }
+        _require_open_window(run, step, conversation)
     text = _first_name_merge(run, step.get("text") or "")
 
     # Apply allowlist template rendering if the text has {placeholders}.
@@ -1571,6 +1948,11 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
             "product.price": ctx.get("product_price", ""),
             "product.currency": ctx.get("product_currency", ""),
             "business.name": getattr(account, "company_name", "") or "",
+            # Answers from a form this run sent (start_form): {form_answers.budget}.
+            **{
+                f"form_answers.{key}": str(value)
+                for key, value in (ctx.get("form_answers") or {}).items()
+            },
         }
         try:
             text = render_template(text, render_ctx, step_id=step.get("id") or "")
@@ -1591,7 +1973,7 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
             {"account": run.workflow.account},
             conversation=conversation,
             body=text,
-            idempotency_key=f"wf:{run.pk}:{step.get('id')}",
+            idempotency_key=send_key(run, step.get("id")),
         )
     except ActionError as exc:
         raise ValueError(f"reply_text step {step.get('id')!r}: {exc}") from exc
@@ -1678,6 +2060,100 @@ def _run_assign_conversation(run: WorkflowRun, step: dict) -> dict:
         )
     except ActionError as exc:
         raise ValueError(f"assign_conversation step {step.get('id')!r}: {exc}") from exc
+
+
+def _run_start_form(run: WorkflowRun, step: dict) -> dict:
+    """Send a form and park the run until the customer finishes it or it times out.
+
+    The response id is kept on the run, so ``apps.automation.api.form_finished`` can carry
+    on from exactly this run when the answers arrive.
+    """
+    from apps.conversations import forms as conversation_forms
+    from apps.conversations.models import ConversationForm
+
+    on_error = step.get("on_error") or ""
+    form = ConversationForm.objects.filter(
+        account=run.workflow.account, public_id=step.get("form") or ""
+    ).first()
+    try:
+        if form is None:
+            raise ValueError("the form it sends no longer exists")
+        conversation = _conversation_for_run(run, step, fallback=True)
+        if not conversation_forms.can_start(form, conversation):
+            raise ValueError(
+                f"the form “{form.name}” isn't ready to send (publish it first)"
+            )
+        if conversation_forms.active_response_for(conversation) is not None:
+            raise ValueError("the customer is already filling in a form")
+        _require_open_window(run, step, conversation)
+        response = conversation_forms.start_form(conversation, form)
+    except (ValueError, conversation_forms.FormError) as exc:
+        if on_error:
+            return {
+                "_routed_to": on_error,
+                "reason": "form_not_sent",
+                "error": str(exc),
+            }
+        raise ValueError(f"start_form step {step.get('id')!r}: {exc}") from exc
+    hours = float(step.get("timeout_hours") or form.timeout_hours or 72)
+    run.context = {
+        **(run.context or {}),
+        "_form_responses": {
+            **((run.context or {}).get("_form_responses") or {}),
+            step["id"]: response.pk,
+        },
+    }
+    run.status = WorkflowRun.Status.WAITING
+    run.next_due_at = timezone.now() + timedelta(hours=hours)
+    run.save(update_fields=["context", "status", "next_due_at"])
+    return {"_parked": True, "response_id": response.pk, "form": form.public_id}
+
+
+def _abandon_run_form(run: WorkflowRun, step: dict) -> None:
+    """The run stopped waiting for its form: let the conversation go too."""
+    from apps.conversations.models import FormResponse
+
+    response_id = ((run.context or {}).get("_form_responses") or {}).get(step["id"])
+    if response_id:
+        FormResponse.objects.filter(
+            pk=response_id, status=FormResponse.Status.IN_PROGRESS
+        ).update(status=FormResponse.Status.ABANDONED, completed_at=timezone.now())
+
+
+def _run_create_followup(run: WorkflowRun, step: dict) -> dict:
+    """Put a reminder on the team's follow-up list about this customer."""
+    from datetime import timedelta
+
+    from apps.accounts import notifications
+    from apps.conversations import followups
+
+    try:
+        conversation = _conversation_for_run(run, step, fallback=True)
+    except ValueError:
+        conversation = None
+    contact = run.contact
+    who = contact.full_name or contact.phone or contact.email or "the customer"
+    note = _first_name_merge(run, step.get("note") or "").replace("{contact}", who)
+    assigned_to = None
+    to = (step.get("assign_to") or "").strip()
+    if to == "assignee":
+        assigned_to = getattr(conversation, "assigned_to", None)
+    elif "@" in to:
+        try:
+            assigned_to = notifications.recipients(run.workflow.account, to)[0]
+        except notifications.NotifyError as exc:
+            raise ValueError(f"create_followup step {step.get('id')!r}: {exc}") from exc
+    hours = float(step.get("due_in_hours") or 24)
+    followup, created = followups.create(
+        run.workflow.account,
+        contact,
+        conversation=conversation,
+        due_at=timezone.now() + timedelta(hours=hours),
+        note=note or "Follow up",
+        source="workflow",
+        assigned_to=assigned_to,
+    )
+    return {"followup_id": followup.pk, "created": created}
 
 
 def _run_notify_team(run: WorkflowRun, step: dict) -> dict:
@@ -1917,12 +2393,65 @@ def _apply_set_attribute(run: WorkflowRun, step: dict) -> dict:
     return {"key": key}
 
 
+# Marks a run parked by a conversation's "teammate took over" pause, so turning the pause
+# off early can wake it (``Conversation.resume_automation``).
+HELD_BY_PAUSE = "held_by_pause"
+
+
+def _held(run: WorkflowRun) -> bool:
+    """A paused workflow, or a conversation a teammate took over: the customer keeps their
+    place and nothing is sent. Returns True when the run was held.
+
+    Every path that moves a run (a button tap, a finished form, a timer) ends up here, so
+    this is the one place the holds are kept. The run sweepers in ``run_due`` pick a held
+    run back up afterwards: they only look at published workflows, and a conversation
+    hold is parked until the pause ends.
+    """
+    from apps.conversations.models import Conversation
+
+    now = timezone.now()
+    until = None
+    conversation_hold = False
+    status = (
+        Workflow.objects.filter(pk=run.workflow_id)
+        .values_list("status", flat=True)
+        .first()
+    )
+    if status == Workflow.Status.PAUSED:
+        until = now
+    elif conversation_id := (run.context or {}).get("conversation_id"):
+        paused_until = (
+            Conversation.objects.filter(public_id=conversation_id)
+            .values_list("automation_paused_until", flat=True)
+            .first()
+        )
+        if paused_until and paused_until > now:
+            until, conversation_hold = paused_until, True
+    if until is None:
+        if (run.context or {}).pop(HELD_BY_PAUSE, None):
+            run.save(update_fields=["context"])
+        return False
+    fields = []
+    if run.next_due_at is None or run.next_due_at < until:
+        run.next_due_at = until
+        fields.append("next_due_at")
+    # Marked only when the hold moved its timer: a longer wait of its own stays as it is.
+    if conversation_hold and fields and not (run.context or {}).get(HELD_BY_PAUSE):
+        run.context = {**(run.context or {}), HELD_BY_PAUSE: True}
+        fields.append("context")
+    if fields:
+        run.save(update_fields=fields)
+    return True
+
+
 def advance_run(run: WorkflowRun) -> WorkflowRun:
     """Execute steps until the run waits, stops, or completes."""
     if run.status not in (WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING):
         return run
+    if _held(run):
+        return run
 
-    steps = _steps_by_id(run.workflow)
+    steps = _run_steps(run)
 
     for _ in range(_MAX_STEPS_PER_CALL):
         step = steps.get(run.current_step)
@@ -1975,7 +2504,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
         # send_buttons / ask_question park the run (WAITING) with a deadline. On re-entry,
         # if the deadline has passed, take the timeout path and cancel interactions.
         if (
-            stype in ("send_buttons", "send_list", "ask_question")
+            stype in ("send_buttons", "send_list", "ask_question", "start_form")
             and run.status == WorkflowRun.Status.WAITING
             and run.next_due_at
             and run.next_due_at <= timezone.now()
@@ -1983,6 +2512,8 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             from apps.automation.interaction import cancel_open_interactions_for_run
 
             cancel_open_interactions_for_run(run)
+            if stype == "start_form":
+                _abandon_run_form(run, step)
             _record(run, step, {"timed_out": True})
             run.status = WorkflowRun.Status.ACTIVE
             run.next_due_at = None
@@ -1990,7 +2521,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             # (WA workflows that pair send_buttons with a separate wait_for_reply step).
             _on_timeout = step.get("on_timeout") or ""
             if not _on_timeout:
-                _nxt = _steps_by_id(run.workflow).get(step.get("next") or "")
+                _nxt = _run_steps(run).get(step.get("next") or "")
                 if _nxt and _nxt.get("type") == "wait_for_reply":
                     _on_timeout = _nxt.get("on_timeout") or ""
             run.current_step = _on_timeout
@@ -2031,6 +2562,18 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
                 result = _run_assign_conversation(run, step)
             elif stype == "notify_team":
                 result = _run_notify_team(run, step)
+            elif stype == "create_followup":
+                result = _run_create_followup(run, step)
+            elif stype == "start_form":
+                result = _run_start_form(run, step)
+            elif stype in ("ai_classify", "ai_extract", "ai_answer"):
+                from apps.automation import ai_steps
+
+                result = {
+                    "ai_classify": ai_steps.run_classify,
+                    "ai_extract": ai_steps.run_extract,
+                    "ai_answer": ai_steps.run_answer,
+                }[stype](run, step)
             elif stype == "branch":
                 matched = _condition_matches(run.contact, step)
                 result = {"matched": matched}
@@ -2077,17 +2620,40 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
         # Interactive and ask_question steps park the run (WAITING + deadline).
         if result.get("_parked"):
             return run
-        # ask_question: window closed or no conversation → routed to on_error.
-        if result.get("_routed_to"):
-            run.current_step = result["_routed_to"]
+        # A step chose its own way on (ask_question's on_error, an AI step's label or its
+        # without-AI path...). An empty choice means the automation ends here.
+        if "_routed_to" in result:
+            run.current_step = result["_routed_to"] or ""
             run.save(update_fields=["current_step"])
+            if not run.current_step:
+                return _complete(run)
             continue
         run.current_step = _next_after(step, run, branch_result=result)
         run.save(update_fields=["current_step"])
         if not run.current_step:
             return _complete(run)
 
-    logger.warning("workflow run %s hit step limit; parking", run.pk)
+    if WorkflowStepRun.objects.filter(run=run, step_id=run.current_step).exists():
+        # Back at a step it already ran: a loop (an older definition, or one edited
+        # through the Code tab) that would otherwise sit "active" forever and block this
+        # customer from the automation. Fail it so the owner hears about it.
+        logger.warning(
+            "workflow run %s looped at %s; failing", run.pk, run.current_step
+        )
+        error = f"The automation looped back to step {run.current_step!r}, so it was stopped."
+        run.status = WorkflowRun.Status.FAILED
+        run.completed_at = timezone.now()
+        run.save(update_fields=["status", "completed_at"])
+        from apps.automation.interaction import cancel_open_interactions_for_run
+
+        cancel_open_interactions_for_run(run)
+        _alert_failure(run, error)
+        return run
+    # A long but legitimate chain: let the sweeper (run_due) carry on from here shortly,
+    # instead of parking with no due time where nothing would ever pick it up.
+    logger.info("workflow run %s hit step limit; continuing on next sweep", run.pk)
+    run.next_due_at = timezone.now()
+    run.save(update_fields=["next_due_at"])
     return run
 
 
@@ -2158,7 +2724,7 @@ def _alert_failure(run: WorkflowRun, error: str) -> None:
                 f"{explain.humanise_step_error(error)}\n\n"
                 "You'll get at most one of these emails a day for each automation."
             ),
-            path=reverse("automation:why-not"),
+            path=reverse("automation:run", kwargs={"run_id": run.public_id}),
         )
     except Exception:
         logger.exception("could not send the failure alert for run %s", run.pk)
@@ -2186,9 +2752,11 @@ def on_business_event(event, **kwargs) -> None:
         return
     from apps.contacts.models import Contact
 
-    contact = Contact.objects.filter(pk=event.contact_id).first()
+    contact = Contact.objects.filter(
+        pk=event.contact_id, account_id=event.account_id
+    ).first()
     if contact is None:
-        return
+        return  # never enroll another business's customer
     workflows = Workflow.objects.filter(
         account_id=event.account_id, status=Workflow.Status.PUBLISHED
     )
@@ -2237,15 +2805,58 @@ def answer_message(account_id: int, contact, *, context: dict) -> bool:
     someone already welcomed) leaves the message for AI.
     """
     runs = _enroll_matching(
-        account_id, "conversation.message_received", contact, context=context
+        account_id,
+        "conversation.message_received",
+        contact,
+        context=context,
+        single_answer=True,
     )
-    if not runs:
-        return False
-    if any(run.status == WorkflowRun.Status.WAITING for run in runs):
+    return any(_answered(run, since=run._enrolled_at) for run in runs)  # type: ignore[attr-defined]
+
+
+def _answered(run: WorkflowRun, *, since) -> bool:
+    """Whether ``run`` replied to the customer (or is now waiting on them) since ``since``.
+
+    Only what this message caused counts: a run parked on a plain ``wait`` (a check-in due
+    in three days) is returned again for every later message, and its earlier sends must
+    not keep AI quiet for those days.
+    """
+    if waiting_on_customer(run):
         return True
+    from django.db.models import Q
+
     return WorkflowStepRun.objects.filter(
-        run__in=runs, step_type__in=_CUSTOMER_REPLY_STEPS, status="ok"
+        Q(step_type__in=_CUSTOMER_REPLY_STEPS)
+        | Q(step_type="ai_answer", result__has_key="answered"),
+        run=run,
+        status="ok",
+        executed_at__gte=since,
     ).exists()
+
+
+# Steps that put words in front of the customer: a workflow with any of them "talks".
+_TALKING_STEPS = _CUSTOMER_REPLY_STEPS | {"ask_question", "start_form", "ai_answer"}
+
+
+def _talks(workflow: Workflow) -> bool:
+    return any(
+        s.get("type") in _TALKING_STEPS
+        for s in (workflow.definition or {}).get("steps", [])
+    )
+
+
+# Steps that park a run until the customer answers; any other WAITING run is on a timer.
+_REPLY_WAIT_STEPS = frozenset(
+    {"wait_for_reply", "send_buttons", "send_list", "ask_question", "start_form"}
+)
+
+
+def waiting_on_customer(run: WorkflowRun) -> bool:
+    """True when ``run`` is parked until the customer replies (not merely on a timer)."""
+    if run.status != WorkflowRun.Status.WAITING:
+        return False
+    step = _run_steps(run).get(run.current_step) or {}
+    return step.get("type") in _REPLY_WAIT_STEPS
 
 
 def _enroll_matching(
@@ -2255,28 +2866,47 @@ def _enroll_matching(
     *,
     context: dict | None = None,
     subject_key: str = "",
+    single_answer: bool = False,
 ) -> list[WorkflowRun]:
+    """Enroll ``contact`` in every published workflow this trigger matches.
+
+    With ``single_answer`` (an inbound message), workflows are tried in priority order and,
+    once one has answered the customer, the remaining ones that would also message them are
+    skipped, so one "price?" never gets two replies. Silent ones (tagging, telling the
+    team) still run.
+    """
+    message = (context or {}).get("message") or {}
+    if is_consent_keyword(message.get("body") or ""):
+        return []
     workflows = Workflow.objects.filter(
         account_id=account_id, status=Workflow.Status.PUBLISHED
-    )
+    ).order_by("priority", "id")
     runs: list[WorkflowRun] = []
+    answered = False
     for wf in workflows:
         trigger = (wf.definition or {}).get("trigger", {})
         if trigger.get("type") != trigger_type:
             continue
+        if single_answer and answered and _talks(wf):
+            continue
         if not _trigger_allows(wf, trigger, contact, context or {}):
             continue
+        enrolled_at = timezone.now()
         try:
             with transaction.atomic():
                 run = enroll(
                     wf, contact, context=context or {}, subject_key=subject_key
                 )
                 if run is not None:
+                    run._enrolled_at = enrolled_at  # type: ignore[attr-defined]
                     runs.append(run)
         except Exception:
             logger.exception(
                 "enroll_for_trigger: wf=%s trigger=%s", wf.pk, trigger_type
             )
+            continue
+        if single_answer and run is not None and _answered(run, since=enrolled_at):
+            answered = True
     return runs
 
 
@@ -2296,6 +2926,8 @@ def trigger_verdict(
     customer who sends "price?" three times gets one answer.
     """
     message = (context or {}).get("message") or {}
+    if trigger.get("form") and (context or {}).get("form") != trigger["form"]:
+        return {"code": "other_form", "details": {"expected": trigger["form"]}}
     match = trigger.get("match")
     if match:
         from apps.automation import keywords

@@ -6,6 +6,7 @@ store. See docs/plans — "UI/UX Principle: Complex Architecture, Simple Product
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -13,7 +14,16 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, OuterRef, Subquery
+from django.db.models import (
+    Case,
+    Count,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    When,
+)
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -27,11 +37,13 @@ from apps.accounts.models import Team
 from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.api import conversation_window_is_open
+from apps.conversations.flow_json import FIELD_TYPES as _FLOW_FIELD_TYPES
 from apps.conversations.media import media_json
 from apps.conversations.models import (
     Conversation,
     ConversationForm,
     FollowUp,
+    FormResponse,
     Message,
     RoutingRule,
     SavedReply,
@@ -49,6 +61,7 @@ from apps.conversations.state import (
 )
 from apps.core.channels import hide_disabled_channels, visible_choices
 from apps.core.htmx import is_background
+from apps.core.module_gate import module_required
 
 if TYPE_CHECKING:
     from django.http.response import HttpResponseBase
@@ -56,6 +69,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 30
+
+
+def _last_handled_by(conversation) -> str:
+    """Who took the customer's latest message, in words (see services.HANDLED_LABELS)."""
+    from apps.conversations.services import HANDLED_LABELS
+
+    last = (
+        Message.objects.filter(
+            conversation=conversation, direction=Message.Direction.INBOUND
+        )
+        .order_by("-timestamp", "-id")
+        .values_list("metadata", flat=True)
+        .first()
+    )
+    if not last or "handled_by" not in last:
+        return ""
+    return HANDLED_LABELS.get(last["handled_by"], "")
 
 
 def get_visible_conversation(account, public_id):
@@ -70,6 +100,9 @@ def get_visible_conversation(account, public_id):
 def _inbox_context(request, account) -> dict:
     now = timezone.now()
     view = (request.GET.get("view") or "all").strip()
+    _open_followups = FollowUp.objects.filter(
+        conversation=OuterRef("pk"), done_at__isnull=True
+    ).order_by("due_at")
     if view == "needs_reply":  # legacy name for the same tab
         view = "needs_attention"
 
@@ -98,6 +131,14 @@ def _inbox_context(request, account) -> dict:
         ).order_by("-last_any", "-id")
     elif view == "needs_attention":
         qs = needs_attention(account, now)
+    elif view == "followups":
+        # Conversations with a reminder still open, soonest due first.
+        qs = (
+            with_activity(Conversation.objects.filter(account=account))
+            .filter(Exists(_open_followups))
+            .annotate(next_due=Subquery(_open_followups.values("due_at")[:1]))
+            .order_by("next_due", "-id")
+        )
     else:
         view = "all"
         qs = with_activity(Conversation.objects.filter(account=account)).order_by(
@@ -125,6 +166,7 @@ def _inbox_context(request, account) -> dict:
     qs = qs.annotate(
         preview_body=Subquery(latest.values("body")[:1]),
         preview_direction=Subquery(latest.values("direction")[:1]),
+        has_followup=Exists(_open_followups),
     )
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
@@ -502,7 +544,7 @@ def conversation_detail(request, public_id: str):
                 choice = request.POST.get("when", "").strip()
                 try:
                     due_at = resolve_due_at(
-                        choice, request.POST.get("custom_due_at", "")
+                        choice, request.POST.get("custom_due_at", ""), account=account
                     )
                 except ValueError as exc:
                     raise ActionError(str(exc)) from exc
@@ -573,6 +615,77 @@ def conversation_detail(request, public_id: str):
                 )
                 if in_pane:
                     messages.success(request, f"Started “{form.name}”.")
+            elif action == "pause_automation":
+                choice = request.POST.get("hours", "")
+                hours = None if choice == "forever" else float(choice or 4)
+                conversation.pause_automation(hours)
+                messages.success(
+                    request,
+                    "Automations are paused in this conversation"
+                    + (
+                        " until you turn them back on."
+                        if hours is None
+                        else f" for {hours:g} hours."
+                    ),
+                )
+            elif action == "resume_automation":
+                conversation.resume_automation()
+                messages.success(request, "Automations can answer here again.")
+            elif action == "stop_run":
+                from apps.automation import api as automation_api
+                from apps.automation.models import WorkflowRun
+
+                run = WorkflowRun.objects.filter(
+                    workflow__account=account,
+                    contact=conversation.contact,
+                    public_id=request.POST.get("run", ""),
+                ).first()
+                if run is None:
+                    raise ActionError("That automation run wasn't found.")
+                try:
+                    automation_api.cancel_run(run)
+                except automation_api.RunActionError as exc:
+                    raise ActionError(str(exc)) from exc
+                messages.success(
+                    request, f"Stopped {run.workflow.name} for this customer."
+                )
+            elif action == "run_automation":
+                from apps.automation import api as automation_api
+
+                workflow = next(
+                    (
+                        w
+                        for w in automation_api.manual_workflows(account)
+                        if w.slug == request.POST.get("workflow", "")
+                    ),
+                    None,
+                )
+                if workflow is None:
+                    raise ActionError("Choose an automation to run.")
+                counts = automation_api.enroll_manually(
+                    workflow,
+                    [conversation.contact],
+                    context={"conversation_id": conversation.public_id},
+                )
+                if counts["started"]:
+                    messages.success(request, f"Started {workflow.name}.")
+                elif counts["already"]:
+                    messages.info(
+                        request, f"{workflow.name} is already running for them."
+                    )
+                else:
+                    raise ActionError(
+                        f"{workflow.name} couldn't start for this customer."
+                    )
+            elif action == "cancel_form":
+                from apps.conversations import forms as conversation_forms
+
+                response = conversation_forms.active_response_for(conversation)
+                if response is not None:
+                    conversation_forms.cancel(response)
+                    messages.success(
+                        request, f"Stopped waiting for “{response.form.name}”."
+                    )
         except ActionError as exc:
             if _is_ajax(request):
                 return JsonResponse({"ok": False, "error": str(exc)}, status=400)
@@ -650,12 +763,27 @@ def conversation_detail(request, public_id: str):
         )
 
     saved_replies = list(SavedReply.objects.filter(account=account).order_by("title"))
+    from apps.conversations import followups as followup_service
+
+    # This conversation's own reminder first, else one for the same customer elsewhere.
     open_followup = (
         FollowUp.objects.filter(
             account=account, contact=conversation.contact, done_at__isnull=True
         )
-        .order_by("due_at")
+        .select_related("assigned_to")
+        .annotate(
+            elsewhere=Case(
+                When(conversation=conversation, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("elsewhere", "due_at")
         .first()
+    )
+    followup_still_needed = (
+        open_followup is not None
+        and open_followup in followup_service.open_after_customer_replied(conversation)
     )
 
     open_lead = open_deal = None
@@ -706,21 +834,29 @@ def conversation_detail(request, public_id: str):
     ).count()
 
     try:
-        from apps.automation.api import activity_for_contact
+        from apps.automation.api import activity_for_contact, contact_automations
 
         automation_activity = activity_for_contact(account, conversation.contact)
+        automation_now = contact_automations(account, conversation.contact)
     except Exception:
-        automation_activity = []  # never let a side panel cost the owner their conversation
+        # never let a side panel cost the owner their conversation
+        automation_activity, automation_now = [], {"running": [], "manual": []}
 
     from apps.conversations import forms as conversation_forms
 
     active_form_response = conversation_forms.active_response_for(conversation)
+    # Only forms that would actually launch here: a Flow that isn't published (or needs
+    # republishing) can't be sent on WhatsApp, and offering it would just end in an error.
     published_forms = (
-        ConversationForm.objects.filter(
-            account=account, status=ConversationForm.Status.PUBLISHED
-        ).order_by("name")
+        [
+            f
+            for f in ConversationForm.objects.filter(
+                account=account, status=ConversationForm.Status.PUBLISHED
+            ).order_by("name")
+            if conversation_forms.can_start(f, conversation)
+        ]
         if active_form_response is None
-        else ConversationForm.objects.none()
+        else []
     )
 
     active_recommendation = _active_recommendation_for(conversation)
@@ -729,6 +865,8 @@ def conversation_detail(request, public_id: str):
         "account": account,
         "now": now,
         "automation_activity": automation_activity,
+        "automation_now": automation_now,
+        "last_handled_by": _last_handled_by(conversation),
         "conversation": conversation,
         "active_recommendation": active_recommendation,
         "chat_config": chat_config,
@@ -741,6 +879,11 @@ def conversation_detail(request, public_id: str):
         "approved_templates": approved_templates,
         "saved_replies": saved_replies,
         "open_followup": open_followup,
+        "open_followup_due": followup_service.local_label(open_followup.due_at, account)
+        if open_followup
+        else "",
+        "followup_still_needed": followup_still_needed,
+        "snooze_choices": [c for c in followup_service.CHOICES if c[0] != "custom"],
         "team_members": _team_members(account),
         "active_form_response": active_form_response,
         "published_forms": published_forms,
@@ -753,14 +896,12 @@ def conversation_detail(request, public_id: str):
     # navigation, so opening one never re-loads the shell or the list beside it. Below lg there
     # is no pane to load into, so a row's own href still points here and gets the full page below.
     if in_pane:
-        response = render(
-            request, "conversations/_conversation_pane.html", pane_context
-        )
-        _messages_to_toast(request, response)
+        pane = render(request, "conversations/_conversation_pane.html", pane_context)
+        _messages_to_toast(request, pane)
         if mutated:
             # Assignment, close and reopen change the list beside the pane: refresh it now.
-            response["HX-Trigger"] = "inbox-refresh"
-        return response
+            pane["HX-Trigger"] = "inbox-refresh"
+        return pane
 
     return render(request, "conversations/conversation_detail.html", pane_context)
 
@@ -813,29 +954,59 @@ def conversation_delete(request, public_id: str):
 
 @login_required
 def followups_due(request):
-    """ "Due today" list (R2.2) — every open follow-up due now or earlier."""
+    """The team's reminders: overdue, today and coming up, for "mine" or the whole team."""
+    from datetime import timedelta
+
+    from django.core.paginator import Paginator
+
+    from apps.accounts.models import Membership
+    from apps.conversations import followups
+    from apps.core.channels import hide_disabled_channels
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     now = timezone.now()
-    due = (
-        FollowUp.objects.filter(account=account, done_at__isnull=True, due_at__lte=now)
-        .select_related("contact", "conversation")
-        .order_by("due_at")
+    which = request.GET.get("list") or "mine"
+    base = hide_disabled_channels(
+        FollowUp.objects.filter(account=account, done_at__isnull=True),
+        field="conversation__channel",
+    ).select_related("contact", "conversation", "assigned_to")
+    mine = base.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
+    scoped = mine if which == "mine" else base
+    zone = followups.business_zone(account)
+    local_now = now.astimezone(zone)
+    end_of_today = (local_now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
     )
-    upcoming = (
-        FollowUp.objects.filter(account=account, done_at__isnull=True, due_at__gt=now)
-        .select_related("contact", "conversation")
-        .order_by("due_at")[:20]
+    due = Paginator(scoped.filter(due_at__lte=now).order_by("due_at"), 50).get_page(
+        request.GET.get("page")
     )
+    today = scoped.filter(due_at__gt=now, due_at__lt=end_of_today).order_by("due_at")
+    upcoming = scoped.filter(due_at__gte=end_of_today).order_by("due_at")[:30]
+    membership = Membership.objects.filter(account=account, user=request.user).first()
+    teammates = [
+        m.user
+        for m in Membership.objects.filter(account=account, user__is_active=True)
+        .select_related("user")
+        .order_by("user__first_name", "user__email")
+    ]
     return render(
         request,
         "conversations/followups_due.html",
         {
             "account": account,
             "now": now,
+            "list": which,
             "due": due,
+            "today": today,
             "upcoming": upcoming,
+            "mine_count": mine.filter(due_at__lte=now).count(),
+            "team_count": base.filter(due_at__lte=now).count(),
+            "teammates": teammates,
+            "emails_on": bool(membership and membership.followup_emails),
+            "zone_name": local_now.tzname(),
+            "snooze_choices": [c for c in followups.CHOICES if c[0] != "custom"],
         },
     )
 
@@ -847,14 +1018,134 @@ def followup_complete(request, pk):
     if account is None:
         return redirect("dashboard")
     followup = get_object_or_404(FollowUp, account=account, pk=pk)
-    run_action("complete_followup", {"account": account}, followup=followup)
+    run_action(
+        "complete_followup", {"account": account}, followup=followup, by=request.user
+    )
     messages.success(request, "Follow-up marked done.")
+    return _back(request, "conversations:followups_due")
+
+
+@login_required
+@require_POST
+def followup_action(request, pk, action):
+    """Snooze, reassign, edit, cancel or reopen one reminder."""
+    from apps.conversations import followups
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    followup = get_object_or_404(FollowUp, account=account, pk=pk)
+    ctx = {"account": account}
+    try:
+        if action == "snooze":
+            run_action(
+                "snooze_followup",
+                ctx,
+                followup=followup,
+                when=request.POST.get("when", ""),
+                custom=request.POST.get("custom_due_at", ""),
+            )
+            messages.success(
+                request,
+                f"Snoozed until {followups.local_label(followup.due_at, account)}.",
+            )
+        elif action == "reassign":
+            from django.contrib.auth import get_user_model
+
+            user_id = request.POST.get("user") or ""
+            if user_id and not user_id.isdigit():
+                raise ActionError("That person isn't on your team.")
+            user = (
+                get_user_model().objects.filter(pk=int(user_id)).first()
+                if user_id
+                else None
+            )
+            run_action("reassign_followup", ctx, followup=followup, user=user)
+            messages.success(
+                request,
+                f"Now on {user.get_full_name() or user.email}'s list."
+                if user
+                else "Now on the whole team's list.",
+            )
+        elif action == "edit":
+            followups.edit(followup, note=request.POST.get("note", "").strip())
+            messages.success(request, "Reminder updated.")
+        elif action == "cancel":
+            run_action(
+                "complete_followup",
+                ctx,
+                followup=followup,
+                by=request.user,
+                reason=FollowUp.ClosedReason.CANCELLED,
+            )
+            messages.success(request, "Reminder removed.")
+        elif action == "reopen":
+            run_action("reopen_followup", ctx, followup=followup)
+            messages.success(request, "Reminder is back on the list.")
+    except ActionError as exc:
+        messages.error(request, str(exc))
+    return _back(request, "conversations:followups_due")
+
+
+@login_required
+def followups_badge(request):
+    """The nav's count of reminders due for me (mine, or nobody's), and the "it's due" toast."""
+    from urllib.parse import quote
+
+    from django.http import HttpResponse
+
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponse("")
+    due = FollowUp.objects.filter(
+        Q(assigned_to=request.user) | Q(assigned_to__isnull=True),
+        account=account,
+        done_at__isnull=True,
+        due_at__lte=timezone.now(),
+    ).count()
+    html = (
+        f'<span class="inbox-tab-count inbox-tab-count--danger" '
+        f'aria-label="{due} due">{due}</span>'
+        if due
+        else ""
+    )
+    response = HttpResponse(html)
+    if request.GET.get("toast") and due:
+        response["X-Toast"] = "info|" + quote(
+            f"You have {due} follow-up{'s' if due != 1 else ''} due."
+        )
+    return response
+
+
+@login_required
+@require_POST
+def followup_emails(request):
+    """Turn "email me when my reminders are due" on or off for the current business."""
+    from apps.accounts.models import Membership
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    on = request.POST.get("on") == "1"
+    Membership.objects.filter(account=account, user=request.user).update(
+        followup_emails=on
+    )
+    messages.success(
+        request,
+        "We'll email you when your reminders are due."
+        if on
+        else "No more reminder emails. They still show here and in the bell.",
+    )
+    return redirect("conversations:followups_due")
+
+
+def _back(request, default: str):
     next_url = request.POST.get("next") or ""
-    if next_url and not url_has_allowed_host_and_scheme(
+    if next_url and url_has_allowed_host_and_scheme(
         next_url, allowed_hosts={request.get_host()}
     ):
-        next_url = ""
-    return redirect(next_url or "conversations:followups_due")
+        return redirect(next_url)
+    return redirect(default)
 
 
 @login_required
@@ -1034,13 +1325,35 @@ def routing_rule_delete(request, pk):
     return redirect("conversations:routing_rules")
 
 
-_FORM_FIELD_TYPES = ["text", "email", "phone", "number"]
+_FORM_FIELD_TYPES = list(_FLOW_FIELD_TYPES)
+_FIELD_TYPE_LABELS = {
+    "text": "Short answer",
+    "long_text": "Long answer",
+    "email": "Email address",
+    "phone": "Phone number",
+    "number": "Number",
+    "choice": "One choice (buttons)",
+    "dropdown": "One choice (drop-down)",
+    "multi_choice": "Several choices",
+    "date": "Date",
+    "opt_in": "Yes / no agreement",
+}
+_MAPS_TO_LABELS = [
+    ("", "Only keep it with the form's answers"),
+    ("contact.first_name", "Customer's first name"),
+    ("contact.last_name", "Customer's last name"),
+    ("contact.email", "Customer's email (if we don't have one)"),
+    ("contact.phone", "Customer's phone (if we don't have one)"),
+]
 
 
 @login_required
+@module_required("automations")
 def forms_list(request):
-    """B.3/Phase C: native WhatsApp forms (apps.conversations.forms). Deliberately
-    deterministic — no AI drafts or answers a form question."""
+    """Forms a business sends in a conversation: a WhatsApp Flow, or questions one by one.
+    Deterministic: no AI drafts or answers a form question."""
+    from django.db.models import Count
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -1049,9 +1362,16 @@ def forms_list(request):
         if not name:
             messages.error(request, "A form needs a name.")
             return redirect("conversations:forms_list")
-        form = ConversationForm.objects.create(account=account, name=name)
+        form = ConversationForm.objects.create(account=account, name=name[:150])
         return redirect("conversations:form_detail", pk=form.pk)
-    forms_qs = ConversationForm.objects.filter(account=account).order_by("name")
+    forms_qs = (
+        ConversationForm.objects.filter(account=account)
+        .annotate(
+            sent=Count("responses"),
+            done=Count("responses", filter=Q(responses__status="completed")),
+        )
+        .order_by("name")
+    )
     return render(
         request,
         "conversations/forms_list.html",
@@ -1071,8 +1391,69 @@ def _maps_to_from_post(request) -> str:
     return ""
 
 
+def _clean_questions(raw) -> tuple[list, list]:
+    """The builder's questions, tidied: ``(questions, problems)``. Keys stay stable for
+    existing questions so answers already collected keep their names."""
+    from apps.conversations.flow_json import CHOICE_TYPES
+
+    questions: list[dict] = []
+    problems: list[str] = []
+    used: set[str] = set()
+    if not isinstance(raw, list):
+        return [], ["The questions didn't arrive. Try again."]
+    for n, item in enumerate(raw[:50], 1):
+        if not isinstance(item, dict):
+            continue
+        label = " ".join(str(item.get("label") or "").split())[:200]
+        field_type = item.get("field_type") or "text"
+        if not label:
+            problems.append(f"Question {n} needs some words.")
+            continue
+        if field_type not in _FORM_FIELD_TYPES:
+            problems.append(f"Question {n} has an unknown answer type.")
+            continue
+        key = slugify(item.get("key") or "").replace("-", "_") or (
+            slugify(label).replace("-", "_")[:40] or "question"
+        )
+        base, i = key, 2
+        while key in used:
+            key, i = f"{base}_{i}", i + 1
+        used.add(key)
+        maps_to = str(item.get("maps_to") or "")
+        if maps_to and not (
+            maps_to in {m for m, _ in _MAPS_TO_LABELS}
+            or maps_to.startswith(("contact.attributes.", "lead.attributes."))
+        ):
+            maps_to = ""
+        if maps_to.endswith("attributes."):
+            maps_to = ""
+        question = {
+            "key": key,
+            "label": label,
+            "field_type": field_type,
+            "maps_to": maps_to,
+            "required": bool(item.get("required", True)),
+        }
+        helper = " ".join(str(item.get("helper") or "").split())[:200]
+        if helper:
+            question["helper"] = helper
+        if field_type in CHOICE_TYPES:
+            question["options"] = [
+                " ".join(str(o).split())[:60]
+                for o in (item.get("options") or [])
+                if str(o).strip()
+            ][:200]
+        if item.get("page_break") and questions:
+            question["page_break"] = True
+        questions.append(question)
+    return questions, problems
+
+
 @login_required
+@module_required("automations")
 def form_detail(request, pk):
+    from apps.conversations.flow_json import check as check_flow
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
@@ -1120,15 +1501,28 @@ def form_detail(request, pk):
                 form.presentation = presentation
                 form.save(update_fields=["presentation", "updated_at"])
         elif action == "publish_flow":
-            from apps.whatsapp.tasks import publish_conversation_flow
+            from apps.whatsapp.tasks import publish_conversation_flow_task
 
-            publish_conversation_flow(form)
+            problems = check_flow(
+                form.questions, title=form.screen_title, submit=form.submit_label
+            )
+            if problems:
+                messages.error(request, f"Fix this first: {problems[0]}")
+                return redirect("conversations:form_detail", pk=form.pk)
+            form.flow_status = ConversationForm.FlowStatus.PUBLISHING
+            form.flow_error = ""
+            form.save(update_fields=["flow_status", "flow_error", "updated_at"])
+            publish_conversation_flow_task.delay(form.pk)
             form.refresh_from_db()
             if form.flow_status == ConversationForm.FlowStatus.PUBLISHED:
                 messages.success(request, "WhatsApp Flow published successfully.")
-            else:
+            elif form.flow_status == ConversationForm.FlowStatus.ERROR:
                 messages.error(
                     request, f"Publish failed: {form.flow_error or 'unknown error'}"
+                )
+            else:
+                messages.info(
+                    request, "Publishing to WhatsApp. This takes a few seconds."
                 )
         elif action == "set_status":
             status = request.POST.get("status", "")
@@ -1139,20 +1533,210 @@ def form_detail(request, pk):
                 form.save(update_fields=["status", "updated_at"])
         return redirect("conversations:form_detail", pk=form.pk)
 
+    from apps.contacts.models import CustomAttributeDef
+
+    attribute_targets = [
+        (
+            f"{d.entity}.attributes.{d.key}",
+            f"{'Lead' if d.entity == 'lead' else 'Customer'} field: {d.label or d.key}",
+        )
+        for d in CustomAttributeDef.objects.filter(
+            account=account, archived_at__isnull=True
+        ).order_by("entity", "key")
+        if d.entity in ("contact", "lead")
+    ]
+    responses = form.responses.all()
+    sent = responses.count()
+    done = responses.filter(status=FormResponse.Status.COMPLETED).count()
+    stats = {
+        "sent": sent,
+        "done": done,
+        "waiting": responses.filter(status=FormResponse.Status.IN_PROGRESS).count(),
+        "rate": round(done / sent * 100) if sent else None,
+    }
     return render(
         request,
         "conversations/form_detail.html",
-        {"account": account, "form": form, "field_types": _FORM_FIELD_TYPES},
+        {
+            "account": account,
+            "form": form,
+            "field_types": _FORM_FIELD_TYPES,
+            "builder": {
+                "questions": form.questions,
+                "copy": {
+                    "intro_text": form.intro_text,
+                    "cta_label": form.cta_label,
+                    "screen_title": form.screen_title,
+                    "submit_label": form.submit_label,
+                    "thanks_text": form.thanks_text,
+                    "timeout_hours": form.timeout_hours,
+                    "lead_action": form.lead_action,
+                },
+                "fieldTypes": [
+                    {"value": t, "label": _FIELD_TYPE_LABELS.get(t, t)}
+                    for t in _FORM_FIELD_TYPES
+                ],
+                "mapsTo": [{"value": v, "label": label} for v, label in _MAPS_TO_LABELS]
+                + [{"value": v, "label": label} for v, label in attribute_targets],
+                "name": form.name,
+            },
+            "flow_problems": check_flow(
+                form.questions, title=form.screen_title, submit=form.submit_label
+            )
+            if form.presentation == ConversationForm.Presentation.WHATSAPP_FLOW
+            else [],
+            "stats": stats,
+            "recent": responses.select_related("contact").order_by("-started_at")[:10],
+        },
     )
 
 
 @login_required
+@module_required("automations")
+@require_POST
+def form_save(request, pk):
+    """The builder's autosave: questions and the words the customer sees."""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "no account"}, status=403)
+    form = get_object_or_404(ConversationForm, account=account, pk=pk)
+    try:
+        body = json.loads(request.body or "{}")
+    except ValueError:
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    questions, problems = _clean_questions(body.get("questions"))
+    copy = body.get("copy") or {}
+    fields = ["questions", "updated_at"]
+    form.questions = questions
+    if isinstance(body.get("name"), str) and body["name"].strip():
+        form.name = body["name"].strip()[:150]
+        fields.append("name")
+    for name, limit in (
+        ("intro_text", 500),
+        ("cta_label", 20),
+        ("screen_title", 30),
+        ("submit_label", 35),
+        ("thanks_text", 500),
+    ):
+        if name in copy:
+            setattr(form, name, " ".join(str(copy[name] or "").split())[:limit])
+            fields.append(name)
+    if "timeout_hours" in copy:
+        try:
+            form.timeout_hours = max(1, min(24 * 30, int(copy["timeout_hours"])))
+            fields.append("timeout_hours")
+        except (TypeError, ValueError):
+            problems.append("The time limit must be a number of hours.")
+    if copy.get("lead_action", "") in ConversationForm.LeadAction.values:
+        form.lead_action = copy.get("lead_action", "")
+        fields.append("lead_action")
+    form.save(update_fields=fields)
+    form.note_questions_changed()
+    from apps.conversations.flow_json import check as check_flow
+
+    flow_problems = (
+        check_flow(form.questions, title=form.screen_title, submit=form.submit_label)
+        if form.presentation == ConversationForm.Presentation.WHATSAPP_FLOW
+        else []
+    )
+    form.refresh_from_db(fields=["flow_status"])
+    return JsonResponse(
+        {
+            "ok": True,
+            "questions": form.questions,
+            "problems": problems,
+            "flow_problems": flow_problems,
+            "flow_status": form.flow_status,
+        }
+    )
+
+
+@login_required
+@module_required("automations")
+def form_flow_status(request, pk):
+    """The Flow status card, polled while publishing."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    form = get_object_or_404(ConversationForm, account=account, pk=pk)
+    return render(request, "conversations/_form_flow_status.html", {"form": form})
+
+
+@login_required
+@module_required("automations")
+def form_responses(request, pk):
+    """Everyone who got this form and what they answered; ``?format=csv`` to download."""
+    import csv
+
+    from django.core.paginator import Paginator
+    from django.http import HttpResponse
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    form = get_object_or_404(ConversationForm, account=account, pk=pk)
+    rows = form.responses.select_related("contact", "conversation").order_by(
+        "-started_at"
+    )
+    status = request.GET.get("status", "")
+    if status in FormResponse.Status.values:
+        rows = rows.filter(status=status)
+    keys = [q["key"] for q in form.questions]
+
+    def cell(value):
+        return (
+            ", ".join(value)
+            if isinstance(value, list)
+            else ("" if value is None else str(value))
+        )
+
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{slugify(form.name) or "form"}-answers.csv"'
+        )
+        writer = csv.writer(response)
+        writer.writerow(
+            ["customer", "phone", "status", "started", "finished"]
+            + [q["label"] for q in form.questions]
+        )
+        for r in rows.iterator():
+            writer.writerow(
+                [
+                    r.contact.display_name,
+                    r.contact.phone or "",
+                    r.get_status_display(),
+                    r.started_at.isoformat(),
+                    r.completed_at.isoformat() if r.completed_at else "",
+                ]
+                + [cell(r.answers.get(k)) for k in keys]
+            )
+        return response
+    page = Paginator(rows, 50).get_page(request.GET.get("page"))
+    for r in page:
+        r.cells = [cell(r.answers.get(k)) for k in keys]  # type: ignore[attr-defined]
+    return render(
+        request,
+        "conversations/form_responses.html",
+        {"account": account, "form": form, "page": page, "status": status},
+    )
+
+
+@login_required
+@module_required("automations")
 @require_POST
 def form_delete(request, pk):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     form = get_object_or_404(ConversationForm, account=account, pk=pk)
+    if form.flow_id:
+        try:
+            from apps.whatsapp.providers import get_whatsapp_provider
+
+            get_whatsapp_provider(account).deprecate_flow(form.flow_id)
+        except Exception:
+            logger.info("form %s: couldn't retire its Flow on delete", form.pk)
     form.delete()
     messages.success(request, "Form deleted.")
     return redirect("conversations:forms_list")

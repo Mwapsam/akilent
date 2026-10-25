@@ -10,6 +10,10 @@ later Commerce) can register into the same registry without depending on
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+from django.utils import timezone
+
 from apps.core.actions import (  # noqa: F401 — re-exported for existing imports
     Action,
     ActionError,
@@ -459,6 +463,7 @@ class StartConversationFormAction(Action):
     """
 
     name = "start_conversation_form"
+    module = "automations"
     scope_kwarg = "conversation"
 
     def input_schema(self) -> dict:
@@ -508,36 +513,121 @@ class CreateFollowUpAction(Action):
     def input_schema(self) -> dict:
         return {
             "required": ["conversation", "due_at"],
-            "optional": ["note", "created_by"],
+            "optional": ["note", "created_by", "assigned_to", "source"],
         }
 
     def execute(  # type: ignore[override]
-        self, context: dict, *, conversation, due_at, note: str = "", created_by=None
+        self,
+        context: dict,
+        *,
+        conversation,
+        due_at,
+        note: str = "",
+        created_by=None,
+        assigned_to=None,
+        source: str = "manual",
     ) -> dict:
-        from apps.conversations.models import FollowUp
+        from apps.conversations import followups
 
-        followup = FollowUp.objects.create(
-            account=conversation.account,
-            contact=conversation.contact,
+        if due_at <= timezone.now() - timedelta(minutes=1):
+            raise ActionError("Pick a time in the future.")
+        followup, created = followups.create(
+            conversation.account,
+            conversation.contact,
             conversation=conversation,
             due_at=due_at,
             note=note,
+            source=source,
             created_by=created_by,
+            assigned_to=assigned_to,
         )
-        return {"followup_id": followup.id}
+        return {"followup_id": followup.id, "created": created}
 
 
 class CompleteFollowUpAction(Action):
-    """Mark a follow-up as done."""
+    """Mark a follow-up as done (or cancelled)."""
 
     name = "complete_followup"
+    scope_kwarg = "followup"
+
+    def input_schema(self) -> dict:
+        return {"required": ["followup"], "optional": ["by", "reason"]}
+
+    def execute(  # type: ignore[override]
+        self, context: dict, *, followup, by=None, reason: str = "done"
+    ) -> dict:
+        from apps.conversations import followups
+        from apps.conversations.models import FollowUp
+
+        if reason not in FollowUp.ClosedReason.values:
+            raise ActionError("Unknown reason.")
+        followups.close(followup, by=by, reason=reason)
+        return {"followup_id": followup.id}
+
+
+class SnoozeFollowUpAction(Action):
+    """Push a reminder back: in 1h, 3h, tomorrow morning, next week, or a picked time."""
+
+    name = "snooze_followup"
+    scope_kwarg = "followup"
+
+    def input_schema(self) -> dict:
+        return {"required": ["followup", "when"], "optional": ["custom"]}
+
+    def execute(  # type: ignore[override]
+        self, context: dict, *, followup, when: str, custom: str = ""
+    ) -> dict:
+        from apps.conversations import followups
+
+        if followup.done_at is not None:
+            raise ActionError("This reminder is already done.")
+        try:
+            followups.snooze(followup, when, custom)
+        except ValueError as exc:
+            raise ActionError(str(exc)) from exc
+        return {"followup_id": followup.id, "due_at": followup.due_at.isoformat()}
+
+
+class ReassignFollowUpAction(Action):
+    """Put a reminder on a teammate's list (or nobody's: the whole team's)."""
+
+    name = "reassign_followup"
+    scope_kwarg = "followup"
+
+    def input_schema(self) -> dict:
+        return {"required": ["followup"], "optional": ["user"]}
+
+    def execute(self, context: dict, *, followup, user=None) -> dict:  # type: ignore[override]
+        from apps.accounts.models import Membership
+        from apps.conversations import followups
+
+        if (
+            user is not None
+            and not Membership.objects.filter(
+                account=followup.account, user=user
+            ).exists()
+        ):
+            raise ActionError("That person isn't on your team.")
+        followups.reassign(followup, user)
+        return {"followup_id": followup.id}
+
+
+class ReopenFollowUpAction(Action):
+    """Undo "Done" on a reminder."""
+
+    name = "reopen_followup"
     scope_kwarg = "followup"
 
     def input_schema(self) -> dict:
         return {"required": ["followup"]}
 
     def execute(self, context: dict, *, followup) -> dict:  # type: ignore[override]
-        followup.mark_done()
+        from apps.conversations import followups
+
+        try:
+            followups.reopen(followup)
+        except ValueError as exc:
+            raise ActionError(str(exc)) from exc
         return {"followup_id": followup.id}
 
 
@@ -609,3 +699,6 @@ register(AddInternalNoteAction())
 register(StartConversationFormAction())
 register(CreateFollowUpAction())
 register(CompleteFollowUpAction())
+register(SnoozeFollowUpAction())
+register(ReassignFollowUpAction())
+register(ReopenFollowUpAction())

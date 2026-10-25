@@ -27,15 +27,27 @@ DEFAULT_MAX_AGE = timedelta(days=7)
 NOTE = "No reply sent - customer has been waiting"
 
 
+# Channels where a customer writes in and waits for an answer.
+_CHAT_CHANNELS = (
+    Conversation.Channel.WHATSAPP,
+    Conversation.Channel.INSTAGRAM,
+    Conversation.Channel.WEBSITE_CHAT,
+)
+
+
 def create_missed_followups(
     now: datetime | None = None, *, max_age: timedelta = DEFAULT_MAX_AGE
 ) -> int:
-    """Create one due follow-up per missed WhatsApp conversation. Returns how many."""
+    """Create one due follow-up per missed chat conversation. Returns how many."""
+    from apps.conversations import followups as followup_service
+
     now = now or timezone.now()
     missed = list(
         with_activity(
             Conversation.objects.filter(
-                channel=Conversation.Channel.WHATSAPP, status=Conversation.Status.OPEN
+                channel__in=_CHAT_CHANNELS,
+                status=Conversation.Status.OPEN,
+                account__is_active=True,
             )
         ).filter(
             unanswered_q(),
@@ -48,17 +60,17 @@ def create_missed_followups(
         .values_list("conversation_id")
         .annotate(latest=Max("created_at"))
     )
-    followups = [
-        FollowUp(
-            account_id=c.account_id,
-            contact_id=c.contact_id,
+    created = 0
+    for c in missed:
+        if latest_reminder.get(c.pk) is not None and latest_reminder[c.pk] >= c.last_in:
+            continue
+        _, made = followup_service.create(
+            c.account,
+            c.contact,
             conversation=c,
             due_at=now,
             note=NOTE,
             source=FollowUp.Source.MISSED,
         )
-        for c in missed
-        if latest_reminder.get(c.pk) is None or latest_reminder[c.pk] < c.last_in
-    ]
-    FollowUp.objects.bulk_create(followups)
-    return len(followups)
+        created += int(made)
+    return created

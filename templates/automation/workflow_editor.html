@@ -10,17 +10,32 @@
     </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ wf.name }}</h1>
     <p class="mt-1 text-sm text-gray-600">
-      {% if wf.status == "published" %}<span class="badge badge-success">Published v{{ wf.version }}</span>
+      {% if wf.status == "published" %}<span class="badge badge-success">On · v{{ wf.version }}</span>
+      {% elif wf.status == "paused" %}<span class="badge badge-neutral">Paused · v{{ wf.version }}</span>
       {% elif wf.status == "archived" %}<span class="badge badge-neutral">Archived</span>
       {% else %}<span class="badge badge-warning">Draft</span>{% endif %}
+      <span class="badge badge-warning" x-data x-show="$store.wfChanges.pending" x-cloak
+            title="Customers still get the published version until you publish these changes">Unpublished changes</span>
     </p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
+    <a href="{% url 'help-article' 'automations' %}" class="btn btn-ghost btn-sm" title="How automations work">Help</a>
+    <a href="/automations/{{ wf.slug }}/runs/" class="btn btn-secondary btn-sm">Customers</a>
     <a href="/automations/{{ wf.slug }}/stats/" class="btn btn-secondary btn-sm">Stats</a>
-    <form method="post" action="/automations/{{ wf.slug }}/publish/">{% csrf_token %}
-      <button class="btn btn-primary btn-sm">Publish</button>
+    {% if wf.status == "published" or wf.status == "paused" %}
+    <form method="post" action="/automations/{{ wf.slug }}/discard/" x-data x-show="$store.wfChanges.pending" x-cloak
+          hx-boost="false" data-confirm="Discard your unpublished changes? The automation keeps running as it is." data-confirm-label="Discard">{% csrf_token %}
+      <button class="btn btn-ghost btn-sm">Discard changes</button>
     </form>
-    <form method="post" action="/automations/{{ wf.slug }}/archive/" hx-confirm="Archive this workflow?"
+    <form method="post" action="/automations/{{ wf.slug }}/publish/" x-data x-show="$store.wfChanges.pending" x-cloak hx-boost="false">{% csrf_token %}
+      <button class="btn btn-primary btn-sm">Publish changes</button>
+    </form>
+    {% else %}
+    <form method="post" action="/automations/{{ wf.slug }}/publish/" hx-boost="false">{% csrf_token %}
+      <button class="btn btn-primary btn-sm">Turn on</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/automations/{{ wf.slug }}/archive/" hx-confirm="Archive this automation? Customers part-way through it will be let go."
       hx-post="/automations/{{ wf.slug }}/archive/" hx-swap="none">{% csrf_token %}
       <button class="btn btn-secondary btn-sm">Archive</button>
     </form>
@@ -31,10 +46,16 @@
   </div>
 </header>
 
+<script>
+  document.addEventListener("alpine:init", () => {
+    Alpine.store("wfChanges", { pending: {{ has_changes|yesno:"true,false" }} });
+  });
+</script>
 <div x-data="workflowEditor()" x-init="init()">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="tabs">
-      <button class="tab" :class="tab === 'visual' && 'tab-active'" @click="tab = 'visual'">Visual</button>
+      <button class="tab" :class="tab === 'visual' && 'tab-active'" @click="tab = 'visual'">Steps</button>
+      <button class="tab" :class="tab === 'map' && 'tab-active'" @click="tab = 'map'">Map</button>
       <button class="tab" x-show="advanced" :class="tab === 'code' && 'tab-active'" @click="syncToCode(); tab = 'code'">Code</button>
     </div>
     <div class="flex items-center gap-3">
@@ -44,10 +65,12 @@
       <span class="text-xs font-medium" :class="blockingErrors().length ? 'text-red-600' : 'text-teal-700'"
             x-text="blockingErrors().length ? blockingErrors().length + ' issue' + (blockingErrors().length === 1 ? '' : 's') : 'Valid'"></span>
       <span class="text-xs text-gray-400" x-show="saved" x-transition>Saved</span>
+      <button class="btn btn-secondary btn-sm" @click="openTest()">Test it</button>
       <button class="btn btn-primary btn-sm" @click="save()" :disabled="busy">Save</button>
     </div>
   </div>
 
+  <p class="alert alert-danger mb-3 text-sm" role="alert" x-show="saveError" x-cloak x-text="saveError"></p>
   <ul class="mb-4 space-y-1" x-show="errors.length" x-cloak>
     <template x-for="(e, ei) in errors" :key="ei">
       <li class="text-xs" :class="e.severity === 'warning' ? 'text-amber-700' : 'text-red-600'">
@@ -66,9 +89,20 @@
         <label class="text-sm">
           <span class="text-gray-600">When</span>
           <select class="select mt-1" x-model="definition.trigger.type" :class="triggerFieldError('trigger.type') && 'input-error'">
-            <template x-for="t in triggerTypes" :key="t"><option x-text="triggerTypeLabels[t] || t" :value="t"></option></template>
+            <template x-for="t in triggerCatalog" :key="t.type"><option x-text="t.label" :value="t.type" :selected="t.type === definition.trigger.type"></option></template>
           </select>
           <p class="field-error" x-show="triggerFieldError('trigger.type')" x-text="triggerFieldError('trigger.type')"></p>
+        </label>
+        <label class="text-sm" x-show="advanced && isMessageTrigger()" x-cloak>
+          <span class="text-gray-600">Priority <span class="text-gray-400">(lower answers first)</span></span>
+          <input type="number" min="1" max="999" class="input mt-1 w-24" x-model.number="priority" />
+        </label>
+        <label class="text-sm" x-show="definition.trigger.type === 'conversation.form_completed'" x-cloak>
+          <span class="text-gray-600">Which form</span>
+          <select class="select mt-1" x-model="definition.trigger.form">
+            <option value="">Any form</option>
+            <template x-for="f in forms" :key="f.id"><option :value="f.id" x-text="f.name" :selected="f.id === definition.trigger.form"></option></template>
+          </select>
         </label>
         <label class="text-sm" x-show="definition.trigger.type === 'business_event'">
           <span class="text-gray-600">Event name</span>
@@ -76,6 +110,34 @@
                  :class="triggerFieldError('trigger.name') && 'input-error'" />
           <p class="field-error" x-show="triggerFieldError('trigger.name')" x-text="triggerFieldError('trigger.name')"></p>
         </label>
+      </div>
+
+      <div class="mt-3" x-show="isMessageTrigger()" x-cloak>
+        <button type="button" class="btn btn-ghost btn-xs" @click="checkCoverage()" :disabled="coverage.busy"
+                x-text="coverage.busy ? 'Checking…' : 'Check which messages it catches'"></button>
+        <div x-show="coverage.result" x-cloak class="mt-2 rounded-xl border border-border p-3 text-xs space-y-2" aria-live="polite">
+          <template x-if="coverage.result && coverage.result.applies">
+            <div class="space-y-2">
+              <p class="font-medium text-ink" x-text="'Would catch ' + coverage.result.caught + ' of ' + coverage.result.total + ' messages' + (coverage.result.ai ? ' (some written by AI to test it)' : '')"></p>
+              <ul class="space-y-0.5">
+                <template x-for="r in coverage.result.rows" :key="r.text">
+                  <li :class="r.caught ? 'text-teal-700' : 'text-gray-500'">
+                    <span x-text="(r.caught ? '✓ ' : '✗ ') + r.text"></span>
+                    <span class="text-amber-700" x-show="r.caught && r.also.length" x-text="' · also answered by ' + r.also.join(', ')"></span>
+                  </li>
+                </template>
+              </ul>
+              <div x-show="coverage.result.suggested_keywords.length">
+                <p class="text-gray-600">Words worth adding:</p>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <template x-for="k in coverage.result.suggested_keywords" :key="k">
+                    <button type="button" class="badge badge-neutral hover:opacity-80" @click="addKeyword(k)" x-text="'+ ' + k"></button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
 
       {# Keyword filter: only for triggers that carry the customer's message. #}
@@ -105,6 +167,14 @@
       </div>
     </div>
 
+    <div class="rounded-xl border border-border bg-surface-muted p-3 text-sm" x-show="summary" x-cloak aria-live="polite">
+      <p class="font-medium text-ink">In plain words</p>
+      <p class="text-gray-700 mt-1"><span class="font-medium">When</span> <span x-text="summary && summary.when"></span>, Akilent:</p>
+      <ul class="list-disc pl-5 text-gray-700">
+        <template x-for="line in (summary && summary.does) || []" :key="line"><li x-text="line"></li></template>
+      </ul>
+    </div>
+
     <div class="relative pl-8 ml-1">
       <div class="absolute left-3 top-2 bottom-2 w-px bg-border" aria-hidden="true"></div>
       <div class="space-y-3">
@@ -115,22 +185,23 @@
             <div class="card card-pad border-l-4 transition-shadow"
                  :class="[(stepTypeMeta[step.type] || {}).border || 'border-l-gray-300', highlighted === step.id && 'ring-2 ring-brand-400']">
               <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                <div class="flex items-center gap-2 flex-wrap">
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
                   <span class="badge inline-flex items-center gap-1" :class="(stepTypeMeta[step.type] || {}).chip || 'badge-neutral'">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"
                          x-html="(stepTypeMeta[step.type] || {}).icon || ''"></svg>
-                    <span x-text="(stepTypeMeta[step.type] || {}).label || step.type"></span>
+                    <span x-text="typeLabel(step.type)"></span>
                   </span>
-                  <input class="input input-sm w-32" x-model="step.id" placeholder="step-id" />
-                  <select class="select select-sm" x-model="step.type" @change="deriveMode(step)">
-                    <template x-for="t in visibleStepTypes(step.type)" :key="t"><option x-text="(stepTypeMeta[t] || {}).label || t" :value="t"></option></template>
-                  </select>
+                  <span class="text-xs text-gray-500 truncate max-w-[16rem]" x-text="stepSummary(step)"></span>
+                  <label class="text-xs text-gray-400 inline-flex items-center gap-1" x-show="advanced" x-cloak>id
+                    <input class="input input-sm w-28" :value="step.id" @change="renameStep(step, $event.target.value)" />
+                  </label>
                 </div>
                 <div class="flex items-center gap-1">
-                  <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0">↑</button>
-                  <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1">↓</button>
-                  <button class="btn btn-ghost btn-xs" @click="insertStep(i)" title="Insert a step below this one">+ Insert</button>
-                  <button class="btn btn-danger-ghost btn-xs" @click="definition.steps.splice(i, 1)">Remove</button>
+                  <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" aria-label="Move up">↑</button>
+                  <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1" aria-label="Move down">↓</button>
+                  <button class="btn btn-ghost btn-xs" @click="openPalette('replace', i)">Change</button>
+                  <button class="btn btn-ghost btn-xs" @click="duplicateStep(i)">Duplicate</button>
+                  <button class="btn btn-danger-ghost btn-xs" @click="removeStep(i)">Remove</button>
                 </div>
               </div>
 
@@ -174,7 +245,7 @@
                   </label>
                   <label class="text-xs">Next step
                     <select class="select select-sm w-full mt-0.5" x-model="step.next" :class="fieldError(step.id, 'next') && 'input-error'">
-                      <option value="">— choose a step —</option>
+                      <option value="">End the automation here</option>
                       <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                     </select>
                     <span class="field-error" x-show="fieldError(step.id, 'next')" x-text="fieldError(step.id, 'next')"></span>
@@ -213,7 +284,7 @@
                 <label class="text-xs">Phone attribute<input class="input input-sm w-full mt-0.5" x-model="step.phone_field" placeholder="phone" /></label>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -260,7 +331,7 @@
                 </label>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -275,9 +346,32 @@
                   <span class="field-error" x-show="fieldError(step.id, 'text')" x-text="fieldError(step.id, 'text')"></span>
                 </label>
                 <p class="text-xs text-gray-400">{first_name} becomes the customer's name. Sent as a normal message, which works because they just wrote to you.</p>
+                <div class="wa-preview" x-show="(step.text || '').trim()" aria-label="Preview">
+                  <div class="wa-bubble" x-text="previewText(step.text)"></div>
+                </div>
+                <details class="text-xs" x-show="whatsappTemplates.length">
+                  <summary class="cursor-pointer text-gray-600">If they haven't messaged in the last 24 hours…</summary>
+                  <label class="block mt-1">send this approved WhatsApp message instead
+                    <select class="select select-sm w-full mt-0.5" x-model="step.fallback_template" :class="fieldError(step.id, 'fallback_template') && 'input-error'">
+                      <option value="">Don't send anything (the step fails and you're told)</option>
+                      <template x-for="t in whatsappTemplates.filter((t) => t.approved)" :key="t.name">
+                        <option :value="t.name" x-text="t.label + ' (' + t.language_code + ')'"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <span class="field-error" x-show="fieldError(step.id, 'fallback_template') || fieldError(step.id, 'fallback_variable_mapping')"
+                        x-text="fieldError(step.id, 'fallback_template') || fieldError(step.id, 'fallback_variable_mapping')"></span>
+                  <template x-for="v in (whatsappTemplates.find((t) => t.name === step.fallback_template) || {}).variables || []" :key="v">
+                    <label class="flex items-center gap-2 mt-1">
+                      <span x-text="v" class="w-20 shrink-0 font-mono truncate"></span>
+                      <input class="input input-sm flex-1" x-model="(step.fallback_variable_mapping = step.fallback_variable_mapping || {})[v]"
+                             placeholder="contact.first_name or literal text" />
+                    </label>
+                  </template>
+                </details>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -300,9 +394,15 @@
                         @click="step.buttons.push({ title: '' })">+ Add button</button>
                 <span class="field-error block" x-show="fieldError(step.id, 'buttons')" x-text="fieldError(step.id, 'buttons')"></span>
                 <p class="text-xs text-gray-400">Customers can tap these within 24 hours of writing to you. Use a “Wait for reply” step next to act on their choice.</p>
+                <div class="wa-preview" x-show="(step.text || '').trim()" aria-label="Preview">
+                  <div class="wa-bubble" x-text="previewText(step.text)"></div>
+                  <template x-for="(b, bi) in (step.buttons || []).filter((b) => (b.title || '').trim())" :key="bi">
+                    <div class="wa-button" x-text="b.title"></div>
+                  </template>
+                </div>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -327,9 +427,13 @@
                 <button type="button" class="btn btn-ghost btn-xs" x-show="(step.rows || []).length < 10"
                         @click="step.rows.push({ title: '', description: '' })">+ Add choice</button>
                 <span class="field-error block" x-show="fieldError(step.id, 'rows')" x-text="fieldError(step.id, 'rows')"></span>
+                <div class="wa-preview" x-show="(step.text || '').trim()" aria-label="Preview">
+                  <div class="wa-bubble" x-text="previewText(step.text)"></div>
+                  <div class="wa-button" x-text="'☰ ' + (step.button || 'See options')"></div>
+                </div>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -383,7 +487,7 @@
                 </label>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -403,7 +507,7 @@
                 </label>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -419,7 +523,7 @@
                 <p class="text-xs text-gray-400">A conversation that already has someone looking after it is left with them.</p>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -442,7 +546,7 @@
                 <p class="text-xs text-gray-400">Sent as an email with a link to the conversation. {contact} becomes the customer's name and {first_name} their first name.</p>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -457,7 +561,7 @@
                 </label>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -465,10 +569,20 @@
 
               {# ---- wait ---- #}
               <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'wait'">
-                <label class="text-xs">Seconds<input type="number" class="input input-sm w-full mt-0.5" x-model.number="step.seconds" /></label>
+                <div class="text-xs">Wait for
+                  <div class="flex gap-2 mt-0.5">
+                    <input type="number" min="1" class="input input-sm w-24" :value="waitAmount(step)"
+                           @input="setWait(step, $event.target.value, waitUnit(step))" aria-label="How long" />
+                    <select class="select select-sm" :value="waitUnit(step)" @change="setWait(step, waitAmount(step), $event.target.value)" aria-label="Unit">
+                      <option value="60">minutes</option>
+                      <option value="3600">hours</option>
+                      <option value="86400">days</option>
+                    </select>
+                  </div>
+                </div>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
@@ -476,20 +590,41 @@
 
               {# ---- branch ---- #}
               <div class="grid gap-2 sm:grid-cols-3" x-show="step.type === 'branch'">
-                <label class="text-xs">Field<input class="input input-sm w-full mt-0.5" x-model="step.field" placeholder="opened_in_last_90d"
-                       :class="fieldError(step.id, 'field') && 'input-error'" /></label>
-                <label class="text-xs">Operator<input class="input input-sm w-full mt-0.5" x-model="step.operator" placeholder="eq" /></label>
-                <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
-                <label class="text-xs">If true → step
+                <label class="text-xs">Check whether
+                  <select class="select select-sm w-full mt-0.5" :value="branchFieldKey(step)" @change="setBranchField(step, $event.target.value)"
+                          :class="fieldError(step.id, 'field') && 'input-error'">
+                    <template x-for="f in branchFields" :key="f.field"><option :value="f.field" x-text="f.label"></option></template>
+                    <option value="__custom">Something else (advanced)</option>
+                  </select>
+                </label>
+                <template x-if="branchFieldKey(step) === '__custom'">
+                  <label class="text-xs">Field<input class="input input-sm w-full mt-0.5" x-model="step.field" placeholder="attributes.budget" /></label>
+                </template>
+                <label class="text-xs" x-show="branchOps(step).length > 1 || branchFieldKey(step) === '__custom'">Is
+                  <select class="select select-sm w-full mt-0.5" x-model="step.operator">
+                    <template x-for="op in branchOps(step)" :key="op"><option :value="op" x-text="opLabels[op] || op"></option></template>
+                  </select>
+                </label>
+                <label class="text-xs" x-show="branchKind(step) === 'text' || branchKind(step) === 'number'">Value
+                  <input class="input input-sm w-full mt-0.5" x-model="step.value" :type="branchKind(step) === 'number' ? 'number' : 'text'" />
+                </label>
+                <label class="text-xs" x-show="branchKind(step) === 'bool'">Answer
+                  <select class="select select-sm w-full mt-0.5" :value="String(step.value === undefined ? true : step.value)"
+                          @change="step.value = $event.target.value === 'true'">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </label>
+                <label class="text-xs">If yes → step
                   <select class="select select-sm w-full mt-0.5" x-model="step.on_true" :class="fieldError(step.id, 'on_true') && 'input-error'">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                   <span class="field-error" x-show="fieldError(step.id, 'on_true')" x-text="fieldError(step.id, 'on_true')"></span>
                 </label>
-                <label class="text-xs">If false → step
+                <label class="text-xs">Otherwise → step
                   <select class="select select-sm w-full mt-0.5" x-model="step.on_false" :class="fieldError(step.id, 'on_false') && 'input-error'">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                   <span class="field-error" x-show="fieldError(step.id, 'on_false')" x-text="fieldError(step.id, 'on_false')"></span>
@@ -502,20 +637,447 @@
                 <label class="text-xs">Value<input class="input input-sm w-full mt-0.5" x-model="step.value" /></label>
                 <label class="text-xs">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
-                    <option value="">— choose a step —</option>
+                    <option value="">End the automation here</option>
                     <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
                   </select>
                 </label>
               </div>
 
-              <p class="text-xs text-gray-400" x-show="step.type === 'stop'">End of the workflow.</p>
+
+              {# ---- ask_question ---- #}
+              <div class="space-y-2" x-show="step.type === 'ask_question'">
+                <label class="text-xs block">Question
+                  <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.question" maxlength="1024"
+                            placeholder="What's your budget, {first_name}?" :class="fieldError(step.id, 'question') && 'input-error'"></textarea>
+                  <span class="field-error" x-show="fieldError(step.id, 'question')" x-text="fieldError(step.id, 'question')"></span>
+                </label>
+                <div class="wa-preview" x-show="(step.question || '').trim()" aria-label="Preview">
+                  <div class="wa-bubble" x-text="previewText(step.question)"></div>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <label class="text-xs">Save the answer as
+                    <input class="input input-sm w-full mt-0.5" x-model="step.attribute" list="attribute-keys" placeholder="budget"
+                           :class="fieldError(step.id, 'attribute') && 'input-error'" />
+                    <span class="field-error" x-show="fieldError(step.id, 'attribute')" x-text="fieldError(step.id, 'attribute')"></span>
+                  </label>
+                  <label class="text-xs">On the
+                    <select class="select select-sm w-full mt-0.5" x-model="step.target">
+                      <option value="contact">Customer</option>
+                      <option value="lead">Interested-customer record</option>
+                    </select>
+                  </label>
+                  <label class="text-xs">Ask again if the answer is invalid
+                    <select class="select select-sm w-full mt-0.5" x-model.number="step.max_attempts">
+                      <option :value="1">No</option>
+                      <option :value="2">Once</option>
+                      <option :value="3">Twice</option>
+                    </select>
+                  </label>
+                  <label class="text-xs">Wait up to (hours)
+                    <input type="number" min="0.1" max="168" step="0.5" class="input input-sm w-full mt-0.5"
+                           :value="(step.timeout_seconds || 86400) / 3600"
+                           @input="step.timeout_seconds = Math.round(parseFloat($event.target.value || 24) * 3600)"
+                           :class="fieldError(step.id, 'timeout_seconds') && 'input-error'" />
+                  </label>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label class="text-xs">When they answer →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If they don't answer →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_timeout">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If the answer still isn't valid →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_invalid">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If it can't be sent →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_error">
+                      <option value="">Stop and tell me</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+
+              {# ---- ai_classify ---- #}
+              <div class="space-y-2" x-show="step.type === 'ai_classify'">
+                <p class="text-xs text-gray-500">Sorts the customer's message into one of your labels, then goes that label's way. Words you list for a label are checked first, without AI. If it isn't sure, or AI is off, it goes your “not sure” way.</p>
+                <template x-for="(item, li) in (step.labels || [])" :key="li">
+                  <div class="rounded-lg border border-border p-2 space-y-1.5">
+                    <div class="flex gap-2">
+                      <input class="input input-sm flex-1" x-model="item.label" maxlength="30" placeholder="Label, e.g. Pricing" @input="syncLabelRoutes(step)" />
+                      <button type="button" class="btn btn-ghost btn-xs" @click="step.labels.splice(li, 1); syncLabelRoutes(step)" aria-label="Remove label">✕</button>
+                    </div>
+                    <input class="input input-sm w-full" :value="(item.keywords || []).join(', ')" @input="item.keywords = $event.target.value.split(',').map((w) => w.trim()).filter(Boolean)" placeholder="Words that always mean this (optional): price, cost" />
+                    <input class="input input-sm w-full" :value="(item.examples || []).join(' | ')" @input="item.examples = $event.target.value.split('|').map((w) => w.trim()).filter(Boolean)" placeholder="Example messages (optional), separated by |" />
+                    <label class="text-xs block">Then →
+                      <select class="select select-sm w-full mt-0.5" :value="(step.routes || {})[item.label] || ''" @change="(step.routes = step.routes || {})[item.label] = $event.target.value">
+                        <option value="">End the automation here</option>
+                        <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                      </select>
+                    </label>
+                  </div>
+                </template>
+                <button type="button" class="btn btn-ghost btn-xs" x-show="(step.labels || []).length < 8" @click="step.labels.push({ label: '', keywords: [], examples: [] })">+ Add a label</button>
+                <span class="field-error block" x-show="fieldError(step.id, 'labels')" x-text="fieldError(step.id, 'labels')"></span>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label class="text-xs">How careful
+                    <select class="select select-sm w-full mt-0.5" x-model="step.care">
+                      <option value="very_careful">Very careful (only when it's clear)</option>
+                      <option value="careful">Careful</option>
+                      <option value="balanced">Balanced</option>
+                    </select>
+                  </label>
+                  <label class="text-xs">Not sure, or AI off →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_unsure" :class="fieldError(step.id, 'on_unsure') && 'input-error'">
+                      <option value="">— choose a step —</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                    <span class="field-error" x-show="fieldError(step.id, 'on_unsure')" x-text="fieldError(step.id, 'on_unsure')"></span>
+                  </label>
+                </div>
+              </div>
+
+              {# ---- ai_extract ---- #}
+              <div class="space-y-2" x-show="step.type === 'ai_extract'">
+                <p class="text-xs text-gray-500">Picks details out of the customer's message. Each one is checked (a real email, a real date…) before it's saved. If one is missing, or AI is off, it goes your “missing” way.</p>
+                <template x-for="(f, fi) in (step.fields || [])" :key="fi">
+                  <div class="grid gap-2 sm:grid-cols-[1fr_8rem_1fr_auto] items-end">
+                    <label class="text-xs">Detail
+                      <input class="input input-sm w-full mt-0.5" x-model="f.key" placeholder="delivery_date" />
+                    </label>
+                    <label class="text-xs">Kind
+                      <select class="select select-sm w-full mt-0.5" x-model="f.type">
+                        <option value="text">Text</option><option value="email">Email</option><option value="phone">Phone</option>
+                        <option value="number">Number</option><option value="date">Date</option>
+                      </select>
+                    </label>
+                    <label class="text-xs">Save to
+                      <input class="input input-sm w-full mt-0.5" x-model="f.save_to" list="extract-targets" placeholder="contact.attributes.delivery_date" />
+                    </label>
+                    <button type="button" class="btn btn-ghost btn-xs" @click="step.fields.splice(fi, 1)" aria-label="Remove detail">✕</button>
+                  </div>
+                </template>
+                <datalist id="extract-targets">
+                  <option value="contact.first_name"></option><option value="contact.last_name"></option>
+                  <option value="contact.email"></option><option value="contact.phone"></option>
+                  {% for key in attribute_keys %}<option value="contact.attributes.{{ key }}"></option>{% endfor %}
+                </datalist>
+                <button type="button" class="btn btn-ghost btn-xs" @click="step.fields.push({ key: '', type: 'text', save_to: '' })">+ Add a detail</button>
+                <span class="field-error block" x-show="fieldError(step.id, 'fields')" x-text="fieldError(step.id, 'fields')"></span>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label class="text-xs">Found them all →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">Something missing, or AI off →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_missing" :class="fieldError(step.id, 'on_missing') && 'input-error'">
+                      <option value="">— choose a step —</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                    <span class="field-error" x-show="fieldError(step.id, 'on_missing')" x-text="fieldError(step.id, 'on_missing')"></span>
+                  </label>
+                </div>
+              </div>
+
+              {# ---- ai_answer ---- #}
+              <div class="space-y-2" x-show="step.type === 'ai_answer'">
+                <p class="text-xs text-gray-500">Replies using only your notes, hours, answers and catalogue, with the same checks as automatic replies (topics you allowed, how sure it must be, no facts it can't back up). If any check fails, it hands over instead.</p>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label class="text-xs">After it answers →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">When it can't answer safely →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_handoff" :class="fieldError(step.id, 'on_handoff') && 'input-error'">
+                      <option value="">— choose a step —</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                    <span class="field-error" x-show="fieldError(step.id, 'on_handoff')" x-text="fieldError(step.id, 'on_handoff')"></span>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-400">Tip: on the hand-over path, send a short holding reply and add a follow-up for your team.</p>
+              </div>
+
+              {# ---- start_form ---- #}
+              <div class="space-y-2" x-show="step.type === 'start_form'">
+                <p class="text-xs text-gray-500">Sends the form (a native WhatsApp form, or one question per message elsewhere) and waits until they finish it.</p>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <label class="text-xs sm:col-span-2">Form
+                    <select class="select select-sm w-full mt-0.5" x-model="step.form" :class="fieldError(step.id, 'form') && 'input-error'">
+                      <option value="">— choose a form —</option>
+                      <template x-for="f in forms" :key="f.id"><option :value="f.id" x-text="f.name + (f.ready ? '' : ' (draft)')" :selected="f.id === step.form"></option></template>
+                    </select>
+                    <span class="field-error" x-show="fieldError(step.id, 'form')" x-text="fieldError(step.id, 'form')"></span>
+                  </label>
+                  <label class="text-xs">Wait up to (hours)
+                    <input type="number" min="1" max="720" class="input input-sm w-full mt-0.5" x-model.number="step.timeout_hours" placeholder="72" />
+                  </label>
+                  <label class="text-xs">When they finish →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If they don't finish →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_timeout">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                  <label class="text-xs">If it can't be sent →
+                    <select class="select select-sm w-full mt-0.5" x-model="step.on_error">
+                      <option value="">Stop and tell me</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-400">Later steps can use their answers, e.g. {form_answers.budget}.</p>
+              </div>
+
+              {# ---- create_followup ---- #}
+              <div class="space-y-2" x-show="step.type === 'create_followup'">
+                <p class="text-xs text-gray-500">Adds a reminder to your team's follow-up list. Nothing is sent to the customer.</p>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <label class="text-xs">Remind in (hours)
+                    <input type="number" min="0.25" max="1440" step="0.25" class="input input-sm w-full mt-0.5" x-model.number="step.due_in_hours"
+                           :class="fieldError(step.id, 'due_in_hours') && 'input-error'" />
+                    <span class="field-error" x-show="fieldError(step.id, 'due_in_hours')" x-text="fieldError(step.id, 'due_in_hours')"></span>
+                  </label>
+                  <label class="text-xs sm:col-span-2">Note
+                    <input class="input input-sm w-full mt-0.5" x-model="step.note" maxlength="255" placeholder="Check {first_name} got the quote" />
+                  </label>
+                  <label class="text-xs sm:col-span-2">Whose list
+                    <input class="input input-sm w-full mt-0.5" x-model="step.assign_to" list="followup-owners" placeholder="Whole team"
+                           :class="fieldError(step.id, 'assign_to') && 'input-error'" />
+                    <span class="field-error" x-show="fieldError(step.id, 'assign_to')" x-text="fieldError(step.id, 'assign_to')"></span>
+                    <datalist id="followup-owners"><option value="assignee">Whoever the conversation is assigned to</option></datalist>
+                  </label>
+                  <label class="text-xs">Next step
+                    <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                      <option value="">End the automation here</option>
+                      <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {# ---- lookup_product ---- #}
+              <div class="space-y-2" x-show="step.type === 'lookup_product'">
+                <p class="text-xs text-gray-500">Finds the product the customer is asking about in your catalogue. The match's name and price can be used in later replies as {product.name} and {product.price}.</p>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <template x-for="out in [['on_found', 'Found it'], ['on_ambiguous', 'Several match'], ['on_not_found', 'Not found'], ['on_no_price', 'Found, but no price'], ['on_error', 'Something went wrong']]" :key="out[0]">
+                    <label class="text-xs"><span x-text="out[1] + ' →'"></span>
+                      <select class="select select-sm w-full mt-0.5" x-model="step[out[0]]" :class="fieldError(step.id, out[0]) && 'input-error'">
+                        <option value="">End the automation here</option>
+                        <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                      </select>
+                      <span class="field-error" x-show="fieldError(step.id, out[0])" x-text="fieldError(step.id, out[0])"></span>
+                    </label>
+                  </template>
+                </div>
+              </div>
+
+              {# ---- publish_post ---- #}
+              <div class="grid gap-2 sm:grid-cols-2" x-show="step.type === 'publish_post'">
+                <label class="text-xs">Post id (from Content Studio)
+                  <input class="input input-sm w-full mt-0.5" x-model="step.post_id" :class="fieldError(step.id, 'post_id') && 'input-error'" />
+                  <span class="field-error" x-show="fieldError(step.id, 'post_id')" x-text="fieldError(step.id, 'post_id')"></span>
+                </label>
+                <label class="text-xs">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">End the automation here</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+                <label class="text-xs">If publishing fails →
+                  <select class="select select-sm w-full mt-0.5" x-model="step.on_error">
+                    <option value="">Stop and tell me</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              {# ---- action ---- #}
+              <div class="space-y-2" x-show="step.type === 'action'">
+                <label class="text-xs block">Action
+                  <input class="input input-sm w-full mt-0.5" x-model="step.action" list="action-names" placeholder="add_internal_note"
+                         :class="fieldError(step.id, 'action') && 'input-error'" />
+                  <span class="field-error" x-show="fieldError(step.id, 'action')" x-text="fieldError(step.id, 'action')"></span>
+                </label>
+                <label class="text-xs block">Inputs (JSON)
+                  <textarea class="textarea font-mono text-xs w-full mt-0.5" rows="3" x-model="step._paramsText" @blur="syncJson(step, '_paramsText', 'params')"
+                            placeholder='{"body": "Followed up automatically"}'></textarea>
+                  <span class="field-error" x-show="step._paramsError || fieldError(step.id, 'params')" x-text="step._paramsError || fieldError(step.id, 'params')"></span>
+                </label>
+                <label class="text-xs block">Next step
+                  <select class="select select-sm w-full mt-0.5" x-model="step.next">
+                    <option value="">End the automation here</option>
+                    <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
+                  </select>
+                </label>
+              </div>
+
+              <p class="text-xs text-gray-400" x-show="step.type === 'stop' || step.type === 'exit'">The automation ends here.</p>
+
+              {# ---- where this step can go next, at a glance ---- #}
+              <div class="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-2" x-show="lanes(step).length > 1" x-cloak>
+                <template x-for="lane in lanes(step)" :key="lane.label">
+                  <button type="button" class="badge badge-neutral inline-flex items-center gap-1 hover:opacity-80"
+                          :class="lane.target && !stepById(lane.target) && 'badge-danger'"
+                          @click="lane.target && jumpToStep(lane.target)">
+                    <span class="font-medium" x-text="lane.label"></span>
+                    <span aria-hidden="true">&rarr;</span>
+                    <span x-text="lane.target ? targetLabel(lane.target) : 'end'"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <div class="relative h-0">
+              <button type="button" class="absolute -left-[2.15rem] -bottom-[0.95rem] w-5 h-5 rounded-full bg-white border border-border text-gray-500 text-xs leading-none hover:border-brand-500 hover:text-brand-600 z-10"
+                      @click="openPalette('insert', i)" :aria-label="'Add a step after step ' + (i + 1)" title="Add a step here">+</button>
             </div>
           </div>
         </template>
       </div>
     </div>
 
-    <button class="btn btn-ghost btn-sm ml-8" @click="addStep()">+ Add step</button>
+    <button class="btn btn-secondary btn-sm ml-8" @click="openPalette('append', definition.steps.length - 1)">+ Add a step</button>
+  </div>
+
+
+  {# ---- Test it: a pretend conversation, nothing is sent or changed ---- #}
+  <div x-show="test.open" x-cloak class="fixed inset-0 flex justify-end bg-gray-900/50" style="z-index: var(--z-drawer)" @click.self="test.open = false"
+       @keydown.escape.window="test.open = false" role="dialog" aria-modal="true" aria-label="Test this automation">
+    <aside class="h-full w-full sm:max-w-md bg-surface border-l border-border flex flex-col" x-trap.noscroll="test.open">
+      <header class="card-pad border-b border-border flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-ink">Test it</h2>
+          <p class="text-xs text-gray-500">Plays your current steps. Nothing is sent and no record changes.</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-xs" @click="test.open = false" aria-label="Close">✕</button>
+      </header>
+      <div class="card-pad border-b border-border space-y-2">
+        <label class="text-xs block">Pretend to be
+          <select class="select select-sm w-full mt-0.5" x-model="test.contact" @change="runTest()">
+            <option value="">A new customer (Ada)</option>
+            {% for c in test_contacts %}<option value="{{ c.id }}">{{ c.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <form class="flex gap-2" @submit.prevent="startTest()" x-show="isMessageTrigger()">
+          <input class="input input-sm flex-1" x-model="test.draft" placeholder="Type what the customer says, e.g. price?" aria-label="Customer message" />
+          <button class="btn btn-primary btn-sm">Send</button>
+        </form>
+        <button type="button" class="btn btn-primary btn-sm" x-show="!isMessageTrigger()" @click="startTest()">Run it</button>
+      </div>
+      <div class="flex-1 overflow-y-auto card-pad space-y-2 bg-surface-muted" aria-live="polite">
+        <p class="text-xs text-gray-400" x-show="!test.result">Send a message to see what happens.</p>
+        <template x-if="test.result && test.result.why_not">
+          <p class="alert alert-warning text-sm" x-text="test.result.why_not"></p>
+        </template>
+        <template x-for="(e, ei) in (test.result ? test.result.transcript : [])" :key="ei">
+          <div :class="e.kind === 'customer' ? 'flex justify-end' : 'flex justify-start'">
+            <div x-show="e.kind === 'customer'" class="rounded-2xl rounded-tr-sm px-3 py-2 text-sm max-w-[85%]" style="background:var(--color-brand-100);color:var(--color-ink)" x-text="e.text === '__timeout__' ? '(no answer)' : e.text"></div>
+            <div x-show="e.kind === 'bot'" class="max-w-[85%]">
+              <div class="wa-bubble" x-text="e.text"></div>
+              <template x-for="o in (e.options || [])" :key="o"><div class="wa-button mt-1" x-text="o"></div></template>
+            </div>
+            <p x-show="e.kind === 'action' || e.kind === 'decision' || e.kind === 'note'" class="text-xs text-gray-600 italic">
+              <button type="button" class="hover:underline text-left" @click="e.step_id && (test.open = false, jumpToStep(e.step_id))" x-text="(e.kind === 'decision' ? '↳ ' : '• ') + e.text"></button>
+            </p>
+            <p x-show="e.kind === 'problem'" class="text-xs text-red-600" x-text="'⚠ ' + e.text"></p>
+          </div>
+        </template>
+      </div>
+      <footer class="card-pad border-t border-border space-y-2" x-show="test.result && test.result.waiting">
+        <p class="text-xs text-gray-500">It's waiting for the customer's answer.</p>
+        <div class="flex flex-wrap gap-1.5" x-show="test.result && test.result.waiting && test.result.waiting.options && test.result.waiting.options.length">
+          <template x-for="o in (test.result && test.result.waiting ? test.result.waiting.options : [])" :key="o">
+            <button type="button" class="btn btn-secondary btn-xs" @click="answerTest(o)" x-text="o"></button>
+          </template>
+        </div>
+        <form class="flex gap-2" @submit.prevent="answerTest(test.reply)">
+          <input class="input input-sm flex-1" x-model="test.reply" placeholder="Type their answer" aria-label="Customer answer" />
+          <button class="btn btn-primary btn-sm">Reply</button>
+        </form>
+        <button type="button" class="btn btn-ghost btn-xs" @click="answerTest('__timeout__')"
+                x-text="'Don\'t answer (after ' + (test.result && test.result.waiting ? test.result.waiting.timeout_label : '') + ')'"></button>
+      </footer>
+    </aside>
+  </div>
+  {# ---- Step palette ---- #}
+  <div x-show="palette.open" x-cloak class="fixed inset-0 flex items-end sm:items-center justify-center bg-gray-900/50 p-0 sm:p-4" style="z-index: var(--z-modal)"
+       @keydown.escape.window="palette.open = false" @click.self="palette.open = false" role="dialog" aria-modal="true" aria-label="Choose a step">
+    <div class="card w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto" x-trap.noscroll="palette.open">
+      <div class="card-pad border-b border-border flex items-center justify-between gap-3 sticky top-0 bg-surface z-10">
+        <h2 class="text-sm font-semibold text-ink" x-text="palette.mode === 'replace' ? 'Change this step to…' : 'What should happen next?'"></h2>
+        <input type="search" class="input input-sm w-40 sm:w-56" placeholder="Search steps" x-model="palette.q" aria-label="Search steps" />
+      </div>
+      <div class="card-pad space-y-4">
+        <template x-for="group in paletteGroups()" :key="group.name">
+          <section>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5" x-text="group.name"></h3>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <template x-for="item in group.items" :key="item.type">
+                <button type="button" class="text-left rounded-xl border border-border p-3 transition-colors"
+                        :class="item.available ? 'hover:border-brand-500' : 'opacity-60 cursor-not-allowed'"
+                        :disabled="!item.available" :aria-disabled="!item.available"
+                        @click="pickStep(item.type)">
+                  <span class="flex items-center gap-2 text-sm font-medium text-ink">
+                    <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor"
+                         x-html="(stepTypeMeta[item.type] || {}).icon || ''"></svg>
+                    <span x-text="item.label"></span>
+                  </span>
+                  <span class="block text-xs text-gray-500 mt-0.5" x-text="item.available ? item.description : item.reason"></span>
+                </button>
+              </template>
+            </div>
+          </section>
+        </template>
+        <p class="text-xs text-gray-400" x-show="!advanced">Turn on <span class="font-medium">Advanced</span> above for webhooks, product look-ups and other technical steps.</p>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="attribute-keys">{% for key in attribute_keys %}<option value="{{ key }}"></option>{% endfor %}</datalist>
+  <datalist id="action-names">{% for name in action_names %}<option value="{{ name }}"></option>{% endfor %}</datalist>
+
+  {# ---- Map: the same steps as a tree of where each one leads ---- #}
+  <div x-show="tab === 'map'" x-cloak class="card card-pad overflow-x-auto">
+    <p class="text-xs text-gray-500 mb-3">Each step and where it leads. Click a step to edit it.</p>
+    <div class="text-sm">
+      <div class="font-medium text-ink mb-2" x-text="'When ' + triggerLabel()"></div>
+      <ul class="wf-map">
+        <template x-for="node in mapRows()" :key="node.key">
+          <li :style="'padding-left:' + (node.depth * 1.25) + 'rem'" class="py-0.5">
+            <span class="text-xs text-gray-400" x-show="node.via" x-text="node.via + ' →'"></span>
+            <template x-if="node.step">
+              <button type="button" class="hover:underline text-left" @click="jumpToStep(node.step.id)">
+                <span class="badge" :class="(stepTypeMeta[node.step.type] || {}).chip || 'badge-neutral'" x-text="node.number + '. ' + typeLabel(node.step.type)"></span>
+                <span class="text-xs text-gray-600" x-text="stepSummary(node.step)"></span>
+              </button>
+            </template>
+            <template x-if="!node.step">
+              <span class="text-xs" :class="node.missing ? 'text-red-600' : 'text-gray-400'" x-text="node.missing ? 'missing step ' + node.missing : (node.seen ? 'back to step ' + node.seen : 'end')"></span>
+            </template>
+          </li>
+        </template>
+      </ul>
+    </div>
   </div>
 
   {# ---- Code ---- #}
@@ -554,13 +1116,28 @@ function workflowEditor() {
       "lead.qualified": "When an interested customer is marked qualified",
       "lead.lost": "When an interested customer is marked lost",
     },
-    advancedStepTypes: ["webhook", "set_attribute", "action"],
+    advancedStepTypes: ["webhook", "set_attribute", "action", "lookup_product", "publish_post"],
+    stepCatalog: {{ step_catalog_json|safe }},
+    forms: {{ forms_json|safe }},
+    triggerCatalog: {{ trigger_catalog_json|safe }},
+    branchFields: {{ branch_fields_json|safe }},
+    priority: {{ wf.priority }},
+    opLabels: { eq: "is", ne: "is not", gte: "at least", lte: "at most", gt: "more than", lt: "less than",
+                contains: "contains", exists: "known", not_exists: "not known", in: "one of" },
+    summary: null,
+    palette: { open: false, mode: "append", index: -1, q: "" },
+    coverage: { busy: false, result: null },
+    test: { open: false, contact: "", draft: "", reply: "", message: "", replies: [], result: null },
+    dirty: false,
+    _validateTimer: null,
+    _saveTimer: null,
     errors: {{ validation_errors|safe }},
     emailTemplates: {{ email_templates_json|safe }},
     whatsappTemplates: {{ whatsapp_templates_json|safe }},
     codeText: "",
     codeError: "",
     saved: false,
+    saveError: "",
     busy: false,
     highlighted: null,
     stepTypeMeta: {
@@ -631,6 +1208,318 @@ function workflowEditor() {
       this.deriveModes();
       this.loadKeywords();
       this.syncToCode();
+      this.validateNow();
+      // Every change is checked as you go and saved a moment later. Saving never changes what
+      // customers get on a live automation: edits wait as "unpublished changes".
+      this.$watch("definition", () => this.changed(), { deep: true });
+      this.$watch("priority", () => this.changed());
+      window.addEventListener("beforeunload", (e) => {
+        if (this.dirty) { e.preventDefault(); e.returnValue = ""; }
+      });
+    },
+    changed() {
+      this.dirty = true;
+      clearTimeout(this._validateTimer);
+      this._validateTimer = setTimeout(() => this.validateNow(), 500);
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(() => this.save({ quiet: true }), 2500);
+    },
+    cleanDefinition() {
+      const cleanSteps = this.definition.steps.map(({ _mode, _bodyText, _bodyError, _routes, _paramsText, _paramsError, _waitUnit, ...rest }) => {
+        // Half-filled rows are just unfinished, not mistakes worth an error.
+        if (rest.type === "send_buttons") rest.buttons = (rest.buttons || []).filter((b) => (b.title || "").trim());
+        if (rest.type === "send_list") {
+          rest.rows = (rest.rows || []).filter((r) => (r.title || "").trim())
+            .map((r) => (r.description && r.description.trim() ? r : { title: r.title }));
+        }
+        if (rest.type === "wait_for_reply") {
+          if (!rest.default) delete rest.default;
+          if (!rest.on_timeout) delete rest.on_timeout;
+        }
+        if (!rest.fallback_template) { delete rest.fallback_template; delete rest.fallback_variable_mapping; }
+        return rest;
+      });
+      return { ...this.definition, steps: cleanSteps };
+    },
+    async validateNow() {
+      try {
+        const r = await fetch("/automations/{{ wf.slug }}/validate/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
+          body: JSON.stringify({ definition: this.cleanDefinition() }),
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        this.errors = data.errors || [];
+        this.summary = data.summary;
+      } catch (e) { /* offline: keep the last known result */ }
+    },
+    // ---- coverage ----
+    async checkCoverage() {
+      this.coverage.busy = true;
+      try {
+        const r = await fetch("/automations/{{ wf.slug }}/coverage/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
+          body: JSON.stringify({ definition: this.cleanDefinition() }),
+        });
+        if (r.ok) this.coverage.result = await r.json();
+      } catch (e) { /* offline */ } finally { this.coverage.busy = false; }
+    },
+    addKeyword(word) {
+      const words = this.keywordDraft.split(",").map((w) => w.trim()).filter(Boolean);
+      if (!words.includes(word)) words.push(word);
+      this.keywordDraft = words.join(", ");
+      this.applyKeywords();
+      this.coverage.result.suggested_keywords = this.coverage.result.suggested_keywords.filter((k) => k !== word);
+      this.checkCoverage();
+    },
+    // ---- test it ----
+    openTest() { this.test.open = true; if (!this.isMessageTrigger() && !this.test.result) this.runTest(); },
+    startTest() {
+      this.test.message = this.test.draft;
+      this.test.replies = [];
+      this.test.draft = "";
+      this.runTest();
+    },
+    answerTest(text) {
+      if (!text && text !== "") return;
+      this.test.replies.push(text);
+      this.test.reply = "";
+      this.runTest();
+    },
+    async runTest() {
+      if (this.isMessageTrigger() && !this.test.message) return;
+      try {
+        const r = await fetch("/automations/{{ wf.slug }}/simulate/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
+          body: JSON.stringify({ definition: this.cleanDefinition(), contact: this.test.contact,
+                                 message: this.test.message, replies: this.test.replies }),
+        });
+        if (r.ok) this.test.result = await r.json();
+      } catch (e) { /* offline */ }
+    },
+    // ---- labels ----
+    typeLabel(type) {
+      const item = this.stepCatalog.find((c) => c.type === type);
+      return item ? item.label : ((this.stepTypeMeta[type] || {}).label || type);
+    },
+    triggerLabel() {
+      const t = this.triggerCatalog.find((c) => c.type === this.definition.trigger.type);
+      return t ? t.label.replace(/^When /, "").replace(/^when /, "") : this.definition.trigger.type;
+    },
+    stepById(id) { return this.definition.steps.find((s) => s.id === id); },
+    stepNumber(id) { return this.definition.steps.findIndex((s) => s.id === id) + 1; },
+    stepSummary(step) {
+      const cut = (t) => { t = (t || "").trim(); return t.length > 48 ? t.slice(0, 47) + "…" : t; };
+      switch (step.type) {
+        case "reply_text": case "send_buttons": case "send_list": case "notify_team": return cut(step.text);
+        case "ask_question": return cut(step.question);
+        case "send_whatsapp": return step.template || "";
+        case "send_email": return cut(step.subject || step.template);
+        case "add_tag": case "remove_tag": return step.tag || "";
+        case "wait": return this.waitAmount(step) + " " + ({ 60: "min", 3600: "h", 86400: "days" }[this.waitUnit(step)] || "");
+        case "update_lead_status": return step.status || "";
+        case "branch": {
+          const f = this.branchFields.find((x) => x.field === step.field);
+          return f ? f.label : (step.field || "");
+        }
+        case "action": return step.action || "";
+        case "create_followup": return cut(step.note);
+        case "start_form": return (this.forms.find((f) => f.id === step.form) || {}).name || "";
+        case "ai_classify": return (step.labels || []).map((i) => i.label).filter(Boolean).join(" / ");
+        case "ai_extract": return (step.fields || []).map((f) => f.key).filter(Boolean).join(", ");
+        default: return "";
+      }
+    },
+    targetLabel(id) {
+      const target = this.stepById(id);
+      if (!target) return "⚠ missing (" + id + ")";
+      const summary = this.stepSummary(target);
+      return this.stepNumber(id) + ". " + this.typeLabel(target.type) + (summary ? ": " + summary : "");
+    },
+    previewText(text) {
+      return (text || "").replace(/\{first_name\}/g, "Ada").replace(/\{contact\}/g, "Ada Banda")
+        .replace(/\{product\.name\}/g, "Chitenge dress").replace(/\{product\.price\}/g, "250");
+    },
+    // ---- where each step leads ----
+    lanes(step) {
+      const L = (label, target) => ({ label, target: target || "" });
+      switch (step.type) {
+        case "branch": return [L("If yes", step.on_true), L("Otherwise", step.on_false)];
+        case "wait_for_reply":
+          return [
+            ...Object.entries(step.routes || {}).map(([k, t]) => L(k, t)),
+            ...(step.default ? [L("Anything else", step.default)] : []),
+            L("No answer", step.on_timeout),
+          ];
+        case "ask_question":
+          return [L("Answered", step.next), L("No answer", step.on_timeout), L("Invalid", step.on_invalid), L("Couldn't send", step.on_error)];
+        case "start_form":
+          return [L("Finished", step.next), L("Didn't finish", step.on_timeout), L("Couldn't send", step.on_error)];
+        case "ai_classify":
+          return [
+            ...(step.labels || []).filter((i) => i.label).map((i) => L(i.label, (step.routes || {})[i.label])),
+            L("Not sure", step.on_unsure),
+          ];
+        case "ai_extract": return [L("Found", step.next), L("Missing", step.on_missing)];
+        case "ai_answer": return [L("Answered", step.next), L("Handed over", step.on_handoff)];
+        case "lookup_product":
+          return [L("Found", step.on_found), L("Several", step.on_ambiguous), L("Not found", step.on_not_found), L("No price", step.on_no_price), L("Error", step.on_error)];
+        case "stop": case "exit": return [];
+        default: return [L("Then", step.next)];
+      }
+    },
+    mapRows() {
+      const rows = [];
+      const seen = new Set();
+      const walk = (id, depth, via) => {
+        if (rows.length > 200) return;
+        if (!id) { rows.push({ key: "end" + rows.length, depth, via }); return; }
+        const step = this.stepById(id);
+        if (!step) { rows.push({ key: "missing" + rows.length, depth, via, missing: id }); return; }
+        if (seen.has(id)) { rows.push({ key: "seen" + rows.length, depth, via, seen: this.stepNumber(id) }); return; }
+        seen.add(id);
+        rows.push({ key: id, depth, via, step, number: this.stepNumber(id) });
+        const lanes = this.lanes(step);
+        if (lanes.length === 1) walk(lanes[0].target, depth, "");
+        else lanes.forEach((lane) => walk(lane.target, depth + 1, lane.label));
+      };
+      if (this.definition.steps.length) walk(this.definition.steps[0].id, 0, "");
+      return rows;
+    },
+    // ---- palette ----
+    openPalette(mode, index) { this.palette = { open: true, mode, index, q: "" }; },
+    paletteGroups() {
+      const q = this.palette.q.trim().toLowerCase();
+      const groups = [];
+      this.stepCatalog
+        .filter((c) => this.advanced || !c.advanced)
+        .filter((c) => !q || (c.label + " " + c.description).toLowerCase().includes(q))
+        .forEach((c) => {
+          let g = groups.find((x) => x.name === c.group);
+          if (!g) { g = { name: c.group, items: [] }; groups.push(g); }
+          g.items.push(c);
+        });
+      return groups;
+    },
+    defaultsFor(type) {
+      return {
+        reply_text: { text: "" },
+        send_buttons: { text: "", buttons: [{ title: "" }, { title: "" }] },
+        send_list: { text: "", button: "See options", rows: [{ title: "", description: "" }] },
+        wait_for_reply: { routes: {}, timeout_seconds: 86400 },
+        ask_question: { question: "", attribute: "", target: "contact", max_attempts: 2, timeout_seconds: 86400 },
+        wait: { seconds: 86400 },
+        branch: { field: "tag", operator: "eq", value: "" },
+        notify_team: { to: "owners", text: "{contact} needs a reply." },
+        add_tag: { tag: "" }, remove_tag: { tag: "" },
+        lookup_product: {}, publish_post: { post_id: "" }, action: { action: "", params: {} },
+        create_followup: { due_in_hours: 24, note: "Follow up with {first_name}", assign_to: "" },
+        start_form: { form: (this.forms.find((f) => f.ready) || {}).id || "", timeout_hours: 72 },
+        ai_classify: { labels: [{ label: "", keywords: [], examples: [] }, { label: "", keywords: [], examples: [] }], routes: {}, care: "careful", on_unsure: "" },
+        ai_extract: { fields: [{ key: "", type: "text", save_to: "" }], next: "", on_missing: "" },
+        ai_answer: { next: "", on_handoff: "" },
+      }[type] || {};
+    },
+    pickStep(type) {
+      const { mode, index } = this.palette;
+      this.palette.open = false;
+      if (mode === "replace") {
+        const old = this.definition.steps[index];
+        // Keep where it was and what led to it; start the new type's own settings fresh.
+        const fresh = { id: old.id, type, ...this.defaultsFor(type) };
+        if (old.next && !["branch", "stop", "exit"].includes(type)) fresh.next = old.next;
+        this.definition.steps.splice(index, 1, fresh);
+        this.deriveMode(fresh);
+        return;
+      }
+      const step = { id: this.uniqueId(type), type, ...this.defaultsFor(type) };
+      this.deriveMode(step);
+      const prev = this.definition.steps[index];
+      // Slot it into the flow: the step before now leads here, and this leads where it used to.
+      if (prev && prev.type !== "branch" && !["stop", "exit"].includes(prev.type) && this.lanes(prev).length === 1) {
+        if (!["branch", "stop", "exit"].includes(type)) step.next = prev.next || "";
+        prev.next = step.id;
+      }
+      this.definition.steps.splice(index + 1, 0, step);
+      this.$nextTick(() => this.jumpToStep(step.id));
+    },
+    duplicateStep(i) {
+      const copy = JSON.parse(JSON.stringify(this.definition.steps[i]));
+      copy.id = this.uniqueId(copy.type);
+      this.definition.steps.splice(i + 1, 0, copy);
+      this.deriveMode(copy);
+    },
+    removeStep(i) {
+      const gone = this.definition.steps[i];
+      // Whatever pointed at the removed step now follows it to where it went.
+      const onward = this.lanes(gone).length === 1 ? (gone.next || "") : "";
+      this.definition.steps.splice(i, 1);
+      this.definition.steps.forEach((s) => {
+        ["next", "on_true", "on_false", "default", "on_timeout", "on_invalid", "on_error",
+         "on_found", "on_not_found", "on_ambiguous", "on_no_price"].forEach((f) => { if (s[f] === gone.id) s[f] = onward; });
+        if (s.routes) Object.keys(s.routes).forEach((k) => { if (s.routes[k] === gone.id) s.routes[k] = onward; });
+        if (s._routes) s._routes.forEach((r) => { if (r.target === gone.id) r.target = onward; });
+      });
+    },
+    renameStep(step, value) {
+      const id = (value || "").trim().replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 60);
+      if (!id || id === step.id || this.stepById(id)) return;
+      const old = step.id;
+      this.definition.steps.forEach((s) => {
+        ["next", "on_true", "on_false", "default", "on_timeout", "on_invalid", "on_error",
+         "on_found", "on_not_found", "on_ambiguous", "on_no_price"].forEach((f) => { if (s[f] === old) s[f] = id; });
+        if (s.routes) Object.keys(s.routes).forEach((k) => { if (s.routes[k] === old) s.routes[k] = id; });
+        if (s._routes) s._routes.forEach((r) => { if (r.target === old) r.target = id; });
+      });
+      step.id = id;
+    },
+    // ---- wait / branch helpers ----
+    waitUnit(step) {
+      if (step._waitUnit) return step._waitUnit;
+      const sec = step.seconds || 0;
+      return sec && sec % 86400 === 0 ? "86400" : sec && sec % 3600 === 0 ? "3600" : "60";
+    },
+    waitAmount(step) { return Math.max(1, Math.round((step.seconds || 60) / parseInt(this.waitUnit(step), 10))); },
+    setWait(step, amount, unit) {
+      step._waitUnit = String(unit);
+      step.seconds = Math.max(1, parseInt(amount, 10) || 1) * parseInt(unit, 10);
+    },
+    branchFieldKey(step) {
+      return this.branchFields.some((f) => f.field === step.field) ? step.field : "__custom";
+    },
+    branchKind(step) {
+      const f = this.branchFields.find((x) => x.field === step.field);
+      return f ? f.kind : "text";
+    },
+    branchOps(step) {
+      const f = this.branchFields.find((x) => x.field === step.field);
+      return f ? f.ops : ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists", "not_exists"];
+    },
+    setBranchField(step, key) {
+      if (key === "__custom") { step.field = ""; step.operator = "eq"; return; }
+      const f = this.branchFields.find((x) => x.field === key);
+      step.field = key;
+      step.operator = f.ops[0];
+      step.value = f.kind === "bool" ? true : f.kind === "none" ? undefined : "";
+    },
+    syncLabelRoutes(step) {
+      // Routes are keyed by label; keep them in step with renamed or removed labels.
+      const routes = {};
+      (step.labels || []).forEach((i, n) => {
+        const old = Object.keys(step.routes || {})[n];
+        if (i.label) routes[i.label] = (step.routes || {})[i.label] || (old ? step.routes[old] : "");
+      });
+      step.routes = routes;
+    },
+    syncJson(step, textKey, field) {
+      const errKey = textKey.replace("Text", "Error");
+      const text = (step[textKey] || "").trim();
+      if (!text) { step[field] = {}; step[errKey] = ""; return; }
+      try { step[field] = JSON.parse(text); step[errKey] = ""; }
+      catch (e) { step[errKey] = "Invalid JSON: " + e.message; }
     },
     isMessageTrigger() {
       return ["conversation.message_received", "whatsapp.received"].includes(this.definition.trigger.type);
@@ -681,6 +1570,13 @@ function workflowEditor() {
         if (!step._routes.length) step._routes.push({ key: "", target: "" });
         if (step.timeout_seconds === undefined) step.timeout_seconds = 86400;
       }
+      if (step.type === "action" && step._paramsText === undefined) {
+        step._paramsText = Object.keys(step.params || {}).length ? JSON.stringify(step.params, null, 2) : "";
+      }
+      if (step.type === "ask_question") {
+        if (!step.target) step.target = "contact";
+        if (step.max_attempts === undefined) step.max_attempts = 1;
+      }
       if (step.type === "webhook" && step._bodyText === undefined) {
         step._bodyText = Object.keys(step.body || {}).length ? JSON.stringify(step.body, null, 2) : "";
       }
@@ -717,7 +1613,7 @@ function workflowEditor() {
       const missing = step && step.next && !this.definition.steps.some((s) => s.id === step.next);
       const opts = this.definition.steps
         .filter((s) => s.id !== step.id)
-        .map((s) => ({ value: s.id, label: s.id }));
+        .map((s) => ({ value: s.id, label: this.targetLabel(s.id) }));
       if (missing) opts.push({ value: step.next, label: "⚠ " + step.next + " (not found)" });
       return opts;
     },
@@ -731,7 +1627,9 @@ function workflowEditor() {
       const e = this.errors.find((er) => er.step_id === stepId && er.field === field);
       return e ? e.message : "";
     },
-    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag", "buttons", "rows", "routes", "timeout_seconds", "status", "to", "source"],
+    stepFieldsWithInlineError: ["from", "template", "next", "on_true", "on_false", "field", "type", "id", "url", "send_at", "variable_mapping", "text", "tag", "buttons", "rows", "routes", "timeout_seconds", "status", "to", "source",
+      "question", "attribute", "action", "params", "post_id", "due_in_hours", "assign_to", "form",
+      "labels", "on_unsure", "care", "fields", "on_missing", "on_handoff", "fallback_template", "fallback_variable_mapping", "on_found", "on_not_found", "on_ambiguous", "on_no_price"],
     hasStepLevelError(stepId) {
       return this.stepErrors(stepId).some((e) => !this.stepFieldsWithInlineError.includes(e.field) || e.field == null);
     },
@@ -756,13 +1654,11 @@ function workflowEditor() {
         setTimeout(() => (this.highlighted = null), 2000);
       });
     },
-    uniqueId() {
-      let max = 0;
-      this.definition.steps.forEach((s) => {
-        const m = /^step-(\d+)$/.exec(s.id || "");
-        if (m) max = Math.max(max, parseInt(m[1], 10));
-      });
-      return "step-" + (max + 1);
+    uniqueId(type) {
+      const base = (type || "step").replace(/_/g, "-");
+      let n = 1;
+      while (this.stepById(base + "-" + n)) n++;
+      return base + "-" + n;
     },
     addStep() {
       const step = { id: this.uniqueId(), type: "reply_text" };
@@ -788,34 +1684,28 @@ function workflowEditor() {
         this.codeError = "";
       } catch (e) { this.codeError = "Invalid JSON: " + e.message; }
     },
-    async save() {
+    async save(opts = {}) {
       if (this.tab === "code") this.syncFromCode();
       if (this.codeError) return;
+      clearTimeout(this._saveTimer);
       this.busy = true;
       try {
-        const cleanSteps = this.definition.steps.map(({ _mode, _bodyText, _bodyError, _routes, ...rest }) => {
-          // Half-filled rows are just unfinished, not mistakes worth an error.
-          if (rest.type === "send_buttons") rest.buttons = (rest.buttons || []).filter((b) => (b.title || "").trim());
-          if (rest.type === "send_list") {
-            rest.rows = (rest.rows || []).filter((r) => (r.title || "").trim())
-              .map((r) => (r.description && r.description.trim() ? r : { title: r.title }));
-          }
-          if (rest.type === "wait_for_reply") {
-            if (!rest.default) delete rest.default;
-            if (!rest.on_timeout) delete rest.on_timeout;
-          }
-          return rest;
-        });
         const r = await fetch("/automations/{{ wf.slug }}/save/", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
-          body: JSON.stringify({ definition: { ...this.definition, steps: cleanSteps } }),
+          body: JSON.stringify({ definition: this.cleanDefinition(), priority: this.priority }),
         });
         const data = await r.json();
         this.errors = data.errors || [];
+        this.saveError = r.ok ? "" : (data.error || "Couldn't save. Try again.");
+        if (!r.ok) return;
+        this.dirty = false;
+        Alpine.store("wfChanges").pending = !!data.has_changes;
         this.saved = true;
         setTimeout(() => (this.saved = false), 2000);
-        this.syncToCode();
+        if (!opts.quiet) this.syncToCode();
+      } catch (e) {
+        this.saveError = "You're offline. Your changes will be saved when you reconnect.";
       } finally { this.busy = false; }
     },
     csrf() {

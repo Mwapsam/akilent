@@ -310,6 +310,7 @@ def _execute_campaign(policy, targets, account) -> dict:
 
 
 def _execute_followup(policy, targets, account) -> dict:
+    from apps.conversations import followups
     from apps.conversations.models import FollowUp
 
     due_hours = int(policy.action.get("due_hours", 4))
@@ -321,21 +322,18 @@ def _execute_followup(policy, targets, account) -> dict:
 
     for target in targets:
         # targets for follow-up triggers are Conversation instances.
-        if not hasattr(target, "account_id"):
+        if (
+            not hasattr(target, "account_id")
+            or getattr(target, "contact", None) is None
+        ):
             continue
-        defaults: dict = {
-            "due_at": due_at,
-            "note": note,
-            "source": "policy",
-        }
-        contact = getattr(target, "contact", None)
-        if contact is not None:
-            defaults["contact"] = contact
-        _, created = FollowUp.objects.get_or_create(
-            account=account,
+        _, created = followups.create(
+            account,
+            target.contact,
             conversation=target,
-            done_at__isnull=True,
-            defaults=defaults,
+            due_at=due_at,
+            note=note,
+            source=FollowUp.Source.POLICY,
         )
         if created:
             created_count += 1

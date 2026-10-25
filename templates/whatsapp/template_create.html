@@ -483,6 +483,7 @@
               <option value="phone_number" {% if form.button_type == "phone_number" %}selected{% endif %}>Call phone number</option>
               <option value="copy_code" {% if form.button_type == "copy_code" %}selected{% endif %}>Copy offer code</option>
               <option value="voice_call" {% if form.button_type == "voice_call" %}selected{% endif %}>Call on WhatsApp</option>
+              <option value="flow" {% if form.button_type == "flow" %}selected{% endif %} {% if not flow_forms %}disabled{% endif %}>Open a form{% if not flow_forms %} (publish a form to WhatsApp first){% endif %}</option>
               <option value="share_contact" disabled>Share Contact Info (not supported yet)</option>
             </select>
             <p class="text-xs text-gray-400 mt-1">"Share Contact Info" isn't available for templates created here — Meta's Cloud API doesn't support it at creation time.</p>
@@ -525,6 +526,14 @@
           </div>
 
           <p id="wa-button-voice-note" class="hidden text-xs text-gray-500">Customers call your business's WhatsApp number. No phone number needed.</p>
+
+          <div id="wa-button-flow-fields" class="hidden">
+            <label class="label" for="tpl-button-flow-form">Form it opens</label>
+            <select id="tpl-button-flow-form" name="button_flow_form" class="select">
+              {% for f in flow_forms %}<option value="{{ f.public_id }}" {% if form.button_flow_form == f.public_id %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
+            </select>
+            <p class="text-xs text-gray-400 mt-1">Customers fill it in right inside WhatsApp, even if they haven't messaged you in the last 24 hours. Their answers appear on the form's Answers page.</p>
+          </div>
 
           <button type="button" id="wa-button-remove" class="btn btn-ghost btn-sm text-red-600">Remove button</button>
         </div>

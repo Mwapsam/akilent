@@ -70,14 +70,16 @@ def test_followups_due_lists_only_due_and_open(logged_in, conversation):
         contact=conversation.contact,
         conversation=conversation,
         due_at=now + timezone.timedelta(days=1),
+        source=FollowUp.Source.WORKFLOW,
     )
-    done = FollowUp.objects.create(
+    FollowUp.objects.create(  # already done
         account=account,
         contact=conversation.contact,
         conversation=conversation,
         due_at=now - timezone.timedelta(hours=1),
+        done_at=now,
+        closed_reason=FollowUp.ClosedReason.DONE,
     )
-    done.mark_done()
 
     resp = client.get("/inbox/followups/")
     assert resp.status_code == 200

@@ -41,7 +41,7 @@ def describe_verdict(verdict: dict) -> dict:
         else:
             headline, detail, tone = "Replied.", "", REPLIED
     elif code == "not_on":
-        paused = d.get("status") == "archived"
+        paused = d.get("status") in ("paused", "archived")
         headline = "Didn't reply. This automation is " + (
             "turned off." if paused else "not turned on yet."
         )
@@ -133,8 +133,10 @@ def describe_step(
 ) -> dict:
     """One executed step as ``{"ok": bool, "text": str}``, for the "what happened" timeline."""
     step, result = step or {}, result or {}
-    if status == "error":
+    if status in ("error", "failed"):
         return {"ok": False, "text": humanise_step_error(result.get("error", ""))}
+    if status == "skipped":
+        return {"ok": True, "text": "Skipped by your team"}
     snippet = lambda text: (text or "").strip().replace("\n", " ")[:80]  # noqa: E731
     texts = {
         "reply_text": lambda: f"Replied “{snippet(step.get('text'))}”",
@@ -162,6 +164,39 @@ def describe_step(
         "set_attribute": lambda: "Updated the customer's details",
         "webhook": lambda: "Notified another system",
         "stop": lambda: "Finished",
+        "ask_question": lambda: (
+            f"Customer answered “{snippet(str(result.get('answer', '')))}”"
+            if result.get("answer")
+            else f"Asked “{snippet(step.get('question'))}”"
+        ),
+        "lookup_product": lambda: "Looked up a product",
+        "publish_post": lambda: "Published a post",
+        "action": lambda: f"Ran “{step.get('action', '')}”",
+        "create_followup": lambda: "Added a reminder to your follow-up list",
+        "start_form": lambda: "Sent a form",
+        "ai_classify": lambda: (
+            f"Sorted it as “{result.get('corrected') or result.get('label')}”"
+            + (" (by keyword)" if result.get("method") == "keywords" else " (AI)")
+            if result.get("label") or result.get("corrected")
+            else "Wasn't sure, so it went your fallback way"
+        ),
+        "ai_extract": lambda: (
+            (
+                "Found " + ", ".join(result.get("found") or {})
+                if result.get("found")
+                else "Didn't find the details"
+            )
+            + (
+                f"; missing {', '.join(result['missing'])}"
+                if result.get("missing")
+                else ""
+            )
+        ),
+        "ai_answer": lambda: (
+            f"Answered “{snippet(result.get('answered'))}”"
+            if result.get("answered")
+            else f"Handed over: {result.get('why') or 'it could not answer safely'}"
+        ),
     }
     return {"ok": True, "text": texts.get(step_type, lambda: "Done")()}
 
@@ -246,6 +281,26 @@ def _step_sentence(step: dict) -> str | None:
         return "checks a condition and picks what happens next"
     if t == "set_attribute":
         return "saves a detail about the customer"
+    if t == "ai_classify":
+        labels = ", ".join(
+            str(i.get("label")) for i in step.get("labels") or [] if isinstance(i, dict)
+        )
+        return (
+            f"sorts the message into {labels} (anything unclear goes your fallback way)"
+        )
+    if t == "ai_extract":
+        keys = ", ".join(
+            str(f.get("key")) for f in step.get("fields") or [] if isinstance(f, dict)
+        )
+        return f"picks out {keys} from their message, checked before saving"
+    if t == "ai_answer":
+        return "answers from your own facts only, or hands over when it can't"
+    if t == "start_form":
+        return "sends one of your forms and waits for the answers"
+    if t == "create_followup":
+        hours = float(step.get("due_in_hours") or 24)
+        when = _duration(int(hours * 3600))
+        return f"reminds your team to follow up in {when}"
     if t == "webhook":
         return "notifies another system"
     return None  # stop / exit: nothing worth saying

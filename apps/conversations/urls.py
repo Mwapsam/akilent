@@ -13,6 +13,13 @@ urlpatterns = [
         views.followup_complete,
         name="followup_complete",
     ),
+    path("followups/emails/", views.followup_emails, name="followup_emails"),
+    path("followups/badge/", views.followups_badge, name="followups_badge"),
+    path(
+        "followups/<int:pk>/<str:action>/",
+        views.followup_action,
+        name="followup_action",
+    ),
     path("saved-replies/", views.saved_replies, name="saved_replies"),
     path(
         "saved-replies/<int:pk>/delete/",
@@ -35,6 +42,11 @@ urlpatterns = [
     path("forms/", views.forms_list, name="forms_list"),
     path("forms/<int:pk>/", views.form_detail, name="form_detail"),
     path("forms/<int:pk>/delete/", views.form_delete, name="form_delete"),
+    path("forms/<int:pk>/save/", views.form_save, name="form_save"),
+    path(
+        "forms/<int:pk>/flow-status/", views.form_flow_status, name="form_flow_status"
+    ),
+    path("forms/<int:pk>/responses/", views.form_responses, name="form_responses"),
     path(
         "recommendations/<int:pk>/act/",
         views.recommendation_act,

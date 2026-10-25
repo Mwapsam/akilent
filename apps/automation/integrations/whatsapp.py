@@ -49,6 +49,13 @@ def mark_outbound_message_failed(message) -> None:
         run.status = WorkflowRun.Status.FAILED
         run.completed_at = timezone.now()
         run.save(update_fields=["status", "completed_at"])
+        # A run parked on a question must stop waiting for an answer to a message the
+        # customer never got, and the owner must hear about it like any other failure.
+        from apps.automation.interaction import cancel_open_interactions_for_run
+        from apps.automation.workflow_engine import _alert_failure
+
+        cancel_open_interactions_for_run(run)
+        _alert_failure(run, step_run.result.get("error") or "WhatsApp send failed")
         logger.info(
             "mark_outbound_message_failed: workflow run %s failed via outbound message %s",
             run.pk,

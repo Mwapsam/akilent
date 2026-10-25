@@ -239,6 +239,14 @@ def evaluate(
         if window_open
         else "The 24-hour reply window has closed.",
     )
+    paused = bool(getattr(conversation, "automation_paused", False))
+    check(
+        "not_paused",
+        not paused,
+        "Automations aren't paused here."
+        if not paused
+        else "Your team paused automations in this conversation.",
+    )
     check(
         "not_assigned",
         conversation.assigned_to_id is None,

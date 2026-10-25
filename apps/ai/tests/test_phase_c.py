@@ -376,10 +376,8 @@ def test_ai_stays_out_right_after_the_team_replied(account, sent):
     c = convo(account)
     team_reply(c, minutes_ago=3)
     p, result = draft(c)
-    assert (
-        result == "ready"
-        and "replied a few minutes ago" in p.auto_decision["checks"][7]["detail"]
-    )
+    team_check = next(c for c in p.auto_decision["checks"] if c["name"] == "team_quiet")
+    assert result == "ready" and "replied a few minutes ago" in team_check["detail"]
     c2 = convo(account, "+260971000002")
     team_reply(c2, minutes_ago=30)
     assert draft(c2)[1] == "sent"

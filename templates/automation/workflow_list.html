@@ -201,6 +201,25 @@
     </div>
   </form>
 {% endmodal %}
+{% elif not starter.installed and starter.qualification %}
+{% modal starter.key title=starter.name %}
+  <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="starter" value="{{ starter.key }}" />
+    <p class="text-sm text-gray-600">{{ starter.explain }} {{ starter.stop_condition }}</p>
+    {% include "automation/_readiness.html" with r=starter.readiness %}
+    <ol class="list-decimal pl-5 text-sm text-ink space-y-1">
+      <li>What is your approximate budget?</li>
+      <li>When are you hoping to get started?</li>
+      <li>What is the main thing you are looking for help with?</li>
+    </ol>
+    <p class="text-xs text-gray-400">Answers are saved on the lead as Budget, Timeline and Needs. If the customer doesn't finish, your team gets an email so they can reply themselves.</p>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
+      <button class="btn btn-primary btn-sm" {% if not starter.readiness.ready %}disabled{% endif %}>Turn it on</button>
+    </div>
+  </form>
+{% endmodal %}
 {% elif not starter.installed and approved_templates %}
 {% modal starter.key title=starter.name %}
   <form method="post" action="{% url 'automation:starter-install' %}" class="space-y-4" x-data="templatePicker()">
@@ -273,22 +292,30 @@
         <div class="min-w-0">
           <h3 class="font-semibold text-ink">{{ wf.name }}
             {% if wf.status == "published" %}<span class="badge badge-success ml-1">On</span>
-            {% elif wf.status == "archived" %}<span class="badge badge-neutral ml-1">Paused</span>
+            {% elif wf.status == "paused" %}<span class="badge badge-neutral ml-1">Paused</span>
+            {% elif wf.status == "archived" %}<span class="badge badge-neutral ml-1">Archived</span>
             {% else %}<span class="badge badge-warning ml-1">Draft</span>{% endif %}
           </h3>
-          {% if wf.status == "archived" %}<p class="text-sm text-gray-600 mt-1">Akilent won't run this automation until you turn it on again.</p>{% endif %}
+          {% if wf.status == "paused" %}<p class="text-sm text-gray-600 mt-1">Paused: nothing new starts, and customers part-way through carry on when you turn it back on.</p>
+          {% elif wf.status == "archived" %}<p class="text-sm text-gray-600 mt-1">Archived: Akilent won't run this automation until you turn it on again.</p>{% endif %}
           <p class="text-sm text-gray-600 mt-1">
             {% if wf.last_ran %}Last ran {{ wf.last_ran|timesince }} ago · Helped {{ wf.helped }} customer{{ wf.helped|pluralize }}
             {% elif wf.status == "published" %}Ready to run. No customer has triggered it yet.
             {% else %}Hasn't run yet.{% endif %}
-            {% if wf.failed_runs %}<a href="{% url 'automation:why-not' %}" class="badge badge-danger ml-1">{{ wf.failed_runs }} didn't send</a>{% endif %}
+            {% if wf.failed_runs %}<a href="{% url 'automation:runs' wf.slug %}?status=failed" class="badge badge-danger ml-1">{{ wf.failed_runs }} didn't send</a>{% endif %}
+            {% if wf.waiting_runs %}<a href="{% url 'automation:runs' wf.slug %}?status=waiting" class="badge badge-info ml-1">{{ wf.waiting_runs }} in progress</a>{% endif %}
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <a href="{% url 'automation:stats' wf.slug %}" class="btn btn-ghost btn-sm">View activity</a>
+          <a href="{% url 'automation:runs' wf.slug %}" class="btn btn-ghost btn-sm">View activity</a>
           <a href="{% url 'automation:why-not' %}" class="btn btn-ghost btn-sm">Why didn't it reply?</a>
           {% if wf.status == "published" %}
           <form method="post" action="{% url 'automation:pause' wf.slug %}">{% csrf_token %}<button class="btn btn-secondary btn-sm">Pause</button></form>
+          {% elif wf.status == "paused" %}
+          <form method="post" action="{% url 'automation:resume' wf.slug %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Turn on</button></form>
+          {% if wf.waiting_runs %}
+          <form method="post" action="{% url 'automation:resume' wf.slug %}" data-confirm="Turn it on and let go of the {{ wf.waiting_runs }} customer{{ wf.waiting_runs|pluralize }} it was holding?" data-confirm-label="Turn on">{% csrf_token %}<input type="hidden" name="waiting" value="cancel"><button class="btn btn-ghost btn-sm">Turn on fresh</button></form>
+          {% endif %}
           {% elif wf.status == "archived" %}
           <form method="post" action="{% url 'automation:resume' wf.slug %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Turn on</button></form>
           {% endif %}
@@ -314,6 +341,20 @@
   <p class="text-sm text-gray-500">Nothing is running yet. Pick something above and it will show up here.</p>
   {% endif %}
   <p class="mt-4 text-xs text-gray-500">Need something different? <button type="button" class="underline" @click="$dispatch('modal-open', 'new-workflow')">Build your own</button> or browse <a href="{% url 'verticals:templates' %}" class="underline">starter packs</a>.</p>
+</section>
+
+<section class="mt-8 card card-pad" aria-labelledby="takeover-h">
+  <h2 id="takeover-h" class="text-sm font-semibold text-ink">When a teammate replies</h2>
+  <form method="post" action="{% url 'automation:settings' %}" class="mt-2 flex flex-wrap items-center gap-2 text-sm" hx-boost="false">
+    {% csrf_token %}
+    <label for="pause-hours-setting" class="text-gray-600">Automations in that conversation</label>
+    <select id="pause-hours-setting" name="pause_automation_hours" class="select select-sm">
+      <option value="0" {% if not account.pause_automation_hours %}selected{% endif %}>keep answering</option>
+      {% for h in pause_hour_choices %}<option value="{{ h }}" {% if account.pause_automation_hours == h %}selected{% endif %}>step back for {{ h }} hours</option>{% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm">Save</button>
+  </form>
+  <p class="mt-1 text-xs text-gray-500">So a person and an automation never talk over each other. You can also pause or resume automations in any one conversation from its side panel.</p>
 </section>
 
 {% modal "new-workflow" title="Build your own automation" %}

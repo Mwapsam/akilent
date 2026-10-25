@@ -1,0 +1,64 @@
+{% comment %}
+One reminder with its actions. Needs: f (FollowUp), next_url, teammates, snooze_choices;
+optional overdue. Used by the Follow-ups page and the conversation pane.
+{% endcomment %}
+<li class="px-4 py-3 flex flex-wrap items-start justify-between gap-3" x-data="{ open: false }">
+  <div class="min-w-0">
+    <p class="text-sm font-medium text-ink">
+      {% if f.conversation %}<a href="{% url 'conversations:detail' f.conversation.public_id %}" class="hover:underline">{{ f.contact.display_name }}</a>{% else %}{{ f.contact.display_name }}{% endif %}
+      {% if f.source == "missed" %}<span class="badge badge-warning ml-1">Waiting for a reply</span>
+      {% elif f.source == "policy" %}<span class="badge badge-info ml-1">From Insights</span>
+      {% elif f.source == "workflow" %}<span class="badge badge-info ml-1">From an automation</span>{% endif %}
+    </p>
+    <p class="text-sm text-gray-700">{{ f.note|default:"Follow up" }}</p>
+    <p class="text-xs {% if overdue %}text-red-700{% else %}text-gray-500{% endif %}">
+      Due {{ f.due_at|date:"D j M, H:i" }}{% if overdue %} ({{ f.due_at|timesince }} ago){% endif %}
+      · {% if f.assigned_to %}{{ f.assigned_to.get_full_name|default:f.assigned_to.email }}{% else %}Whole team{% endif %}
+      {% if f.snoozed_count %} · snoozed {{ f.snoozed_count }}×{% endif %}
+    </p>
+  </div>
+  <div class="flex flex-wrap items-center gap-1.5">
+    <form method="post" action="{% url 'conversations:followup_complete' f.pk %}" hx-boost="false">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button class="btn btn-secondary btn-sm">Done</button>
+    </form>
+    <form method="post" action="{% url 'conversations:followup_action' f.pk 'snooze' %}" hx-boost="false" class="flex items-center gap-1">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="sr-only" for="snooze-{{ f.pk }}">Snooze</label>
+      <select id="snooze-{{ f.pk }}" name="when" class="select select-sm" onchange="this.form.requestSubmit()">
+        <option value="">Snooze…</option>
+        {% for value, label in snooze_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </form>
+    <button type="button" class="btn btn-ghost btn-sm" @click="open = !open" :aria-expanded="open">More</button>
+  </div>
+  <div class="w-full grid gap-2 sm:grid-cols-2" x-show="open" x-cloak>
+    <form method="post" action="{% url 'conversations:followup_action' f.pk 'reassign' %}" hx-boost="false" class="flex gap-2">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="sr-only" for="assign-{{ f.pk }}">Whose list</label>
+      <select id="assign-{{ f.pk }}" name="user" class="select select-sm flex-1">
+        <option value="">Whole team</option>
+        {% for u in teammates %}<option value="{{ u.pk }}" {% if u.pk == f.assigned_to_id %}selected{% endif %}>{{ u.get_full_name|default:u.email }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-ghost btn-sm">Move</button>
+    </form>
+    <form method="post" action="{% url 'conversations:followup_action' f.pk 'edit' %}" hx-boost="false" class="flex gap-2">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="sr-only" for="note-{{ f.pk }}">Note</label>
+      <input id="note-{{ f.pk }}" name="note" class="input input-sm flex-1" maxlength="255" value="{{ f.note }}">
+      <button class="btn btn-ghost btn-sm">Save</button>
+    </form>
+    <form method="post" action="{% url 'conversations:followup_action' f.pk 'snooze' %}" hx-boost="false" class="flex gap-2">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <input type="hidden" name="when" value="custom">
+      <label class="sr-only" for="at-{{ f.pk }}">New time</label>
+      <input id="at-{{ f.pk }}" type="datetime-local" name="custom_due_at" class="input input-sm flex-1" required>
+      <button class="btn btn-ghost btn-sm">Set time</button>
+    </form>
+    <form method="post" action="{% url 'conversations:followup_action' f.pk 'cancel' %}" hx-boost="false"
+          data-confirm="Remove this reminder?" data-confirm-label="Remove">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button class="btn btn-danger-ghost btn-sm">Remove</button>
+    </form>
+  </div>
+</li>

@@ -797,7 +797,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           {% if open_followup %}
           <span class="cv-next-done">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Reminder set for {{ open_followup.due_at|date:"D j M, H:i" }}
+            Reminder set for {{ open_followup_due }}
           </span>
           {% else %}
           <form method="post" class="contents" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
@@ -946,32 +946,84 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
       </div>
 
-      {# What automations did #}
+      {# Automations: what's running here now, pause/stop, run one by hand, what happened #}
       <div class="cv-section">
-        <h2 class="cv-h">What automations did</h2>
+        <h2 class="cv-h">Automations</h2>
         {% url 'automation:why-not' as why_not_url %}
-        {% if automation_activity %}
-        <ul class="cv-activity">
-          {% for item in automation_activity %}
-          <li class="text-sm">
-            <p class="font-medium text-ink break-words">{{ item.automation }}</p>
-            <p class="text-xs text-gray-500">{{ item.when|date:"j M, H:i" }}</p>
-            <ul class="mt-1.5 space-y-1">
-              {% for line in item.lines %}
-              <li class="flex items-start gap-1.5 {% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">
-                {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
-                {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
-                <span class="min-w-0 break-words">{{ line.text }}</span>
-              </li>
-              {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
-            </ul>
-          </li>
-          {% endfor %}
-        </ul>
-        <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="inline-block mt-2 text-xs underline text-gray-500">Why didn't it reply?</a>
-        {% else %}
-        <p class="text-sm text-gray-400">Nothing yet. <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="underline">Why didn't it reply?</a></p>
+        {% if last_handled_by %}<p class="text-xs text-gray-500 mb-2">Their last message: {{ last_handled_by }}.</p>{% endif %}
+        {% if conversation.automation_paused %}
+        <div class="alert alert-warning text-xs mb-2" role="status">
+          <span>Paused here{% if conversation.automation_paused_until.year < 2100 %} until {{ conversation.automation_paused_until|date:"j M, H:i" }}{% endif %}. Automations won't answer this customer.</span>
+        </div>
+        <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          {% csrf_token %}<input type="hidden" name="action" value="resume_automation" />
+          <button class="btn btn-secondary btn-sm w-full">Let automations answer again</button>
+        </form>
         {% endif %}
+
+        {% for r in automation_now.running %}
+        <div class="flex items-start justify-between gap-2 py-1.5 text-sm">
+          <div class="min-w-0">
+            <a href="{% url 'automation:run' r.run_id %}" class="font-medium text-ink hover:underline break-words">{{ r.workflow }}</a>
+            <p class="text-xs text-gray-500">{{ r.state }}{% if r.next_due_at %} · until {{ r.next_due_at|date:"j M, H:i" }}{% endif %}</p>
+          </div>
+          <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+            {% csrf_token %}<input type="hidden" name="action" value="stop_run" /><input type="hidden" name="run" value="{{ r.run_id }}" />
+            <button class="btn btn-ghost btn-xs">Stop</button>
+          </form>
+        </div>
+        {% endfor %}
+
+        {% if not conversation.automation_paused %}
+        <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          {% csrf_token %}<input type="hidden" name="action" value="pause_automation" />
+          <label class="sr-only" for="pause-hours">Pause automations here</label>
+          <select id="pause-hours" name="hours" class="select select-sm">
+            <option value="1">Pause here for 1 hour</option>
+            <option value="4" selected>Pause here for 4 hours</option>
+            <option value="24">Pause here for a day</option>
+            <option value="forever">Pause here until I turn it back on</option>
+          </select>
+          <button class="btn btn-ghost btn-sm">Pause</button>
+        </form>
+        {% endif %}
+
+        {% if automation_now.manual %}
+        <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          {% csrf_token %}<input type="hidden" name="action" value="run_automation" />
+          <label class="sr-only" for="run-workflow">Automation to run</label>
+          <select id="run-workflow" name="workflow" class="select select-sm">
+            {% for w in automation_now.manual %}<option value="{{ w.slug }}">{{ w.name }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-secondary btn-sm">Run</button>
+        </form>
+        {% endif %}
+
+        <details class="mt-2" {% if not automation_now.running %}open{% endif %}>
+          <summary class="text-xs text-gray-500 cursor-pointer">What automations did</summary>
+          {% if automation_activity %}
+          <ul class="cv-activity mt-1">
+            {% for item in automation_activity %}
+            <li class="text-sm">
+              <p class="font-medium text-ink break-words">{{ item.automation }}</p>
+              <p class="text-xs text-gray-500">{{ item.when|date:"j M, H:i" }}</p>
+              <ul class="mt-1.5 space-y-1">
+                {% for line in item.lines %}
+                <li class="flex items-start gap-1.5 {% if line.ok %}text-gray-600{% else %}text-red-700{% endif %}">
+                  {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
+                  {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
+                  <span class="min-w-0 break-words">{{ line.text }}</span>
+                </li>
+                {% empty %}<li class="text-gray-400">Started.</li>{% endfor %}
+              </ul>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-sm text-gray-400 mt-1">Nothing yet.</p>
+          {% endif %}
+          <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="inline-block mt-2 text-xs underline text-gray-500">Why didn't it reply?</a>
+        </details>
       </div>
 
       {# Recommended action — shown when there is an actionable recommendation for this conversation #}
@@ -1049,9 +1101,14 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
       <div class="cv-section">
         <h2 class="cv-h">Form in progress</h2>
         <p class="text-sm text-ink">{{ active_form_response.form.name }}</p>
-        <p class="text-xs text-gray-500 mt-0.5">Question {{ active_form_response.current_index|add:1 }} of {{ active_form_response.form.questions|length }}</p>
+        <p class="text-xs text-gray-500 mt-0.5">{% if active_form_response.flow_token %}Sent as a WhatsApp form · waiting for them to submit it{% else %}Question {{ active_form_response.current_index|add:1 }} of {{ active_form_response.form.questions|length }}{% endif %}</p>
+        <form method="post" class="mt-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="cancel_form" />
+          <button class="btn btn-ghost btn-sm w-full">Stop waiting for it</button>
+        </form>
       </div>
-      {% elif published_forms %}
+      {% elif published_forms and "automations" in usable_features %}
       <div class="cv-section">
         <h2 class="cv-h">Start a form</h2>
         <form method="post" class="cv-inline-form" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
@@ -1075,16 +1132,35 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         <div class="cv-reminder">
           <svg class="w-4 h-4 mt-0.5 shrink-0 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           <div class="min-w-0 flex-1 text-sm">
-            <p class="font-medium text-ink">{{ open_followup.due_at|date:"D j M, H:i" }}</p>
+            <p class="font-medium text-ink">{{ open_followup_due }}</p>
             {% if open_followup.note %}<p class="text-gray-600 mt-0.5">{{ open_followup.note }}</p>{% endif %}
+            <p class="text-xs text-gray-500 mt-0.5">{% if open_followup.assigned_to %}On {{ open_followup.assigned_to.get_full_name|default:open_followup.assigned_to.email }}'s list{% else %}On the whole team's list{% endif %}</p>
           </div>
         </div>
+        {% if followup_still_needed %}
+        <div class="alert alert-info mt-2 text-xs" role="status">
+          <span>{{ conversation.contact.display_name }} wrote since you set this. If it's handled, mark it done.</span>
+        </div>
+        {% endif %}
         {% url 'conversations:followup_complete' open_followup.pk as tag_url %}
-        <form method="post" action="{{ tag_url }}" class="mt-2" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ detail_url }}" />
-          <button class="btn btn-ghost btn-sm w-full">Mark done</button>
-        </form>
+        {% url 'conversations:followup_action' open_followup.pk 'snooze' as snooze_url %}
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <form method="post" action="{{ tag_url }}" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ detail_url }}" />
+            <button class="btn btn-secondary btn-sm w-full">Done</button>
+          </form>
+          <form method="post" action="{{ snooze_url }}" {% if in_pane %}hx-post="{{ snooze_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML" hx-trigger="change"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ detail_url }}" />
+            <label class="sr-only" for="pane-snooze">Snooze</label>
+            <select id="pane-snooze" name="when" class="select select-sm w-full" {% if not in_pane %}onchange="this.form.requestSubmit()"{% endif %}>
+              <option value="">Snooze…</option>
+              {% for value, label in snooze_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select>
+          </form>
+        </div>
+        <a href="{% url 'conversations:followups_due' %}" class="mt-2 block text-xs text-gray-500 hover:underline">All follow-ups</a>
         {% else %}
         {% comment %}
           The composer's own "Remind me tomorrow" (below the message box) covers the common

@@ -25,6 +25,10 @@ def _conversation_public_id() -> str:
     return "conv_" + secrets.token_hex(12)
 
 
+def _form_public_id() -> str:
+    return "form_" + secrets.token_hex(12)
+
+
 def _event_public_id() -> str:
     return "evt_" + secrets.token_hex(12)
 
@@ -95,6 +99,8 @@ class Conversation(models.Model):
         related_name="conversations",
     )
     is_unread = models.BooleanField(default=True)
+    # While set and in the future, automations don't answer here (a teammate took over).
+    automation_paused_until = models.DateTimeField(blank=True, null=True)
 
     last_message_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -110,6 +116,41 @@ class Conversation(models.Model):
 
     def __str__(self):
         return f"{self.get_channel_display()} conversation with {self.contact}"
+
+    @property
+    def automation_paused(self) -> bool:
+        from django.utils import timezone
+
+        return bool(
+            self.automation_paused_until
+            and self.automation_paused_until > timezone.now()
+        )
+
+    def pause_automation(self, hours: float | None = None) -> None:
+        """Hold automations here for ``hours`` (None: until someone turns them back on)."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.automation_paused_until = timezone.now() + timedelta(
+            hours=hours if hours is not None else 24 * 365 * 10
+        )
+        self.save(update_fields=["automation_paused_until", "updated_at"])
+
+    def resume_automation(self) -> None:
+        from django.utils import timezone
+
+        from apps.automation.models import WorkflowRun
+        from apps.automation.workflow_engine import HELD_BY_PAUSE
+
+        self.automation_paused_until = None
+        self.save(update_fields=["automation_paused_until", "updated_at"])
+        # Runs parked until the pause would have ended carry on now instead.
+        WorkflowRun.objects.filter(
+            status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
+            context__conversation_id=self.public_id,
+            **{f"context__{HELD_BY_PAUSE}": True},
+        ).update(next_due_at=timezone.now())
 
     @classmethod
     def get_or_create_for_whatsapp(cls, whatsapp_conversation) -> Conversation:
@@ -549,14 +590,34 @@ class ConversationForm(models.Model):
 
         NOT_CREATED = "not_created", "Not created on Meta"
         DRAFT = "draft", "Draft (not published)"
+        PUBLISHING = "publishing", "Publishing to WhatsApp"
         PUBLISHED = "published", "Published"
         NEEDS_REPUBLISH = "needs_republish", "Questions changed since publish"
         ERROR = "error", "Meta rejected the last publish attempt"
 
+    class LeadAction(models.TextChoices):
+        NONE = "", "Nothing"
+        CREATE = "create", "Track them as interested"
+        QUALIFY = "qualify", "Track them as interested and mark them qualified"
+
+    public_id = models.CharField(
+        max_length=40, unique=True, default=_form_public_id, editable=False
+    )
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="conversation_forms"
     )
     name = models.CharField(max_length=150)
+    # What the customer sees. Blank means the default wording.
+    intro_text = models.CharField(max_length=500, blank=True, default="")
+    cta_label = models.CharField(max_length=20, blank=True, default="")
+    screen_title = models.CharField(max_length=30, blank=True, default="")
+    submit_label = models.CharField(max_length=35, blank=True, default="")
+    thanks_text = models.CharField(max_length=500, blank=True, default="")
+    # A form nobody finishes is let go after this long, freeing the conversation.
+    timeout_hours = models.PositiveIntegerField(default=72)
+    lead_action = models.CharField(
+        max_length=10, choices=LeadAction.choices, blank=True, default=""
+    )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.DRAFT
     )
@@ -577,6 +638,9 @@ class ConversationForm(models.Model):
     flow_json_hash = models.CharField(max_length=40, blank=True, default="")
     flow_error = models.TextField(blank=True, default="")
     flow_published_at = models.DateTimeField(blank=True, null=True)
+    # The WhatsApp Business Account the Flow lives in: a Flow can only be sent from a
+    # number in the same WABA, so a different sending number means a new Flow.
+    flow_waba_id = models.CharField(max_length=50, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -585,6 +649,18 @@ class ConversationForm(models.Model):
 
     def __str__(self):
         return self.name
+
+    DEFAULT_THANKS = "Thanks - got everything I need!"
+
+    def build_flow_json(self) -> dict:
+        from apps.conversations.flow_json import build
+
+        return build(
+            self.questions,
+            title=self.screen_title or self.name[:30],
+            intro=self.intro_text,
+            submit=self.submit_label,
+        )
 
     def note_questions_changed(self) -> None:
         """Call after mutating and saving ``questions``. Flags a previously
@@ -595,11 +671,14 @@ class ConversationForm(models.Model):
             return
         if self.flow_status != self.FlowStatus.PUBLISHED:
             return
-        from apps.conversations.flow_json import build, content_hash
+        from apps.conversations.flow_json import FlowJSONError, content_hash
 
         if not self.questions:
             return
-        new_hash = content_hash(build(self.questions))
+        try:
+            new_hash = content_hash(self.build_flow_json())
+        except FlowJSONError:
+            new_hash = ""  # unpublishable as it stands: certainly not what's live
         if new_hash != self.flow_json_hash:
             self.flow_status = self.FlowStatus.NEEDS_REPUBLISH
             self.save(update_fields=["flow_status", "updated_at"])
@@ -749,6 +828,14 @@ class FollowUp(models.Model):
     class Source(models.TextChoices):
         MANUAL = "manual", "Set by a person"
         MISSED = "missed", "Missed conversation"
+        POLICY = "policy", "Insights rule"
+        WORKFLOW = "workflow", "Automation"
+
+    class ClosedReason(models.TextChoices):
+        DONE = "done", "Done"
+        STAFF_REPLIED = "staff_replied", "Your team replied"
+        CUSTOMER_REPLIED = "customer_replied", "The customer replied"
+        CANCELLED = "cancelled", "Cancelled"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="followups"
@@ -769,9 +856,31 @@ class FollowUp(models.Model):
         max_length=12, choices=Source.choices, default=Source.MANUAL
     )
     done_at = models.DateTimeField(null=True, blank=True)
+    # Why it was closed. Blank on reminders closed before this was recorded.
+    closed_reason = models.CharField(
+        max_length=20, choices=ClosedReason.choices, blank=True, default=""
+    )
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="followups_done",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
+    # Whose list it's on. Empty: the whole team's.
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="followups_assigned",
+    )
+    snoozed_count = models.PositiveSmallIntegerField(default=0)
+    # When the "it's due" nudge went out; each reminder nudges once per due time.
+    notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -781,18 +890,37 @@ class FollowUp(models.Model):
                 fields=["account", "source", "created_at"],
                 name="followup_account_source_idx",
             ),
+            models.Index(
+                fields=["done_at", "notified_at", "due_at"],
+                name="followup_due_notify_idx",
+            ),
+        ]
+        constraints = [
+            # One open reminder of each kind per conversation, so a double click, an AI
+            # suggestion and a sweep can never stack up copies.
+            models.UniqueConstraint(
+                fields=["conversation", "source"],
+                condition=models.Q(done_at__isnull=True, conversation__isnull=False),
+                name="uniq_open_followup_per_conversation_source",
+            )
         ]
         ordering = ["due_at"]
 
     def __str__(self):
         return f"Follow up with {self.contact} at {self.due_at.isoformat()}"
 
-    def mark_done(self) -> None:
+    @property
+    def is_open(self) -> bool:
+        return self.done_at is None
+
+    def mark_done(self, *, by=None, reason: str = "done") -> None:
         from django.utils import timezone
 
         if self.done_at is None:
             self.done_at = timezone.now()
-            self.save(update_fields=["done_at"])
+            self.closed_reason = reason
+            self.done_by = by
+            self.save(update_fields=["done_at", "closed_reason", "done_by"])
 
 
 class ConversationEntryPoint(models.Model):

@@ -269,6 +269,36 @@ def _activity(contact, events) -> list[dict]:
     return items[:80]
 
 
+def _open_followups(account, contact) -> list:
+    """This customer's open reminders, soonest first, with due times in the business's zone."""
+    from apps.conversations import followups
+    from apps.conversations.models import FollowUp
+
+    items = list(
+        FollowUp.objects.filter(account=account, contact=contact, done_at__isnull=True)
+        .select_related("conversation", "assigned_to")
+        .order_by("due_at")[:5]
+    )
+    for f in items:
+        f.due_label = followups.local_label(f.due_at, account)  # type: ignore[attr-defined]
+    return items
+
+
+def _contact_automations(account, contact) -> dict | None:
+    """What's running for this customer, and what can be started for them; None without
+    the automations feature (the card is hidden)."""
+    from apps.billing import api as billing_api
+
+    if not billing_api.usable(account, "automations"):
+        return None
+    from apps.automation import api as automation_api
+
+    try:
+        return automation_api.contact_automations(account, contact)
+    except Exception:
+        return None  # a side card must never cost the owner the customer's page
+
+
 @login_required
 def contact_detail(request, public_id: str):
     from apps.contacts import merge, reachability
@@ -343,6 +373,8 @@ def contact_detail(request, public_id: str):
             "known_tags": Tag.objects.filter(account=account),
             "contact_recs": _contact_recommendations(contact),
             "is_admin": is_account_admin(request.user, account),
+            "automations": _contact_automations(account, contact),
+            "open_followups": _open_followups(account, contact),
         },
     )
 

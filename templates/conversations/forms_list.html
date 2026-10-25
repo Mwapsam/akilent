@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Forms</h1>
-  <p class="mt-1 text-sm text-gray-600">Ask a customer a fixed set of questions, one at a time, inside a WhatsApp conversation. No AI involved — every answer is checked deterministically before moving on.</p>
+  <p class="mt-1 text-sm text-gray-600">Collect details inside a conversation: a native form on WhatsApp, or questions one at a time on other channels. Every answer is checked before it's saved. Send one from the inbox, or from an automation.</p>
 </header>
 
 <div class="grid gap-6 lg:grid-cols-3">
@@ -12,13 +12,14 @@
     {% if forms %}
     <div class="table-wrap">
       <table class="table table--cards">
-        <thead><tr><th>Form</th><th>Status</th><th>Questions</th><th></th></tr></thead>
+        <thead><tr><th>Form</th><th>Status</th><th>Questions</th><th>Finished</th><th></th></tr></thead>
         <tbody>
           {% for form in forms %}
           <tr>
             <td data-label="Form">{{ form.name }}</td>
             <td data-label="Status">{{ form.get_status_display }}</td>
             <td data-label="Questions" class="text-gray-600">{{ form.questions|length }}</td>
+            <td data-label="Finished" class="text-gray-600">{% if form.sent %}{{ form.done }} of {{ form.sent }}{% else %}—{% endif %}</td>
             <td><a href="{% url 'conversations:form_detail' form.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
           </tr>
           {% endfor %}

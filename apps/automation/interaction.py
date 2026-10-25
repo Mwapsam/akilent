@@ -303,7 +303,7 @@ def _commit_claim(
     The durable continuation fields are set here so ``run_due`` can recover
     if ``_advance_after_commit`` never runs.
     """
-    steps = _steps_by_id(run.workflow)
+    steps = _run_steps(run)
     step = steps.get(interaction.step_id)
 
     # ask_question steps have their own answer-processing path.
@@ -482,15 +482,26 @@ def _commit_ask_question_answer(
 
             try:
                 conv = Conversation.objects.get(pk=interaction.conversation_id)
-                _send_ask_question_text(
-                    run, conv, reprompt_text, step_id, attempt=new_count
-                )
             except Conversation.DoesNotExist:
                 logger.warning(
                     "claim_reply ask_question re-prompt: conversation %s not found run=%s",
                     interaction.conversation_id,
                     run.pk,
                 )
+            else:
+                # After commit: an Instagram send is an HTTP call, and the conversation,
+                # interaction and run rows are locked until this transaction ends.
+                def _reprompt(run=run, conv=conv, attempt=new_count):
+                    try:
+                        _send_ask_question_text(
+                            run, conv, reprompt_text, step_id, attempt=attempt
+                        )
+                    except Exception:
+                        logger.exception(
+                            "claim_reply ask_question re-prompt failed run=%s", run.pk
+                        )
+
+                transaction.on_commit(_reprompt)
 
         # Keep the run WAITING; sync next_due_at to the new deadline invariant.
         run.next_due_at = new_deadline
@@ -591,6 +602,12 @@ def _steps_by_id(workflow) -> dict:
     from apps.automation.workflow_engine import _steps_by_id as _engine_steps_by_id
 
     return _engine_steps_by_id(workflow)
+
+
+def _run_steps(run) -> dict:
+    from apps.automation.workflow_engine import _run_steps as _engine_run_steps
+
+    return _engine_run_steps(run)
 
 
 def cancel_open_interactions_for_run(run: WorkflowRun) -> int:

@@ -303,9 +303,11 @@ def _check_not_referenced(defn) -> None:
     active_refs = WorkflowRun.objects.filter(
         workflow__account=account,
         status__in=[WorkflowRun.Status.ACTIVE, WorkflowRun.Status.WAITING],
-    ).select_related("workflow")
+    ).select_related("workflow", "version")
+    from apps.automation.workflow_engine import run_definition
+
     for run in active_refs:
-        if _definition_references_key(run.workflow.definition, key, entity):
+        if _definition_references_key(run_definition(run), key, entity):
             raise ValueError(
                 f"Cannot archive {key!r}: run {run.pk} (workflow {run.workflow.name!r}) "
                 f"is currently active/waiting and references it."

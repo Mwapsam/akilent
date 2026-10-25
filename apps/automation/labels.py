@@ -19,6 +19,11 @@ TRIGGER_LABELS = {
     "lead.status_changed": "When an interested customer's status changes",
     "lead.qualified": "When an interested customer is marked qualified",
     "lead.lost": "When an interested customer is marked lost",
+    "deal.created": "When a deal is created",
+    "deal.stage_changed": "When a deal moves to another stage",
+    "order.created": "When an order is placed",
+    "order.paid": "When an order is paid",
+    "conversation.form_completed": "When a customer finishes a form",
 }
 
 STEP_LABELS = {
@@ -41,6 +46,14 @@ STEP_LABELS = {
     "stop": "Stop",
     "exit": "Stop",
     "action": "Do this",
+    "ask_question": "Ask a question and save the answer",
+    "lookup_product": "Look up a product",
+    "publish_post": "Publish a post",
+    "start_form": "Send a form",
+    "create_followup": "Remind your team to follow up",
+    "ai_classify": "Sort the message (AI)",
+    "ai_extract": "Pick out details (AI)",
+    "ai_answer": "Answer from your facts (AI)",
 }
 
 # Step types a non-technical owner doesn't need to see unless they opt into

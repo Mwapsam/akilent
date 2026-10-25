@@ -62,6 +62,9 @@ class Workflow(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
         PUBLISHED = "published", "Published"
+        # Off for now: nothing new starts and waiting customers are held, to pick up
+        # where they left off on resume. Archived is off for good: in-flight runs end.
+        PAUSED = "paused", "Paused"
         ARCHIVED = "archived", "Archived"
 
     account = models.ForeignKey(
@@ -73,7 +76,16 @@ class Workflow(models.Model):
         max_length=12, choices=Status.choices, default=Status.DRAFT
     )
     version = models.PositiveIntegerField(default=1)
+    # What runs: new runs snapshot it into a WorkflowVersion, so editing never changes a
+    # run already in flight.
     definition = models.JSONField(default=dict, blank=True)
+    # Unpublished edits to a workflow that's on. ``None`` means no pending changes. The
+    # editor saves here; "Publish changes" validates it and moves it into ``definition``.
+    draft_definition = models.JSONField(null=True, blank=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    # When several message workflows match one inbound message, only the lowest priority
+    # answers it (ties: oldest first), so a customer never gets two replies.
+    priority = models.PositiveSmallIntegerField(default=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -92,6 +104,32 @@ class Workflow(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.status} v{self.version}]"
+
+
+class WorkflowVersion(models.Model):
+    """An immutable snapshot of a workflow's definition, pinned by the runs that use it."""
+
+    workflow = models.ForeignKey(
+        Workflow, on_delete=models.CASCADE, related_name="versions"
+    )
+    number = models.PositiveIntegerField()
+    digest = models.CharField(max_length=64)
+    definition = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workflow", "digest"], name="uniq_workflowversion_digest"
+            ),
+            models.UniqueConstraint(
+                fields=["workflow", "number"], name="uniq_workflowversion_number"
+            ),
+        ]
+        ordering = ["-number"]
+
+    def __str__(self):
+        return f"{self.workflow_id} v{self.number}"
 
 
 class WorkflowRun(models.Model):
@@ -115,6 +153,15 @@ class WorkflowRun(models.Model):
         max_length=12, choices=Status.choices, default=Status.ACTIVE
     )
     context = models.JSONField(default=dict, blank=True)
+    # The definition this run follows. Null only for runs started before versioning, which
+    # fall back to the workflow's current definition.
+    version = models.ForeignKey(
+        WorkflowVersion,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="runs",
+    )
     # What this run is about, e.g. "order:ord_ab12". Empty for contact-level triggers,
     # which keep one active run per (workflow, contact); a subject lets one contact have
     # concurrent runs for different subjects (a second order is not dropped).

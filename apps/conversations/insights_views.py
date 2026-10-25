@@ -164,6 +164,7 @@ def insights(request):
             "peak_series": peak_series,
             "team": reporting.team(account, period, rows),
             "automation": reporting.automation_impact(account, period, rows),
+            "forms": reporting.forms(account, period),
             "sales": reporting.sales(account, period),
             "channels": reporting.channels(account, period, rows)
             if has_history
@@ -384,9 +385,14 @@ def insight_dismiss(request, pk):
 # Must be safe, internal paths only.  Any action not listed here falls back to /insights/.
 _ACTION_DESTINATIONS = {
     "inbox": "/inbox/",
-    "follow_up": "/inbox/?filter=overdue_24h",
+    "follow_up": "/inbox/?view=needs_attention&overdue=1",
+    "create_followup": "/inbox/?view=needs_attention&overdue=1",
     "campaign": "/whatsapp/campaigns/new/",
 }
+
+
+# What an insight's suggested action becomes when the owner automates it as a policy.
+_POLICY_ACTION_TYPES = {"follow_up": "create_followup"}
 
 
 @login_required
@@ -516,7 +522,11 @@ def policy_from_insight(request, pk):
                     "trigger": trigger,
                     "condition": _default_condition_for_trigger(trigger),
                     "action": {
-                        "type": suggested.get("action", ""),
+                        # Older insights suggested "follow_up"; the executor's action
+                        # is "create_followup", so policies made from them can run.
+                        "type": _POLICY_ACTION_TYPES.get(
+                            suggested.get("action", ""), suggested.get("action", "")
+                        ),
                         "label": suggested.get("label", ""),
                     },
                     "status": BusinessPolicy.Status.DRAFT,
@@ -666,6 +676,10 @@ def policy_update_status(request, pk):
     action = request.POST.get("action", "")
     if action == "activate":
         action_type = policy.action.get("type", "")
+        if action_type in _POLICY_ACTION_TYPES:  # made before the mapping existed
+            action_type = _POLICY_ACTION_TYPES[action_type]
+            policy.action = {**policy.action, "type": action_type}
+            policy.save(update_fields=["action"])
         if action_type not in _KNOWN_ACTION_TYPES:
             messages.error(
                 request,

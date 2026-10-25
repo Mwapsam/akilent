@@ -1,0 +1,30 @@
+{% comment %}The WhatsApp Flow status card; polls itself while publishing. Needs: form.{% endcomment %}
+<div id="flow-status" class="flex items-start justify-between gap-3 flex-wrap"
+     {% if form.flow_status == "publishing" %}hx-get="{% url 'conversations:form_flow_status' form.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div>
+    <p class="text-sm font-medium text-ink">On WhatsApp</p>
+    <p class="text-xs text-gray-600 mt-0.5" role="status">
+      {% if form.flow_status == "published" %}
+        <span class="badge badge-success">Live</span>{% if form.flow_published_at %} since {{ form.flow_published_at|date:"j M Y, H:i" }}{% endif %}
+      {% elif form.flow_status == "publishing" %}
+        <span class="badge badge-info">Publishing…</span> This takes a few seconds.
+      {% elif form.flow_status == "needs_republish" %}
+        <span class="badge badge-warning">Changes not live yet</span> Customers still get the last published version.
+      {% elif form.flow_status == "error" %}
+        <span class="badge badge-danger">Not published</span>
+      {% else %}
+        <span class="badge badge-neutral">Not published yet</span>
+      {% endif %}
+    </p>
+    {% if form.flow_error %}<p class="text-xs text-red-700 mt-1">{{ form.flow_error }}</p>{% endif %}
+  </div>
+  {% if form.flow_status != "publishing" %}
+  <form method="post" action="{% url 'conversations:form_detail' form.pk %}" hx-boost="false">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="publish_flow" />
+    <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>
+      {% if form.flow_status == "needs_republish" %}Publish changes{% elif form.flow_status == "published" %}Publish again{% else %}Publish to WhatsApp{% endif %}
+    </button>
+  </form>
+  {% endif %}
+</div>

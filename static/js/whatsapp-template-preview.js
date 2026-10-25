@@ -112,6 +112,7 @@
     var buttonPhoneFields = document.getElementById("wa-button-phone-fields");
     var buttonCodeFields = document.getElementById("wa-button-code-fields");
     var buttonVoiceNote = document.getElementById("wa-button-voice-note");
+    var buttonFlowFields = document.getElementById("wa-button-flow-fields");
     var buttonPhoneNumberEl = document.getElementById("tpl-button-phone-number");
     var buttonCodeExampleEl = document.getElementById("tpl-button-code-example");
     var buttonTextEl = document.getElementById("tpl-button-text");
@@ -672,6 +673,7 @@
       if (buttonPhoneFields) buttonPhoneFields.classList.toggle("hidden", type !== "phone_number");
       if (buttonCodeFields) buttonCodeFields.classList.toggle("hidden", type !== "copy_code");
       if (buttonVoiceNote) buttonVoiceNote.classList.toggle("hidden", type !== "voice_call");
+      if (buttonFlowFields) buttonFlowFields.classList.toggle("hidden", type !== "flow");
     }
     if (buttonTypeEl) buttonTypeEl.addEventListener("change", function () { updateButtonTypeVisibility(); renderPreview(); });
     updateButtonTypeVisibility();

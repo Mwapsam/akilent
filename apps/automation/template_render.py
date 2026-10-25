@@ -9,6 +9,7 @@ Allowed placeholders:
   {lead.status}
   {product.name}        {product.price}       {product.currency}
   {business.name}
+  {form_answers.<key>}  an answer from a form the run sent (blank if it was skipped)
 """
 
 from __future__ import annotations
@@ -29,6 +30,9 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "business.name",
     ]
 )
+
+
+_FORM_ANSWER = "form_answers."
 
 
 class TemplateRenderError(ValueError):
@@ -55,6 +59,8 @@ def render_template(text: str, context: dict, *, step_id: str = "") -> str:
     placeholders = _PLACEHOLDER_RE.findall(text)
 
     for name in placeholders:
+        if name.startswith(_FORM_ANSWER):
+            continue  # a skipped optional question is simply blank
         if name not in _ALLOWLIST or name not in context:
             missing.append(name)
 
@@ -62,6 +68,6 @@ def render_template(text: str, context: dict, *, step_id: str = "") -> str:
         raise TemplateRenderError(missing, step_id=step_id)
 
     def _replace(m: re.Match) -> str:
-        return str(context[m.group(1)])
+        return str(context.get(m.group(1), ""))
 
     return _PLACEHOLDER_RE.sub(_replace, text)

@@ -71,7 +71,11 @@ def test_an_inbound_message_counts_as_being_in_touch(account):
 
 
 @pytest.mark.django_db
-def test_a_reply_closes_the_reminder_to_chase_them(account):
+def test_a_customer_reply_asks_about_a_reminder_instead_of_closing_it(account):
+    """ "Any update?" doesn't mean the quote was sent: the reminder stays, and the pane asks
+    whether it's still needed."""
+    from apps.conversations import followups
+
     contact = Contact.objects.create(account=account, phone="+260971234567")
     conversation, _ = _inbound(account, "Hello", "wamid.ACT3", contact=contact)
     followup = FollowUp.objects.create(
@@ -85,7 +89,8 @@ def test_a_reply_closes_the_reminder_to_chase_them(account):
     _inbound(account, "Any update?", "wamid.ACT4", contact=contact)
 
     followup.refresh_from_db()
-    assert followup.done_at is not None
+    assert followup.done_at is None
+    assert followups.open_after_customer_replied(conversation) == [followup]
 
 
 @pytest.mark.django_db

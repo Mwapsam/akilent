@@ -393,7 +393,7 @@ class TestCompleteFromFlow:
         result = conversation_forms.complete_from_flow(generic, "", {"name": "X"})
         assert result is False
 
-    def test_second_call_after_completion_returns_false_without_firing_event_again(
+    def test_a_repeated_reply_is_consumed_without_firing_event_again(
         self, monkeypatch, account, published_form, wa_setup
     ):
         _, _, _, generic = wa_setup
@@ -403,11 +403,12 @@ class TestCompleteFromFlow:
         conversation_forms.complete_from_flow(generic, "tok_idem", {"name": "Alice"})
         event_count = Event.objects.filter(type="conversation.form_completed").count()
 
-        # Second call: response is now COMPLETED, token lookup returns nothing
+        # Second call: the response is already completed. The reply is still the form's,
+        # so it's consumed (never handed to automations or AI), but nothing re-fires.
         result = conversation_forms.complete_from_flow(
             generic, "tok_idem", {"name": "Alice"}
         )
-        assert result is False
+        assert result is True
         assert (
             Event.objects.filter(type="conversation.form_completed").count()
             == event_count
@@ -580,7 +581,7 @@ class TestNoteQuestionsChanged:
         assert form.flow_status == ConversationForm.FlowStatus.PUBLISHED
 
     def test_does_not_flip_when_hash_unchanged(self, account):
-        from apps.conversations.flow_json import build, content_hash
+        from apps.conversations.flow_json import content_hash
 
         form = ConversationForm.objects.create(
             account=account,
@@ -588,8 +589,9 @@ class TestNoteQuestionsChanged:
             questions=QUESTIONS,
             presentation=ConversationForm.Presentation.WHATSAPP_FLOW,
             flow_status=ConversationForm.FlowStatus.PUBLISHED,
-            flow_json_hash=content_hash(build(QUESTIONS)),
         )
+        form.flow_json_hash = content_hash(form.build_flow_json())
+        form.save(update_fields=["flow_json_hash"])
 
         form.questions = list(QUESTIONS)
         form.save(update_fields=["questions", "updated_at"])

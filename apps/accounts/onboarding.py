@@ -669,9 +669,10 @@ STEPS: tuple[StepDef, ...] = (
         cta="Choose one",
         url="build:home",
         done=_done_automation,
-        # The starter automations run on WhatsApp conversations.
-        available=lambda ctx: ctx.wants_whatsapp and "automations" in ctx.usable,
-        needs="whatsapp",
+        # Starters answer customers on WhatsApp or Instagram; each says what it still needs.
+        available=lambda ctx: (
+            (ctx.wants_whatsapp or ctx.wants_instagram) and "automations" in ctx.usable
+        ),
     ),
     StepDef(
         key="ai",
@@ -1025,7 +1026,7 @@ NEXT_ACTIONS: tuple[NextActionDef, ...] = (
         desc="A reminder on the conversation makes sure they hear back from you.",
         cta="Open the inbox",
         url=lambda ctx: reverse("conversations:inbox"),
-        when=_all(_has("crm.Lead"), _no("conversations.FollowUp")),
+        when=_all(_has("crm.Lead"), _no("conversations.FollowUp", source="manual")),
         feature="follow_ups",
     ),
     NextActionDef(

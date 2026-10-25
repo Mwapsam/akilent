@@ -34,6 +34,18 @@
   {% include "components/stat_card.html" with label="Cancelled" value=run_counts.cancelled|default:0 icon="pause" %}
 </div>
 
+{% if ai_quality %}
+<h2 class="text-sm font-semibold text-ink mb-2">AI steps</h2>
+<ul class="card divide-y divide-border mb-6">
+  {% for q in ai_quality %}
+  <li class="px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-2">
+    <span class="font-medium text-ink">{{ q.label }}</span>
+    <span class="text-gray-600">{{ q.verdict }}{% if q.total %} · used {{ q.total }}×, fell back {{ q.fell_back }}×{% if q.corrected %}, corrected {{ q.corrected }}×{% endif %}{% endif %}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 <h2 class="text-sm font-semibold text-ink mb-2">Step breakdown</h2>
 <p class="text-xs text-gray-500 mb-3">Where runs succeed or fail at each step — a high "Failed" count on one step is usually where people are dropping out.</p>
 

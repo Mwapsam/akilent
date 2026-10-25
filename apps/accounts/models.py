@@ -45,6 +45,9 @@ class Account(models.Model):
     # The channels the business chose at signup (keys from apps.core.channels), which
     # decide the channel setup onboarding asks for. Always a subset of what the plan gives.
     selected_channels = models.JSONField(default=list, blank=True)
+    # When a teammate replies in a conversation, automations there step back for this many
+    # hours, so a person and a bot never talk over each other. 0: never.
+    pause_automation_hours = models.PositiveSmallIntegerField(default=0)
 
     # Accounts are created active (non-blocking verification); this tracks
     # whether the owner has since clicked the emailed confirmation link.
@@ -145,6 +148,8 @@ class Membership(models.Model):
         Account, on_delete=models.CASCADE, related_name="memberships"
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.OWNER)
+    # Email this person when reminders on their follow-up list fall due (at most hourly).
+    followup_emails = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

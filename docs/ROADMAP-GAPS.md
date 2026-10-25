@@ -35,10 +35,10 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 | Contact dedupe on import | Implemented (static) | `apps/contacts/importer.py:100-104` |
 | Contact merge | Missing | Migration `0003` refuses auto-merge of duplicates |
 | SLA enforcement, support tickets | Implemented (static) | `apps/support/tasks.py:9`, `sla.py:68-84`, tests `test_mark_breached_is_idempotent` |
-| SLA / overdue alerts, conversations | Implemented but incomplete | `apps/conversations/tasks.py:22-70` writes an Event and re-routes; no notification sent |
+| SLA / overdue alerts, conversations | Implemented (static) | `apps/conversations/tasks.py:88-175` writes an Event, re-routes and emails the assignee (`_alert_overdue`). Being merged into the follow-up pipeline, see `docs/audits/2026-10-24-automation-followups-flows.md` |
 | Assignment and routing | Implemented (static) | `apps/conversations/routing.py`, `test_routing.py` |
 | Saved replies | Implemented (static) | `apps/conversations/models.py:720`, `test_saved_replies.py` |
-| Follow-ups and reminders | Implemented (static) | `apps/conversations/followups.py`, `tasks.py:11`, `test_followups.py` |
+| Follow-ups and reminders | Implemented but incomplete | `apps/conversations/followups.py`, `recovery.py`, `test_followups.py`. No due notification, UTC-only times, over-eager auto-close, broken Insights policy path. See `docs/audits/2026-10-24-automation-followups-flows.md` |
 | Conversation notes (UI) | Implemented but incomplete | Model exists; only the internal-note action creates one, and no view does |
 | Support internal notes | Implemented (static) | `apps/support/models/message.py:59` |
 | Deals and leads pipeline | Implemented (static) | `apps/crm/services.py`, `test_crm.py` |
@@ -67,6 +67,7 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 | Instagram App Review gate | Implemented but incomplete | Manual; no code checks review or live-mode status. Scopes rejected 2026-10-07, resubmission pending (Blocked). |
 | Workflow triggers | Implemented (static) | Not WhatsApp-only: conversation, contact, lead, deal, order, email, business event |
 | Interactive steps (buttons, lists) | Implemented (static) | `workflow_engine.py:84-85, 410-451`; list rejected on Instagram at publish time |
+| WhatsApp Flows (forms) | Implemented but incomplete | Static Flow JSON only (`apps/conversations/flow_json.py`), sent from the inbox. Launch safety fixed 2026-10-24; republish, automation launch, template Flow buttons, field types and gating are in progress. See `docs/audits/2026-10-24-automation-followups-flows.md` |
 | Email campaigns and suppression | Implemented (static) | `apps/email/tasks.py:224-226, 613-644` |
 | Email bounce and complaint handling | Implemented (static) | `apps/email/ses_webhooks.py:325-491` |
 | Email inbound | Deferred | No inbound mail handling (`ChannelAdapter` seam not built) |
@@ -134,7 +135,7 @@ Tiers: **T0** current commitments and pilot-critical; **T1** evidence-gated (nam
 |---|---|---|---|
 | T0-1 | Publishing staging validation, then Steps 4.7D and 4.7E | Eng | Current priority; blocks release |
 | T0-2 | Pilot readiness gate (`docs/ops/pilot-readiness.md`) | Ops | Before inviting business 3 |
-| T0-3 | Implement `notify_owner` (Samantha stub) | Eng | Pilot Samantha; reuse `accounts/notifications.py` |
+| T0-3 | ~~Implement `notify_owner` (Samantha stub)~~ Done: `apps/insights/executor.py:353`, `test_notify_owner.py` | Eng | Pilot Samantha; reuse `accounts/notifications.py` |
 | T0-4 | Owner alerts for unassigned or SLA-breached conversations | Eng | Reuses the T0-3 channel |
 | T0-5 | Login-time 2FA enforcement for staff | Eng | Freeze exception: security, before Wave 2 |
 | T0-6 | Deploy gate: close `workflow_dispatch` bypass, fix environment name | Eng | None |

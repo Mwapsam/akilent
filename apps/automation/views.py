@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
 from apps.automation import api as automation_api
+from apps.automation import builder
 from apps.automation.models import Workflow, WorkflowRun, WorkflowStepRun
 from apps.automation.workflow_engine import validate_definition
 from apps.automation.workflow_templates import (
@@ -76,6 +77,7 @@ def workflow_list(request):
             last_ran=Max("runs__started_at"),
             helped=Count("runs__contact", distinct=True),
             failed_runs=Count("runs", filter=Q(runs__status="failed"), distinct=True),
+            waiting_runs=Count("runs", filter=Q(runs__status="waiting"), distinct=True),
         )
     )
     for wf in workflows:
@@ -102,6 +104,7 @@ def workflow_list(request):
             "goal_groups": groups,
             "approved_templates": approved_templates,
             "blank_choices": wa_variables_choices(),
+            "pause_hour_choices": _PAUSE_HOUR_CHOICES,
             "template_data": {
                 "business": account.company_name or "Your business",
                 "templates": [
@@ -159,7 +162,11 @@ def _engagement_starters(account, workflows):
     installed = {
         wf.slug: wf for wf in workflows if wf.status == Workflow.Status.PUBLISHED
     }
-    paused = {wf.slug: wf for wf in workflows if wf.status == Workflow.Status.ARCHIVED}
+    paused = {
+        wf.slug: wf
+        for wf in workflows
+        if wf.status in (Workflow.Status.PAUSED, Workflow.Status.ARCHIVED)
+    }
     cards = {
         starter["key"]: {
             **starter,
@@ -211,6 +218,8 @@ def starter_install(request):
         return _install_menu_starter(request, account, starter)
     if starter.get("reply"):
         return _install_reply_starter(request, account, starter)
+    if starter.get("qualification"):
+        return _install_qualification_starter(request, account, starter)
 
     template = MessageTemplate.objects.filter(
         account=account,
@@ -262,6 +271,19 @@ def starter_install(request):
 
 _MAX_REPLY_LENGTH = 1000
 _MENU_OPTIONS = 3
+
+
+def _install_qualification_starter(request, account, starter):
+    """Install "qualify new leads": fixed questions, so there's nothing to choose but "on"."""
+    from apps.automation.engagement_starters import (
+        install_lead_qualification_questionnaire,
+    )
+
+    if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
+        return stop
+    install_lead_qualification_questionnaire(account)
+    messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
+    return redirect("automation:list")
 
 
 def _install_team_starter(request, account, starter):
@@ -518,13 +540,20 @@ def workflow_editor(request, slug: str):
         .order_by("name")
     ]
 
+    from apps.contacts.models import Contact, CustomAttributeDef
+    from apps.conversations.models import ConversationForm
+    from apps.core.actions import available_actions
+
     return render(
         request,
         "automation/workflow_editor.html",
         {
             "account": account,
             "wf": wf,
-            "definition_json": json.dumps(wf.definition or {}, indent=2),
+            "definition_json": json.dumps(
+                automation_api.editable_definition(wf), indent=2
+            ),
+            "has_changes": wf.draft_definition is not None,
             # Existing steps keep working; only new ones are offered for enabled channels.
             "step_types": json.dumps(
                 [
@@ -534,8 +563,38 @@ def workflow_editor(request, slug: str):
                 ]
             ),
             "trigger_types": json.dumps(_TRIGGER_TYPES),
+            "step_catalog_json": json.dumps(builder.step_catalog(account)),
+            "trigger_catalog_json": json.dumps(builder.trigger_catalog()),
+            "branch_fields_json": json.dumps(builder.BRANCH_FIELDS),
+            "attribute_keys": sorted(
+                CustomAttributeDef.objects.filter(account=account)
+                .exclude(archived_at__isnull=False)
+                .values_list("key", flat=True)
+                .distinct()
+            ),
+            "action_names": available_actions(),
+            "forms_json": json.dumps(
+                [
+                    {
+                        "id": f.public_id,
+                        "name": f.name,
+                        "ready": f.status == "published",
+                    }
+                    for f in ConversationForm.objects.filter(account=account).order_by(
+                        "name"
+                    )
+                ]
+            ),
+            "test_contacts": [
+                {"id": c.public_id, "label": c.display_name}
+                for c in Contact.objects.filter(account=account).order_by(
+                    "-last_engaged_at", "-id"
+                )[:25]
+            ],
             "validation_errors": json.dumps(
-                validate_definition(wf.definition, account=account)
+                validate_definition(
+                    automation_api.editable_definition(wf), account=account
+                )
             ),
             "email_templates_json": json.dumps(email_templates),
             "whatsapp_templates_json": json.dumps(whatsapp_templates),
@@ -600,6 +659,7 @@ def workflow_stats(request, slug: str):
             "total_enrolled": total_enrolled,
             "run_counts": run_counts,
             "step_breakdown": breakdown,
+            "ai_quality": automation_api.ai_quality(wf),
         },
     )
 
@@ -619,17 +679,193 @@ def workflow_save(request, slug: str):
 
     if isinstance(body.get("name"), str) and body["name"].strip():
         wf.name = body["name"].strip()
+        wf.save(update_fields=["name", "updated_at"])
+    if isinstance(body.get("priority"), int) and 1 <= body["priority"] <= 999:
+        wf.priority = body["priority"]
+        wf.save(update_fields=["priority", "updated_at"])
     if isinstance(body.get("definition"), dict):
-        wf.definition = body["definition"]
-    wf.save(update_fields=["name", "definition", "updated_at"])
+        # A workflow that's on keeps running its published steps; edits wait here until
+        # "Publish changes", so a half-built step never reaches a customer.
+        automation_api.save_edits(wf, body["definition"])
+    editing = automation_api.editable_definition(wf)
     return JsonResponse(
         {
             "ok": True,
-            "errors": validate_definition(wf.definition, account=account),
+            "errors": validate_definition(editing, account=account),
             "status": wf.status,
             "version": wf.version,
+            "has_changes": wf.draft_definition is not None,
         }
     )
+
+
+_PAUSE_HOUR_CHOICES = (1, 2, 4, 12, 24, 72)
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def automation_settings(request):
+    """Business-wide automation settings (owners and admins)."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if not _can_switch(request, account):
+        messages.error(request, "Only an owner or admin can change this.")
+        return redirect("automation:list")
+    try:
+        hours = int(request.POST.get("pause_automation_hours", "0"))
+    except ValueError:
+        hours = 0
+    account.pause_automation_hours = hours if hours in _PAUSE_HOUR_CHOICES else 0
+    account.save(update_fields=["pause_automation_hours"])
+    messages.success(
+        request,
+        f"Automations will step back for {hours} hours after a teammate replies."
+        if account.pause_automation_hours
+        else "Automations keep answering after a teammate replies.",
+    )
+    return redirect("automation:list")
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def workflow_validate(request, slug: str):
+    """Check the editor's current work without saving it: problems plus a plain summary."""
+    from apps.automation import explain
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "no account"}, status=403)
+    get_object_or_404(Workflow, account=account, slug=slug)
+    try:
+        definition = json.loads(request.body or "{}").get("definition")
+    except (ValueError, AttributeError):
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    if not isinstance(definition, dict):
+        return JsonResponse({"error": "definition must be an object"}, status=400)
+    try:
+        summary = explain.explain_definition(definition)
+    except Exception:
+        summary = None  # a half-built step must never stop the editor checking the rest
+    return JsonResponse(
+        {
+            "errors": validate_definition(definition, account=account)
+            + automation_api.fact_warnings(account, definition),
+            "summary": summary,
+        }
+    )
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def workflow_coverage(request, slug: str):
+    """Try realistic customer messages against the trigger before publishing."""
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "no account"}, status=403)
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    try:
+        body = json.loads(request.body or "{}")
+    except ValueError:
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    definition = body.get("definition")
+    if not isinstance(definition, dict):
+        definition = automation_api.editable_definition(wf)
+    phrases = [str(p)[:200] for p in (body.get("phrases") or []) if str(p).strip()][:10]
+    return JsonResponse(
+        automation_api.coverage(account, wf, definition, extra_phrases=phrases)
+    )
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def workflow_simulate(request, slug: str):
+    """Play the editor's current steps against a test message. Sends and changes nothing."""
+    from apps.automation import simulate
+    from apps.contacts.models import Contact
+
+    account = get_current_account(request)
+    if account is None:
+        return JsonResponse({"error": "no account"}, status=403)
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    try:
+        body = json.loads(request.body or "{}")
+    except ValueError:
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    definition = body.get("definition")
+    if not isinstance(definition, dict):
+        definition = automation_api.editable_definition(wf)
+    contact = None
+    if body.get("contact"):
+        contact = Contact.objects.filter(
+            account=account, public_id=str(body["contact"])
+        ).first()
+    replies = [str(r)[:1000] for r in (body.get("replies") or [])][:20]
+    return JsonResponse(
+        simulate.simulate(
+            account,
+            definition,
+            contact=contact,
+            message=str(body.get("message") or "")[:1000],
+            replies=replies,
+        )
+    )
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def workflow_enroll(request, slug: str):
+    """Start a hand-run automation for one customer (or several, from a list)."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from apps.contacts.models import Contact
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(
+        Workflow, account=account, slug=slug, status=Workflow.Status.PUBLISHED
+    )
+    ids = request.POST.getlist("contact")[:500]
+    contacts = list(Contact.objects.filter(account=account, public_id__in=ids))
+    context = {}
+    if request.POST.get("conversation"):
+        context["conversation_id"] = request.POST["conversation"][:40]
+    counts = automation_api.enroll_manually(wf, contacts, context=context)
+    parts = []
+    if counts["started"]:
+        parts.append(f"Started {wf.name} for {counts['started']}")
+    if counts["already"]:
+        parts.append(f"{counts['already']} already part-way through it")
+    if counts["skipped"]:
+        parts.append(f"{counts['skipped']} couldn't start (opted out, or not allowed)")
+    (messages.success if counts["started"] else messages.warning)(
+        request, ". ".join(parts) + "." if parts else "Nobody was chosen."
+    )
+    nxt = request.POST.get("next") or ""
+    if url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect("automation:runs", slug=wf.slug)
+
+
+def _can_switch(request, account) -> bool:
+    """Turning an automation on or off changes what every customer gets: owners and admins only."""
+    from apps.accounts.api import is_account_admin
+
+    return request.user.is_superuser or is_account_admin(request.user, account)
+
+
+def _not_allowed(request, wf):
+    messages.error(
+        request,
+        "Only an owner or admin can turn automations on or off. Ask one of them.",
+    )
+    return redirect("automation:editor", slug=wf.slug)
 
 
 @login_required
@@ -640,35 +876,35 @@ def workflow_publish(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
-    errors = validate_definition(wf.definition, account=account)
-    blocking = [e for e in errors if e.get("severity", "error") != "warning"]
-    if blocking:
-        messages.error(
-            request,
-            "Fix the workflow before publishing: "
-            + "; ".join(e["message"] for e in blocking[:3]),
-        )
-        return redirect("automation:editor", slug=wf.slug)
+    if not _can_switch(request, account):
+        return _not_allowed(request, wf)
     try:
-        automation_api.ensure_room_to_turn_on(account, wf)
-    except automation_api.AutomationLimitReached as exc:
-        messages.error(request, str(exc))
+        automation_api.publish(wf)
+    except (
+        automation_api.WorkflowNotReady,
+        automation_api.AutomationLimitReached,
+    ) as exc:
+        messages.error(request, f"Fix this before publishing: {exc}")
         return redirect("automation:editor", slug=wf.slug)
-    from django.db import transaction as _tx
+    messages.success(
+        request,
+        f"Published {wf.name} (v{wf.version}). Customers already part-way through "
+        "finish on the version they started.",
+    )
+    return redirect("automation:editor", slug=wf.slug)
 
-    from apps.contacts.attributes import verify_defs_for_publish
 
-    try:
-        with _tx.atomic():
-            verify_defs_for_publish(account, wf.definition)
-            if wf.status != Workflow.Status.PUBLISHED:
-                wf.version += 1
-            wf.status = Workflow.Status.PUBLISHED
-            wf.save(update_fields=["status", "version", "updated_at"])
-    except ValueError as exc:
-        messages.error(request, str(exc))
-        return redirect("automation:editor", slug=wf.slug)
-    messages.success(request, f"Published {wf.name} (v{wf.version}).")
+@login_required
+@module_required("automations")
+@require_POST
+def workflow_discard(request, slug: str):
+    """Throw away unpublished edits; the automation keeps running as it was."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    automation_api.discard_edits(wf)
+    messages.success(request, "Your changes were discarded.")
     return redirect("automation:editor", slug=wf.slug)
 
 
@@ -680,9 +916,18 @@ def workflow_archive(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
-    wf.status = Workflow.Status.ARCHIVED
-    wf.save(update_fields=["status", "updated_at"])
-    messages.success(request, f"Archived {wf.name}.")
+    if not _can_switch(request, account):
+        return _not_allowed(request, wf)
+    ended = automation_api.archive(wf)
+    messages.success(
+        request,
+        f"Archived {wf.name}."
+        + (
+            f" {ended} customer{'s' if ended != 1 else ''} part-way through were let go."
+            if ended
+            else ""
+        ),
+    )
     return redirect("automation:list")
 
 
@@ -690,17 +935,18 @@ def workflow_archive(request, slug: str):
 @module_required("automations")
 @require_POST
 def workflow_pause(request, slug: str):
-    """Pause an automation. Only its on/off state changes: same steps, same version, nothing lost."""
+    """Pause an automation: nothing new starts, and customers part-way through are held."""
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
-    if wf.status == Workflow.Status.PUBLISHED:
-        wf.status = Workflow.Status.ARCHIVED
-        wf.save(update_fields=["status", "updated_at"])
+    if not _can_switch(request, account):
+        return _not_allowed(request, wf)
+    automation_api.pause(wf)
     messages.success(
         request,
-        f"{wf.name} is paused. Akilent won't run it until you turn it on again.",
+        f"{wf.name} is paused. Customers part-way through are held and carry on when "
+        "you turn it back on.",
     )
     return redirect("automation:list")
 
@@ -714,34 +960,17 @@ def workflow_resume(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
-    if wf.status == Workflow.Status.ARCHIVED:
-        blocking = [
-            e
-            for e in validate_definition(wf.definition, account=account)
-            if e.get("severity", "error") != "warning"
-        ]
-        if blocking:
-            messages.error(
-                request, f"{wf.name} can't be turned on yet: {blocking[0]['message']}"
-            )
-            return redirect("automation:list")
-        try:
-            automation_api.ensure_room_to_turn_on(account, wf)
-        except automation_api.AutomationLimitReached as exc:
-            messages.error(request, str(exc))
-            return redirect("automation:list")
-        from django.db import transaction as _tx
-
-        from apps.contacts.attributes import verify_defs_for_publish
-
-        try:
-            with _tx.atomic():
-                verify_defs_for_publish(account, wf.definition)
-                wf.status = Workflow.Status.PUBLISHED
-                wf.save(update_fields=["status", "updated_at"])
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect("automation:list")
+    if not _can_switch(request, account):
+        return _not_allowed(request, wf)
+    waiting = "cancel" if request.POST.get("waiting") == "cancel" else "continue"
+    try:
+        automation_api.resume(wf, waiting=waiting)
+    except (
+        automation_api.WorkflowNotReady,
+        automation_api.AutomationLimitReached,
+    ) as exc:
+        messages.error(request, f"{wf.name} can't be turned on yet: {exc}")
+        return redirect("automation:list")
     messages.success(request, f"{wf.name} is on.")
     return redirect("automation:list")
 
@@ -754,9 +983,133 @@ def workflow_delete(request, slug: str):
     if account is None:
         return redirect("dashboard")
     wf = get_object_or_404(Workflow, account=account, slug=slug)
+    if not _can_switch(request, account):
+        return _not_allowed(request, wf)
     wf.delete()
     messages.success(request, f"{wf.name} was removed.")
     return redirect("automation:list")
+
+
+_RUN_FILTERS = {
+    "failed": ["failed"],
+    "waiting": ["waiting", "active"],
+    "done": ["completed"],
+    "cancelled": ["cancelled"],
+}
+
+
+@login_required
+@module_required("automations")
+def workflow_runs(request, slug: str):
+    """Every customer who went through this automation, newest first, filterable."""
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    wf = get_object_or_404(Workflow, account=account, slug=slug)
+    status = request.GET.get("status", "")
+    q = (request.GET.get("q") or "").strip()
+    runs = wf.runs.select_related("contact").order_by("-started_at", "-id")
+    if status in _RUN_FILTERS:
+        runs = runs.filter(status__in=_RUN_FILTERS[status])
+    if q:
+        runs = runs.filter(
+            Q(contact__first_name__icontains=q)
+            | Q(contact__last_name__icontains=q)
+            | Q(contact__phone__icontains=q)
+            | Q(contact__email__icontains=q)
+        )
+    page = Paginator(runs, 25).get_page(request.GET.get("page"))
+    counts = {
+        key: wf.runs.filter(status__in=values).count()
+        for key, values in _RUN_FILTERS.items()
+    }
+    return render(
+        request,
+        "automation/workflow_runs.html",
+        {"wf": wf, "page": page, "status": status, "q": q, "counts": counts},
+    )
+
+
+@login_required
+@module_required("automations")
+def run_detail(request, run_id: str):
+    """One customer's path through an automation, with ways to fix a failure."""
+    from apps.conversations.models import Conversation
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    run = get_object_or_404(
+        WorkflowRun.objects.select_related("workflow", "contact", "version"),
+        public_id=run_id,
+        workflow__account=account,
+    )
+    conversation = None
+    if (run.context or {}).get("conversation_id"):
+        conversation = Conversation.objects.filter(
+            account=account, public_id=run.context["conversation_id"]
+        ).first()
+    return render(
+        request,
+        "automation/run_detail.html",
+        {
+            "run": run,
+            "wf": run.workflow,
+            "timeline": automation_api.run_timeline(run),
+            "conversation": conversation,
+            "version_number": run.version.number if run.version else None,
+        },
+    )
+
+
+@login_required
+@module_required("automations")
+@require_POST
+def run_action(request, run_id: str, action: str):
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    run = get_object_or_404(
+        WorkflowRun.objects.select_related("workflow"),
+        public_id=run_id,
+        workflow__account=account,
+    )
+    if action == "correct":
+        from apps.automation.models import WorkflowStepRun
+
+        step_run = get_object_or_404(
+            WorkflowStepRun, run=run, pk=request.POST.get("step_run") or 0
+        )
+        try:
+            automation_api.correct_ai_label(step_run, request.POST.get("label", ""))
+        except automation_api.RunActionError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request, "Thanks. It will learn from this for the next messages."
+            )
+        return redirect("automation:run", run_id=run.public_id)
+    handlers = {
+        "retry": (automation_api.retry_run, "Tried that step again."),
+        "skip": (automation_api.skip_failed_step, "Skipped that step and carried on."),
+        "cancel": (automation_api.cancel_run, "Stopped this run."),
+    }
+    if action not in handlers:
+        return redirect("automation:run", run_id=run.public_id)
+    handler, done = handlers[action]
+    try:
+        run = handler(run)
+    except automation_api.RunActionError as exc:
+        messages.error(request, str(exc))
+        return redirect("automation:run", run_id=run.public_id)
+    if action == "retry" and run.status == WorkflowRun.Status.FAILED:
+        messages.error(request, "It failed again. See the reason below.")
+    else:
+        messages.success(request, done)
+    return redirect("automation:run", run_id=run.public_id)
 
 
 @login_required

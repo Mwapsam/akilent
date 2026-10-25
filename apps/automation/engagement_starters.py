@@ -383,6 +383,8 @@ def build_definition(
     really has been quiet, then send. The branch is what makes this safe to turn
     on — without it the workflow would chase customers mid-conversation.
     """
+    if starter.get("qualification"):
+        return build_lead_qualification_definition()
     if starter.get("welcome"):
         return _welcome_definition(
             starter, template_name, variable_mapping, variable_fallbacks
@@ -439,9 +441,9 @@ def build_lead_qualification_definition() -> dict:
                 "max_attempts": 2,
                 "timeout_seconds": 86400,
                 "next": "q_timeline",
-                "on_timeout": "notify_team",
-                "on_invalid": "notify_team",
-                "on_error": "notify_team",
+                "on_timeout": "notify_incomplete",
+                "on_invalid": "notify_incomplete",
+                "on_error": "notify_incomplete",
             },
             {
                 "id": "q_timeline",
@@ -452,9 +454,9 @@ def build_lead_qualification_definition() -> dict:
                 "max_attempts": 2,
                 "timeout_seconds": 86400,
                 "next": "q_needs",
-                "on_timeout": "notify_team",
-                "on_invalid": "notify_team",
-                "on_error": "notify_team",
+                "on_timeout": "notify_incomplete",
+                "on_invalid": "notify_incomplete",
+                "on_error": "notify_incomplete",
             },
             {
                 "id": "q_needs",
@@ -465,15 +467,23 @@ def build_lead_qualification_definition() -> dict:
                 "max_attempts": 2,
                 "timeout_seconds": 86400,
                 "next": "notify_team",
-                "on_timeout": "notify_team",
-                "on_invalid": "notify_team",
-                "on_error": "notify_team",
+                "on_timeout": "notify_incomplete",
+                "on_invalid": "notify_incomplete",
+                "on_error": "notify_incomplete",
             },
             {
                 "id": "notify_team",
                 "type": "notify_team",
                 "to": "owners",
                 "text": "{contact} has answered your qualification questions. Check their lead record.",
+                "next": "stop",
+            },
+            {
+                "id": "notify_incomplete",
+                "type": "notify_team",
+                "to": "owners",
+                "text": "{contact} didn't finish your qualification questions. "
+                "Check their lead record and reply to them yourself.",
                 "next": "stop",
             },
             {"id": "stop", "type": "stop"},

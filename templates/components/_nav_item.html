@@ -3,6 +3,8 @@
   match  — space-separated path fragments / url names for active state
            (defaults to href)
   exact  — match the path exactly rather than by prefix
+  badge_url — optional: a URL returning a small count, loaded after the page and refreshed
+              live (realtime) and every two minutes
   collapsible — hide the label text when the desktop rail is collapsed
   feature — catalog key; when the business isn't entitled to it (``locked_features`` from the
             plan_features context processor) the link shows a lock and opens the locked page
@@ -33,6 +35,10 @@
     <span class="hidden lg:inline" x-show="!$store.ui.sidebarCollapsed" x-cloak>{{ label }}</span>
   {% else %}
     <span>{{ label }}</span>
+  {% endif %}
+  {% if badge_url %}
+  <span class="ml-auto" hx-get="{{ badge_url }}" hx-swap="innerHTML"
+        hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated"></span>
   {% endif %}
 </a>
 {% endif %}

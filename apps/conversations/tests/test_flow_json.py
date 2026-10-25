@@ -44,10 +44,13 @@ def test_input_type_mapping(field_type, expected):
     assert component["input-type"] == expected
 
 
-def test_an_unknown_field_type_falls_back_to_text():
-    flow = build([{"key": "q", "label": "Q?", "field_type": "bogus", "maps_to": ""}])
-    component = flow["screens"][0]["layout"]["children"][0]["children"][0]
-    assert component["input-type"] == "text"
+def test_an_unknown_field_type_is_refused_with_a_reason():
+    import pytest
+
+    from apps.conversations.flow_json import FlowJSONError
+
+    with pytest.raises(FlowJSONError, match="unknown answer type"):
+        build([{"key": "q", "label": "Q?", "field_type": "bogus", "maps_to": ""}])
 
 
 def test_the_footer_submits_every_question_key():

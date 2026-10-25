@@ -88,9 +88,11 @@ def ig_conversation(ig_account, ig_contact_and_contact):
     from apps.instagram.models.conversation import InstagramConversation
 
     ig_contact, _contact = ig_contact_and_contact
+    # The customer wrote in, so the 24h messaging window is open.
     return InstagramConversation.objects.create(
         instagram_account=ig_account,
         instagram_contact=ig_contact,
+        last_inbound_at=timezone.now(),
     )
 
 
@@ -429,7 +431,11 @@ def test_wa_send_buttons_creates_no_interaction(db):
         mock_msg.id = wa_outbound.id
         mock_msg.created_at = timezone.now()
         mock_send.return_value = mock_msg
-        run = enroll(wf, contact, context={"conversation_id": spine.public_id})
+        run = enroll(
+            wf,
+            contact,
+            context={"conversation_id": spine.public_id, "message": {"body": "hi"}},
+        )
 
     assert run is not None
     run.refresh_from_db()

@@ -202,6 +202,8 @@ def _source(account, params) -> tuple[str, dict, dict, object]:
         draft = ai_api.get_draft(account, params["draft"], kind="automation")
         if draft is None or draft.status not in ("ready", "used"):
             raise intents.IntentError("That draft isn't ready.")
+        if draft.result.get("intent") == "custom":
+            return "custom", {"plan": draft.result.get("plan") or {}}, {}, draft
         return (
             draft.result.get("intent", ""),
             draft.result.get("entities") or {},
@@ -209,6 +211,20 @@ def _source(account, params) -> tuple[str, dict, dict, object]:
             draft,
         )
     return params.get("intent", ""), {}, {}, None
+
+
+def _create_answer_fields(account, definition: dict) -> None:
+    """Make the customer/lead fields that "ask a question" steps save into, if new."""
+    from apps.contacts.models import CustomAttributeDef
+
+    for step in definition.get("steps") or []:
+        if step.get("type") == "ask_question" and step.get("attribute"):
+            CustomAttributeDef.objects.get_or_create(
+                account=account,
+                entity=step.get("target") or "contact",
+                key=step["attribute"],
+                defaults={"type": "string"},
+            )
 
 
 @login_required
@@ -238,7 +254,14 @@ def build_review(request):
         if params.get("tag") is not None:
             entities["tag"] = params.get("tag", "").strip()
     try:
-        built = intents.build_from_intent(account, intent, entities, evidence=evidence)
+        if intent == "custom":
+            from apps.automation import compose
+
+            built = compose.compile_plan(account, entities.get("plan") or {})
+        else:
+            built = intents.build_from_intent(
+                account, intent, entities, evidence=evidence
+            )
     except intents.IntentError as exc:
         messages.error(request, str(exc))
         if request.method == "POST":
@@ -249,9 +272,10 @@ def build_review(request):
     action = params.get("action", "") if request.method == "POST" else ""
     if (
         built
-        and action in ("save", "turn_on")
+        and action in ("save", "turn_on", "builder")
         and not (action == "turn_on" and built["errors"])
     ):
+        _create_answer_fields(account, built["definition"])
         try:
             workflow = automation_api.save_built_workflow(
                 account,
@@ -266,6 +290,12 @@ def build_review(request):
             ai_api.mark_draft_used(draft)
             if params.get("pattern"):
                 patterns.dismiss(account, f"pattern:{params['pattern']}", days=365)
+            if action == "builder":
+                messages.success(
+                    request,
+                    "Saved as a draft. Adjust it here and press Test it to try it.",
+                )
+                return redirect("automation:editor", slug=workflow.slug)
             messages.success(
                 request,
                 f"{workflow.name} is on."

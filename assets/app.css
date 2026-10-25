@@ -1411,4 +1411,13 @@
   .ob-section > summary:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
   .ob-section[open] .ob-chevron { transform: rotate(180deg); }
   .ob-chevron { transition: transform 200ms var(--ease-emphasized); }
+
+  /* Workflow builder: how a message will look to the customer, and the step map. */
+  .wa-preview { @apply flex flex-col items-start gap-1 rounded-xl p-3 max-w-sm;
+    background-color: var(--color-surface-muted); border: 1px solid var(--color-border); }
+  .wa-bubble { @apply rounded-2xl rounded-tl-sm px-3 py-2 text-sm whitespace-pre-wrap shadow-card;
+    background-color: var(--color-surface); color: var(--color-ink); max-width: 100%; }
+  .wa-button { @apply rounded-xl px-3 py-1.5 text-sm font-medium text-center w-full;
+    background-color: var(--color-surface); color: var(--color-brand-600); border: 1px solid var(--color-border); }
+  .wf-map li { border-left: 1px dashed var(--color-border); margin-left: 0.25rem; }
 }

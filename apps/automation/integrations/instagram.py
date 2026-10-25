@@ -56,3 +56,8 @@ def mark_outbound_message_failed(message) -> None:
                     locked_run.pk,
                     message.id,
                 )
+                from apps.automation.workflow_engine import _alert_failure
+
+                _alert_failure(
+                    locked_run, step_run.result.get("error") or "Instagram send failed"
+                )

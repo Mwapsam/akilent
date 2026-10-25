@@ -114,9 +114,8 @@ def rule_lead_followup_gap(account):
         },
         evidence_count=count,
         suggested_action={
-            "action": "follow_up",
+            "action": "create_followup",
             "label": f"Follow up with {count} waiting conversation{'s' if count != 1 else ''}",
-            "filter": "overdue_24h",
         },
     )
 
