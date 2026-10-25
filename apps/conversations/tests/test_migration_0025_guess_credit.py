@@ -20,52 +20,52 @@ def test_old_guesses_lose_their_credit_and_explicit_rows_keep_it():
     executor.loader.build_graph()
     old = executor.loader.project_state([(_APP, _BEFORE)]).apps
 
-    account = old.get_model("accounts", "Account").objects.create(company_name="Old")
-    contact = old.get_model("contacts", "Contact").objects.create(
-        account=account, phone="+260971234567"
+    # Only this app was rolled back; other apps' tables are at their latest schema, so
+    # their rows come from the current models and are linked by id.
+    from apps.accounts.models import Account
+    from apps.commerce.models import Order
+    from apps.contacts.models import Contact
+    from apps.publishing.models import ContentPost, ContentPostVariant
+
+    account = Account.objects.create(company_name="Old")
+    contact = Contact.objects.create(account=account, phone="+260971234567")
+    post = ContentPost.objects.create(
+        account=account, platforms=["facebook"], media_type="text"
     )
+    variant = ContentPostVariant.objects.create(post=post, platform="facebook")
     conversation = old.get_model(_APP, "Conversation").objects.create(
-        account=account, contact=contact, channel="whatsapp", public_id="conv_old"
-    )
-    post = old.get_model("publishing", "ContentPost").objects.create(
-        account=account, platforms=["facebook"], media_type="text", public_id="post_old"
-    )
-    variant = old.get_model("publishing", "ContentPostVariant").objects.create(
-        post=post, platform="facebook"
+        account_id=account.pk,
+        contact_id=contact.pk,
+        channel="whatsapp",
+        public_id="conv_old",
     )
     entry = old.get_model(_APP, "ConversationEntryPoint").objects.create(
-        account=account,
+        account_id=account.pk,
         conversation=conversation,
         kind="tracked_link",
-        post=post,
-        variant=variant,
+        post_id=post.pk,
+        variant_id=variant.pk,
     )
-    Order = old.get_model("commerce", "Order")
     Attribution = old.get_model(_APP, "ConversationAttribution")
     rows = {}
-    for method, public_id in (
-        ("recent_conversation", "ord_guess"),
-        ("explicit", "ord_named"),
-    ):
+    for method in ("recent_conversation", "explicit"):
         order = Order.objects.create(
             account=account,
             contact=contact,
-            conversation=conversation,
-            public_id=public_id,
             total=10,
             currency="ZMW",
-            status="paid",
+            status=Order.Status.PAID,
             paid_at=timezone.now(),
         )
         rows[method] = Attribution.objects.create(
-            account=account,
+            account_id=account.pk,
             conversation=conversation,
             channel="whatsapp",
             method=method,
-            order=order,
+            order_id=order.pk,
             entry_point=entry,
-            source_post=post,
-            source_variant=variant,
+            source_post_id=post.pk,
+            source_variant_id=variant.pk,
         ).pk
 
     executor = MigrationExecutor(connection)
