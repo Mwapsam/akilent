@@ -389,29 +389,21 @@ def publishing_index(request):
         datetime.datetime.combine(next_month, datetime.time.min), tz
     )
 
+    from .worklist import worklist
+
     qs = ContentPost.objects.filter(account=account)
-    counts = {
-        "in_progress": qs.filter(
-            status__in=[
-                ContentPost.Status.IDEA,
-                ContentPost.Status.DRAFT,
-                ContentPost.Status.IN_REVIEW,
-                ContentPost.Status.APPROVED,
-            ]
-        ).count(),
-        "scheduled": qs.filter(status=ContentPost.Status.SCHEDULED).count(),
-        "published_this_month": qs.filter(
-            status=ContentPost.Status.PUBLISHED,
-            published_at__gte=month_start_dt,
-            published_at__lt=next_month_dt,
-        ).count(),
-        "needs_attention": qs.filter(status=ContentPost.Status.FAILED).count(),
-    }
+    work = worklist(
+        account,
+        request.user,
+        lambda post: _can_review(post, request.user, account)[0],
+    )
+    published_this_month = qs.filter(
+        status=ContentPost.Status.PUBLISHED,
+        published_at__gte=month_start_dt,
+        published_at__lt=next_month_dt,
+    ).count()
     upcoming = list(
         qs.filter(status=ContentPost.Status.SCHEDULED).order_by("scheduled_at")[:5]
-    )
-    failed_recent = list(
-        qs.filter(status=ContentPost.Status.FAILED).order_by("-updated_at")[:3]
     )
 
     return render(
@@ -419,9 +411,9 @@ def publishing_index(request):
         "publishing/index.html",
         {
             "account": account,
-            "counts": counts,
+            "work": work,
+            "published_this_month": published_this_month,
             "upcoming": upcoming,
-            "failed_recent": failed_recent,
         },
     )
 
@@ -595,7 +587,11 @@ def publishing_calendar(request):
             "channel_filter": channel_filter,
             "status_filter": status_filter,
             "unscheduled_drafts": unscheduled_drafts,
-            "status_choices": ContentPost.Status.choices,
+            "status_choices": [
+                c
+                for c in ContentPost.Status.choices
+                if c[0] != ContentPost.Status.IN_REVIEW
+            ],
             "today": today,
             "week_has_content": any(items or posts for _, items, posts in week_days),
         },
@@ -624,6 +620,16 @@ def publishing_library(request):
     status_filter = request.GET.get("status", "")
     if status_filter:
         qs = qs.filter(status=status_filter)
+
+    # Where it stands (worklist buckets), e.g. "awaiting approval", which a draft or a
+    # scheduled post can both be. Same rule as the overview's counts.
+    from .worklist import BUCKETS, post_ids_in
+
+    bucket_filter = request.GET.get("bucket", "")
+    if bucket_filter in dict(BUCKETS):
+        qs = qs.filter(pk__in=post_ids_in(account, bucket_filter))
+    else:
+        bucket_filter = ""
 
     media_type_filter = request.GET.get("media_type", "")
     if media_type_filter:
@@ -662,11 +668,18 @@ def publishing_library(request):
             "page_obj": page_obj,
             "q": q,
             "status_filter": status_filter,
+            "bucket_filter": bucket_filter,
+            "bucket_choices": BUCKETS,
             "media_type_filter": media_type_filter,
             "platform_filter": platform_filter,
             "date_from": date_from,
             "date_to": date_to,
-            "status_choices": ContentPost.Status.choices,
+            # Review has its own filter; the lifecycle status never holds "in review".
+            "status_choices": [
+                c
+                for c in ContentPost.Status.choices
+                if c[0] != ContentPost.Status.IN_REVIEW
+            ],
             "media_type_choices": ContentPost.MediaType.choices,
         },
     )

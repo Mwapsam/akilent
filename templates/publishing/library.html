@@ -14,14 +14,14 @@
 
 {# Filter form #}
 <form method="get" class="card card-pad mb-4"
-      x-data="{ more: {% if status_filter or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
+      x-data="{ more: {% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
   <div class="flex flex-wrap gap-3 items-end">
     <div class="flex-1 min-w-[11rem]">
       <label class="block text-xs font-medium text-gray-500 mb-1" for="library-q">Search</label>
       <input type="text" id="library-q" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full text-sm py-1">
     </div>
     <button type="button" class="btn btn-ghost text-sm py-1 sm:hidden" @click="more = !more" :aria-expanded="more" aria-controls="library-more-filters">
-      Filters{% if status_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
+      Filters{% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
     </button>
     <div id="library-more-filters" class="w-full grid grid-cols-2 gap-3 sm:contents" :class="{ 'max-sm:hidden': !more }">
     <div>
@@ -30,6 +30,15 @@
         <option value="">All</option>
         {% for val, label in status_choices %}
         <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-500 mb-1" for="library-bucket">Where it stands</label>
+      <select name="bucket" id="library-bucket" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
+        <option value="">All</option>
+        {% for val, label in bucket_choices %}
+        <option value="{{ val }}" {% if bucket_filter == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>
@@ -60,7 +69,7 @@
     </div>
     </div>
     <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
-    {% if q or status_filter or platform_filter or media_type_filter or date_from or date_to %}
+    {% if q or status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}
     <a href="{% url 'publishing:library' %}" class="btn btn-ghost text-sm py-1 text-gray-400">Clear</a>
     {% endif %}
   </div>

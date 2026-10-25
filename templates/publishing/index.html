@@ -15,27 +15,55 @@
 
 {% next_action_card %}
 
-{# Stat cards #}
-<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.in_progress }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">In progress</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.scheduled }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Scheduled</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.published_this_month }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Published this month</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold {% if counts.needs_attention > 0 %}text-red-600{% else %}text-ink{% endif %}">{{ counts.needs_attention }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Needs attention</p>
-  </div>
+{# Where every unfinished post stands: each post is in exactly one bucket. #}
+<div class="card card-pad mb-4">
+  <h2 class="font-semibold text-ink mb-3">Where your posts stand</h2>
+  <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+    {% for b in work.buckets %}
+    <li class="rounded-lg border border-border px-3 py-2{% if b.warn %} tone-coral-bg{% endif %}">
+      {% if b.url %}<a href="{{ b.url }}" class="block">{% endif %}
+        <p class="text-xl font-bold text-ink">{{ b.count }}</p>
+        <p class="text-xs text-gray-500">{{ b.label }}</p>
+      {% if b.url %}</a>{% endif %}
+    </li>
+    {% endfor %}
+    <li class="rounded-lg border border-border px-3 py-2">
+      <p class="text-xl font-bold text-ink">{{ published_this_month }}</p>
+      <p class="text-xs text-gray-500">Published this month</p>
+    </li>
+  </ul>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  {# Posts waiting on someone, with the one next step #}
+  <div class="card card-pad">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-ink">Needs you</h2>
+      {% if work.needs_you_total > work.needs_you|length %}<span class="text-xs text-gray-500">{{ work.needs_you|length }} of {{ work.needs_you_total }}</span>{% endif %}
+    </div>
+    {% if work.needs_you %}
+    <ul class="space-y-2">
+      {% for row in work.needs_you %}
+      <li class="p-2 rounded-lg {% if row.bucket == 'needs_check' or row.bucket == 'failed' %}tone-coral-bg{% else %}bg-surface-subtle{% endif %}">
+        <div class="flex items-start justify-between gap-2">
+          <a href="{% url 'publishing:post-detail' row.post.pk %}" class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-ink truncate">{{ row.post.caption|truncatechars:50|default:"(no caption)" }}</p>
+            <p class="text-xs text-gray-500">{{ row.bucket_label }}{% if row.bucket == 'failed' and row.post.error %} · <span class="text-red-700">{{ row.post.error|truncatechars:70 }}</span>{% endif %}</p>
+          </a>
+          {% if row.action.url %}
+          <a href="{{ row.action.url }}" class="btn btn-ghost text-xs py-0.5 px-2 shrink-0">{{ row.action.label }}</a>
+          {% else %}
+          <span class="text-xs text-gray-500 shrink-0 text-right" style="max-width:45%">{{ row.action.label }}</span>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-400 text-center py-6">Nothing is waiting on you.</p>
+    {% endif %}
+  </div>
 
   {# Upcoming scheduled posts #}
   <div class="card card-pad">
@@ -61,36 +89,6 @@
     </div>
     {% else %}
     <p class="text-sm text-gray-400 text-center py-6">No scheduled posts.</p>
-    {% endif %}
-  </div>
-
-  {# Needs attention #}
-  <div class="card card-pad">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="font-semibold text-ink">Needs attention</h2>
-      <a href="{% url 'publishing:library' %}?status=failed" class="text-xs text-accent">View all →</a>
-    </div>
-    {% if failed_recent %}
-    <div class="space-y-2">
-      {% for post in failed_recent %}
-      <div class="p-2 rounded-lg tone-coral-bg">
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-ink truncate">{{ post.caption|truncatechars:50|default:"(no caption)" }}</p>
-            {% if post.error %}
-            <p class="text-xs text-red-700 mt-0.5 truncate">{{ post.error|truncatechars:80 }}</p>
-            {% endif %}
-          </div>
-          <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Retry</button>
-          </form>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-gray-400 text-center py-6">No failed posts.</p>
     {% endif %}
   </div>
 

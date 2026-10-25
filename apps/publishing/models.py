@@ -175,6 +175,9 @@ class ContentPost(models.Model):
     class Status(models.TextChoices):
         IDEA = "idea", "Idea"
         DRAFT = "draft", "Draft"
+        # Never set, on purpose (2026-10-25): review state lives in ``approval_status``,
+        # because a post can be scheduled and waiting for approval at once. See
+        # apps/publishing/worklist.py and docs/ROADMAP-GAPS.md §10.
         IN_REVIEW = "in_review", "In Review"
         APPROVED = "approved", "Approved"
         SCHEDULED = "scheduled", "Scheduled"

@@ -750,3 +750,11 @@ def recover_abandoned_publish_claims() -> dict:
             recovered += 1
 
     return {"recovered": recovered}
+
+
+@shared_task(queue="outbound")
+def alert_publishing_problems() -> dict:
+    """Email Owners and Admins about channels that failed or need a check (see alerts)."""
+    from .alerts import send_due_alerts
+
+    return send_due_alerts()

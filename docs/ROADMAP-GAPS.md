@@ -339,3 +339,41 @@ Operator evidence to record separately from code tests: restore drill result, re
 - Email settings messages show success and info correctly. The security page lists every factor in use.
 - anymail: no references remain in code or configuration. Production runs `98b647b`, which predates the removal.
 - Not verified yet: PostgreSQL (row locks); a real passkey on a device.
+
+## 10. Connected-journey capability audit (2026-10-25)
+
+Plan: `~/.claude/plans/explore-and-audit-if-mighty-sundae.md`. Strategy: `docs/strategy/meta-growth-optimisation.md`. Workstream 3 (the end-to-end journey acceptance test) is the release gate. Passing tests is code correctness only; production readiness needs the staging journey (Workstream 5).
+
+### Intentional design decisions (not unfinished work)
+- **`ContentPost.Status.IN_REVIEW` is never set.**
+  - Review state lives in `approval_status` (draft, submitted, changes_requested, approved), separate from the lifecycle `status`.
+  - A post can be scheduled and waiting for approval at once. Moving it into a lifecycle "in review" state would take it off the schedule.
+  - The library and calendar status filters no longer offer "In Review". "Awaiting approval" comes from `approval_status` (`apps/publishing/worklist.py`).
+- **No separate rule forces AI-drafted posts through review.** With workspace review on, every post already needs approval. `ContentPost.ai_assisted` is provenance shown to reviewers, not an enforcement mechanism.
+
+### Approval bypass check (2026-10-25, static)
+Every route to a Meta publish call goes through `services.publish_variant`. It checks `is_approval_valid()` before claiming, then again under the row lock on the same snapshot it sends to Meta. Callers:
+- `publish_variant_async`, used by scheduled dispatch and by per-channel retry (`views.py` variant retry). It also checks approval itself.
+- `orchestrate_post_publication`, reached two ways, each of which checks approval first:
+  - the composer's publish-now, via `publish_post_async`;
+  - the workflow `publish_post` step.
+
+The composer resets a stale approval on save. Library bulk actions only delete drafts or cancel scheduled posts, and the public API has no post endpoints. Dead legacy code with no approval check, and no callers outside old mocked tests:
+- `services.publish_post`, `_publish_instagram` and `_publish_facebook`;
+- `try_publish_ig_container`.
+
+Remove it in a cleanup. The IG container poller publishes an already-claimed container, whose content was approved at claim time.
+
+### Publishing problem alerts (Workstream 2)
+`apps/publishing/alerts.py` runs from the beat task `alert_publishing_problems` every 5 minutes. It emails Owners and Admins once per channel *episode*:
+- An episode starts when a variant lands in FAILED or RECONCILING, and closes only when it is published or cancelled.
+- A retry that fails again, by hand or automatically, is the same episode, so there is no second email.
+- RECONCILING is a separate kind with its own message ("check whether it went live; we won't retry"). One episode can therefore send at most one failed alert and one needs-check alert.
+- Failures are reported after a 15-minute settle window, so automatic retries finish first.
+- Only problems from the last 3 days are considered, so old failures are not emailed when alerts go live.
+- There are no per-user notification preferences; the recipients are the workspace's Owners and Admins.
+
+### Open verification gaps
+- Browser check of the composer's AI suggestion: pick, undo, hidden `ai_draft`/`ai_option` fields, and the reviewer label. Covered only by server-side tests so far.
+- PostgreSQL 16 run of the publishing suite (3 row-lock tests skip on SQLite).
+- Real email delivery of the alerts on staging.

@@ -928,6 +928,10 @@ CELERY_BEAT_SCHEDULE.update(
             "task": "apps.publishing.tasks.collect_due_metrics",
             "schedule": 900.0,  # Every 15 minutes; each channel has its own read plan
         },
+        "alert-publishing-problems": {
+            "task": "apps.publishing.tasks.alert_publishing_problems",
+            "schedule": 300.0,  # Every 5 minutes; one email per channel problem episode
+        },
     }
 )
 
