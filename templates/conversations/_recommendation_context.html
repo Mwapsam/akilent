@@ -17,7 +17,7 @@ Severity colours mirror the Insight card pattern in templates/insights/_intellig
     {% if insight %}
     <p class="font-medium text-ink mb-0.5">{{ insight.title }}</p>
     {% if insight.evidence_count %}
-    <p class="text-xs text-gray-500 mb-2">
+    <p class="text-xs text-ink-subtle mb-2">
       {{ insight.evidence_count }} signal{{ insight.evidence_count|pluralize }}
       {% if insight.evidence.period_days %} · last {{ insight.evidence.period_days }} days{% endif %}
     </p>
@@ -25,7 +25,7 @@ Severity colours mirror the Insight card pattern in templates/insights/_intellig
     {% endif %}
 
     {% if rec.status == "presented" %}
-      <p class="text-gray-600 mb-3">{{ insight.suggested_action.label|default:"Start a conversation with this customer." }}</p>
+      <p class="text-ink-subtle mb-3">{{ insight.suggested_action.label|default:"Start a conversation with this customer." }}</p>
       <form method="post"
             action="{% url 'conversations:recommendation-act' rec.pk %}"
             hx-post="{% url 'conversations:recommendation-act' rec.pk %}"
@@ -46,16 +46,16 @@ Severity colours mirror the Insight card pattern in templates/insights/_intellig
       </form>
 
     {% elif rec.status == "accepted" %}
-      <p class="flex items-center gap-1 text-xs text-gray-500 mb-1">
+      <p class="flex items-center gap-1 text-xs text-ink-subtle mb-1">
         {% include "components/icon.html" with name="check" class="w-3.5 h-3.5 shrink-0 text-teal-600" %}Contacted
-        {% if rec.acted_at %}<span class="text-gray-400">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}
+        {% if rec.acted_at %}<span class="text-ink-subtle">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}
       </p>
       {% with signals=rec.outcome_summary %}
         {% if signals.lead_created_at %}
-        <p class="text-xs text-gray-500">Lead created</p>
+        <p class="text-xs text-ink-subtle">Lead created</p>
         {% endif %}
         {% if signals.order_paid_at %}
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-ink-subtle">
           Order paid
           {% if signals.revenue %}<span class="font-medium text-ink">· {{ signals.currency|default:"" }} {{ signals.revenue }}</span>{% endif %}
         </p>
@@ -63,7 +63,7 @@ Severity colours mirror the Insight card pattern in templates/insights/_intellig
       {% endwith %}
 
     {% elif rec.status == "dismissed" %}
-      <p class="text-xs text-gray-400">Dismissed</p>
+      <p class="text-xs text-ink-subtle">Dismissed</p>
     {% endif %}
 
     {% if insight %}

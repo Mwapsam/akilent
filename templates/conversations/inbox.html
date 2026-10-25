@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load onboarding_tags %}
-{% block title %}Inbox — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Inbox — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 {% comment %}Page header: the title, and links to the neighbouring pages.
@@ -14,7 +14,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
 <header class="inbox-header">
   <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
-    <p class="hidden sm:block mt-1 text-sm text-gray-600">Who is waiting on you, and for how long — across every channel.</p>
+    <p class="hidden sm:block mt-1 text-sm text-ink-subtle">Who is waiting on you, and for how long — across every channel.</p>
   </div>
   <div class="flex items-center gap-1 sm:gap-2 shrink-0">
     <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Follow-ups due">
@@ -50,7 +50,16 @@ The links are icon buttons on a phone with their labels kept for screen readers
   boosted, full-page navigation to conversations:detail, unchanged from before this feature.
 {% endcomment %}
 <div class="inbox-split" id="inbox-split">
-  <div class="inbox-list-col">
+  <div class="inbox-list-col" x-data="{ stale: false }"
+       @ak-refresh-failed="if ($event.target.id === 'inbox-body') stale = true"
+       @ak-refresh-ok="if ($event.target.id === 'inbox-body') stale = false"
+       @online.window="htmx.trigger(document.body, 'inbox-refresh')">
+    {% comment %}A refresh that fails says so here, once, instead of a toast every
+    8 seconds (app.js treats timed refreshes as automatic). The list below is what
+    it was at the last good refresh, so it says that rather than looking live.{% endcomment %}
+    <p class="alert alert-warning text-sm mb-3" x-show="stale" x-cloak role="status">
+      The inbox isn't updating right now, so new messages may not show yet. It will refresh once Akilent can be reached.
+    </p>
     {% comment %}
       Live refresh, driven by HTMX rather than a bespoke fetch loop.
 
@@ -65,7 +74,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
     {% comment %}sr-only status region: announces a brief "Inbox updated" when the poll
     changes the list, without reading out the entire list to screen reader users.{% endcomment %}
     <div id="inbox-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
-    <div id="inbox-body"
+    <div id="inbox-body" data-auto-refresh="inbox-refresh"
          data-hash=""
          hx-get="{% url 'conversations:inbox_feed' %}{% querystring h=None %}"
          hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))], inbox-refresh from:body{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
@@ -81,7 +90,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
         {% include "components/icon.html" with name="message-circle" class="w-6 h-6" %}
       </span>
       <p class="font-medium text-ink">Select a conversation</p>
-      <p class="text-sm text-gray-500">It opens here, with the list still beside it.</p>
+      <p class="text-sm text-ink-subtle">It opens here, with the list still beside it.</p>
     </div>
     {% comment %}Shown while a conversation loads (inbox_pane.js sets .is-loading).{% endcomment %}
     <div class="inbox-pane-skeleton" aria-hidden="true">
@@ -93,7 +102,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
         <span class="inbox-skel inbox-skel-bubble is-out w-2/5"></span>
       </div>
     </div>
-    <div id="conversation-pane-inner"></div>
+    <div id="conversation-pane-inner" data-error-region data-error-retry-event="inbox-pane-retry" data-error-title="Couldn't open this conversation"></div>
   </div>
 </div>
 {% endblock %}

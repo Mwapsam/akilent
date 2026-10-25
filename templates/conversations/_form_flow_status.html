@@ -1,9 +1,9 @@
 {% comment %}The WhatsApp Flow status card; polls itself while publishing. Needs: form.{% endcomment %}
 <div id="flow-status" class="flex items-start justify-between gap-3 flex-wrap"
-     {% if form.flow_status == "publishing" %}hx-get="{% url 'conversations:form_flow_status' form.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+     {% if form.flow_status == "publishing" %}hx-get="{% url 'conversations:form_flow_status' form.pk %}" hx-trigger="every 2s" hx-swap="outerHTML" data-auto-refresh{% endif %}>
   <div>
     <p class="text-sm font-medium text-ink">On WhatsApp</p>
-    <p class="text-xs text-gray-600 mt-0.5" role="status">
+    <p class="text-xs text-ink-subtle mt-0.5" role="status">
       {% if form.flow_status == "published" %}
         <span class="badge badge-success">Live</span>{% if form.flow_published_at %} since {{ form.flow_published_at|date:"j M Y, H:i" }}{% endif %}
       {% elif form.flow_status == "publishing" %}

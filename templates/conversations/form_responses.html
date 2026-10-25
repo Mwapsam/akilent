@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       <a href="{% url 'conversations:forms_list' %}" class="hover:text-ink">Forms</a>
       <span aria-hidden="true">/</span>
       <a href="{% url 'conversations:form_detail' form.pk %}" class="hover:text-ink">{{ form.name }}</a>
@@ -32,7 +32,7 @@
       {% for r in page.object_list %}
       <tr>
         <td data-label="Customer"><a href="{% url 'conversations:detail' r.conversation.public_id %}" class="text-accent hover:underline">{{ r.contact.display_name }}</a>
-          <span class="block text-xs text-gray-500">{{ r.started_at|date:"j M, H:i" }}</span></td>
+          <span class="block text-xs text-ink-subtle">{{ r.started_at|date:"j M, H:i" }}</span></td>
         <td data-label="Status">{{ r.get_status_display }}</td>
         {% for c in r.cells %}<td>{{ c|default:"—" }}</td>{% endfor %}
       </tr>

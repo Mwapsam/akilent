@@ -8,6 +8,7 @@ should be, and a wait time printed twice all render perfectly happily.
 from datetime import timedelta
 
 import pytest
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.template import Context, Template
 from django.utils import timezone
@@ -318,7 +319,9 @@ class TestConversationHeaderStatus:
         client, account, _ = logged_in
         conv = _conversation(account, first="Sam")
         body = client.get(f"/inbox/{conv.public_id}/").content.decode()
-        assert '"back avatar name actions" "back avatar status status"' in body
+        # The pane's styles live in assets/app.css (no longer inline in the pane).
+        css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
+        assert '"back avatar name actions" "back avatar status status"' in css
         assert 'class="cv-h-status"' in body and 'class="cv-h-name' in body
 
 

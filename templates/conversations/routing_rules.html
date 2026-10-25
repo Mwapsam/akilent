@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Routing rules — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Routing rules — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Routing rules</h1>
-  <p class="mt-1 text-sm text-gray-600">
+  <p class="mt-1 text-sm text-ink-subtle">
     A new conversation is checked against these, in priority order (lowest first); the first one that
     matches decides its team. A rule with no conditions checked always matches — that's how to set a
     default/catch-all team. Nothing matching leaves the conversation in
@@ -27,7 +27,7 @@
               {% if not rule.is_active %}<span class="badge badge-neutral">Off</span>{% endif %}
             </td>
             <td data-label="Team">{{ rule.team.name }}</td>
-            <td data-label="Conditions" class="text-gray-600 text-sm">
+            <td data-label="Conditions" class="text-ink-subtle text-sm">
               {% if rule.conditions %}
                 {% for key, value in rule.conditions.items %}{{ key }}={{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}
               {% else %}
@@ -78,7 +78,7 @@
         <div>
           <label class="label" for="rule-priority">Priority</label>
           <input id="rule-priority" name="priority" type="number" class="input" value="0" />
-          <p class="mt-1 text-xs text-gray-500">Lower runs first.</p>
+          <p class="mt-1 text-xs text-ink-subtle">Lower runs first.</p>
         </div>
         <fieldset class="space-y-2">
           <legend class="label">Conditions (leave all blank/unchecked for a default/catch-all rule)</legend>
@@ -108,7 +108,7 @@
         <button class="btn btn-primary btn-sm w-full">Add rule</button>
       </form>
       {% else %}
-      <p class="text-sm text-gray-500">Add a <a href="{% url 'conversations:teams' %}" class="text-accent underline">team</a> first — a rule needs somewhere to route to.</p>
+      <p class="text-sm text-ink-subtle">Add a <a href="{% url 'conversations:teams' %}" class="text-accent underline">team</a> first — a rule needs somewhere to route to.</p>
       {% endif %}
     </div>
   </section>

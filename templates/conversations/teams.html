@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Teams — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Teams — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Teams</h1>
-  <p class="mt-1 text-sm text-gray-600">Organizational responsibility for a conversation — Sales, Support — kept separate from which agent owns it.</p>
+  <p class="mt-1 text-sm text-ink-subtle">Organizational responsibility for a conversation — Sales, Support — kept separate from which agent owns it.</p>
 </header>
 
 <div class="grid gap-6 lg:grid-cols-3">
@@ -17,7 +17,7 @@
           {% for team in teams %}
           <tr>
             <td data-label="Team">{{ team.name }}</td>
-            <td data-label="Members" class="text-gray-600">{{ team.member_count }}</td>
+            <td data-label="Members" class="text-ink-subtle">{{ team.member_count }}</td>
             <td><a href="{% url 'conversations:team_detail' team.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
           </tr>
           {% endfor %}

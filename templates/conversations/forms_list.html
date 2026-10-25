@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Forms — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Forms — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Forms</h1>
-  <p class="mt-1 text-sm text-gray-600">Collect details inside a conversation: a native form on WhatsApp, or questions one at a time on other channels. Every answer is checked before it's saved. Send one from the inbox, or from an automation.</p>
+  <p class="mt-1 text-sm text-ink-subtle">Collect details inside a conversation: a native form on WhatsApp, or questions one at a time on other channels. Every answer is checked before it's saved. Send one from the inbox, or from an automation.</p>
 </header>
 
 <div class="grid gap-6 lg:grid-cols-3">
@@ -18,8 +18,8 @@
           <tr>
             <td data-label="Form">{{ form.name }}</td>
             <td data-label="Status">{{ form.get_status_display }}</td>
-            <td data-label="Questions" class="text-gray-600">{{ form.questions|length }}</td>
-            <td data-label="Finished" class="text-gray-600">{% if form.sent %}{{ form.done }} of {{ form.sent }}{% else %}—{% endif %}</td>
+            <td data-label="Questions" class="text-ink-subtle">{{ form.questions|length }}</td>
+            <td data-label="Finished" class="text-ink-subtle">{% if form.sent %}{{ form.done }} of {{ form.sent }}{% else %}—{% endif %}</td>
             <td><a href="{% url 'conversations:form_detail' form.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
           </tr>
           {% endfor %}

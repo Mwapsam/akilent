@@ -10,8 +10,8 @@ optional overdue. Used by the Follow-ups page and the conversation pane.
       {% elif f.source == "policy" %}<span class="badge badge-info ml-1">From Insights</span>
       {% elif f.source == "workflow" %}<span class="badge badge-info ml-1">From an automation</span>{% endif %}
     </p>
-    <p class="text-sm text-gray-700">{{ f.note|default:"Follow up" }}</p>
-    <p class="text-xs {% if overdue %}text-red-700{% else %}text-gray-500{% endif %}">
+    <p class="text-sm text-ink-muted">{{ f.note|default:"Follow up" }}</p>
+    <p class="text-xs {% if overdue %}text-red-700{% else %}text-ink-subtle{% endif %}">
       Due {{ f.due_at|date:"D j M, H:i" }}{% if overdue %} ({{ f.due_at|timesince }} ago){% endif %}
       · {% if f.assigned_to %}{{ f.assigned_to.get_full_name|default:f.assigned_to.email }}{% else %}Whole team{% endif %}
       {% if f.snoozed_count %} · snoozed {{ f.snoozed_count }}×{% endif %}

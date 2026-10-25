@@ -134,7 +134,7 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
         </div>
 
         <p class="inbox-preview">
-          {% if c.has_messages %}{% if c.preview_direction == 'outbound' %}<span class="text-gray-500">You: </span>{% endif %}{{ c.preview_body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
+          {% if c.has_messages %}{% if c.preview_direction == 'outbound' %}<span class="text-ink-subtle">You: </span>{% endif %}{{ c.preview_body|default:"(no text content)" }}{% else %}No messages yet{% endif %}
         </p>
 
         <div class="inbox-meta">

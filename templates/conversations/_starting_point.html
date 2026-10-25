@@ -6,11 +6,11 @@ conversations.api.starting_point; renders nothing before WhatsApp is connected.
 <section class="card card-pad space-y-3" aria-labelledby="sp-h">
   {% if starting_point.state == "measuring" %}
   <h2 id="sp-h" class="font-semibold text-ink">Your starting point</h2>
-  <p class="text-sm text-gray-600">We're measuring your first week on WhatsApp: day {{ starting_point.day }} of 7. On {{ starting_point.ready_on|date:"j M" }} you'll see where you started, and in 30 days what changed.</p>
+  <p class="text-sm text-ink-subtle">We're measuring your first week on WhatsApp: day {{ starting_point.day }} of 7. On {{ starting_point.ready_on|date:"j M" }} you'll see where you started, and in 30 days what changed.</p>
 
   {% elif starting_point.state == "starting" %}
   <h2 id="sp-h" class="font-semibold text-ink">Your starting point</h2>
-  <p class="text-sm text-gray-600">Your first week on WhatsApp. We'll compare with a week a month later, on {{ starting_point.compare_on|date:"j M" }}.</p>
+  <p class="text-sm text-ink-subtle">Your first week on WhatsApp. We'll compare with a week a month later, on {{ starting_point.compare_on|date:"j M" }}.</p>
   {% with s=starting_point.start %}
   <ul class="rounded-xl border border-border divide-y divide-border text-sm">
     <li class="flex justify-between gap-3 p-3"><span>Conversations started</span><strong>{{ s.conversations }}</strong></li>
@@ -36,7 +36,7 @@ conversations.api.starting_point; renders nothing before WhatsApp is connected.
       </tbody>
     </table>
   </div>
-  <p class="text-xs text-gray-500">Both weeks are measured the same way, from your WhatsApp conversations.</p>
+  <p class="text-xs text-ink-subtle">Both weeks are measured the same way, from your WhatsApp conversations.</p>
   {% endif %}
 </section>
 {% endif %}

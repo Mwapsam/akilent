@@ -13,4 +13,4 @@ the full sentence comes back from sm up, and the exact time is in the title.
 {% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning whitespace-nowrap" title="Waiting since {{ snapshot.last_customer_message_at|date:'j M Y, H:i' }}"><span class="sm:hidden">Waiting · {{ snapshot.last_customer_message_at|ago:now }}</span><span class="hidden sm:inline">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span></span>
 {% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success whitespace-nowrap">Replied<span class="hidden sm:inline"> · waiting for the customer</span></span>
 {% else %}<span class="badge badge-neutral whitespace-nowrap">Closed</span>{% endif %}
-{% if snapshot.first_response_seconds is not None %}<span class="hidden sm:inline text-xs text-gray-400 whitespace-nowrap">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}
+{% if snapshot.first_response_seconds is not None %}<span class="hidden sm:inline text-xs text-ink-subtle whitespace-nowrap">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}

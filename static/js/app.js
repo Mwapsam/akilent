@@ -547,8 +547,11 @@
   // Elements whose *current* request is an automatic one. Membership is set
   // just before firing and cleared once the toast handlers below have read it.
   const silentRequests = new WeakSet();
-  function isSilent(el) {
-    return !!el && (silentRequests.has(el) || el.hasAttribute("hx-toast-silent"));
+  // xhr._akAuto marks one automatic refresh (see "Refreshes nobody asked for" below). It
+  // lives on the request, not the element, so a cancelled refresh can't leave the element
+  // silent for the next, user-triggered, request.
+  function isSilent(el, xhr) {
+    return (!!xhr && !!xhr._akAuto) || (!!el && (silentRequests.has(el) || el.hasAttribute("hx-toast-silent")));
   }
 
   // Three things the hand-rolled data-ajax engine did that HTMX does not do
@@ -641,6 +644,8 @@
     const header = xhr.getResponseHeader("X-Toast");
     if (!header) return;
     const t = decodeToast(header);
+    // Element-level silence only: an automatic refresh silences its *failures*, never
+    // what the server chose to say (the follow-ups-due toast arrives on an SSE refresh).
     if (isSilent(e.detail.elt) && t.type !== "success") return;
     window.toast(t.type, t.message);
   });
@@ -679,9 +684,14 @@
     if (status === 404 || status === 410) return { kind: "gone" };
     if (status === 409) return { kind: "conflict" };
     if (status === 429) return { kind: "busy" };
+    // A proxy answering for a slow or restarting app: Django may still finish the request.
+    if (status === 502 || status === 503 || status === 504) return { kind: "gateway" };
     if (status >= 500) return { kind: "server" };
     return { kind: "client" };
   }
+  // Outcomes after which a save may or may not have happened: the request may have reached
+  // the server, and requests are not atomic (a 500 can come after the work was committed).
+  const MAYBE_SAVED = { timeout: true, network: true, gateway: true, server: true };
   const LOAD_COPY = {
     offline: ["You're offline", "Reconnect and try again. Nothing you entered was lost."],
     timeout: ["This is taking too long", "Akilent didn't answer in time. Nothing you entered was lost."],
@@ -690,6 +700,7 @@
     gone: ["This isn't here any more", "It may have been deleted or moved."],
     conflict: ["This changed while you were looking", "Load it again to see the latest."],
     busy: ["Too many requests", "Wait a few seconds, then try again."],
+    gateway: ["Akilent isn't answering", "It may be restarting. Try again in a moment."],
     server: ["Couldn't load this", "Something went wrong on our side. Try again in a moment."],
     client: ["Couldn't load this", "Try again, or reload the page."],
   };
@@ -703,9 +714,13 @@
     gone: "This no longer exists. It may have been deleted.",
     conflict: "Someone else changed this first. Reload to see the latest, then try again.",
     busy: "Too many requests. Wait a few seconds, then try again.",
-    server: "This didn't save: something went wrong on our side. What you entered is still here.",
+    gateway: "Akilent didn't answer properly, so this may or may not have saved. Check before trying again.",
+    // Not "didn't save": a 500 can come after the change was made.
+    server: "Something went wrong on our side, so this may or may not have saved. Check before trying again. What you entered is still here.",
     client: "This didn't go through. Check the form and try again.",
   };
+  // One source of truth for "did it go through" (static/js/chat.js uses it for sends).
+  window.akFailure = { describe: describeFailure, maybeSaved: MAYBE_SAVED, SAVE_COPY: SAVE_COPY };
   function showRegionError(region, detail, failure) {
     const tpl = document.getElementById("ak-error-state");
     if (!tpl) return false;
@@ -715,7 +730,15 @@
     node.querySelector("[data-error-message]").textContent = copy[1];
     const retry = node.querySelector("[data-error-retry]");
     const cfg = detail.requestConfig || {};
-    if (retry && cfg.path && window.htmx) {
+    const retryEvent = region.getAttribute("data-error-retry-event");
+    if (retry && retryEvent) {
+      // The region retries its own way (inbox_pane.js: through openInPane).
+      retry.addEventListener("click", function () {
+        retry.setAttribute("aria-busy", "true");
+        retry.disabled = true;
+        region.dispatchEvent(new CustomEvent(retryEvent, { bubbles: false }));
+      });
+    } else if (retry && cfg.path && window.htmx) {
       retry.addEventListener("click", function () {
         retry.setAttribute("aria-busy", "true");
         retry.disabled = true;
@@ -732,6 +755,13 @@
     swapInto.replaceChildren(node);
     return true;
   }
+  function jsonError(xhr) {
+    if (!xhr || !/json/i.test(xhr.getResponseHeader("Content-Type") || "")) return "";
+    try {
+      const body = JSON.parse(xhr.responseText);
+      return body && typeof body.error === "string" ? body.error.slice(0, 300) : "";
+    } catch (_) { return ""; }
+  }
   function handleFailure(e, kind) {
     const detail = e.detail;
     const xhr = detail.xhr;
@@ -743,7 +773,7 @@
       if (!region.isConnected) return; // left the page
       if (xhr && xhr._akSeq && xhr._akSeq !== regionSeq.get(region)) return; // superseded
     }
-    if (isSilent(detail.elt)) return;
+    if (isSilent(detail.elt, xhr)) return;
     // Navigations are handled further down (they fall back to a full page load).
     if (isBoosted(detail) && verb === "get" && kind !== "response") return;
     if (verb === "get") {
@@ -754,7 +784,11 @@
       return;
     }
     if (xhr && xhr.getResponseHeader("X-Toast")) return; // the view said what happened
-    window.toast("danger", SAVE_COPY[failure.kind] || SAVE_COPY.client);
+    // A view that answers a refused save with JSON {"error": "..."} knows why ("The
+    // workspace owner can't be removed"); say that rather than the generic copy. Only for
+    // a refusal (4xx): for a 5xx the outcome is unknown whatever the body says.
+    const reason = failure.kind !== "server" && failure.kind !== "gateway" && jsonError(xhr);
+    window.toast("danger", reason || SAVE_COPY[failure.kind] || SAVE_COPY.client);
   }
   document.addEventListener("htmx:responseError", function (e) { handleFailure(e, "response"); });
   document.addEventListener("htmx:sendError", function (e) { handleFailure(e, navigator.onLine ? "network" : "offline"); });
@@ -783,6 +817,37 @@
   document.addEventListener("htmx:afterRequest", function (e) {
     const el = e.detail.elt;
     if (silentRequests.has(el)) setTimeout(function () { silentRequests.delete(el); }, 0);
+    if (el && e.detail.xhr && e.detail.xhr._akAuto) {
+      const ok = e.detail.successful;
+      // A region that refreshes itself says when it has stopped doing so: the
+      // content on screen is what it was at the last good refresh, not live.
+      if (ok) el.removeAttribute("data-stale");
+      else el.setAttribute("data-stale", "");
+      el.dispatchEvent(new CustomEvent(ok ? "ak-refresh-ok" : "ak-refresh-failed", { bubbles: true }));
+    }
+  });
+
+  // Refreshes nobody asked for fail without a toast. A list refreshing every 8
+  // seconds while the server is unreachable raised an error toast each time, and
+  // error toasts stay until dismissed. The region is marked data-stale instead and
+  // fires ak-refresh-failed (ak-refresh-ok once it recovers), so the page can say
+  // "not updating" in place, once.
+  // Opt-in, never inferred from htmx internals: an element marked data-auto-refresh
+  // declares that its own triggers are background refreshes - its timer or load
+  // (htmx sends those with no triggering event), sse:… events, and any custom event
+  // names listed in the attribute's value. A trusted click or submit on it is still
+  // the user's request and keeps its error toast. htmx.ajax() also sends no event,
+  // so code making a user-visible request must not use such an element as source.
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    const el = e.detail.elt;
+    const xhr = e.detail.xhr;
+    if (!el || !xhr || !el.hasAttribute || !el.hasAttribute("data-auto-refresh")) return;
+    const ev = (e.detail.requestConfig || {}).triggeringEvent;
+    const listed = (el.getAttribute("data-auto-refresh") || "").split(/\s+/).filter(Boolean);
+    const own = ev === undefined || ev === null || ev === el;
+    const pushed = ev instanceof Event && !ev.isTrusted &&
+      (ev.type.indexOf("sse:") === 0 || listed.indexOf(ev.type) !== -1);
+    if (own || pushed) xhr._akAuto = true;
   });
 
   // --- In-place navigation (shell swaps) ---------------------------------
@@ -806,9 +871,14 @@
       catch (err) { console.error(err); }
     });
   }
+  // Run a hook at once only if the start-up pass (DOMContentLoaded, below) has already
+  // happened. A deferred script calls onPage while readyState is "interactive", before
+  // DOMContentLoaded; running it then *and* in the start-up pass left two live copies of
+  // the page script (the two-pane inbox opened every conversation twice).
+  let pageHooksStarted = false;
   akilent.onPage = function (fn) {
     pageHooks.push(fn);
-    if (document.readyState !== "loading") {
+    if (pageHooksStarted) {
       try { const c = fn(mainEl()); if (typeof c === "function") pageCleanups.push(c); }
       catch (err) { console.error(err); }
     }
@@ -940,6 +1010,14 @@
     if (window.Alpine && Alpine.store("ui")) Alpine.store("ui").closeDrawer();
   });
 
+  // View Transitions are for moving between pages (boosted navigation). With
+  // globalViewTransitions on, every other swap - the inbox list refreshing itself
+  // every few seconds, a conversation opening in the pane, a form re-rendering -
+  // also cross-faded the whole screen, which read as the screen flickering.
+  document.addEventListener("htmx:beforeTransition", function (e) {
+    if (!isBoosted(e.detail)) e.preventDefault();
+  });
+
   document.addEventListener("htmx:historyRestore", function (e) {
     // The restore response is a whole page; make sure its <title> wins.
     const html = e.detail && e.detail.serverResponse;
@@ -1022,6 +1100,7 @@
       window.htmx.config.globalViewTransitions = !reduceMotion;
     }
     markUnsafeMain();
+    pageHooksStarted = true;
     runPageHooks();
   });
 

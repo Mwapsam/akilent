@@ -4,12 +4,12 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       <a href="{% url 'conversations:forms_list' %}" class="hover:text-ink">Forms</a>
       <span aria-hidden="true">/</span><span class="text-ink">{{ form.name }}</span>
     </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ form.name }}</h1>
-    <p class="mt-1 text-sm text-gray-600">
+    <p class="mt-1 text-sm text-ink-subtle">
       <span class="badge {% if form.status == 'published' %}badge-success{% elif form.status == 'archived' %}badge-neutral{% else %}badge-warning{% endif %}">{% if form.status == 'published' %}Ready to send{% else %}{{ form.get_status_display }}{% endif %}</span>
       {% if stats.sent %}· Sent {{ stats.sent }} · finished {{ stats.done }}{% if stats.rate is not None %} ({{ stats.rate }}%){% endif %}{% if stats.waiting %} · {{ stats.waiting }} filling it in{% endif %}{% endif %}
     </p>
@@ -44,7 +44,7 @@
   <div class="space-y-4 min-w-0">
     <div class="flex items-center justify-between">
       <h2 class="font-semibold text-ink">Questions</h2>
-      <span class="text-xs" :class="saveState === 'error' ? 'text-red-700' : 'text-gray-400'" x-text="saveLabel()" aria-live="polite"></span>
+      <span class="text-xs" :class="saveState === 'error' ? 'text-red-700' : 'text-ink-subtle'" x-text="saveLabel()" aria-live="polite"></span>
     </div>
     <ul class="text-xs text-red-700 space-y-0.5" x-show="problems.length" x-cloak>
       <template x-for="p in problems" :key="p"><li x-text="'• ' + p"></li></template>
@@ -54,7 +54,7 @@
       <template x-for="(q, i) in questions" :key="q._id">
         <li class="card card-pad space-y-2">
           <div class="flex items-center justify-between gap-2">
-            <span class="text-xs font-medium text-gray-500" x-text="'Question ' + (i + 1)"></span>
+            <span class="text-xs font-medium text-ink-subtle" x-text="'Question ' + (i + 1)"></span>
             <div class="flex items-center gap-1">
               <button type="button" class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" aria-label="Move up">↑</button>
               <button type="button" class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === questions.length - 1" aria-label="Move down">↓</button>
@@ -63,7 +63,7 @@
           </div>
           <label class="text-xs block">Question
             <input class="input input-sm w-full mt-0.5" x-model="q.label" @input="changed()" maxlength="200" placeholder="What's your budget?" />
-            <span class="text-xs" :class="labelTooLong(q) ? 'text-amber-700' : 'text-gray-400'"
+            <span class="text-xs" :class="labelTooLong(q) ? 'text-amber-700' : 'text-ink-subtle'"
                   x-text="labelTooLong(q) ? 'On WhatsApp this kind of question shows at most ' + labelLimit(q) + ' characters. Shorten it, or move the rest into the hint.' : ''"></span>
           </label>
           <div class="grid gap-2 sm:grid-cols-2">
@@ -79,7 +79,7 @@
             </label>
           </div>
           <div x-show="isChoice(q)" class="space-y-1.5">
-            <p class="text-xs text-gray-600">Choices</p>
+            <p class="text-xs text-ink-subtle">Choices</p>
             <template x-for="(o, oi) in q.options" :key="oi">
               <div class="flex gap-2">
                 <input class="input input-sm flex-1" x-model="q.options[oi]" @input="changed()" maxlength="60" :placeholder="'Choice ' + (oi + 1)" />
@@ -88,7 +88,7 @@
             </template>
             <button type="button" class="btn btn-ghost btn-xs" @click="q.options.push(''); changed()">+ Add a choice</button>
           </div>
-          <label class="text-xs block">Hint <span class="text-gray-400">(optional)</span>
+          <label class="text-xs block">Hint <span class="text-ink-subtle">(optional)</span>
             <input class="input input-sm w-full mt-0.5" x-model="q.helper" @input="changed()" maxlength="80" placeholder="e.g. A rough figure is fine" />
           </label>
           <div class="flex flex-wrap gap-4 text-xs">
@@ -144,7 +144,7 @@
         </label>
         <button class="btn btn-secondary btn-sm">Save</button>
       </form>
-      <p class="text-xs text-gray-500">On Instagram and other channels it's always asked one question per message, with the same checks.</p>
+      <p class="text-xs text-ink-subtle">On Instagram and other channels it's always asked one question per message, with the same checks.</p>
       {% if form.presentation == "whatsapp_flow" %}
         <div class="border-t border-border pt-3">{% include "conversations/_form_flow_status.html" %}</div>
         {% if flow_problems %}
@@ -156,14 +156,14 @@
 
   {# Live preview, as the customer will see it #}
   <aside class="lg:sticky lg:top-4 self-start" aria-label="Preview">
-    <p class="text-xs font-medium text-gray-500 mb-2">Preview</p>
+    <p class="text-xs font-medium text-ink-subtle mb-2">Preview</p>
     <div class="rounded-[2rem] border-4 border-ink/80 bg-surface-muted p-3 space-y-2 max-w-xs mx-auto">
       <div class="wa-bubble" x-text="copy.intro_text || ('Please fill in ' + data.name + '.')"></div>
       <div class="wa-button" x-text="copy.cta_label || 'Start'"></div>
       <div class="rounded-2xl bg-surface p-3 space-y-3 shadow-card">
         <div class="flex items-center justify-between">
           <p class="text-sm font-semibold text-ink" x-text="copy.screen_title || 'Your details'"></p>
-          <span class="text-xs text-gray-400" x-show="pages().length > 1" x-text="'Page ' + (page + 1) + ' of ' + pages().length"></span>
+          <span class="text-xs text-ink-subtle" x-show="pages().length > 1" x-text="'Page ' + (page + 1) + ' of ' + pages().length"></span>
         </div>
         <template x-for="q in (pages()[page] || [])" :key="q._id">
           <div class="space-y-1">
@@ -171,7 +171,7 @@
             <template x-if="isChoice(q)">
               <div class="space-y-1">
                 <template x-for="o in q.options.filter((o) => o.trim())" :key="o">
-                  <div class="flex items-center gap-2 text-xs text-gray-700">
+                  <div class="flex items-center gap-2 text-xs text-ink-muted">
                     <span class="w-3.5 h-3.5 border border-gray-400" :class="q.field_type === 'multi_choice' ? 'rounded' : 'rounded-full'"></span>
                     <span x-text="o"></span>
                   </div>
@@ -179,7 +179,7 @@
               </div>
             </template>
             <template x-if="!isChoice(q)">
-              <div class="rounded-lg border border-border px-2 py-1.5 text-xs text-gray-400"
+              <div class="rounded-lg border border-border px-2 py-1.5 text-xs text-ink-subtle"
                    x-text="q.field_type === 'date' ? 'Pick a date' : q.field_type === 'opt_in' ? '☐ I agree' : (q.helper || 'Answer')"></div>
             </template>
           </div>
@@ -205,12 +205,12 @@
     {% for r in recent %}
     <li class="px-4 py-2 flex items-center justify-between gap-3 text-sm">
       <a href="{% url 'conversations:detail' r.conversation.public_id %}" class="text-ink hover:underline truncate">{{ r.contact.display_name }}</a>
-      <span class="text-xs text-gray-500">{{ r.get_status_display }} · {{ r.started_at|timesince }} ago</span>
+      <span class="text-xs text-ink-subtle">{{ r.get_status_display }} · {{ r.started_at|timesince }} ago</span>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p class="text-sm text-gray-500">Nobody has had this form yet. Send it from a conversation (“Start a form”) or from an automation.</p>
+  <p class="text-sm text-ink-subtle">Nobody has had this form yet. Send it from a conversation (“Start a form”) or from an automation.</p>
   {% endif %}
 </section>
 

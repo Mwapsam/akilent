@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ team.name }} — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}{{ team.name }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6">
@@ -56,7 +56,7 @@
         <button class="btn btn-primary btn-sm w-full">Add to team</button>
       </form>
       {% else %}
-      <p class="text-sm text-gray-500">Everyone on your account is already on this team.</p>
+      <p class="text-sm text-ink-subtle">Everyone on your account is already on this team.</p>
       {% endif %}
     </div>
   </section>

@@ -60,6 +60,9 @@
     }
 
     function closePane() {
+      // A load still in flight must not land in a closed pane or push a history entry.
+      loadSeq++;
+      window.htmx.trigger(pane, "htmx:abort");
       delete split.dataset.open;
       split.classList.remove("has-conversation", "is-loading");
       pane.innerHTML = "";
@@ -69,30 +72,103 @@
 
     // Loads ``url`` into the pane. ``push`` adds a history entry (a click); a popstate
     // re-open must not, or Back would bounce between the same two entries.
+    // Only the latest call finishes the job: clicking B while A is still loading must
+    // not leave A's title, history entry or focus behind once A's answer arrives.
+    var loadSeq = 0;
+    var lastLoad = null; // what the pane's Try again repeats
+    function pathOf(u) { return new URL(u, window.location.href).pathname; }
+    // Pane loads carry this header (set below); nothing else sends it. Forms inside the pane
+    // (assign, tags, snooze) also target the pane and must always swap. htmx fires the swap
+    // events on the target, so the event's element can't tell the two apart.
+    var PANE_HEADER = "X-Inbox-Pane-Load";
+    var paneHeaders = {};
+    paneHeaders[PANE_HEADER] = "1";
+    function isPaneLoad(detail) {
+      var cfg = detail && detail.requestConfig;
+      return !!(cfg && cfg.headers && cfg.headers[PANE_HEADER]);
+    }
     function openInPane(url, push) {
+      var mine = ++loadSeq;
+      lastLoad = { url: url, push: push };
       split.dataset.open = url;
       selectRow(rowFor(url));
       split.classList.add("has-conversation", "is-loading");
       var failed = false;
+      var status = 0;
+      // With View Transitions on (app.js: globalViewTransitions unless reduced motion) htmx
+      // swaps after its promise has resolved, so "loaded" means the pane has settled, not
+      // that the request finished. Reading the pane at resolve time found it still empty and
+      // fell back to a full page load on every click, losing the list beside it.
+      var settled = false;
+      var onSettled = null;
+      function onSettle(e) {
+        // Only this load's own swap counts, not an earlier one finishing late. Compared by
+        // pathname: the same URL can arrive absolute from a row and relative from history.
+        var cfg = e.detail && e.detail.requestConfig;
+        if (isPaneLoad(e.detail) && cfg && pathOf(cfg.path) === pathOf(url)) {
+          settled = true;
+          if (onSettled) onSettled();
+        }
+      }
+      function whenSettled() {
+        return new Promise(function (resolve) {
+          if (settled || failed) return resolve();
+          onSettled = resolve;
+          setTimeout(resolve, 4000);
+        });
+      }
+      // Only this load's own failure: a form inside the pane (assign, tags, snooze) also
+      // targets the pane, and its error must not be read as the conversation failing to open.
       function onError(e) {
-        if (e.detail && e.detail.target === pane) failed = true;
+        var cfg = e.detail && e.detail.requestConfig;
+        if (isPaneLoad(e.detail) && cfg && pathOf(cfg.path) === pathOf(url)) {
+          failed = true;
+          status = e.detail.xhr ? e.detail.xhr.status : 0;
+        }
+      }
+      function stopListening() {
+        document.removeEventListener("htmx:responseError", onError);
+        document.removeEventListener("htmx:sendError", onError);
+        document.removeEventListener("htmx:timeout", onError);
+        document.removeEventListener("htmx:afterSettle", onSettle);
       }
       document.addEventListener("htmx:responseError", onError);
       document.addEventListener("htmx:sendError", onError);
+      document.addEventListener("htmx:timeout", onError);
+      document.addEventListener("htmx:afterSettle", onSettle);
+      // htmx queues a second request on a source element behind the first and resolves its
+      // promise at once, so clicking B then C opened B. The pane is the source, and any load
+      // still in flight on it is cancelled first; onBeforeSwap below also drops a late answer
+      // that is not for the conversation asked for last.
+      window.htmx.trigger(pane, "htmx:abort");
       window.htmx
-        .ajax("GET", url, { target: "#conversation-pane-inner", swap: "innerHTML", source: document.body })
+        .ajax("GET", url, { target: "#conversation-pane-inner", swap: "innerHTML", source: pane, headers: paneHeaders })
+        .then(whenSettled)
         .then(function () {
-          document.removeEventListener("htmx:responseError", onError);
-          document.removeEventListener("htmx:sendError", onError);
-          if (failed || !pane.querySelector("[data-title]")) throw new Error("pane did not load");
+          stopListening();
+          if (mine !== loadSeq) return; // a newer conversation was asked for meanwhile
+          if (failed) throw new Error("pane did not load");
+          // Answered, but not with a conversation (a sign-in page, an unexpected redirect):
+          // the full page shows whatever it is.
+          if (!pane.querySelector("[data-title]")) { window.location.href = url; return; }
           split.classList.remove("is-loading");
           if (push) history.pushState({ akilentPane: url }, "", url);
           setTitle();
           focusPaneHeading();
         })
         .catch(function () {
-          // The pane couldn't load (network error, a 404 for a deleted conversation, …) —
-          // fall back to a real navigation rather than leaving the user on an empty pane.
+          stopListening();
+          if (mine !== loadSeq) return;
+          split.classList.remove("is-loading");
+          // Rejected without an error of its own: cancelled (htmx:abort), not failed.
+          if (!failed) return;
+          // Lost connection, a timeout or a server error: the pane (a data-error-region)
+          // now says so, with Try again (which comes back as onRetry). Leaving the page
+          // instead would land an offline user on the browser's own error page and lose the
+          // list beside it.
+          if (failed && status !== 403 && status !== 404 && status !== 410 && pane.querySelector("[data-error-state]")) return;
+          // A conversation that is gone or not visible, or anything else unexpected: the
+          // full page says why better than the pane can.
           window.location.href = url;
         });
     }
@@ -107,7 +183,10 @@
       if (!a || !list.contains(a)) return;
       e.preventDefault();
       e.stopPropagation();
-      if (a.getAttribute("aria-current") === "true") return; // already open in the pane
+      // Already open and showing: nothing to do. A row whose load failed (the pane shows the
+      // error state) or is still loading opens again, rather than ignoring the click.
+      if (a.getAttribute("aria-current") === "true" && pane.querySelector("[data-title]") &&
+          !split.classList.contains("is-loading")) return;
       openInPane(a.href, true);
     }
 
@@ -121,6 +200,20 @@
         closePane();
       }
     }
+
+    // A late answer for a conversation that is no longer the one asked for never replaces
+    // the newer one (race safety: the last click wins, whatever order the answers arrive).
+    // Also: nothing lands once the pane has been closed (Back to the inbox).
+    function onBeforeSwap(e) {
+      var cfg = e.detail && e.detail.requestConfig;
+      if (!isPaneLoad(e.detail) || !cfg) return;
+      if (!split.dataset.open || pathOf(cfg.path) !== pathOf(split.dataset.open)) e.detail.shouldSwap = false;
+    }
+
+    // The pane's error state asks for a retry through data-error-retry-event (app.js) rather
+    // than repeating the raw request, so a retry goes through openInPane: latest-click-wins,
+    // history and title included.
+    function onRetry() { if (lastLoad) openInPane(lastLoad.url, lastLoad.push); }
 
     // The list poll re-renders every row; keep the open conversation highlighted.
     function onAfterSwap(e) {
@@ -142,11 +235,15 @@
     document.addEventListener("click", onClickCapture, true);
     window.addEventListener("popstate", onPopState);
     document.addEventListener("htmx:afterSwap", onAfterSwap);
+    document.addEventListener("htmx:beforeSwap", onBeforeSwap);
+    pane.addEventListener("inbox-pane-retry", onRetry);
     window.addEventListener("resize", fit, { passive: true });
     return function cleanup() {
       document.removeEventListener("click", onClickCapture, true);
       window.removeEventListener("popstate", onPopState);
       document.removeEventListener("htmx:afterSwap", onAfterSwap);
+      document.removeEventListener("htmx:beforeSwap", onBeforeSwap);
+      pane.removeEventListener("inbox-pane-retry", onRetry);
       window.removeEventListener("resize", fit);
       document.title = inboxTitle;
     };

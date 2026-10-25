@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Follow-ups — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Follow-ups — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
-    <p class="mt-1 text-sm text-gray-600">Reminders for your team to get back to a customer. Nothing here is sent to customers. Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
+    <p class="mt-1 text-sm text-ink-subtle">Reminders for your team to get back to a customer. Nothing here is sent to customers. Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
   </div>
   <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false" class="flex items-center gap-2 text-sm">
     {% csrf_token %}
     <input type="hidden" name="on" value="{% if emails_on %}0{% else %}1{% endif %}">
-    <span class="text-gray-600">Email me when mine are due:</span>
+    <span class="text-ink-subtle">Email me when mine are due:</span>
     <button class="btn btn-ghost btn-sm" aria-pressed="{{ emails_on|yesno:'true,false' }}">{% if emails_on %}On{% else %}Off{% endif %}</button>
   </form>
 </header>
@@ -30,7 +30,7 @@
   {% if due.has_other_pages %}
   <nav class="mt-3 flex items-center justify-between text-sm" aria-label="Pages">
     {% if due.has_previous %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}
-    <span class="text-gray-500">Page {{ due.number }} of {{ due.paginator.num_pages }}</span>
+    <span class="text-ink-subtle">Page {{ due.number }} of {{ due.paginator.num_pages }}</span>
     {% if due.has_next %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.next_page_number }}">Next</a>{% else %}<span></span>{% endif %}
   </nav>
   {% endif %}
