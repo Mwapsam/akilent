@@ -28,12 +28,12 @@ from apps.core.module_gate import module_required
 from .composer import (
     EDITABLE_STATUSES as _EDITABLE_POST_STATUSES,
 )
+from .composer import caption_brief
 from .composer import (
     parse_schedule as _parse_schedule,
 )
 from .models import (
     ContentCampaign,
-    ContentCaption,
     ContentPillar,
     ContentPlanItem,
     ContentPost,
@@ -1490,6 +1490,12 @@ def post_new(request):
     wa_links = links_for_post(existing_post) if existing_post else {}
     dests = destinations(account)
     review_gate = requires_review and not approved
+    # A new post, or a draft nobody has written yet (e.g. one made from a plan item),
+    # can start from AI captions.
+    show_ai_start = existing_post is None or (
+        existing_post.status in AUTOSAVE_STATUSES and not existing_post.caption
+    )
+    plan_item = existing_post.plan_item if existing_post else None
     return render(
         request,
         "publishing/post_new.html",
@@ -1497,6 +1503,7 @@ def post_new(request):
             "account": account,
             "media_types": ContentPost.MediaType.choices,
             "existing_post": existing_post,
+            "show_ai_start": show_ai_start,
             "destinations": list(dests.values()),
             "editor_data": {
                 "post_id": existing_post.pk if existing_post else None,
@@ -1528,6 +1535,7 @@ def post_new(request):
                     "edit": reverse("publishing:post-new"),
                 },
                 "caption": existing_post.caption if existing_post else "",
+                "brief_topic": plan_item.topic if plan_item else "",
                 "hashtags": existing_post.hashtags if existing_post else [],
                 "platform_captions": existing_post.platform_captions
                 if existing_post
@@ -2079,7 +2087,10 @@ def _submit_for_review(post, user) -> bool:
     from .models import ApprovalLog
 
     ApprovalLog.objects.create(
-        post=post, action=ApprovalLog.Action.SUBMITTED, performed_by=user
+        post=post,
+        action=ApprovalLog.Action.SUBMITTED,
+        performed_by=user,
+        content_hash=post.compute_content_hash(),
     )
     return True
 
@@ -2152,7 +2163,10 @@ def post_approve(request, pk):
     from .models import ApprovalLog
 
     ApprovalLog.objects.create(
-        post=post, action=ApprovalLog.Action.APPROVED, performed_by=request.user
+        post=post,
+        action=ApprovalLog.Action.APPROVED,
+        performed_by=request.user,
+        content_hash=post.last_content_hash,
     )
 
     messages.success(request, "Post approved.")
@@ -2195,6 +2209,7 @@ def post_request_changes(request, pk):
         action=ApprovalLog.Action.CHANGES_REQUESTED,
         performed_by=request.user,
         feedback=feedback,
+        content_hash=post.compute_content_hash(),
     )
 
     messages.success(request, "Changes requested.")
@@ -2230,6 +2245,7 @@ def post_resubmit_after_changes(request, pk):
         post=post,
         action=ApprovalLog.Action.RESUBMITTED,
         performed_by=request.user,
+        content_hash=post.compute_content_hash(),
     )
 
     messages.success(request, "Post resubmitted for review.")
@@ -2261,22 +2277,26 @@ def generate_caption(request):
 
     from apps.ai import tasks as ai_tasks
 
-    draft_id = ai_tasks.build_caption_draft(
-        account.id, prompt, media_type, platform, goal=goal, cta=cta
-    )
-
+    post = None
     if post_id:
         try:
-            post = ContentPost.objects.get(pk=int(post_id), account=account)
-            ContentCaption.objects.create(
-                post=post,
-                prompt=prompt,
-                body="",
-                hashtags=[],
-            )
+            post = ContentPost.objects.select_related(
+                "plan_item__pillar", "plan_item__campaign"
+            ).get(pk=int(post_id), account=account)
         except (ContentPost.DoesNotExist, ValueError):
-            pass
+            post = None
 
+    draft_id = ai_tasks.build_caption_draft(
+        account.id,
+        prompt,
+        media_type,
+        platform,
+        goal=goal,
+        cta=cta,
+        brief=caption_brief(post) if post else None,
+    )
+    # The caption is recorded (ContentCaption) only when the owner applies a suggestion
+    # and saves: see composer.record_ai_caption.
     return JsonResponse({"draft_id": draft_id})
 
 

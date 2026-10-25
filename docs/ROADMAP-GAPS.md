@@ -189,6 +189,7 @@ Tiers: **T0** current commitments and pilot-critical; **T1** evidence-gated (nam
 - Public outbound webhook marketplace and a richer event catalogue.
 - Vertical-specific automation templates beyond starter packs.
 - Multi-language AI replies and knowledge.
+- Meta growth optimisation engine (organic first, then a read-only paid engine; experiment engine with human approval as the end state). Direction only, nothing authorised: `docs/strategy/meta-growth-optimisation.md`. Gated on Phase 0: the journey acceptance test and staging verification from the 2026-10-25 capability audit (`~/.claude/plans/explore-and-audit-if-mighty-sundae.md`).
 
 ## 5. Execution sequence (respects the freeze)
 

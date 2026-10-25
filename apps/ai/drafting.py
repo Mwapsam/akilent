@@ -538,6 +538,10 @@ def run(draft, provider) -> None:
         cta = draft.context.get("cta", "")
         if cta:
             user = f"{user}\nEnd each caption by asking readers to: {cta}"
+        brief = draft.context.get("brief") or {}
+        if brief:
+            lines = "\n".join(f"- {label}: {value}" for label, value in brief.items())
+            user = f"{user}\n\nThe post's brief (write for this audience and offer):\n{lines}"
     else:
         instruction = draft.context.get("instruction", "")
         how = EDITS.get(instruction) or (

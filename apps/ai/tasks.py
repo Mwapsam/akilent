@@ -353,11 +353,13 @@ def build_caption_draft(
     platform: str,
     goal: str = "",
     cta: str = "",
+    brief: dict[str, str] | None = None,
 ) -> str:
     """Create a CONTENT_CAPTION AIDraft and enqueue it. Returns the draft public_id.
 
     ``goal`` is a plain-language aim ("Drive sales") the captions should serve, and
-    ``cta`` what readers should do ("Message us on WhatsApp to order").
+    ``cta`` what readers should do ("Message us on WhatsApp to order"). ``brief`` holds
+    labelled lines from the post's brief and plan item ({"Audience": "...", ...}).
     """
     from apps.accounts.models import Account
     from apps.ai.models import AIDraft
@@ -368,6 +370,8 @@ def build_caption_draft(
         context["goal"] = goal
     if cta:
         context["cta"] = cta
+    if brief:
+        context["brief"] = brief
     draft = AIDraft.objects.create(
         account=account,
         kind=AIDraft.Kind.CONTENT_CAPTION,

@@ -32,11 +32,13 @@
     <input type="hidden" name="client_key" :value="clientKey">
     <input type="hidden" name="action" value="draft">
     {% if not existing_post %}<input type="hidden" name="brief_cta" :value="brief.cta">{% endif %}
+    <input type="hidden" name="ai_draft" :value="aiPick ? aiPick.draft : ''">
+    <input type="hidden" name="ai_option" :value="aiPick ? aiPick.option : ''">
 
     <div class="cmp-grid">
       <div class="cmp-editor" :class="mobileView === 'preview' && 'cmp-hide-mobile'">
         {% include "publishing/composer/_destinations.html" %}
-        {% if not existing_post %}{% include "publishing/composer/_ai_start.html" %}{% endif %}
+        {% if show_ai_start %}{% include "publishing/composer/_ai_start.html" %}{% endif %}
         {% include "publishing/composer/_caption.html" %}
         {% include "publishing/composer/_media.html" %}
         {% include "publishing/composer/_cta.html" %}

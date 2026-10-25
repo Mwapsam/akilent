@@ -125,6 +125,8 @@ class ComposerInput:
     wa_links: dict[str, bool] = field(default_factory=dict)  # channel -> link ticked
     channel_options: dict = field(default_factory=dict)
     brief: dict[str, str] = field(default_factory=dict)
+    # The AI suggestion the caption started from: (AIDraft id, option index), or None.
+    ai_pick: tuple[str, int] | None = None
 
 
 def parse_schedule(raw: str):
@@ -170,6 +172,7 @@ def parse_form(data) -> ComposerInput:
         scheduled_at=parse_schedule(data.get("scheduled_at", "")),
         wa_links={p: bool(data.get(f"wa_link_{p}")) for p in platforms},
         brief={f: data[f].strip() for f in BRIEF_FIELDS if f in data},
+        ai_pick=_ai_pick(data),
     )
 
     # Per-channel times: each channel publishes at its own time, and the post's time is
@@ -191,6 +194,87 @@ def parse_form(data) -> ComposerInput:
     except OptionsError as exc:
         raise ComposerError(str(exc), "options") from None
     return inp
+
+
+def _ai_pick(data) -> tuple[str, int] | None:
+    draft_id = (data.get("ai_draft") or "").strip()
+    try:
+        option = int(data.get("ai_option") or 0)
+    except ValueError:
+        return None
+    return (draft_id, option) if draft_id.isdigit() and option >= 0 else None
+
+
+# Brief fields as the caption prompt names them.
+_BRIEF_LABELS = (
+    ("brief_objective", "Objective"),
+    ("brief_audience", "Audience"),
+    ("brief_problem", "Problem it solves"),
+    ("brief_offer", "Offer"),
+    ("brief_message", "Key message"),
+)
+
+
+def caption_brief(post: ContentPost) -> dict[str, str]:
+    """What the post's brief and plan item say, as labelled lines for the caption prompt."""
+    brief = {
+        label: value
+        for name, label in _BRIEF_LABELS
+        if (value := (getattr(post, name) or "").strip())
+    }
+    item = post.plan_item
+    if item is not None:
+        if item.topic:
+            brief.setdefault("Planned topic", item.topic)
+        if item.notes:
+            brief.setdefault("Planning notes", item.notes)
+        if item.pillar is not None:
+            brief["Content pillar"] = item.pillar.name
+        if item.campaign is not None:
+            brief["Campaign"] = item.campaign.name
+            if item.campaign.objective:
+                brief.setdefault("Campaign objective", item.campaign.objective)
+    return {k: v[:500] for k, v in brief.items()}
+
+
+def record_ai_caption(post: ContentPost, pick: tuple[str, int] | None) -> None:
+    """Mark ``post`` AI-assisted and keep the suggestion it accepted.
+
+    Only a finished caption draft of the post's own workspace counts, and each accepted
+    suggestion is kept once however often the post is saved.
+    """
+    from apps.ai.models import AIDraft
+
+    from .models import ContentCaption
+
+    if pick is None:
+        return
+    draft_id, index = pick
+    draft = AIDraft.objects.filter(
+        pk=int(draft_id),
+        account_id=post.account_id,
+        kind=AIDraft.Kind.CONTENT_CAPTION,
+        status__in=[AIDraft.Status.READY, AIDraft.Status.USED],
+    ).first()
+    if draft is None:
+        return
+    options = (draft.result or {}).get("options") or []
+    if index >= len(options):
+        return
+    option = options[index]
+    body = str(option.get("caption") or "")
+    hashtags = [str(t) for t in option.get("hashtags") or []]
+    if not ContentCaption.objects.filter(post=post, body=body, accepted=True).exists():
+        ContentCaption.objects.create(
+            post=post, prompt=draft.prompt, body=body, hashtags=hashtags, accepted=True
+        )
+    if not post.ai_assisted:
+        post.ai_assisted = True
+        post.save(update_fields=["ai_assisted"])
+    if draft.status != AIDraft.Status.USED:
+        draft.status = AIDraft.Status.USED
+        draft.used_at = timezone.now()
+        draft.save(update_fields=["status", "used_at"])
 
 
 # --- Finding the post -------------------------------------------------------------------
@@ -360,6 +444,7 @@ def _save_locked(post, inp, action, user, data) -> SaveResult:
     result = SaveResult(post=post)
     with transaction.atomic():
         post.save()
+        record_ai_caption(post, inp.ai_pick)
         initialize_post_with_variants(post, inp.platforms)
         # Before the review check: the CTA and its caption line are part of what a
         # reviewer approves.

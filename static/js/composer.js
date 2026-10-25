@@ -136,10 +136,13 @@
       mediaAnnouncement: "",
       undo: null,
       aiOpen: false,
-      brief: { topic: "", goal: "engagement", cta: "" },
+      brief: { topic: d.brief_topic || "", goal: "engagement", cta: "" },
       generating: false,
       genError: "",
       captionOptions: [],
+      captionDraftId: "",
+      // The suggestion the caption came from, sent on save so the post is marked AI-assisted.
+      aiPick: null,
 
       // ── Saving and readiness ──────────────────────────────────────────────
       autosaveEnabled: d.autosave !== false,
@@ -303,6 +306,7 @@
           this.caption = u.prev.caption;
           this.hashtagsText = u.prev.hashtagsText;
           if (u.prev.tab !== "all") this.platformCaptions[u.prev.tab] = u.prev.override;
+          this.aiPick = u.prevPick || null;
         }
         this.undo = null;
         this.touched();
@@ -648,6 +652,7 @@
         fd.append("platform", this.briefPlatform());
         fd.append("goal", this.brief.goal);
         fd.append("cta", this.brief.cta || "");
+        fd.append("post_id", this.postId || "");
         fd.append("csrfmiddlewaretoken", csrf());
         var data;
         try {
@@ -681,6 +686,7 @@
           }
           if (result.status === "ready") {
             clearInterval(poll);
+            self.captionDraftId = String(data.draft_id);
             self.captionOptions = result.options && result.options.length
               ? result.options : [{ caption: result.caption, hashtags: result.hashtags || [] }];
             self.generating = false;
@@ -699,7 +705,10 @@
         this.setUndo({
           type: "ai", message: "Caption replaced with the suggestion.",
           prev: { caption: this.caption, hashtagsText: this.hashtagsText, tab: intoOverride ? tab : "all", override: intoOverride ? this.platformCaptions[tab] : "" },
+          prevPick: this.aiPick,
         });
+        var index = this.captionOptions.indexOf(opt);
+        this.aiPick = this.captionDraftId && index !== -1 ? { draft: this.captionDraftId, option: index } : this.aiPick;
         if (intoOverride) this.platformCaptions[tab] = opt.caption;
         else this.caption = opt.caption;
         if (opt.hashtags && opt.hashtags.length) {

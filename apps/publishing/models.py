@@ -231,6 +231,10 @@ class ContentPost(models.Model):
     # {"kind": "none"|"whatsapp"|"link", "text": str, "url": str, "prefill": str}
     cta = models.JSONField(default=dict, blank=True)
 
+    # Set when a saved caption started from an AI suggestion (the accepted text is kept as a
+    # ContentCaption). Shown to reviewers; never cleared, since later edits build on it.
+    ai_assisted = models.BooleanField(default=False)
+
     error = models.TextField(blank=True, default="")
 
     # Approval workflow
@@ -652,6 +656,9 @@ class ApprovalLog(models.Model):
         related_name="approval_actions",
     )
     feedback = models.TextField(blank=True, default="")
+    # ContentPost.content_hash_for() at the time of the action, so the trail shows exactly
+    # which content was submitted or approved even after later edits.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
