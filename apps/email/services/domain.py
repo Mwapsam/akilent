@@ -158,7 +158,7 @@ class DomainService:
         try:
             info = self._provider.create_domain(
                 domain_record.domain,
-                description=f"Automator account {self.account.pk}",
+                description=f"Akilent account {self.account.pk}",
             )
         except EmailProviderError:
             audit(

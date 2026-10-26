@@ -98,8 +98,14 @@ def onboarding_status(request):
         state = ob.get_state(account, essentials_only=True, request=request)
         if state["complete"]:
             return {}
+        from apps.accounts.models import Membership
+
         return {
             "onboarding": state,
+            # Seen on any browser or device: the tour doesn't open on its own again.
+            "welcome_tour_seen": Membership.objects.filter(
+                user=user, account=account, welcome_tour_seen_at__isnull=False
+            ).exists(),
             "onboarding_wants_whatsapp": state["wants_whatsapp"],
             "onboarding_wants_instagram": state["wants_instagram"],
             "onboarding_wants_facebook": state["wants_facebook"],

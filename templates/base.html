@@ -94,7 +94,7 @@
         boosted <form> it disables that form's own submit button for the request's duration, so a
         slow save can't be double-clicked. A page can override it with its own hx-disabled-elt.
       {% endcomment %}
-      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload{% if REALTIME_SSE_ENABLED %} sse{% endif %}" hx-disabled-elt="find [type=submit]"{% if REALTIME_SSE_ENABLED %} sse-connect="{% url 'events-stream' %}"{% endif %}{% endif %}>
+      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload{% if REALTIME_SSE_ENABLED %}, sse{% endif %}" hx-disabled-elt="find [type=submit]"{% if REALTIME_SSE_ENABLED %} sse-connect="{% url 'events-stream' %}"{% endif %}{% endif %}>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
@@ -133,7 +133,7 @@
 
       {# Collapse toggle is only meaningful where the full sidebar shows #}
       <button type="button"
-              class="hidden lg:flex m-3 nav-link justify-center text-gray-400"
+              class="hidden lg:flex m-3 nav-link justify-center text-ink-subtle"
               @click="$store.ui.toggleSidebar()"
               :aria-label="$store.ui.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
         <span class="inline-flex transition-transform duration-200"
@@ -201,8 +201,7 @@
 
       {% if viewing_as %}
       {# Read-only "View as" (support): every change is blocked by ViewAsReadOnlyMiddleware. #}
-      <div class="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium"
-           style="background: var(--color-danger, #b91c1c); color: #fff;" role="status">
+      <div class="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium bg-red-600 text-white" role="status">
         <span>Viewing {{ viewing_as.company_name }} as support: read-only. Nothing you do here is saved or sent.</span>
         <form method="post" action="{% url 'core:view-as-stop' %}" hx-boost="false">{% csrf_token %}
           <button class="underline font-semibold">Stop viewing</button>
@@ -273,7 +272,7 @@
                   aria-hidden="true">
               {{ user.get_username|default:"?"|first|upper }}
             </span>
-            {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-gray-400" %}
+            {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-ink-subtle" %}
           </button>
 
           <div id="user-menu-panel"
@@ -291,7 +290,7 @@
             <div class="px-3 py-2 border-b border-border mb-1">
               <p class="text-sm font-medium text-ink truncate">{{ user.get_username }}</p>
               {% if user.email %}
-                <p class="text-xs text-gray-400 truncate">{{ user.email }}</p>
+                <p class="text-xs text-ink-subtle truncate">{{ user.email }}</p>
               {% endif %}
             </div>
 
@@ -308,12 +307,12 @@
 
             {# Theme toggle — backed by Alpine.store('theme') #}
             <div class="px-3 py-2">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Theme</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-ink-subtle mb-1.5">Theme</p>
               <div class="grid grid-cols-3 gap-1 rounded-lg bg-canvas p-0.5" role="group" aria-label="Theme">
                 <template x-for="opt in ['light', 'dark', 'system']" :key="opt">
                   <button type="button"
                           class="rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors"
-                          :class="$store.theme.value === opt ? 'bg-surface text-ink shadow-card' : 'text-gray-500 hover:text-ink'"
+                          :class="$store.theme.value === opt ? 'bg-surface text-ink shadow-card' : 'text-ink-subtle hover:text-ink'"
                           :aria-pressed="$store.theme.value === opt"
                           @click="$store.theme.set(opt)"
                           x-text="opt"></button>

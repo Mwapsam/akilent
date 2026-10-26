@@ -234,8 +234,14 @@ await go(detailPath);
 st = await chat("c.messages.filter(m => m.body === 'QA unknown reply').map(m => m.unknown)");
 check("send.unknown-survives-reload", st.length === 1 && st[0] === true, st);
 
-// 4. The real message arriving reconciles it (as if it had gone after all).
-await chat(`c.apply({ messages: [{ id: 99999999, direction: 'outbound', body: 'QA unknown reply', timestamp: new Date().toISOString(), status: 'sent' }], statuses: {}, open: true })`);
+// 4. The real message arriving reconciles it (as if it had gone after all), matched by the
+// attempt's key: a teammate's identical words (no key, or another key) don't stand in for it.
+const unknownKey = await chat("(c.messages.find(m => m.unknown) || {}).clientKey || ''");
+await chat(`c.apply({ messages: [{ id: 99999990, direction: 'outbound', body: 'QA unknown reply', timestamp: new Date().toISOString(), status: 'sent', clientKey: 'someone-elses-key' }], statuses: {}, open: true })`);
+st = await chat("c.messages.filter(m => m.unknown).length");
+check("send.teammate-same-words-not-matched", unknownKey.length >= 8 && st === 1, { unknownKey, st });
+await chat("(c.messages = c.messages.filter(m => m.id !== 99999990), 0)");
+await chat(`c.apply({ messages: [{ id: 99999999, direction: 'outbound', body: 'QA unknown reply', timestamp: new Date().toISOString(), status: 'sent', clientKey: ${JSON.stringify(unknownKey)} }], statuses: {}, open: true })`);
 await sleep(200);
 st = await chat("({ unknown: c.messages.filter(m => m.unknown).length, real: c.messages.filter(m => m.id === 99999999).length, stored: sessionStorage.getItem('inbox-unconfirmed:' + JSON.parse(document.getElementById('chat-config').textContent).id) })");
 check("send.unknown-reconciles", st.unknown === 0 && st.real === 1 && !st.stored, st);
@@ -248,7 +254,7 @@ await sleep(700);
 st = await chat("({ m: c.messages.filter(m => m.body === 'QA dropped reply').map(m => m.unknown), draft: c.draft })");
 check("send.network-drop-unknown", st.m.length === 1 && st.m[0] === true && st.draft === "", st);
 // Put back knowingly -> text in the box, bubble gone.
-await clickSel(".cv-fail.is-unknown .cv-fail-actions button:nth-child(2)");
+await evaluate("[...document.querySelectorAll('.cv-fail.is-unknown .cv-fail-actions button')].find(b => b.offsetParent && /Put back/.test(b.textContent)).click()");
 await sleep(300);
 st = await chat("({ draft: c.draft, left: c.messages.filter(m => m.unknown).length })");
 check("send.put-back", st.draft === "QA dropped reply" && st.left === 0, st);
@@ -406,8 +412,13 @@ check("media.unknown-renders", st.m.length === 1 && !st.m[0].pending && st.fail.
 await chat(`c.apply({ messages: [{ id: 99999998, direction: 'outbound', body: '', timestamp: new Date().toISOString(), status: 'sent', media: { state: 'ready', kind: 'image', url: '/static/favicon.ico' } }], statuses: {}, open: true })`);
 await sleep(200);
 st = { left: await chat("c.messages.filter(m => m.mediaUnknown).length"), text: await visible("#conversation-pane-inner .cv-fail.is-unknown") };
-check("media.unknown-not-matched-to-any-file", st.left === 1 && st.text.some((t) => t.includes("Check the thread above")), st);
-await chat("(c.messages.filter(m => m.mediaUnknown).forEach(m => c.dismissUnknown(m)), c.messages = c.messages.filter(m => m.id !== 99999998), 0)");
+check("media.unknown-not-matched-to-any-file", st.left === 1 && st.text.some((t) => t.includes("If it went, it will show here") && t.includes("Send again")), st);
+// Its own message (same key) does clear it.
+const mediaKey = await chat("(c.messages.find(m => m.mediaUnknown) || {}).clientKey || ''");
+await chat(`c.apply({ messages: [{ id: 99999989, direction: 'outbound', body: '', timestamp: new Date().toISOString(), status: 'sent', clientKey: ${JSON.stringify(mediaKey)}, media: { state: 'ready', kind: 'image', url: '/static/favicon.ico' } }], statuses: {}, open: true })`);
+st = { key: mediaKey, left: await chat("c.messages.filter(m => m.mediaUnknown).length") };
+check("media.own-file-matched-by-key", st.key.length >= 8 && st.left === 0, st);
+await chat("(c.messages.filter(m => m.mediaUnknown).forEach(m => c.dismissUnknown(m)), c.messages = c.messages.filter(m => m.id !== 99999998 && m.id !== 99999989), 0)");
 
 // 16. Closing the pane (Back to the inbox) while a load is in flight: the late answer never
 // lands and pushes no history entry.
@@ -541,7 +552,8 @@ check("send.server-clock-known", st.has && st.skew < 10000, st);
 await chat("(c._skew = -120000, 0)");
 await typeAndSend("QA skewed clock reply");
 await sleep(600);
-await chat(`c.apply({ messages: [{ id: 99999996, direction: 'outbound', body: 'QA skewed clock reply', timestamp: new Date(Date.now() - 120000 + 1000).toISOString(), status: 'sent' }], statuses: {}, open: true })`);
+const skewKey = await chat("(c.messages.find(m => m.body === 'QA skewed clock reply') || {}).clientKey || ''");
+await chat(`c.apply({ messages: [{ id: 99999996, direction: 'outbound', body: 'QA skewed clock reply', timestamp: new Date(Date.now() - 120000 + 1000).toISOString(), status: 'sent', clientKey: ${JSON.stringify(skewKey)} }], statuses: {}, open: true })`);
 st = await chat("c.messages.filter(m => m.body === 'QA skewed clock reply').map(m => ({ pending: !!m.pending, unknown: !!m.unknown }))");
 check("send.fast-clock-reconciles", st.length === 1 && !st[0].pending && !st[0].unknown, st);
 await chat("(c._skew = 0, c.messages = c.messages.filter(m => m.id !== 99999996), 0)");
@@ -717,6 +729,26 @@ await sleep(2600);
 rules = [];
 st = await evaluate("({ fresh: !!document.getElementById('qa-fresh'), err: !!document.querySelector('#qa-region [data-error-state]') })");
 check("region.write-beats-late-read-failure", st.fresh && !st.err, st);
+
+// ---- Gaps G1/G2 ----
+// V1. An unconfirmed reply offers "Send again", which resends it with the same key (the server
+// dedupes on it, so the customer can't get it twice).
+let sentBodies = [];
+const capture = { match: (r) => { if (r.method === "POST" && new URL(r.url).pathname === new URL(cfg5.feedUrl.replace(/messages\/$/, ""), "http://x").pathname) sentBodies.push(r.postData || ""); return false; }, act: null };
+rules = [capture, { match: (r) => r.method === "POST" && new URL(r.url).pathname === new URL(cfg5.feedUrl.replace(/messages\/$/, ""), "http://x").pathname, act: { status: 503, html: "down" } }];
+await typeAndSend("QA send again");
+await sleep(1200);
+const firstKey = await chat("(c.messages.find(m => m.unknown && m.body === 'QA send again') || {}).clientKey || ''");
+st = { buttons: await visible("#conversation-pane-inner .cv-fail.is-unknown .cv-fail-actions"), firstKey };
+check("send.unconfirmed-offers-send-again", firstKey.length >= 8 && st.buttons.some((t) => t.includes("Send again")), st);
+rules = [capture];
+sentBodies = [];
+await evaluate("[...document.querySelectorAll('.cv-fail.is-unknown .cv-fail-actions button')].find(b => b.offsetParent && /Send again/.test(b.textContent)).click()");
+await sleep(1200);
+rules = [];
+st = { posts: sentBodies.length, sameKey: sentBodies.some((b) => b.includes(firstKey)), pending: await chat("c.messages.filter(m => m.body === 'QA send again').map(m => ({ pending: !!m.pending, unknown: !!m.unknown, key: m.clientKey === " + JSON.stringify(firstKey) + " }))") };
+check("send.again-reuses-the-key", st.posts === 1 && st.sameKey && st.pending.length === 1 && st.pending[0].key && !st.pending[0].unknown, st);
+await chat("(c.messages = c.messages.filter(m => m.body !== 'QA send again'), 0)");
 
 writeFileSync(join(outDir, "inbox_qa_results.json"), JSON.stringify({ results, log: log.slice(-80) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

@@ -322,10 +322,14 @@ def record_sent_message(outbound: OutboundMessage):
         },
     )
     ig_convo.register_outbound(sent_at)
+    from apps.conversations.inbox_keys import sender_metadata
+
     metadata = {"message_type": outbound.media_kind or "text"}
     who = sender_of(outbound)
     if who:
         metadata["sent_by"] = who
+    # A reply from the inbox: which teammate, and the browser's key for the attempt.
+    metadata.update(sender_metadata(outbound.idempotency_key))
     message, _ = record_outbound_message(
         conversation=spine,
         body=outbound.body,

@@ -16,7 +16,7 @@ works without JavaScript and middle-click/open-in-new-tab behave normally.
 {% endcomment %}
 {% if page.has_other_pages %}
 <nav class="flex items-center justify-between gap-3 mt-4 text-sm" aria-label="Pagination">
-  <span class="text-gray-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
   <div class="flex gap-2">
     {% if page.has_previous %}
       {% querystring page=page.previous_page_number h=None as prev_qs %}

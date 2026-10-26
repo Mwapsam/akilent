@@ -234,6 +234,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                             @click="draft = item.m.body; $nextTick(() => { grow($refs.input); $refs.input.focus(); })">Edit &amp; resend</button>
                     <template x-if="item.m.unknown">
                       <span class="cv-fail-actions">
+                        <button type="button" class="cv-fail-action" x-show="open && canSendAgain(item.m)" :disabled="sending" @click="sendAgain(item.m)">Send again</button>
                         <button type="button" class="cv-fail-action" @click="checkNow()">Check now</button>
                         <button type="button" class="cv-fail-action" x-show="open && (!item.m.mediaUnknown || item.m.caption)" @click="restoreUnknown(item.m)" x-text="item.m.mediaUnknown ? 'Put caption back in reply box' : 'Put back in reply box'">Put back in reply box</button>
                         <button type="button" class="cv-fail-action" @click="dismissUnknown(item.m)">Dismiss</button>

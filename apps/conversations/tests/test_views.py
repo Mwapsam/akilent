@@ -4,10 +4,12 @@ from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
 from apps.contacts.models import Contact
-from apps.conversations.models import Conversation, ConversationNote
+from apps.conversations.inbox_keys import inbox_key, sender_metadata
+from apps.conversations.models import Conversation, ConversationNote, Message
 from apps.conversations.services import record_inbound_whatsapp_message
 from apps.whatsapp.models import Conversation as WhatsAppConversation
-from apps.whatsapp.models import MessageLog, WhatsAppContact
+from apps.whatsapp.models import MessageLog, OutboundMessage, WhatsAppContact
+from apps.whatsapp.tasks import project_outbound_to_inbox
 
 
 @pytest.fixture
@@ -708,3 +710,100 @@ def test_a_closed_deal_no_longer_counts_as_tracked(
     )
     body = client.get(page).content.decode()
     assert "Not tracked yet" in body and "Track as interested" in body
+
+
+# ---------------------------------------------------------------------------
+# Gaps G1 and G2: an inbox reply sent again is not sent twice, and records who sent it.
+# The browser sends a key with every attempt (static/js/chat.js) and the same key again
+# when the person retries a send whose outcome was unknown (conversations/inbox_keys.py).
+# ---------------------------------------------------------------------------
+
+KEY = "3f2b8c1e-5d4a-4b7e-9a10-1c2d3e4f5a6b"
+
+
+def _reply(client, conversation, body, key=None):
+    data = {"action": "reply", "body": body}
+    if key is not None:
+        data["client_key"] = key
+    return client.post(
+        f"/inbox/{conversation.public_id}/",
+        data,
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+
+@pytest.mark.django_db
+def test_the_same_send_again_reaches_the_customer_once(logged_in, open_conversation):
+    client, account, user = logged_in
+    assert _reply(client, open_conversation, "On its way!", KEY).json() == {"ok": True}
+    assert _reply(client, open_conversation, "On its way!", KEY).json() == {"ok": True}
+    sent = OutboundMessage.objects.filter(account=account)
+    assert sent.count() == 1
+    assert sent.get().idempotency_key == (
+        f"inbox:{open_conversation.pk}:{user.pk}:{KEY}"
+    )
+
+
+@pytest.mark.django_db
+def test_a_new_attempt_or_an_unusable_key_is_a_new_send(logged_in, open_conversation):
+    client, account, _ = logged_in
+    _reply(client, open_conversation, "One", KEY)
+    _reply(client, open_conversation, "Two", KEY.replace("3f", "4f"))
+    _reply(client, open_conversation, "Three", "bad:key")  # rejected: a random key
+    _reply(client, open_conversation, "Four")  # no key: as before
+    assert OutboundMessage.objects.filter(account=account).count() == 4
+    assert not OutboundMessage.objects.filter(idempotency_key__contains="bad").exists()
+
+
+@pytest.mark.django_db
+def test_the_key_is_scoped_to_the_person_and_conversation(open_conversation):
+    from django.contrib.auth.models import User
+
+    a = User(pk=1)
+    b = User(pk=2)
+    assert inbox_key(open_conversation, a, KEY) != inbox_key(open_conversation, b, KEY)
+    assert inbox_key(open_conversation, a, "short") is None
+    assert inbox_key(open_conversation, a, "") is None
+
+
+@pytest.mark.django_db
+def test_the_thread_records_who_sent_it_without_calling_it_automatic(
+    logged_in, open_conversation
+):
+    client, account, user = logged_in
+    _reply(client, open_conversation, "Yes, in stock.", KEY)
+    outbound = OutboundMessage.objects.get(account=account)
+    wa_conversation = open_conversation.whatsapp_conversation
+    log = MessageLog.objects.create(
+        account=account,
+        conversation=wa_conversation,
+        contact=wa_conversation.contact,
+        message_id="wamid.KEYTEST",
+        direction=MessageLog.Direction.OUTBOUND,
+        message_type=MessageLog.MessageType.TEXT,
+        content="Yes, in stock.",
+        status=MessageLog.Status.SENT,
+        timestamp=timezone.now(),
+    )
+    outbound.message_log = log
+    outbound.save(update_fields=["message_log"])
+    project_outbound_to_inbox(log)
+
+    message = Message.objects.get(whatsapp_message=log)
+    assert message.metadata["sent_by_user"] == user.pk
+    assert message.metadata["client_key"] == KEY
+    # A person's reply still has no "sent_by": reports and follow-ups rely on that.
+    assert "sent_by" not in message.metadata
+
+    feed = client.get(f"/inbox/{open_conversation.public_id}/messages/?after=0").json()
+    mine = [m for m in feed["messages"] if m["id"] == message.pk]
+    assert mine and mine[0]["clientKey"] == KEY
+
+
+@pytest.mark.django_db
+def test_sender_metadata_reads_only_inbox_keys():
+    assert sender_metadata(f"inbox:5:7:{KEY}") == {"sent_by_user": 7, "client_key": KEY}
+    assert sender_metadata(f"inbox:5:7:{KEY}:caption")["client_key"] == f"{KEY}:caption"
+    assert sender_metadata("ai-auto:5:abc") == {}
+    assert sender_metadata("inbox:5:x:abc") == {}
+    assert sender_metadata(None) == {}

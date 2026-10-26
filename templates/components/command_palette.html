@@ -18,7 +18,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
            x-transition:enter-end="opacity-100 translate-y-0">
         <div class="card shadow-modal overflow-hidden">
           <div class="flex items-center gap-2 px-3 border-b border-border">
-            {% include "components/icon.html" with name="search" class="w-4 h-4 text-gray-400 shrink-0" %}
+            {% include "components/icon.html" with name="search" class="w-4 h-4 text-ink-subtle shrink-0" %}
             {% comment %}
               role=combobox + aria-activedescendant is what makes the
               highlighted row audible. Focus stays in the input the whole time,
@@ -37,7 +37,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
                    :aria-expanded="filtered.length ? 'true' : 'false'"
                    aria-autocomplete="list"
                    :aria-activedescendant="filtered.length ? 'cmdk-option-' + active : null">
-            <kbd class="hidden sm:block text-[11px] text-gray-400 border border-border rounded px-1.5 py-0.5">esc</kbd>
+            <kbd class="hidden sm:block text-xs text-ink-subtle border border-border rounded px-1.5 py-0.5">esc</kbd>
           </div>
 
           <ul class="max-h-80 overflow-y-auto py-1.5" role="listbox"
@@ -57,13 +57,13 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
                    @click="if (!($event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey)) { $event.preventDefault(); go(item.href); }"
                    :class="active === i ? 'tone-brand' : 'text-ink'"
                    class="flex items-center gap-3 px-3 py-2 text-sm">
-                  <span class="text-gray-400" x-text="item.group"></span>
+                  <span class="text-ink-subtle" x-text="item.group"></span>
                   <span x-text="item.label" class="font-medium"></span>
                 </a>
               </li>
             </template>
             <li role="presentation" x-show="filtered.length === 0"
-                class="px-3 py-6 text-center text-sm text-gray-500">
+                class="px-3 py-6 text-center text-sm text-ink-subtle">
               No matches
             </li>
           </ul>

@@ -1052,8 +1052,8 @@ def settings_page(request):
 
     if request.method == "POST":
         site.app_name = (
-            request.POST.get("app_name") or "Automator"
-        ).strip() or "Automator"
+            request.POST.get("app_name") or "Akilent"
+        ).strip() or "Akilent"
         site.support_email = (request.POST.get("support_email") or "").strip()
         site.signups_enabled = "signups_enabled" in request.POST
         site.payments_enabled = "payments_enabled" in request.POST

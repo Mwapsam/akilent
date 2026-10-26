@@ -10,7 +10,7 @@ Optional:
 {% endcomment %}
 <header class="mb-6">
   {% if breadcrumbs %}
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       {% for crumb in breadcrumbs %}
         {% if crumb.url %}<a href="{{ crumb.url }}" class="hover:text-ink">{{ crumb.label }}</a>
         {% else %}<span class="text-ink">{{ crumb.label }}</span>{% endif %}

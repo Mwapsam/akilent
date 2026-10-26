@@ -48,3 +48,23 @@ def test_fixed_ink_backs_text_on_amber():
 def test_templates_fall_back_to_the_product_name():
     for path in TEMPLATES.rglob("*.html"):
         assert "Automator" not in path.read_text(encoding="utf-8"), path
+
+
+def test_the_code_falls_back_to_the_product_name_too():
+    """Gap G4: the site name's default and every Python fallback say "Akilent".
+
+    The one exception is the SES "Source" message tag, a machine label AWS-side rules may
+    filter on and that no one sees (apps/email/providers/ses/provider.py).
+    """
+    from apps.core.models import SiteSettings
+
+    assert SiteSettings._meta.get_field("app_name").default == "Akilent"
+    apps_dir = settings.BASE_DIR / "apps"
+    found = []
+    for path in apps_dir.rglob("*.py"):
+        if "migrations" in path.parts or "tests" in path.parts:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "Automator" in line and '"Key": "Source"' not in line:
+                found.append(f"{path.relative_to(apps_dir)}:{number}")
+    assert not found, found

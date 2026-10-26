@@ -51,7 +51,7 @@ class _RestoreSiteBrandingMixin:
     with django.contrib.sites' get_current_site() (a RequestSite here, since
     that framework isn't installed), clobbering the SiteSettings object our
     own site_context processor already put there — so ``{{ site.app_name }}``
-    silently resolves to nothing and templates fall back to "Automator".
+    silently resolves to nothing and templates fall back to "Akilent".
     """
 
     def get_context_data(self, **kwargs):
@@ -204,7 +204,7 @@ class PasswordResetView(auth_views.PasswordResetView):
         from apps.email.services.html_email import site_email_context
 
         self.extra_email_context = {
-            "site_name": SiteSettings.load().app_name or "Automator",
+            "site_name": SiteSettings.load().app_name or "Akilent",
             **site_email_context(),
         }
         return super().form_valid(form)
@@ -225,7 +225,7 @@ def _send_verification_email(request, user):
     from apps.accounts.tokens import email_verification_token
     from apps.core.models import SiteSettings
 
-    site_name = SiteSettings.load().app_name or "Automator"
+    site_name = SiteSettings.load().app_name or "Akilent"
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = email_verification_token.make_token(user)
     path = reverse("verify_email", kwargs={"uidb64": uid, "token": token})
@@ -793,6 +793,23 @@ def landing(request):
         '</api/schema>; rel="describedby"; type="application/vnd.oai.openapi+json;version=3.0"'
     )
     return resp
+
+
+@login_required
+@require_POST
+def welcome_tour_seen(request):
+    """The welcome tour was finished or closed: don't open it again for this person here."""
+    from django.http import HttpResponse
+
+    from apps.accounts.models import Membership
+    from apps.accounts.utils import viewing_as
+
+    account = get_current_account(request)
+    if account is not None and viewing_as(request) is None:
+        Membership.objects.filter(
+            user=request.user, account=account, welcome_tour_seen_at__isnull=True
+        ).update(welcome_tour_seen_at=timezone.now())
+    return HttpResponse(status=204)
 
 
 @login_required

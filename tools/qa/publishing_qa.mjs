@@ -132,6 +132,14 @@ await shot("composer-preview-360");
 await cmp("(c.dirty = true, 0)");
 await viewport(1280, 800, false);
 await sleep(300);
+// Hovering a sidebar link only preloads it: no prompt (it used to ask on hover).
+const hoverAt = await evaluate(`(() => { const r = document.querySelector("nav a[href='/inbox/']").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+const preloadsBefore = log.filter((l) => l.startsWith("GET /inbox/ ")).length;
+await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: hoverAt.x, y: hoverAt.y });
+await sleep(900);
+st = { open: await evaluate("Alpine.store('confirm').open"), preloaded: log.filter((l) => l.startsWith("GET /inbox/ ")).length - preloadsBefore, path: await evaluate("location.pathname") };
+check("composer.hover-preload-no-prompt", !st.open && st.preloaded >= 1 && st.path === "/publishing/new/", st);
+await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 900, y: 500 });
 await clickSel("nav a[href='/dashboard/']");
 await sleep(800);
 st = await evaluate("({ open: Alpine.store('confirm').open, title: Alpine.store('confirm').title, path: location.pathname })");

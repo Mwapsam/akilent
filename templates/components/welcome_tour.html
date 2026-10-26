@@ -1,5 +1,8 @@
 {% comment %}First-run welcome tour. Renders app-wide while onboarding is
-incomplete; auto-opens once (localStorage), and is replayable via the
+incomplete; auto-opens once per person and workspace (remembered on the server,
+Membership.welcome_tour_seen_at, so a new browser or device doesn't bring it back;
+a dismissal an older version kept in this browser's localStorage is carried over
+the first time), and is replayable via the
 `open-welcome-tour` event dispatched by the setup widget. Slides follow the
 channels the business picked at signup (onboarding_tour_channels): the inbox is
 only mentioned for WhatsApp or Instagram, Content Studio shows when it has
@@ -10,6 +13,7 @@ focus, so they never act on another open modal.{% endcomment %}
 <div x-data="{
         open: false, step: 0,
         hasChannels: {{ onboarding_tour_channels|yesno:'true,false' }},
+        seen: {{ welcome_tour_seen|yesno:'true,false' }},
         canPublish: {{ onboarding_can_publish|yesno:'true,false' }},
         get slides() {
           var s = ['welcome'];
@@ -22,10 +26,22 @@ focus, so they never act on another open modal.{% endcomment %}
         get current() { return this.slides[this.step]; },
         get isLast() { return this.step === this.total - 1; },
         init() {
-          try { if (!localStorage.getItem('welcomeTourSeen')) this.show(); } catch (e) {}
+          if (this.seen) return;
+          var here = false;
+          try { here = !!localStorage.getItem('welcomeTourSeen'); } catch (e) {}
+          if (here) this.remember(); else this.show();
         },
         show() { this.step = 0; this.open = true; this.$nextTick(() => this.$refs.next && this.$refs.next.focus()); },
-        markSeen() { try { localStorage.setItem('welcomeTourSeen', '1'); } catch (e) {} },
+        markSeen() {
+          try { localStorage.setItem('welcomeTourSeen', '1'); } catch (e) {}
+          this.remember();
+        },
+        remember() {
+          if (this.seen) return;
+          this.seen = true;
+          fetch('{% url "welcome-tour-seen" %}', { method: 'POST', credentials: 'same-origin', keepalive: true,
+            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' } }).catch(function () {});
+        },
         // When the focused button disappears (Back on the first slide, Skip after it), keep focus on Next.
         keepFocus() {
           this.$nextTick(() => {
@@ -50,7 +66,7 @@ focus, so they never act on another open modal.{% endcomment %}
        @keydown.escape.prevent.stop="finish()"
        @keydown.arrow-right.prevent="forward()"
        @keydown.arrow-left.prevent="back()">
-    <button type="button" @click="finish()" class="absolute top-2 right-2 btn-ghost rounded-lg p-3 text-gray-500 hover:text-ink" aria-label="Close the tour">
+    <button type="button" @click="finish()" class="absolute top-2 right-2 btn-ghost rounded-lg p-3 text-ink-subtle hover:text-ink" aria-label="Close the tour">
       {% include "components/icon.html" with name="x" class="w-5 h-5" %}
     </button>
 
@@ -98,8 +114,8 @@ focus, so they never act on another open modal.{% endcomment %}
           <li>
             <a href="{{ c.href }}" @click="markSeen()" class="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 min-h-11 hover:border-brand-300 hover:bg-surface-muted transition-colors">
               {% include "components/icon.html" with name=c.icon class="w-5 h-5 text-brand-600 shrink-0" %}
-              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">{{ c.label }}</span><span class="block text-xs text-gray-500">{{ c.note }}</span></span>
-              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400 shrink-0" %}
+              <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-ink">{{ c.label }}</span><span class="block text-xs text-ink-subtle">{{ c.note }}</span></span>
+              {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-ink-subtle shrink-0" %}
             </a>
           </li>
           {% endfor %}
@@ -144,7 +160,7 @@ focus, so they never act on another open modal.{% endcomment %}
             <div class="pt-1"><p class="text-sm font-semibold text-ink">Measure</p><p class="text-sm text-gray-600">Insights shows what your {% if onboarding_has_inbox %}conversations{% else %}customers{% endif %}{% if onboarding_can_publish %} and posts{% endif %} turned into.</p></div>
           </li>
         </ol>
-        <p class="mt-4 text-xs text-gray-500 text-center">Some features depend on your plan.</p>
+        <p class="mt-4 text-xs text-ink-subtle text-center">Some features depend on your plan.</p>
       </div>
 
       {# Slide — team #}
@@ -177,7 +193,7 @@ focus, so they never act on another open modal.{% endcomment %}
                   :class="i === step ? 'w-4 bg-ink' : 'w-1.5 bg-border'"></span>
           </template>
         </div>
-        <p id="tour-progress" class="text-xs text-gray-500 tabular-nums whitespace-nowrap" aria-live="polite">Step <span x-text="step + 1"></span> of <span x-text="total"></span></p>
+        <p id="tour-progress" class="text-xs text-ink-subtle tabular-nums whitespace-nowrap" aria-live="polite">Step <span x-text="step + 1"></span> of <span x-text="total"></span></p>
       </div>
       <div class="flex items-center gap-2">
         <button type="button" x-show="step > 0" @click="back()" class="btn btn-ghost btn-sm min-h-11">Back</button>

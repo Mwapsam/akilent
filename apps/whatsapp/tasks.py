@@ -350,10 +350,17 @@ def project_outbound_to_inbox(log: MessageLog, *, sent_by: str = "") -> None:
 
         _canonical_contact(log.account, log.contact)
         spine = SpineConversation.get_or_create_for_whatsapp(log.conversation)
+        from apps.conversations.inbox_keys import sender_metadata
+
+        outbound_source = getattr(log, "outbound_source", None)
         metadata = {"message_type": log.message_type}
-        who = sent_by or _sender_of(getattr(log, "outbound_source", None))
+        who = sent_by or _sender_of(outbound_source)
         if who:
             metadata["sent_by"] = who
+        # A reply from the inbox: which teammate, and the browser's key for the attempt.
+        metadata.update(
+            sender_metadata(getattr(outbound_source, "idempotency_key", None))
+        )
         if log.status in (
             MessageLog.Status.FAILED,
             MessageLog.Status.HELD,

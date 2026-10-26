@@ -38,6 +38,7 @@ from apps.accounts.utils import get_current_account, viewing_as
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.api import conversation_window_is_open
 from apps.conversations.flow_json import FIELD_TYPES as _FLOW_FIELD_TYPES
+from apps.conversations.inbox_keys import inbox_key
 from apps.conversations.media import media_json
 from apps.conversations.models import (
     Conversation,
@@ -489,13 +490,19 @@ def conversation_detail(request, public_id: str):
     if request.method == "POST":
         action = request.POST.get("action")
         ctx = {"account": account}
+        sent: dict = {}
         try:
             if action == "reply":
-                run_action(
+                sent = run_action(
                     "reply",
                     ctx,
                     conversation=conversation,
                     body=request.POST.get("body", "").strip(),
+                    # Sent again with the same key (a retry of an unconfirmed send), it
+                    # returns the first send instead of messaging the customer twice.
+                    idempotency_key=inbox_key(
+                        conversation, request.user, request.POST.get("client_key")
+                    ),
                 )
                 conversation.mark_read()
                 _record_ai_use(account, request, request.POST.get("body", ""))
@@ -692,6 +699,10 @@ def conversation_detail(request, public_id: str):
             messages.error(request, str(exc))
         else:
             if _is_ajax(request):
+                # A repeated send whose first attempt Meta may or may not have taken: the
+                # inbox keeps saying "Not confirmed" rather than "Sent".
+                if (sent or {}).get("unconfirmed"):
+                    return JsonResponse({"ok": True, "unconfirmed": True})
                 return JsonResponse({"ok": True})
             mutated = True
         if not in_pane:
@@ -740,6 +751,9 @@ def conversation_detail(request, public_id: str):
                 "status": m.status,
                 "failureReason": (m.metadata or {}).get("failure_reason") or None,
                 "byAi": (m.metadata or {}).get("sent_by") == "ai",
+                # The browser's key for a reply sent from the inbox (inbox_keys), so its
+                # "Sending…" or "Not confirmed" bubble is matched to exactly this message.
+                "clientKey": (m.metadata or {}).get("client_key") or None,
                 "automate": offers.get(m.id),
                 "media": media_json(m, conversation.public_id),
             }
@@ -1780,6 +1794,9 @@ def send_media(request, public_id: str):
             conversation=conversation,
             media=media,
             caption=(request.POST.get("caption") or "").strip(),
+            idempotency_key=inbox_key(
+                conversation, request.user, request.POST.get("client_key")
+            ),
         )
     except (outbound_media.MediaError, ActionError) as exc:
         return JsonResponse({"ok": False, "error": str(exc)}, status=400)
@@ -1925,6 +1942,7 @@ def messages_feed(request, public_id: str):
                     "status": m.status,
                     "failureReason": (m.metadata or {}).get("failure_reason") or None,
                     "byAi": (m.metadata or {}).get("sent_by") == "ai",
+                    "clientKey": (m.metadata or {}).get("client_key") or None,
                     "media": media_json(m, conversation.public_id),
                 }
                 for m in new

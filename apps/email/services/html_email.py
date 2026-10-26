@@ -30,7 +30,7 @@ def site_email_context() -> dict:
             pass
 
     return {
-        "site_name": row.app_name or "Automator",
+        "site_name": row.app_name or "Akilent",
         "logo_url": logo_url,
         "support_email": row.support_email or "",
         "year": datetime.datetime.now(tz=datetime.UTC).year,

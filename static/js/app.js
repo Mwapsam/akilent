@@ -471,6 +471,10 @@
     const d = e.detail;
     if (leavingConfirmed || !d.requestConfig || !d.requestConfig.boosted) return;
     if (d.requestConfig.verb !== "get" || !window.akDirty.any()) return;
+    // Hovering a sidebar link preloads its page (htmx-ext-preload, header HX-Preloaded):
+    // that only warms a cache and leaves nothing. Only an actual navigation asks.
+    const headers = d.requestConfig.headers || {};
+    if (headers["HX-Preloaded"] === "true") return;
     const store = window.Alpine && Alpine.store("confirm");
     if (!store) return;
     e.preventDefault();

@@ -14,10 +14,16 @@ function registerChat() {
   const LOST_AFTER = 2;
   const SEND_TIMEOUT = 30000;
   const UPLOAD_TIMEOUT = 120000;
-  const UNKNOWN_TEXT = "Not confirmed. This may or may not have been sent. If it doesn't appear here shortly, put it back in the reply box and send it again.";
-  // A file can't be matched to the thread (messages don't record who sent them, gap G2:
-  // a teammate's photo looks the same), so this note stays until dismissed.
-  const UNKNOWN_MEDIA_TEXT = "Not confirmed. This may or may not have been sent. Check the thread above for it before sending it again, then dismiss this note.";
+  // Sending again reuses the attempt's key, which the server dedupes on (apps/conversations/
+  // inbox_keys.py): if the first one went, the customer doesn't get it twice.
+  const UNKNOWN_TEXT = "Not confirmed. This may or may not have been sent. Sending it again is safe: if it already went, the customer won't get it twice.";
+  // After a reload the file itself is gone, so it can't be sent again from here.
+  const UNKNOWN_MEDIA_TEXT = "Not confirmed. This may or may not have been sent. If it went, it will show here.";
+  // A random key per send attempt (see UNKNOWN_TEXT). The server accepts 8-64 letters,
+  // digits and hyphens.
+  const newKey = () => (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
   // A page time further than this from the browser's clock is an old page (restored from
   // history), not a wrong clock: it isn't used, and the first poll measures the clock instead.
   const STALE_PAGE_MS = 5 * 60 * 1000;
@@ -112,6 +118,9 @@ function registerChat() {
     // component on every page shares and which outlives a swapped page: one conversation's
     // _destroyed then stopped the next one from ever polling.
     _destroyed: false,
+    // Files whose send is unconfirmed, by key, so "Send again" can resend the same file
+    // with the same key. Kept only while the page is open.
+    _blobs: {},
     _draftKey: '',
     _unknownKey: '',
     _fit: null,
@@ -153,11 +162,11 @@ function registerChat() {
         const kept = JSON.parse(sessionStorage.getItem(this._unknownKey) || '[]');
         for (const u of kept) {
           if (!u || !u.body) continue;
-          // A file can't be matched (see UNKNOWN_MEDIA_TEXT): its note stays until dismissed.
-          const arrived = !u.media &&
-            this.messages.some((m) => m.direction === 'outbound' && !m.byAi && m.body === u.body && new Date(m.ts) >= new Date(u.ts) - 60000);
+          // Matched by the attempt's key, so only this send counts, never a teammate's.
+          // (A note kept before keys existed has none: it stays until dismissed.)
+          const arrived = !!u.clientKey && this.messages.some((m) => m.clientKey === u.clientKey);
           if (!arrived) {
-            this.messages.push({ id: u.id, direction: 'outbound', body: u.body, ts: u.ts, status: 'unknown', unknown: true, mediaUnknown: !!u.media, caption: u.caption || '' });
+            this.messages.push({ id: u.id, direction: 'outbound', body: u.body, ts: u.ts, status: 'unknown', unknown: true, mediaUnknown: !!u.media, caption: u.caption || '', clientKey: u.clientKey || '' });
           }
         }
         this.sortMessages();
@@ -235,7 +244,7 @@ function registerChat() {
     saveUnknown() {
       try {
         const list = this.messages.filter((m) => m.unknown && m.body)
-          .map((m) => ({ id: m.id, body: m.body, ts: m.ts, media: !!m.mediaUnknown, caption: m.caption || '' }));
+          .map((m) => ({ id: m.id, body: m.body, ts: m.ts, media: !!m.mediaUnknown, caption: m.caption || '', clientKey: m.clientKey || '' }));
         if (list.length) sessionStorage.setItem(this._unknownKey, JSON.stringify(list));
         else sessionStorage.removeItem(this._unknownKey);
       } catch (e) { /* storage blocked */ }
@@ -382,18 +391,16 @@ function registerChat() {
       for (const raw of data.messages) {
         if (known.has(raw.id)) continue;
         if (raw.direction === 'outbound') {
-          // The real message replaces its optimistic placeholder.
-          // So does a send whose outcome was unknown: it did go.
-          // Never an AI reply, and only a message created after the attempt (a minute of
-          // clock difference allowed). A teammate sending the same words at the same moment
-          // can't be told apart: messages don't record which person sent them (gap G2).
-          // A file or voice note is never matched: with no text to compare, a teammate's
-          // photo would pass for this one and hide a send that may not have gone. Its
-          // placeholder waits for the upload's own answer instead.
-          const after = (m) => new Date(raw.timestamp) >= new Date(m.ts) - 60000;
-          const i = raw.byAi ? -1 : this.messages.findIndex((m) => (m.pending || m.unknown) && !m.mediaUnknown && !m.mediaPending && m.body === raw.body && after(m));
+          // The real message replaces its "Sending…" or "Not confirmed" bubble (it did go).
+          // Matched by the key this browser sent with the attempt, which the server keeps on
+          // the message (apps/conversations/inbox_keys.py): exact, for text and files alike,
+          // so a teammate's identical words or photo, or an AI reply, is never taken for it.
+          const i = raw.clientKey
+            ? this.messages.findIndex((m) => (m.pending || m.unknown) && m.clientKey === raw.clientKey)
+            : -1;
           if (i !== -1) {
             const wasUnknown = this.messages[i].unknown;
+            delete this._blobs[raw.clientKey];
             this.messages.splice(i, 1);
             if (wasUnknown) this.saveUnknown();
           }
@@ -568,7 +575,8 @@ function registerChat() {
       this.uploadMedia(h.blob, h.filename, h.voice);
     },
     discardHeld(h) { this.held = this.held.filter((x) => x.id !== h.id); },
-    async uploadMedia(blob, filename, voice) {
+    // ``again`` ({ key, caption }): "Send again" on an unconfirmed file, with the same key.
+    async uploadMedia(blob, filename, voice, again) {
       if (!this.sendMediaUrl) return;
       const what = voice ? 'This voice note' : (filename ? '"' + filename + '"' : 'This file');
       if (this.sending) {
@@ -581,25 +589,29 @@ function registerChat() {
       fd.set('csrfmiddlewaretoken', new FormData(form).get('csrfmiddlewaretoken'));
       fd.set('file', blob, filename);
       if (voice) fd.set('voice', '1');
-      const caption = voice ? '' : this.draft.trim();
+      const caption = again ? again.caption : (voice ? '' : this.draft.trim());
       if (caption) fd.set('caption', caption);
+      const key = again ? again.key : newKey();
+      fd.set('client_key', key);
       const label = voice ? '[Voice message]' : '[' + (filename || 'File') + ']';
       if (!navigator.onLine) {
         this.hold(blob, filename, voice, what + " wasn't sent: you're offline. It's kept here; send it once you're back online.");
         return;
       }
-      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: this.serverTime(), status: '', pending: true, mediaPending: true };
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: this.serverTime(), status: '', pending: true, mediaPending: true, clientKey: key };
       this.messages.push(pending);
-      if (caption) this.draft = '';
+      this._blobs[key] = { blob, filename, voice };
+      if (caption && !again) this.draft = '';
       this.$nextTick(() => this.scrollBottom());
       this.sending = true;
       try {
         const out = await postSend(this.sendMediaUrl, fd, UPLOAD_TIMEOUT);
-        if (out.kind === 'ok') {
+        if (out.kind === 'ok' && !(out.data && out.data.unconfirmed)) {
           this.messages = this.messages.filter((m) => m.id !== pending.id);
+          delete this._blobs[key];
           this.interval = BASE_INTERVAL;
           this.schedule(300);
-        } else if (out.kind === 'unknown') {
+        } else if (out.kind === 'ok' || out.kind === 'unknown') {
           // The file can't be put back, so the bubble stays to say what is known, and is
           // kept across a reload until dismissed: it may not have gone, and it can't be
           // matched to the thread (see apply). Only a caption can be put back.
@@ -613,7 +625,8 @@ function registerChat() {
           this.schedule(0);
         } else {
           this.messages = this.messages.filter((m) => m.id !== pending.id);
-          if (caption) this.draft = caption;
+          delete this._blobs[key];
+          if (caption) this.draft = this.draft.trim() ? this.draft + '\n' + caption : caption;
           this.sendError = out.error;
         }
       } finally {
@@ -675,34 +688,55 @@ function registerChat() {
       }
       this.collision = '';
       this.collisionAck = false;
+      this.draft = '';
+      await this.deliver(body, newKey());
+    },
+    // "Send again" on a send that was never confirmed: the same words or file with the same
+    // key, so if the first one did go the server returns it instead of sending it twice.
+    hasFile(m) { return !!(m.clientKey && this._blobs[m.clientKey]); },
+    canSendAgain(m) { return !!m.clientKey && (!m.mediaUnknown || this.hasFile(m)); },
+    sendAgain(m) {
+      if (this.sending || !this.canSendAgain(m)) return;
+      if (!navigator.onLine) { this.sendError = "You're offline, so it wasn't sent again."; return; }
+      this.messages = this.messages.filter((x) => x.id !== m.id);
+      this.saveUnknown();
+      if (m.mediaUnknown) {
+        const f = this._blobs[m.clientKey];
+        this.uploadMedia(f.blob, f.filename, f.voice, { key: m.clientKey, caption: m.caption || '' });
+      } else {
+        this.deliver(m.body, m.clientKey);
+      }
+    },
+    async deliver(body, key) {
       const form = this.$refs.composer;
       const fd = new FormData(form);
       fd.set('body', body);
+      fd.set('client_key', key);
 
-      const pending = { id: 'p' + Date.now(), direction: 'outbound', body, ts: this.serverTime(), status: '', pending: true };
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body, ts: this.serverTime(), status: '', pending: true, clientKey: key };
       this.messages.push(pending);
-      this.draft = '';
       this.$nextTick(() => { this.grow(this.$refs.input); this.scrollBottom(); });
       this.sending = true;
 
       try {
         const out = await postSend(form.getAttribute('action') || window.location.pathname, fd, SEND_TIMEOUT);
-        if (out.kind === 'ok') {
+        if (out.kind === 'ok' && !(out.data && out.data.unconfirmed)) {
           this.interval = BASE_INTERVAL;
           this.schedule(300);
           if (this.aiUsedId && this.ai.proposal && this.ai.proposal.id === this.aiUsedId) this.ai.proposal.status = 'used';
           this.aiUsedId = null;
-        } else if (out.kind === 'unknown') {
-          // It may have gone. The bubble says so and stays until the thread shows the real
-          // message (apply() swaps it in) or the person chooses what to do; the text is not
-          // put back in the box, where one more Enter would send it a second time.
+        } else if (out.kind === 'ok' || out.kind === 'unknown') {
+          // It may have gone (or the server said its first attempt is unconfirmed). The
+          // bubble says so and stays until the thread shows the real message (apply() swaps
+          // it in) or the person chooses what to do; the text is not put back in the box,
+          // where one more Enter would send it again under a new key.
           const i = this.messages.indexOf(pending);
           if (i !== -1) this.messages.splice(i, 1, Object.assign({}, pending, { pending: false, unknown: true, status: 'unknown' }));
           this.saveUnknown();
           this.schedule(0);
         } else {
           this.messages = this.messages.filter((m) => m.id !== pending.id);
-          this.draft = body;
+          this.draft = this.draft.trim() ? this.draft + '\n' + body : body;
           this.sendError = out.error + ' Your reply is still in the box.';
         }
       } finally {

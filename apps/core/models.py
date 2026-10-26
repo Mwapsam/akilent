@@ -38,7 +38,7 @@ def default_restricted_channels() -> list[str]:
 
 class SiteSettings(models.Model):
     # Branding
-    app_name = models.CharField(max_length=100, default="Automator")
+    app_name = models.CharField(max_length=100, default="Akilent")
     logo = models.ImageField(upload_to="branding/", blank=True, null=True)
     support_email = models.EmailField(blank=True, default="")
 

@@ -56,7 +56,7 @@ def _send_invitation_email(request, invite):
     from apps.email.services.send import send_system_email
     from apps.email.services.system_templates import render_system_email
 
-    site_name = SiteSettings.load().app_name or "Automator"
+    site_name = SiteSettings.load().app_name or "Akilent"
     link = request.build_absolute_uri(
         reverse("accept-invitation", kwargs={"token": invite.token})
     )

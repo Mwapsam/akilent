@@ -92,6 +92,8 @@ class SesProvider(EmailProvider):
             # not DNS/DKIM.
             self.client.create_email_identity(
                 EmailIdentity=domain,
+                # A machine tag AWS-side rules may filter on, never shown to anyone:
+                # kept as it was through the rename to Akilent (UI quality gap G4).
                 Tags=[{"Key": "Source", "Value": "Automator"}],
             )
             logger.info("SES domain identity created: %s", domain)

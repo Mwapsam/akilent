@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
+from apps.conversations.inbox_keys import is_inbox_key
 from apps.core.actions import (  # noqa: F401 — re-exported for existing imports
     Action,
     ActionError,
@@ -89,6 +90,27 @@ def _require_channel_enabled(conversation) -> None:
         raise ActionError(f"{ch.label} is switched off, so replies can't be sent.")
 
 
+def _instagram_repeat(outbound) -> dict:
+    """The answer to an inbox send repeated with the same key (apps.conversations.inbox_keys).
+
+    Reports the first attempt's state without sending again: sent (its inbox message),
+    failed (the reason, as for a first attempt), unconfirmed (Meta may or may not have
+    taken it; the inbox keeps saying so), or still on its way (queued; the outbox drain
+    finishes it).
+    """
+    from apps.instagram.models.message import OutboundMessage
+    from apps.instagram.services.outbound import record_sent_message
+
+    if outbound.status == OutboundMessage.Status.SENT:
+        spine_msg = record_sent_message(outbound)
+        return {"outbound_message_id": spine_msg.id if spine_msg else None}
+    if outbound.status == OutboundMessage.Status.FAILED:
+        raise ActionError(f"Instagram send failed: {outbound.last_error}")
+    if outbound.status == OutboundMessage.Status.UNCONFIRMED:
+        return {"outbound_message_id": None, "unconfirmed": True}
+    return {"outbound_message_id": None, "queued": True}
+
+
 class ReplyAction(Action):
     """Send a free-text reply in an open conversation.
 
@@ -162,6 +184,10 @@ class ReplyAction(Action):
             )
             if outbound is None:
                 outbound = OutboundMessage.objects.get(idempotency_key=key)
+                if is_inbox_key(key):
+                    # The same inbox send again: say what the first attempt did, never
+                    # attempt it a second time (it may still be on its way).
+                    return _instagram_repeat(outbound)
             if not send_outbound(outbound):
                 outbound.refresh_from_db()
                 if outbound.status != OutboundMessage.Status.FAILED:
@@ -258,14 +284,17 @@ class ReplyMediaAction(Action):
                 "video": _ATTACHMENT_LABELS["video"],
                 "audio": _ATTACHMENT_LABELS["audio"],
             }.get(media.kind, "[File]")
-            outbound = enqueue_reply(
+            created = enqueue_reply(
                 instagram_account,
                 igsid,
                 label,
                 action_type=OutboundMessage.ActionType.DM_REPLY,
                 idempotency_key=key,
                 media=media,
-            ) or OutboundMessage.objects.get(idempotency_key=key)
+            )
+            outbound = created or OutboundMessage.objects.get(idempotency_key=key)
+            if created is None and is_inbox_key(key):
+                return _instagram_repeat(outbound)
             queued = False
             if not send_outbound(outbound):
                 outbound.refresh_from_db()

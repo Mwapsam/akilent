@@ -43,7 +43,7 @@
     <div class="space-y-2">
       {% for item in upcoming %}
       <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle group">
-        <div class="shrink-0 text-center min-w-[40px]">
+        <div class="shrink-0 text-center w-10">
           {% if item.planned_date %}
           <p class="text-xs text-ink-subtle">{{ item.planned_date|date:"D" }}</p>
           <p class="text-sm font-semibold text-ink">{{ item.planned_date|date:"j" }}</p>

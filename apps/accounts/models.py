@@ -150,6 +150,9 @@ class Membership(models.Model):
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.OWNER)
     # Email this person when reminders on their follow-up list fall due (at most hourly).
     followup_emails = models.BooleanField(default=True)
+    # When this person finished or closed the welcome tour in this workspace. Kept here,
+    # not only in the browser, so it doesn't come back on every new browser or device.
+    welcome_tour_seen_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
