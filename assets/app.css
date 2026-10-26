@@ -681,6 +681,11 @@
      is what decides which one shows; a bare /inbox/ visit has neither, so the list wins. */
   .inbox-list-col { display: block; }
   .inbox-pane-col { display: none; }
+  /* Below lg, an open conversation has the screen to itself: the inbox's title and
+     suggestion card above it would push the thread into the bottom half. */
+  @media (max-width: 1023.98px) {
+    .inbox-chrome:has(~ .inbox-split.has-conversation) { display: none; }
+  }
   .inbox-split.has-conversation .inbox-list-col { display: none; }
   .inbox-split.has-conversation .inbox-pane-col { display: block; }
   .inbox-pane-empty {
@@ -723,13 +728,19 @@
        static/js/inbox_pane.js; 12rem is a fallback until it is. */
     .inbox-split {
       @apply grid gap-4; grid-template-columns: 380px minmax(0, 1fr);
-      height: calc(100dvh - var(--inbox-top, 12rem) - var(--kb-inset, 0px)); min-height: 32rem;
+      /* The minimum only applies on genuinely short screens; at 32rem it overrode the
+         fitted height whenever a suggestion card sat above, and the page scrolled. */
+      height: calc(100dvh - var(--inbox-top, 12rem) - var(--kb-inset, 0px)); min-height: 22rem;
     }
     .inbox-split .inbox-list-col,
     .inbox-split.has-conversation .inbox-list-col {
-      display: block; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
       scrollbar-gutter: stable;
     }
+    /* The list's card reaches the bottom of its column, level with the conversation beside
+       it, however few rows there are; more rows than fit scroll inside the column. */
+    .inbox-split #inbox-body { flex: 1 0 auto; display: flex; flex-direction: column; }
+    .inbox-split #inbox-body > .inbox-list { flex: 1 0 auto; }
     .inbox-split .inbox-list-col .inbox-toolbar {
       position: sticky; top: 0; z-index: 1; padding-block: 0.25rem; margin-block-start: -0.25rem;
       background-color: var(--color-canvas, var(--color-surface-muted));
@@ -1818,8 +1829,21 @@
      letting it scroll internally keeps a guaranteed minimum of thread visible either way. */
   .cv-footer { max-height: min(60vh, calc(100% - 6rem)); overflow-y: auto; }
 }
-/* In the two-pane inbox the list is already beside the pane: no "back" needed. */
-@media (min-width: 1024px) { #inbox-split .cv-h-back { display: none; } }
+/* In the two-pane inbox the list is already beside the pane: no "back" needed. And the
+   conversation fills its column exactly: the split is already sized to the viewport, so
+   measuring the viewport again from the pane's own offset left it 32px short of the list. */
+@media (min-width: 1024px) {
+  #inbox-split .cv-h-back { display: none; }
+  /* Column → pane → .cv-wrap → .cv, each a flex column passing the height down (percent
+     heights don't resolve through these). Only one of the column's children shows at a
+     time: the empty state, the loading skeleton, or the pane. */
+  #inbox-split .inbox-pane-col { display: flex; flex-direction: column; }
+  #inbox-split .inbox-pane-col > *,
+  #inbox-split .cv-wrap { flex: 1 1 auto; min-height: 0; }
+  #inbox-split #conversation-pane-inner,
+  #inbox-split .cv-wrap { display: flex; flex-direction: column; }
+  #inbox-split .cv { flex: 1 1 auto; height: auto; min-height: 0; }
+}
 
 /* Header menus (Assign, Close, More): a button that opens a list of choices, each a
    submit button — nothing changes until a choice is made (an auto-submitting <select>

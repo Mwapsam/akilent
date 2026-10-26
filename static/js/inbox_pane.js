@@ -27,8 +27,10 @@
     var pane = document.getElementById("conversation-pane-inner");
     if (!split || !list || !pane) return; // not the inbox list page
 
-    var inboxTitle = document.title;
-    var inboxUrl = window.location.href;
+    // What closing the pane goes back to. Taken from the page, not the address bar: a
+    // conversation's own address loaded as a full page renders the inbox with it open.
+    var inboxTitle = split.getAttribute("data-inbox-title") || document.title;
+    var inboxUrl = new URL(split.getAttribute("data-inbox-url") || window.location.href, window.location.href).href;
 
     function rowFor(url) {
       if (!url) return null;
@@ -229,6 +231,15 @@
       split.style.setProperty("--inbox-top", Math.round(top + pad) + "px");
     }
     requestAnimationFrame(fit);
+
+    // Opened as a full page with a conversation already in the pane (a reload, a link):
+    // mark its row and record the history entry the way a click would have, so Back,
+    // Forward and the next click behave the same as after opening it from the list.
+    if (split.dataset.open && pane.querySelector("[data-title]")) {
+      split.dataset.open = window.location.href;
+      selectRow(rowFor(window.location.href));
+      history.replaceState(Object.assign({}, history.state, { akilentPane: window.location.href }), "", window.location.href);
+    }
 
     document.addEventListener("click", onClickCapture, true);
     window.addEventListener("popstate", onPopState);

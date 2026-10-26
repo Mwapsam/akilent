@@ -48,6 +48,7 @@ def _resolve_current_account(request):
     if pinned:
         for m in memberships:
             if m.account_id == pinned:
+                request._akilent_membership = m
                 return m.account
 
     owner = memberships.filter(role=Membership.Role.OWNER).first()
@@ -56,7 +57,23 @@ def _resolve_current_account(request):
         return None
 
     set_current_account(request, membership.account)
+    request._akilent_membership = membership
     return membership.account
+
+
+def current_membership(request):
+    """The request user's ``Membership`` in the current account, or None (also while support
+    views a workspace as it, where the viewer isn't a member). Reuses the one found while
+    resolving the account."""
+    account = get_current_account(request)
+    if account is None or viewing_as(request) is not None:
+        return None
+    m = getattr(request, "_akilent_membership", None)
+    if m is not None and m.account_id == account.pk:
+        return m
+    m = Membership.objects.filter(user=request.user, account=account).first()
+    request._akilent_membership = m
+    return m
 
 
 def set_current_account(request, account: Account) -> None:

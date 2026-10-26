@@ -287,6 +287,21 @@ def record_sent_message(outbound: OutboundMessage):
         .first()
     )
     if existing is not None:
+        # The webhook's echo of this send can arrive first and record it as sent from the
+        # Instagram app. It was ours: put our sender and the inbox's key on it, so the
+        # inbox matches it to its "Sending…" or "Not confirmed" bubble.
+        from apps.conversations.inbox_keys import sender_metadata
+
+        merged = {**existing.metadata, **sender_metadata(outbound.idempotency_key)}
+        if merged.get("sent_by") == "instagram_app":
+            who = sender_of(outbound)
+            if who:
+                merged["sent_by"] = who
+            else:
+                merged.pop("sent_by")
+        if merged != existing.metadata:
+            existing.metadata = merged
+            existing.save(update_fields=["metadata"])
         return existing
 
     ig_contact = _recipient_contact(outbound)

@@ -807,3 +807,59 @@ def test_sender_metadata_reads_only_inbox_keys():
     assert sender_metadata("ai-auto:5:abc") == {}
     assert sender_metadata("inbox:5:x:abc") == {}
     assert sender_metadata(None) == {}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "status, answer",
+    [
+        ("failed", 400),
+        ("cancelled", 400),
+        ("unconfirmed", {"ok": True, "unconfirmed": True}),
+        ("queued", {"ok": True}),
+    ],
+)
+def test_a_repeat_says_what_the_first_whatsapp_attempt_did(
+    logged_in, open_conversation, status, answer
+):
+    client, account, _ = logged_in
+    _reply(client, open_conversation, "Hello", KEY)
+    OutboundMessage.objects.filter(account=account).update(status=status)
+    resp = _reply(client, open_conversation, "Hello", KEY)
+    if answer == 400:
+        assert resp.status_code == 400 and resp.json()["ok"] is False
+    else:
+        assert resp.json() == answer
+    assert OutboundMessage.objects.filter(account=account).count() == 1
+
+
+@pytest.mark.django_db
+def test_a_repeated_file_send_stores_no_new_file(logged_in, open_conversation):
+    from unittest.mock import patch
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    client, account, _ = logged_in
+    url = f"/inbox/{open_conversation.public_id}/media/send/"
+    with patch("apps.conversations.outbound_media.prepare") as prepare:
+        prepare.return_value = type(
+            "M",
+            (),
+            {
+                "path": "x/qa.png",
+                "mime": "image/png",
+                "kind": "image",
+                "filename": "qa.png",
+            },
+        )()
+        for _ in range(2):
+            client.post(
+                url,
+                {
+                    "file": SimpleUploadedFile("qa.png", b"x", "image/png"),
+                    "client_key": KEY,
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+    assert prepare.call_count == 1
+    assert OutboundMessage.objects.filter(account=account).count() == 1

@@ -2,7 +2,7 @@
 incomplete; auto-opens once per person and workspace (remembered on the server,
 Membership.welcome_tour_seen_at, so a new browser or device doesn't bring it back;
 a dismissal an older version kept in this browser's localStorage is carried over
-the first time), and is replayable via the
+once, to the workspace open at the time, then removed), and is replayable via the
 `open-welcome-tour` event dispatched by the setup widget. Slides follow the
 channels the business picked at signup (onboarding_tour_channels): the inbox is
 only mentioned for WhatsApp or Instagram, Content Studio shows when it has
@@ -27,15 +27,15 @@ focus, so they never act on another open modal.{% endcomment %}
         get isLast() { return this.step === this.total - 1; },
         init() {
           if (this.seen) return;
+          // An older version kept a dismissal in this browser, for every workspace at once.
+          // It is carried over to the workspace open now, once, then removed, so another
+          // workspace opened later in this browser still gets its own tour.
           var here = false;
-          try { here = !!localStorage.getItem('welcomeTourSeen'); } catch (e) {}
+          try { here = !!localStorage.getItem('welcomeTourSeen'); localStorage.removeItem('welcomeTourSeen'); } catch (e) {}
           if (here) this.remember(); else this.show();
         },
         show() { this.step = 0; this.open = true; this.$nextTick(() => this.$refs.next && this.$refs.next.focus()); },
-        markSeen() {
-          try { localStorage.setItem('welcomeTourSeen', '1'); } catch (e) {}
-          this.remember();
-        },
+        markSeen() { this.remember(); },
         remember() {
           if (this.seen) return;
           this.seen = true;

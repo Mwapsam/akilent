@@ -780,3 +780,96 @@ Tested code: HEAD `915ce04` + working tree, diff SHA-256 `38c26b8883308c87…`.
 - Browser checks: inbox **61/61**, publishing **20/20**, accounts **12/12**.
 - New inbox checks: unconfirmed file not matched to another file, upload not paired with another file, held items survive a text send and a second file, refused upload not held, other page not "signed out", write beats a late read failure, next conversation polls.
 - New publishing check: Esc without the dialog stack.
+
+## Entry 8: closing the Phase 0–3 gaps (your request), 2026-10-26
+
+Tested code: HEAD `66c0541` + working tree, diff SHA-256 `8c8e288a14185ff3…`. You authorized backend gaps G1–G4 ("close the gaps from phase 0 – phase 3").
+
+**G1, duplicate sends (closed).** Every inbox send carries a random key from the browser. The server builds `inbox:<conversation>:<user>:<key>` (`apps/conversations/inbox_keys.py`): the person comes from the request, never the browser, and the conversation is part of the key.
+- **WhatsApp:** dedupes on it per account.
+- **Instagram:** a repeat never attempts a second send. It reports the first attempt instead: sent, failed (with the reason), unconfirmed (the inbox keeps saying "Not confirmed"), or still on its way. Before this, a retry while the first was still sending would have sent it again.
+- **In the browser:** an unconfirmed reply (or file, while it's still in memory) now offers **"Send again"**, which reuses the key. The copy says so: "Sending it again is safe: if it already went, the customer won't get it twice."
+
+**G2, who sent a reply (closed).** Both channels' projections record `sent_by_user` and `client_key` in the message metadata.
+- **Kept apart from `sent_by` on purpose:** reports, follow-ups and AI context treat "no `sent_by`" as a person's reply, and still do.
+- **Matching:** the feed exposes `clientKey`. The inbox matches its "Sending…" or "Not confirmed" bubble to exactly its own message, for text and files alike. A teammate's identical words or photo, or an AI reply, can't stand in for it. This replaces both the old text-and-time guess and Entry 7's "never match files".
+
+**G3, welcome tour (closed).** `Membership.welcome_tour_seen_at` (migration `accounts/0024`), a POST endpoint `/onboarding/tour-seen/` (staff "view as" never records), and a flag in the context processor.
+- A dismissal an older version kept in the browser is carried over the first time that browser loads a page. Verified: the QA user's was.
+- It's per workspace, because the tour's slides follow that workspace's channels.
+
+**G4, product name (closed).** The `SiteSettings.app_name` default and every Python fallback say "Akilent".
+- **Data migration (`core/0019`):** renames a stored name only when it is exactly the old default "Automator". A name someone set deliberately is left alone. Your local database now shows "Akilent".
+- **Left on purpose:** the SES "Source" message tag stays "Automator". It's a machine tag AWS-side rules may filter on, and no one sees it.
+- **Guard:** a test fails if "Automator" comes back into Python code.
+
+**Phase 0 leftovers.** Shared components and root templates had 32 drift findings; now 0, and the baseline went from 815 to 783.
+- **The onboarding badge:** it was `bg-ink text-white`, unreadable in dark mode (white on a light badge). It now uses `text-surface`.
+- **The "View as" banner:** it used an undefined `--color-danger` with a hex fallback. It now uses the danger button's colours.
+
+**Phase 1, live updates (now tested, and a production bug found).**
+- **The bug:** `base.html` declared `hx-ext="preload sse"`. htmx splits on commas and drops spaces, so with `REALTIME_SSE_ENABLED` on, the page asked for one extension called "preloadsse". Live updates never connected, **and hover preloading silently stopped too**.
+- **The fix:** `hx-ext="preload, sse"`. A test renders the page with the flag on and off and checks every name is a vendored extension.
+- **Verified on the real stack:** uvicorn ASGI with the flag on, Redis, a browser. New `tools/qa/sse_qa.mjs`: **3/3**.
+  - A message event refreshes the open thread at once.
+  - Another conversation's event is ignored.
+  - A conversation event refreshes the list without a toast.
+- **Server side checked separately:** the stream opens, Redis delivers, and an idle 8-second wait doesn't time out.
+- **Local note:** two dev servers on one SQLite file lock it ("database is locked" in the browser-session middleware). Run one at a time locally; production is Postgres.
+
+**Phase 2 leftovers.**
+- `planning.html`'s `min-w-[40px]` is now `w-10`.
+- **The media loading grid is not applicable:** Content Studio has no media grid that loads after the page (library and post media render with it), and composer uploads already show "Uploading" with a progress bar.
+
+**Reported by you while this was running.** Hovering a sidebar link on a page with unsaved work opened "Leave without saving?". The hover preload is a boosted GET, and the unsaved-work guard treated it as navigation. Preloads (`HX-Preloaded: true`) now pass. A click still asks. New check `composer.hover-preload-no-prompt`: the preload went out, no prompt, still on the page.
+
+**Results**
+- Full suite: **4,660 passed, 0 failures**. ruff, format and mypy are clean.
+- Browser checks: inbox **65/65**, publishing **21/21**, accounts **12/12**, live updates **3/3**.
+- `area_scan`: dashboard, inbox, onboarding, team settings, library at 360/1280 × light/dark: 0 issues.
+- New tests: WhatsApp dedupe, keys scoped to the person and conversation, projection metadata, feed `clientKey`, Instagram repeat cases (sending, unconfirmed, failed), welcome-tour memory, product-name guard, extension names.
+
+**What only you can close:** real devices and screen readers (Phases 0–3), the Meta sandbox and a real failed publish (Phases 1–2), and your acceptance of each phase.
+
+## Entry 9: inbox reload, chat height, page titles, review round 6, 2026-10-26
+
+Tested code: HEAD `66c0541` + working tree, diff SHA-256 `0f37a3137125a51f…`.
+
+**Reported by you: reloading an open conversation lost the inbox.** A full page load of `/inbox/<id>/` (a reload, a link, a new tab) rendered the standalone conversation page. It now renders the inbox with that conversation already in the pane: `.has-conversation`, `data-open`, the row marked, and history set as a click would set it.
+- On a phone the conversation shows alone, with Back to the list, as before.
+- Its forms post into the pane.
+- `conversation_detail.html` was no longer used and is removed.
+
+**Reported by you: the chat's height was unbalanced.**
+- **Desktop:** the conversation sized itself from the viewport and its own offset, ending 32px short of the list column. The split's 32rem minimum also overrode the fitted height whenever a suggestion card sat above, so the page scrolled. Now the column, pane, `.cv-wrap` and `.cv` pass the height down as flex columns, the list's card fills its column, and the minimum is 22rem. At 1280×860 both cards end at the same line (828) with no page scroll.
+- **Phone:** the inbox title and suggestion card stayed above an open conversation, squeezing it into the bottom half (460px). They're now hidden below lg while a conversation is open (`.inbox-chrome:has(~ .has-conversation)`), so the conversation gets 732px.
+
+**Found while fixing that: every app page showed the site's generic title.** `seo/meta.html` wrote a `<title>` ahead of the page's own in `base.html`, and a browser shows the first. `seo_meta` now takes `title=False` for layouts with their own title block (`base.html`, `public/_base.html`). The landing page keeps its SEO title. A test checks for exactly one title.
+
+**Review round 6 (10 findings).**
+1. **Instagram's echo recorded first left the bubble stuck:**
+   - **Server:** `record_sent_message` now puts our key and sender on the echoed message and drops "instagram_app".
+   - **Browser:** a message with no key still clears a text bubble by its words (a teammate's inbox reply always has its own key).
+   - Fixed.
+2. **The old browser-wide tour flag marked every later workspace as seen:** it is carried over once and then removed, and no longer written. Fixed.
+3. **"Send again" recorded the AI suggestion in the box as used:** the resend now drops `ai_proposal` and leaves the AI state alone. Fixed.
+4. **A repeated Instagram file send skipped a caption the first attempt never sent:** the caption now goes, unless the attachment is unconfirmed. Fixed.
+5. **A repeated file send stored a new, unused copy:** the view checks for an existing send first and prepares nothing. Fixed.
+6. **Kept files were never freed:** they're released on dismiss and put-back. Fixed.
+7. **"Send again" could remove the note and then not send:** every precondition is checked first. Fixed.
+8. **A WhatsApp repeat answered "ok" whatever happened:** repeats are now checked at the top of both actions, for both channels. Failed or cancelled is refused with the reason; unconfirmed is reported as unconfirmed. Fixed.
+9. **An extra query on every page:** the membership is memoised with the account (`current_membership`). Fixed.
+10. **The tour opening during "View as":** **not valid.** `base.html` doesn't render the tour when `viewing_as` is set. The membership helper also returns none while viewing as.
+
+**Results**
+- Full suite: **4,667 passed, 0 failures**. ruff, format and mypy are clean.
+- Browser checks: inbox **73/73**, publishing **21/21**, accounts **12/12**.
+- New inbox checks:
+  - reload keeps the inbox and pane (1280)
+  - reload, then another conversation, then Back
+  - phone shows the conversation alone, and Back goes to the list
+  - columns balanced, no page scroll
+  - "Send again" not counted as AI use
+  - a keyless message still clears its bubble
+  - dismissing frees the file
+- New server tests: WhatsApp repeats by status, no file prepared on a repeat, echo-first merge, reload renders the inbox with the pane, one title per page.

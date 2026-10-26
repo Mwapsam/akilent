@@ -10,7 +10,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="light dark">
-  {% seo_meta %}
+  {% seo_meta title=False %}
   {% google_analytics %}
 {% endif %}
   <title>{% block title %}{{ seo.title|default:site.app_name|default:"Akilent" }}{% endblock %}</title>

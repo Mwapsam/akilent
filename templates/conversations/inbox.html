@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load onboarding_tags %}
-{% block title %}Inbox — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if open_in_pane %}{{ conversation.contact.display_name }} — Inbox{% else %}Inbox — {{ site.app_name|default:"Akilent" }}{% endif %}{% endblock %}
 
 {% block content %}
 {% comment %}Page header: the title, and links to the neighbouring pages.
@@ -11,6 +11,9 @@ unrelated to the list it filters.
 
 The links are icon buttons on a phone with their labels kept for screen readers
 (sr-only), and icon + label from sm up.{% endcomment %}
+{% comment %}The inbox's title and suggestion: hidden below lg while a conversation is open
+(.inbox-chrome, assets/app.css), which then has the screen to itself.{% endcomment %}
+<div class="inbox-chrome">
 <header class="inbox-header">
   <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Inbox</h1>
@@ -40,6 +43,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
   </div>
 </header>
 {% next_action_card %}
+</div>
 
 {% comment %}
   Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever
@@ -49,7 +53,12 @@ The links are icon buttons on a phone with their labels kept for screen readers
   lg there's no room for both, so a row click falls through to its plain href — the existing
   boosted, full-page navigation to conversations:detail, unchanged from before this feature.
 {% endcomment %}
-<div class="inbox-split" id="inbox-split">
+{% comment %}A conversation's own address loaded as a full page (a reload, a link, a new tab)
+renders here with that conversation already in the pane (open_in_pane): data-open says which,
+and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcomment %}
+<div class="inbox-split{% if open_in_pane %} has-conversation{% endif %}" id="inbox-split"
+     data-inbox-url="{% url 'conversations:inbox' %}" data-inbox-title="Inbox — {{ site.app_name|default:"Akilent" }}"
+     {% if open_in_pane %}data-open="{{ detail_url }}"{% endif %}>
   <div class="inbox-list-col" x-data="{ stale: false }"
        @ak-refresh-failed="if ($event.target.id === 'inbox-body') stale = true"
        @ak-refresh-ok="if ($event.target.id === 'inbox-body') stale = false"
@@ -102,7 +111,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
         <span class="inbox-skel inbox-skel-bubble is-out w-2/5"></span>
       </div>
     </div>
-    <div id="conversation-pane-inner" data-error-region data-error-retry-event="inbox-pane-retry" data-error-title="Couldn't open this conversation"></div>
+    <div id="conversation-pane-inner" data-error-region data-error-retry-event="inbox-pane-retry" data-error-title="Couldn't open this conversation">{% if open_in_pane %}{% include "conversations/_conversation_pane.html" %}{% endif %}</div>
   </div>
 </div>
 {% endblock %}

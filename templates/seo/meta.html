@@ -1,5 +1,5 @@
 {% with s=seo %}{% if s %}
-<title>{{ s.title }}</title>
+{% if with_title %}<title>{{ s.title }}</title>{% endif %}
 {% if s.description %}<meta name="description" content="{{ s.description }}">{% endif %}
 <link rel="canonical" href="{{ s.canonical_url }}">
 <meta name="robots" content="{% if s.index %}index{% else %}noindex{% endif %},{% if s.follow %}follow{% else %}nofollow{% endif %}">

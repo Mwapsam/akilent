@@ -35,7 +35,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.models import Team
 from apps.accounts.utils import get_current_account, viewing_as
-from apps.conversations.actions import ActionError, run_action
+from apps.conversations.actions import ActionError, inbox_send_started, run_action
 from apps.conversations.api import conversation_window_is_open
 from apps.conversations.flow_json import FIELD_TYPES as _FLOW_FIELD_TYPES
 from apps.conversations.inbox_keys import inbox_key
@@ -922,7 +922,21 @@ def conversation_detail(request, public_id: str):
             pane["HX-Trigger"] = "inbox-refresh"
         return pane
 
-    return render(request, "conversations/conversation_detail.html", pane_context)
+    # A full page load of a conversation's own address (a reload after opening it in the
+    # pane, a bookmark, a link, a new tab) shows it the way it was opened: inside the inbox,
+    # in the pane beside the list. Below lg the pane shows alone (.has-conversation), with
+    # Back to the list, as the standalone page did.
+    return render(
+        request,
+        "conversations/inbox.html",
+        {
+            **_inbox_context(request, account),
+            **pane_context,
+            # Its forms post into the pane, as they do once it has been opened there.
+            "in_pane": True,
+            "open_in_pane": True,
+        },
+    )
 
 
 def _in_pane(request) -> bool:
@@ -1781,12 +1795,20 @@ def send_media(request, public_id: str):
         return JsonResponse(
             {"ok": False, "error": "Media can't be sent on this channel."}, status=400
         )
+    key = inbox_key(conversation, request.user, request.POST.get("client_key"))
     try:
-        media = outbound_media.prepare(
-            upload,
-            channel,
-            account_id=account.pk,
-            voice=request.POST.get("voice") == "1",
+        # A repeat of a send already made with this key needs no new file: the action
+        # answers with what the first attempt did. Preparing it would store a copy that
+        # nothing ever uses.
+        media = (
+            None
+            if inbox_send_started(conversation, key)
+            else outbound_media.prepare(
+                upload,
+                channel,
+                account_id=account.pk,
+                voice=request.POST.get("voice") == "1",
+            )
         )
         result = run_action(
             "reply_media",
@@ -1794,9 +1816,7 @@ def send_media(request, public_id: str):
             conversation=conversation,
             media=media,
             caption=(request.POST.get("caption") or "").strip(),
-            idempotency_key=inbox_key(
-                conversation, request.user, request.POST.get("client_key")
-            ),
+            idempotency_key=key,
         )
     except (outbound_media.MediaError, ActionError) as exc:
         return JsonResponse({"ok": False, "error": str(exc)}, status=400)

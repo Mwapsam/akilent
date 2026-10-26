@@ -730,6 +730,40 @@ rules = [];
 st = await evaluate("({ fresh: !!document.getElementById('qa-fresh'), err: !!document.querySelector('#qa-region [data-error-state]') })");
 check("region.write-beats-late-read-failure", st.fresh && !st.err, st);
 
+// ---- Reloading an open conversation (reported by you) ----
+// W1. Opened in the pane, then the page reloaded: the inbox comes back with it still open
+// beside the list, its row marked; another conversation opens in the pane, and Back returns.
+await viewport(1280, 860, false);
+await go("/inbox/?view=all", 1500);
+const wr = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+await clickSel(`.inbox-row[href="${wr[0]}"]`); await sleep(1800);
+await go(wr[0], 2000); // the reload
+const reloadState = `(() => ({ path: location.pathname, split: !!document.getElementById('inbox-split'), list: !!document.querySelector('#inbox-body .inbox-row') && getComputedStyle(document.querySelector('.inbox-list-col')).display !== 'none',
+  pane: !!document.querySelector('#conversation-pane-inner .cv'), current: document.querySelector('.inbox-row[aria-current="true"]')?.getAttribute('href'), title: document.title }))()`;
+st = await evaluate(reloadState);
+st.balance = await evaluate(`(() => { const l = document.querySelector('.inbox-list-col').getBoundingClientRect(), c = document.querySelector('#conversation-pane-inner .cv').getBoundingClientRect();
+  return { listBottom: Math.round(l.bottom), cvBottom: Math.round(c.bottom), cvTop: Math.round(c.top), listTop: Math.round(l.top), pageScroll: document.documentElement.scrollHeight - innerHeight }; })()`);
+check("pane.columns-balanced-no-page-scroll", st.balance.listBottom === st.balance.cvBottom && st.balance.listTop === st.balance.cvTop && st.balance.pageScroll <= 0, st.balance);
+check("reload.keeps-inbox-and-pane-1280", st.path === wr[0] && st.split && st.list && st.pane && st.current === wr[0] && /— Inbox$/.test(st.title), st);
+await clickSel(`.inbox-row[href="${wr[1]}"]`); await sleep(1800);
+const second = await evaluate("location.pathname");
+await send("Runtime.evaluate", { expression: "history.back()" });
+await sleep(2000);
+st = { second, ...(await evaluate(reloadState)) };
+check("reload.then-another-then-back", st.second === wr[1] && st.path === wr[0] && st.pane && st.current === wr[0], st);
+// W2. On a phone the same address shows the conversation alone, with Back to the list.
+await viewport(390, 844, true);
+await go(wr[0], 2000);
+st = await evaluate(`(() => ({ listShown: getComputedStyle(document.querySelector('.inbox-list-col')).display !== 'none', paneShown: !!document.querySelector('#conversation-pane-inner .cv') && getComputedStyle(document.querySelector('.inbox-pane-col')).display !== 'none',
+  back: !!document.querySelector('.cv-h-back') && getComputedStyle(document.querySelector('.cv-h-back')).display !== 'none', hscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth }))()`);
+check("reload.phone-shows-conversation-alone", !st.listShown && st.paneShown && st.back && st.hscroll <= 0, st);
+await clickSel(".cv-h-back"); await sleep(1800);
+st = await evaluate("({ path: location.pathname, list: getComputedStyle(document.querySelector('.inbox-list-col')).display !== 'none', rows: document.querySelectorAll('.inbox-row').length })");
+check("reload.phone-back-to-list", st.path === "/inbox/" && st.list && st.rows > 0, st);
+await viewport(1280, 860, false);
+await go("/inbox/?view=all", 1500);
+await clickSel(`.inbox-row[href="${sh[1]}"]`); await sleep(2000);
+
 // ---- Gaps G1/G2 ----
 // V1. An unconfirmed reply offers "Send again", which resends it with the same key (the server
 // dedupes on it, so the customer can't get it twice).
@@ -747,8 +781,20 @@ await evaluate("[...document.querySelectorAll('.cv-fail.is-unknown .cv-fail-acti
 await sleep(1200);
 rules = [];
 st = { posts: sentBodies.length, sameKey: sentBodies.some((b) => b.includes(firstKey)), pending: await chat("c.messages.filter(m => m.body === 'QA send again').map(m => ({ pending: !!m.pending, unknown: !!m.unknown, key: m.clientKey === " + JSON.stringify(firstKey) + " }))") };
+st.noAiField = !sentBodies.some((b) => /name="ai_proposal"/.test(b));
 check("send.again-reuses-the-key", st.posts === 1 && st.sameKey && st.pending.length === 1 && st.pending[0].key && !st.pending[0].unknown, st);
 await chat("(c.messages = c.messages.filter(m => m.body !== 'QA send again'), 0)");
+check("send.again-not-counted-as-ai-use", st.noAiField, { noAiField: st.noAiField });
+
+// V2. A message with no key (Instagram's echo recorded before our own record, older data)
+// still clears its text bubble by its words; a dismissed file is let go.
+await chat(`(c.messages.push({ id: 'pecho', direction: 'outbound', body: 'QA echoed reply', ts: c.serverTime(), status: 'unknown', unknown: true, clientKey: 'k-not-in-feed-1' }), 0)`);
+await chat(`c.apply({ messages: [{ id: 99999988, direction: 'outbound', body: 'QA echoed reply', timestamp: c.serverTime(), status: 'sent' }], statuses: {}, open: true })`);
+st = await chat("c.messages.filter(m => m.id === 'pecho').length");
+check("send.keyless-message-still-clears-bubble", st === 0, st);
+await chat("(c.messages = c.messages.filter(m => m.id !== 99999988), c._blobs['k-free-1'] = { blob: new Blob(['x']) }, c.messages.push({ id: 'pfree', direction: 'outbound', body: '[x.png]', ts: c.serverTime(), status: 'unknown', unknown: true, mediaUnknown: true, clientKey: 'k-free-1' }), c.dismissUnknown(c.messages.find(m => m.id === 'pfree')), 0)");
+st = await chat("'k-free-1' in c._blobs");
+check("media.dismiss-frees-the-file", st === false, st);
 
 writeFileSync(join(outDir, "inbox_qa_results.json"), JSON.stringify({ results, log: log.slice(-80) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

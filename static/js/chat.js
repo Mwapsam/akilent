@@ -256,12 +256,14 @@ function registerChat() {
       const text = m.mediaUnknown ? m.caption : m.body;
       if (!text) return;
       this.messages = this.messages.filter((x) => x.id !== m.id);
+      if (m.clientKey) delete this._blobs[m.clientKey];
       this.saveUnknown();
       this.draft = this.draft.trim() ? this.draft + '\n' + text : text;
       this.$nextTick(() => { this.grow(this.$refs.input); this.$refs.input.focus(); });
     },
     dismissUnknown(m) {
       this.messages = this.messages.filter((x) => x.id !== m.id);
+      if (m.clientKey) delete this._blobs[m.clientKey];
       this.saveUnknown();
     },
     // In time order (day dividers and meta runs depend on it); in-flight sends last.
@@ -395,12 +397,18 @@ function registerChat() {
           // Matched by the key this browser sent with the attempt, which the server keeps on
           // the message (apps/conversations/inbox_keys.py): exact, for text and files alike,
           // so a teammate's identical words or photo, or an AI reply, is never taken for it.
+          // A message with no key at all (recorded from Instagram's echo before our own record,
+          // a projection that failed, older data) can still be this send: matched by its
+          // words as before, text only, never an AI reply. A teammate's inbox reply always
+          // carries its own key, so it never comes this way.
+          const after = (m) => new Date(raw.timestamp) >= new Date(m.ts) - 60000;
           const i = raw.clientKey
             ? this.messages.findIndex((m) => (m.pending || m.unknown) && m.clientKey === raw.clientKey)
-            : -1;
+            : raw.byAi ? -1
+              : this.messages.findIndex((m) => (m.pending || m.unknown) && !m.mediaUnknown && !m.mediaPending && m.body === raw.body && after(m));
           if (i !== -1) {
             const wasUnknown = this.messages[i].unknown;
-            delete this._blobs[raw.clientKey];
+            delete this._blobs[this.messages[i].clientKey];
             this.messages.splice(i, 1);
             if (wasUnknown) this.saveUnknown();
           }
@@ -694,8 +702,10 @@ function registerChat() {
     // "Send again" on a send that was never confirmed: the same words or file with the same
     // key, so if the first one did go the server returns it instead of sending it twice.
     hasFile(m) { return !!(m.clientKey && this._blobs[m.clientKey]); },
-    canSendAgain(m) { return !!m.clientKey && (!m.mediaUnknown || this.hasFile(m)); },
+    canSendAgain(m) { return !!m.clientKey && (!m.mediaUnknown || (this.hasFile(m) && !!this.sendMediaUrl)); },
     sendAgain(m) {
+      // Everything that could stop the resend is checked before the note is taken away: it
+      // is the only record that this may not have gone.
       if (this.sending || !this.canSendAgain(m)) return;
       if (!navigator.onLine) { this.sendError = "You're offline, so it wasn't sent again."; return; }
       this.messages = this.messages.filter((x) => x.id !== m.id);
@@ -704,14 +714,18 @@ function registerChat() {
         const f = this._blobs[m.clientKey];
         this.uploadMedia(f.blob, f.filename, f.voice, { key: m.clientKey, caption: m.caption || '' });
       } else {
-        this.deliver(m.body, m.clientKey);
+        this.deliver(m.body, m.clientKey, { again: true });
       }
     },
-    async deliver(body, key) {
+    // ``again``: "Send again" on an earlier reply, not the one in the box, so the AI
+    // suggestion currently in the box isn't recorded as used by it.
+    async deliver(body, key, opts) {
+      const again = !!(opts && opts.again);
       const form = this.$refs.composer;
       const fd = new FormData(form);
       fd.set('body', body);
       fd.set('client_key', key);
+      if (again) fd.delete('ai_proposal');
 
       const pending = { id: 'p' + Date.now(), direction: 'outbound', body, ts: this.serverTime(), status: '', pending: true, clientKey: key };
       this.messages.push(pending);
@@ -723,8 +737,10 @@ function registerChat() {
         if (out.kind === 'ok' && !(out.data && out.data.unconfirmed)) {
           this.interval = BASE_INTERVAL;
           this.schedule(300);
-          if (this.aiUsedId && this.ai.proposal && this.ai.proposal.id === this.aiUsedId) this.ai.proposal.status = 'used';
-          this.aiUsedId = null;
+          if (!again) {
+            if (this.aiUsedId && this.ai.proposal && this.ai.proposal.id === this.aiUsedId) this.ai.proposal.status = 'used';
+            this.aiUsedId = null;
+          }
         } else if (out.kind === 'ok' || out.kind === 'unknown') {
           // It may have gone (or the server said its first attempt is unconfirmed). The
           // bubble says so and stays until the thread shows the real message (apply() swaps

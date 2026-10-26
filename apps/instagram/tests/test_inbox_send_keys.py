@@ -5,13 +5,18 @@ import secrets
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.conversations.actions import ActionError, run_action
 from apps.conversations.inbox_keys import inbox_key
 from apps.conversations.models import Conversation, Message
 from apps.instagram.models import OutboundMessage
 from apps.instagram.providers.base import SendResult
-from apps.instagram.tests.test_messaging_fixes import InstagramCase, _deliver
+from apps.instagram.tests.test_messaging_fixes import (
+    InstagramCase,
+    _deliver,
+    _messaging_payload,
+)
 
 SEND = "apps.instagram.providers.meta.MetaInstagramProvider.send_message"
 KEY = "9d1c7a52-2b3e-4f60-8a71-0b1c2d3e4f50"
@@ -91,3 +96,43 @@ class TestOtherSendersUnchanged(TestCase):
         self.assertFalse(is_inbox_key(f"ai-auto:{secrets.token_hex(4)}"))
         self.assertFalse(is_inbox_key(""))
         self.assertTrue(is_inbox_key(f"inbox:1:2:{KEY}"))
+
+
+class TestEchoFirst(InstagramCase):
+    def test_our_key_and_sender_win_over_an_echo_recorded_first(self):
+        from apps.instagram.services.outbound import record_sent_message
+
+        _deliver(self.dm("Hello"))
+        conversation = Conversation.objects.get(channel="instagram")
+        key = inbox_key(conversation, self.user, KEY)
+        outbound = OutboundMessage.objects.create(
+            instagram_account=self.ig_account,
+            idempotency_key=key,
+            recipient_igsid=self.igsid,
+            action_type=OutboundMessage.ActionType.DM_REPLY,
+            body="Hi!",
+            status=OutboundMessage.Status.SENT,
+            provider_message_id="mid.echo1",
+        )
+        # Meta's echo of our own send arrives before we record it.
+        _deliver(
+            _messaging_payload(
+                self.ig_account.page_id,
+                {
+                    "sender": {"id": self.ig_account.instagram_business_account_id},
+                    "recipient": {"id": self.igsid},
+                    "timestamp": int(timezone.now().timestamp() * 1000),
+                    "message": {"mid": "mid.echo1", "text": "Hi!", "is_echo": True},
+                },
+            )
+        )
+        echoed = Message.objects.get(instagram_message__message_id="mid.echo1")
+        self.assertEqual(
+            echoed.metadata.get("sent_by"), "instagram_app"
+        )  # the echo won
+        message = record_sent_message(outbound)
+        self.assertEqual(message.pk, echoed.pk)
+        message.refresh_from_db()
+        self.assertEqual(message.metadata.get("client_key"), KEY)
+        self.assertEqual(message.metadata.get("sent_by_user"), self.user.pk)
+        self.assertNotEqual(message.metadata.get("sent_by"), "instagram_app")

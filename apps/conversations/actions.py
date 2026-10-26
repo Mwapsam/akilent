@@ -90,6 +90,55 @@ def _require_channel_enabled(conversation) -> None:
         raise ActionError(f"{ch.label} is switched off, so replies can't be sent.")
 
 
+def _first_inbox_send(conversation, key: str | None):
+    """The outbound record of an earlier attempt with this inbox key, or None."""
+    if not is_inbox_key(key):
+        return None
+    if conversation.channel == conversation.Channel.WHATSAPP:
+        from apps.whatsapp.models import OutboundMessage as WhatsAppOutbound
+
+        return WhatsAppOutbound.objects.filter(
+            account=conversation.account, idempotency_key=key
+        ).first()
+    if conversation.channel == conversation.Channel.INSTAGRAM:
+        from apps.instagram.models.message import OutboundMessage as InstagramOutbound
+
+        return InstagramOutbound.objects.filter(idempotency_key=key).first()
+    return None
+
+
+def inbox_send_started(conversation, key: str | None) -> bool:
+    """Whether this inbox key was already used: the send is a repeat (no new file needed)."""
+    return _first_inbox_send(conversation, key) is not None
+
+
+def _repeat_inbox_send(conversation, key: str | None) -> dict | None:
+    """The answer to an inbox send repeated with the same key, or None for a first send.
+
+    Never a second attempt. Says what the first one did, the same way on both channels:
+    failed or cancelled (refused, with the reason), unconfirmed (it may or may not have
+    gone; the inbox keeps saying so), or sent / still on its way.
+    """
+    first = _first_inbox_send(conversation, key)
+    if first is None:
+        return None
+    if conversation.channel == conversation.Channel.INSTAGRAM:
+        return _instagram_repeat(first)
+    from apps.whatsapp.friendly_errors import friendly_send_error
+    from apps.whatsapp.models import OutboundMessage as WhatsAppOutbound
+
+    if first.status in (
+        WhatsAppOutbound.Status.FAILED,
+        WhatsAppOutbound.Status.CANCELLED,
+    ):
+        raise ActionError(
+            friendly_send_error(first.error_code) or "This message wasn't sent."
+        )
+    if first.status == WhatsAppOutbound.Status.UNCONFIRMED:
+        return {"outbound_message_id": first.id, "unconfirmed": True}
+    return {"outbound_message_id": first.id}
+
+
 def _instagram_repeat(outbound) -> dict:
     """The answer to an inbox send repeated with the same key (apps.conversations.inbox_keys).
 
@@ -138,6 +187,9 @@ class ReplyAction(Action):
         if not body:
             raise ActionError("reply requires a body")
         _require_channel_enabled(conversation)
+        repeat = _repeat_inbox_send(conversation, idempotency_key)
+        if repeat is not None:
+            return repeat
 
         if conversation.channel == conversation.Channel.WHATSAPP:
             from apps.whatsapp import api as whatsapp_api
@@ -235,6 +287,25 @@ class ReplyMediaAction(Action):
 
         _require_channel_enabled(conversation)
         key = idempotency_key or f"media:{conversation.pk}:{uuid.uuid4()}"
+        # The same file sent again (an unconfirmed send retried): what the first attempt
+        # did, never a second send. On Instagram its caption goes separately, after the
+        # attachment; if the first attempt didn't get that far, it goes now. Not after an
+        # unconfirmed attachment: a caption arriving alone would only add to the doubt.
+        repeat = _repeat_inbox_send(conversation, key)
+        if repeat is not None:
+            if (
+                conversation.channel == conversation.Channel.INSTAGRAM
+                and caption.strip()
+                and not repeat.get("unconfirmed")
+            ):
+                run_action(
+                    "reply",
+                    context,
+                    conversation=conversation,
+                    body=caption,
+                    idempotency_key=f"{key}:caption",
+                )
+            return repeat
 
         if conversation.channel == conversation.Channel.WHATSAPP:
             from apps.whatsapp import api as whatsapp_api

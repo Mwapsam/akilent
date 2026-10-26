@@ -206,8 +206,29 @@ def test_pane_forms_post_to_the_conversation_and_target_the_pane(
     assert f'action="{url}" hx-post="{url}"' in pane
     assert 'hx-target="#conversation-pane-inner"' in pane
     assert 'onchange="this.form.submit()"' not in pane  # no auto-submitting selects
+    # Loaded as a full page, it opens in the inbox's pane too, with the same forms.
     page = client.get(url).content.decode()
-    assert f'hx-post="{url}"' not in page  # the standalone page keeps plain forms
+    assert f'hx-post="{url}"' in page and 'id="inbox-split"' in page
+
+
+@pytest.mark.django_db
+def test_reloading_an_open_conversation_keeps_the_inbox_beside_it(
+    logged_in, conversation
+):
+    """Opened from the list, a conversation's address is /inbox/<id>/; reloading it (or a
+    link to it) shows the inbox with that conversation in the pane, not a page on its own."""
+    client, _, _ = logged_in
+    url = f"/inbox/{conversation.public_id}/"
+    page = client.get(url).content.decode()
+    assert 'class="inbox-split has-conversation"' in page
+    assert f'data-open="{url}"' in page
+    assert 'id="inbox-body"' in page  # the list
+    assert 'id="chat-config"' in page  # the conversation, inside the pane
+    pane_start = page.index('id="conversation-pane-inner"')
+    assert page.index('id="chat-config"') > pane_start
+    # The plain inbox still opens with nothing selected.
+    inbox = client.get("/inbox/").content.decode()
+    assert 'class="inbox-split"' in inbox and "has-conversation" not in inbox
 
 
 # --- Names and titles --------------------------------------------------------------
