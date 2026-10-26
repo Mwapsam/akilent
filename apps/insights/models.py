@@ -181,6 +181,8 @@ class BusinessPolicy(models.Model):
         "campaign_opportunity": Trigger.REPURCHASE_DUE,
         "instagram_unanswered_intent": Trigger.CONVERSATION_UNANSWERED,
         "instagram_high_engagement_contact": Trigger.CONVERSATION_UNANSWERED,
+        "facebook_unanswered_intent": Trigger.CONVERSATION_UNANSWERED,
+        "facebook_high_engagement_contact": Trigger.CONVERSATION_UNANSWERED,
     }
 
     class Status(models.TextChoices):

@@ -7,6 +7,7 @@ register = template.Library()
 _SOURCES = {
     "whatsapp": "WhatsApp",
     "instagram": "Instagram",
+    "facebook": "Facebook",
     "api": "API",
     "csv": "CSV import",
     "import": "Import",

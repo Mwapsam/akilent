@@ -2,6 +2,19 @@ from django.conf import settings
 from django.db import models
 
 
+class RuleChannels(models.TextChoices):
+    """Which channels' comments a moderation rule or comment trigger applies to."""
+
+    INSTAGRAM = "instagram", "Instagram"
+    FACEBOOK = "facebook", "Facebook"
+    BOTH = "both", "Instagram and Facebook"
+
+    @classmethod
+    def covering(cls, channel: str) -> list[str]:
+        """The stored values that apply to ``channel`` ("instagram" or "facebook")."""
+        return [channel, cls.BOTH]
+
+
 class ModerationRule(models.Model):
     """
     A per-account rule that evaluates inbound comments and applies a moderation
@@ -47,6 +60,10 @@ class ModerationRule(models.Model):
     )
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
+    # Which channels' comments the rule applies to (shared with Facebook Page comments).
+    channels = models.CharField(
+        max_length=10, choices=RuleChannels.choices, default=RuleChannels.BOTH
+    )
 
     match_type = models.CharField(max_length=20, choices=MatchType.choices)
     # For KEYWORD match type: comma-separated phrases to match (case-insensitive)
@@ -106,9 +123,19 @@ class ModerationLog(models.Model):
         blank=True,
         related_name="logs",
     )
+    # Exactly one of these is set: an Instagram comment or a Facebook Page comment.
     comment = models.ForeignKey(
         "instagram.Comment",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="moderation_logs",
+    )
+    facebook_comment = models.ForeignKey(
+        "facebook.FacebookComment",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="moderation_logs",
     )
 
@@ -133,6 +160,15 @@ class ModerationLog(models.Model):
             models.Index(fields=["account", "occurred_at"]),
             models.Index(fields=["comment", "occurred_at"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(comment__isnull=False, facebook_comment__isnull=True)
+                    | models.Q(comment__isnull=True, facebook_comment__isnull=False)
+                ),
+                name="moderation_log_exactly_one_comment",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.pk:
@@ -143,4 +179,5 @@ class ModerationLog(models.Model):
         raise ValueError("ModerationLog rows are immutable.")
 
     def __str__(self):
-        return f"ModerationLog: {self.moderation_action} on comment {self.comment_id} ({self.outcome})"
+        target = self.comment_id or f"fb:{self.facebook_comment_id}"
+        return f"ModerationLog: {self.moderation_action} on comment {target} ({self.outcome})"

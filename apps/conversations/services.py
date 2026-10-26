@@ -547,6 +547,96 @@ def _announce_processed(conversation: Conversation, message: Message, handled) -
             )
 
 
+def record_inbound_facebook_message(
+    *,
+    contact,
+    facebook_conversation,
+    facebook_message,
+    enroll_workflows: bool = True,
+) -> Conversation | None:
+    """Project an already-created inbound FacebookMessage (Messenger) onto the spine.
+
+    Same steps as ``record_inbound_instagram_message``. Idempotent on the
+    ``facebook_message`` FK: a replayed webhook returns None.
+    """
+    from apps.conversations.models import ChannelConversation, Conversation
+
+    is_new = not ChannelConversation.objects.filter(
+        channel=Conversation.Channel.FACEBOOK,
+        object_id=facebook_conversation.pk,
+    ).exists()
+    conversation = Conversation.get_or_create_for_facebook(facebook_conversation)
+    if is_new:
+        route_new_conversation(conversation)
+    conversation.register_inbound(facebook_message.timestamp)
+
+    message_type = (facebook_message.metadata or {}).get("message_type") or "text"
+    message, created = Message.objects.get_or_create(
+        facebook_message=facebook_message,
+        defaults={
+            "account": conversation.account,
+            "conversation": conversation,
+            "direction": Message.Direction.INBOUND,
+            "body": facebook_message.body,
+            "timestamp": facebook_message.timestamp,
+            "metadata": {"message_type": message_type},
+        },
+    )
+    if not created:
+        return None
+    entry_points.on_inbound_message(conversation, message)
+
+    event = emit_event(
+        account=conversation.account,
+        type="conversation.message_received",
+        occurred_at=facebook_message.timestamp,
+        source="facebook",
+        source_event_id=facebook_message.message_id or "",
+        payload={
+            "conversation_id": conversation.public_id,
+            "message_id": message.id,
+            "body": facebook_message.body,
+            "message_type": message_type,
+        },
+        subject_type="conversation",
+        subject_id=conversation.public_id,
+    )
+    if event is None:
+        return conversation
+
+    handled = ""
+    if enroll_workflows:
+        try:
+            raw_message = (facebook_message.metadata or {}).get("message") or {}
+            qr_payload = (raw_message.get("quick_reply") or {}).get("payload", "")
+            msg_dict: dict = {
+                "body": facebook_message.body,
+                "type": message_type,
+                "_conversation": conversation,
+                "_message_key": (
+                    f"facebook:{facebook_conversation.page_id}:"
+                    f"{facebook_message.message_id or ''}"
+                ),
+            }
+            if qr_payload:
+                msg_dict["reply_id"] = qr_payload
+            handled = _enroll_workflows(conversation, contact, msg_dict)
+        except Exception:
+            logger.exception(
+                "record_inbound_facebook_message: workflow enrollment failed for conversation=%s",
+                conversation.pk,
+            )
+    _announce_processed(conversation, message, handled)
+    if not enroll_workflows:
+        return conversation
+
+    _record_customer_activity(
+        contact, facebook_message.timestamp, facebook_message.body
+    )
+    capture_opportunity(conversation, contact, facebook_message.body)
+    return conversation
+
+
 # Same ordering as the provider-side log: a status only moves forward, and "failed" is terminal.
 _STATUS_RANK = {"queued": 0, "sent": 1, "delivered": 2, "read": 3, "failed": 99}
 
@@ -560,6 +650,7 @@ def record_outbound_message(
     metadata: dict | None = None,
     whatsapp_message=None,
     instagram_message=None,
+    facebook_message=None,
 ) -> tuple[Message, bool]:
     """Record a business message (human reply, template or workflow send) on the spine.
 
@@ -574,6 +665,8 @@ def record_outbound_message(
         if whatsapp_message is not None
         else {"instagram_message": instagram_message}
         if instagram_message is not None
+        else {"facebook_message": facebook_message}
+        if facebook_message is not None
         else None
     )
     if provider_link is not None:

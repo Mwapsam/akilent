@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.chatbot",
     "apps.support",
     "apps.instagram",
+    "apps.facebook",
     "apps.hubspot",
     "apps.publishing",
     "django_otp",
@@ -370,7 +371,8 @@ FIELD_ENCRYPTION_KEYS = [FIELD_ENCRYPTION_KEY]
 WHATSAPP_ENABLED = os.getenv("WHATSAPP_ENABLED", "False").lower() == "true"
 INSTAGRAM_ENABLED = os.getenv("INSTAGRAM_ENABLED", "True").lower() == "true"
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "True").lower() == "true"
-# Facebook Page publishing (Content Studio). Not Messenger. An empty value keeps the default.
+# A Facebook Page: Content Studio publishing, and Messenger + Page comments in the inbox.
+# An empty value keeps the default.
 FACEBOOK_ENABLED = (os.getenv("FACEBOOK_ENABLED") or "True").lower() == "true"
 
 # --- WhatsApp ---
@@ -395,6 +397,11 @@ INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID", "") or WHATSAPP_APP_ID
 INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET") or WHATSAPP_APP_SECRET
 INSTAGRAM_GRAPH_VERSION = os.getenv("INSTAGRAM_GRAPH_VERSION") or META_GRAPH_VERSION
 INSTAGRAM_VERIFY_TOKEN = os.getenv("INSTAGRAM_VERIFY_TOKEN", "")
+
+# Facebook Page webhooks (Messenger + Page comments). Facebook Login runs on the same Meta
+# app as WhatsApp, so deliveries are signed with WHATSAPP_APP_SECRET. The verify token
+# falls back to Instagram's when it isn't set separately.
+FACEBOOK_VERIFY_TOKEN = os.getenv("FACEBOOK_VERIFY_TOKEN") or INSTAGRAM_VERIFY_TOKEN
 
 # Inbound keyword handling for messaging consent. A single-word inbound text
 # matching (case-insensitively) one of these opts the contact out / back in.
@@ -701,6 +708,8 @@ CELERY_TASK_ROUTES = {
     "apps.email.tasks.deliver_webhook": {"queue": "webhooks"},
     # Instagram
     "apps.instagram.tasks.drain_instagram_outbox": {"queue": "outbound"},
+    # Facebook
+    "apps.facebook.tasks.drain_facebook_outbox": {"queue": "outbound"},
     # Automation (rule evaluation)
     "apps.automation.tasks.evaluate_rules_for_message": {"queue": "automation"},
     # Maintenance
@@ -896,6 +905,23 @@ if INSTAGRAM_ENABLED:
             "apps.instagram.tasks.download_instagram_media": {"queue": "celery"},
             "apps.instagram.tasks.refresh_instagram_tokens": {"queue": "celery"},
         }
+    )
+
+if FACEBOOK_ENABLED:
+    CELERY_BEAT_SCHEDULE.update(
+        {
+            "drain-facebook-outbox": {
+                "task": "apps.facebook.tasks.drain_facebook_outbox",
+                "schedule": 30.0,  # retries transiently-failed Facebook sends after backoff
+            },
+            "download-facebook-media": {
+                "task": "apps.facebook.tasks.download_facebook_media",
+                "schedule": 60.0,  # sweep attachments the on-arrival download missed
+            },
+        }
+    )
+    CELERY_TASK_ROUTES.update(
+        {"apps.facebook.tasks.download_facebook_media": {"queue": "celery"}}
     )
 
 CELERY_BEAT_SCHEDULE.update(

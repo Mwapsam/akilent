@@ -48,6 +48,7 @@ class Conversation(models.Model):
         SMS = "sms", "SMS"
         WEBSITE_CHAT = "website_chat", "Website Chat"
         INSTAGRAM = "instagram", "Instagram"
+        FACEBOOK = "facebook", "Facebook Messenger"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -194,6 +195,25 @@ class Conversation(models.Model):
         )
 
     @classmethod
+    def get_or_create_for_facebook(cls, facebook_conversation) -> Conversation:
+        """Idempotently get/create the generic wrapper for a facebook.FacebookConversation.
+
+        ``facebook_conversation.facebook_contact.contact`` must already be resolved.
+        """
+        contact = facebook_conversation.facebook_contact.contact
+        if contact is None:
+            raise ValueError(
+                "facebook_conversation.facebook_contact.contact must be resolved "
+                "before creating a generic Conversation"
+            )
+        return cls._bind_channel(
+            facebook_conversation,
+            cls.Channel.FACEBOOK,
+            account=facebook_conversation.account,
+            contact=contact,
+        )
+
+    @classmethod
     def get_or_create_for_channel(cls, channel_obj, channel: str) -> Conversation:
         """Generic factory: get/create the spine Conversation for any channel-specific record.
 
@@ -204,6 +224,8 @@ class Conversation(models.Model):
             return cls.get_or_create_for_whatsapp(channel_obj)
         if channel == cls.Channel.INSTAGRAM:
             return cls.get_or_create_for_instagram(channel_obj)
+        if channel == cls.Channel.FACEBOOK:
+            return cls.get_or_create_for_facebook(channel_obj)
         raise ValueError(
             f"Unsupported channel for get_or_create_for_channel: {channel!r}"
         )
@@ -285,6 +307,20 @@ class Conversation(models.Model):
         from apps.instagram.models import InstagramConversation
 
         return InstagramConversation.objects.filter(pk=cc.object_id).first()
+
+    @property
+    def facebook_conversation(self):
+        """The Messenger backing record for this conversation, or None.
+
+        A Python property, like ``instagram_conversation``: prefetch
+        ``channel_conversations`` for bulk access.
+        """
+        cc = self.channel_conversations.filter(channel=self.Channel.FACEBOOK).first()
+        if cc is None:
+            return None
+        from apps.facebook.models import FacebookConversation
+
+        return FacebookConversation.objects.filter(pk=cc.object_id).first()
 
     def register_inbound(self, at) -> None:
         self.last_message_at = at
@@ -488,6 +524,13 @@ class Message(models.Model):
     )
     instagram_message = models.OneToOneField(
         "instagram.InstagramMessage",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="generic_message",
+    )
+    facebook_message = models.OneToOneField(
+        "facebook.FacebookMessage",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -934,6 +977,7 @@ class ConversationEntryPoint(models.Model):
     class Kind(models.TextChoices):
         TRACKED_LINK = "tracked_link", "Tracked link"
         IG_COMMENT = "ig_comment", "Instagram comment"
+        FB_COMMENT = "fb_comment", "Facebook comment"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="entry_points"

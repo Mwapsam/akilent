@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Instagram comment rules — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}Comment rules — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
@@ -10,8 +10,8 @@
 
 {% if not has_account %}
 <div class="mb-6 card p-4 text-sm text-gray-600">
-  Rules start working once an Instagram account is connected.
-  <a href="{% url 'instagram-accounts' %}" class="underline font-medium text-ink">Connect Instagram</a>
+  Rules start working once Instagram or a Facebook Page is connected.
+  <a href="{% url 'settings-integrations' %}" class="underline font-medium text-ink">Connect a channel</a>
 </div>
 {% endif %}
 
@@ -27,7 +27,7 @@
   {% if triggers %}
   <ul class="space-y-3">
     {% for rule in triggers %}
-    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display %}
+    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display show_channels=both_channels %}
     {% endfor %}
   </ul>
   {% else %}
@@ -55,7 +55,7 @@
   {% if moderation_rules %}
   <ul class="space-y-3">
     {% for rule in moderation_rules %}
-    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule summary=rule.get_match_type_display detail=rule.get_moderation_action_display %}
+    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule summary=rule.get_match_type_display detail=rule.get_moderation_action_display show_channels=both_channels %}
     {% endfor %}
   </ul>
   {% else %}
@@ -68,7 +68,7 @@
 <section class="mb-8">
   <div class="mb-3">
     <h2 class="text-lg font-semibold text-ink">Recent moderation activity</h2>
-    <p class="text-sm text-gray-600">The last 20 comments your moderation rules acted on.</p>
+    <p class="text-sm text-gray-600">The last 20 comments your rules or your team acted on. <a href="{% url 'conversations:comments' %}" class="underline">See all comments</a></p>
   </div>
   {% if moderation_logs %}
   <ul class="card divide-y divide-gray-100">
@@ -76,15 +76,16 @@
     <li class="p-4 text-sm">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <span class="font-medium text-ink">
-          {% with contact=log.comment.instagram_contact %}{% if contact.username %}@{{ contact.username }}{% else %}{{ contact.name|default:"Someone" }}{% endif %}{% endwith %}
+          {% if log.facebook_comment %}{{ log.facebook_comment.facebook_contact.name|default:"Someone" }} <span class="text-xs text-ink-subtle">· Facebook</span>
+          {% else %}{% with contact=log.comment.instagram_contact %}{% if contact.username %}@{{ contact.username }}{% else %}{{ contact.name|default:"Someone" }}{% endif %}{% endwith %}{% endif %}
         </span>
         <span class="flex items-center gap-2">
           <span class="badge {% if log.outcome == 'applied' %}badge-success{% elif log.outcome == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">{{ log.get_outcome_display }}</span>
           <span class="text-ink-subtle">{{ log.occurred_at|timesince }} ago</span>
         </span>
       </div>
-      <p class="mt-1 text-gray-700">“{{ log.comment.body|truncatechars:140 }}”</p>
-      <p class="mt-1 text-ink-subtle">{{ log.rule.name|default:"Deleted rule" }} · {{ log.moderation_action|capfirst }}{% if log.moderation_action == "flag" or log.automation_trigger == "notify_staff" %} · Team emailed{% endif %}{% if log.automation_trigger == "create_proposal" %} · Lead opened{% endif %}</p>
+      <p class="mt-1 text-gray-700">“{% if log.facebook_comment %}{{ log.facebook_comment.body|truncatechars:140 }}{% else %}{{ log.comment.body|truncatechars:140 }}{% endif %}”</p>
+      <p class="mt-1 text-ink-subtle">{% if log.acted_by %}By {{ log.acted_by.get_full_name|default:log.acted_by.email }}{% else %}{{ log.rule.name|default:"Deleted rule" }}{% endif %} · {{ log.moderation_action|capfirst }}{% if log.moderation_action == "flag" or log.automation_trigger == "notify_staff" %} · Team emailed{% endif %}{% if log.automation_trigger == "create_proposal" %} · Lead opened{% endif %}</p>
       {% if log.error %}<p class="mt-1 text-coral-700">{{ log.error }}</p>{% endif %}
     </li>
     {% endfor %}
@@ -95,6 +96,6 @@
 </section>
 {% endif %}
 
-<a href="{% url 'instagram-accounts' %}" class="text-sm text-ink-subtle hover:text-ink">← Back to Instagram</a>
+<a href="{% url 'conversations:comments' %}" class="text-sm text-ink-subtle hover:text-ink">← Back to comments</a>
 
 {% endblock %}

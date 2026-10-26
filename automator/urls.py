@@ -126,6 +126,7 @@ urlpatterns = [
     path("support/", include("apps.support.urls", namespace="support")),
     path("whatsapp/", include("apps.whatsapp.urls")),
     path("instagram/", include("apps.instagram.urls")),
+    path("facebook/", include("apps.facebook.urls")),
     path("hubspot/", include("apps.hubspot.urls", namespace="hubspot")),
     path("publishing/", include("apps.publishing.urls", namespace="publishing")),
 ]

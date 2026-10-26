@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -491,19 +492,20 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
             # only when the account actually has an active IG channel.
             if step["type"] == "send_list":
                 try:
+                    from apps.facebook.models.page import active_page
                     from apps.instagram.models.account import InstagramBusinessAccount
 
-                    _has_ig = (
-                        account is not None
-                        and InstagramBusinessAccount.objects.filter(
+                    _has_ig = account is not None and (
+                        InstagramBusinessAccount.objects.filter(
                             account=account, is_active=True
                         ).exists()
+                        or active_page(account) is not None
                     )
                 except Exception:
                     _has_ig = False
                 if _has_ig:
                     _error(
-                        f"step {sid!r}: Instagram doesn't support lists — use send_buttons instead",
+                        f"step {sid!r}: Instagram and Messenger don't support lists — use send_buttons instead",
                         step_id=sid,
                         field="type",
                     )
@@ -1148,7 +1150,7 @@ def _require_open_window(run: WorkflowRun, step: dict, conversation) -> None:
 
 
 def _run_interactive(run: WorkflowRun, step: dict) -> dict:
-    """Send reply buttons (WhatsApp) or quick replies (Instagram) for this run.
+    """Send reply buttons (WhatsApp) or quick replies (Instagram, Messenger) for this run.
 
     WhatsApp: unchanged — sends WA interactive message, run continues to the next
     step (typically ``wait_for_reply``).
@@ -1167,6 +1169,9 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
         return _run_interactive_whatsapp(run, step, conversation)
     if conversation.channel == Conversation.Channel.INSTAGRAM:
         return _run_interactive_instagram(run, step, conversation)
+    if conversation.channel == Conversation.Channel.FACEBOOK:
+        # Messenger quick replies work exactly like Instagram's.
+        return _run_interactive_instagram(run, step, conversation, channel="facebook")
 
     raise ValueError(
         f"{step['type']} step {step.get('id')!r}: channel {conversation.channel!r} "
@@ -1210,10 +1215,14 @@ _IG_MAX_PAYLOAD = 1000
 _IG_DEFAULT_TIMEOUT = 86400  # 24 h
 
 
-def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> dict:
-    """IG send_buttons step: one transaction opens interaction + enqueues message + parks run.
+def _run_interactive_instagram(
+    run: WorkflowRun, step: dict, conversation, channel: str = "instagram"
+) -> dict:
+    """IG / Messenger send_buttons step: one transaction opens interaction + enqueues
+    message + parks run.
 
-    ``send_list`` is not supported on Instagram; publish validation rejects it before here.
+    ``send_list`` is not supported on Instagram or Messenger; publish validation rejects
+    it before here.
     """
     from datetime import timedelta
 
@@ -1222,28 +1231,62 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
     from django.utils.text import slugify
 
     from apps.automation.models import WorkflowInteraction
-    from apps.instagram.services.outbound import enqueue_reply
 
+    label = "Messenger" if channel == "facebook" else "Instagram"
     if step.get("type") == "send_list":
         raise ValueError(
-            f"step {step.get('id')!r}: Instagram does not support lists — use send_buttons instead"
+            f"step {step.get('id')!r}: {label} does not support lists — use send_buttons instead"
         )
 
-    ig_convo = getattr(conversation, "instagram_conversation", None)
-    if ig_convo is None:
-        raise ValueError(
-            f"step {step.get('id')!r}: no Instagram conversation on this spine"
-        )
-    ig_account = ig_convo.instagram_account
-    ig_contact = ig_convo.instagram_contact
-    recipient_igsid = ig_contact.instagram_scoped_id
+    if channel == "facebook":
+        from apps.facebook.models.page import active_page
+        from apps.facebook.services.outbound import enqueue_reply as fb_enqueue
+
+        fb_convo = getattr(conversation, "facebook_conversation", None)
+        conn = active_page(conversation.account)
+        if fb_convo is None or conn is None or conn.page_id != fb_convo.page_id:
+            raise ValueError(
+                f"step {step.get('id')!r}: no connected Messenger conversation on this spine"
+            )
+        recipient = fb_convo.facebook_contact.psid
+
+        def enqueue(text, *, idempotency_key, quick_replies):
+            return fb_enqueue(
+                conn,
+                recipient,
+                text,
+                action_type="dm_reply",
+                idempotency_key=idempotency_key,
+                quick_replies=quick_replies,
+            )
+
+    else:
+        from apps.instagram.services.outbound import enqueue_reply as ig_enqueue
+
+        ig_convo = getattr(conversation, "instagram_conversation", None)
+        if ig_convo is None:
+            raise ValueError(
+                f"step {step.get('id')!r}: no Instagram conversation on this spine"
+            )
+        ig_account = ig_convo.instagram_account
+        recipient = ig_convo.instagram_contact.instagram_scoped_id
+
+        def enqueue(text, *, idempotency_key, quick_replies):
+            return ig_enqueue(
+                ig_account,
+                recipient,
+                text,
+                action_type="dm_reply",
+                idempotency_key=idempotency_key,
+                quick_replies=quick_replies,
+            )
 
     buttons = step.get("buttons") or []
     if not buttons:
         raise ValueError(f"step {step.get('id')!r}: at least one button is required")
     if len(buttons) > _IG_MAX_QUICK_REPLIES:
         raise ValueError(
-            f"step {step.get('id')!r}: Instagram allows at most {_IG_MAX_QUICK_REPLIES} quick replies"
+            f"step {step.get('id')!r}: {label} allows at most {_IG_MAX_QUICK_REPLIES} quick replies"
         )
 
     text = _first_name_merge(run, step.get("text") or "")
@@ -1316,11 +1359,8 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
             )
 
         # 3. Enqueue the outbound message.
-        outbound = enqueue_reply(
-            ig_account,
-            recipient_igsid,
+        outbound = enqueue(
             text,
-            action_type="dm_reply",
             idempotency_key=send_key(run, step_id),
             quick_replies=quick_replies,
         )
@@ -1330,17 +1370,25 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
         run.next_due_at = deadline
         run.save(update_fields=["status", "next_due_at"])
 
-    ig_outbound_id = outbound.id if outbound else None
+    outbound_id = outbound.id if outbound else None
+    fk = "fb_outbound_message_id" if channel == "facebook" else "ig_outbound_message_id"
 
     # Record the step run BEFORE attempting to send, so mark_outbound_message_failed
     # (the reconciliation hook) can find the WorkflowStepRun row on an immediate failure.
     # The outer _record call in advance_run will hit an IntegrityError and silently no-op.
-    _record(run, step, {"_parked": True}, ig_outbound_message_id=ig_outbound_id)
+    if channel == "facebook":
+        _record(run, step, {"_parked": True}, fb_outbound_message_id=outbound_id)
+    else:
+        _record(run, step, {"_parked": True}, ig_outbound_message_id=outbound_id)
 
     # Send immediately (don't wait for the next drain tick) so the customer
     # sees the quick-reply chips without a multi-minute delay.
     if outbound is not None:
-        from apps.instagram.services.outbound import send_outbound
+        send_outbound: Any
+        if channel == "facebook":
+            from apps.facebook.services.outbound import send_outbound
+        else:
+            from apps.instagram.services.outbound import send_outbound
 
         try:
             send_outbound(outbound)
@@ -1353,7 +1401,7 @@ def _run_interactive_instagram(run: WorkflowRun, step: dict, conversation) -> di
 
     return {
         "_parked": True,
-        "ig_outbound_message_id": ig_outbound_id,
+        fk: outbound_id,
         "interaction_token": token,
     }
 
@@ -2307,7 +2355,6 @@ def _build_action_kwargs(run: WorkflowRun, step: dict) -> dict:
 
     action = get_action(step["action"])
     schema = action.input_schema()
-    from typing import Any
 
     params = step.get("params") or {}
     kwargs: dict[str, Any] = {}
@@ -2616,6 +2663,7 @@ def advance_run(run: WorkflowRun) -> WorkflowRun:
             result,
             status="skipped" if result.get("skipped") else "ok",
             ig_outbound_message_id=result.get("ig_outbound_message_id"),
+            fb_outbound_message_id=result.get("fb_outbound_message_id"),
         )
         # Interactive and ask_question steps park the run (WAITING + deadline).
         if result.get("_parked"):
@@ -2674,6 +2722,7 @@ def _record(
     *,
     status: str = "ok",
     ig_outbound_message_id: int | None = None,
+    fb_outbound_message_id: int | None = None,
 ) -> None:
     from django.db import IntegrityError, transaction
 
@@ -2689,6 +2738,7 @@ def _record(
                 outbound_message_id=result.get("outbound_message_id"),
                 # IG outbound FK (A workstream).
                 ig_outbound_message_id=ig_outbound_message_id,
+                fb_outbound_message_id=fb_outbound_message_id,
             )
     except IntegrityError:
         # uniq_workflowsteprun_run_step — a concurrent advance already recorded

@@ -31,6 +31,7 @@ NOTE = "No reply sent - customer has been waiting"
 _CHAT_CHANNELS = (
     Conversation.Channel.WHATSAPP,
     Conversation.Channel.INSTAGRAM,
+    Conversation.Channel.FACEBOOK,
     Conversation.Channel.WEBSITE_CHAT,
 )
 

@@ -1,5 +1,7 @@
 from django.db import models
 
+from .moderation import RuleChannels
+
 
 class CommentTrigger(models.Model):
     """
@@ -34,6 +36,10 @@ class CommentTrigger(models.Model):
     )
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
+    # Which channels' comments the trigger answers (shared with Facebook Page comments).
+    channels = models.CharField(
+        max_length=10, choices=RuleChannels.choices, default=RuleChannels.BOTH
+    )
 
     match_type = models.CharField(max_length=20, choices=MatchType.choices)
     keywords = models.TextField(

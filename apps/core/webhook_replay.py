@@ -1,7 +1,7 @@
 """Replay of inbound webhook events that arrived while their channel was switched off.
 
 A webhook for a channel that is off is validated, stored (WhatsApp: ``held=True``; Instagram:
-``status=held``) and acknowledged with 200, so nothing is lost. Nothing is processed until the
+``status=held``; Facebook the same) and acknowledged with 200, so nothing is lost. Nothing is processed until the
 channel is back on. ``replay_held_webhooks`` releases the stored events, oldest first.
 
 Each event is claimed with a conditional update, so two replays can't release the same event.
@@ -30,6 +30,8 @@ def replay_held_webhooks() -> dict:
         result["whatsapp"] = _drain(_replay_whatsapp)
     if channel_state("instagram") == "enabled":
         result["instagram"] = _drain(_replay_instagram)
+    if channel_state("facebook") == "enabled":
+        result["facebook"] = _drain(_replay_facebook)
     return result
 
 
@@ -73,25 +75,37 @@ def _replay_instagram() -> int:
     from apps.instagram.models.webhook import WebhookEventLog
     from apps.instagram.tasks import process_instagram_event
 
-    held = WebhookEventLog.Status.HELD
-    received = WebhookEventLog.Status.RECEIVED
+    return _replay_status_log(WebhookEventLog, process_instagram_event, "Instagram")
+
+
+def _replay_facebook() -> int:
+    from apps.facebook.models.webhook import FacebookWebhookEventLog
+    from apps.facebook.tasks import process_facebook_event
+
+    return _replay_status_log(
+        FacebookWebhookEventLog, process_facebook_event, "Facebook"
+    )
+
+
+def _replay_status_log(log, task, label: str) -> int:
+    """Release held events of a log with a ``status`` field (Instagram, Facebook)."""
+    held = log.Status.HELD
+    received = log.Status.RECEIVED
     ids = list(
-        WebhookEventLog.objects.filter(status=held)
+        log.objects.filter(status=held)
         .order_by("received_at", "id")
         .values_list("id", flat=True)[:_BATCH]
     )
     released = 0
     for pk in ids:
-        if not WebhookEventLog.objects.filter(pk=pk, status=held).update(
-            status=received
-        ):
+        if not log.objects.filter(pk=pk, status=held).update(status=received):
             continue
         released += 1
         try:
-            process_instagram_event.delay(pk)
+            task.delay(pk)
         except Exception:
-            WebhookEventLog.objects.filter(pk=pk).update(status=held)
-            logger.exception("replay: could not enqueue Instagram webhook %s", pk)
+            log.objects.filter(pk=pk).update(status=held)
+            logger.exception("replay: could not enqueue %s webhook %s", label, pk)
             break
     return released
 
@@ -123,6 +137,8 @@ def sweep_stuck_webhooks() -> dict:
         result["whatsapp"] = _sweep_whatsapp()
     if channel_state("instagram") == "enabled":
         result["instagram"] = _sweep_instagram()
+    if channel_state("facebook") == "enabled":
+        result["facebook"] = _sweep_facebook()
     return result
 
 
@@ -170,6 +186,24 @@ def _sweep_instagram() -> int:
     return _enqueue_all(ids, process_instagram_event, "Instagram")
 
 
+def _sweep_facebook() -> int:
+    from apps.facebook.models.webhook import FacebookWebhookEventLog
+    from apps.facebook.tasks import process_facebook_event
+
+    Status = FacebookWebhookEventLog.Status
+    ids = list(
+        FacebookWebhookEventLog.objects.filter(
+            status__in=[Status.RECEIVED, Status.PROCESSING, Status.FAILED],
+            account__isnull=False,  # unresolved: no business to process it for
+            attempts__lt=_MAX_SWEEP_ATTEMPTS,
+            received_at__lt=_stuck_cutoff(),
+        )
+        .order_by("received_at", "id")
+        .values_list("id", flat=True)[:_BATCH]
+    )
+    return _enqueue_all(ids, process_facebook_event, "Facebook")
+
+
 def _enqueue_all(ids, task, label: str) -> int:
     swept = 0
     for pk in ids:
@@ -197,7 +231,7 @@ _PRUNE_BATCH = 2000
 
 @shared_task(name="apps.core.webhook_replay.prune_webhook_logs")
 def prune_webhook_logs() -> dict:
-    """Delete stored WhatsApp and Instagram webhook bodies past their retention.
+    """Delete stored WhatsApp, Instagram and Facebook webhook bodies past their retention.
 
     Held events are never pruned: they are waiting for their channel to come back on.
     Deletes in batches so one run can't hold a long lock on a large table.
@@ -207,6 +241,7 @@ def prune_webhook_logs() -> dict:
     from django.db.models import Q
     from django.utils import timezone
 
+    from apps.facebook.models.webhook import FacebookWebhookEventLog as FBEvent
     from apps.instagram.models.webhook import WebhookEventLog as IGEvent
     from apps.whatsapp.models import WebhookEventLog as WAEvent
 
@@ -222,7 +257,15 @@ def prune_webhook_logs() -> dict:
         Q(status=IGEvent.Status.PROCESSED, received_at__lt=processed_before)
         | Q(received_at__lt=unprocessed_before)
     )
-    return {"whatsapp": _delete_in_batches(wa), "instagram": _delete_in_batches(ig)}
+    fb = FBEvent.objects.exclude(status=FBEvent.Status.HELD).filter(
+        Q(status=FBEvent.Status.PROCESSED, received_at__lt=processed_before)
+        | Q(received_at__lt=unprocessed_before)
+    )
+    return {
+        "whatsapp": _delete_in_batches(wa),
+        "instagram": _delete_in_batches(ig),
+        "facebook": _delete_in_batches(fb),
+    }
 
 
 def _delete_in_batches(queryset) -> int:

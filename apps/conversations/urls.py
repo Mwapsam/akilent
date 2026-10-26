@@ -1,12 +1,30 @@
 from django.urls import path
 
-from apps.conversations import views
+from apps.conversations import comments_views, views
 
 app_name = "conversations"
 
 urlpatterns = [
     path("", views.inbox, name="inbox"),
     path("feed/", views.inbox_feed, name="inbox_feed"),
+    # Instagram and Facebook comments in one place (comments_views).
+    path("comments/", comments_views.comments_inbox, name="comments"),
+    path("comments/post/", comments_views.comment_on_post, name="comments_post"),
+    path(
+        "comments/<str:channel>/<int:pk>/reply/",
+        comments_views.reply,
+        name="comments_reply",
+    ),
+    path(
+        "comments/<str:channel>/<int:pk>/private-reply/",
+        comments_views.private_reply,
+        name="comments_private_reply",
+    ),
+    path(
+        "comments/<str:channel>/<int:pk>/moderate/",
+        comments_views.moderate,
+        name="comments_moderate",
+    ),
     path("followups/", views.followups_due, name="followups_due"),
     path(
         "followups/<int:pk>/complete/",

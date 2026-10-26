@@ -53,16 +53,22 @@ def evaluate_triggers(thread: CommentThread, body: str) -> bool:
         return False
 
     account = thread.instagram_account.account
-    triggers = CommentTrigger.objects.filter(account=account, is_active=True).order_by(
-        "priority", "created_at"
-    )
+    trigger = first_matching_trigger(account, "instagram", body)
+    if trigger is None:
+        return False
+    _fire_trigger(thread, trigger)
+    return True
 
-    for trigger in triggers:
-        if _trigger_matches(trigger, body):
-            _fire_trigger(thread, trigger)
-            return True
 
-    return False
+def first_matching_trigger(account, channel: str, body: str) -> CommentTrigger | None:
+    """The account's first active trigger for ``channel`` ("instagram" or "facebook")
+    that matches the comment text, by priority. Shared by Instagram and Facebook."""
+    from apps.instagram.models.moderation import RuleChannels
+
+    triggers = CommentTrigger.objects.filter(
+        account=account, is_active=True, channels__in=RuleChannels.covering(channel)
+    ).order_by("priority", "created_at")
+    return next((t for t in triggers if _trigger_matches(t, body)), None)
 
 
 # ---------------------------------------------------------------------------

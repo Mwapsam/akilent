@@ -2,32 +2,81 @@
 
 Until these pages existed the rules could only be set up in Django admin, so a
 business (or Meta's App Reviewer) had no way to use comment features at all.
+
+The rules are shared by Instagram and Facebook Page comments: each rule says which
+channels it applies to. The pages are open to a business with either channel's
+feature (``instagram`` or ``facebook``).
 """
 
 from __future__ import annotations
 
+from functools import wraps
 from typing import cast
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.core.module_gate import module_required
 from apps.instagram.models import CommentTrigger, ModerationLog, ModerationRule
+from apps.instagram.models.moderation import RuleChannels
 from apps.instagram.services.default_rules import (
     add_default_moderation_rules,
     missing_default_rules,
 )
 
 
-class CommentTriggerForm(forms.ModelForm):
+def rule_channels(account) -> list[str]:
+    """The comment channels this business can write rules for ("instagram", "facebook")."""
+    from apps.billing import api as billing_api
+
+    return [c for c in ("instagram", "facebook") if billing_api.usable(account, c)]
+
+
+def comment_rules_required(view):
+    """Open to a business that can use Instagram or the Facebook inbox."""
+
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        account = get_current_account(request)
+        if account is not None and not rule_channels(account):
+            return redirect(reverse("billing:locked", args=["instagram"]))
+        return view(request, *args, **kwargs)
+
+    return wrapper
+
+
+class _ChannelsMixin(forms.ModelForm):
+    """Shows "Applies to" only when the business has both channels; otherwise a rule
+    applies to its one channel."""
+
+    _only_channel = ""
+
+    def setup_channels(self, channels: list[str]):
+        self._only_channel = channels[0] if len(channels) == 1 else ""
+        if self._only_channel:
+            self.fields.pop("channels", None)
+        else:
+            self.fields["channels"].label = "Applies to comments on"
+
+    def save(self, commit=True):
+        rule = super().save(commit=False)
+        if self._only_channel and not (rule.pk and rule.channels == RuleChannels.BOTH):
+            rule.channels = self._only_channel
+        if commit:
+            rule.save()
+        return rule
+
+
+class CommentTriggerForm(_ChannelsMixin):
     class Meta:
         model = CommentTrigger
         fields = [
             "name",
+            "channels",
             "match_type",
             "keywords",
             "reply_type",
@@ -43,7 +92,7 @@ class CommentTriggerForm(forms.ModelForm):
         }
         help_texts = {
             "keywords": "Comma-separated, e.g. price, how much, cost. Used with 'contains a keyword'.",
-            "reply_template": "{username} becomes their Instagram name. Sent once per comment thread.",
+            "reply_template": "{username} becomes their Instagram name, or their first name on Facebook. Sent once per comment thread.",
             "priority": "Lower runs first; only the first matching rule replies.",
         }
         widgets = {
@@ -60,11 +109,12 @@ class CommentTriggerForm(forms.ModelForm):
         return data
 
 
-class ModerationRuleForm(forms.ModelForm):
+class ModerationRuleForm(_ChannelsMixin):
     class Meta:
         model = ModerationRule
         fields = [
             "name",
+            "channels",
             "match_type",
             "keywords",
             "moderation_action",
@@ -97,7 +147,9 @@ class ModerationRuleForm(forms.ModelForm):
         return data
 
 
-_KINDS = {
+_KINDS: dict[
+    str, tuple[type[CommentTrigger | ModerationRule], type[_ChannelsMixin]]
+] = {
     "reply": (CommentTrigger, CommentTriggerForm),
     "moderation": (ModerationRule, ModerationRuleForm),
 }
@@ -112,7 +164,7 @@ def _style(form: forms.BaseForm) -> forms.BaseForm:
 
 
 @login_required
-@module_required("instagram")
+@comment_rules_required
 def comment_rules(request):
     """List both kinds of rule, with an add form for each."""
     account = get_current_account(request)
@@ -127,16 +179,32 @@ def comment_rules(request):
             # What the rules actually did, so a failure (e.g. a missing Meta
             # permission) is visible to the business, not only in admin.
             "moderation_logs": ModerationLog.objects.filter(account=account)
-            .select_related("rule", "comment__instagram_contact")
+            .select_related(
+                "rule",
+                "acted_by",
+                "comment__instagram_contact",
+                "facebook_comment__facebook_contact",
+            )
             .order_by("-occurred_at")[:20],
             "missing_defaults": missing_default_rules(account),
-            "has_account": account.instagram_accounts.filter(is_active=True).exists(),
+            "has_account": _has_comment_channel(account),
+            "both_channels": len(rule_channels(account)) == 2,
         },
     )
 
 
+def _has_comment_channel(account) -> bool:
+    from apps.facebook.models.page import active_page
+
+    channels = rule_channels(account)
+    return (
+        "instagram" in channels
+        and account.instagram_accounts.filter(is_active=True).exists()
+    ) or ("facebook" in channels and active_page(account) is not None)
+
+
 @login_required
-@module_required("instagram")
+@comment_rules_required
 def comment_rule_edit(request, kind: str, pk: int | None = None):
     """Create (no ``pk``) or edit one rule of ``kind`` ("reply" or "moderation")."""
     account = get_current_account(request)
@@ -147,6 +215,7 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
 
     if request.method == "POST":
         form = form_class(request.POST, instance=instance)
+        form.setup_channels(rule_channels(account))
         if form.is_valid():
             rule = form.save(commit=False)
             rule.account = account
@@ -155,6 +224,7 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
             return redirect("instagram-comment-rules")
     else:
         form = form_class(instance=instance)
+        form.setup_channels(rule_channels(account))
     return render(
         request,
         "instagram/comment_rule_form.html",
@@ -163,7 +233,7 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
 
 
 @login_required
-@module_required("instagram")
+@comment_rules_required
 @require_POST
 def comment_rule_defaults(request):
     """Add the recommended moderation rules the account doesn't have yet."""
@@ -182,7 +252,7 @@ def comment_rule_defaults(request):
 
 
 @login_required
-@module_required("instagram")
+@comment_rules_required
 @require_POST
 def comment_rule_toggle(request, kind: str, pk: int):
     account = get_current_account(request)
@@ -201,7 +271,7 @@ def comment_rule_toggle(request, kind: str, pk: int):
 
 
 @login_required
-@module_required("instagram")
+@comment_rules_required
 @require_POST
 def comment_rule_delete(request, kind: str, pk: int):
     account = get_current_account(request)

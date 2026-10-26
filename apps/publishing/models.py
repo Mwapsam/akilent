@@ -738,6 +738,12 @@ class FacebookPageConnection(models.Model):
     )
     oauth_state = models.CharField(max_length=64, blank=True, default="")
     oauth_state_created_at = models.DateTimeField(null=True, blank=True)
+    # The app-scoped id of the person who connected the Page: Meta's deauthorize and
+    # data-deletion callbacks name them by it.
+    fb_user_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    # When the Page was subscribed to Messenger + comment webhooks (the Facebook inbox).
+    webhook_subscribed_at = models.DateTimeField(null=True, blank=True)
+    webhook_error = models.CharField(max_length=500, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

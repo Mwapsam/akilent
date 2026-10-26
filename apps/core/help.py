@@ -209,7 +209,7 @@ ARTICLES = [
     Article(
         "facebook-page-setup",
         "Connect your Facebook Page",
-        "Connect the Page you post to, so Content Studio can publish and schedule posts on it.",
+        "Connect your Page to publish posts, and answer its messages and comments in Akilent.",
         "Facebook",
         icon="image",
         keywords=(
@@ -221,6 +221,9 @@ ARTICLES = [
             "expired",
             "meta",
             "messenger",
+            "messages",
+            "comments",
+            "inbox",
         ),
         related=("content-studio", "post-results"),
         channel="facebook",

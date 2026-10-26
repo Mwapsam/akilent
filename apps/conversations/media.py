@@ -48,6 +48,14 @@ def _source(message):
             "hint": ig.media_type,
             "attempts": ig.media_attempts,
         }
+    fb = getattr(message, "facebook_message", None)
+    if fb is not None and (fb.media_source_url or fb.media_file):
+        return {
+            "file": fb.media_file,
+            "mime": fb.media_mime_type or "",
+            "hint": fb.media_type,
+            "attempts": fb.media_attempts,
+        }
     return None
 
 

@@ -432,8 +432,9 @@ from apps.conversations.reporting import (  # noqa: E402, F401
 def conversation_window_is_open(conversation) -> bool:
     """Whether a free-text reply is allowed now: inside the channel's 24h window.
 
-    WhatsApp and Instagram each track it on their channel record; any other
-    channel has no window and is always open.
+    WhatsApp, Instagram and Messenger each track it on their channel record; any other
+    channel has no window and is always open. Messenger's 7-day HUMAN_AGENT allowance
+    is not counted here: it is for replies a person types, never automation.
     """
     if conversation.channel == Conversation.Channel.WHATSAPP:
         wa = conversation.whatsapp_conversation
@@ -441,4 +442,7 @@ def conversation_window_is_open(conversation) -> bool:
     if conversation.channel == Conversation.Channel.INSTAGRAM:
         ig = conversation.instagram_conversation
         return bool(ig and ig.window_is_open)
+    if conversation.channel == Conversation.Channel.FACEBOOK:
+        fb = conversation.facebook_conversation
+        return bool(fb and fb.window_is_open)
     return True

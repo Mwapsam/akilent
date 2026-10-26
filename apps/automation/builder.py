@@ -180,9 +180,9 @@ def _reasons(account) -> dict[str, str]:
         reasons["send_whatsapp"] = "You need a message WhatsApp has approved first."
     if "email" not in channels:
         reasons["send_email"] = "Email isn't switched on for your business."
-    if not ({"whatsapp", "instagram"} & set(channels)):
+    if not ({"whatsapp", "instagram", "facebook"} & set(channels)):
         for t in ("reply_text", "send_buttons", "wait_for_reply", "ask_question"):
-            reasons[t] = "Connect WhatsApp or Instagram first."
+            reasons[t] = "Connect WhatsApp, Instagram or Facebook first."
     return reasons
 
 

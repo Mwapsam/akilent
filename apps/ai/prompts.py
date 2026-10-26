@@ -21,7 +21,11 @@ RECENT_MESSAGES = 8
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)")
 
-CHANNEL_LABELS = {"whatsapp": "WhatsApp", "instagram": "Instagram"}
+CHANNEL_LABELS = {
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "facebook": "Facebook Messenger",
+}
 SENSITIVE_TOPICS = (
     "complaints, refunds, payment disputes, cancellations, account restrictions, legal threats, "
     "custom pricing or deals, and service disputes"

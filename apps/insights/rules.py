@@ -384,6 +384,110 @@ def rule_instagram_high_engagement_contact(account):
     )
 
 
+def rule_facebook_unanswered_intent(account):
+    """Facebook Page comments with buying intent that never became a Messenger thread.
+
+    The Facebook twin of ``rule_instagram_unanswered_intent``.
+    """
+    from apps.facebook.models.comment import FacebookCommentThread
+
+    cutoff = timezone.now() - timedelta(days=7)
+    qs = FacebookCommentThread.objects.filter(
+        account=account,
+        intent__gt="",
+        conversation__isnull=True,
+        received_at__gte=cutoff,
+    )
+    count = qs.count()
+    if count == 0:
+        return None
+
+    sample_items = [
+        {
+            "username": r["facebook_contact__name"] or "unknown",
+            "intent": r["intent"],
+            "comment": (r["body"] or "")[:80],
+        }
+        for r in qs.order_by("-received_at").values(
+            "facebook_contact__name", "intent", "body"
+        )[:5]
+    ]
+
+    from apps.insights.models import Insight
+
+    return Insight(
+        account=account,
+        type="facebook_unanswered_intent",
+        severity=Insight.Severity.OPPORTUNITY
+        if count < 10
+        else Insight.Severity.WARNING,
+        title=f"{count} Facebook comment{'s' if count != 1 else ''} with buying intent, no message sent",
+        body=(
+            f"{count} Facebook comment{'s show' if count != 1 else ' shows'} buying intent "
+            f"in the past 7 days but {'have' if count != 1 else 'has'} not had a private reply. "
+            f"Each is a warm prospect who hasn't heard from you yet."
+        ),
+        evidence={"count": count, "window_days": 7, "sample": sample_items},
+        evidence_count=count,
+        suggested_action={
+            "action": "facebook_trigger",
+            "label": f"Set up a buying-intent trigger to auto-reply to {count} comment{'s' if count != 1 else ''}",
+            "filter": "facebook_intent_no_dm",
+        },
+    )
+
+
+def rule_facebook_high_engagement_contact(account):
+    """People who commented on 3+ of the Page's posts in the past 14 days."""
+    from django.db.models import Count
+
+    from apps.facebook.models.comment import FacebookCommentThread
+
+    cutoff = timezone.now() - timedelta(days=14)
+    rows = list(
+        FacebookCommentThread.objects.filter(account=account, received_at__gte=cutoff)
+        .values("facebook_contact_id", "facebook_contact__name")
+        .annotate(thread_count=Count("id"))
+        .filter(thread_count__gte=3)
+        .order_by("-thread_count")[:50]
+    )
+    count = len(rows)
+    if count == 0:
+        return None
+
+    from apps.insights.models import Insight
+
+    return Insight(
+        account=account,
+        type="facebook_high_engagement_contact",
+        severity=Insight.Severity.OPPORTUNITY,
+        title=f"{count} highly engaged Facebook contact{'s' if count != 1 else ''} worth a message",
+        body=(
+            f"{count} {'people have' if count != 1 else 'person has'} commented on 3 or more "
+            f"of your Facebook posts in the past 14 days — "
+            f"{'they are' if count != 1 else 'this person is'} prime candidates for a proactive message."
+        ),
+        evidence={
+            "count": count,
+            "window_days": 14,
+            "min_threads": 3,
+            "sample": [
+                {
+                    "username": r["facebook_contact__name"] or "unknown",
+                    "thread_count": r["thread_count"],
+                }
+                for r in rows[:5]
+            ],
+        },
+        evidence_count=count,
+        suggested_action={
+            "action": "facebook_dm_outreach",
+            "label": f"Message {count} highly engaged contact{'s' if count != 1 else ''}",
+            "filter": "facebook_high_engagement",
+        },
+    )
+
+
 # Registry of all rules.  generate_insights iterates this list.
 RULES = [
     rule_unanswered_conversations,
@@ -392,4 +496,6 @@ RULES = [
     rule_campaign_opportunity,
     rule_instagram_unanswered_intent,
     rule_instagram_high_engagement_contact,
+    rule_facebook_unanswered_intent,
+    rule_facebook_high_engagement_contact,
 ]

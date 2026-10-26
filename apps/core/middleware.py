@@ -380,12 +380,13 @@ class ChannelGateMiddleware:
             return self.get_response(request)
 
         for ch in CHANNEL_REGISTRY.values():
-            if not path.startswith(ch.url_prefix):
+            prefix = next((p for p in ch.url_prefixes if path.startswith(p)), None)
+            if prefix is None:
                 continue
             enabled = enabled_channels()
             if ch.key in enabled:
                 break
-            rest = path[len(ch.url_prefix) :]
+            rest = path[len(prefix) :]
             if any(rest.startswith(p) for p in ch.public_paths):
                 break
             if ch.hub_paths.get(rest) in enabled:

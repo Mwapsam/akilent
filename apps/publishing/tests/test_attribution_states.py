@@ -299,7 +299,7 @@ def test_a_credited_order_whose_entry_point_is_gone_claims_no_channel_route(worl
 
     assert 'data-attribution="post"' in html
     assert "the chat started from the post" in html
-    assert "comment" not in html
+    assert "their comment on the post" not in html
     assert "WhatsApp link" not in html
 
 

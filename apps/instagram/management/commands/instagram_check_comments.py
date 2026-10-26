@@ -101,7 +101,8 @@ class Command(BaseCommand):
             )[:5]:
                 out(
                     f"    #{log.pk} {log.occurred_at:%Y-%m-%d %H:%M} {log.moderation_action} "
-                    f"{log.outcome} comment={log.comment.comment_id} error={log.error[:160]!r}"
+                    f"{log.outcome} comment={log.comment.comment_id if log.comment else log.facebook_comment_id} "
+                    f"error={log.error[:160]!r}"
                 )
 
             out("  Latest comment threads:")

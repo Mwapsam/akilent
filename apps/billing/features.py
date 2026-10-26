@@ -116,6 +116,13 @@ FEATURES: tuple[Feature, ...] = (
         nav_paths=("/instagram/",),
     ),
     Feature(
+        "facebook",
+        "Facebook inbox",
+        "Facebook Page messages in the inbox, comment auto-replies and moderation.",
+        "Communication",
+        nav_paths=("/facebook/",),
+    ),
+    Feature(
         "content_studio",
         "Content Studio",
         "Plan, write and schedule posts for Instagram and your Facebook Page in one place.",
@@ -227,6 +234,7 @@ ISSUED_KEYS = frozenset(
         "priority_support",
         "instagram",
         "content_studio",
+        "facebook",
     }
 )
 

@@ -41,6 +41,12 @@ class ChannelDef:
     hub_paths: dict[str, str] = field(default_factory=dict)
     # Public REST API resources (the part after /api/<version>/) this channel owns.
     api_paths: tuple[str, ...] = ()
+    # Further URL prefixes the channel's pages live under, gated the same way.
+    extra_url_prefixes: tuple[str, ...] = ()
+
+    @property
+    def url_prefixes(self) -> tuple[str, ...]:
+        return (self.url_prefix, *self.extra_url_prefixes)
 
 
 CHANNEL_REGISTRY: dict[str, ChannelDef] = {
@@ -72,15 +78,18 @@ CHANNEL_REGISTRY: dict[str, ChannelDef] = {
         public_paths=("deauthorize/", "data-deletion/"),
         webhook_path="webhook/",
     ),
-    # Facebook Page publishing from Content Studio. Facebook messages (Messenger) are not
-    # supported, so this channel has no inbox, webhook or API resource.
+    # A Facebook Page: Messenger and Page comments in the inbox (facebook/), and Page
+    # publishing from Content Studio (publishing/fb/).
     "facebook": ChannelDef(
         key="facebook",
         label="Facebook",
         setting="FACEBOOK_ENABLED",
-        url_prefix="publishing/fb/",
-        # A business can always remove a Page it connected.
-        public_paths=("disconnect/",),
+        url_prefix="facebook/",
+        extra_url_prefixes=("publishing/fb/",),
+        # A business can always remove a Page it connected; Meta's deauthorize and
+        # data-deletion callbacks are compliance endpoints.
+        public_paths=("disconnect/", "deauthorize/", "data-deletion/"),
+        webhook_path="webhook/",
     ),
 }
 
@@ -93,6 +102,7 @@ FEATURE_CHANNEL_DEPS: dict[str, str] = {
     "whatsapp_campaigns": "whatsapp",
     "verification_codes": "whatsapp",
     "instagram": "instagram",
+    "facebook": "facebook",
     "email_sending": "email",
     "email_templates": "email",
     "email_campaigns": "email",

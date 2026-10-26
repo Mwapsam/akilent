@@ -63,15 +63,25 @@ def match_ref_code(conversation, message) -> ConversationEntryPoint | None:
 
 
 def record_comment_entry(thread) -> ConversationEntryPoint | None:
-    """A private reply to a comment on a Content Studio post opened this DM."""
+    """A private reply to a comment on a Content Studio post opened this DM.
+
+    ``thread`` is an Instagram CommentThread or a FacebookCommentThread.
+    """
     if not (thread.content_variant_id and thread.conversation_id):
         return None
+    from apps.facebook.models import FacebookCommentThread
+
+    kind = (
+        ConversationEntryPoint.Kind.FB_COMMENT
+        if isinstance(thread, FacebookCommentThread)
+        else ConversationEntryPoint.Kind.IG_COMMENT
+    )
     variant = thread.content_variant
     post = variant.post
     entry, _ = ConversationEntryPoint.objects.get_or_create(
         conversation_id=thread.conversation_id,
         post=post,
-        kind=ConversationEntryPoint.Kind.IG_COMMENT,
+        kind=kind,
         defaults={
             "account_id": post.account_id,
             "variant": variant,

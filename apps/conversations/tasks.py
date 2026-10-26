@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 @shared_task(queue="celery")
 def send_typing_indicator(conversation_id: int) -> bool:
-    """Show the customer "typing…" while a teammate writes a reply (WhatsApp, Instagram).
+    """Show the customer "typing…" while a teammate writes a reply (WhatsApp, Instagram,
+    Messenger).
 
     Best effort and cosmetic, like the read receipt: anything missing or failing is
     dropped quietly. Meta clears the indicator after ~25 seconds or when the reply lands.
@@ -69,6 +70,22 @@ def send_typing_indicator(conversation_id: int) -> bool:
             return provider.send_typing(
                 ig_conversation.instagram_contact.instagram_scoped_id
             )
+        if conversation.channel == Conversation.Channel.FACEBOOK:
+            from apps.core.channels import channel_state
+            from apps.facebook.models.page import active_page
+            from apps.facebook.providers.meta import provider_for
+
+            if channel_state("facebook") != "enabled":
+                return False
+            fb_conversation = conversation.facebook_conversation
+            conn = active_page(conversation.account)
+            if (
+                fb_conversation is None
+                or conn is None
+                or conn.page_id != fb_conversation.page_id
+            ):
+                return False
+            return provider_for(conn).send_typing(fb_conversation.facebook_contact.psid)
     except Exception as exc:
         logger.debug("send_typing_indicator: skipped for %s: %s", conversation_id, exc)
     return False

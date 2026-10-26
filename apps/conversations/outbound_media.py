@@ -6,6 +6,7 @@ stores it, and hands back where it is. Channel rules live here, once:
 * WhatsApp takes images (jpeg/png), mp4 video, documents, and audio — a voice
   note must be Ogg/Opus to arrive as a voice note.
 * Instagram takes images, mp4 video, aac/m4a audio, and PDFs as files.
+* Messenger takes images (jpeg/png/gif), mp4 video, mp3/aac/m4a audio, and any file.
 
 Browsers record voice in webm/opus (Chrome), ogg/opus (Firefox) or mp4/aac
 (Safari), so recordings are converted with ffmpeg where the channel needs it.
@@ -25,6 +26,7 @@ from django.core.files.storage import default_storage
 
 WHATSAPP = "whatsapp"
 INSTAGRAM = "instagram"
+FACEBOOK = "facebook"
 
 _MB = 1024 * 1024
 # Meta's own ceilings per kind (the smaller of the two channels where they differ).
@@ -41,16 +43,24 @@ _MAX_BYTES = {
         "audio": 25 * _MB,
         "document": 25 * _MB,
     },
+    FACEBOOK: {
+        "image": 8 * _MB,
+        "video": 25 * _MB,
+        "audio": 25 * _MB,
+        "document": 25 * _MB,
+    },
 }
 _IMAGE_TYPES = {
     WHATSAPP: {"image/jpeg", "image/png"},
     INSTAGRAM: {"image/jpeg", "image/png", "image/gif"},
+    FACEBOOK: {"image/jpeg", "image/png", "image/gif"},
 }
 _VIDEO_TYPES = {"video/mp4", "video/3gpp"}
 # Audio each channel takes as-is.
 _AUDIO_OK = {
     WHATSAPP: {"audio/ogg", "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr"},
     INSTAGRAM: {"audio/aac", "audio/mp4", "audio/x-m4a", "audio/wav"},
+    FACEBOOK: {"audio/aac", "audio/mp4", "audio/x-m4a", "audio/mpeg", "audio/wav"},
 }
 _EXT = {
     "image/jpeg": ".jpg",

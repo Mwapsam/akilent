@@ -45,6 +45,7 @@ from .providers.facebook import (
     FacebookPublishError,
     FacebookPublishProvider,
     exchange_for_long_lived_user_token,
+    fetch_user_id,
     get_page_token,
     list_pages,
 )
@@ -95,12 +96,16 @@ def _in_workspace_tz(view):
 
 
 # read_insights + pages_read_engagement: post views, reach and reactions (Page/insights).
-# pages_manage_engagement: a post's first comment.
-# pages_read_user_content: a post's comment count (Performance); Meta also requires it
-# alongside pages_manage_engagement.
+# pages_manage_engagement: a post's first comment; replying to, hiding and deleting
+# comments (Facebook inbox).
+# pages_read_user_content: a post's comment count (Performance), and visitors' comments;
+# Meta also requires it alongside pages_manage_engagement.
+# pages_messaging: Messenger messages and private replies to comments (Facebook inbox).
+# pages_manage_metadata: subscribing the Page to Messenger and comment webhooks.
 _FB_SCOPES = (
     "pages_show_list,pages_manage_posts,pages_read_engagement,read_insights,"
-    "pages_manage_engagement,pages_read_user_content,business_management"
+    "pages_manage_engagement,pages_read_user_content,business_management,"
+    "pages_messaging,pages_manage_metadata"
 )
 
 # Valid status transitions: {from_status: allowed_to_statuses}
@@ -262,7 +267,9 @@ def fb_oauth_callback(request):
 
     if len(pages) == 1:
         page = pages[0]
-        _activate_fb_page(conn, page["id"], page.get("name", ""), page["access_token"])
+        _activate_fb_page(
+            conn, page["id"], page.get("name", ""), page["access_token"], user_token
+        )
         messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
         return redirect("settings-integrations")
 
@@ -276,7 +283,9 @@ def fb_oauth_callback(request):
     return redirect("publishing:fb-select-page")
 
 
-def _activate_fb_page(conn, page_id: str, page_name: str, page_token: str) -> None:
+def _activate_fb_page(
+    conn, page_id: str, page_name: str, page_token: str, user_token: str = ""
+) -> None:
     conn.page_id = page_id
     conn.page_name = page_name
     conn.access_token = page_token
@@ -285,7 +294,13 @@ def _activate_fb_page(conn, page_id: str, page_name: str, page_token: str) -> No
     )
     conn.oauth_state = ""
     conn.status = FacebookPageConnection.Status.ACTIVE
+    if user_token:
+        conn.fb_user_id = fetch_user_id(user_token) or conn.fb_user_id
     conn.save()
+    # Messenger + comment webhooks for the Facebook inbox.
+    from apps.facebook.services.pages import on_page_connected
+
+    on_page_connected(conn)
 
 
 @full_page_load
@@ -327,7 +342,7 @@ def fb_select_page(request):
             messages.error(request, f"Could not connect that Page: {exc}")
             return redirect("publishing:fb-select-page")
         conn, _ = FacebookPageConnection.objects.get_or_create(account=account)
-        _activate_fb_page(conn, page_id, page["name"], page_token)
+        _activate_fb_page(conn, page_id, page["name"], page_token, user_token)
         request.session.pop(_FB_PAGE_CHOICES_KEY, None)
         messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
         return redirect("settings-integrations")
@@ -352,11 +367,12 @@ def fb_oauth_disconnect(request):
 
     try:
         conn = account.facebook_page_connection
-        conn.status = FacebookPageConnection.Status.DISCONNECTED
-        conn.access_token = None
-        conn.save(update_fields=["status", "access_token"])
     except FacebookPageConnection.DoesNotExist:
-        pass
+        conn = None
+    if conn is not None:
+        from apps.facebook.services.pages import disconnect_page
+
+        disconnect_page(conn, unsubscribe=True)
 
     messages.success(request, "Facebook Page disconnected.")
     return redirect("settings-integrations")

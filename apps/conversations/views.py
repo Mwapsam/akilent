@@ -285,8 +285,11 @@ def _window_is_open(conversation) -> bool:
 
     WhatsApp and Instagram both allow free text for 24h after the customer's last
     message; a channel without a window is reported open so its composer is
-    unaffected.
+    unaffected. On Messenger a reply typed here may go for 7 days (HUMAN_AGENT tag).
     """
+    if conversation.channel == Conversation.Channel.FACEBOOK:
+        fb = conversation.facebook_conversation
+        return bool(fb and (fb.window_is_open or fb.human_agent_window_is_open))
     return conversation_window_is_open(conversation)
 
 
@@ -715,7 +718,9 @@ def conversation_detail(request, public_id: str):
     ):  # support looking "as" the business mustn't clear its unread
         conversation.mark_read()
     thread = list(
-        conversation.messages.select_related("whatsapp_message", "instagram_message")
+        conversation.messages.select_related(
+            "whatsapp_message", "instagram_message", "facebook_message"
+        )
         .all()
         .order_by("timestamp", "id")
     )
@@ -1791,7 +1796,11 @@ def send_media(request, public_id: str):
             {"ok": False, "error": "Choose a file to send."}, status=400
         )
     channel = conversation.channel
-    if channel not in (outbound_media.WHATSAPP, outbound_media.INSTAGRAM):
+    if channel not in (
+        outbound_media.WHATSAPP,
+        outbound_media.INSTAGRAM,
+        outbound_media.FACEBOOK,
+    ):
         return JsonResponse(
             {"ok": False, "error": "Media can't be sent on this channel."}, status=400
         )
@@ -1828,7 +1837,7 @@ def _recent_media(conversation) -> dict:
     """``{message_id: media_json}`` for the latest inbound messages that carry media."""
     recent = (
         conversation.messages.filter(direction=Message.Direction.INBOUND)
-        .select_related("whatsapp_message", "instagram_message")
+        .select_related("whatsapp_message", "instagram_message", "facebook_message")
         .order_by("-id")[:20]
     )
     out = {}
@@ -1873,7 +1882,9 @@ def message_media(request, public_id: str, message_id: int):
         raise Http404
     conversation = get_visible_conversation(account, public_id)
     message = get_object_or_404(
-        Message.objects.select_related("whatsapp_message", "instagram_message"),
+        Message.objects.select_related(
+            "whatsapp_message", "instagram_message", "facebook_message"
+        ),
         pk=message_id,
         conversation=conversation,
     )
@@ -1925,7 +1936,9 @@ def messages_feed(request, public_id: str):
         after = 0
 
     new = list(
-        conversation.messages.select_related("whatsapp_message", "instagram_message")
+        conversation.messages.select_related(
+            "whatsapp_message", "instagram_message", "facebook_message"
+        )
         .filter(id__gt=after)
         .order_by("id")[:100]
     )
@@ -2002,6 +2015,7 @@ def messages_feed(request, public_id: str):
 _CUSTOMER_TYPING_CHANNELS = {
     Conversation.Channel.WHATSAPP,
     Conversation.Channel.INSTAGRAM,
+    Conversation.Channel.FACEBOOK,
 }
 _CUSTOMER_TYPING_EVERY = 20  # seconds between indicators sent to Meta, per conversation
 

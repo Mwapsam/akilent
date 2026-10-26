@@ -126,6 +126,9 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         # Post a public threaded reply on the comment. recipient_igsid holds
         # the parent comment_id (same convention as PRIVATE_REPLY).
         result = provider.reply_to_comment(outbound.recipient_igsid, outbound.body)
+    elif outbound.action_type == OutboundMessage.ActionType.POST_COMMENT:
+        # A new comment on one of the business's posts; recipient_igsid holds the media id.
+        result = provider.comment_on_media(outbound.recipient_igsid, outbound.body)
     elif outbound.media_path:
         result = provider.send_attachment(
             outbound.recipient_igsid,
@@ -142,7 +145,7 @@ def send_outbound(outbound: OutboundMessage) -> bool:
     if result.success:
         outbound.mark_sent(result.provider_message_id)
         try:
-            record_sent_message(outbound)
+            record_sent(outbound)
         except Exception:
             # The customer has the message; failing to mirror it must not
             # turn a delivered send into a retry (and a duplicate).
@@ -267,6 +270,59 @@ def sender_of(outbound: OutboundMessage) -> str:
     if key.startswith(("wf:", "private_reply:", "form:")):
         return "automation"
     return ""
+
+
+def record_sent(outbound: OutboundMessage):
+    """Mirror a sent row where people look for it.
+
+    A public reply or a comment on a post: an outbound comment in its thread (the
+    Comments view). A DM or private reply: the inbox thread. A public reply a trigger
+    sent also lands on the inbox thread, as it always has.
+    """
+    A = OutboundMessage.ActionType
+    if outbound.action_type in {A.COMMENT_REPLY, A.POST_COMMENT}:
+        _record_outbound_comment(outbound)
+        if not (
+            outbound.action_type == A.COMMENT_REPLY
+            and outbound.idempotency_key.startswith("private_reply:")
+        ):
+            return None
+    return record_sent_message(outbound)
+
+
+def _record_outbound_comment(outbound: OutboundMessage) -> None:
+    from apps.instagram.models.comment import Comment, CommentThread
+
+    if outbound.action_type != OutboundMessage.ActionType.COMMENT_REPLY:
+        return  # a comment on a post has no visitor thread; the outbox row is its record
+    thread = CommentThread.objects.filter(
+        instagram_account=outbound.instagram_account,
+        comment_id=outbound.recipient_igsid,
+    ).first()
+    if thread is None:
+        parent = (
+            Comment.objects.filter(
+                thread__instagram_account=outbound.instagram_account,
+                comment_id=outbound.recipient_igsid,
+            )
+            .select_related("thread")
+            .first()
+        )
+        thread = parent.thread if parent else None
+    if thread is None:
+        return
+    Comment.objects.get_or_create(
+        thread=thread,
+        comment_id=outbound_message_id(outbound),
+        defaults={
+            "instagram_contact_id": thread.instagram_contact_id,
+            "parent_comment_id": outbound.recipient_igsid,
+            "body": outbound.body,
+            "direction": Comment.Direction.OUTBOUND,
+            "moderation_state": Comment.ModerationState.APPROVED,
+            "timestamp": outbound.sent_at or timezone.now(),
+        },
+    )
 
 
 def record_sent_message(outbound: OutboundMessage):

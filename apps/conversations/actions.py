@@ -104,6 +104,10 @@ def _first_inbox_send(conversation, key: str | None):
         from apps.instagram.models.message import OutboundMessage as InstagramOutbound
 
         return InstagramOutbound.objects.filter(idempotency_key=key).first()
+    if conversation.channel == conversation.Channel.FACEBOOK:
+        from apps.facebook.models.message import FacebookOutboundMessage
+
+        return FacebookOutboundMessage.objects.filter(idempotency_key=key).first()
     return None
 
 
@@ -124,6 +128,10 @@ def _repeat_inbox_send(conversation, key: str | None) -> dict | None:
         return None
     if conversation.channel == conversation.Channel.INSTAGRAM:
         return _instagram_repeat(first)
+    if conversation.channel == conversation.Channel.FACEBOOK:
+        from apps.facebook.services.inbox import repeat
+
+        return repeat(first)
     from apps.whatsapp.friendly_errors import friendly_send_error
     from apps.whatsapp.models import OutboundMessage as WhatsAppOutbound
 
@@ -252,6 +260,11 @@ class ReplyAction(Action):
             spine_msg = record_sent_message(outbound)
             return {"outbound_message_id": spine_msg.id if spine_msg else None}
 
+        if conversation.channel == conversation.Channel.FACEBOOK:
+            from apps.facebook.services import inbox as facebook_inbox
+
+            return facebook_inbox.send(conversation, body, idempotency_key)
+
         raise ActionError(
             f"reply not yet implemented for channel {conversation.channel!r}"
         )
@@ -294,7 +307,8 @@ class ReplyMediaAction(Action):
         repeat = _repeat_inbox_send(conversation, key)
         if repeat is not None:
             if (
-                conversation.channel == conversation.Channel.INSTAGRAM
+                conversation.channel
+                in (conversation.Channel.INSTAGRAM, conversation.Channel.FACEBOOK)
                 and caption.strip()
                 and not repeat.get("unconfirmed")
             ):
@@ -387,6 +401,25 @@ class ReplyMediaAction(Action):
             if queued:
                 return {"outbound_message_id": None, "queued": True}
             return {"outbound_message_id": spine_msg.id if spine_msg else None}
+
+        if conversation.channel == conversation.Channel.FACEBOOK:
+            from apps.facebook.services import inbox as facebook_inbox
+            from apps.facebook.services.inbound import _ATTACHMENT_LABELS
+
+            label = _ATTACHMENT_LABELS.get(
+                {"document": "file"}.get(media.kind, media.kind), "[File]"
+            )
+            result = facebook_inbox.send(conversation, label, key, media=media)
+            # A Messenger attachment can't carry text, so a caption follows it.
+            if caption.strip() and not result.get("unconfirmed"):
+                run_action(
+                    "reply",
+                    context,
+                    conversation=conversation,
+                    body=caption,
+                    idempotency_key=f"{key}:caption",
+                )
+            return result
 
         raise ActionError(
             f"reply_media not yet implemented for channel {conversation.channel!r}"

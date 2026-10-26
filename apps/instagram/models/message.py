@@ -107,6 +107,7 @@ class OutboundMessage(models.Model):
         DM_REPLY = "dm_reply", "DM Reply"
         COMMENT_REPLY = "comment_reply", "Comment Reply"
         PRIVATE_REPLY = "private_reply", "Private Reply to Comment"
+        POST_COMMENT = "post_comment", "Comment on a post"
 
     instagram_account = models.ForeignKey(
         "instagram.InstagramBusinessAccount",

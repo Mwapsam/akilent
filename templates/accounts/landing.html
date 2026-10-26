@@ -504,8 +504,7 @@
               {% include "accounts/_landing_status.html" with state=ch.facebook %}
             </div>
             <h3 class="h3">Facebook Page</h3>
-            <p class="small muted" data-claim="facebook-publishing">Publish and schedule posts to your Page from Content Studio.</p>
-            <p class="channel-note" data-claim="facebook-publishing">Facebook messages (Messenger) don't come into the inbox.</p>
+            <p class="small muted" data-claim="facebook-inbox facebook-comments facebook-publishing">Messages to your Page arrive in the same inbox. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
           </article>
           {% endif %}
           {% if ch.email %}
@@ -828,14 +827,14 @@
           <h2 id="faq-title" class="h2">Frequently asked questions</h2>
         </div>
         <div class="faq">
-          <details data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} email-sending{% if ch.facebook %} facebook-publishing{% endif %}">
+          <details data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} email-sending{% if ch.facebook %} facebook-inbox facebook-publishing{% endif %}">
             <summary>Which channels can I use?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
-            <p class="body muted">{% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" %} and Instagram{% endif %} messages arrive in your shared inbox. {% endif %}{% if ch.email == "live" %}Email is for sending messages and campaigns from your own domain; replies don't come into the inbox. {% endif %}{% if ch.facebook == "live" %}Facebook is for publishing posts to your Page. {% endif %}</p>
+            <p class="body muted">{% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" %} and Instagram{% endif %} messages arrive in your shared inbox. {% endif %}{% if ch.email == "live" %}Email is for sending messages and campaigns from your own domain; replies don't come into the inbox. {% endif %}{% if ch.facebook == "live" %}Messages to your Facebook Page arrive there too, and you can publish posts to your Page. {% endif %}</p>
           </details>
           {% if ch.facebook %}
-          <details data-claim="facebook-publishing">
+          <details data-claim="facebook-inbox facebook-comments">
             <summary>Do Facebook messages come into the inbox?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
-            <p class="body muted">No. Facebook is for publishing and scheduling posts to your Page from Content Studio. Messenger isn't supported.</p>
+            <p class="body muted">Yes. Messages sent to your Facebook Page arrive in your shared inbox, and comments on your Page's posts can be answered in public, replied to privately or hidden, automatically or by hand.</p>
           </details>
           {% endif %}
           {% if ch.results %}

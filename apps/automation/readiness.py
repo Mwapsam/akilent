@@ -28,6 +28,17 @@ def instagram_connected(account) -> bool:
     ).exists()
 
 
+def facebook_connected(account) -> bool:
+    """A Facebook Page is connected for the inbox and its channel is switched on."""
+    from apps.billing import api as billing_api
+    from apps.core.channels import enabled_channels
+    from apps.facebook.models.page import active_page
+
+    if "facebook" not in enabled_channels():
+        return False
+    return billing_api.usable(account, "facebook") and active_page(account) is not None
+
+
 def check(account, starter: dict, *, approved_template_count: int) -> dict:
     """``{"ready": bool, "items": [{"ok", "blocking", "headline", "detail", "fix"}]}`` for one starter."""
     from apps.accounts import business_hours
@@ -60,14 +71,16 @@ def check(account, starter: dict, *, approved_template_count: int) -> dict:
         )
     else:
         # Replies, menus and questions work in any conversation customers start with you.
-        connected = whatsapp or instagram_connected(account)
+        connected = (
+            whatsapp or instagram_connected(account) or facebook_connected(account)
+        )
         items.append(
             {
                 "ok": connected,
                 "blocking": not connected,
                 "headline": "A messaging channel is connected"
                 if connected
-                else "Connect WhatsApp or Instagram first",
+                else "Connect WhatsApp, Instagram or Facebook first",
                 "detail": ""
                 if connected
                 else "This answers customers who message you, so connect where they do.",

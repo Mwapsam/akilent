@@ -45,27 +45,43 @@ DEFAULT_MODERATION_RULES: list[dict] = [
 ]
 
 
-def missing_default_rules(account) -> list[dict]:
-    """The recommended rules the account doesn't have (matched by name)."""
+def _rules_for(account, channel: str | None):
+    from apps.instagram.models.moderation import RuleChannels
+
+    rules = ModerationRule.objects.filter(account=account)
+    if channel:
+        rules = rules.filter(channels__in=RuleChannels.covering(channel))
+    return rules
+
+
+def missing_default_rules(account, channel: str | None = None) -> list[dict]:
+    """The recommended rules the account doesn't have (matched by name).
+
+    With ``channel`` ("instagram" or "facebook"), only rules covering that channel count.
+    """
     existing = {
         name.lower()
-        for name in ModerationRule.objects.filter(account=account).values_list(
-            "name", flat=True
-        )
+        for name in _rules_for(account, channel).values_list("name", flat=True)
     }
     return [r for r in DEFAULT_MODERATION_RULES if r["name"].lower() not in existing]
 
 
-def add_default_moderation_rules(account, *, only_if_none: bool = False) -> int:
+def add_default_moderation_rules(
+    account, *, only_if_none: bool = False, channel: str | None = None
+) -> int:
     """Create the recommended rules the account is missing. Returns how many.
 
     ``only_if_none`` is for connecting an account: a business that already set
-    up moderation is left as it is.
+    up moderation is left as it is. ``channel`` limits both to that channel's rules,
+    and the new rules apply to it alone; without it they apply to both channels.
     """
-    if only_if_none and ModerationRule.objects.filter(account=account).exists():
+    from apps.instagram.models.moderation import RuleChannels
+
+    if only_if_none and _rules_for(account, channel).exists():
         return 0
-    missing = missing_default_rules(account)
+    missing = missing_default_rules(account, channel)
     ModerationRule.objects.bulk_create(
-        ModerationRule(account=account, **rule) for rule in missing
+        ModerationRule(account=account, channels=channel or RuleChannels.BOTH, **rule)
+        for rule in missing
     )
     return len(missing)

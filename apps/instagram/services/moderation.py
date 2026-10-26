@@ -41,15 +41,7 @@ def moderate_comment(comment: Comment) -> ModerationLog | None:
         return None
 
     account = comment.thread.instagram_account.account
-    rules = ModerationRule.objects.filter(account=account, is_active=True).order_by(
-        "priority", "created_at"
-    )
-
-    matched_rule = None
-    for rule in rules:
-        if _rule_matches(rule, comment):
-            matched_rule = rule
-            break
+    matched_rule = first_matching_rule(account, "instagram", comment.body or "")
 
     if matched_rule is None:
         return None
@@ -125,8 +117,23 @@ _COMPILED: dict[str, list[re.Pattern]] = {
 }
 
 
+def first_matching_rule(account, channel: str, body: str) -> ModerationRule | None:
+    """The account's first active rule for ``channel`` ("instagram" or "facebook") that
+    matches the comment text, by priority. Shared by Instagram and Facebook comments."""
+    from apps.instagram.models.moderation import RuleChannels
+
+    rules = ModerationRule.objects.filter(
+        account=account, is_active=True, channels__in=RuleChannels.covering(channel)
+    ).order_by("priority", "created_at")
+    return next((rule for rule in rules if body_matches_rule(rule, body)), None)
+
+
 def _rule_matches(rule: ModerationRule, comment: Comment) -> bool:
-    body = comment.body or ""
+    return body_matches_rule(rule, comment.body or "")
+
+
+def body_matches_rule(rule: ModerationRule, body: str) -> bool:
+    body = body or ""
 
     # Keywords count on every rule type: on a heuristic rule they add to the
     # built-in patterns. Ignoring them there silently broke rules businesses

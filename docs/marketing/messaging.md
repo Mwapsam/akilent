@@ -21,8 +21,8 @@ The product is one business process, not four products. Each pillar is a step in
 
 | Pillar | Customer problem | Outcome we promise | What Akilent does | Boundary |
 |---|---|---|---|---|
-| **Talk:** capture interest | Enquiries arrive on WhatsApp and Instagram and some are missed or answered late | Fewer missed enquiries, more consistent replies | WhatsApp and Instagram DMs in one shared inbox. Auto-replies (greeting, closed hours, keywords). AI suggests replies from your business knowledge, or answers simple questions only if you allow it | Facebook Messenger is **not** in the inbox. Email does not arrive in the inbox. AI is off by default |
-| **Publish:** stay visible | Posting is ad hoc and done separately on each app | A consistent social presence with less manual work | Content Studio: plan posts, write once with a version per channel, AI caption help, schedule per channel, optional review before publishing, publish to Instagram and a Facebook Page | Facebook means **Page publishing** only |
+| **Talk:** capture interest | Enquiries arrive on WhatsApp, Instagram and Facebook and some are missed or answered late | Fewer missed enquiries, more consistent replies | WhatsApp, Instagram DMs and Facebook Page messages in one shared inbox. Comments on Instagram and Facebook posts answered, moderated or replied to privately, by rule or by hand. Auto-replies (greeting, closed hours, keywords). AI suggests replies from your business knowledge, or answers simple questions only if you allow it | Facebook means a **Page**: no personal profiles, groups or ads. Email does not arrive in the inbox. AI is off by default |
+| **Publish:** stay visible | Posting is ad hoc and done separately on each app | A consistent social presence with less manual work | Content Studio: plan posts, write once with a version per channel, AI caption help, schedule per channel, optional review before publishing, publish to Instagram and a Facebook Page | Facebook means a **Page** |
 | **Automate:** follow through | Follow-ups are forgotten and the same tasks repeat | Less repetitive work, fewer forgotten follow-ups | Workflows you can test before they go live, forms (native WhatsApp Flows, or questions one by one elsewhere), follow-up reminders that tell the team when they're due, a nudge when a conversation goes unanswered (internal, not a customer message) | Lists and native forms are WhatsApp-only (forms fall back to one question per message elsewhere). Follow-ups never message the customer |
 | **Sell & measure:** understand what works | No one knows which post or message became a sale | A clear view from marketing activity to paid orders | Leads, orders and payment links. Campaigns by WhatsApp and email. Each post's results (clicks → chats → leads → orders → paid revenue). Business Health | Results count **explicit evidence only** (tracked link or comment reply). They are lower bounds, never estimates. Email is sending and campaigns |
 
@@ -97,8 +97,8 @@ Say exactly what the product does, and let the owner draw the conclusion.
 |---|---|---|
 | "Wins back missed customers automatically" | "Reminds your team to follow up when a conversation needs attention" | Missed-conversation recovery creates an internal follow-up. It doesn't message customers. |
 | "AI handles your customers" | "AI can suggest replies, or answer simple questions on its own if you allow it" | AI is off by default, and suggest-only unless the owner turns on autopilot. |
-| "WhatsApp, email and other conversations in one inbox" | "WhatsApp and Instagram messages in one shared inbox. Email your customers from your own address" | Only WhatsApp and Instagram DMs arrive in the inbox. Email is sending and campaigns. |
-| "Manage Facebook messages" / "Facebook inbox" | "Publish and schedule posts to your Facebook Page" | Facebook is Page publishing only. There is no Messenger. |
+| "WhatsApp, email and other conversations in one inbox" | "WhatsApp, Instagram and Facebook messages in one shared inbox. Email your customers from your own address" | Only WhatsApp, Instagram DMs and Facebook Page messages arrive in the inbox. Email is sending and campaigns. |
+| "Manage all your Facebook" / "Facebook groups and ads" | "Answer your Facebook Page's messages and comments, and publish to your Page" | Facebook is a Page: Messenger, Page comments and publishing. No profiles, groups or ads. |
 | "See exactly which posts make you money" | "See the chats, leads, orders and paid revenue that came through each post's chat link or comment replies" | Only explicit evidence is counted, so results are lower bounds. |
 | "Post everywhere" | "Publish to Instagram and your Facebook Page" | Name the real destinations. |
 | "Never miss a customer" | "Opportunities you don't miss" | No absolute guarantees. |
@@ -154,6 +154,9 @@ Evidence is `path::text`: the file must exist and contain the text.
 | inbox | Capability | WhatsApp conversations in one shared inbox your team can see | apps/conversations/services.py::def record_inbound_whatsapp_message |
 | instagram-dms | Capability | Instagram DMs arrive in the same shared inbox | apps/conversations/services.py::def record_inbound_instagram_message |
 | instagram-comments | Capability | Reply to Instagram comments automatically by keyword, privately or publicly | apps/instagram/services/triggers.py::def evaluate_triggers |
+| facebook-inbox | Capability | Messages sent to your Facebook Page arrive in the same shared inbox | apps/conversations/services.py::def record_inbound_facebook_message |
+| facebook-comments | Capability | Answer, moderate and reply privately to comments on your Facebook posts, automatically or by hand | apps/facebook/services/triggers.py::def evaluate_triggers |
+| comments | Capability | Comment on your posts, reply to comments and hide or delete them, from one place | apps/conversations/comments.py::def post_comment |
 | assign | Capability | Assign a conversation to a teammate | apps/conversations/actions.py::class AssignConversationAction |
 | auto-replies | Capability | Greet new customers, reply when you're closed, answer common questions by keyword | apps/automation/engagement_starters.py::Reply when you're closed |
 | keywords | Mechanism | Keyword-triggered replies | apps/automation/keywords.py::def |

@@ -8,8 +8,8 @@ Deleting the Contact cascades to its spine conversations and messages, orders,
 leads, deals, notes, list memberships and automation runs. On top of that this
 removes what only *points* at the customer (and so would otherwise be left
 behind with the link cleared): their WhatsApp identity with its message log
-and send queue, and their Instagram identity with its comments, DMs and
-queued replies. A connected HubSpot gets the contact archived too.
+and send queue, and their Instagram and Facebook identities with their comments,
+DMs and queued replies. A connected HubSpot gets the contact archived too.
 """
 
 from __future__ import annotations
@@ -34,6 +34,13 @@ def _instagram_identities(contact):
     )
 
 
+def _facebook_identities(contact):
+    FacebookContact = apps.get_model("facebook", "FacebookContact")
+    return FacebookContact.objects.filter(
+        account_id=contact.account_id, contact=contact
+    )
+
+
 def preview(contact) -> list[tuple[str, int]]:
     """What deleting ``contact`` removes, as ``[(label, count)]`` for the confirm screen."""
     Message = apps.get_model("conversations", "Message")
@@ -46,6 +53,7 @@ def preview(contact) -> list[tuple[str, int]]:
         ("Notes", contact.notes.count()),
         ("WhatsApp numbers", _whatsapp_identities(contact).count()),
         ("Instagram accounts", _instagram_identities(contact).count()),
+        ("Facebook profiles", _facebook_identities(contact).count()),
     ]
     return [(label, n) for label, n in rows if n]
 
@@ -53,6 +61,7 @@ def preview(contact) -> list[tuple[str, int]]:
 def delete_customer(contact, *, actor=None, source: str = "ui") -> dict:
     """Permanently delete ``contact`` and everything about them. Returns counts."""
     InstagramOutbound = apps.get_model("instagram", "OutboundMessage")
+    FacebookOutbound = apps.get_model("facebook", "FacebookOutboundMessage")
 
     link = _hubspot_link(contact)
     hs_object_id = link.hs_object_id if link and not link.remote_archived else ""
@@ -66,7 +75,13 @@ def delete_customer(contact, *, actor=None, source: str = "ui") -> dict:
                 instagram_account__account_id=contact.account_id,
                 recipient_igsid__in=igsids,
             ).delete()
-        for identity in [*wa, *ig]:
+        fb = list(_facebook_identities(contact))
+        psids = [i.psid for i in fb]
+        if psids:
+            FacebookOutbound.objects.filter(
+                account_id=contact.account_id, recipient_id__in=psids
+            ).delete()
+        for identity in [*wa, *ig, *fb]:
             identity.delete()
         account = contact.account
         public_id = contact.public_id
@@ -84,9 +99,19 @@ def delete_customer(contact, *, actor=None, source: str = "ui") -> dict:
         actor=actor,
         resource_type="contact",
         resource_id=public_id,
-        metadata={"source": source, "whatsapp": len(wa), "instagram": len(ig)},
+        metadata={
+            "source": source,
+            "whatsapp": len(wa),
+            "instagram": len(ig),
+            "facebook": len(fb),
+        },
     )
-    return {"contacts": 1, "whatsapp": len(wa), "instagram": len(ig)}
+    return {
+        "contacts": 1,
+        "whatsapp": len(wa),
+        "instagram": len(ig),
+        "facebook": len(fb),
+    }
 
 
 def _hubspot_link(contact):

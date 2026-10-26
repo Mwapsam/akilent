@@ -230,13 +230,15 @@ class MetaInstagramProvider(BaseInstagramProvider):
             logger.exception("Instagram get_user_profile failed for %s", igsid)
         return {}
 
-    def hide_comment(self, comment_id: str) -> tuple[bool, str]:
-        """Hide a comment on the business's media. Reversible.
+    def hide_comment(self, comment_id: str, hidden: bool = True) -> tuple[bool, str]:
+        """Hide (or unhide) a comment on the business's media. Reversible.
 
         Meta documents ``POST /{ig-comment-id}?hide=true``, so ``hide`` goes as a
         query parameter, not a JSON body.
         """
-        return self._comment_call("post", comment_id, {"hide": "true"})
+        return self._comment_call(
+            "post", comment_id, {"hide": "true" if hidden else "false"}
+        )
 
     def delete_comment(self, comment_id: str) -> tuple[bool, str]:
         """Permanently delete a comment. Requires instagram_business_manage_comments."""
@@ -270,6 +272,31 @@ class MetaInstagramProvider(BaseInstagramProvider):
             )
         except Exception as exc:
             logger.exception("Instagram reply_to_comment unexpected error")
+            return SendResult(success=False, error=str(exc), terminal=False)
+
+    def comment_on_media(self, media_id: str, body: str) -> SendResult:
+        """A new top-level comment on the business's own post, as the business.
+
+        ``POST /{ig-media-id}/comments`` (instagram_business_manage_comments).
+        """
+        try:
+            data = self._post(f"{media_id}/comments", {"message": body})
+            return SendResult(success=True, provider_message_id=data.get("id", ""))
+        except InstagramAPIError as exc:
+            logger.warning(
+                "Instagram comment_on_media failed: code=%s msg=%s",
+                exc.code,
+                exc.message,
+            )
+            return SendResult(
+                success=False,
+                error=str(exc),
+                terminal=exc.is_terminal,
+                error_code=exc.code,
+                http_status=exc.http_status,
+            )
+        except Exception as exc:
+            logger.exception("Instagram comment_on_media unexpected error")
             return SendResult(success=False, error=str(exc), terminal=False)
 
     def _comment_call(

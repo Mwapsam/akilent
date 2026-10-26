@@ -56,9 +56,10 @@ no endpoint rather than implying it does.
 {% if "facebook" in enabled_channels %}
 <h2 id="facebook">Facebook Page</h2>
 <p>
-  There's no Facebook endpoint. Connecting a Page and publishing or scheduling posts to it from
-  Content Studio are only in the app. Facebook messages (Messenger) aren't supported, so they
-  don't reach the inbox or the API.
+  There's no Facebook endpoint yet. Connecting a Page, its Messenger messages and comments in
+  the inbox, comment rules, and publishing or scheduling posts from Content Studio are in the
+  app. People who message or comment on your Page become contacts, returned by the Contacts
+  API with <code>"source": "facebook"</code>.
 </p>
 {% endif %}
 

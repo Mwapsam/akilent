@@ -218,6 +218,15 @@ class WorkflowStepRun(models.Model):
         on_delete=models.SET_NULL,
         related_name="workflow_step_runs",
     )
+    # The same for a Messenger send_buttons step.
+    # See apps.automation.integrations.facebook.mark_outbound_message_failed.
+    fb_outbound_message = models.ForeignKey(
+        "facebook.FacebookOutboundMessage",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="workflow_step_runs",
+    )
 
     class Meta:
         indexes = [models.Index(fields=["run", "step_id"])]

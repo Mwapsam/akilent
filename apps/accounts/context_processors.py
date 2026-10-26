@@ -101,6 +101,8 @@ def onboarding_status(request):
         from apps.accounts.utils import current_membership
 
         membership = current_membership(request)
+        from apps.billing import api as billing_api
+
         return {
             "onboarding": state,
             # Seen on any browser or device: the tour doesn't open on its own again.
@@ -110,8 +112,11 @@ def onboarding_status(request):
             "onboarding_wants_facebook": state["wants_facebook"],
             "onboarding_wants_email": state["wants_email"],
             "onboarding_can_publish": state["can_publish"],
-            # Only WhatsApp and Instagram DMs reach the inbox (messaging truth rule).
-            "onboarding_has_inbox": state["wants_whatsapp"] or state["wants_instagram"],
+            # Only WhatsApp, Instagram and Facebook Page messages reach the inbox
+            # (messaging truth rule).
+            "onboarding_has_inbox": state["wants_whatsapp"]
+            or state["wants_instagram"]
+            or (state["wants_facebook"] and billing_api.usable(account, "facebook")),
             "onboarding_tour_channels": [
                 c for c in TOUR_CHANNELS if state[f"wants_{c['key']}"]
             ],

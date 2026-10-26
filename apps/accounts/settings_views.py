@@ -296,14 +296,20 @@ def settings_integrations(request):
     # Facebook Page connection
     fb_connected = False
     fb_page_name = ""
+    fb_inbox = "none"
     try:
+        from apps.facebook.services.pages import inbox_status
         from apps.publishing.models import FacebookPageConnection
 
         fb_conn = account.facebook_page_connection
         fb_connected = fb_conn.status == FacebookPageConnection.Status.ACTIVE
         fb_page_name = fb_conn.page_name
+        fb_inbox = inbox_status(fb_conn)
     except Exception:
         pass
+    from apps.billing import api as billing_api
+
+    fb_inbox_feature = billing_api.usable(account, "facebook")
 
     return render(
         request,
@@ -316,6 +322,8 @@ def settings_integrations(request):
             "ig_publish_scope": ig_publish_scope,
             "fb_connected": fb_connected,
             "fb_page_name": fb_page_name,
+            "fb_inbox": fb_inbox,
+            "fb_inbox_feature": fb_inbox_feature,
         },
     )
 

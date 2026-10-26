@@ -1,12 +1,14 @@
 # Meta App Review — submission pack
 
 For the Akilent Meta app (`1080201821670178`). Paste the text below into the App Review
-form. Request **exactly** the twelve permissions in the two tables; anything else gets the
+form. Request **exactly** the fourteen permissions in the two tables, plus the two
+features listed under them; anything else gets the
 whole submission rejected for "requesting permissions the app doesn't use". Akilent has two
 separate login flows, and each table matches the scopes that flow asks for:
 
 - Instagram Business Login → `SCOPES` in `apps/instagram/oauth.py`
-- Facebook Login (Page publishing) → `_FB_SCOPES` in `apps/publishing/views.py`
+- Facebook Login (Page publishing, Messenger and Page comments) → `_FB_SCOPES` in
+  `apps/publishing/views.py`
 
 Keep them in step: a scope a connect flow asks for but the review doesn't cover (or the
 reverse) is also grounds for rejection. `apps/instagram/tests/test_app_review_pack.py`
@@ -30,18 +32,29 @@ already has Advanced Access and is not part of this submission.
 | `pages_show_list` | List the Pages the person manages so they can choose which Page to connect. |
 | `business_management` | Find Pages owned by the person's business portfolio (`/me/businesses` → `owned_pages`) when they don't hold a direct Page role. |
 | `pages_manage_posts` | Publish the posts a business creates and schedules in Content Studio to its connected Page. |
-| `pages_manage_engagement` | Post the business's own first comment under a post Akilent just published for it. |
-| `pages_read_user_content` | Read the comment count on a post Akilent published for the business (never the comments' text). Meta requires it with `pages_manage_engagement`. |
+| `pages_manage_engagement` | Post the business's first comment under a post it published, and from the Comments view: comment on its own posts, reply to visitors' comments as the Page, and hide or delete comments the business chose to moderate (by a rule it set up, or by hand). |
+| `pages_read_user_content` | Receive the comments people leave on the business's Page posts so the team can answer and moderate them in Akilent, and show the comment count on a post's Performance card. Meta requires it with `pages_manage_engagement`. |
+| `pages_messaging` | Receive the Page's Messenger messages in the Akilent inbox, send the business's replies, and send the one private reply a business set up (or typed) in answer to a comment. |
+| `pages_manage_metadata` | Subscribe the connected Page to the app's webhooks (`/{page-id}/subscribed_apps`) so its messages and comments reach Akilent. |
 | `pages_read_engagement` | Read the published post's id and share count to show results next to the post. |
 | `read_insights` | Read views, reach and reactions for posts Akilent published to the Page. |
+
+### Features (requested in App Review, not OAuth scopes)
+
+| Feature | Why Akilent needs it |
+|---|---|
+| Human Agent | A team member's reply typed in the inbox may reach a customer up to 7 days after their last Messenger message (`tag=HUMAN_AGENT`). Automations and AI auto-replies never use it; they stop at 24 hours. |
+| Business Asset User Profile Access | Show the name and picture of the person who messaged or commented on the Page, so the team knows who it is talking to. |
 
 **Before submitting**
 1. Business Verification is complete for the business portfolio that owns the app (passes as of 2026-10-22).
 2. App Dashboard → Use cases → **Manage everything on your Page** → Customize: add
-   `pages_manage_engagement` and `pages_read_user_content`. Until a permission is added to the
-   use case, the Facebook dialog shows "Invalid Scopes" to developers and silently drops it
-   for everyone else.
-3. The pending submission contains exactly the twelve permissions above. Remove anything
+   `pages_manage_engagement`, `pages_read_user_content` and `pages_manage_metadata`; and
+   **Engage with customers on Messenger** → Customize: add `pages_messaging`, Human Agent and
+   Business Asset User Profile Access. Until a permission is added to the use case, the
+   Facebook dialog shows "Invalid Scopes" to developers and silently drops it for everyone
+   else.
+3. The pending submission contains exactly the fourteen permissions and two features above. Remove anything
    else: `instagram_content_publish`, `instagram_basic`, `instagram_manage_messages`,
    `instagram_manage_comments`, `email`, `manage_app_solution`. (`public_profile` is granted
    by default with Facebook Login and needs no separate request.)
@@ -53,12 +66,18 @@ already has Advanced Access and is not part of this submission.
    - Deauthorize callback: `https://akilent.com/instagram/deauthorize/`
    - Data deletion request: `https://akilent.com/instagram/data-deletion/`
 6. Facebook Login → Settings → Valid OAuth Redirect URIs includes
-   `https://akilent.com/publishing/fb/callback/`.
+   `https://akilent.com/publishing/fb/callback/`; Deauthorize callback
+   `https://akilent.com/facebook/deauthorize/`; Data deletion request
+   `https://akilent.com/facebook/data-deletion/`.
+6a. Webhooks → **Page**: callback `https://akilent.com/facebook/webhook/`, verify token =
+   `FACEBOOK_VERIFY_TOKEN` (falls back to `INSTAGRAM_VERIFY_TOKEN`), and subscribe the fields
+   `messages`, `messaging_postbacks`, `message_echoes` and `feed`. Akilent subscribes each
+   connected Page itself when it is connected.
 7. Every permission has a successful API call from the live app in the last 30 days
    (the "API test call" step). Run each flow in the test instructions once on production
    with tester accounts, then wait up to 24 hours for Meta to register the calls.
-8. Create a reviewer login on akilent.com: a workspace with the `instagram` feature on (use
-   an operator override, it isn't on any plan yet), Owner role, an Instagram professional
+8. Create a reviewer login on akilent.com: a workspace with the `instagram` and `facebook`
+   features on (use operator overrides, they aren't on any plan yet), Owner role, an Instagram professional
    test account, and a Facebook Page the reviewer's test user manages. Add a second
    Instagram account the reviewer can message and comment from. Until approval, both
    Instagram accounts must have a role on the app (Instagram Tester), or replies fail with
@@ -149,21 +168,46 @@ posts that need approval are held until someone approves them.
 
 **pages_manage_engagement**
 In Content Studio's composer, the **More options** card lets a business write a "First
-comment" for its Facebook post, for example a link, a price list or extra hashtags. Right
-after Akilent publishes the post to the business's connected Page, it posts that one comment
-as the Page under that same post with `POST /{post-id}/comments`. The business writes the
-comment itself and sees it on its Page straight away. Akilent posts at most one comment per
-post, only on posts it just published for the business, and never comments on other
-people's posts, replies to visitors, or likes, hides or deletes anything on the Page.
-(Screencast: video 9.)
+comment" for its Facebook post, which Akilent posts as the Page right after publishing it
+(`POST /{post-id}/comments`). In the **Comments** view (Inbox → Comments) a team member can
+also comment on one of the Page's posts, reply publicly to a visitor's comment, and hide,
+unhide or delete a comment. The business's own **Comment rules** can hide or delete spam
+and abuse automatically, or reply publicly. Every action is one the business wrote or chose,
+only on its own Page's posts, and each moderation action is logged with who did it. Akilent
+never comments on other people's posts or likes anything. (Screencast: video 9.)
 
 **pages_read_user_content**
-After a post is published, Content Studio's **Performance** card shows how many comments
-people left on it, next to its views, reactions and shares. Akilent reads only the total,
-with `GET /{post-id}?fields=comments.summary(true).limit(0)`, and only for posts it published
-for the business. It never reads, stores or shows the comments' text or who wrote them. The
-count refreshes a few times in the first weeks after publishing and when the business clicks
-**Refresh numbers**, and is shown only to the business's own team. (Screencast: video 10.)
+When someone comments on one of the business's Page posts, the Page's `feed` webhook
+brings the comment to Akilent. It appears in the **Comments** view, where the team answers
+it publicly or privately, and the business's comment rules can moderate it or send one
+private reply. Content Studio's **Performance** card also shows each published post's
+comment count. Comments are shown only to the business's own team. (Screencast: video 10.)
+
+**pages_messaging**
+Messages people send to the business's Facebook Page arrive in the Akilent inbox, next to
+WhatsApp and Instagram, and the team replies there (text, photos, files, voice notes, quick
+replies). Replies follow Messenger's rules: within 24 hours of the customer's last message,
+or up to 7 days for a reply a person types (Human Agent). It is also used for the private
+reply to a comment (`recipient.comment_id`): one message, within 7 days of the comment,
+written by the business in a comment rule or typed in the Comments view.
+(Screencast: video 13.)
+
+**pages_manage_metadata**
+When a business connects its Page, Akilent calls `POST /{page-id}/subscribed_apps` with the
+fields `messages`, `messaging_postbacks`, `message_echoes` and `feed`, so the Page's
+messages and comments reach its inbox. On disconnect Akilent removes the subscription.
+Akilent changes no other Page setting. (Screencast: video 14.)
+
+**Human Agent**
+When more than 24 hours have passed since the customer's last message, the inbox tells
+the team member a human reply is still allowed and for how long. A reply they type and send
+goes with `messaging_type=MESSAGE_TAG`, `tag=HUMAN_AGENT`, up to 7 days after the customer's
+last message. Automated replies, workflows and AI never use the tag. (Screencast: video 15.)
+
+**Business Asset User Profile Access**
+Messenger webhooks carry only a Page-scoped id. Akilent reads that person's name and
+profile picture (`GET /{psid}?fields=first_name,last_name,name,profile_pic`) once, so the
+inbox and the customer record show who wrote. (Screencast: video 16.)
 
 **pages_read_engagement**
 After publishing, Akilent reads the post's id and share count so the post's **Performance**
@@ -199,6 +243,14 @@ business's own team.
 8. Open an already published post in Content Studio. Under **Performance**, click **Refresh
    numbers**. Reach, views, saves and shares (Instagram) and views, reactions, comments and
    shares (Facebook) appear. Meta can take a few minutes to report numbers for a new post.
+9. From the test Facebook user, send a Messenger message to the connected Page. Open
+   **Inbox**: it appears within a few seconds, with the sender's name. Reply with text and a
+   photo; both arrive in Messenger.
+10. In **Comment rules**, set the keyword rule from step 5 to apply to Instagram and Facebook.
+    From the test Facebook user, comment "price?" on the Page post. The commenter receives
+    the private reply in Messenger and the conversation appears in the inbox.
+11. Open **Inbox → Comments**. On the Facebook post: reply publicly to a comment, hide it and
+    unhide it, and write a new comment on the post. Each shows on the Page straight away.
 
 ## Screencasts (one video per permission)
 
@@ -305,12 +357,39 @@ from Content Studio a day early, so videos 5 and 10–12 have numbers to show.
 2. Highlight views, unique viewers and reactions by type.
 3. Caption: "The business sees views and reactions for its own post, shown only to its team."
 
+**13. `pages_messaging`** (`13-fb-messaging.mp4`, about 90 s)
+1. From the test user's Messenger, write to the Page. Show it arriving in the Akilent inbox.
+2. Reply from the inbox (text, then a photo); show both in Messenger.
+3. Comment "price?" on a Page post; show the private reply in Messenger and the new
+   inbox conversation.
+4. Caption: "Page messages reach the business's inbox; replies follow Messenger's rules."
+
+**14. `pages_manage_metadata`** (`14-fb-manage-metadata.mp4`, about 45 s)
+1. Settings → Integrations → **Connect Facebook Page** → approve.
+2. The card says "Messages and comments arrive in your inbox"; send a test message to show it.
+3. Caption: "We subscribe the connected Page to our webhooks, and nothing else."
+
+**15. Human Agent** (`15-fb-human-agent.mp4`, about 45 s)
+1. Open a Messenger conversation whose last customer message is over 24 hours old (prepare
+   it a day ahead). The inbox shows "Human reply window: … left".
+2. A team member types a reply and sends it; show it in Messenger.
+3. Caption: "Only a person's typed reply uses the tag, within 7 days. Automations don't."
+
+**16. Business Asset User Profile Access** (`16-fb-profile-access.mp4`, about 30 s)
+1. A new person messages the Page; their name and picture show in the inbox and on the
+   customer record.
+2. Caption: "We show the team who wrote to the Page."
+
 Videos 10–12 can be recorded in one sitting from the same post. Export them as three files
 with their own captions, since each permission's section needs its own upload.
 
 ## After approval
 
-- Add the `instagram` feature to the plans that should include it (Console → Plans).
+- Add the `instagram` and `facebook` features to the plans that should include them
+  (Console → Plans).
+- Every Facebook Page connected before 2026-10-26 must reconnect once to grant
+  `pages_messaging` and `pages_manage_metadata`; the Channels page shows **Reconnect** until
+  the Page is subscribed to webhooks.
 - Every Facebook Page connected before 2026-10-19 must reconnect once to pick up
   `read_insights` and `pages_manage_engagement`; every Page connected before 2026-10-23
   must reconnect once more for `pages_read_user_content`.

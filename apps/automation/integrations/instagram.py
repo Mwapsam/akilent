@@ -11,7 +11,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def mark_outbound_message_failed(message) -> None:
+def mark_outbound_message_failed(
+    message, *, fk: str = "ig_outbound_message_id", label: str = "Instagram"
+) -> None:
     """Reconcile a permanently-failed Instagram ``OutboundMessage`` onto its step/run.
 
     Also cancels the open ``WorkflowInteraction`` for the step, so the interaction
@@ -21,7 +23,7 @@ def mark_outbound_message_failed(message) -> None:
     from apps.automation.models import WorkflowRun, WorkflowStepRun
 
     step_run = (
-        WorkflowStepRun.objects.filter(ig_outbound_message_id=message.id)
+        WorkflowStepRun.objects.filter(**{fk: message.id})
         .exclude(status="failed")
         .select_related("run")
         .first()
@@ -32,7 +34,7 @@ def mark_outbound_message_failed(message) -> None:
     step_run.status = "failed"
     step_run.result = {
         **step_run.result,
-        "error": message.last_error or "Instagram send failed",
+        "error": message.last_error or f"{label} send failed",
     }
     step_run.save(update_fields=["status", "result"])
 
@@ -52,12 +54,13 @@ def mark_outbound_message_failed(message) -> None:
                 locked_run.completed_at = timezone.now()
                 locked_run.save(update_fields=["status", "completed_at"])
                 logger.info(
-                    "mark_outbound_message_failed (IG): workflow run %s failed via outbound message %s",
+                    "mark_outbound_message_failed (%s): workflow run %s failed via outbound message %s",
+                    label,
                     locked_run.pk,
                     message.id,
                 )
                 from apps.automation.workflow_engine import _alert_failure
 
                 _alert_failure(
-                    locked_run, step_run.result.get("error") or "Instagram send failed"
+                    locked_run, step_run.result.get("error") or f"{label} send failed"
                 )

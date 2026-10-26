@@ -615,23 +615,39 @@ def instagram_funnel(account, period: Period) -> dict:
     except ImportError:
         return _empty_instagram_funnel()
 
-    from apps.commerce.models import Order
-    from apps.crm.models import Lead
-
     threads = CommentThread.objects.filter(
         instagram_account__account=account,
         received_at__gte=period.start,
         received_at__lt=period.end,
     )
+    return _comment_funnel(account, period, threads, Conversation.Channel.INSTAGRAM)
+
+
+def facebook_funnel(account, period: Period) -> dict:
+    """The same funnel for Facebook Page comments: comment → Messenger → lead → order."""
+    from apps.facebook.models import FacebookCommentThread
+
+    threads = FacebookCommentThread.objects.filter(
+        account=account,
+        received_at__gte=period.start,
+        received_at__lt=period.end,
+    )
+    return _comment_funnel(account, period, threads, Conversation.Channel.FACEBOOK)
+
+
+def _comment_funnel(account, period: Period, threads, channel: str) -> dict:
+    from apps.commerce.models import Order
+    from apps.crm.models import Lead
+
     comments_received = threads.count()
     threads_triggered = threads.filter(trigger_fired_at__isnull=False).count()
     dms_opened = threads.filter(conversation__isnull=False).count()
 
-    # Credited to an Instagram conversation. Lead.source names how a lead was made
+    # Credited to a conversation on this channel. Lead.source names how a lead was made
     # ("conversation", "manual"), not the channel, so it can't answer this.
     leads_confirmed = Lead.objects.filter(
         account=account,
-        attribution__channel=Conversation.Channel.INSTAGRAM,
+        attribution__channel=channel,
         created_at__gte=period.start,
         created_at__lt=period.end,
     ).count()
@@ -641,7 +657,7 @@ def instagram_funnel(account, period: Period) -> dict:
         status=Order.Status.PAID,
         paid_at__gte=period.start,
         paid_at__lt=period.end,
-        attribution__channel=Conversation.Channel.INSTAGRAM,
+        attribution__channel=channel,
     )
     paid_rows = (
         paid_qs.values("currency")
@@ -1028,6 +1044,7 @@ def period_metrics(account, start: datetime, end: datetime) -> dict:
             {"currency": r["currency"], "total": str(r["total"])} for r in money
         ],
         "instagram": instagram_funnel(account, period),
+        "facebook": facebook_funnel(account, period),
     }
 
 

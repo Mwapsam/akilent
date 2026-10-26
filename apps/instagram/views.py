@@ -169,7 +169,9 @@ def instagram_account_connect(request):
                 add_default_moderation_rules,
             )
 
-            add_default_moderation_rules(account, only_if_none=True)
+            add_default_moderation_rules(
+                account, only_if_none=True, channel="instagram"
+            )
         action = "connected" if created else "updated"
         messages.success(request, f"Instagram account {action}.")
         return redirect("instagram-accounts")
@@ -436,7 +438,7 @@ def _finish_instagram_oauth(request, account, chosen: dict, subscribe_fn) -> tup
     if created:
         from apps.instagram.services.default_rules import add_default_moderation_rules
 
-        add_default_moderation_rules(account, only_if_none=True)
+        add_default_moderation_rules(account, only_if_none=True, channel="instagram")
 
     label = chosen.get("username") or iba_id
     if subscribed:

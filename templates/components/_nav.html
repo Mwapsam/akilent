@@ -5,7 +5,7 @@ Active state comes from apps/core/templatetags/nav.py (path-prefix based).
 Arrow Up/Down move through every link in the nav; groups are labelling only.{% endcomment %}
 <nav class="flex-1 space-y-0.5 px-3" aria-label="Primary" @keydown.arrow-up="navFocusLink($event, 'up')" @keydown.arrow-down="navFocusLink($event, 'down')">
 
-  {% include "components/_nav_item.html" with href="/inbox/" label="Inbox" icon="message-circle" match="inbox" exclude="inbox/followups inbox/forms" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/inbox/" label="Inbox" icon="message-circle" match="inbox" exclude="inbox/followups inbox/forms inbox/comments" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/dashboard/" label="Dashboard" icon="home" collapsible=collapsible %}
 
   <div role="group" aria-label="Work">
@@ -18,6 +18,9 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" feature="orders" collapsible=collapsible %}
     {% endif %}
     {% if CAMPAIGNS_ENABLED %}{% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled whatsapp/campaigns" collapsible=collapsible %}{% endif %}
+    {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}
+    {% include "components/_nav_item.html" with href="/inbox/comments/" label="Comments" icon="chat" match="inbox/comments instagram/rules" collapsible=collapsible %}
+    {% endif %}
     {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="bell" match="inbox/followups" collapsible=collapsible badge_url="/inbox/followups/badge/" %}
     {% include "components/_nav_item.html" with href="/support/" label="Support" icon="life-buoy" match="support" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/publishing/" label="Content Studio" icon="image" match="publishing" feature="content_studio" collapsible=collapsible %}

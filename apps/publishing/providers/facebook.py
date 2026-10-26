@@ -154,6 +154,20 @@ def exchange_for_long_lived_user_token(
     return data["access_token"]
 
 
+def fetch_user_id(user_access_token: str) -> str:
+    """The app-scoped id of the person a user token belongs to (``/me``). Best effort."""
+    try:
+        r = requests.get(
+            f"{_BASE}/me",
+            params={"fields": "id", "access_token": user_access_token},
+            timeout=30,
+        )
+        return str(r.json().get("id") or "")
+    except Exception:
+        logger.warning("Facebook /me lookup failed", exc_info=True)
+        return ""
+
+
 def get_page_token(user_access_token: str, page_id: str) -> str:
     """Exchange a short-lived user token for a long-lived page token."""
     r = requests.get(

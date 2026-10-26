@@ -56,9 +56,16 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-ink-subtle">Publish posts, photos, and videos to your Facebook Page.</p>
+        <p class="text-sm text-ink-subtle">Publish posts to your Facebook Page{% if fb_inbox_feature %}, and answer Messenger messages and comments from your inbox{% endif %}.</p>
         {% if fb_connected and fb_page_name %}
         <p class="text-xs text-ink-subtle mt-1">Page: {{ fb_page_name }}</p>
+        {% endif %}
+        {% if fb_connected and fb_inbox_feature %}
+          {% if fb_inbox == "ready" %}
+          <p class="text-xs text-ink-subtle mt-1">Messages and comments arrive in your inbox.</p>
+          {% elif fb_inbox == "reconnect" %}
+          <p class="text-xs tone-amber-fg mt-1">Reconnect your Page to receive Messenger messages and comments in your inbox.</p>
+          {% endif %}
         {% endif %}
       </div>
     </div>
@@ -69,6 +76,9 @@
         <button type="submit" class="btn btn-danger-ghost text-sm"
                 data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
+      {% if fb_inbox_feature and fb_inbox == "reconnect" %}
+      <a href="{% url 'publishing:fb-connect' %}" class="btn btn-secondary text-sm">Reconnect</a>
+      {% endif %}
       {% else %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
       {% endif %}

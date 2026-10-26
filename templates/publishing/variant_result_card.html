@@ -61,6 +61,10 @@ Expects ``variant`` and ``post``.{% endcomment %}
   </form>
   {% endif %}
 
+  {% if variant.publication_id and variant.status == 'published' %}
+  <a href="{% url 'conversations:comments' %}?channel={{ variant.platform }}&variant={{ variant.pk }}" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="chat" class="w-4 h-4" %}Comments</a>
+  {% endif %}
+
   {% if variant.attempt_count > 0 or variant.publication_id and variant.status == 'published' %}
   <p class="text-xs text-ink-subtle">
     {% if variant.attempt_count > 0 %}{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}{% if variant.last_error_type %} · {{ variant.get_last_error_type_display }}{% endif %}{% endif %}{% if variant.publication_id and variant.status == 'published' %}{% if variant.attempt_count > 0 %} · {% endif %}ID {{ variant.publication_id }}{% endif %}

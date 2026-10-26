@@ -21,11 +21,15 @@ SERVICE_CHANNELS: dict[str, set[str]] = {
 }
 
 # The channels a business can pick at signup, in display order, with what each one does
-# here (docs/marketing/messaging.md, section 2). Facebook is Page publishing only.
+# here (docs/marketing/messaging.md, section 2).
 CHANNEL_CHOICES: tuple[tuple[str, str, str], ...] = (
     ("whatsapp", "WhatsApp", "A shared inbox, auto-replies and campaigns"),
     ("instagram", "Instagram", "DMs in the same inbox, comment replies and posts"),
-    ("facebook", "Facebook Page", "Publish and schedule posts to your Page"),
+    (
+        "facebook",
+        "Facebook Page",
+        "Page messages in the inbox, comment replies and posts",
+    ),
     ("email", "Email", "Send from your own domain, with templates and campaigns"),
 )
 

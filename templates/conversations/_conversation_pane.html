@@ -282,11 +282,19 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           <p class="flex-1"><span x-text="collision"></span> Check it before you send yours<span x-show="collisionAck">, or press Send again to send anyway</span>.</p>
           <button type="button" class="text-xs underline" @click="collision = ''; collisionAck = false">Dismiss</button>
         </div>
+        {% if conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.window_is_open and fb.human_agent_window_is_open %}
+        {% comment %}Messenger's HUMAN_AGENT tag: past 24 hours only a reply a person types here can go, for 7 days after the customer's last message. Automation and AI auto-replies can't.{% endcomment %}
+        <div class="cv-window" x-show="windowOpen" role="status">
+          <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <p class="flex-1">Human reply window: {{ fb.human_agent_window_closes_at|timeuntil }} left. It's more than 24 hours since their last message, so only a reply you type yourself can go — automations and auto-replies can't.</p>
+        </div>
+        {% endif %}{% endwith %}{% endif %}
         <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
           <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <p class="flex-1">
             {% if approved_templates %}The 24-hour window is closed — send an approved template below.
             {% elif conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
+            {% elif conversation.channel == "facebook" %}The reply window is closed. Messenger won't deliver a reply until the customer messages again.
             {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
           </p>
         </div>
