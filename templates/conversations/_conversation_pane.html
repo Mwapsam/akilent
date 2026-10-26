@@ -396,6 +396,19 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           <p class="flex-1" x-text="sendError"></p>
           <button type="button" class="cv-fail-action" @click="sendError = ''">Dismiss</button>
         </div>
+        {% comment %}Files and voice notes that never left (offline, or another send in progress),
+        each kept with its own notice until it is sent or discarded: a text reply sent meanwhile
+        doesn't hide them.{% endcomment %}
+        <template x-for="h in held" :key="h.id">
+          <div class="cv-send-error" role="status">
+            <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <p class="flex-1" x-text="h.note"></p>
+            <span class="cv-fail-actions">
+              <button type="button" class="cv-fail-action" @click="sendHeld(h)" :disabled="sending" x-text="h.voice ? 'Send voice note' : 'Send file'">Send file</button>
+              <button type="button" class="cv-fail-action" @click="discardHeld(h)">Discard</button>
+            </span>
+          </div>
+        </template>
         <form method="post" action="{{ detail_url }}" class="cv-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
           <input type="hidden" name="action" value="reply" />

@@ -153,6 +153,10 @@ function totp(base32) {
 }
 
 await send("Page.enable"); await send("Runtime.enable");
+// Always the current scripts and styles: a cached copy would test old code.
+await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
+// Start signed out: the profile keeps the last run's session, and /signup/ redirects then.
+await send("Network.clearBrowserCookies");
 await send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
 mkdirSync(shots, { recursive: true });
 

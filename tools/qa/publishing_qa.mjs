@@ -94,6 +94,8 @@ ws.addEventListener("message", async (ev) => {
 });
 
 await send("Page.enable"); await send("Runtime.enable");
+// Always the current scripts and styles: a cached copy would test old code.
+await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
 await go("/auth/login/");
 const login = once("Page.loadEventFired");
 await evaluate(`(() => { const f=document.querySelector('input[type=password]').form; f.querySelector('input[name=username]').value=${JSON.stringify(env.QA_UI_EMAIL)};
@@ -187,6 +189,15 @@ await sleep(600);
 st = { state: await dialogState(), hidden: await evaluate("document.getElementById('ig-crop-modal').classList.contains('hidden')"), uploads: await evaluate("window.__uploads") };
 check("crop.queue-ends-cleanly", st.hidden && st.state.depth === 0 && st.state.inert === 0 && st.uploads === 2, st);
 
+// 4c. Without the shared dialog stack, Esc still skips the crop (the cropper's own fallback).
+await evaluate("window.__akDialogSaved = window.akDialog; window.akDialog = undefined; window.__cropResult = 'pending'; window._igCropOpen(" + JSON.stringify(png) + ", {}, (r) => { window.__cropResult = r; })");
+await sleep(600);
+for (const type of ["rawKeyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+await sleep(400);
+st = { hidden: await evaluate("document.getElementById('ig-crop-modal').classList.contains('hidden')"), result: await evaluate("window.__cropResult") };
+await evaluate("window.akDialog = window.__akDialogSaved");
+check("crop.esc-without-dialog-stack", st.hidden && st.result === null, st);
+
 // 5. Native dialogs: none left on the page (prompt/confirm/alert are never called).
 await evaluate("window.__native = []; ['alert','confirm','prompt'].forEach(n => { window[n] = function () { window.__native.push(n); return null; }; })");
 await evaluate("(() => { const b = document.createElement('button'); b.setAttribute('hx-post', '/publishing/qa-noop/'); b.setAttribute('hx-confirm', 'Sure?'); document.body.appendChild(b); htmx.process(b); b.click(); })()");
@@ -203,7 +214,7 @@ await go("/publishing/library/", 1500);
 const postHref = await evaluate("[...document.querySelectorAll('a[href*=\"/publishing/posts/\"]')].map(a => a.getAttribute('href'))[0]");
 if (postHref) {
   await go(postHref, 1500);
-  st = await evaluate("(() => { const m = document.querySelector('#main').innerText; return { perChannel: /Per-channel status/i.test(m), text: (m.match(/Per-channel status[\\s\\S]{0,200}/) || [''])[0] }; })()");
+  st = await evaluate("(() => { const c = document.getElementById('pd-channels'); const card = c && c.closest('section'); return { perChannel: !!card && card.querySelectorAll('.pd-channel').length > 0, text: card ? card.innerText.slice(0, 200) : '' }; })()");
   check("post.per-channel-outcome", st.perChannel, { postHref, ...st });
 } else {
   check("post.per-channel-outcome", false, "no post in the library to open");
@@ -215,6 +226,38 @@ await clickSel("nav a[href='/dashboard/']");
 await sleep(2500);
 st = await evaluate("({ path: location.pathname, vtClass: document.documentElement.classList.contains('ak-page-vt'), name: getComputedStyle(document.getElementById('main')).viewTransitionName })");
 check("nav.transition-name-cleared", st.path === "/dashboard/" && !st.vtClass && (st.name === "none" || !st.name), st);
+
+// 7. Calendar: seven columns where they fit (xl), an agenda below; every entry says its
+// status in words; today is marked; no sideways scroll.
+const calState = `(() => { const shown = (s) => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0; };
+  const states = [...document.querySelectorAll('.cal-entry')].filter(e => e.offsetParent).map(e => e.querySelector('.cal-state')?.textContent.trim() || '');
+  return { grid: shown('.cal-week'), agenda: shown('.cal-agenda'), hscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    entries: states.length, unlabelled: states.filter(s => !s).length, today: !!document.querySelector('.cal-today .cal-date') }; })()`;
+await viewport(1280, 860, false);
+await go("/publishing/calendar/", 1500);
+st = await evaluate(calState);
+check("calendar.week-grid-1280", st.grid && !st.agenda && st.hscroll <= 0 && st.unlabelled === 0 && st.today, st);
+await viewport(390, 844, true);
+await go("/publishing/calendar/", 1500);
+st = await evaluate(calState);
+check("calendar.agenda-390", !st.grid && st.agenda && st.hscroll <= 0 && st.unlabelled === 0 && st.today, st);
+await go("/publishing/calendar/?view=list", 1500);
+st = await evaluate(calState);
+check("calendar.list-no-overflow-390", st.agenda && st.hscroll <= 0, st);
+
+// 8. A post's page: channels beside the post on a wide screen, above it on a phone.
+if (postHref) {
+  const pdState = `(() => { const ch = document.getElementById('pd-channels')?.closest('section'); const post = document.getElementById('pd-post')?.closest('section');
+    if (!ch || !post) return { missing: true }; const a = ch.getBoundingClientRect(), b = post.getBoundingClientRect();
+    return { beside: a.left > b.right - 1, above: a.bottom <= b.top + 1, hscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth, h1: document.querySelector('h1').textContent.trim().slice(0, 40) }; })()`;
+  await go(postHref, 1500);
+  st = await evaluate(pdState);
+  check("post.channels-first-on-phone", st.above && st.hscroll <= 0 && st.h1 && st.h1 !== "Post", st);
+  await viewport(1280, 860, false);
+  await go(postHref, 1500);
+  st = await evaluate(pdState);
+  check("post.channels-beside-post-1280", st.beside && st.hscroll <= 0, st);
+}
 
 writeFileSync(join(outDir, "publishing_qa_results.json"), JSON.stringify({ results, log: log.slice(-40) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

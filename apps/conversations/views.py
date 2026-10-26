@@ -25,7 +25,7 @@ from django.db.models import (
     When,
 )
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect, render, resolve_url
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -721,8 +721,11 @@ def conversation_detail(request, public_id: str):
         ),
         "typingUrl": reverse("conversations:typing", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
-        # The browser's clock can be off; sends it is unsure of are timed against this.
+        # The browser's clock can be off; a first estimate of how far, refined by every
+        # feed poll (which measures the round trip).
         "serverNow": now.isoformat(),
+        # A poll redirected here means the session ended (chat.js says "signed out").
+        "loginUrl": resolve_url(settings.LOGIN_URL),
         "open": conversation.status == Conversation.Status.OPEN,
         # Only WhatsApp enforces a messaging window today; other channels report
         # it open so the composer behaves as it always has for them.
@@ -1949,6 +1952,9 @@ def messages_feed(request, public_id: str):
             ),
             "open": conversation.status == Conversation.Status.OPEN,
             "presence": others,
+            # Read last, so it is as close as it can be to when the answer leaves: the
+            # browser times its own clock against it (chat.js _skew).
+            "serverNow": timezone.now().isoformat(),
         }
     )
 

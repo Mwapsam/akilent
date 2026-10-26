@@ -70,6 +70,18 @@
     var scheduled = !!(d.scheduled_at || Object.keys(d.channel_times || {}).length);
 
     return {
+      // Every private field a method sets is declared here: Alpine puts an undeclared one
+      // on the outermost x-data (base.html's <body x-data>), shared by every page and kept
+      // across boosted navigation, so the next composer would inherit it.
+      _cropQueue: [],
+      _cropping: false,
+      _again: false,
+      _retryDelay: 0,
+      _saveTimer: null,
+      _localTimer: null,
+      _readyTimer: null,
+      _readinessSeq: 0,
+      _undoTimer: null,
       // ── Server state ──────────────────────────────────────────────────────
       d: d,
       urls: d.urls || {},
@@ -1093,7 +1105,11 @@
     });
 
     // Esc skips the crop (uploads the original), the same as the Skip button: handled by
-    // window.akDialog, which only lets the topmost dialog take it.
+    // window.akDialog, which only lets the topmost dialog take it. Without it (app.js not
+    // loaded), the cropper handles Esc itself so the upload is never left waiting.
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !window.akDialog && !m.classList.contains("hidden")) closeCrop(null);
+    });
 
     document.getElementById("ig-crop-skip").addEventListener("click", function () { closeCrop(null); });
 

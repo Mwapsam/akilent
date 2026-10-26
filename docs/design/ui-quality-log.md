@@ -668,3 +668,115 @@ One more throwaway `qa-signup-…@akilent-qa.invalid` account per accounts-harne
 | Implementation | **Done** (Phase 2 and the listed leftovers). |
 | Verification | **Done** (full suite, 12/12 + 12-page scan, earlier harnesses green). **Open:** real devices, screen readers. |
 | Acceptance | **Pending your sign-off.** |
+
+### Entry 5 addendum: two code-review rounds (19 findings), 2026-10-26
+
+| | |
+|---|---|
+| HEAD | `915ce04` (your commit since Entry 5; the remaining Phase 2/3 work and these fixes are on top of it, staged or modified) |
+| Tracked changes | 132 files, +1777 −646. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `6bc4d5262caba0f9…` (the QA harnesses and the new test files are staged, so they're inside this hash) |
+
+**Round 1 (9 findings), all fixed:**
+- Cropper with several images queued: the next crop opened before the last one had left the dialog stack, so it had no inert page and no Esc. The dialog now closes fully before the callback opens the next one (`composer.js closeCrop`).
+- A browser clock running fast left a duplicate reply stuck on "Sending…". The page and every feed poll now carry `serverNow`. The browser works out its offset (from the poll's midpoint, within half the round trip) and stamps sends in server time.
+- A late answer from a form inside the pane (assign, tags) could replace the conversation opened after it. A pane epoch is bumped when a load starts and again when it swaps in; answers from an older epoch are dropped (`inbox_pane.js`).
+- A poll answered by the sign-in page now says "You've been signed out…" instead of "Not connected… Reconnecting…".
+- Channel names in error notes come from `platform_display_name`, not a third label map. The fallback is "the channel", capitalised only at the start of a sentence.
+- The 4-second settle wait and its full-page fallback are gone from pane loads. A pane load never runs a View Transition, so the pane is filled when `htmx.ajax` resolves.
+- "Add a blank" before the page finished loading now says "Still loading" instead of doing nothing.
+- Stale comments corrected: the progress bar counts `htmx:beforeSend`, and unconfirmed media *is* kept across a reload. Putting back media with no caption is now a no-op (the button was already hidden).
+
+**Round 2 (10 findings), all fixed:**
+- A file's "Sending…" placeholder now pairs with its real message if that arrives first, so a late upload failure can't leave a "Not confirmed" bubble beside the sent file.
+- The send timeout now covers reading the response body too. A stalled body ends as "Not confirmed" and the reply box works again.
+- `serverNow` is read as late as possible (the last key in the feed), and polls refine it (see round 1).
+- Only reads (GET) take a turn in an error region's sequence (`app.js`). A form posted inside the pane can no longer hide a load's failure, and a mutation's own failure is never dropped as stale.
+- The details-drawer watcher checks that `akDialog` exists.
+- Pressing Send while offline no longer dismisses the "someone else just replied" warning.
+- With overlapping page navigations, only the newest View Transition removes `.ak-page-vt`.
+- Provider errors ending in "!" or "?" no longer get a "." added after them.
+- A voice note or file that wasn't sent (offline, refused, or while another send was in progress) is kept, with "Send voice note" / "Send file" and "Discard" buttons. Before, the recording was lost.
+- Dead code `ev === el` removed from the `data-auto-refresh` check.
+
+**Automated results:** full suite **4,641 passed, 0 failures, 25 skipped**. The first run had 1 failure in `apps/automation` (`test_after_hours_messages_recommend_replying_when_closed`); it passed alone and on a clean rerun, so it was a one-off under parallel load and is not related to this work. `ruff check`, `ruff format` and `mypy` are clean on the changed Python. `node --check` passes on every changed script. New tests: channel naming for any platform, sentence-start capitals, and the provider's own punctuation.
+
+**Browser results:**
+- **Inbox: 56/56.** The 13 new checks:
+  - the server clock is known
+  - a fast clock still reconciles
+  - signed out is said, and clears
+  - putting back a captionless file does nothing
+  - stale form answers are dropped, whether sent before the click or during the load (the request log confirms both late answers were sent and fulfilled)
+  - the real file message arriving during the upload reconciles
+  - a stalled body times out
+  - an offline voice note is kept, then sent once back online
+  - the collision warning survives an offline Send
+  - a load failure is still said despite a form post
+- **Content Studio: 14/14.** New: two queued crops. The second crop is a full dialog, and the queue ends cleanly.
+- **Accounts: 12/12.** The harness now clears cookies at start, because a session left over from the last run made `/signup/` redirect.
+
+**Not verified:** overlapping page transitions (can't be observed headless; the logic is a single latest-transition check). Real devices and screen readers remain yours.
+
+**QA data:** one more throwaway `qa-signup-…@akilent-qa.invalid` account (about 10 now) and one more `qa-tag-*` tag on a QA contact per inbox run. The stale-form posts were answered by the harness and never reached the server.
+
+## Entry 6: Content Studio calendar and post page redesign (your request), 2026-10-26
+
+Tested code: HEAD `915ce04` + working tree, `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `6120a24d8964bd91…`.
+
+**Calendar** (`calendar.html`, new `_cal_entry.html`, `_cal_plan.html`, `_cal_agenda.html`, `_platform_icons.html`)
+- **Toolbar:** previous / Today / next and the week's dates, with a summary line ("4 posts · 4 planned · 1 failed"). Week/List is a segmented control (new shared `.segmented`), and the filters apply as they change.
+- **Wide screens (xl):** a seven-column week in one card. Today's date is filled with the accent colour, and past days sit on a muted ground. Each post shows its time, channel icons, two lines of caption, and its status as a coloured edge **plus a written label**. Plan items are dashed and labelled "Planned", with the theme's colour dot. A day's + appears on hover or focus (always on touch). Empty future days offer "+ Plan an idea".
+- **Narrower:** an agenda with one row per day, a date block, thumbnails, and "Create a post / Plan an idea" on empty days. The list view is the same agenda, showing only days with something in them, with an empty state when the week is empty or filtered out.
+- **"Not scheduled yet":** shown as cards with an image, caption, status and channels.
+- **View change:** a `week_summary` dict and a `same_month` flag added to the context. Display only.
+
+**Post page** (`post_detail.html`, `variant_result_card.html`, `_results_card.html`, `_metric_card.html`)
+- **Title:** the caption's first line (new `post_headline` filter) instead of "Post", with breadcrumbs. A meta line gives the status, channels, type, and "Published / Goes out / Set for / Not scheduled". "Set for" is used for a draft with a time, which won't go out on its own. The actions are ordered with one primary.
+- **Layout:** wide (lg) puts the post on the left (media, caption, per-channel captions, call to action, results, performance, options) and review + channels + details on the right. On a phone, review and channels come first.
+- **Channel rows:** each has its status, own time, view link, reschedule, and its failure as "Why it failed" with the plain reason, plus "Retry this channel".
+- **Other changes:** a post-level error is now a banner at the top, not the bottom. Results and performance numbers are stat tiles. A carousel is a swipeable strip with counters.
+- **Fixed on the way:** `.copy-btn` is styled for dark code blocks (gray-400, white on hover), which nearly disappears on a card. A `.copy-btn--light` variant uses the accent colour.
+- **Unchanged:** every action, form, condition and message, including the review flow, truthful channel states and the result notes.
+
+**Also:** a Facebook icon and a `channel_tag` Facebook entry.
+
+**Results**
+- Full suite: 4,641 passed, 0 failures. ruff and mypy are clean.
+- `publishing_qa.mjs`: **19/19**. The 5 new checks: week grid at 1280, agenda at 390, list with no overflow, channels before the post on a phone, channels beside the post at 1280.
+- `area_scan`: calendar (week, list, past week) and three posts (published on two channels, failed, carousel) at 360/1280 × light/dark, **0 issues**. The first scan caught the invisible-until-hover "+ Plan an idea"; it is now always readable.
+- Two tests asserted old wording. "Started from an AI suggestion" is restored, and my own "Per-channel status" assertion now checks the Channels heading.
+
+**QA data (local):** in the demo workspace's current week, 4 draft/failed posts (24–27) and 2 "QA …" plan items. Drafts and failed posts are never picked up by the scheduler.
+
+**Not verified:** real devices and screen readers.
+
+## Entry 7: third code-review round (10 findings) and a long-standing polling bug, 2026-10-26
+
+Tested code: HEAD `915ce04` + working tree, diff SHA-256 `38c26b8883308c87…`.
+
+**Found while verifying (the most serious item): conversations stopped updating.**
+- **What users saw:** in the two-pane inbox, after one conversation was closed or replaced, every conversation opened afterwards never polled. New messages and delivery ticks didn't appear until a full reload. With boosted navigation the same applied on phones, for the second thread opened.
+- **Cause:** Alpine stores a field a component sets without declaring it on the outermost `x-data`. In base.html that is `<body x-data>`, one object shared by every page and kept across boosted navigation. The closed conversation's `this._destroyed = true` landed there, and every later conversation read it.
+- **How long:** since 2026-09-27, when `chat.js` gained `_destroyed`.
+- **Fix:** every private field is declared on its component. That covers chat (9 fields), `cvMenu`, `voiceNote` (whose per-note listeners were also being shared), and the composer (9 fields, including the crop queue and save timers).
+- **Guards:** the new `apps/core/tests/test_alpine_fields.py` fails if any app script sets an undeclared `this._…`. Harness check `pane.next-conversation-polls` covers it in the browser.
+
+**Review findings, all fixed:**
+- **Held files and voice notes:** they are now a list, each with its own notice by the reply box. A text reply can't hide them, and a second one doesn't replace the first.
+- **Refused uploads:** these (wrong type, too large, window closed) are no longer held for a retry that would fail again. The reason is shown instead.
+- **Matching files to the thread:** files and voice notes are never auto-matched to a media message in the thread, pending or unknown. A teammate's photo can't be told apart (gap G2), and wrongly matching would hide a send that may not have gone. This reverses the round-1/round-2 pairing; the trade-off is a "Not confirmed" note the person dismisses. Its copy now says to check the thread above, then dismiss.
+- **Calendar summary:** it counts posts, not channel entries, and "failed" is per post.
+- **Region errors:** a mutation whose answer re-rendered a region now supersedes older reads still in flight, so a late read failure can't wipe the fresh content. While a conversation is loading in the pane, no form answer is let into it, so if that load fails its error still shows (this fixes an interaction between the two rules, found by the harness).
+- **Signed out:** shown only when the feed was redirected to the sign-in page itself (`loginUrl` added to the chat config). Any other non-feed page counts as a failed poll.
+- **Stale page clock:** a page time more than 5 minutes off the browser's clock is treated as an old page and ignored, and the first poll runs at once.
+- **Whitespace-only errors:** a provider error of only spaces or newlines shows nothing, not a lone ".".
+- **Cropper Esc:** it still works when the shared dialog stack is absent.
+
+**Harness fixes:** all three harnesses now turn off the browser cache. A cached `composer.js` had made a fixed check look broken. The Back-to-list check waits for the list instead of a fixed sleep.
+
+**Results**
+- Full suite: 4,644 passed, 0 failures. One run under heavy load had a single failure that passed when rerun and on a clean rerun.
+- ruff and mypy are clean.
+- Browser checks: inbox **61/61**, publishing **20/20**, accounts **12/12**.
+- New inbox checks: unconfirmed file not matched to another file, upload not paired with another file, held items survive a text send and a second file, refused upload not held, other page not "signed out", write beats a late read failure, next conversation polls.
+- New publishing check: Esc without the dialog stack.

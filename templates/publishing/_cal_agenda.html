@@ -1,0 +1,38 @@
+{% comment %}The week as an agenda: one row per day, date on the left, that day's plans and posts
+on the right. The week view uses it below xl (seven columns don't fit); the list view at
+every width, with ``skip_empty`` so only days with something on them are listed.{% endcomment %}
+<ol class="cal-agenda">
+  {% for day, day_plan_items, day_posts in week_days %}
+  {% if not skip_empty or day_plan_items or day_posts %}
+  <li class="cal-row{% if day < today %} cal-row--past{% endif %}{% if day == today %} cal-today{% endif %}">
+    <div class="cal-row-date">
+      <span class="cal-dow">{{ day|date:"D" }}</span>
+      <span class="cal-date">{{ day|date:"j" }}</span>
+      {% if day == today %}<span class="sr-only">Today</span>{% endif %}
+    </div>
+    <div class="cal-row-body">
+      <h3 class="sr-only">{{ day|date:"l, N j" }}</h3>
+      {% for item in day_plan_items %}{% include "publishing/_cal_plan.html" %}{% endfor %}
+      {% for entry in day_posts %}{% include "publishing/_cal_entry.html" with thumb=True %}{% endfor %}
+      {% if day >= today %}
+        {% if not day_plan_items and not day_posts %}
+        <p class="cal-row-empty">
+          <span class="basis-full sm:basis-auto">Nothing planned</span>
+          <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00" class="text-accent font-medium hover:underline">Create a post</a>
+          <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}" class="text-accent font-medium hover:underline">Plan an idea</a>
+        </p>
+        {% else %}
+        <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00"
+           class="self-start inline-flex items-center gap-1 text-xs font-medium text-ink-subtle hover:text-accent -my-0.5 py-1"
+           aria-label="Create a post on {{ day|date:'l, N j' }}">
+          {% include "components/icon.html" with name="plus" class="w-4 h-4" %}Add
+        </a>
+        {% endif %}
+      {% elif not day_plan_items and not day_posts %}
+        <p class="cal-row-empty">Nothing posted</p>
+      {% endif %}
+    </div>
+  </li>
+  {% endif %}
+  {% endfor %}
+</ol>

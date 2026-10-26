@@ -1185,6 +1185,135 @@
   .channel-tag--compact[data-channel="sms"] > svg { color: var(--tone-info-fg); }
   .channel-tag--compact[data-channel="instagram"] > svg { color: var(--tone-coral-fg); }
   .channel-tag--compact > svg { @apply w-3.5 h-3.5; }
+  .channel-tag[data-channel="facebook"] { color: var(--tone-info-fg); }
+  .channel-tag--compact[data-channel="facebook"] > svg { color: var(--tone-info-fg); }
+
+  /* Segmented control: a few views of the same thing (Week / List). Links or buttons;
+     the current one carries aria-current or aria-pressed. Same look as the composer's
+     Edit / Preview switch. */
+  .segmented { @apply inline-flex items-center gap-0.5 p-0.5 rounded-xl; background: var(--tone-neutral-bg); }
+  .segmented > a, .segmented > button {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[0.625rem] text-sm font-medium transition-colors;
+    color: var(--color-ink-muted);
+  }
+  .segmented > a:hover, .segmented > button:hover { color: var(--color-ink); }
+  .segmented > [aria-current="page"], .segmented > [aria-pressed="true"] {
+    background: var(--color-surface); color: var(--color-ink); box-shadow: var(--shadow-card);
+  }
+
+  /* Content Studio calendar ------------------------------------------------
+     Wide (xl): a seven-column week. Narrower: an agenda, one row per day, which
+     reads at 360px where seven columns can't. Entries carry their status as a
+     coloured edge plus a written label (never colour alone). */
+  .cal-toolbar { @apply flex flex-wrap items-center justify-between gap-3 mb-5; }
+  .cal-range { @apply text-lg font-semibold tracking-tight text-ink whitespace-nowrap; }
+  .cal-stepper { @apply inline-flex items-center rounded-xl border border-border bg-surface shadow-card overflow-hidden; }
+  .cal-stepper > a { @apply inline-flex items-center justify-center h-9 min-w-9 px-2.5 text-sm font-medium transition-colors; color: var(--color-ink-muted); }
+  .cal-stepper > a + a { border-left: 1px solid var(--color-border); }
+  .cal-stepper > a:hover { background: var(--color-surface-muted); color: var(--color-ink); }
+  .cal-summary { @apply text-sm mt-1; color: var(--color-ink-subtle); }
+
+  .cal-week { @apply grid grid-cols-7 overflow-hidden; }
+  .cal-col { @apply flex flex-col min-w-0 min-h-[22rem]; }
+  .cal-col + .cal-col { border-left: 1px solid var(--color-border); }
+  .cal-col--past { background: var(--color-surface-muted); }
+  .cal-col-head { @apply flex items-center justify-between gap-1 px-2.5 pt-2.5 pb-2; }
+  .cal-col-body { @apply flex-1 flex flex-col gap-1.5 px-1.5 pb-2; }
+  .cal-dow { @apply text-[0.6875rem] font-semibold uppercase tracking-wider; color: var(--color-ink-subtle); }
+  .cal-date { @apply inline-flex items-center justify-center w-8 h-8 rounded-full text-base font-semibold tabular-nums text-ink; }
+  .cal-today .cal-dow { color: var(--color-accent); }
+  .cal-today .cal-date { background: var(--color-accent); color: var(--color-surface); }
+
+  .cal-add {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors;
+    color: var(--color-ink-subtle);
+  }
+  .cal-add:hover, .cal-add:focus-visible { background: var(--tone-neutral-bg); color: var(--color-ink); }
+  /* Mouse: the + shows on the day being pointed at. Touch: always (nothing to hover). */
+  @media (hover: hover) and (pointer: fine) {
+    .cal-col .cal-add { opacity: 0; }
+    .cal-col:hover .cal-add, .cal-col:focus-within .cal-add, .cal-add:focus-visible { opacity: 1; }
+  }
+  /* Always readable (touch screens have no hover to reveal it); pointing at it adds the outline. */
+  .cal-empty-add {
+    @apply flex-1 flex items-center justify-center rounded-lg text-xs font-medium border border-dashed border-transparent transition-colors min-h-12;
+    color: var(--color-ink-subtle);
+  }
+  .cal-empty-add:hover, .cal-empty-add:focus-visible { border-color: var(--color-border-strong); color: var(--color-ink); background: var(--color-surface-muted); }
+
+  .cal-entry {
+    --cal-tone: var(--color-border-strong);
+    @apply relative flex flex-col gap-1 rounded-lg border border-border bg-surface text-left
+      pl-2.5 pr-2 py-1.5 transition-shadow min-w-0;
+    box-shadow: inset 3px 0 0 var(--cal-tone);
+  }
+  .cal-entry:hover { border-color: var(--color-border-strong); box-shadow: inset 3px 0 0 var(--cal-tone), var(--shadow-card); }
+  .cal-entry[data-tone="tone-info"] { --cal-tone: var(--tone-info-fg); }
+  .cal-entry[data-tone="tone-teal"] { --cal-tone: var(--tone-teal-fg); }
+  .cal-entry[data-tone="tone-amber"] { --cal-tone: var(--tone-amber-fg); }
+  .cal-entry[data-tone="tone-coral"] { --cal-tone: var(--tone-coral-fg); }
+  .cal-entry-top { @apply flex items-center gap-2 min-w-0; }
+  .cal-time { @apply text-xs font-semibold tabular-nums text-ink; }
+  .cal-icons { @apply ml-auto inline-flex items-center gap-1 shrink-0; color: var(--color-ink-subtle); }
+  .cal-icons svg { @apply w-3.5 h-3.5; }
+  .cal-caption { @apply text-xs leading-snug line-clamp-2 break-words; color: var(--color-ink-muted); }
+  .cal-state { @apply inline-flex items-center gap-1 text-[0.6875rem] font-medium; color: var(--cal-tone); }
+  .cal-entry[data-tone="tone-neutral"] .cal-state { color: var(--color-ink-subtle); }
+  .cal-state::before { content: ""; @apply w-1.5 h-1.5 rounded-full shrink-0; background: currentColor; }
+
+  .cal-plan {
+    @apply flex flex-col gap-0.5 rounded-lg border border-dashed px-2.5 py-1.5 text-left transition-colors min-w-0;
+    border-color: var(--color-border-strong);
+  }
+  .cal-plan:hover { background: var(--color-surface-muted); }
+  .cal-plan-label { @apply inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider; color: var(--color-ink-subtle); }
+  .cal-plan-pillar { @apply normal-case tracking-normal font-medium truncate; }
+  .cal-col .cal-plan-pillar { display: none; }
+  .cal-plan-dot { @apply w-2 h-2 rounded-full shrink-0; background: var(--color-ink-subtle); }
+  .cal-plan-topic { @apply text-xs font-medium leading-snug line-clamp-2 break-words text-ink; }
+
+  /* Agenda: one row per day, below xl and in the list view. */
+  .cal-agenda { @apply divide-y; }
+  .cal-agenda > * { border-color: var(--color-border); }
+  .cal-row { @apply flex gap-3 sm:gap-5 px-3 sm:px-5 py-3.5; }
+  .cal-row--past { background: var(--color-surface-muted); }
+  .cal-row-date { @apply flex flex-col items-center w-11 shrink-0 pt-0.5; }
+  .cal-row-body { @apply flex-1 min-w-0 flex flex-col gap-2; }
+  .cal-row-empty { @apply flex flex-wrap items-center gap-x-3 gap-y-1 min-h-8 text-sm; color: var(--color-ink-subtle); }
+  .cal-row .cal-entry { @apply flex-row items-center gap-3 py-2 pl-3; }
+  .cal-row .cal-caption { @apply text-sm; }
+  .cal-row .cal-plan { @apply py-2 pl-3; }
+  .cal-row .cal-plan-topic { @apply text-sm; }
+
+  /* Post page ---------------------------------------------------------------
+     Wide (lg): the post on the left, where it stands on the right. Narrow: where it
+     stands first (review, channels), then the post, then its details. */
+  .pd-grid { @apply grid gap-5 items-start; }
+  @media (min-width: 1024px) {
+    .pd-grid { grid-template-columns: minmax(0, 1fr) 22rem; grid-template-rows: auto 1fr; }
+    .pd-side { grid-column: 2; grid-row: 1; }
+    .pd-main { grid-column: 1; grid-row: 1 / span 2; }
+    .pd-side2 { grid-column: 2; grid-row: 2; }
+  }
+  @media (min-width: 1280px) { .pd-grid { grid-template-columns: minmax(0, 1fr) 24rem; gap: 1.5rem; } }
+  .pd-meta { @apply flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm; color: var(--color-ink-subtle); }
+  .pd-section-title { @apply text-sm font-semibold text-ink; }
+  .pd-media { @apply w-full overflow-hidden; background: var(--tone-neutral-bg); }
+  .pd-strip { @apply flex gap-2 overflow-x-auto p-2 snap-x snap-mandatory; scrollbar-width: thin; }
+  .pd-strip > li { @apply relative snap-start shrink-0 w-[78%] sm:w-[58%]; }
+  .pd-num { @apply absolute top-2 left-2 text-xs font-semibold px-1.5 py-0.5 rounded-md bg-gray-900/65 text-white tabular-nums; }
+  .pd-channel + .pd-channel { border-top: 1px solid var(--color-border); }
+  .pd-facts { @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm; }
+  .pd-facts dt { color: var(--color-ink-subtle); }
+  .pd-facts dd { @apply text-ink text-right font-medium min-w-0 break-words; }
+  .pd-stats { @apply grid grid-cols-2 sm:grid-cols-3 gap-2; }
+  .pd-stat { @apply rounded-xl px-3 py-2.5; background: var(--color-surface-muted); border: 1px solid var(--color-border); }
+  .pd-stat dt { @apply text-xs; color: var(--color-ink-subtle); }
+  .pd-stat dd { @apply mt-1 text-base font-semibold tabular-nums text-ink leading-tight; }
+  /* .copy-btn is drawn for the dark code blocks; on a light card it needs the accent. */
+  .copy-btn.copy-btn--light { @apply font-sans font-medium ml-0; color: var(--color-accent); }
+  .copy-btn.copy-btn--light:hover { color: var(--color-accent-strong); background: var(--tone-neutral-bg); }
+  .copy-btn.copy-btn--light.copied { color: var(--tone-teal-fg); }
 
   /* Copy field ---------------------------------------------------------- */
   .copy-value {

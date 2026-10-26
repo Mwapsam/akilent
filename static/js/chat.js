@@ -15,6 +15,12 @@ function registerChat() {
   const SEND_TIMEOUT = 30000;
   const UPLOAD_TIMEOUT = 120000;
   const UNKNOWN_TEXT = "Not confirmed. This may or may not have been sent. If it doesn't appear here shortly, put it back in the reply box and send it again.";
+  // A file can't be matched to the thread (messages don't record who sent them, gap G2:
+  // a teammate's photo looks the same), so this note stays until dismissed.
+  const UNKNOWN_MEDIA_TEXT = "Not confirmed. This may or may not have been sent. Check the thread above for it before sending it again, then dismiss this note.";
+  // A page time further than this from the browser's clock is an old page (restored from
+  // history), not a wrong clock: it isn't used, and the first poll measures the clock instead.
+  const STALE_PAGE_MS = 5 * 60 * 1000;
 
   // Posts a send and says what is actually known about it afterwards:
   //   ok       - the server took it;
@@ -29,12 +35,14 @@ function registerChat() {
     const F = window.akFailure;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
-    let r;
+    let r, data;
     try {
       r = await fetch(url, {
         method: 'POST', body: fd, credentials: 'same-origin', signal: ctrl.signal,
         headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
       });
+      // The timeout covers the body too: headers can arrive and the rest stall.
+      data = await r.json().catch((e) => { if (ctrl.signal.aborted) throw e; return null; });
     } catch (e) {
       // Even if the browser now says it is offline, the connection may have gone
       // after the request reached the server.
@@ -42,7 +50,6 @@ function registerChat() {
     } finally {
       clearTimeout(timer);
     }
-    const data = await r.json().catch(() => null);
     if (r.ok && data && data.ok) return { kind: 'ok', data };
     if (!r.ok) {
       const failure = F.describe({ status: r.status }, 'response');
@@ -89,14 +96,34 @@ function registerChat() {
     // Why the last send didn't go, said next to the reply box (it stays until the next
     // send or a dismiss, so it can't be missed the way a toast can).
     sendError: '',
+    // Files and voice notes that never left (offline, or another send in progress), kept
+    // to send when the person chooses. Each has its own notice by the reply box.
+    held: [],
     // 'ok' | 'lost' | 'signedOut': lost once LOST_AFTER polls in a row have failed;
     // signedOut when the server answered with the sign-in page instead.
     connection: 'ok',
     online: navigator.onLine,
     _pollFailures: 0,
-    // How far the server's clock is ahead of this browser's. Sends are stamped in server
-    // time, so matching them to the real message (and sorting) holds on a wrong PC clock.
-    _skew: cfg.serverNow ? new Date(cfg.serverNow).getTime() - Date.now() : 0,
+    // How far the server's clock is ahead of this browser's (first from the page, then from
+    // each poll). Sends are stamped in server time, so matching them to the real message
+    // (and sorting) holds on a wrong PC clock.
+    // Every field a method sets is declared here. Alpine stores a field that isn't on the
+    // component on the outermost x-data instead (base.html's <body x-data>), which every
+    // component on every page shares and which outlives a swapped page: one conversation's
+    // _destroyed then stopped the next one from ever polling.
+    _destroyed: false,
+    _draftKey: '',
+    _unknownKey: '',
+    _fit: null,
+    _onResizeInfo: null,
+    _onVisible: null,
+    _onSseMessage: null,
+    _onOnline: null,
+    _onOffline: null,
+    _skew: (() => {
+      const skew = cfg.serverNow ? new Date(cfg.serverNow).getTime() - Date.now() : 0;
+      return Math.abs(skew) < STALE_PAGE_MS ? skew : 0;
+    })(),
     serverTime() { return new Date(Date.now() + this._skew).toISOString(); },
 
     // "[Photo]" / "[Voice message]" placeholders say nothing once the media itself shows.
@@ -126,9 +153,9 @@ function registerChat() {
         const kept = JSON.parse(sessionStorage.getItem(this._unknownKey) || '[]');
         for (const u of kept) {
           if (!u || !u.body) continue;
-          const arrived = u.media
-            ? this.messages.some((m) => m.direction === 'outbound' && m.media && !m.byAi && new Date(m.ts) >= new Date(u.ts) - 60000)
-            : this.messages.some((m) => m.direction === 'outbound' && !m.byAi && m.body === u.body && new Date(m.ts) >= new Date(u.ts) - 60000);
+          // A file can't be matched (see UNKNOWN_MEDIA_TEXT): its note stays until dismissed.
+          const arrived = !u.media &&
+            this.messages.some((m) => m.direction === 'outbound' && !m.byAi && m.body === u.body && new Date(m.ts) >= new Date(u.ts) - 60000);
           if (!arrived) {
             this.messages.push({ id: u.id, direction: 'outbound', body: u.body, ts: u.ts, status: 'unknown', unknown: true, mediaUnknown: !!u.media, caption: u.caption || '' });
           }
@@ -154,10 +181,10 @@ function registerChat() {
       this.$watch('infoOpen', (open) => {
         if (open && isDrawer()) {
           this.infoDrawer = true;
-          window.akDialog.open(this.$refs.side, { close: () => { this.infoOpen = false; } });
+          if (window.akDialog) window.akDialog.open(this.$refs.side, { close: () => { this.infoOpen = false; } });
         } else if (!open && this.infoDrawer) {
           this.infoDrawer = false;
-          window.akDialog.close(this.$refs.side);
+          if (window.akDialog) window.akDialog.close(this.$refs.side);
         } else if (open) {
           this.infoOpen = false; // wide: the details are already on screen as a column
         }
@@ -187,7 +214,9 @@ function registerChat() {
       this._onOffline = () => { this.online = false; };
       window.addEventListener('online', this._onOnline);
       window.addEventListener('offline', this._onOffline);
-      this.schedule();
+      // An old page (restored from history) has no usable clock: measure it now.
+      const fresh = !cfg.serverNow || Math.abs(new Date(cfg.serverNow).getTime() - Date.now()) < STALE_PAGE_MS;
+      this.schedule(fresh ? undefined : 0);
     },
 
     destroy() {
@@ -278,7 +307,7 @@ function registerChat() {
       // A plain-language reason from apps.whatsapp.friendly_errors, translated
       // server-side at projection time (see docs/plans R0). Falls back if a
       // message somehow has no reason recorded.
-      if (m.unknown) return UNKNOWN_TEXT;
+      if (m.unknown) return m.mediaUnknown ? UNKNOWN_MEDIA_TEXT : UNKNOWN_TEXT;
       return m.failureReason || 'This message could not be delivered.';
     },
 
@@ -307,20 +336,32 @@ function registerChat() {
       // handle is a bug, logged as one, not reported to the user as a lost connection.
       let data = null;
       try {
+        const sent = Date.now();
         const r = await fetch(cfg.feedUrl + '?after=' + this.lastId, {
           credentials: 'same-origin',
           headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
         });
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        // The session ended: the feed was redirected to the sign-in page. Retrying can't
-        // fix that, so it isn't a lost connection; keep checking slowly for a new sign-in.
-        if (r.redirected || !(r.headers.get('Content-Type') || '').includes('json')) {
+        // The session ended: the feed was redirected to the sign-in page itself. Retrying
+        // can't fix that, so it isn't a lost connection; keep checking slowly for a new
+        // sign-in. Any other page that isn't the feed (a proxy's or maintenance page) is a
+        // failed poll like any other.
+        if (r.redirected && cfg.loginUrl && new URL(r.url).pathname === new URL(cfg.loginUrl, location.href).pathname) {
           this.connection = 'signedOut';
+          this._pollFailures = 0;
           this.interval = MAX_INTERVAL;
           this.schedule();
           return;
         }
+        if (!(r.headers.get('Content-Type') || '').includes('json')) throw new Error('not the feed');
         data = await r.json();
+        // The server read its clock somewhere between sending and arriving: the midpoint
+        // is within half the round trip, unlike the page's own estimate, which misses the
+        // time spent rendering and loading the page.
+        if (data && data.serverNow) {
+          const got = Date.now();
+          this._skew = new Date(data.serverNow).getTime() - (sent + got) / 2;
+        }
         this.interval = BASE_INTERVAL;
         this._pollFailures = 0;
         this.connection = 'ok';
@@ -342,17 +383,15 @@ function registerChat() {
         if (known.has(raw.id)) continue;
         if (raw.direction === 'outbound') {
           // The real message replaces its optimistic placeholder.
-          // So does a send whose outcome was unknown: it did go. A file or voice note has no
-          // text to match, so it pairs with the first outbound media message sent after it
-          // was attempted (allowing a minute of clock difference).
+          // So does a send whose outcome was unknown: it did go.
           // Never an AI reply, and only a message created after the attempt (a minute of
           // clock difference allowed). A teammate sending the same words at the same moment
           // can't be told apart: messages don't record which person sent them (gap G2).
+          // A file or voice note is never matched: with no text to compare, a teammate's
+          // photo would pass for this one and hide a send that may not have gone. Its
+          // placeholder waits for the upload's own answer instead.
           const after = (m) => new Date(raw.timestamp) >= new Date(m.ts) - 60000;
-          let i = raw.byAi ? -1 : this.messages.findIndex((m) => (m.pending || m.unknown) && !m.mediaUnknown && m.body === raw.body && after(m));
-          if (i === -1 && raw.media && !raw.byAi) {
-            i = this.messages.findIndex((m) => m.mediaUnknown && after(m));
-          }
+          const i = raw.byAi ? -1 : this.messages.findIndex((m) => (m.pending || m.unknown) && !m.mediaUnknown && !m.mediaPending && m.body === raw.body && after(m));
           if (i !== -1) {
             const wasUnknown = this.messages[i].unknown;
             this.messages.splice(i, 1);
@@ -517,8 +556,25 @@ function registerChat() {
       const s = String(this.recSeconds % 60).padStart(2, '0');
       return m + ':' + s;
     },
+    // A file or voice note that never left (offline, or another send in progress) is kept,
+    // so a recording isn't lost. A refused one isn't: sending it again would be refused
+    // the same way (too large, wrong type, window closed), so the reason is said instead.
+    hold(blob, filename, voice, note) {
+      this.held = this.held.concat([{ id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), blob, filename, voice, note }]);
+    },
+    sendHeld(h) {
+      if (this.sending) return;
+      this.held = this.held.filter((x) => x.id !== h.id);
+      this.uploadMedia(h.blob, h.filename, h.voice);
+    },
+    discardHeld(h) { this.held = this.held.filter((x) => x.id !== h.id); },
     async uploadMedia(blob, filename, voice) {
-      if (this.sending || !this.sendMediaUrl) return;
+      if (!this.sendMediaUrl) return;
+      const what = voice ? 'This voice note' : (filename ? '"' + filename + '"' : 'This file');
+      if (this.sending) {
+        this.hold(blob, filename, voice, what + " wasn't sent yet: the last message was still sending. It's kept here.");
+        return;
+      }
       this.sendError = '';
       const form = this.$refs.composer;
       const fd = new FormData();
@@ -529,10 +585,10 @@ function registerChat() {
       if (caption) fd.set('caption', caption);
       const label = voice ? '[Voice message]' : '[' + (filename || 'File') + ']';
       if (!navigator.onLine) {
-        this.sendError = "You're offline, so " + (voice ? 'the voice note' : 'the file') + " wasn't sent.";
+        this.hold(blob, filename, voice, what + " wasn't sent: you're offline. It's kept here; send it once you're back online.");
         return;
       }
-      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: this.serverTime(), status: '', pending: true };
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: this.serverTime(), status: '', pending: true, mediaPending: true };
       this.messages.push(pending);
       if (caption) this.draft = '';
       this.$nextTick(() => this.scrollBottom());
@@ -545,7 +601,8 @@ function registerChat() {
           this.schedule(300);
         } else if (out.kind === 'unknown') {
           // The file can't be put back, so the bubble stays to say what is known, and is
-          // kept across a reload: it may not have gone. Only a caption can be put back.
+          // kept across a reload until dismissed: it may not have gone, and it can't be
+          // matched to the thread (see apply). Only a caption can be put back.
           // Replaced through the reactive array (not by mutating the object pushed earlier,
           // which Alpine would not notice), so the bubble re-renders as Not confirmed.
           const i = this.messages.findIndex((m) => m.id === pending.id);
@@ -609,14 +666,15 @@ function registerChat() {
         this.collisionAck = true;
         return;
       }
-      this.collision = '';
-      this.collisionAck = false;
       this.sendError = '';
       if (!navigator.onLine) {
-        // Nothing left the browser, so the reply simply stays in the box.
+        // Nothing left the browser, so the reply simply stays in the box (and the warning
+        // about the other reply stays acknowledged, not dismissed: nothing was sent).
         this.sendError = "You're offline, so this wasn't sent. Your reply is still in the box.";
         return;
       }
+      this.collision = '';
+      this.collisionAck = false;
       const form = this.$refs.composer;
       const fd = new FormData(form);
       fd.set('body', body);
@@ -661,6 +719,7 @@ function registerChat() {
    * chat component can still read the conversation's own `open` flag. */
   Alpine.data('cvMenu', () => ({
     menuOpen: false,
+    _outside: null, // declared: see chat's note on undeclared fields
     init() {
       this._outside = (e) => { if (this.menuOpen && !this.$el.contains(e.target)) this.menuOpen = false; };
       document.addEventListener('click', this._outside, true);
@@ -711,6 +770,8 @@ function registerChat() {
   };
 
   Alpine.data('voiceNote', (url, seed) => ({
+    _onOther: null, // declared: see chat's note on undeclared fields
+    _raf: null,
     url,
     playing: false,
     current: 0,

@@ -2,11 +2,11 @@
 What this post brought in, per channel. Expects ``results`` from apps.publishing.results.
 {% endcomment %}
 {% if results %}
-<div class="card card-pad space-y-3">
-  <h2 class="font-semibold text-ink">Results</h2>
+<section class="card card-pad space-y-4" aria-labelledby="pd-results">
+  <h2 id="pd-results" class="pd-section-title">Results</h2>
   {% for r in results %}
-  <div class="rounded-lg border border-border p-3 space-y-3">
-    <p class="text-sm font-medium text-ink">{{ r.channel }}</p>
+  <div class="space-y-3{% if not forloop.first %} pt-4 border-t border-border{% endif %}">
+    {% include "components/channel_tag.html" with channel=r.variant.platform %}
 
     {% if r.link %}
     <div class="space-y-1" x-data="{ copied: false }">
@@ -24,26 +24,26 @@ What this post brought in, per channel. Expects ``results`` from apps.publishing
     </div>
     {% endif %}
 
-    <dl class="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-3">
-      <div>
+    <dl class="pd-stats grid-cols-3 sm:grid-cols-5">
+      <div class="pd-stat">
         <dt class="text-xs text-ink-subtle" title="Times people opened the chat link (link previews and bots aren't counted)">Link clicks</dt>
-        <dd class="text-sm font-semibold tabular-nums">{% if r.link %}{{ r.clicks }}{% else %}—{% endif %}</dd>
+        <dd>{% if r.link %}{{ r.clicks }}{% else %}—{% endif %}</dd>
       </div>
-      <div>
+      <div class="pd-stat">
         <dt class="text-xs text-ink-subtle" title="Chats started from this post's link{% if r.variant.platform == 'instagram' %} or from a reply to a comment on it{% endif %}">Chats</dt>
-        <dd class="text-sm font-semibold tabular-nums">{{ r.chats }}</dd>
+        <dd>{{ r.chats }}</dd>
       </div>
-      <div>
+      <div class="pd-stat">
         <dt class="text-xs text-ink-subtle">Leads</dt>
-        <dd class="text-sm font-semibold tabular-nums">{{ r.leads }}</dd>
+        <dd>{{ r.leads }}</dd>
       </div>
-      <div>
+      <div class="pd-stat">
         <dt class="text-xs text-ink-subtle">Orders</dt>
-        <dd class="text-sm font-semibold tabular-nums">{{ r.orders }}</dd>
+        <dd>{{ r.orders }}</dd>
       </div>
-      <div>
+      <div class="pd-stat">
         <dt class="text-xs text-ink-subtle">Paid</dt>
-        <dd class="text-sm font-semibold tabular-nums">
+        <dd>
           {% for row in r.revenue %}{{ row.currency }} {{ row.total }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}
         </dd>
       </div>
@@ -51,5 +51,5 @@ What this post brought in, per channel. Expects ``results`` from apps.publishing
   </div>
   {% endfor %}
   <p class="text-xs text-ink-subtle">Only chats that used this post's link{% if 'instagram' in post.platforms %} or came from a reply to a comment on it{% endif %} are counted. Customers who found you another way aren't, so the real total can be higher.</p>
-</div>
+</section>
 {% endif %}

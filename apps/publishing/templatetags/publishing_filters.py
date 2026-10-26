@@ -93,6 +93,16 @@ def first_media(post):
 
 
 @register.filter
+def post_headline(post):
+    """A post's name on its own page: the caption's first line, shortened."""
+    for line in (post.caption or "").splitlines():
+        line = line.strip()
+        if line:
+            return line if len(line) <= 80 else line[:79].rstrip() + "…"
+    return "Untitled post"
+
+
+@register.filter
 def platform_display_name(platform):
     """Return user-friendly platform name."""
     names = {
@@ -122,11 +132,14 @@ def publication_url_for_variant(variant):
 @register.filter
 def variant_error_message(variant):
     """Return human-readable error message for variant."""
-    if not variant.last_error:
+    error_msg = (variant.last_error or "").strip()
+    if not error_msg:
         return ""
 
     error_type = variant.last_error_type
-    error_msg = variant.last_error.rstrip(" .")
+    # The provider's own sentence, ended once: "failed!" stays as it is, "(code 190)" gets a
+    # full stop, and nothing ends up with "!." or "..".
+    said = error_msg if error_msg.endswith((".", "!", "?")) else error_msg + "."
 
     # What happened, in the customer's words, and the next step. Nothing here promises an
     # automatic retry: a failed channel stays failed until someone retries it (a provider
@@ -135,19 +148,17 @@ def variant_error_message(variant):
     starts = channel[:1].upper() + channel[1:]  # the same name opening a sentence
     if error_type == "timeout":
         return (
-            f"{error_msg}. {starts} didn't answer in time, so it may already be live. "
+            f"{said} {starts} didn't answer in time, so it may already be live. "
             f"Check it on {channel} before trying again."
         )
     if error_type == "permission":
-        return f"{error_msg}. Reconnect {channel} in Channels, then try again."
+        return f"{said} Reconnect {channel} in Channels, then try again."
     if error_type == "rate_limit":
-        return (
-            f"{error_msg}. {starts} asked us to slow down. Try again in a few minutes."
-        )
+        return f"{said} {starts} asked us to slow down. Try again in a few minutes."
     if error_type == "provider_outage":
-        return f"{error_msg}. {starts} had a problem on its side. Try again later."
+        return f"{said} {starts} had a problem on its side. Try again later."
     if error_type == "validation":
-        return f"{error_msg}. Change the post to fix this, then try again."
+        return f"{said} Change the post to fix this, then try again."
     return error_msg
 
 

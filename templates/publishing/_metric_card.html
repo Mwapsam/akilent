@@ -4,9 +4,9 @@ One published channel's performance numbers. A metric with no number shows "—"
 reason, never 0. Expects ``variant`` (a published ContentPostVariant).
 {% endcomment %}
 {% with perf=variant|variant_performance %}
-<div class="rounded-lg border border-border p-3 space-y-3">
+<div class="space-y-3 pt-1">
   <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <p class="text-sm font-medium text-ink">{{ perf.channel }}</p>
+    {% include "components/channel_tag.html" with channel=variant.platform %}
     <p class="text-xs text-ink-subtle">
       {% if perf.collected_at %}
         Updated {{ perf.collected_at|timesince }} ago{% if perf.stale %} · <span class="tone-amber-fg">may be out of date</span>{% endif %}{% if perf.finished %} · final numbers{% endif %}
@@ -18,17 +18,17 @@ reason, never 0. Expects ``variant`` (a published ContentPostVariant).
     </p>
   </div>
 
-  <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+  <dl class="pd-stats sm:grid-cols-4">
     {% for row in perf.rows %}
-    <div>
-      <dt class="text-xs text-ink-subtle" title="{{ row.definition }}">
+    <div class="pd-stat">
+      <dt title="{{ row.definition }}">
         {{ row.label }}
         <span class="sr-only">: {{ row.definition }}</span>
       </dt>
       {% if row.value is not None %}
-      <dd class="text-sm font-semibold tabular-nums">{{ row.value }}</dd>
+      <dd>{{ row.value }}</dd>
       {% else %}
-      <dd class="text-sm font-semibold text-ink-subtle" title="{{ row.reason }}">—<span class="sr-only"> ({{ row.reason }})</span></dd>
+      <dd class="!text-ink-subtle" title="{{ row.reason }}">—<span class="sr-only"> ({{ row.reason }})</span></dd>
       {% endif %}
     </div>
     {% endfor %}

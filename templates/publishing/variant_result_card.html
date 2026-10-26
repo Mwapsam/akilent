@@ -1,29 +1,20 @@
-{# Per-variant/channel publication result card #}
 {% load publishing_filters %}
-
-<div class="card card-pad space-y-2 border-l-4
-  {% if variant.status == 'published' %}tone-teal-border
-  {% elif variant.status == 'failed' %}tone-coral-border
-  {% elif variant.status in 'reconciling,publishing,processing' %}tone-amber-border
-  {% elif variant.status == 'scheduled' %}tone-info-border
-  {% else %}border-border{% endif %}">
-
-  {# Platform name + Status #}
+{% comment %}One channel of a post, as a row in the post page's Channels card: its status,
+its own time, where it went, and what to do if it didn't (reschedule, resolve, retry).
+Expects ``variant`` and ``post``.{% endcomment %}
+<div class="pd-channel px-5 py-4 space-y-2.5">
   <div class="flex items-center justify-between gap-2">
-    <div class="flex items-center gap-2">
-      <p class="font-medium text-sm">{{ variant.platform|platform_display_name }}</p>
-      {{ variant|variant_status_badge }}
-    </div>
-    {% if variant.last_attempt_at %}
-    <p class="text-xs text-ink-subtle">{{ variant.last_attempt_at|timesince }} ago</p>
-    {% endif %}
+    {% include "components/channel_tag.html" with channel=variant.platform %}
+    {{ variant|variant_status_badge }}
   </div>
 
   {# This channel's own time #}
   {% if variant.status == 'scheduled' and variant.scheduled_at %}
-  <p class="text-sm text-ink-subtle">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
+  <p class="text-sm text-ink-muted">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
   {% elif variant.status == 'published' and variant.published_at %}
-  <p class="text-xs text-ink-subtle">Published {{ variant.published_at|date:"N j, H:i" }}</p>
+  <p class="text-sm text-ink-muted">Published {{ variant.published_at|date:"D N j, H:i" }}</p>
+  {% elif variant.last_attempt_at %}
+  <p class="text-xs text-ink-subtle">Last tried {{ variant.last_attempt_at|timesince }} ago</p>
   {% endif %}
   {% if variant.status == 'draft' and variant.last_error %}
   <p class="text-xs text-ink-subtle">{{ variant.last_error }}</p>
@@ -36,55 +27,43 @@
     <label for="reschedule-{{ variant.platform }}" class="sr-only">New time for {{ variant.platform|platform_display_name }}</label>
     <input type="datetime-local" name="scheduled_at" id="reschedule-{{ variant.platform }}" required
            value="{% if variant.scheduled_at %}{{ variant.scheduled_at|date:'Y-m-d\TH:i' }}{% endif %}"
-           class="input w-full sm:w-56">
-    <button type="submit" class="btn btn-ghost text-xs">{% if variant.status == 'scheduled' %}Change time{% else %}Schedule this channel{% endif %}</button>
+           class="input min-w-0 flex-1">
+    <button type="submit" class="btn btn-secondary btn-sm">{% if variant.status == 'scheduled' %}Change time{% else %}Schedule this channel{% endif %}</button>
   </form>
   {% endif %}
 
   {# Publication URL (if successful) #}
   {% if variant.status == 'published' and variant.publication_url|slice:":8" == "https://" or variant.status == 'published' and variant.publication_url|slice:":7" == "http://" %}
   <a href="{{ variant.publication_url }}" target="_blank" rel="noopener"
-     class="inline-flex items-center gap-1 text-sm text-accent hover:underline">
+     class="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
     View on {{ variant.platform|platform_display_name }}
     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
   </a>
   {% endif %}
 
-  {# Publication ID (metadata) #}
-  {% if variant.publication_id and variant.status == 'published' %}
-  <p class="text-xs text-ink-subtle">ID: {{ variant.publication_id }}</p>
-  {% endif %}
-
   {% if variant.status == 'reconciling' %}
-  <div class="tone-amber-bg tone-amber-border border rounded p-2 space-y-1">
-    <p class="text-sm text-ink">We couldn't confirm whether this was published. Check {{ variant.platform|platform_display_name }}, then resolve it so it isn't posted twice.</p>
-    {% if variant.last_error %}<p class="text-xs text-ink-subtle">{{ variant|variant_error_message }}</p>{% endif %}
+  <div class="alert alert-warning !p-3 !text-ink flex-col !gap-1">
+    <p class="text-sm">We couldn't confirm whether this was published. Check {{ variant.platform|platform_display_name }}, then resolve it so it isn't posted twice.</p>
+    {% if variant.last_error %}<p class="text-xs text-ink-muted">{{ variant|variant_error_message }}</p>{% endif %}
     <a href="{% url 'publishing:reconciliation-queue' %}" class="inline-block text-sm font-medium text-accent hover:underline">Resolve in Needs check →</a>
   </div>
   {% elif variant.last_error and variant.status == 'failed' %}
-  <div class="tone-coral-bg tone-coral-border border rounded p-2 space-y-1">
-    <p class="text-xs font-medium tone-coral-fg">Error</p>
-    <p class="text-xs tone-coral-fg">{{ variant|variant_error_message }}</p>
+  <div class="alert alert-danger !p-3 flex-col !gap-0.5">
+    <p class="text-xs font-semibold">Why it failed</p>
+    <p class="text-sm break-words">{{ variant|variant_error_message }}</p>
   </div>
   {% endif %}
 
-  {# Retry controls #}
   {% if variant|is_variant_retryable %}
-  <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}" class="mt-2">
+  <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}">
     {% csrf_token %}
-    <button type="submit" class="btn btn-ghost text-xs tone-coral-fg hover:tone-coral-bg">
-      Retry this channel
-    </button>
+    <button type="submit" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry this channel</button>
   </form>
   {% endif %}
 
-  {# Metadata: attempt count, error type #}
-  {% if variant.attempt_count > 0 %}
-  <div class="text-xs text-ink-subtle mt-2 pt-2 border-t border-border">
-    <p>{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}</p>
-    {% if variant.last_error_type %}
-    <p>Error type: {{ variant.get_last_error_type_display }}</p>
-    {% endif %}
-  </div>
+  {% if variant.attempt_count > 0 or variant.publication_id and variant.status == 'published' %}
+  <p class="text-xs text-ink-subtle">
+    {% if variant.attempt_count > 0 %}{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}{% if variant.last_error_type %} · {{ variant.get_last_error_type_display }}{% endif %}{% endif %}{% if variant.publication_id and variant.status == 'published' %}{% if variant.attempt_count > 0 %} · {% endif %}ID {{ variant.publication_id }}{% endif %}
+  </p>
   {% endif %}
 </div>

@@ -594,6 +594,24 @@ def publishing_calendar(request):
             ],
             "today": today,
             "week_has_content": any(items or posts for _, items, posts in week_days),
+            # The line under the week's dates: what is in it, at a glance.
+            # Posts, not calendar entries: a post with a different time per channel is
+            # one post on several days, and counts once (failed if any channel failed).
+            "week_summary": {
+                "posts": len(
+                    {e["post"].pk for _, _, posts in week_days for e in posts}
+                ),
+                "planned": sum(len(items) for _, items, _ in week_days),
+                "failed": len(
+                    {
+                        e["post"].pk
+                        for _, _, posts in week_days
+                        for e in posts
+                        if e["status"] == ContentPost.Status.FAILED
+                    }
+                ),
+            },
+            "same_month": week_start.month == week_end.month,
         },
     )
 

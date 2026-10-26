@@ -683,12 +683,25 @@
     const target = detail.target || detail.elt;
     return target && target.closest ? target.closest("[data-error-region]") : null;
   }
+  // Only reads take a turn: a form posted inside the region (assign, tags) must not make
+  // the region's own load look superseded, and a mutation's failure is always said.
   document.addEventListener("htmx:beforeRequest", function (e) {
     const region = errorRegion(e.detail);
     if (!region) return;
+    const verb = ((e.detail.requestConfig && e.detail.requestConfig.verb) || "get").toLowerCase();
+    if (verb !== "get") return;
     const seq = (regionSeq.get(region) || 0) + 1;
     regionSeq.set(region, seq);
     if (e.detail.xhr) e.detail.xhr._akSeq = seq;
+  });
+  // A mutation whose answer has actually re-rendered the region is newer than any read
+  // still out: that read's late failure must not wipe what the mutation just showed. (One
+  // still in flight doesn't count, see above; nor does one whose answer was dropped.)
+  document.addEventListener("htmx:afterSwap", function (e) {
+    const region = errorRegion(e.detail);
+    if (!region) return;
+    const verb = ((e.detail.requestConfig && e.detail.requestConfig.verb) || "get").toLowerCase();
+    if (verb !== "get") regionSeq.set(region, (regionSeq.get(region) || 0) + 1);
   });
   function describeFailure(xhr, kind) {
     const status = xhr ? xhr.status : 0;
@@ -859,7 +872,7 @@
     if (!el || !xhr || !el.hasAttribute || !el.hasAttribute("data-auto-refresh")) return;
     const ev = (e.detail.requestConfig || {}).triggeringEvent;
     const listed = (el.getAttribute("data-auto-refresh") || "").split(/\s+/).filter(Boolean);
-    const own = ev === undefined || ev === null || ev === el;
+    const own = ev == null; // htmx's own trigger (every/poll/load): no event at all
     const pushed = ev instanceof Event && !ev.isTrusted &&
       (ev.type.indexOf("sse:") === 0 || listed.indexOf(ev.type) !== -1);
     if (own || pushed) xhr._akAuto = true;
@@ -1039,9 +1052,13 @@
   });
   if (document.startViewTransition && !document.startViewTransition.__ak) {
     const startVT = document.startViewTransition.bind(document);
+    let latest = null;
     document.startViewTransition = function () {
       const t = startVT.apply(document, arguments);
-      const done = function () { document.documentElement.classList.remove("ak-page-vt"); };
+      latest = t;
+      // Only the newest transition takes the name off: an earlier one, skipped because a
+      // second navigation started, finishes while the second is still running.
+      const done = function () { if (latest === t) document.documentElement.classList.remove("ak-page-vt"); };
       if (t && t.finished) t.finished.then(done, done); else done();
       return t;
     };

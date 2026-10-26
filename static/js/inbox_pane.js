@@ -198,7 +198,10 @@
       if (!cfg) return;
       if (!isPaneLoad(e.detail)) {
         var xhr = e.detail.xhr;
-        if (xhr && xhr._akPaneEpoch !== undefined && xhr._akPaneEpoch !== paneEpoch) e.detail.shouldSwap = false;
+        // Also while another conversation is loading: the pane is about to be replaced, and
+        // if that load fails, its error must be what the pane shows, not the old form's answer.
+        if (xhr && xhr._akPaneEpoch !== undefined &&
+            (xhr._akPaneEpoch !== paneEpoch || split.classList.contains("is-loading"))) e.detail.shouldSwap = false;
         return;
       }
       if (!split.dataset.open || pathOf(cfg.path) !== pathOf(split.dataset.open)) e.detail.shouldSwap = false;

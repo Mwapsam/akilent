@@ -77,6 +77,7 @@ const chat = (expr) => evaluate(`(() => { const c = Alpine.$data(document.queryS
 
 // ---- Network interception: no POST leaves the browser (nothing is sent to a customer). ----
 let rules = [];
+const T0 = Date.now();
 const log = [];
 ws.addEventListener("message", async (ev) => {
   const msg = JSON.parse(ev.data);
@@ -84,9 +85,10 @@ ws.addEventListener("message", async (ev) => {
   const { requestId, request } = msg.params;
   const rule = rules.find((r) => r.match(request));
   const act = rule ? rule.act : (request.method === "POST" ? { status: 200, body: { ok: true } } : null);
-  log.push(`${request.method} ${new URL(request.url).pathname} -> ${act ? (act.fail || act.status) : "pass"}`);
+  log.push(`${((Date.now() - T0) / 1000).toFixed(1)}s ${request.method} ${new URL(request.url).pathname} -> ${act ? (act.fail || act.status || (act.slowHtml && "slow") || (act.delayFail && "delayFail")) : "pass"}`);
   try {
-    if (act && act.slowHtml) { await sleep(act.slowHtml); await send("Fetch.fulfillRequest", { requestId, responseCode: 200,
+    if (act && act.delayFail) { await sleep(act.delayFail); await send("Fetch.failRequest", { requestId, errorReason: "ConnectionRefused" }); }
+    else if (act && act.slowHtml) { await sleep(act.slowHtml); await send("Fetch.fulfillRequest", { requestId, responseCode: act.status || 200,
       responseHeaders: [{ name: "Content-Type", value: "text/html" }], body: Buffer.from(act.html).toString("base64") }); }
     else if (act && act.delay) { await sleep(act.delay); await send("Fetch.continueRequest", { requestId }); }
     else if (!act) await send("Fetch.continueRequest", { requestId });
@@ -98,6 +100,8 @@ ws.addEventListener("message", async (ev) => {
 });
 
 await send("Page.enable"); await send("Runtime.enable");
+// Always the current scripts and styles: a cached copy would test old code.
+await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
 await go("/auth/login/");
 const login = once("Page.loadEventFired");
 await evaluate(`(() => { const f=document.querySelector('input[type=password]').form; f.querySelector('input[name=username]').value=${JSON.stringify(env.QA_UI_EMAIL)};
@@ -317,7 +321,10 @@ await sleep(1800);
 await chat("(c.draft = 'QA draft kept across panes')");
 await sleep(200);
 await send("Runtime.evaluate", { expression: "history.back()" });
-await sleep(1800);
+for (let waited = 0; waited < 6000; waited += 300) {
+  await sleep(300);
+  if (await evaluate("location.pathname === '/inbox/' && !!document.querySelector('.inbox-list')")) break;
+}
 st = { path: await evaluate("location.pathname"), list: await evaluate("!!document.querySelector('.inbox-list')") };
 check("phone.back-returns-to-list", st.path === "/inbox/" && st.list, st);
 await clickSel(`.inbox-row[href="${detailPath}"]`);
@@ -398,8 +405,9 @@ st = { fail: await visible("#conversation-pane-inner .cv-fail.is-unknown"), m: a
 check("media.unknown-renders", st.m.length === 1 && !st.m[0].pending && st.fail.some((t) => t.includes("Not confirmed") && t.includes("Dismiss") && !t.includes("Put back")), st);
 await chat(`c.apply({ messages: [{ id: 99999998, direction: 'outbound', body: '', timestamp: new Date().toISOString(), status: 'sent', media: { state: 'ready', kind: 'image', url: '/static/favicon.ico' } }], statuses: {}, open: true })`);
 await sleep(200);
-st = await chat("c.messages.filter(m => m.mediaUnknown).length");
-check("media.unknown-reconciles", st === 0, st);
+st = { left: await chat("c.messages.filter(m => m.mediaUnknown).length"), text: await visible("#conversation-pane-inner .cv-fail.is-unknown") };
+check("media.unknown-not-matched-to-any-file", st.left === 1 && st.text.some((t) => t.includes("Check the thread above")), st);
+await chat("(c.messages.filter(m => m.mediaUnknown).forEach(m => c.dismissUnknown(m)), c.messages = c.messages.filter(m => m.id !== 99999998), 0)");
 
 // 16. Closing the pane (Back to the inbox) while a load is in flight: the late answer never
 // lands and pushes no history entry.
@@ -540,11 +548,15 @@ await chat("(c._skew = 0, c.messages = c.messages.filter(m => m.id !== 99999996)
 
 // S2. A poll answered by the sign-in page says the user is signed out, not "Not connected",
 // and clears once the feed answers again.
-rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === fp, act: { status: 200, html: "<!doctype html><title>Sign in</title><form></form>" } }];
+const loginPath = await chat("new URL(JSON.parse(document.querySelector('#conversation-pane-inner #chat-config, #chat-config').textContent).loginUrl, location.href).pathname");
+rules = [
+  { match: (r) => r.method === "GET" && new URL(r.url).pathname === fp, act: { status: 302, html: "", headers: [{ name: "Location", value: loginPath + "?next=/inbox/" }] } },
+  { match: (r) => r.method === "GET" && new URL(r.url).pathname === loginPath, act: { status: 200, html: "<!doctype html><title>Sign in</title><form></form>" } },
+];
 await chat("c.checkNow()");
 await sleep(1500);
 st = await visible(".cv-conn");
-check("thread.signed-out-said", st.length === 1 && st[0].startsWith("You've been signed out"), st);
+check("thread.signed-out-said", st.length === 1 && st[0].startsWith("You've been signed out"), { st, loginPath });
 rules = [];
 await chat("c.checkNow()");
 await sleep(1500);
@@ -582,6 +594,129 @@ await sleep(3500);
 rules = [];
 st = { path: await evaluate("location.pathname"), stale: await evaluate("!!document.getElementById('qa-stale')"), loaded: !!(await paneId()) };
 check("pane.stale-form-during-load-dropped", st.path === sh[2] && !st.stale && st.loaded, st);
+
+// ---- Review round 4 (T1 revised in round 5) ----
+// T1. Someone's file message showing up while this upload is still out is not taken for it
+// (it may be a teammate's): the upload's own answer decides, here Not confirmed.
+const mp2 = await evaluate("new URL(JSON.parse(document.querySelector('#conversation-pane-inner #chat-config').textContent).sendMediaUrl, location.href).pathname");
+rules = [{ match: (r) => r.method === "POST" && new URL(r.url).pathname === mp2, act: { slowHtml: 1500, status: 504, html: "timeout" } }];
+await chat("(c.uploadMedia(new Blob(['x'], { type: 'image/png' }), 'qa-late.png', false), 0)");
+await sleep(300);
+await chat(`c.apply({ messages: [{ id: 99999995, direction: 'outbound', body: '', timestamp: c.serverTime(), status: 'sent', media: { state: 'ready', kind: 'image', url: '/static/favicon.ico' } }], statuses: {}, open: true })`);
+await sleep(2000);
+rules = [];
+st = await chat("({ unknown: c.messages.filter(m => m.mediaUnknown).length, pending: c.messages.filter(m => m.mediaPending && m.pending).length, sending: c.sending })");
+check("media.upload-not-paired-with-another-file", st.unknown === 1 && st.pending === 0 && !st.sending, st);
+await chat("(c.messages.filter(m => m.mediaUnknown).forEach(m => c.dismissUnknown(m)), c.messages = c.messages.filter(m => m.id !== 99999995), 0)");
+
+// T2. A reply whose answer stalls after the headers still ends: Not confirmed, and the box
+// works again (the send timeout covers the body).
+await chat(`(() => { window.__realFetch = window.fetch; window.fetch = (u, o) => (o && o.method === 'POST' && o.body instanceof FormData && o.body.get('body') === 'QA stalled body')
+  ? Promise.resolve({ ok: true, status: 200, redirected: false, json: () => new Promise((_, rej) => o.signal.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))) })
+  : window.__realFetch(u, o); return 0; })()`);
+await typeAndSend("QA stalled body");
+await sleep(31500);
+await evaluate("window.fetch = window.__realFetch");
+st = await chat("({ sending: c.sending, m: c.messages.filter(m => m.body === 'QA stalled body').map(m => ({ unknown: !!m.unknown, pending: !!m.pending })) })");
+check("send.stalled-body-times-out", !st.sending && st.m.length === 1 && st.m[0].unknown && !st.m[0].pending, st);
+await chat("c.dismissUnknown(c.messages.find(m => m.body === 'QA stalled body'))");
+
+// T3. Offline: a voice note isn't thrown away; it is kept and can be sent once back online.
+await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await sleep(300);
+await chat("(c.uploadMedia(new Blob(['x'], { type: 'audio/webm' }), 'voice-note.webm', true), 0)");
+await sleep(300);
+st = { held: await chat("c.held.length === 1 && c.held[0].voice"), shown: await visible("#conversation-pane-inner .cv-send-error") };
+check("voice.offline-kept", st.held && st.shown.some((t) => t.includes("Send voice note") && t.includes("Discard")), st);
+await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await sleep(500);
+await chat("c.sendHeld(c.held[0])");
+await sleep(1200);
+st = await chat("({ held: c.held.length, err: c.sendError, sending: c.sending })");
+check("voice.held-sends-when-online", st.held === 0 && !st.err && !st.sending, st);
+
+// T4. Pressing Send offline keeps the "someone else just replied" warning: nothing was sent.
+await chat("(c.collision = 'A reply was just sent in this conversation.', c.collisionAck = false, c.draft = 'QA collide', 0)");
+await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await sleep(300);
+await chat("c.send()"); await chat("c.send()");
+st = await chat("({ collision: c.collision, ack: c.collisionAck, draft: c.draft })");
+check("send.offline-keeps-collision-warning", !!st.collision && st.ack && st.draft === "QA collide", st);
+await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await chat("(c.collision = '', c.collisionAck = false, c.draft = '', c.sendError = '')");
+
+// T5. A form posted inside the pane while the next conversation loads doesn't hide that
+// load's failure: the pane says so in place, and the list stays.
+await sleep(500);
+rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === sh[0], act: { delayFail: 1200 } }];
+await clickSel(`.inbox-row[href="${sh[0]}"]`); await sleep(100);
+await evaluate("document.getElementById('conversation-add-tag') && (document.getElementById('conversation-add-tag').value = 'qa-during-fail', document.getElementById('conversation-add-tag').form.requestSubmit())");
+await sleep(2500);
+rules = [];
+st = await evaluate(`(() => ({ path: location.pathname, split: !!document.getElementById('inbox-split'), err: !!document.querySelector('#conversation-pane-inner [data-error-state]') }))()`);
+check("pane.load-failure-said-despite-form", st.split && st.err, st);
+
+// ---- Review round 5 ----
+// T5 left the pane on its error state: open a conversation to work in, and use its own
+// feed and upload URLs (the ones above belong to other conversations).
+await clickSel(`.inbox-row[href="${sh[1]}"]`);
+await sleep(2000);
+const cfg5 = await evaluate("JSON.parse(document.querySelector('#conversation-pane-inner #chat-config').textContent)");
+const fp5 = new URL(cfg5.feedUrl, "http://x").pathname;
+const mp5 = new URL(cfg5.sendMediaUrl, "http://x").pathname;
+// A conversation opened after another one was closed still polls (undeclared fields used to
+// land on <body x-data>, so the closed one's _destroyed stopped every later one).
+const pollsBefore = log.filter((l) => l.includes(fp5)).length;
+await sleep(7000);
+st = { destroyed: await chat("c._destroyed"), timer: await chat("!!c.timer"), polls: log.filter((l) => l.includes(fp5)).length - pollsBefore, bodyHas: await evaluate("'_destroyed' in Alpine.$data(document.body)") };
+check("pane.next-conversation-polls", !st.destroyed && st.timer && st.polls >= 1 && !st.bodyHas, st);
+// U1. A kept voice note stays reachable after a text reply is sent, and a second kept file
+// doesn't replace it.
+await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await sleep(300);
+await chat("(c.uploadMedia(new Blob(['x'], { type: 'audio/webm' }), 'voice-note.webm', true), c.uploadMedia(new Blob(['y'], { type: 'image/png' }), 'qa-b.png', false), 0)");
+await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+await sleep(500);
+await typeAndSend("QA text after a kept voice note");
+await sleep(1200);
+st = { held: await chat("c.held.map(h => h.voice ? 'voice' : h.filename)"), shown: await visible("#conversation-pane-inner .cv-send-error") };
+check("held.survives-text-send-and-second-file", st.held.length === 2 && st.held[0] === "voice" && st.shown.filter((t) => t.includes("Discard")).length === 2, st);
+await chat("(c.held = [], 0)");
+
+// U2. A refused file is not kept for a retry that would be refused again: its reason is said.
+rules = [{ match: (r) => r.method === "POST" && new URL(r.url).pathname === mp5, act: { status: 400, body: { ok: false, error: "This file type can't be sent." } } }];
+await chat("(c.uploadMedia(new Blob(['x'], { type: 'application/x-msdownload' }), 'qa.exe', false), 0)");
+await sleep(1200);
+rules = [];
+st = await chat("({ held: c.held.length, err: c.sendError })");
+check("upload.refused-not-held", st.held === 0 && st.err.includes("can't be sent"), st);
+await chat("(c.sendError = '', 0)");
+
+// U3. A page that isn't the feed (a proxy's or maintenance page) is a failed poll, not
+// "signed out".
+rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === fp5, act: { status: 200, html: "<!doctype html><title>Maintenance</title>" } }];
+await chat("c.checkNow()");
+await sleep(9000);
+st = { now: ((Date.now() - T0) / 1000).toFixed(1), conn: await visible(".cv-conn"), state: await chat("({ connection: c.connection, failures: c._pollFailures, interval: c.interval, sending: c.sending, destroyed: !!c._destroyed, cvs: document.querySelectorAll('.cv').length })"), feed: log.filter((l) => l.includes("/messages/")).slice(-8) };
+rules = [];
+check("thread.other-page-not-signed-out", st.conn.length === 1 && st.conn[0].startsWith("Not connected"), st);
+await chat("c.checkNow()");
+await sleep(1500);
+
+// U4. A mutation that re-rendered a region beats an older read failing late: the fresh
+// content stays, no error state replaces it.
+rules = [
+  { match: (r) => new URL(r.url).pathname === "/qa-slow-read/", act: { delayFail: 1500 } },
+  { match: (r) => new URL(r.url).pathname === "/qa-write/", act: { status: 200, html: "<p id=\"qa-fresh\">fresh</p>" } },
+];
+await evaluate(`(() => { const r = document.createElement('div'); r.id = 'qa-region'; r.setAttribute('data-error-region', ''); r.innerHTML = '<p>old</p>'; document.body.appendChild(r);
+  const a = document.createElement('div'); a.id = 'qa-src-a'; const b = document.createElement('div'); b.id = 'qa-src-b'; document.body.append(a, b);
+  htmx.ajax('GET', '/qa-slow-read/', { source: a, target: '#qa-region', swap: 'innerHTML' }).catch(() => {});
+  setTimeout(() => htmx.ajax('POST', '/qa-write/', { source: b, target: '#qa-region', swap: 'innerHTML' }), 200); return 0; })()`);
+await sleep(2600);
+rules = [];
+st = await evaluate("({ fresh: !!document.getElementById('qa-fresh'), err: !!document.querySelector('#qa-region [data-error-state]') })");
+check("region.write-beats-late-read-failure", st.fresh && !st.err, st);
 
 writeFileSync(join(outDir, "inbox_qa_results.json"), JSON.stringify({ results, log: log.slice(-80) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

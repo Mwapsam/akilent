@@ -1,0 +1,3 @@
+{% load publishing_filters %}{% comment %}The channels a post goes to, as small icons with their names for screen readers.
+  {% include "publishing/_platform_icons.html" with platforms=entry.platforms %}{% endcomment %}
+<span class="cal-icons">{% for p in platforms %}{% if p == "email" %}{% include "components/icon.html" with name="mail" %}{% else %}{% include "components/icon.html" with name=p %}{% endif %}<span class="sr-only">{{ p|platform_display_name }}{% if not forloop.last %}, {% endif %}</span>{% endfor %}</span>
