@@ -10,7 +10,7 @@
         {{ summary }}{% if rule.keywords %}: <span class="font-mono text-xs">{{ rule.keywords }}</span>{% endif %}
         {% if badge %}<span class="badge badge-neutral ml-1 text-xs">{{ badge }}</span>{% endif %}
       </p>
-      <p class="mt-1 text-sm text-gray-500 break-words">{{ detail }}</p>
+      <p class="mt-1 text-sm text-ink-subtle break-words">{{ detail }}</p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
       <a href="{% url 'instagram-comment-rule-edit' kind rule.pk %}" class="btn btn-secondary btn-sm">Edit</a>
@@ -20,7 +20,7 @@
       </form>
       <form method="post" action="{% url 'instagram-comment-rule-delete' kind rule.pk %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost btn-sm text-red-600" data-confirm="Delete this rule?" data-confirm-danger data-confirm-label="Delete">Delete</button>
+        <button type="submit" class="btn btn-danger-ghost btn-sm" data-confirm="Delete this rule?" data-confirm-danger data-confirm-label="Delete">Delete</button>
       </form>
     </div>
   </div>

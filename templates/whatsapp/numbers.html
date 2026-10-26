@@ -37,7 +37,7 @@
     {% if console.current and console.number %}Continue setting up WhatsApp{% else %}Setup progress{% endif %}
   </h2>
   {% if console.current and console.number %}
-    <p class="text-xs text-gray-500 mt-0.5">{{ console.number.display_number|default:console.number.phone_number_id }}</p>
+    <p class="text-xs text-ink-subtle mt-0.5">{{ console.number.display_number|default:console.number.phone_number_id }}</p>
   {% endif %}
   <ol class="space-y-3 mt-4">
     {% for step in console.steps %}
@@ -49,20 +49,20 @@
       {% elif step.state == "current" %}
         <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-medium" aria-label="Next step">&rarr;</span>
       {% else %}
-        <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 text-gray-400 text-xs font-medium">&#9675;</span>
+        <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 text-ink-subtle text-xs font-medium">&#9675;</span>
       {% endif %}
       <div class="min-w-0 flex-1">
         <p class="text-sm font-medium {% if step.state == "current" or step.state == "done" %}text-gray-900{% else %}text-gray-600{% endif %}">
-          {{ step.label }}{% if not step.required and step.state != "done" %} <span class="text-xs font-normal text-gray-400">(recommended)</span>{% endif %}
+          {{ step.label }}{% if not step.required and step.state != "done" %} <span class="text-xs font-normal text-ink-subtle">(recommended)</span>{% endif %}
         </p>
-        <p class="text-xs text-gray-400 mt-0.5">{{ step.hint }}</p>
+        <p class="text-xs text-ink-subtle mt-0.5">{{ step.hint }}</p>
         {% if step.state == "current" and step.action %}
           {% if step.action.kind == "guide" %}
           <div class="mt-3" x-data="{ skip: false }">
             {% if step.action.url %}
             <a href="{{ step.action.url }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">{{ step.action.label }}</a>
             {% endif %}
-            <p class="mt-3 text-xs text-gray-500" data-wa-poll data-status-url="{{ step.action.status_url }}"
+            <p class="mt-3 text-xs text-ink-subtle" data-wa-poll data-status-url="{{ step.action.status_url }}"
                data-since="{{ step.action.since }}" role="status" aria-live="polite">
               Waiting for your message… this page updates automatically.
             </p>
@@ -76,7 +76,7 @@
                     x-show="!skip" @click="skip = true">Skip — send a template test instead</button>
             <div x-show="skip" x-cloak>
               {% include "whatsapp/_verify_form.html" with url=step.action.verify_url label="Send test message" prefill="" %}
-              <p class="text-xs text-gray-400 mt-1">Works only if your account has an approved template without variables, or on Meta's public test number.</p>
+              <p class="text-xs text-ink-subtle mt-1">Works only if your account has an approved template without variables, or on Meta's public test number.</p>
             </div>
           </div>
           {% elif step.action.kind == "verify" %}
@@ -96,7 +96,7 @@
                      pattern="[0-9]{6}" autocomplete="one-time-code"
                      class="input input-sm w-32 font-mono tracking-widest"
                      placeholder="6 digits" required>
-              <p class="mt-1 text-xs text-gray-500">
+              <p class="mt-1 text-xs text-ink-subtle">
                 The 6-digit PIN set in WhatsApp &rarr; Settings &rarr; Account &rarr; Two-step verification.
               </p>
             </div>
@@ -123,19 +123,19 @@
 {% if console.required_complete and numbers %}
 <div class="card card-pad mb-6">
   <h2 class="font-semibold">What's next?</h2>
-  <p class="text-sm text-gray-500 mt-1">WhatsApp is sending. Start using it:</p>
+  <p class="text-sm text-ink-subtle mt-1">WhatsApp is sending. Start using it:</p>
   <div class="mt-4 grid gap-3 sm:grid-cols-3">
     <a href="/inbox/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Open Inbox</p>
-      <p class="text-xs text-gray-500 mt-1">Read and reply to customer messages.</p>
+      <p class="text-xs text-ink-subtle mt-1">Read and reply to customer messages.</p>
     </a>
     <a href="/contacts/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Add contacts</p>
-      <p class="text-xs text-gray-500 mt-1">Bring in the people you'll message.</p>
+      <p class="text-xs text-ink-subtle mt-1">Bring in the people you'll message.</p>
     </a>
     <a href="/automations/" class="rounded-xl border border-border p-4 hover:tone-brand-border hover:tone-neutral-bg">
       <p class="text-sm font-medium text-gray-900">Create an automation</p>
-      <p class="text-xs text-gray-500 mt-1">Reply and follow up automatically.</p>
+      <p class="text-xs text-ink-subtle mt-1">Reply and follow up automatically.</p>
     </a>
   </div>
 </div>
@@ -144,7 +144,7 @@
 {# ── Connect a number ─────────────────────────────────────────────────── #}
 <div class="card card-pad mb-6">
   <h2 class="font-semibold">Connect a number</h2>
-  <p class="text-sm text-gray-500 mt-1">
+  <p class="text-sm text-ink-subtle mt-1">
     Onboard through Meta — pick or create your WhatsApp Business Account and
     number. We store the connection, register it on the Cloud API and set a
     verification PIN automatically; no tokens to copy.
@@ -184,7 +184,7 @@
     </button>
 
     <div x-show="open" x-cloak x-transition class="mt-4">
-      <p class="text-xs text-gray-400 mb-3">
+      <p class="text-xs text-ink-subtle mb-3">
         For testing, or when the Meta connect option above is blocked. Steps: in
         <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener"
            class="underline">Meta Business Manager → System Users</a>, create or
@@ -198,25 +198,25 @@
         {% csrf_token %}
         <p id="wa-manual-error" class="hidden sm:col-span-2 text-sm rounded-xl border tone-coral-border tone-coral px-3 py-2" role="alert"></p>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Phone number ID *</label>
-          <input name="phone_number_id" required class="input w-full">
+          <label for="wa-manual-phone-number-id" class="block text-xs font-medium text-gray-600 mb-1.5">Phone number ID *</label>
+          <input id="wa-manual-phone-number-id" name="phone_number_id" required class="input w-full">
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Display number</label>
-          <input name="display_number" placeholder="+1 555 0100" class="input w-full">
+          <label for="wa-manual-display-number" class="block text-xs font-medium text-gray-600 mb-1.5">Display number</label>
+          <input id="wa-manual-display-number" name="display_number" placeholder="+1 555 0100" type="tel" autocomplete="off" class="input w-full">
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">WhatsApp Business account ID</label>
-          <input name="waba_id" class="input w-full">
+          <label for="wa-manual-waba-id" class="block text-xs font-medium text-gray-600 mb-1.5">WhatsApp Business account ID</label>
+          <input id="wa-manual-waba-id" name="waba_id" class="input w-full">
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Business ID</label>
-          <input name="business_id" class="input w-full">
+          <label for="wa-manual-business-id" class="block text-xs font-medium text-gray-600 mb-1.5">Business ID</label>
+          <input id="wa-manual-business-id" name="business_id" class="input w-full">
         </div>
         <div class="sm:col-span-2">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Access token (System User / WABA) *</label>
-          <input name="access_token" type="password" required class="input w-full">
-          <p class="text-xs text-gray-400 mt-1">Stored encrypted. Used to call the Cloud API for this number.</p>
+          <label for="wa-manual-access-token" class="block text-xs font-medium text-gray-600 mb-1.5">Access token (System User / WABA) *</label>
+          <input id="wa-manual-access-token" name="access_token" type="password" required class="input w-full">
+          <p class="text-xs text-ink-subtle mt-1">Stored encrypted. Used to call the Cloud API for this number.</p>
         </div>
         <div class="sm:col-span-2">
           <button type="submit" class="btn btn-secondary">Register manually</button>
@@ -238,7 +238,7 @@
         submitted = true;
         var btn = vform.querySelector('button[type="submit"]');
         btn.disabled = true;
-        out.className = 'w-full text-sm text-gray-500';
+        out.className = 'w-full text-sm text-ink-muted';
         out.textContent = 'Sending…';
         var fd = new FormData(vform);
         fetch(vform.action, {
@@ -249,14 +249,14 @@
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.ok) {
-              out.className = 'w-full text-sm text-green-700';
+              out.className = 'w-full text-sm tone-teal-fg';
               out.textContent = 'Test message sent — check your WhatsApp.';
               setTimeout(function () { window.location.reload(); }, 1500);
               return;
             }
             submitted = false;
             btn.disabled = false;
-            out.className = 'w-full text-sm text-red-700';
+            out.className = 'w-full text-sm tone-coral-fg';
             out.textContent = d.message || 'Could not send the test message.';
             if (d.action === 'retry_registration' || d.action === 'reconnect') {
               setTimeout(function () { window.location.reload(); }, 2500);
@@ -265,7 +265,7 @@
           .catch(function () {
             submitted = false;
             btn.disabled = false;
-            out.className = 'w-full text-sm text-red-700';
+            out.className = 'w-full text-sm tone-coral-fg';
             out.textContent = 'Network error. Try again.';
           });
       });
@@ -370,13 +370,13 @@
           {% if not n.is_active %}<span class="badge badge-neutral">Inactive</span>{% endif %}
         </div>
         <dl class="mt-3 grid gap-2 text-xs max-w-md">
-          <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-            <dt class="text-gray-500">Phone number ID</dt>
+          <div class="grid grid-cols-[7rem_1fr] items-center gap-2">
+            <dt class="text-ink-subtle">Phone number ID</dt>
             <dd class="min-w-0">{% include "components/copy_field.html" with value=n.phone_number_id label="Copy" %}</dd>
           </div>
           {% if n.waba_id %}
-          <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-            <dt class="text-gray-500">Business account ID</dt>
+          <div class="grid grid-cols-[7rem_1fr] items-center gap-2">
+            <dt class="text-ink-subtle">Business account ID</dt>
             <dd class="min-w-0 font-mono text-gray-600 truncate">{{ n.waba_id }}</dd>
           </div>
           {% endif %}
@@ -396,16 +396,16 @@
     <div class="mt-4 grid gap-4 sm:grid-cols-3">
       {% for group in n.health.groups %}
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ group.title }}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-2">{{ group.title }}</p>
         <ul class="space-y-1.5 text-sm">
           {% for item in group.items %}
           <li class="flex items-start gap-2">
-            <span class="shrink-0 w-4 text-center {% if item.state == 'ok' %}text-green-600{% elif item.state == 'warn' %}text-amber-600{% else %}text-gray-400{% endif %}"
-                  aria-label="{{ item.state }}">{% if item.state == 'ok' %}&#10003;{% elif item.state == 'warn' %}&#9888;{% else %}&mdash;{% endif %}</span>
+            <span class="shrink-0 w-4 text-center {% if item.state == 'ok' %}text-teal-700{% elif item.state == 'warn' %}text-amber-800{% else %}text-ink-subtle{% endif %}"
+                  aria-label="{% if item.state == 'ok' %}Done{% elif item.state == 'warn' %}Needs attention{% else %}Not yet{% endif %}">{% if item.state == 'ok' %}&#10003;{% elif item.state == 'warn' %}&#9888;{% else %}&mdash;{% endif %}</span>
             <span class="min-w-0">
               <span class="text-gray-800">{{ item.label }}</span>
-              {% if item.when %}<span class="text-xs text-gray-400"> &middot; {{ item.when|timesince }} ago</span>{% endif %}
-              {% if item.detail %}<span class="block text-xs {% if item.state == 'warn' %}text-amber-700{% else %}text-gray-500{% endif %}">{{ item.detail }}</span>{% endif %}
+              {% if item.when %}<span class="text-xs text-ink-subtle"> &middot; {{ item.when|timesince }} ago</span>{% endif %}
+              {% if item.detail %}<span class="block text-xs {% if item.state == 'warn' %}text-amber-800{% else %}text-ink-subtle{% endif %}">{{ item.detail }}</span>{% endif %}
             </span>
           </li>
           {% endfor %}
@@ -439,27 +439,27 @@
 {% if show_webhook_setup %}
 <div class="card card-pad mb-6">
   <h2 class="font-semibold flex items-center gap-2">
-    {% include "components/icon.html" with name="code-bracket" class="w-4 h-4 text-gray-400" %}
+    {% include "components/icon.html" with name="code-bracket" class="w-4 h-4 text-ink-subtle" %}
     Webhook (platform setup)
   </h2>
-  <p class="text-sm text-gray-500 mt-1">
+  <p class="text-sm text-ink-subtle mt-1">
     One-time, in Meta → your app → WhatsApp → Configuration. Embedded Signup
     subscribes each new WABA automatically.
   </p>
-  <div class="mt-3 grid gap-2 text-xs max-w-xl">
-    <div class="grid grid-cols-[8rem,1fr] items-center gap-2">
-      <dt class="text-gray-500">Callback URL</dt>
+  <dl class="mt-3 grid gap-2 text-xs max-w-xl">
+    <div class="grid grid-cols-[8rem_1fr] items-center gap-2">
+      <dt class="text-ink-subtle">Callback URL</dt>
       <dd class="min-w-0">{% include "components/copy_field.html" with value=webhook_url label="Copy" %}</dd>
     </div>
-    <div class="grid grid-cols-[8rem,1fr] items-start gap-2">
-      <dt class="text-gray-500">Verify token</dt>
+    <div class="grid grid-cols-[8rem_1fr] items-start gap-2">
+      <dt class="text-ink-subtle">Verify token</dt>
       <dd class="text-gray-600">Match your <code>WHATSAPP_VERIFY_TOKEN</code> env var.</dd>
     </div>
-    <div class="grid grid-cols-[8rem,1fr] items-start gap-2">
-      <dt class="text-gray-500">Subscribe fields</dt>
+    <div class="grid grid-cols-[8rem_1fr] items-start gap-2">
+      <dt class="text-ink-subtle">Subscribe fields</dt>
       <dd class="text-gray-600"><code>messages</code>, <code>message_template_status_update</code></dd>
     </div>
-  </div>
+  </dl>
 </div>
 {% endif %}
 
@@ -469,11 +469,11 @@
           class="w-full flex items-center justify-between gap-2 text-left"
           @click="open = !open" :aria-expanded="open">
     <span class="font-semibold flex items-center gap-2">
-      {% include "components/icon.html" with name="question" class="w-4 h-4 text-gray-400" %}
+      {% include "components/icon.html" with name="question" class="w-4 h-4 text-ink-subtle" %}
       What you'll need from Meta
     </span>
     <span class="inline-flex transition-transform" :class="open ? 'rotate-180' : ''">
-      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-gray-400" %}
+      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-ink-subtle" %}
     </span>
   </button>
   <div x-show="open" x-cloak x-transition class="mt-4 text-sm text-gray-600 space-y-3">

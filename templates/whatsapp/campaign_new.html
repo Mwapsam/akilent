@@ -3,7 +3,7 @@
 
 {% block content %}
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
     <span aria-hidden="true">/</span><span class="text-ink">{% if draft %}{{ draft.name }}{% else %}New WhatsApp campaign{% endif %}</span>
   </nav>
@@ -34,6 +34,19 @@
         lits: JSON.parse(document.getElementById('composer-lits').textContent),
         fbs: JSON.parse(document.getElementById('composer-fbs').textContent),
         busy: false,
+        _snap: null,
+        _off: null,
+        {% comment %}Unsaved work (app.js, akDirty): leaving with changes the server doesn't have
+        asks first. Sending or saving is the form's own submit, so busy lets it go. The "before"
+        state is taken when the person first presses a key or pointer in the form, which always
+        comes before any change they make: at load, x-model is still filling fields in, later
+        than any timer can safely wait for. Not focus: the page moves focus in by itself.{% endcomment %}
+        init() {
+          const take = () => { if (this._snap === null) this._snap = window.akDirty.formState(this.$el); };
+          ['pointerdown', 'keydown'].forEach((t) => this.$el.addEventListener(t, take, true));
+          this._off = window.akDirty.register(this.$el, () => this._snap !== null && !this.busy && window.akDirty.formState(this.$el) !== this._snap);
+        },
+        destroy() { if (this._off) this._off(); },
         go(n) { this.step = n; this.$nextTick(() => document.getElementById('step-' + n + '-title')?.focus()); window.scrollTo({ top: 0, behavior: 'smooth' }) },
         get canContinue() { return (this.step === 1 && this.audience) || (this.step === 2 && this.template) || this.step === 3 },
       }"
@@ -44,28 +57,28 @@
 
   {% comment %}Step bar: labels on wide screens, "Step n of 4" on a phone.{% endcomment %}
   <ol class="hidden sm:flex flex-wrap items-center gap-2 mb-6 text-sm" aria-label="Steps">
-    <li class="flex items-center gap-2" :class="step >= 1 ? 'text-ink font-medium' : 'text-gray-400'">
+    <li class="flex items-center gap-2" :class="step >= 1 ? 'text-ink font-medium' : 'text-ink-subtle'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 1 ? 'bg-teal-500 text-white' : (step === 1 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">1</span>
       <button type="button" @click="go(1)" :aria-current="step === 1 ? 'step' : null">Who gets it</button>
     </li>
     <li class="h-px w-6 bg-border" aria-hidden="true"></li>
-    <li class="flex items-center gap-2" :class="step >= 2 ? 'text-ink font-medium' : 'text-gray-400'">
+    <li class="flex items-center gap-2" :class="step >= 2 ? 'text-ink font-medium' : 'text-ink-subtle'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 2 ? 'bg-teal-500 text-white' : (step === 2 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">2</span>
       <button type="button" @click="audience && go(2)" :disabled="!audience" :aria-current="step === 2 ? 'step' : null">The message</button>
     </li>
     <li class="h-px w-6 bg-border" aria-hidden="true"></li>
-    <li class="flex items-center gap-2" :class="step >= 3 ? 'text-ink font-medium' : 'text-gray-400'">
+    <li class="flex items-center gap-2" :class="step >= 3 ? 'text-ink font-medium' : 'text-ink-subtle'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step > 3 ? 'bg-teal-500 text-white' : (step === 3 ? 'bg-brand-500 text-white' : 'bg-surface-subtle')" aria-hidden="true">3</span>
       <button type="button" @click="audience && template && go(3)" :disabled="!audience || !template" :aria-current="step === 3 ? 'step' : null">When</button>
     </li>
     <li class="h-px w-6 bg-border" aria-hidden="true"></li>
-    <li class="flex items-center gap-2" :class="step >= 4 ? 'text-ink font-medium' : 'text-gray-400'">
+    <li class="flex items-center gap-2" :class="step >= 4 ? 'text-ink font-medium' : 'text-ink-subtle'">
       <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs" :class="step === 4 ? 'bg-brand-500 text-white' : 'bg-surface-subtle'" aria-hidden="true">4</span>
       <button type="button" @click="audience && template && go(4)" :disabled="!audience || !template" :aria-current="step === 4 ? 'step' : null">Review</button>
     </li>
   </ol>
   <div class="sm:hidden mb-4">
-    <p class="text-xs text-gray-500">Step <span x-text="step"></span> of 4</p>
+    <p class="text-xs text-ink-subtle">Step <span x-text="step"></span> of 4</p>
     <div class="mt-1 h-1.5 rounded-full bg-surface-subtle"><div class="h-1.5 rounded-full bg-brand-500 transition-all" :style="'width:' + (step * 25) + '%'"></div></div>
   </div>
 
@@ -77,7 +90,7 @@
         <legend id="step-1-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">Who should get this?</legend>
         <p class="text-sm text-gray-600 mb-4">Choose a list or a segment. The numbers show who WhatsApp can reach.</p>
         {% if lists %}
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Lists</h3>
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-2">Lists</h3>
         <div class="space-y-3">
           {% for l in lists %}
           {% include "whatsapp/_audience_card.html" with name=l.name reach=l.reach value=l.pk kind="list" item=l %}
@@ -85,7 +98,7 @@
         </div>
         {% endif %}
         {% if segments %}
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Segments <span class="normal-case font-normal">— whoever matches when it sends</span></h3>
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mt-5 mb-2">Segments <span class="normal-case font-normal">— whoever matches when it sends</span></h3>
         <div class="space-y-3">
           {% for s in segments %}
           {% include "whatsapp/_audience_card.html" with name=s.name reach=s.reach value=s.pk kind="segment" item=s %}
@@ -108,11 +121,11 @@
               <span class="flex flex-wrap items-center gap-2">
                 <span class="font-medium text-ink">{{ t.name }}</span>
                 {% if t.is_marketing %}<span class="badge badge-warning">Promotion</span>{% elif t.category == 'utility' %}<span class="badge badge-info">Update</span>{% else %}<span class="badge badge-neutral">{{ t.get_category_display }}</span>{% endif %}
-                <span class="text-xs text-gray-500 uppercase">{{ t.language_code }}</span>
+                <span class="text-xs text-ink-subtle uppercase">{{ t.language_code }}</span>
               </span>
               <span class="mt-1 block text-sm text-gray-600 line-clamp-2">{{ t.content }}</span>
-              {% if not t.sendable %}<span class="mt-1 block text-xs text-gray-500">Has a picture or file at the top — campaigns can't send those yet.</span>
-              {% elif t.is_marketing %}<span class="mt-1 block text-xs text-gray-500">Promotions only go to people who opted in.</span>{% endif %}
+              {% if not t.sendable %}<span class="mt-1 block text-xs text-ink-subtle">Has a picture or file at the top — campaigns can't send those yet.</span>
+              {% elif t.is_marketing %}<span class="mt-1 block text-xs text-ink-subtle">Promotions only go to people who opted in.</span>{% endif %}
             </span>
           </label>
           {% endfor %}
@@ -131,7 +144,7 @@
             </select>
             <div x-show="picks['{{ key }}'] === 'literal'" x-cloak>
               <input name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']" aria-label="Text for “{{ b.name }}”" />
-              <p class="text-xs text-amber-700 mt-1">Every customer gets exactly this text — don't type a person's name here.</p>
+              <p class="text-xs text-amber-800 mt-1">Every customer gets exactly this text — don't type a person's name here.</p>
             </div>
             <div x-show="picks['{{ key }}'] !== 'literal'" x-cloak>
               <label class="text-xs text-gray-600 block">If we don't have it for someone, use
@@ -178,7 +191,7 @@
       <section x-show="step === 4" x-cloak aria-labelledby="step-4-title">
         <h2 id="step-4-title" tabindex="-1" class="text-lg font-semibold text-ink mb-4">Review</h2>
         <div>
-          <label class="label" for="campaign-name">Campaign name <span class="font-normal text-gray-400">(only you see this)</span></label>
+          <label class="label" for="campaign-name">Campaign name <span class="font-normal text-ink-subtle">(only you see this)</span></label>
           <input id="campaign-name" name="name" class="input" value="{{ state.name }}" placeholder="e.g. December offer" maxlength="150" />
         </div>
         <div id="review-summary" class="mt-4"></div>
@@ -210,7 +223,7 @@
            hx-trigger="load, change from:#composer-form, input from:#composer-form delay:500ms"
            hx-swap="innerHTML"
            aria-live="polite">
-        <div class="card card-pad text-sm text-gray-500">Choose who gets it and a message to see a preview.</div>
+        <div class="card card-pad text-sm text-ink-subtle">Choose who gets it and a message to see a preview.</div>
       </div>
     </aside>
   </div>

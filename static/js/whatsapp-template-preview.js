@@ -256,15 +256,15 @@
         '</div>' +
         '<div class="grid sm:grid-cols-2 gap-2">' +
           '<div>' +
-            '<span class="text-xs text-gray-500 block mb-1">Akilent data</span>' +
+            '<span class="text-xs text-ink-subtle block mb-1">Akilent data</span>' +
             '<div data-role="picker-mount"></div>' +
           '</div>' +
           '<div>' +
-            '<label class="text-xs text-gray-500 block mb-1" for="wa-var-example-' + n + '">Example value</label>' +
+            '<label class="text-xs text-ink-subtle block mb-1" for="wa-var-example-' + n + '">Example value</label>' +
             '<input class="input" id="wa-var-example-' + n + '" name="variable_example" placeholder="e.g. Ada" />' +
           '</div>' +
         '</div>' +
-        '<p class="text-xs text-gray-400">Meta uses the example to review your template. It isn’t sent to customers.</p>';
+        '<p class="text-xs text-ink-subtle">Meta uses the example to review your template. It isn’t sent to customers.</p>';
 
       var labelInput = card.querySelector('[name="variable_label"]');
       var exampleInput = card.querySelector('[name="variable_example"]');
@@ -363,10 +363,10 @@
         wrap.innerHTML =
           '<button type="button" class="input w-full flex items-center gap-2 text-left" data-role="chip">' +
             icon(found ? found.group.icon : "sliders") +
-            '<span class="flex-1 truncate' + (found ? "" : " text-gray-400") + '">' +
+            '<span class="flex-1 truncate' + (found ? "" : " text-ink-subtle") + '">' +
               (found ? escapeHtml(found.group.label) + " → " + escapeHtml(found.field.label) : "Choose a field…") +
             '</span>' +
-            (found ? '<span data-role="clear" class="text-gray-400 hover:text-gray-600 px-1" aria-label="Clear field">×</span>' : '') +
+            (found ? '<span data-role="clear" class="text-ink-subtle hover:text-gray-600 px-1" aria-label="Clear field">×</span>' : '') +
           '</button>';
         wrap.querySelector('[data-role="chip"]').addEventListener("click", function (e) {
           if (e.target.closest('[data-role="clear"]')) {
@@ -402,14 +402,14 @@
             if (!matches.length) return;
             anyMatch = true;
             var heading = document.createElement("div");
-            heading.className = "px-3 pt-2 pb-1 text-xs font-semibold text-gray-500 flex items-center gap-1.5";
+            heading.className = "px-3 pt-2 pb-1 text-xs font-semibold text-ink-subtle flex items-center gap-1.5";
             heading.innerHTML = icon(g.icon) + "<span>" + escapeHtml(g.label) + "</span>";
             panel.appendChild(heading);
             matches.forEach(function (f) {
               var row = document.createElement("button");
               row.type = "button";
               row.className = "w-full text-left px-3 py-1.5 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none text-sm";
-              row.innerHTML = '<span class="block text-ink">' + escapeHtml(f.label) + '</span><span class="block text-xs text-gray-400">' + escapeHtml(f.sample) + '</span>';
+              row.innerHTML = '<span class="block text-ink">' + escapeHtml(f.label) + '</span><span class="block text-xs text-ink-subtle">' + escapeHtml(f.sample) + '</span>';
               row.addEventListener("click", function () {
                 opts.onSelect((g.prefix || g.key) + "." + f.key, { label: f.label, sample: f.sample });
                 renderChip();
@@ -424,7 +424,7 @@
           });
           if (!anyMatch) {
             var empty = document.createElement("p");
-            empty.className = "px-3 py-2 text-sm text-gray-500";
+            empty.className = "px-3 py-2 text-sm text-ink-subtle";
             empty.textContent = "No fields match. Create a custom field below.";
             panel.appendChild(empty);
           }
@@ -795,7 +795,7 @@
         var body = substitute(bodyEl.value, map);
         previewBody.innerHTML = body.trim()
           ? formatWhatsApp(body)
-          : '<span class="text-gray-400">Your message appears here.</span>';
+          : '<span class="text-ink-subtle">Your message appears here.</span>';
       }
       if (previewFooter) previewFooter.textContent = footerField.classList.contains("hidden") ? "" : footerEl.value;
 

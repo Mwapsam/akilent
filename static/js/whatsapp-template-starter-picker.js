@@ -131,7 +131,7 @@
         '<span class="wa-tile-icon">' + icon(iconPath) + "</span>" +
         '<span class="min-w-0">' +
           '<span class="text-sm font-semibold text-ink block">' + escapeHtml(title) + "</span>" +
-          '<span class="text-xs text-gray-500 block mt-0.5">' + escapeHtml(subtitle) + "</span>" +
+          '<span class="text-xs text-ink-subtle block mt-0.5">' + escapeHtml(subtitle) + "</span>" +
         "</span>";
       return el;
     }
@@ -171,7 +171,7 @@
         info.className = "min-w-0";
         info.innerHTML =
           '<p class="text-sm font-medium text-ink">' + escapeHtml(tpl.name) + "</p>" +
-          '<p class="text-xs text-gray-500">' + escapeHtml(tpl.use_case) + "</p>";
+          '<p class="text-xs text-ink-subtle">' + escapeHtml(tpl.use_case) + "</p>";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn btn-secondary btn-sm shrink-0";

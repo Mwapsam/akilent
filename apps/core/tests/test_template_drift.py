@@ -38,6 +38,9 @@ CAUGHT = [
     ('<div class="min-h-screen flex">', "viewport-height"),
     ('<div style="height:100vh">', "viewport-height"),
     ('<div class="md:opacity-0 md:group-hover:opacity-100">', "hover-only"),
+    # Tailwind v4 writes grid-template-columns:7rem,1fr (invalid, so ignored).
+    ('<div class="grid grid-cols-[7rem,1fr]">', "grid-comma"),
+    ('<div class="sm:grid-rows-[auto,1fr]">', "grid-comma"),
 ]
 
 LEFT_ALONE = [
@@ -57,6 +60,8 @@ LEFT_ALONE = [
     # Viewport heights that follow the browser toolbar.
     '<div class="min-h-viewport">',
     "<style>.x { height: 100vh; height: 100dvh; }</style>",
+    # Grid tracks separated by _ ; commas inside a function are part of its arguments.
+    '<div class="grid grid-cols-[7rem_1fr] lg:grid-cols-[minmax(0,1fr)_20rem] grid-cols-[repeat(2,1fr)]">',
     # Hover reveal that only hides for a mouse.
     '<div class="md:pointer-fine:opacity-0 md:group-hover:opacity-100">',
     # Not markup: comments, scripts and template expressions.

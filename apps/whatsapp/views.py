@@ -974,7 +974,6 @@ def campaign_detail(request, pk: int):
         local_label,
         timeline,
     )
-    from apps.whatsapp.models import WhatsAppCampaignRecipient
 
     account = get_current_account(request)
     if account is None:
@@ -1032,15 +1031,17 @@ def campaign_detail(request, pk: int):
     ]
     delivery = campaign_delivery_stats(campaign)
 
+    # Each row shows what happened to its message (the same outcome as the CSV
+    # export), not the recipient row's own status: "queued" only means a message was
+    # handed to the send queue, which can still fail, wait or go unconfirmed.
     outcome = request.GET.get("outcome") or ""
-    recipients = campaign.recipients.select_related("contact").order_by("pk")
-    _R = WhatsAppCampaignRecipient.Status
+    recipients = svc.recipients_with_outcome(campaign)
     if outcome == "failed":
-        recipients = recipients.filter(status=_R.FAILED)
+        recipients = recipients.filter(outcome="failed")
     elif outcome == "not_sent":
-        recipients = recipients.filter(status=_R.SKIPPED)
+        recipients = recipients.filter(outcome="not_sent")
     elif outcome == "sent":
-        recipients = recipients.filter(status=_R.QUEUED)
+        recipients = recipients.filter(outcome__in=("sent", "delivered", "read"))
     else:
         outcome = ""
     page = Paginator(recipients, 50).get_page(request.GET.get("page"))
@@ -1069,6 +1070,9 @@ def campaign_detail(request, pk: int):
         "can_resume": can_send and campaign.status == _S.PAUSED,
         "can_cancel": can_send and svc.can_cancel(campaign),
         "failed_n": svc.failed_count(campaign) if finished else 0,
+        # How long a message held by the plan limit waits before it's dropped
+        # (apps.whatsapp.campaigns.cancel_stale_campaign_holds).
+        "hold_max_hours": settings.WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS,
         "in_progress": campaign.status in WhatsAppCampaign.ACTIVE
         or (campaign.status == _S.COMPLETED and delivery["pending"] > 0),
     }

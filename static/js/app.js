@@ -461,6 +461,15 @@
       }
       return false;
     },
+    // A form's values as one comparable string (the CSRF token left out, a file by its
+    // name): take one when the page loads, and the form is dirty while it differs.
+    formState(form) {
+      const fd = new FormData(form);
+      fd.delete("csrfmiddlewaretoken");
+      return JSON.stringify(Array.from(fd.entries()).map(function (p) {
+        return [p[0], typeof p[1] === "string" ? p[1] : (p[1] && p[1].name) || ""];
+      }));
+    },
   };
   window.addEventListener("beforeunload", function (e) {
     if (leavingConfirmed || !window.akDirty.any()) return;
@@ -504,20 +513,18 @@
         _snap: "",
         _submitting: false,
         _off: null,
-        serialize() {
-          const fd = new FormData(this.$el);
-          fd.delete("csrfmiddlewaretoken");
-          return JSON.stringify(Array.from(fd.entries()).map(function (p) {
-            return [p[0], typeof p[1] === "string" ? p[1] : (p[1] && p[1].name) || ""];
-          }));
-        },
+        serialize() { return window.akDirty.formState(this.$el); },
         get dirty() { return !this._submitting && this.serialize() !== this._snap; },
         init() {
           this._snap = this.serialize();
           this._off = window.akDirty.register(this.$el, () => this.dirty);
           this.$el.addEventListener("submit", () => {
-            // A non-htmx submit leaves the page; let it go without a prompt.
-            if (!this.$el.hasAttribute("hx-post") && !this.$el.closest("[hx-boost=true]")) this._submitting = true;
+            // A non-htmx submit leaves the page; let it go without a prompt. The nearest
+            // hx-boost decides: a form marked hx-boost="false" inside the boosted body
+            // is a real page submit.
+            const boost = this.$el.closest("[hx-boost]");
+            const boosted = !!boost && boost.getAttribute("hx-boost") === "true";
+            if (!this.$el.hasAttribute("hx-post") && !boosted) this._submitting = true;
           });
           this.$el.addEventListener("htmx:afterRequest", (e) => {
             if (e.detail.successful) this._snap = this.serialize();

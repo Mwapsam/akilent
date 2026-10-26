@@ -31,7 +31,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <div class="card p-5 text-sm text-gray-500">No reply rules yet. Example: a comment containing “price” gets “Thanks {username}! We've sent you the price in a DM.”</div>
+  <div class="card p-5 text-sm text-ink-subtle">No reply rules yet. Example: a comment containing “price” gets “Thanks {username}! We've sent you the price in a DM.”</div>
   {% endif %}
 </section>
 
@@ -59,7 +59,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <div class="card p-5 text-sm text-gray-500">No moderation rules yet. “Add recommended rules” hides spam and flags abuse and complaints for your team — you can change any of them.</div>
+  <div class="card p-5 text-sm text-ink-subtle">No moderation rules yet. “Add recommended rules” hides spam and flags abuse and complaints for your team — you can change any of them.</div>
   {% endif %}
 </section>
 
@@ -80,21 +80,21 @@
         </span>
         <span class="flex items-center gap-2">
           <span class="badge {% if log.outcome == 'applied' %}badge-success{% elif log.outcome == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">{{ log.get_outcome_display }}</span>
-          <span class="text-gray-500">{{ log.occurred_at|timesince }} ago</span>
+          <span class="text-ink-subtle">{{ log.occurred_at|timesince }} ago</span>
         </span>
       </div>
       <p class="mt-1 text-gray-700">“{{ log.comment.body|truncatechars:140 }}”</p>
-      <p class="mt-1 text-gray-500">{{ log.rule.name|default:"Deleted rule" }} · {{ log.moderation_action|capfirst }}{% if log.moderation_action == "flag" or log.automation_trigger == "notify_staff" %} · Team emailed{% endif %}{% if log.automation_trigger == "create_proposal" %} · Lead opened{% endif %}</p>
-      {% if log.error %}<p class="mt-1 text-red-600">{{ log.error }}</p>{% endif %}
+      <p class="mt-1 text-ink-subtle">{{ log.rule.name|default:"Deleted rule" }} · {{ log.moderation_action|capfirst }}{% if log.moderation_action == "flag" or log.automation_trigger == "notify_staff" %} · Team emailed{% endif %}{% if log.automation_trigger == "create_proposal" %} · Lead opened{% endif %}</p>
+      {% if log.error %}<p class="mt-1 text-coral-700">{{ log.error }}</p>{% endif %}
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <div class="card p-5 text-sm text-gray-500">Nothing yet. Activity appears here when a new comment matches one of your rules.</div>
+  <div class="card p-5 text-sm text-ink-subtle">Nothing yet. Activity appears here when a new comment matches one of your rules.</div>
   {% endif %}
 </section>
 {% endif %}
 
-<a href="{% url 'instagram-accounts' %}" class="text-sm text-gray-500 hover:text-ink">← Back to Instagram</a>
+<a href="{% url 'instagram-accounts' %}" class="text-sm text-ink-subtle hover:text-ink">← Back to Instagram</a>
 
 {% endblock %}

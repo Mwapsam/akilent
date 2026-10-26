@@ -95,6 +95,8 @@ ws.addEventListener("message", async (ev) => {
 });
 
 await send("Page.enable"); await send("Runtime.enable");
+// A rebuilt app.css must be the one measured, not the profile's cached copy.
+await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
 await go("/auth/login/");
 const login = once("Page.loadEventFired");
 await evaluate(`(() => { const f=document.querySelector('input[type=password]').form; f.querySelector('input[name=username]').value=${JSON.stringify(env.QA_UI_EMAIL)};

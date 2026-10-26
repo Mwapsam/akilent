@@ -6,10 +6,10 @@
   <span class="min-w-0 flex-1">
     <span class="flex flex-wrap items-baseline justify-between gap-2">
       <span class="font-medium text-ink">{{ name }}</span>
-      <span class="text-sm text-gray-500 tabular-nums">{{ reach.total }} customer{{ reach.total|pluralize }}{% if kind == "segment" %} now{% endif %}</span>
+      <span class="text-sm text-ink-subtle tabular-nums">{{ reach.total }} customer{{ reach.total|pluralize }}{% if kind == "segment" %} now{% endif %}</span>
     </span>
     {% if item.broken %}
-    <span class="mt-1 block text-xs text-gray-500">This segment has a rule that no longer works — <a href="{% url 'contacts:segment_edit' value %}" class="text-accent hover:text-accent-strong">fix it</a>.</span>
+    <span class="mt-1 block text-xs text-ink-subtle">This segment has a rule that no longer works — <a href="{% url 'contacts:segment_edit' value %}" class="text-accent hover:text-accent-strong">fix it</a>.</span>
     {% elif reach.total %}
     <span class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
       <span><span class="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1" aria-hidden="true"></span>{{ reach.opted_in }} opted in</span>
@@ -18,9 +18,9 @@
       {% if reach.none %}<span><span class="inline-block h-2 w-2 rounded-full bg-gray-300 mr-1" aria-hidden="true"></span>{{ reach.none }} no WhatsApp</span>{% endif %}
     </span>
     {% elif kind == "list" %}
-    <span class="mt-1 block text-xs text-gray-500">Empty — <a href="{% url 'contacts:list_detail' value %}" class="text-accent hover:text-accent-strong">add people</a> first.</span>
+    <span class="mt-1 block text-xs text-ink-subtle">Empty — <a href="{% url 'contacts:list_detail' value %}" class="text-accent hover:text-accent-strong">add people</a> first.</span>
     {% else %}
-    <span class="mt-1 block text-xs text-gray-500">Nobody matches right now.</span>
+    <span class="mt-1 block text-xs text-ink-subtle">Nobody matches right now.</span>
     {% endif %}
   </span>
 </label>

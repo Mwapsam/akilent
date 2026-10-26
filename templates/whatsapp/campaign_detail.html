@@ -3,9 +3,9 @@
 
 {% block content %}
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
-    <span aria-hidden="true">/</span><span class="text-ink">{{ campaign.name }}</span>
+    <span aria-hidden="true">/</span><span class="text-ink" aria-current="page">{{ campaign.name }}</span>
   </nav>
   <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
     <div class="min-w-0">
@@ -75,13 +75,13 @@
 <section class="card card-pad" aria-labelledby="draft-reach-title">
   <h2 id="draft-reach-title" class="text-base font-semibold text-ink">{% if campaign.status == 'scheduled' %}Who it would reach if it went now{% else %}Who it would reach{% endif %}</h2>
   {% if preview %}
-    <p class="mt-2 text-2xl font-semibold text-ink tabular-nums">{{ preview.will_receive }} <span class="text-sm font-normal text-gray-500">of {{ preview.total }} in {{ campaign.audience_name }}</span></p>
+    <p class="mt-2 text-2xl font-semibold text-ink tabular-nums">{{ preview.will_receive }} <span class="text-sm font-normal text-ink-subtle">of {{ preview.total }} in {{ campaign.audience_name }}</span></p>
     {% if preview.excluded %}
     <ul class="mt-3 space-y-1 text-sm">
-      {% for key, n, label, why in preview.excluded %}<li><span class="tabular-nums font-medium text-ink">{{ n }}</span> · {{ label }} <span class="text-gray-500">— {{ why }}</span></li>{% endfor %}
+      {% for key, n, label, why in preview.excluded %}<li><span class="tabular-nums font-medium text-ink">{{ n }}</span> · {{ label }} <span class="text-ink-subtle">— {{ why }}</span></li>{% endfor %}
     </ul>
     {% endif %}
-    <p class="mt-3 text-xs text-gray-500">Recipients are chosen when it sends, so people added before then are included.</p>
+    <p class="mt-3 text-xs text-ink-subtle">Recipients are chosen when it sends, so people added before then are included.</p>
   {% else %}
     <p class="mt-2 text-sm text-gray-600">Recipients are chosen when it sends.</p>
   {% endif %}
@@ -132,15 +132,25 @@
         {% for r in page %}
         <tr>
           <td data-label="Customer"><a href="{% url 'contacts:detail' r.contact.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ r.contact.full_name|default:r.contact.phone|default:r.contact.email|default:"Unnamed customer" }}</a></td>
+          {% comment %}r.outcome: apps.whatsapp.campaigns.recipients_with_outcome, the same as the
+          CSV export. "Sent" only once WhatsApp has said so.{% endcomment %}
           <td data-label="Result">
-            {% if r.status == 'queued' %}<span class="badge badge-success">Sent</span>
-            {% elif r.status == 'failed' %}<span class="badge badge-danger">Failed</span>
-            {% elif r.status == 'skipped' %}<span class="badge badge-neutral">Not sent</span>
+            {% if r.outcome == 'read' %}<span class="badge badge-success">Read</span>
+            {% elif r.outcome == 'delivered' %}<span class="badge badge-success">Delivered</span>
+            {% elif r.outcome == 'sent' %}<span class="badge badge-success">Sent</span>
+            {% elif r.outcome == 'failed' %}<span class="badge badge-danger">Failed</span>
+            {% elif r.outcome == 'unconfirmed' %}<span class="badge badge-warning">Not confirmed</span>
+            {% elif r.outcome == 'held' %}<span class="badge badge-warning">Waiting</span>
+            {% elif r.outcome == 'not_sent' %}<span class="badge badge-neutral">Not sent</span>
+            {% elif r.outcome == 'pending' %}<span class="badge badge-info">Queued</span>
             {% else %}<span class="badge badge-info">Waiting</span>{% endif %}
           </td>
           <td data-label="Details" class="text-sm text-gray-600">
-            {% if r.status == 'skipped' %}{{ r.get_skip_reason_display }}
-            {% elif r.status == 'failed' %}{{ r.error|default:"WhatsApp couldn't deliver it."|truncatechars:140 }}
+            {% if r.outcome == 'not_sent' %}{{ r.get_skip_reason_display }}
+            {% elif r.outcome == 'failed' %}{{ r.error|default:"WhatsApp couldn't deliver it."|truncatechars:140 }}
+            {% elif r.outcome == 'unconfirmed' %}WhatsApp didn't confirm it, so it may not have been sent. It won't be sent again automatically.
+            {% elif r.outcome == 'held' %}Your plan's monthly WhatsApp limit is reached. It goes out if there's room within {{ hold_max_hours }} hours; after that it isn't sent.
+            {% elif r.outcome == 'pending' %}Waiting for WhatsApp to accept it.
             {% else %}—{% endif %}
           </td>
         </tr>
@@ -161,9 +171,9 @@
   <ol class="mt-3 space-y-2 text-sm">
     {% for e in timeline %}
     <li class="flex flex-wrap gap-x-2">
-      <span class="text-gray-500 tabular-nums w-32 shrink-0">{{ e.at|date:"j M, H:i" }}</span>
+      <span class="text-ink-subtle tabular-nums w-32 shrink-0">{{ e.at|date:"j M, H:i" }}</span>
       <span class="text-ink">{{ e.label }}{% if e.recipients %} to {{ e.recipients }} customer{{ e.recipients|pluralize }}{% endif %}{% if e.not_sent %} — {{ e.not_sent }} not sent{% endif %}</span>
-      {% if e.by %}<span class="text-gray-500">by {{ e.by }}</span>{% endif %}
+      {% if e.by %}<span class="text-ink-subtle">by {{ e.by }}</span>{% endif %}
     </li>
     {% endfor %}
   </ol>

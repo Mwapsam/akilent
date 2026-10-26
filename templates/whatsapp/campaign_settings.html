@@ -3,7 +3,7 @@
 
 {% block content %}
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
     <span aria-hidden="true">/</span><span class="text-ink">Sending hours</span>
   </nav>
@@ -29,9 +29,9 @@
     {% if tz == "UTC" %}
     <p class="alert alert-warning !text-sm">{% include "components/icon.html" with name="alert-triangle" %}<span>These hours are in UTC because your business's time zone isn't set yet. <a href="{% url 'settings-hours' %}" class="underline font-medium">Set it with your opening hours</a> so they match your customers' clocks.</span></p>
     {% else %}
-    <p class="text-xs text-gray-500">In your business's time zone: {{ tz }}. <a href="{% url 'settings-hours' %}" class="text-accent hover:text-accent-strong">Change it with your opening hours</a>.</p>
+    <p class="text-xs text-ink-subtle">In your business's time zone: {{ tz }}. <a href="{% url 'settings-hours' %}" class="text-accent hover:text-accent-strong">Change it with your opening hours</a>.</p>
     {% endif %}
-    {% if can_send %}<button class="btn btn-primary btn-sm">Save</button>{% else %}<p class="text-sm text-gray-500">Only the business owner or an admin can change these.</p>{% endif %}
+    {% if can_send %}<button class="btn btn-primary btn-sm">Save</button>{% else %}<p class="text-sm text-ink-subtle">Only the business owner or an admin can change these.</p>{% endif %}
   </form>
 
   <aside class="card card-pad text-sm space-y-2">

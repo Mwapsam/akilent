@@ -16,14 +16,6 @@
   </p>
 </header>
 
-{% if messages %}
-<div class="mb-4 space-y-2">
-  {% for msg in messages %}
-  <div class="card p-3 text-sm text-red-700 tone-coral-border border">{{ msg }}</div>
-  {% endfor %}
-</div>
-{% endif %}
-
 <div class="card p-6 max-w-lg">
   <form method="post">
     {% csrf_token %}
@@ -31,7 +23,7 @@
     {% if mode == "connect" %}
     <div class="mb-4">
       <label class="block text-sm font-medium text-ink mb-1" for="iba_id">
-        Instagram Business Account ID <span class="text-red-500">*</span>
+        Instagram Business Account ID <span class="text-coral-700" aria-hidden="true">*</span>
       </label>
       <input
         id="iba_id"
@@ -43,7 +35,7 @@
         required
         autocomplete="off"
       >
-      <p class="mt-1 text-xs text-gray-500">Found in Meta Business Suite → Instagram → About → Instagram ID.</p>
+      <p class="mt-1 text-xs text-ink-subtle">Found in Meta Business Suite → Instagram → About → Instagram ID.</p>
     </div>
     {% endif %}
 
@@ -58,12 +50,12 @@
         placeholder="e.g. 112233445566"
         autocomplete="off"
       >
-      <p class="mt-1 text-xs text-gray-500">The Facebook Page connected to your Instagram account. Required for comment webhooks.</p>
+      <p class="mt-1 text-xs text-ink-subtle">The Facebook Page connected to your Instagram account. Required for comment webhooks.</p>
     </div>
 
     <div class="mb-4">
       <label class="block text-sm font-medium text-ink mb-1" for="access_token">
-        Page access token {% if mode == "connect" %}<span class="text-red-500">*</span>{% else %}<span class="text-gray-400">(leave blank to keep current)</span>{% endif %}
+        Page access token {% if mode == "connect" %}<span class="text-coral-700" aria-hidden="true">*</span>{% else %}<span class="text-ink-subtle">(leave blank to keep current)</span>{% endif %}
       </label>
       <textarea
         id="access_token"
@@ -74,7 +66,7 @@
         {% if mode == "connect" %}required{% endif %}
         autocomplete="off"
       ></textarea>
-      <p class="mt-1 text-xs text-gray-500">Long-lived page access token from Meta's Graph API Explorer or your app's token generation flow.</p>
+      <p class="mt-1 text-xs text-ink-subtle">Long-lived page access token from Meta's Graph API Explorer or your app's token generation flow.</p>
     </div>
 
     <div class="mb-4">

@@ -27,13 +27,13 @@
           {% if candidate.username %}{{ candidate.username }}{% elif candidate.name %}{{ candidate.name }}{% else %}{{ candidate.instagram_business_account_id }}{% endif %}
         </span>
         {% if candidate.name and candidate.username %}
-        <span class="block text-sm text-gray-500">{{ candidate.name }}</span>
+        <span class="block text-sm text-ink-subtle">{{ candidate.name }}</span>
         {% endif %}
         <details class="mt-1">
-          <summary class="text-xs text-gray-400 cursor-pointer select-none">Details</summary>
-          <span class="block text-xs text-gray-500 font-mono">Instagram account ID: {{ candidate.instagram_business_account_id }}</span>
-          <span class="block text-xs text-gray-500 font-mono">Facebook Page ID: {{ candidate.page_id }}</span>
-          {% if candidate.page_name %}<span class="block text-xs text-gray-500">Page: {{ candidate.page_name }}</span>{% endif %}
+          <summary class="text-xs text-ink-subtle cursor-pointer select-none">Details</summary>
+          <span class="block text-xs text-ink-subtle font-mono">Instagram account ID: {{ candidate.instagram_business_account_id }}</span>
+          <span class="block text-xs text-ink-subtle font-mono">Facebook Page ID: {{ candidate.page_id }}</span>
+          {% if candidate.page_name %}<span class="block text-xs text-ink-subtle">Page: {{ candidate.page_name }}</span>{% endif %}
         </details>
       </span>
     </label>
@@ -41,7 +41,7 @@
     <button type="submit" class="btn btn-primary mt-2">Connect this account</button>
   </form>
   {% else %}
-  <p class="text-sm text-gray-500">
+  <p class="text-sm text-ink-subtle">
     No Instagram Business Accounts were found. Connect a professional Instagram account to a
     Facebook Page in Meta Business Suite, then
     <a href="{% url 'instagram-connect-oauth-start' %}" class="underline">try again</a>.
@@ -50,6 +50,6 @@
 </div>
 
 <div class="mt-4">
-  <a href="{% url 'instagram-accounts' %}" class="text-sm text-gray-500 hover:text-ink">← Cancel</a>
+  <a href="{% url 'instagram-accounts' %}" class="text-sm text-ink-subtle hover:text-ink">← Cancel</a>
 </div>
 {% endblock %}

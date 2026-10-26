@@ -56,19 +56,27 @@
           <td data-label="Name" class="font-medium text-ink">{{ t.name }}</td>
           <td data-label="Category">{{ t.get_category_display }}</td>
           <td data-label="Language">{{ t.language_code }}</td>
+          {% comment %}Meta's own status (MessageTemplate.ApprovalStatus), with what it means
+          for sending. Meta's rejection reason isn't stored, so it isn't shown.{% endcomment %}
           <td data-label="Status">
             {% if t.approval_status == 'approved' %}<span class="badge badge-success">Approved</span>
+              <span class="block mt-1 text-xs text-ink-subtle">Ready to send.</span>
             {% elif t.approval_status == 'rejected' %}<span class="badge badge-danger">Rejected</span>
+              <span class="block mt-1 text-xs text-ink-subtle">Meta didn't approve it, so it can't be sent. Create a new version with different wording.</span>
             {% elif t.approval_status == 'paused' %}<span class="badge badge-danger">Paused by Meta</span>
+              <span class="block mt-1 text-xs text-ink-subtle">Meta paused it, usually after customer feedback. It can't be sent while paused.</span>
             {% elif t.approval_status == 'pending' %}<span class="badge badge-warning">Pending Meta approval</span>
-            {% else %}<span class="badge badge-neutral">Draft (local only)</span>{% endif %}
+              <span class="block mt-1 text-xs text-ink-subtle">Meta is reviewing it. Most reviews finish within a day.</span>
+            {% else %}<span class="badge badge-neutral">Draft (local only)</span>
+              <span class="block mt-1 text-xs text-ink-subtle">Not submitted to Meta.</span>{% endif %}
           </td>
-          <td data-label="Variables" class="text-gray-500">{% if t.variables %}{{ t.variables|join:", " }}{% else %}—{% endif %}</td>
+          <td data-label="Variables" class="text-ink-subtle">{% if t.variables %}{{ t.variables|join:", " }}{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  <p class="mt-3 text-xs text-ink-subtle">Statuses come from Meta. They update as soon as Meta tells us, and every 30 minutes. “Sync from WhatsApp” checks now.</p>
   {% else %}
   <div class="table-wrap">
     {% include "components/empty_state.html" with icon="message-circle" title="No templates yet" message="Create your first template above, or sync one already approved in Meta Business Manager." %}

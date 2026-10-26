@@ -873,3 +873,106 @@ Tested code: HEAD `66c0541` + working tree, diff SHA-256 `0f37a3137125a51f…`.
   - a keyless message still clears its bubble
   - dismissing frees the file
 - New server tests: WhatsApp repeats by status, no file prepared on a repeat, echo-first merge, reload renders the inbox with the pane, one title per page.
+
+## Entry 10: Phase 4 (WhatsApp and Instagram), 2026-10-26
+
+You said "continue to next phase", which lifts the hold on Phase 4. Phases 5–9 stay on hold until you say otherwise.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `fc2a649`. You staged part of this work during the phase; nothing is committed. |
+| Tracked changes | 30 files, +470 −419. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `927b90f02ede4ab3…` |
+| Untracked (SHA-256 prefix) | `apps/whatsapp/tests/test_wa_ui_quality.py` `f844291d…` · `apps/instagram/tests/test_ig_ui_quality.py` `40279b12…` · `apps/core/tests/test_templates_compile.py` `512d805c…` · `tools/qa/channels_qa.mjs` `9c6bb5fb…` |
+
+### Defects found and fixed
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | **A working Instagram connection was badged "Sent".** The accounts page reused the message-status component. | The badge shows the connection's own state: Connected, Connection expired, or Setup not finished (with what to do). |
+| 2 | **Campaign recipients were all "Sent" once queued.** The table read the recipient row's own status. `queued` only means "handed to the send queue", so the label covered messages WhatsApp later failed, never confirmed, or held at the plan limit. The "Failed" filter also missed messages that failed after queueing. | Rows and filters use `recipients_with_outcome`, the outcome the CSV export and stat cards already used. Each row shows one of: Read / Delivered / Sent (only once WhatsApp says so), Failed, Not confirmed ("may not have been sent; won't be sent again automatically"), Waiting (plan limit, with the real hold time from `WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS`), Queued, or Not sent. |
+| 3 | **The number details grid never lined up.** Tailwind v4 compiles `grid-cols-[7rem,1fr]` to `grid-template-columns:7rem,1fr`, which is invalid and ignored. | Now `7rem_1fr`. A new drift rule, `grid-comma`, catches a comma outside parentheses in any arbitrary grid value (fixtures included). None remain anywhere. |
+| 4 | **Every flash message on the Instagram pages showed twice**, inline and as the shell's toast. | The inline copies are removed. |
+| 5 | **No unsaved-work guard** on the template builder, the campaign composer or the comment-rule form. | All three are guarded. The composer takes its "before" state at the person's first key or pointer press. At load, `x-model` is still filling fields in, later than any timer can safely wait, and the page moves focus in by itself. |
+| 6 | **The shared `dirtyGuard` treated a form marked `hx-boost="false"` as boosted**, because it looked for any boosted ancestor. A real submit would have asked "Leave without saving?". | The nearest `hx-boost` decides. |
+| 7 | **The template builder's active step and category labels failed contrast:** Meta blue on its own tint measured 4.41:1 (light) and 3.77:1 (dark). | The labels use the app's accent. The tint and marks keep the WhatsApp accent. |
+| 8 | **The rule form's textareas carried both `.input` and `.textarea`.** | The form uses `components/form.html` (labels, required marks, linked errors). The view only adds `w-full`. |
+
+### Other changes
+
+- **Template statuses say what they mean** (Templates → WhatsApp). Each badge has one line under it:
+  - Approved: "Ready to send."
+  - Pending: "Meta is reviewing it."
+  - Rejected: "It can't be sent; create a new version."
+  - Paused: "It can't be sent while paused."
+  - Draft: "Not submitted to Meta."
+
+  A note says statuses come from Meta, that they update when Meta tells us and every 30 minutes (checked: `sync-whatsapp-templates` runs every 1800s), and that "Sync from WhatsApp" checks now.
+- **The WhatsApp preview is one component.** The builder's page-level `<style>` moved to `assets/app.css`, unlayered as before. The campaign composer's preview now uses the same `.wa-preview` classes, so it also gets WhatsApp's real dark colours. Raw colours remain only for WhatsApp's own screen.
+- **Tokens.** WhatsApp and Instagram drift went from **171 to 0**, and the whole site from 783 to 611. Grey text became `text-ink-subtle`. Low-contrast greens, ambers and reds moved to steps that pass, or to `tone-*-fg`.
+- **Smaller fixes:**
+  - the manual number form's labels are tied to their fields
+  - the webhook rows are a real `<dl>`
+  - the health ticks are named Done / Needs attention / Not yet
+  - the campaign breadcrumb has `aria-current`
+  - Disconnect and Delete use `btn-danger-ghost`
+  - the Instagram setup error and empty state use the shared alert and empty-state components
+- **A new test compiles every template** (`test_templates_compile.py`). A broken block in a page that no test renders would otherwise reach production as a 500. This phase produced one, and an Instagram test caught it.
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run pytest` (full suite) | **5,010 passed, 25 skipped, 0 failures** |
+| `ruff check` / `ruff format` / `mypy` (changed files) | Pass / pass (one file reformatted) / no issues |
+| New tests | `test_wa_ui_quality.py` (4), `test_ig_ui_quality.py` (3), `grid-comma` detector fixtures (3), template compile (one per template) |
+
+### Browser verification (automated, headless Chrome; every POST intercepted, other hosts blocked)
+
+**`tools/qa/channels_qa.mjs`: 17 of 17 pass.**
+- The number details grid lines up, and the number shows its health.
+- Instagram badges are truthful.
+- All four template statuses carry their meaning and the freshness note.
+- Recipient outcomes are real. The Failed filter shows only failures, and Sent stays empty until WhatsApp confirms.
+- Campaign page at 375: no sideways scroll, rows stack, the long name wraps, and 0 contrast failures in light and dark.
+- Template builder: leaves freely when clean, asks once something is typed, keeps the text on "Stay", and its own submit doesn't count as leaving.
+- The composer and the rule form ask only after a change.
+- The preview uses WhatsApp's colours in both themes.
+
+**Area scan (`area_scan.mjs`), 12 screens at 360 and 1280, light and dark:** 0 contrast failures, 0 overflow, 0 clipped controls, 0 unlabelled fields, 0 phone fields under 16px. The scan now disables the browser cache: its first run measured a stale `app.css`.
+
+Screenshots are in `docs/design/qa/phase4/` (local only).
+
+### Backend gaps (need separate authorization)
+
+- **G5, rejection reason:** Meta's template webhook carries a `reason`, but `_process_template_status_change` doesn't store it. A rejected template therefore can't say why. The list doesn't guess.
+- **G6, "Retry N failed" vs the Failed count:** retry counts only recipients marked failed. The Failed stat and filter also include cancelled messages and ones Meta reported failed after sending. So the button can say "Retry 10 failed" next to a Failed count of 12.
+- **G7, the template sync doesn't stop campaigns:** a pause or rejection that arrives by webhook stops running campaigns, but the same change arriving through the 30-minute sync doesn't. The copy doesn't claim campaigns are stopped.
+
+### Not verified yet
+
+- Real Meta states (Meta sandbox, yours):
+  - a real number's health
+  - a real template moving through review
+  - a real campaign's delivered and read receipts
+- Real devices and a screen reader (yours).
+
+### QA data added (local database only)
+
+All of it is named "QA P4" or `qa_p4_`:
+- the WhatsApp number `QA-P4-000` (no token)
+- four templates
+- the list "QA P4 list", with five contacts
+- campaign 2, with one recipient per outcome
+- two Instagram accounts, `QA-P4-IG-1` and `QA-P4-IG-2` (fake token; one expired)
+
+Delete them in the Django admin, or restore `../automator-db-backups/`. The dev server ran with `WHATSAPP_ENABLED=True` set inline; `.env` is unchanged.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done.** G5–G7 are held as backend gaps. |
+| Verification | **Done**: full suite, 17/17 browser tasks, and the 48-load scan. **Open:** Meta sandbox, real devices, screen reader. |
+| Acceptance | **Pending your sign-off.** |

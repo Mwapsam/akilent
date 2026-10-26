@@ -45,6 +45,7 @@ RULES = {
     "table-unwrapped": "<table> not in .table-wrap / .table-scroll / overflow-x-auto, and not .table--cards",
     "viewport-height": "min-h-screen / h-screen / bare 100vh - use min-h-viewport or svh/dvh",
     "hover-only": "revealed only on hover (opacity-0 + group-hover) with no pointer-fine: scope",
+    "grid-comma": "grid-cols-[a,b] - Tailwind v4 keeps the comma, so the CSS is invalid; use a_b",
 }
 
 
@@ -97,6 +98,22 @@ _WRAPPER = re.compile(
 )
 
 
+_GRID_ARBITRARY = re.compile(r"(?<![\w-])(?:[a-z-]+:)*grid-(?:cols|rows)-\[([^\]]*)\]")
+
+
+def _top_level_comma(value: str) -> bool:
+    """A comma outside any parentheses: minmax(0,1fr) and repeat(2,1fr) are fine."""
+    depth = 0
+    for ch in value:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            return True
+    return False
+
+
 def _line_of(src: str, pos: int) -> int:
     return src.count("\n", 0, pos) + 1
 
@@ -125,6 +142,8 @@ def scan_source(src: str, path: str = "x.html") -> list[Finding]:
             add(start, "stock-hue", value)
         if re.search(r"(?<![\w:-])text-gray-(?:400|500)\b", value):
             add(start, "gray-text", value)
+        if any(_top_level_comma(g.group(1)) for g in _GRID_ARBITRARY.finditer(value)):
+            add(start, "grid-comma", value)
         if re.search(r"(?<![\w-])(?:min-h-screen|h-screen)\b", value):
             add(start, "viewport-height", value)
         if (

@@ -2,157 +2,13 @@
 {% block title %}New WhatsApp template — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-{% verbatim %}
-<style>
-  /* ── Scoped to the builder. Change --wa-accent to match your brand.
-     --wa-line/--wa-fg/--wa-fg-muted/--wa-surface-hover ride the app's own
-     theme tokens (assets/app.css) so this whole block follows dark mode
-     automatically instead of needing its own light/dark duplication. ── */
-  #wa-builder {
-    --wa-accent: #0866ff; --wa-green: #008069; --wa-link: #027eb5;
-    --wa-line: var(--color-border);
-    --wa-surface: var(--color-surface);
-    --wa-surface-hover: var(--color-hover);
-    --wa-fg: var(--color-ink);
-    --wa-fg-muted: var(--color-ink-muted);
-    --wa-fg-subtle: var(--color-ink-subtle);
-  }
-
-  /* Stepper */
-  .wa-steps { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
-  .wa-step { display: inline-flex; align-items: center; gap: .5rem; padding: .375rem .75rem; border-radius: .5rem;
-             font-size: .875rem; font-weight: 500; color: var(--wa-fg-subtle); transition: background-color .2s, color .2s; }
-  .wa-step-dot { position: relative; width: 1.125rem; height: 1.125rem; border-radius: 999px; border: 2px solid currentColor;
-                 display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .wa-step-dot svg { width: .7rem; height: .7rem; color: var(--wa-surface); display: none; }
-  .wa-step[data-state="active"] { color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 9%, var(--wa-surface)); }
-  .wa-step[data-state="active"] .wa-step-dot { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-  .wa-step[data-state="done"] { color: var(--wa-fg); }
-  .wa-step[data-state="done"] .wa-step-dot { background: #16a34a; border-color: #16a34a; }
-  .wa-step[data-state="done"] .wa-step-dot svg { display: block; }
-  .wa-step-sep { color: var(--wa-line); letter-spacing: 2px; font-size: .75rem; }
-
-  /* Category segmented control */
-  .wa-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid var(--wa-line); border-radius: .5rem; overflow: hidden; }
-  .wa-cat-btn { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .625rem .75rem;
-                font-size: .875rem; font-weight: 500; color: var(--wa-fg); background: var(--wa-surface); border-left: 1px solid var(--wa-line); }
-  .wa-cat-btn:first-child { border-left: 0; }
-  .wa-cat-btn:hover { background: var(--wa-surface-hover); }
-  .wa-cat-btn svg { width: 1rem; height: 1rem; }
-  .wa-cat-btn.is-active { background: color-mix(in srgb, var(--wa-accent) 8%, var(--wa-surface)); color: var(--wa-accent); box-shadow: inset 0 -2px 0 var(--wa-accent); }
-  .wa-cat-btn:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: -2px; }
-
-  /* Pill toggle (header none / text / image / video / document) */
-  .wa-pills { display: inline-flex; flex-wrap: wrap; padding: 2px; background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); border-radius: .5rem; }
-  .wa-pills label { position: relative; padding: .3rem .8rem; border-radius: .375rem; font-size: .8125rem; color: var(--wa-fg-muted); cursor: pointer; }
-  .wa-pills label:has(input:checked) { background: var(--wa-surface); color: var(--wa-fg); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-  .wa-pills label:has(input:focus-visible) { outline: 2px solid var(--wa-accent); }
-  .wa-pills input { position: absolute; opacity: 0; pointer-events: none; }
-
-  /* Character counters */
-  .wa-counted { position: relative; }
-  .wa-counted > .input { padding-right: 4.75rem; }
-  .wa-count { position: absolute; right: .75rem; top: .625rem; font-size: .75rem; color: var(--wa-fg-subtle); font-variant-numeric: tabular-nums; pointer-events: none; }
-  .wa-counted:has(> .hidden) .wa-count { display: none; }
-  .wa-count.is-over { color: #dc2626; }
-
-  /* Body editor: textarea + formatting toolbar in one frame */
-  .wa-editor { border: 1px solid var(--wa-line); border-radius: .5rem; background: var(--wa-surface); transition: border-color .15s, box-shadow .15s; }
-  .wa-editor:focus-within { border-color: var(--wa-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wa-accent) 18%, transparent); }
-  .wa-editor .input, .wa-editor .input:focus { border: 0; box-shadow: none; outline: none; border-radius: .5rem .5rem 0 0; resize: vertical; }
-  .wa-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; padding: .375rem .5rem; border-top: 1px solid var(--wa-line); }
-  .wa-tool { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; height: 2rem; padding: 0 .4rem;
-             border-radius: .375rem; color: var(--wa-fg-muted); font-size: .875rem; }
-  .wa-tool:hover { background: var(--wa-surface-hover); color: var(--wa-fg); }
-  .wa-tool:focus-visible { outline: 2px solid var(--wa-accent); }
-  .wa-tool svg { width: 1rem; height: 1rem; }
-  .wa-tool-divider { width: 1px; height: 1.25rem; background: var(--wa-line); margin: 0 .25rem; }
-
-  /* Info banner */
-  .wa-note { display: flex; gap: .5rem; align-items: flex-start; padding: .625rem .75rem; border-radius: .5rem;
-             background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); font-size: .8125rem; color: var(--wa-fg); }
-  .wa-note svg { width: 1rem; height: 1rem; flex-shrink: 0; margin-top: .1rem; }
-
-  /* The hidden attribute must win over utility classes like .grid / .flex */
-  #wa-builder [hidden] { display: none !important; }
-
-  /* Starter tiles + scenario rows (rendered by whatsapp-template-starter-picker.js) */
-  .wa-tile { display: flex; align-items: flex-start; gap: .75rem; width: 100%; padding: 1rem; text-align: left;
-             background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; transition: border-color .15s, background-color .15s; }
-  .wa-tile:hover { border-color: color-mix(in srgb, var(--wa-accent) 40%, var(--wa-surface)); background: color-mix(in srgb, var(--wa-accent) 3%, var(--wa-surface)); }
-  .wa-tile:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
-  .wa-tile-dashed { border-style: dashed; }
-  .wa-tile-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0;
-                  border-radius: .5rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, var(--wa-surface)); }
-  .wa-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 1rem;
-            background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; }
-  .wa-row:hover { background: var(--wa-surface-hover); }
-
-  /* Variable cards (rendered by whatsapp-template-preview.js) */
-  .wa-varcard { padding: .875rem; background: var(--wa-surface); border: 1px solid var(--wa-line); border-radius: .625rem; }
-  .wa-var-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 2.5rem; height: 1.75rem; padding: 0 .5rem; flex-shrink: 0;
-                 border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, var(--wa-surface)); }
-
-  /* Sticky action bar */
-  .wa-actionbar { position: sticky; bottom: 0; z-index: 10; margin-top: 1.5rem; padding: .875rem 1rem;
-                  background: color-mix(in srgb, var(--wa-surface) 92%, transparent); backdrop-filter: blur(6px);
-                  border: 1px solid var(--wa-line); border-radius: .75rem; box-shadow: 0 -4px 16px rgba(0,0,0,.12); }
-
-  /* Header media drop zone */
-  #wa-header-media-drop .wa-tile-icon { color: var(--wa-fg-muted); background: color-mix(in srgb, var(--wa-fg) 6%, var(--wa-surface)); }
-
-  /* WhatsApp preview — deliberately kept as its own light "device screen" by
-     default, since that's genuinely what recipients see; a dark-mode variant
-     below switches it to WhatsApp's own real dark chat colors rather than
-     the app's unrelated navy theme, so it still reads as an authentic
-     WhatsApp screen instead of a mismatched hybrid. */
-  .wa-phone { border-radius: 1rem; overflow: hidden; border: 1px solid var(--wa-line); }
-  .wa-phone-bar { background: var(--wa-green); color: #fff; }
-  .wa-chat { background-color: #efeae2; min-height: 360px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23000' stroke-opacity='.06' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E"); }
-  .wa-daychip { display: inline-block; padding: .2rem .6rem; border-radius: .375rem; background: #fff; color: #54656f; font-size: .6875rem; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
-  .wa-bubble { position: relative; max-width: 92%; background: #fff; border-radius: 0 .5rem .5rem .5rem; box-shadow: 0 1px .5px rgba(11,20,26,.13); color: #111b21; }
-  .wa-bubble::before { content: ""; position: absolute; left: -7px; top: 0; width: 8px; height: 13px; background: #fff; clip-path: polygon(0 0, 100% 0, 100% 100%); }
-  #wa-preview-body strong { font-weight: 600; }
-  #wa-preview-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; }
-  #wa-preview-body .wa-var { padding: 0 .25rem; border-radius: .25rem; font-size: .8125rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, #fff); }
-  #wa-preview-button { color: var(--wa-link); }
-  #wa-preview-button::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; background: currentColor;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'/%3E%3C/svg%3E") center / contain no-repeat;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'/%3E%3C/svg%3E") center / contain no-repeat; }
-
-  /* WhatsApp's own dark theme for the phone screen (not the app's navy dark
-     mode) — same resolution order as assets/app.css: OS preference unless
-     the user explicitly picked "light", or an explicit data-theme="dark". */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .wa-chat {
-      background-color: #0b141a;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23fff' stroke-opacity='.05' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E");
-    }
-    :root:not([data-theme="light"]) .wa-daychip { background: #182229; color: #8696a0; }
-    :root:not([data-theme="light"]) .wa-bubble { background: #202c33; color: #e9edef; box-shadow: 0 1px .5px rgba(0,0,0,.3); }
-    :root:not([data-theme="light"]) .wa-bubble::before { background: #202c33; }
-    :root:not([data-theme="light"]) #wa-preview-body .wa-var { background: color-mix(in srgb, var(--wa-accent) 20%, #202c33); }
-  }
-  :root[data-theme="dark"] .wa-chat {
-    background-color: #0b141a;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23fff' stroke-opacity='.05' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E");
-  }
-  :root[data-theme="dark"] .wa-daychip { background: #182229; color: #8696a0; }
-  :root[data-theme="dark"] .wa-bubble { background: #202c33; color: #e9edef; box-shadow: 0 1px .5px rgba(0,0,0,.3); }
-  :root[data-theme="dark"] .wa-bubble::before { background: #202c33; }
-  :root[data-theme="dark"] #wa-preview-body .wa-var { background: color-mix(in srgb, var(--wa-accent) 20%, #202c33); }
-
-  @media (prefers-reduced-motion: reduce) { .wa-step, .wa-editor { transition: none; } }
-</style>
-{% endverbatim %}
 
 <div id="wa-builder" data-fields='{{ data_fields_json }}' data-initial-variables='{{ initial_variables_json }}' data-media-upload-url="{{ media_upload_url }}">
 
   {# ── Page header + stepper ── #}
   <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
-      <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+      <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
         <a href="/email/templates/?channel=whatsapp" class="hover:text-ink">Templates</a>
         <span aria-hidden="true">/</span><span class="text-ink">New WhatsApp template</span>
       </nav>
@@ -182,7 +38,7 @@
   <section class="card card-pad mb-6 space-y-2"
            x-data="aiDraft({kind: 'template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '?draft=' + d.id } })">
     <h2 class="text-base font-semibold text-ink">Describe the message you need</h2>
-    <p class="text-sm text-gray-500">AI fills in the form below for you: category, wording, blanks and examples. You check it, then submit.</p>
+    <p class="text-sm text-ink-subtle">AI fills in the form below for you: category, wording, blanks and examples. You check it, then submit.</p>
     <div x-data="{ prompt: '' }" class="space-y-2">
       <textarea x-model="prompt" class="textarea" rows="2" aria-label="The message you need"
                 placeholder="Thank customers after they buy and remind them to keep their receipt."></textarea>
@@ -194,7 +50,7 @@
       <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !prompt.trim()" @click="start({prompt})">
         <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
       </button>
-      <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
+      <p class="text-sm text-coral-700" x-show="error" x-text="error" role="alert"></p>
     </div>
     {% csrf_token %}
   </section>
@@ -225,7 +81,7 @@
 
       <div id="wa-setup-summary" class="px-5 pb-5 pt-3" hidden>
         <p class="flex items-center gap-2 text-sm text-gray-600">
-          <svg class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>
+          <svg class="w-4 h-4 text-teal-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>
           Starter applied. Adjust anything below before you submit.
         </p>
       </div>
@@ -237,13 +93,13 @@
     {% comment %}hx-boost="false": a rejected submit re-renders this page, whose scripts need a real
     page load, so a boosted POST is answered with HX-Refresh (apps.core.htmx.ShellMiddleware) and
     the reload throws away both what was typed and the error message.{% endcomment %}
-    <form method="post" id="wa-form" class="space-y-5 min-w-0" hx-boost="false">
+    <form method="post" id="wa-form" class="space-y-5 min-w-0" hx-boost="false" x-data="dirtyGuard">
       {% csrf_token %}
       {% if ai_draft %}
       <section class="rounded-xl border border-border p-4 text-sm" aria-label="Why I built it this way">
         <p class="font-medium text-ink">Drafted by AI. Why I built it this way:</p>
         <ul class="mt-1 list-disc pl-5 space-y-0.5 text-gray-700">{% for r in ai_draft.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
-        <p class="mt-2 text-xs text-gray-500">Check every word, then submit. WhatsApp reviews it before it can be sent.</p>
+        <p class="mt-2 text-xs text-ink-subtle">Check every word, then submit. WhatsApp reviews it before it can be sent.</p>
       </section>
       {% endif %}
 
@@ -251,7 +107,7 @@
       <section class="card card-pad space-y-5" aria-labelledby="wa-details-h">
         <div>
           <h2 id="wa-details-h" class="text-base font-semibold text-ink">Template details</h2>
-          <p class="text-sm text-gray-500">How WhatsApp will file and review this template.</p>
+          <p class="text-sm text-ink-subtle">How WhatsApp will file and review this template.</p>
         </div>
 
         <div>
@@ -271,7 +127,7 @@
             </button>
             {% endfor %}
           </div>
-          <p id="wa-cat-desc" class="mt-2 text-xs text-gray-500"></p>
+          <p id="wa-cat-desc" class="mt-2 text-xs text-ink-subtle"></p>
           {# The real field. Kept in the DOM so the starter picker and form POST keep working. #}
           <div class="sr-only">
             <label for="tpl-category">Category</label>
@@ -291,7 +147,7 @@
                      pattern="[a-z0-9_]+" maxlength="512" value="{{ form.name|default:'' }}" required />
               <span class="wa-count" data-count-for="tpl-name" data-max="512">0/512</span>
             </div>
-            <p class="text-xs text-gray-400 mt-1">Spaces become underscores as you type. The name can't be changed after submission.</p>
+            <p class="text-xs text-ink-subtle mt-1">Spaces become underscores as you type. The name can't be changed after submission.</p>
           </div>
           <div>
             <label class="label" for="tpl-language">Language</label>
@@ -308,8 +164,8 @@
       <section id="wa-auth-options" class="card card-pad space-y-4" aria-labelledby="wa-auth-h" hidden>
         <div>
           <h2 id="wa-auth-h" class="text-base font-semibold text-ink">One-time code</h2>
-          <p class="text-sm text-gray-500">WhatsApp writes this message for you: “<strong>123456</strong> is your verification code.” You choose the options.</p>
-          <p class="text-sm text-gray-500 mt-1">Once Meta approves it, your app or website can send codes with it. See <a class="underline" href="{% url 'whatsapp-codes' %}">One-time codes</a>.</p>
+          <p class="text-sm text-ink-subtle">WhatsApp writes this message for you: “<strong>123456</strong> is your verification code.” You choose the options.</p>
+          <p class="text-sm text-ink-subtle mt-1">Once Meta approves it, your app or website can send codes with it. See <a class="underline" href="{% url 'whatsapp-codes' %}">One-time codes</a>.</p>
         </div>
         <label class="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" name="auth_security" {% if form.auth_security or not form.csrfmiddlewaretoken %}checked{% endif %}>
@@ -317,7 +173,7 @@
         </label>
         <div class="grid sm:grid-cols-2 gap-4">
           <div>
-            <label class="label" for="wa-auth-expiry">Code expires after (minutes) <span class="font-normal text-gray-400">· Optional</span></label>
+            <label class="label" for="wa-auth-expiry">Code expires after (minutes) <span class="font-normal text-ink-subtle">· Optional</span></label>
             <input id="wa-auth-expiry" name="auth_expiry" type="number" min="1" max="90" class="input" value="{{ form.auth_expiry|default:'10' }}">
           </div>
           <div>
@@ -331,12 +187,12 @@
       <section class="card card-pad space-y-5" aria-labelledby="wa-content-h" data-hide-for-auth>
         <div>
           <h2 id="wa-content-h" class="text-base font-semibold text-ink">Content</h2>
-          <p class="text-sm text-gray-500">Add a header, body and footer. Meta reviews all of it.</p>
+          <p class="text-sm text-ink-subtle">Add a header, body and footer. Meta reviews all of it.</p>
         </div>
 
         <div>
           <div class="flex items-center justify-between gap-3 mb-2">
-            <span class="label mb-0">Header <span class="font-normal text-gray-400">· Optional</span></span>
+            <span class="label mb-0">Header <span class="font-normal text-ink-subtle">· Optional</span></span>
             <div class="wa-pills" role="radiogroup" aria-label="Header type">
               <label><input type="radio" name="header_format" value="none" id="tpl-header-mode-none" {% if not form.header and not form.header_format or form.header_format == "none" %}checked{% endif %} />None</label>
               <label><input type="radio" name="header_format" value="text" id="tpl-header-mode-text" {% if form.header or form.header_format == "text" %}checked{% endif %} />Text</label>
@@ -358,12 +214,12 @@
               </span>
               <span class="min-w-0">
                 <span id="wa-header-media-label" class="text-sm font-medium text-ink block">Drag and drop, or choose a file</span>
-                <span id="wa-header-media-status" class="text-xs text-gray-500 block mt-0.5"></span>
+                <span id="wa-header-media-status" class="text-xs text-ink-subtle block mt-0.5"></span>
               </span>
             </label>
             <input type="file" id="tpl-header-media-file" class="sr-only" accept="" />
             <input type="hidden" id="tpl-header-media-asset-id" name="header_media_asset_id" value="{{ form.header_media_asset_id|default:'' }}" />
-            <p id="wa-header-media-error" class="hidden text-xs text-red-600"></p>
+            <p id="wa-header-media-error" class="hidden text-xs text-coral-700"></p>
           </div>
         </div>
 
@@ -389,14 +245,14 @@
               </button>
             </div>
           </div>
-          <p class="text-xs text-gray-400 mt-1.5">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… for anything that changes per customer — a card for each appears under Personalize.</p>
-          <p id="wa-variable-warning" class="hidden text-xs text-amber-600 mt-1"></p>
+          <p class="text-xs text-ink-subtle mt-1.5">Use {% verbatim %}{{1}}, {{2}}, {{3}}{% endverbatim %}… for anything that changes per customer — a card for each appears under Personalize.</p>
+          <p id="wa-variable-warning" class="hidden text-xs text-amber-800 mt-1"></p>
           {# Likely Meta rejections, checked as you type (apps.whatsapp.template_lint). #}
           <ul id="wa-lint" class="mt-2 space-y-1 text-xs" aria-live="polite" data-url="{% url 'whatsapp-template-lint' %}"></ul>
           {% if ai_on %}
           <div class="mt-2" x-data="aiDraft({kind: 'template_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
             <div class="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Improve with AI">
-              <span class="text-gray-500">Improve with AI:</span>
+              <span class="text-ink-subtle">Improve with AI:</span>
               <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('friendlier'))">Friendlier</button>
               <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('shorter'))">Shorter</button>
               <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('business_name'))">Add our business name</button>
@@ -407,18 +263,18 @@
                 </select>
                 <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(waEditFields('translate:' + lang))">Translate</button>
               </span>
-              <span x-show="busy" x-cloak class="text-gray-500">Working…</span>
+              <span x-show="busy" x-cloak class="text-ink-subtle">Working…</span>
             </div>
-            <p class="text-xs text-red-700 mt-1" x-show="error" x-text="error" role="alert"></p>
+            <p class="text-xs text-coral-700 mt-1" x-show="error" x-text="error" role="alert"></p>
             <div x-show="draft" x-cloak class="mt-2 rounded-xl border border-border p-3 text-sm">
-              <p class="text-xs font-semibold text-gray-500">Suggested change</p>
+              <p class="text-xs font-semibold text-ink-subtle">Suggested change</p>
               <p class="mt-1 whitespace-pre-line">
                 <template x-for="part in (draft && draft.result.diff) || []">
-                  <span :class="part[0] === 'del' ? 'line-through text-red-700' : ''"
+                  <span :class="part[0] === 'del' ? 'line-through text-coral-700' : ''"
                         :style="part[0] === 'add' ? 'background: var(--tone-teal-bg); color: var(--tone-teal-fg)' : ''" x-text="part[1] + ' '"></span>
                 </template>
               </p>
-              <ul class="mt-1 text-xs text-amber-700" x-show="draft && draft.warnings.length"><template x-for="w in (draft && draft.warnings) || []"><li x-text="w"></li></template></ul>
+              <ul class="mt-1 text-xs text-amber-800" x-show="draft && draft.warnings.length"><template x-for="w in (draft && draft.warnings) || []"><li x-text="w"></li></template></ul>
               <div class="mt-2 flex gap-2">
                 <button type="button" class="btn btn-primary btn-sm" @click="waSetBody(draft.result.after); draft = null">Use this</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
@@ -433,7 +289,7 @@
             {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add footer
           </button>
           <div id="wa-footer-field" class="{% if not form.footer %}hidden{% endif %}">
-            <label class="label" for="tpl-footer">Footer <span class="font-normal text-gray-400">· Optional</span></label>
+            <label class="label" for="tpl-footer">Footer <span class="font-normal text-ink-subtle">· Optional</span></label>
             <div class="flex gap-2">
               <div class="wa-counted flex-1">
                 <input id="tpl-footer" name="footer" class="input" maxlength="60" placeholder="e.g. Thank you for your business" value="{{ form.footer|default:'' }}" />
@@ -450,15 +306,15 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h2 id="wa-personalize-h" class="text-base font-semibold text-ink">Personalize</h2>
-            <p class="text-sm text-gray-500">Connect each variable to Akilent data, or leave it as free text.</p>
+            <p class="text-sm text-ink-subtle">Connect each variable to Akilent data, or leave it as free text.</p>
           </div>
           <button type="button" id="wa-personalize-create-field" class="btn btn-ghost btn-sm shrink-0">
             {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create custom field
           </button>
         </div>
-        <p id="wa-personalize-create-field-status" class="hidden text-xs text-green-600"></p>
+        <p id="wa-personalize-create-field-status" class="hidden text-xs text-teal-700"></p>
         <div id="variable-cards" class="space-y-3"></div>
-        <div id="wa-no-variables-hint" class="flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-sm text-gray-500">
+        <div id="wa-no-variables-hint" class="flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-sm text-ink-subtle">
           <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-gray-600">{% verbatim %}{{ }}{% endverbatim %}</span>
           <span>Click <strong class="font-medium text-ink">Add variable</strong> or type {% verbatim %}{{1}}{% endverbatim %} in the body to add your first one.</span>
         </div>
@@ -467,8 +323,8 @@
       {# Buttons #}
       <section class="card card-pad space-y-3" aria-labelledby="wa-buttons-h" data-hide-for-auth>
         <div>
-          <h2 id="wa-buttons-h" class="text-base font-semibold text-ink">Button <span class="font-normal text-gray-400 text-sm">· Optional</span></h2>
-          <p class="text-sm text-gray-500">Let customers act on the message with one tap.</p>
+          <h2 id="wa-buttons-h" class="text-base font-semibold text-ink">Button <span class="font-normal text-ink-subtle text-sm">· Optional</span></h2>
+          <p class="text-sm text-ink-subtle">Let customers act on the message with one tap.</p>
         </div>
 
         <button type="button" id="wa-button-add" class="btn btn-ghost btn-sm {% if form.button_text or form.button_url or form.button_phone_number %}hidden{% endif %}">
@@ -486,7 +342,7 @@
               <option value="flow" {% if form.button_type == "flow" %}selected{% endif %} {% if not flow_forms %}disabled{% endif %}>Open a form{% if not flow_forms %} (publish a form to WhatsApp first){% endif %}</option>
               <option value="share_contact" disabled>Share Contact Info (not supported yet)</option>
             </select>
-            <p class="text-xs text-gray-400 mt-1">"Share Contact Info" isn't available for templates created here — Meta's Cloud API doesn't support it at creation time.</p>
+            <p class="text-xs text-ink-subtle mt-1">"Share Contact Info" isn't available for templates created here — Meta's Cloud API doesn't support it at creation time.</p>
           </div>
 
           <div>
@@ -522,26 +378,26 @@
           <div id="wa-button-code-fields" class="hidden">
             <label class="label" for="tpl-button-code-example">Example code</label>
             <input id="tpl-button-code-example" name="button_code_example" class="input" placeholder="e.g. SAVE20" maxlength="20" value="{{ form.button_code_example|default:'' }}" />
-            <p class="text-xs text-gray-400 mt-1">Shown to Meta as a sample of the code customers will copy — required for approval. Up to 20 characters.</p>
+            <p class="text-xs text-ink-subtle mt-1">Shown to Meta as a sample of the code customers will copy — required for approval. Up to 20 characters.</p>
           </div>
 
-          <p id="wa-button-voice-note" class="hidden text-xs text-gray-500">Customers call your business's WhatsApp number. No phone number needed.</p>
+          <p id="wa-button-voice-note" class="hidden text-xs text-ink-subtle">Customers call your business's WhatsApp number. No phone number needed.</p>
 
           <div id="wa-button-flow-fields" class="hidden">
             <label class="label" for="tpl-button-flow-form">Form it opens</label>
             <select id="tpl-button-flow-form" name="button_flow_form" class="select">
               {% for f in flow_forms %}<option value="{{ f.public_id }}" {% if form.button_flow_form == f.public_id %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
             </select>
-            <p class="text-xs text-gray-400 mt-1">Customers fill it in right inside WhatsApp, even if they haven't messaged you in the last 24 hours. Their answers appear on the form's Answers page.</p>
+            <p class="text-xs text-ink-subtle mt-1">Customers fill it in right inside WhatsApp, even if they haven't messaged you in the last 24 hours. Their answers appear on the form's Answers page.</p>
           </div>
 
-          <button type="button" id="wa-button-remove" class="btn btn-ghost btn-sm text-red-600">Remove button</button>
+          <button type="button" id="wa-button-remove" class="btn btn-ghost btn-sm text-coral-700">Remove button</button>
         </div>
 
         <div id="wa-custom-field-panel" class="hidden border border-border rounded-lg p-4 space-y-3 bg-surface-muted">
           <div>
             <p class="text-sm font-medium text-ink">Create custom contact field</p>
-            <p class="text-xs text-gray-500">Saved to your Contacts so you can reuse it on any future message.</p>
+            <p class="text-xs text-ink-subtle">Saved to your Contacts so you can reuse it on any future message.</p>
           </div>
           <div class="grid sm:grid-cols-2 gap-2">
             <input id="wa-custom-field-label" class="input" placeholder="Field name, e.g. Membership number" />
@@ -551,7 +407,7 @@
               {% endfor %}
             </select>
           </div>
-          <p id="wa-custom-field-error" class="text-xs text-red-600 hidden"></p>
+          <p id="wa-custom-field-error" class="text-xs text-coral-700 hidden"></p>
           <div class="flex justify-end gap-2">
             <button type="button" id="wa-custom-field-cancel" class="btn btn-ghost btn-sm">Cancel</button>
             <button type="button" id="wa-custom-field-create" class="btn btn-primary btn-sm">Create field</button>
@@ -563,8 +419,8 @@
       <div class="wa-actionbar flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Discard</a>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <p id="wa-submit-error" class="hidden text-xs text-red-600" role="alert"></p>
-          <p id="wa-submit-hint" class="text-xs text-gray-500">Meta reviews it before you can send. Most reviews finish within a day.</p>
+          <p id="wa-submit-error" class="hidden text-xs text-coral-700" role="alert"></p>
+          <p id="wa-submit-hint" class="text-xs text-ink-subtle">Meta reviews it before you can send. Most reviews finish within a day.</p>
           <button type="submit" id="wa-submit-btn" class="btn btn-primary btn-sm">Submit for review</button>
         </div>
       </div>
@@ -580,7 +436,7 @@
             <div class="leading-tight min-w-0">
               <p class="text-sm font-medium flex items-center gap-1">
                 Your business
-                <svg class="w-3.5 h-3.5 text-[#25d366]" viewBox="0 0 24 24" fill="currentColor" aria-label="Verified"><path d="M12 2l2.4 2.1 3.2-.3.9 3.1 2.8 1.6-1.1 3 1.1 3-2.8 1.6-.9 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.9-3.1-2.8-1.6 1.1-3-1.1-3 2.8-1.6.9-3.1 3.2.3z"/><path d="M8.5 12.2l2.3 2.3 4.7-4.7" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg class="w-3.5 h-3.5 wa-verified" viewBox="0 0 24 24" fill="currentColor" aria-label="Verified"><path d="M12 2l2.4 2.1 3.2-.3.9 3.1 2.8 1.6-1.1 3 1.1 3-2.8 1.6-.9 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.9-3.1-2.8-1.6 1.1-3-1.1-3 2.8-1.6.9-3.1 3.2.3z"/><path d="M8.5 12.2l2.3 2.3 4.7-4.7" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </p>
               <p class="text-xs text-white/75">Business account</p>
             </div>
@@ -591,8 +447,8 @@
               <div class="px-2.5 pt-2 pb-1">
                 <div id="wa-preview-header" class="font-semibold mb-1 empty:hidden"></div>
                 <div id="wa-preview-body" class="whitespace-pre-wrap break-words"></div>
-                <div id="wa-preview-footer" class="text-xs text-gray-500 mt-1 empty:hidden"></div>
-                <p class="text-right text-[11px] text-gray-400 mt-0.5"><span id="wa-preview-time">12:04</span></p>
+                <div id="wa-preview-footer" class="text-xs text-ink-subtle mt-1 empty:hidden"></div>
+                <p class="wa-time text-right text-ink-subtle mt-0.5"><span id="wa-preview-time">12:04</span></p>
               </div>
               <div id="wa-preview-button" class="py-2 border-t border-black/10 text-center text-sm font-medium hidden"></div>
             </div>
@@ -803,7 +659,7 @@
     const data = await r.json().catch(() => ({ warnings: [] }));
     list.replaceChildren(...(data.warnings || []).map((w) => {
       const li = document.createElement('li');
-      li.className = w.level === 'warning' ? 'text-amber-700' : 'text-gray-500';
+      li.className = w.level === 'warning' ? 'text-amber-800' : 'text-ink-subtle';
       li.textContent = w.text;
       return li;
     }));

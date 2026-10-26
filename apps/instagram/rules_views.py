@@ -104,10 +104,10 @@ _KINDS = {
 
 
 def _style(form: forms.BaseForm) -> forms.BaseForm:
+    # The design-system class (.input / .select / .textarea) comes from render_field
+    # in components/form.html; this only makes every field full width.
     for field in form.fields.values():
-        widget = field.widget
-        css = "select w-full" if isinstance(widget, forms.Select) else "input w-full"
-        widget.attrs.setdefault("class", css)
+        field.widget.attrs.setdefault("class", "w-full")
     return form
 
 

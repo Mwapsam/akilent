@@ -44,7 +44,7 @@
       <button class="btn btn-secondary btn-sm">Create an API key</button>
     </form>
     {% else %}
-    <p class="text-xs text-gray-500">Ask an owner or admin to create the key.</p>
+    <p class="text-xs text-ink-subtle">Ask an owner or admin to create the key.</p>
     {% endif %}
   </section>
 
@@ -61,19 +61,19 @@
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">Recent codes</h2>
     {% if recent %}
-    <p class="text-xs text-gray-500">Codes themselves aren't kept, only whether they arrived.</p>
+    <p class="text-xs text-ink-subtle">Codes themselves aren't kept, only whether they arrived.</p>
     <ul class="rounded-xl border border-border divide-y divide-border text-sm">
       {% for r in recent %}
       <li class="flex flex-wrap justify-between gap-2 p-3">
         <span>{{ r.to }} · <code>{{ r.template }}</code></span>
-        <span class="{% if r.status == 'failed' %}text-red-700{% else %}text-gray-600{% endif %}">
+        <span class="{% if r.status == 'failed' %}text-coral-700{% else %}text-gray-600{% endif %}">
           {{ r.status|capfirst }}{% if r.error %}: {{ r.error.message }}{% endif %}
         </span>
       </li>
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-gray-500">None yet.</p>
+    <p class="text-sm text-ink-subtle">None yet.</p>
     {% endif %}
   </section>
 </div>
